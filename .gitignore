@@ -30,5 +30,5 @@ vendor
 .docker/.env
 
 .docs/TIMELOG.md
-
+.docs/WISHLIST.md
 cmd/web/explorer/.idea
