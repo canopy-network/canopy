@@ -166,7 +166,7 @@ export default function Governance({account: accountWithTxs}) {
                             <Bar data={{
                                 labels: [val.accounts.votedPercent + '% Accounts Reporting', val.validators.votedPercent + '% Validators Reporting'], // Categories
                                 datasets: [
-                                    {label: '% Voted YES', data: [val.accounts.approvedPercent, val.validators.approvedPercent], backgroundColor: '#7749c0'},
+                                    {label: '% Voted YES', data: [val.accounts.approvedPercent, val.validators.approvedPercent], backgroundColor: '#5447ac'},
                                     {label: '% Voted NO', data: [val.accounts.rejectPercent, val.validators.rejectPercent], backgroundColor: '#000'},
                                 ],
                             }} options={{

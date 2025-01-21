@@ -238,7 +238,7 @@ export default function Accounts({keygroup, account, validator}) {
                     <Card.Body style={{padding: "10px"}}>
                         <Card.Title style={{fontWeight: "bold", fontSize: "14px"}}>
                             {v.info}
-                            <span style={{fontSize: "10px", color: "#32908f"}}>{v.after}</span>
+                            <span style={{fontSize: "10px", color: "#5ECFF9"}}>{v.after}</span>
                         </Card.Title>
                     </Card.Body>
                 </Card>
@@ -265,7 +265,7 @@ export default function Accounts({keygroup, account, validator}) {
     function renderTransactions() {
         return account.combined.length === 0 ? null : (
             <div className="recent-transactions-table">
-            <span style={{textAlign: "center", fontWeight: "100", fontSize: "14px", color: "grey"}}>
+            <span style={{textAlign: "center", fontWeight: "100", fontSize: "14px", color: "#1e1d1e26"}}>
                 RECENT TRANSACTIONS
             </span>
                 <Table className="table-fixed" bordered hover style={{marginTop: "10px"}}>
@@ -296,7 +296,7 @@ export default function Accounts({keygroup, account, validator}) {
     return <>
         <div className="content-container">
             <span id="balance">{formatNumber(acc.amount)}</span>
-            <span style={{fontWeight: "bold", color: "#32908f"}}>{" CNPY"}</span>
+            <span style={{fontWeight: "bold", color: "#5ECFF9"}}>{" CNPY"}</span>
             <br/>
             <hr style={{border: "1px dashed black", borderRadius: "5px", width: "60%", margin: "0 auto"}}/>
             <br/>

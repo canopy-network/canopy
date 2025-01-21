@@ -30,7 +30,7 @@
 }
 
 #nav-bar-brand-highlight {
-    color: #32908F;
+    color: #5ECFF9;
 }
 
 #nav-bar-select {
@@ -60,13 +60,13 @@
 }
 
 .nav-link.active {
-    color: #32908f !important;
+    color: #5ECFF9 !important;
     background-color: white !important;
     opacity: 100%;
     text-decoration: none;
     font-weight: bold;
     border: 0 !important;
-    border-bottom: 1px solid #32908f !important;
+    border-bottom: 1px solid #5ECFF9 !important;
     width: 100px !important;
     margin: 0 auto;
 }
@@ -253,14 +253,14 @@
 }
 
 #pk-button {
-    color: #32908f;
-    border-color: #32908f;
+    color: #5ECFF9;
+    border-color: #5ECFF9;
     margin: 20px;
 }
 
 #pk-button:hover {
     color: white;
-    background-color: #32908f;
+    background-color: #5ECFF9;
 }
 
 #export-pk-button {
@@ -268,13 +268,13 @@
 }
 
 #reveal-pk-button {
-    color: purple;
-    border-color: purple;
+    color: #5447ac;
+    border-color: #5447ac;
     margin: 10px;
 }
 
 #reveal-pk-button:hover {
-    background-color: purple;
+    background-color: #5447ac;
     color: white;
 }
 
@@ -284,13 +284,13 @@
 
 
 #import-pk-button {
-    color: grey;
-    border-color: grey;
+    color: #1e1d1e26;
+    border-color: #1e1d1e26;
     margin: 10px;
 }
 
 #import-pk-button:hover {
-    background-color: grey;
+    background-color: #1e1d1e26;
     color: white;
 }
 
@@ -380,6 +380,7 @@
     font-weight: 800 !important;
 }
 
+/* TODO: change gradient so the actual brand colors can be used on the next two items */
 .carousel-item-detail {
     width: 50%;
     margin: 0 auto;
@@ -436,7 +437,7 @@
 #propose-subtitle {
     font-weight: bold;
     font-size: 18px;
-    color: #32908f;
+    color: #5ECFF9;
 }
 
 .governance-header-image {

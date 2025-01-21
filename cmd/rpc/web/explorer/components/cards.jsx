@@ -2,6 +2,7 @@ import {Card, Col, Row} from "react-bootstrap";
 import Truncate from 'react-truncate-inside';
 import {addDate, convertBytes, convertNumber, convertTime} from "@/components/util";
 
+// TODO: change this images to #82DCA8 so they are the same as the letters 
 const cardImages = ["./block-filled.png", "./chart-up.png", "./transaction-filled.png", "./lock-filled.png"]
 const cardTitles = ["Latest Block", "Supply", "Transactions", "Validators"]
 
