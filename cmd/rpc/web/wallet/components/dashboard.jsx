@@ -200,7 +200,7 @@ export default function Dashboard() {
           src={state.pauseLogs ? "./unpause.png" : "./pause.png"}
         />
       </div>
-      <LazyLog enableSearch={true} id="lazy-log" text={state.logs.replace("\n", "")}/>
+      <LazyLog enableSearch={true} id="lazy-log" text={state.logs.replace("\n", "")} />
       <Container id="charts-container">
         {[
           [
