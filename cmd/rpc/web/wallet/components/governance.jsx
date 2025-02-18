@@ -356,7 +356,7 @@ export default function Governance({keygroup, account: accountWithTxs, validator
             </Button>
             <br/>
             <br/>
-            <Modal show={state.showPropModal} size="lg" onHide={handlePropClose}>
+            <Modal show={state.showPropModal} size="lg" onHide={handlePropClose} JsonViewVariant={JsonViewVariant}>
                 <Form onSubmit={onPropSubmit}>
                     <Modal.Header closeButton>
                         <Modal.Title>{state.txPropType === 0 ? "Change Parameter" : "Treasury Subsidy"}</Modal.Title>
