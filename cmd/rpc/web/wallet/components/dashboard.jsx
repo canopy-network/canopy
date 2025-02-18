@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import Truncate from "react-truncate-inside";
 import { getRatio, formatNumber } from "@/components/util";
 import Container from "react-bootstrap/Container";
@@ -18,6 +18,15 @@ import {
   peerInfoPath,
   Resource,
 } from "@/components/api";
+
+// Memoized log controller button
+const RenderControlButton = memo(({ state, setState }) => { 
+  return (
+    <div onClick={() => setState({ ...state, pauseLogs: !state.pauseLogs })} className="logs-button-container">
+      {state.pauseLogs ? <UnpauseIcon className="icon-button" /> : <PauseIcon className="icon-button" />}
+    </div>
+  );
+});
 
 // Dashboard() is the main component of this file
 export default function Dashboard() {
@@ -130,7 +139,7 @@ export default function Dashboard() {
         ],
       },
     ];
-
+  
   // renderButtonCarouselItem() generates the button for the carousel
   function renderButtonCarouselItem(props) {
     return (
@@ -259,12 +268,8 @@ export default function Dashboard() {
       </Container>
       <h2 className="dashboard-label">Transaction Log</h2>
       <Container id="log-container" fluid>
-        <div onClick={() => setState({ ...state, pauseLogs: !state.pauseLogs })} className="logs-button-container">
-          <img
-            className="logs-button"
-            alt="play-pause-btn"
-            src={state.pauseLogs ? "./unpause.png" : "./pause.png"}
-          />
+        <div className="logs-button-container">
+          <RenderControlButton state={state} setState={setState} />
         </div>
         <CanaLog text={state.logs} />
       </Container>

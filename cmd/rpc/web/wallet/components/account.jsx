@@ -94,19 +94,19 @@ export default function Accounts({keygroup, account, validator, setActiveKey}) {
 
   const stateRef = useRef(state);
   const [buttonVariant, setButtonVariant] = useState('outline-dark');
-  const [JsonViewVariant, setJsonViewVariant] = useState(darkTheme);
+  const [JsonViewVariant, setJsonViewVariant] = useState('darkTheme');
 
   // Using a standalone useEffect here to isolate the color states 
   useEffect(() => {
     // Check data-bs-theme on mount
     const currentTheme = document.documentElement.getAttribute('data-bs-theme');
-
+    
     if (currentTheme === 'dark') {
       setButtonVariant('outline-light');
-      setJsonViewVariant(lightTheme);
+      setJsonViewVariant('lightTheme');
     } else {
       setButtonVariant('outline-dark');
-      setJsonViewVariant(darkTheme);
+      setJsonViewVariant('darkTheme');
     }
   }, []);
 
@@ -341,6 +341,7 @@ export default function Accounts({keygroup, account, validator, setActiveKey}) {
                 state={state}
                 closeOnClick={resetState}
                 keystore={ks}
+                JsonViewVariant={JsonViewVariant}
             />
         );
     }
@@ -493,7 +494,7 @@ function JSONViewer({state, setState, JsonViewVariant}) {
             value={isEmptyPK ? {result: state.txResult} : {result: state.pk}}
             shortenTextAfterLength={100}
             displayDataTypes={false}
-            style={JsonViewVariant}
+            theme={JsonViewVariant}
         />
     );
 }

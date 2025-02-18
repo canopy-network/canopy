@@ -518,27 +518,25 @@ div#log-container {
 }
 
 .logs-button-container {
-  alignment: left;
-  width: 20px;
-  height: 20px;
+  height: 30px;
+  width: 30px;
   position: relative;
-  top: 27px;
-  left: 42px;
+  top: 8px;
+  left: 18px;
   cursor: pointer;
-  transition: ease-in-out 0.2s;
+  transition: .2s ease-in-out;
 }
 
 .logs-button-container:hover {
-  scale: 1.2;
+  scale: 1.05;
 }
 
-.logs-button {
-  width: 25px;
-  height: 25px;
+.logs-button-container svg {
+    max-width: 30px;
 }
 
-.content-dark .logs-button {
-  filter: invert(1);
+.logs-button-container svg path {
+    fill: var(--primary-color);
 }
 
 .canalog-container {
