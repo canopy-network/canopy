@@ -80,14 +80,14 @@ function getCardHeader(props, idx) {
 }
 
 // getCardSubHeader() returns the sub header of the card (right below the header)
-function getCardSubHeader(props, idx) {
+function getCardSubHeader(props, consensusDuration, idx) {
   const v = props.blocks;
   if (v.results.length === 0) {
     return "Loading";
   }
   switch (idx) {
     case 0:
-      return convertTime(v.results[0].block_header.time);
+      return convertTime(v.results[0].block_header.time-consensusDuration);
     case 1:
       return convertNumber(Number(props.supply.total) - Number(props.supply.staked), 1000, true) + " liquid";
     case 2:
@@ -144,14 +144,14 @@ function getCardNote(props, idx) {
 }
 
 // getCardFooter() returns the data for the footer of the card
-function getCardFooter(props, idx) {
+function getCardFooter(props, consensusDuration, idx) {
   const v = props.blocks;
   if (v.results.length === 0) {
     return "Loading";
   }
   switch (idx) {
     case 0:
-      return "Next block: " + addDate(v.results[0].block_header.time, v.results[0].meta.took);
+      return "Next block: " + addDate(v.results[0].block_header.time, consensusDuration);
     case 1:
       let s = "DAO pool supply: ";
       if (props.pool != null) {
@@ -200,6 +200,7 @@ function getCardOnClick(props, index) {
 // Cards() returns the main component
 export default function Cards(props) {
   const cardData = props.state.cardData;
+  const consensusDuration = props.state.consensusDuration;
   return (
     <Row sm={1} md={2} lg={4} className="g-4">
       {Array.from({ length: 4 }, (_, idx) => {
@@ -211,11 +212,11 @@ export default function Cards(props) {
                 <Card.Title className="card-title">{cardTitles[idx]}</Card.Title>
                 <h5>{getCardHeader(cardData, idx)}</h5>
                 <div className="d-flex justify-content-between mb-1">
-                  <Card.Text className="card-info-2 mb-2">{getCardSubHeader(cardData, idx)}</Card.Text>
+                  <Card.Text className="card-info-2 mb-2">{getCardSubHeader(cardData, consensusDuration, idx)}</Card.Text>
                   <Card.Text className="card-info-3">{getCardRightAligned(cardData, idx)}</Card.Text>
                 </div>
                 <div className="card-info-4 mb-3">{getCardNote(cardData, idx)}</div>
-                <Card.Footer className="card-footer">{getCardFooter(cardData, idx)}</Card.Footer>
+                <Card.Footer className="card-footer">{getCardFooter(cardData, consensusDuration, idx)}</Card.Footer>
               </Card.Body>
             </Card>
           </Col>
