@@ -16,7 +16,6 @@ import (
 // HandleTransaction() accepts or rejects inbound txs based on the mempool state
 // - pass through call checking indexer and mempool for duplicate
 func (c *Controller) HandleTransaction(tx []byte) lib.ErrorI {
-	// lock the controller for thread safety
 	hash := crypto.Hash(tx)
 	hashString := lib.BytesToString(hash)
 	// indexer
