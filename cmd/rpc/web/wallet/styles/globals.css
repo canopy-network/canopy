@@ -95,7 +95,7 @@
 }
 
 #toast {
-    width: 100px;
+    width: auto;
     color: white;
 }
 
@@ -369,13 +369,10 @@ button {
 }
 
 #reveal-pk-button {
-    color: var(--secondary-color);
-    border-color: var(--secondary-color);
     margin: 10px;
 }
 
 #reveal-pk-button:hover {
-    background-color: var(--secondary-color);
     color: white;
 }
 
@@ -592,6 +589,65 @@ span.canalog-msgtype.canalog-debug {
 .content-light .canalog-row:nth-child(odd) {
   background-color: rgba(255, 255, 255, 0.6);
 }
+
+/* Begin CanaJSON styles */
+
+.json-viewer{
+    position: relative;
+}
+
+.json-viewer pre {
+    padding: 1rem;
+}
+
+.json-entry {
+    padding-left: 10px;
+}
+
+.json-light.json-viewer {
+    background-color: #eee;
+}
+
+.json-light .json-value.string {
+    color: #198754;
+}
+
+.json-light .json-value.number {
+    color: #0d6efd;
+}
+
+.json-dark.json-viewer {
+    background-color: #111;
+}
+
+.json-dark .json-value.string {
+    color: #2fd789;
+}
+
+.json-dark .json-value.number {
+    color: #0dcaf0;
+}
+
+.json-dark .copy-link svg {
+    fill: #fff;
+}
+
+.copy-link{
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 50px;
+}
+
+.copy-link svg {
+    max-width: 50px;
+}
+
+.copy-link.copied svg {
+    fill: var(--primary-color);
+}
+
+/* End CanaJSON styles */
 
 #charts-container {
   margin-top: 2rem;

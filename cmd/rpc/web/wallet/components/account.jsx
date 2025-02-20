@@ -43,12 +43,10 @@ import {
     UnstakeIcon,
 } from "@/components/svg_icons";
 import { useContext, useEffect, useRef, useState } from "react";
-import JsonView from "@uiw/react-json-view";
-import { lightTheme } from '@uiw/react-json-view/light';
-import { darkTheme } from '@uiw/react-json-view/dark';
 import { Button, Card, Col, Form, Modal, Row, Spinner, Table } from "react-bootstrap";
 import Alert from "react-bootstrap/Alert";
 import Truncate from "react-truncate-inside";
+import CanaJSON from "@/components/canaJSON";
 
 function Keystore() {
     const keystore = useContext(KeystoreContext);
@@ -94,7 +92,7 @@ export default function Accounts({keygroup, account, validator, setActiveKey}) {
 
   const stateRef = useRef(state);
   const [buttonVariant, setButtonVariant] = useState('outline-dark');
-  const [JsonViewVariant, setJsonViewVariant] = useState('darkTheme');
+  const [JsonViewVariant, setJsonViewVariant] = useState('json-dark');
 
   // Using a standalone useEffect here to isolate the color states 
   useEffect(() => {
@@ -103,29 +101,29 @@ export default function Accounts({keygroup, account, validator, setActiveKey}) {
     
     if (currentTheme === 'dark') {
       setButtonVariant('outline-light');
-      setJsonViewVariant('lightTheme');
+      setJsonViewVariant('json-dark');
     } else {
       setButtonVariant('outline-dark');
-      setJsonViewVariant('darkTheme');
+      setJsonViewVariant('json-light');
     }
+  }, [document.documentElement.getAttribute('data-bs-theme')]);
+
+  useEffect(() => {
+    // Ensure document is available
+    const rootStyles = getComputedStyle(document.documentElement);
+    const primaryColor = rootStyles.getPropertyValue("--primary-color").trim();
+    const greyColor = rootStyles.getPropertyValue("--grey-color").trim();
+
+    ksRef.current = ks;
+    stateRef.current = state;
+
+    // Update state with colors
+    setState((prevState) => ({
+      ...prevState,
+      primaryColor,
+      greyColor,
+    }));
   }, []);
-
-    useEffect(() => {
-        // Ensure document is available
-        const rootStyles = getComputedStyle(document.documentElement);
-        const primaryColor = rootStyles.getPropertyValue("--primary-color").trim();
-        const greyColor = rootStyles.getPropertyValue("--grey-color").trim();
-
-        ksRef.current = ks;
-        stateRef.current = state;
-
-        // Update state with colors
-        setState((prevState) => ({
-            ...prevState,
-            primaryColor,
-            greyColor,
-        }));
-    }, []);
 
     // resetState() resets the state back to its initial
     function resetState() {
@@ -480,38 +478,19 @@ function KeyDetail({i, title, info, state, setState}) {
     );
 }
 
-// JSONViewer() returns a raw JSON viewer based on the state of pk and txResult
-function JSONViewer({state, setState, JsonViewVariant}) {
-    const isEmptyPK = objEmpty(state.pk);
-    const isEmptyTxRes = objEmpty(state.txResult);
-
-    if (isEmptyPK && isEmptyTxRes) return <></>;
-    return (
-        <JsonView
-            onCopied={(text) => {
-                copy(state, setState, text, "copied to keyboard!")
-            }}
-            value={isEmptyPK ? {result: state.txResult} : {result: state.pk}}
-            shortenTextAfterLength={100}
-            displayDataTypes={false}
-            theme={JsonViewVariant}
-        />
-    );
-}
-
 // AccSumTabCol() returns an account summary table column
 function AccSumTabCol({detail, i, state, setState}) {
-    return withTooltip(
-        <td onClick={() => copy(state, setState, detail)}>
-            <CopyIcon/>
-            <div className="account-summary-info-table-column">
-                <Truncate text={detail}/>
-            </div>
-        </td>,
-        detail,
-        i,
-        "top",
-    );
+  return withTooltip(
+    <td onClick={() => copy(state, setState, detail)}>
+      <CopyIcon/>
+      <div className="account-summary-info-table-column">
+        <Truncate text={detail}/>
+      </div>
+    </td>,
+    detail,
+    i,
+    "top",
+  );
 }
 
 // SubmitBtn() renders a transaction submit button with customizable text, variant, and id
@@ -567,7 +546,7 @@ function RenderButtons({type, state, closeOnClick}) {
                     </>
                 );
             } else {
-                const s = state.showSubmit ? <SubmitBtn text="Submit Transaction" variant="outline-danger"/> : <></>;
+                const s = state.showSubmit ? <SubmitBtn text="Submit Transaction" variant="outline-secondary"/> : <></>;
                 return (
                     <>
                         {s}
@@ -622,7 +601,7 @@ function RenderModal({
             validator={validator}
           />
           {showAlert && <Alert variant={"danger"}>{alertMsg}</Alert>}
-          <JSONViewer state={state} setState={setState} JsonViewVariant={JsonViewVariant} />
+          <CanaJSON state={state} setState={setState} JsonViewVariant={JsonViewVariant} />
           <Spinner style={{ display: state.showSpinner ? "block" : "none", margin: "0 auto" }} />
         </Modal.Body>
 
