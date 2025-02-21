@@ -38,12 +38,12 @@ message GenesisState {
   repeated Validator validators = 4;
   // non_signers: a count of validators who haven't signed in some 'non-sign-window' of blocks
   // this field is not importable
-  repeated NonSigner non_signers = 5;
+  repeated NonSigner non_signers = 5; // @gotags: json:"nonSigners"
   // double_signers: a list of those who 'double-signed' and the heights they double signed on
   // this field is not importable
-  repeated DoubleSigner double_signers = 6;
+  repeated DoubleSigner double_signers = 6; // @gotags: json:"doubleSigners"
   // order_books: is a list of active sell orders
-  OrderBooks order_books = 7;
+  OrderBooks order_books = 7; // @gotags: json:"orderBooks"
   // params: is a list of governance parameters and their respective values
   Params params = 8;
   // supply: keeps track of the total amount of tokens or funds available across the entire blockchain
@@ -53,5 +53,5 @@ message GenesisState {
   // this field is not importable
   CommitteesData committees = 10;
   // retired committees: a list of the chain ids that are permanently retired
-  repeated uint64 retired_committees = 11;
+  repeated uint64 retired_committees = 11; // @gotags: json:"retiredComittees"
 }

@@ -102,16 +102,16 @@ type Params struct {
 
 	// consensus: are parameters in the 'consensus' space
 	// settings that define how nodes in the blockchain agree on the state of the ledger
-	Consensus *ConsensusParams `protobuf:"bytes,1,opt,name=Consensus,proto3" json:"Consensus,omitempty"`
+	Consensus *ConsensusParams `protobuf:"bytes,1,opt,name=Consensus,proto3" json:"consensus"` // @gotags: json:"consensus"
 	// validator: are parameters in the 'validator' space
 	// settings that define the rules and criteria for validators in the blockchain network
-	Validator *ValidatorParams `protobuf:"bytes,2,opt,name=Validator,proto3" json:"Validator,omitempty"`
+	Validator *ValidatorParams `protobuf:"bytes,2,opt,name=Validator,proto3" json:"validator"` // @gotags: json:"validator"
 	// fee: are parameters in the 'fee' space
 	// settings that define the various amounts of transaction fees
-	Fee *FeeParams `protobuf:"bytes,3,opt,name=Fee,proto3" json:"Fee,omitempty"`
+	Fee *FeeParams `protobuf:"bytes,3,opt,name=Fee,proto3" json:"fee"` // @gotags: json:"fee"
 	// governance: are parameters in the 'gov' space
 	// settings that define the rules that enable decentralized and autonomous governing of the network
-	Governance *GovernanceParams `protobuf:"bytes,4,opt,name=Governance,proto3" json:"Governance,omitempty"`
+	Governance *GovernanceParams `protobuf:"bytes,4,opt,name=Governance,proto3" json:"governance"` // @gotags: json:"governance"
 }
 
 func (x *Params) Reset() {
@@ -240,11 +240,11 @@ type ConsensusParams struct {
 	unknownFields protoimpl.UnknownFields
 
 	// block_size: is the maximum allowed size of a block (not including the header)
-	BlockSize uint64 `protobuf:"varint,1,opt,name=block_size,json=blockSize,proto3" json:"block_size,omitempty"`
+	BlockSize uint64 `protobuf:"varint,1,opt,name=block_size,json=blockSize,proto3" json:"blockSize"` // @gotags: json:"blockSize"
 	// protocol_version: is the minimum protocol standard that nodes must run to participate in the network
-	ProtocolVersion string `protobuf:"bytes,2,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
+	ProtocolVersion string `protobuf:"bytes,2,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocolVersion"` // @gotags: json:"protocolVersion"
 	// root_chain_id: the identifier of the root chain (source of the validator set)
-	RootChainId uint64 `protobuf:"varint,3,opt,name=root_chain_id,json=rootChainId,proto3" json:"root_chain_id,omitempty"`
+	RootChainId uint64 `protobuf:"varint,3,opt,name=root_chain_id,json=rootChainId,proto3" json:"rootChainID"` // @gotags: json:"rootChainID"
 	// retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
 	Retired uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
 }
@@ -318,50 +318,50 @@ type ValidatorParams struct {
 	// unstaking_blocks: is the number of blocks a validator's staked tokens must remain locked and slashable after
 	// sending 'unstake_validator'. Without unstaking blocks, validators could withdraw their stake right after attempting
 	// malicious behavior, like double-signing or failing to validate correctly
-	UnstakingBlocks uint64 `protobuf:"varint,1,opt,name=unstaking_blocks,json=unstakingBlocks,proto3" json:"unstaking_blocks,omitempty"`
+	UnstakingBlocks uint64 `protobuf:"varint,1,opt,name=unstaking_blocks,json=unstakingBlocks,proto3" json:"unstakingBlocks"` // @gotags: json:"unstakingBlocks"
 	// max_pause_blocks: is the maximum number of blocks a validator may be paused before being 'force unstaked'.
 	// This is necessary to prevent dead validators from forever existing in the state
-	MaxPauseBlocks uint64 `protobuf:"varint,2,opt,name=max_pause_blocks,json=maxPauseBlocks,proto3" json:"max_pause_blocks,omitempty"`
+	MaxPauseBlocks uint64 `protobuf:"varint,2,opt,name=max_pause_blocks,json=maxPauseBlocks,proto3" json:"maxPauseBlocks"` // @gotags: json:"maxPauseBlocks"
 	// double_sign_slash_percentage: is the percentage of staked tokens that are slashed when a Validator is caught
 	// performing a double-sign (signing two different blocks for the same block height and round,
 	// supporting conflicting versions of the blockchain)
-	DoubleSignSlashPercentage uint64 `protobuf:"varint,3,opt,name=double_sign_slash_percentage,json=doubleSignSlashPercentage,proto3" json:"double_sign_slash_percentage,omitempty"`
+	DoubleSignSlashPercentage uint64 `protobuf:"varint,3,opt,name=double_sign_slash_percentage,json=doubleSignSlashPercentage,proto3" json:"doubleSignSlashPercentage"` // @gotags: json:"doubleSignSlashPercentage"
 	// non_sign_slash_percentage: is the percentage of staked tokens that are slashed when a Validator doesn't sign a
 	// number of blocks over the max_non_sign threshold within the non_sign_window blocks.
-	NonSignSlashPercentage uint64 `protobuf:"varint,4,opt,name=non_sign_slash_percentage,json=nonSignSlashPercentage,proto3" json:"non_sign_slash_percentage,omitempty"`
+	NonSignSlashPercentage uint64 `protobuf:"varint,4,opt,name=non_sign_slash_percentage,json=nonSignSlashPercentage,proto3" json:"nonSignSlashPercentage"` // @gotags: json:"nonSignSlashPercentage"
 	// max_non_sign: is the maximum number of blocks a Validator may not sign before being slashed, a threshold system
 	// provides lee-way for accidental non-sign faults
-	MaxNonSign uint64 `protobuf:"varint,5,opt,name=max_non_sign,json=maxNonSign,proto3" json:"max_non_sign,omitempty"`
+	MaxNonSign uint64 `protobuf:"varint,5,opt,name=max_non_sign,json=maxNonSign,proto3" json:"maxNonSign"` // @gotags: json:"maxNonSign"
 	// non_sign_window: is the period of blocks in which a validator’s count of missed signatures (non-signs) is tracked
 	// before it is reset. During this window, if a validator fails to sign blocks, the missed count is incremented
 	// Once the window expires, the non-sign count is reset, providing the validator a chance to recover without immediate
 	// penalties
-	NonSignWindow uint64 `protobuf:"varint,6,opt,name=non_sign_window,json=nonSignWindow,proto3" json:"non_sign_window,omitempty"`
+	NonSignWindow uint64 `protobuf:"varint,6,opt,name=non_sign_window,json=nonSignWindow,proto3" json:"nonSignWindow"` // @gotags: json:"nonSignWindow"
 	// max_committees: is the maximum number of committees a validator is allowed to stake for
-	MaxCommittees uint64 `protobuf:"varint,7,opt,name=max_committees,json=maxCommittees,proto3" json:"max_committees,omitempty"`
+	MaxCommittees uint64 `protobuf:"varint,7,opt,name=max_committees,json=maxCommittees,proto3" json:"maxCommittees"` // @gotags: json:"maxCommittees"
 	// max_committee_size: is the maximum number of active validators a committee may have participating in BFT at any
 	// one view
-	MaxCommitteeSize uint64 `protobuf:"varint,8,opt,name=max_committee_size,json=maxCommitteeSize,proto3" json:"max_committee_size,omitempty"`
+	MaxCommitteeSize uint64 `protobuf:"varint,8,opt,name=max_committee_size,json=maxCommitteeSize,proto3" json:"maxCommitteeSize"` // @gotags: json:"maxCommitteeSize"
 	// early_withdrawal_penalty: is the percent reward deduction if NOT compounding validator rewards
-	EarlyWithdrawalPenalty uint64 `protobuf:"varint,9,opt,name=early_withdrawal_penalty,json=earlyWithdrawalPenalty,proto3" json:"early_withdrawal_penalty,omitempty"`
+	EarlyWithdrawalPenalty uint64 `protobuf:"varint,9,opt,name=early_withdrawal_penalty,json=earlyWithdrawalPenalty,proto3" json:"earlyWithdrawalPenalty"` // @gotags: json:"earlyWithdrawalPenalty"
 	// delegate_unstaking_blocks: is the number of blocks a delegate validator's staked tokens must remain locked.
 	// Since there's no slashing of delegates, this variable affects economic stability more than security
-	DelegateUnstakingBlocks uint64 `protobuf:"varint,10,opt,name=delegate_unstaking_blocks,json=delegateUnstakingBlocks,proto3" json:"delegate_unstaking_blocks,omitempty"`
+	DelegateUnstakingBlocks uint64 `protobuf:"varint,10,opt,name=delegate_unstaking_blocks,json=delegateUnstakingBlocks,proto3" json:"delegateUnstakingBlocks"` // @gotags: json:"delegateUnstakingBlocks"
 	// minimum_order_size: is the minimum amount a 'sell order' must sell in order to be valid
-	MinimumOrderSize uint64 `protobuf:"varint,11,opt,name=minimum_order_size,json=minimumOrderSize,proto3" json:"minimum_order_size,omitempty"`
+	MinimumOrderSize uint64 `protobuf:"varint,11,opt,name=minimum_order_size,json=minimumOrderSize,proto3" json:"minimumOrderSize"` // @gotags: json:"minimumOrderSize"
 	// stake_percent_for_subsidized_committee: is the minimum percentage of total stake that a committee must have
 	// committed to it in order to be considered "subsidized" by the protocol
-	StakePercentForSubsidizedCommittee uint64 `protobuf:"varint,12,opt,name=stake_percent_for_subsidized_committee,json=stakePercentForSubsidizedCommittee,proto3" json:"stake_percent_for_subsidized_committee,omitempty"`
+	StakePercentForSubsidizedCommittee uint64 `protobuf:"varint,12,opt,name=stake_percent_for_subsidized_committee,json=stakePercentForSubsidizedCommittee,proto3" json:"stakePercentForSubsidizedCommittee"` // @gotags: json:"stakePercentForSubsidizedCommittee"
 	// max_slash_per_committee: is the maximum slash per committee per block that a validator may receive.
 	// If the slash exceeds maximum, the validator will be auto-removed from the committee to protect all parties from
 	// cascading failures.
-	MaxSlashPerCommittee uint64 `protobuf:"varint,13,opt,name=max_slash_per_committee,json=maxSlashPerCommittee,proto3" json:"max_slash_per_committee,omitempty"`
+	MaxSlashPerCommittee uint64 `protobuf:"varint,13,opt,name=max_slash_per_committee,json=maxSlashPerCommittee,proto3" json:"maxSlashPerCommittee"` // @gotags: json:"maxSlashPerCommittee"
 	// delegate_reward_percentage: is the percentage of the block reward that is awarded to the delegates
-	DelegateRewardPercentage uint64 `protobuf:"varint,14,opt,name=delegate_reward_percentage,json=delegateRewardPercentage,proto3" json:"delegate_reward_percentage,omitempty"`
+	DelegateRewardPercentage uint64 `protobuf:"varint,14,opt,name=delegate_reward_percentage,json=delegateRewardPercentage,proto3" json:"delegateRewardPercentage"` // @gotags: json:"delegateRewardPercentage"
 	// buy_deadline_blocks: amount of blocks a 'buyer' has to complete an order they 'reserved'
-	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buy_deadline_blocks,omitempty"`
+	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buyDeadlineBlocks"` // @gotags: json:"buyDeadlineBlocks"
 	// buy_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a buy order
-	BuyOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=buy_order_fee_multiplier,json=buyOrderFeeMultiplier,proto3" json:"buy_order_fee_multiplier,omitempty"`
+	BuyOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=buy_order_fee_multiplier,json=buyOrderFeeMultiplier,proto3" json:"buyOrderFeeMultiplier"` // @gotags: json:"buyOrderFeeMultiplier"
 }
 
 func (x *ValidatorParams) Reset() {
@@ -515,31 +515,31 @@ type FeeParams struct {
 	unknownFields protoimpl.UnknownFields
 
 	// send_fee: is the fee amount (in uCNPY) for Message Send
-	SendFee uint64 `protobuf:"varint,1,opt,name=send_fee,json=sendFee,proto3" json:"send_fee,omitempty"`
+	SendFee uint64 `protobuf:"varint,1,opt,name=send_fee,json=sendFee,proto3" json:"sendFee"` // @gotags: json:"sendFee"
 	// stake_fee: is the fee amount (in uCNPY) for Message Stake
-	StakeFee uint64 `protobuf:"varint,2,opt,name=stake_fee,json=stakeFee,proto3" json:"stake_fee,omitempty"`
+	StakeFee uint64 `protobuf:"varint,2,opt,name=stake_fee,json=stakeFee,proto3" json:"stakeFee"` // @gotags: json:"stakeFee"
 	// edit_stake_fee: is the fee amount (in uCNPY) for Message Edit-Stake
-	EditStakeFee uint64 `protobuf:"varint,3,opt,name=edit_stake_fee,json=editStakeFee,proto3" json:"edit_stake_fee,omitempty"`
+	EditStakeFee uint64 `protobuf:"varint,3,opt,name=edit_stake_fee,json=editStakeFee,proto3" json:"editStakeFee"` // @gotags: json:"editStakeFee"
 	// unstake_stake_fee: is the fee amount (in uCNPY) for Message Unstake
-	UnstakeFee uint64 `protobuf:"varint,4,opt,name=unstake_fee,json=unstakeFee,proto3" json:"unstake_fee,omitempty"`
+	UnstakeFee uint64 `protobuf:"varint,4,opt,name=unstake_fee,json=unstakeFee,proto3" json:"unstakeFee"` // @gotags: json:"unstakeFee"
 	// pause_fee: is the fee amount (in uCNPY) for Message Pause
-	PauseFee uint64 `protobuf:"varint,5,opt,name=pause_fee,json=pauseFee,proto3" json:"pause_fee,omitempty"`
+	PauseFee uint64 `protobuf:"varint,5,opt,name=pause_fee,json=pauseFee,proto3" json:"pauseFee"` // @gotags: json:"pauseFee"
 	// unpause_fee: is the fee amount (in uCNPY) for Message Unpause
-	UnpauseFee uint64 `protobuf:"varint,6,opt,name=unpause_fee,json=unpauseFee,proto3" json:"unpause_fee,omitempty"`
+	UnpauseFee uint64 `protobuf:"varint,6,opt,name=unpause_fee,json=unpauseFee,proto3" json:"unpauseFee"` // @gotags: json:"unpauseFee"
 	// change_parameter_fee: is the fee amount (in uCNPY) for Message Change Parameter
-	ChangeParameterFee uint64 `protobuf:"varint,7,opt,name=change_parameter_fee,json=changeParameterFee,proto3" json:"change_parameter_fee,omitempty"`
+	ChangeParameterFee uint64 `protobuf:"varint,7,opt,name=change_parameter_fee,json=changeParameterFee,proto3" json:"changeParameterFee"` // @gotags: json:"changeParameterFee"
 	// dao_transfer: is the fee amount (in uCNPY) for Message DAO transfer
-	DaoTransferFee uint64 `protobuf:"varint,8,opt,name=dao_transfer_fee,json=daoTransferFee,proto3" json:"dao_transfer_fee,omitempty"`
+	DaoTransferFee uint64 `protobuf:"varint,8,opt,name=dao_transfer_fee,json=daoTransferFee,proto3" json:"daoTransferFee"` // @gotags: json:"daoTransferFee"
 	// certificate_results_fee: is the fee amount (in uCNPY) for Message Certificate Results
-	CertificateResultsFee uint64 `protobuf:"varint,9,opt,name=certificate_results_fee,json=certificateResultsFee,proto3" json:"certificate_results_fee,omitempty"`
+	CertificateResultsFee uint64 `protobuf:"varint,9,opt,name=certificate_results_fee,json=certificateResultsFee,proto3" json:"certificateResultsFee"` // @gotags: json:"certificateResultsFee"
 	// subsidy_fee: is the fee amount (in uCNPY) for Message Subsidy
-	SubsidyFee uint64 `protobuf:"varint,10,opt,name=subsidy_fee,json=subsidyFee,proto3" json:"subsidy_fee,omitempty"`
+	SubsidyFee uint64 `protobuf:"varint,10,opt,name=subsidy_fee,json=subsidyFee,proto3" json:"subsidyFee"` // @gotags: json:"subsidyFee"
 	// create_order_fee: is the fee amount (in uCNPY) for Message Create Order
-	CreateOrderFee uint64 `protobuf:"varint,11,opt,name=create_order_fee,json=createOrderFee,proto3" json:"create_order_fee,omitempty"`
+	CreateOrderFee uint64 `protobuf:"varint,11,opt,name=create_order_fee,json=createOrderFee,proto3" json:"createOrderFee"` // @gotags: json:"createOrderFee"
 	// edit_order_fee: is the fee amount (in uCNPY) for Message Edit Order
-	EditOrderFee uint64 `protobuf:"varint,12,opt,name=edit_order_fee,json=editOrderFee,proto3" json:"edit_order_fee,omitempty"`
+	EditOrderFee uint64 `protobuf:"varint,12,opt,name=edit_order_fee,json=editOrderFee,proto3" json:"editOrderFee"` // @gotags: json:"editOrderFee"
 	// delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
-	DeleteOrderFee uint64 `protobuf:"varint,13,opt,name=delete_order_fee,json=deleteOrderFee,proto3" json:"delete_order_fee,omitempty"`
+	DeleteOrderFee uint64 `protobuf:"varint,13,opt,name=delete_order_fee,json=deleteOrderFee,proto3" json:"deleteOrderFee"` // @gotags: json:"deleteOrderFee"
 }
 
 func (x *FeeParams) Reset() {
@@ -673,7 +673,7 @@ type GovernanceParams struct {
 	unknownFields protoimpl.UnknownFields
 
 	// dao_reward_percent: is the percent of the block reward that is sent to the DAO
-	DaoRewardPercentage uint64 `protobuf:"varint,1,opt,name=dao_reward_percentage,json=daoRewardPercentage,proto3" json:"dao_reward_percentage,omitempty"`
+	DaoRewardPercentage uint64 `protobuf:"varint,1,opt,name=dao_reward_percentage,json=daoRewardPercentage,proto3" json:"daoRewardPercentage"` // @gotags: json:"daoRewardPercentage"
 }
 
 func (x *GovernanceParams) Reset() {

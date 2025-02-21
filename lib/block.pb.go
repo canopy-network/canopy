@@ -51,41 +51,41 @@ type BlockHeader struct {
 	Hash []byte `protobuf:"bytes,2,opt,name=hash,proto3" json:"hash,omitempty"`
 	// network_id: a unique identifier used to distinguish different canopy blockchain networks, ensuring that
 	// transactions and blocks are only processed within the correct network
-	NetworkId uint32 `protobuf:"varint,3,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NetworkId uint32 `protobuf:"varint,3,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// time: specific time recorded in a block when it is created by the proposer, indicating when the block was proposed
 	Time uint64 `protobuf:"varint,4,opt,name=time,proto3" json:"time,omitempty"`
 	// num_txs: the count of transactions in the block
-	NumTxs uint64 `protobuf:"varint,5,opt,name=num_txs,json=numTxs,proto3" json:"num_txs,omitempty"`
+	NumTxs uint64 `protobuf:"varint,5,opt,name=num_txs,json=numTxs,proto3" json:"numTxs"` // @gotags: json:"numTxs"
 	// total_txs: the count of transactions in the blockchain
-	TotalTxs uint64 `protobuf:"varint,6,opt,name=total_txs,json=totalTxs,proto3" json:"total_txs,omitempty"`
+	TotalTxs uint64 `protobuf:"varint,6,opt,name=total_txs,json=totalTxs,proto3" json:"totalTxs"` // @gotags: json:"totalTxs"
 	// total_vdf_iterations: the total number of verifiable random delay function iterations in the blockchain
-	TotalVdfIterations uint64 `protobuf:"varint,7,opt,name=total_vdf_iterations,json=totalVdfIterations,proto3" json:"total_vdf_iterations,omitempty"`
+	TotalVdfIterations uint64 `protobuf:"varint,7,opt,name=total_vdf_iterations,json=totalVdfIterations,proto3" json:"totalVDFIterations"` // @gotags: json:"totalVDFIterations"
 	// last_block_hash: the unique identifier of the previous block, chaining this block to the previous, ensuring the
 	// continuity of the blockchain
-	LastBlockHash []byte `protobuf:"bytes,8,opt,name=last_block_hash,json=lastBlockHash,proto3" json:"last_block_hash,omitempty"`
+	LastBlockHash []byte `protobuf:"bytes,8,opt,name=last_block_hash,json=lastBlockHash,proto3" json:"lastBlockHash"` // @gotags: json:"lastBlockHash"
 	// state_root: the merkle root of the 'state commit store' representing  the entire state of the blockchain at
 	// this height
-	StateRoot []byte `protobuf:"bytes,9,opt,name=state_root,json=stateRoot,proto3" json:"state_root,omitempty"`
+	StateRoot []byte `protobuf:"bytes,9,opt,name=state_root,json=stateRoot,proto3" json:"stateRoot"` // @gotags: json:"stateRoot"
 	// transaction_root: the merkle root of the 'transactions' included in this block
-	TransactionRoot []byte `protobuf:"bytes,10,opt,name=transaction_root,json=transactionRoot,proto3" json:"transaction_root,omitempty"`
+	TransactionRoot []byte `protobuf:"bytes,10,opt,name=transaction_root,json=transactionRoot,proto3" json:"transactionRoot"` // @gotags: json:"transactionRoot"
 	// validator_root: the merkle root of the validators that signed the quorum certificate for this height
 	// ensuring that the list of validators (who are responsible for proposing and validating blocks) is consistent
 	// and tamper-proof, allowing participants to independently verify the integrity of the validator set at any point
 	// in the blockchain
-	ValidatorRoot []byte `protobuf:"bytes,11,opt,name=validator_root,json=validatorRoot,proto3" json:"validator_root,omitempty"`
+	ValidatorRoot []byte `protobuf:"bytes,11,opt,name=validator_root,json=validatorRoot,proto3" json:"validatorRoot"` // @gotags: json:"validatorRoot"
 	// next_validator_root: the merkle root of the validators who are responsible for proposing and validating the next
 	// block - ensuring smooth transitions between validator sets. This design allows lite-node operations as just with
 	// the block_headers a node is able to validate the signers of the entire blockchain
-	NextValidatorRoot []byte `protobuf:"bytes,12,opt,name=next_validator_root,json=nextValidatorRoot,proto3" json:"next_validator_root,omitempty"`
+	NextValidatorRoot []byte `protobuf:"bytes,12,opt,name=next_validator_root,json=nextValidatorRoot,proto3" json:"nextValidatorRoot"` // @gotags: json:"nextValidatorRoot"
 	// proposer_address: is the short version of the public key of the Validator who proposed this block
-	ProposerAddress []byte `protobuf:"bytes,13,opt,name=proposer_address,json=proposerAddress,proto3" json:"proposer_address,omitempty"`
+	ProposerAddress []byte `protobuf:"bytes,13,opt,name=proposer_address,json=proposerAddress,proto3" json:"proposerAddress"` // @gotags: json:"proposerAddress"
 	// vdf: the verifiable delay proof for this block. The VDF serves as a protection mechanism against historical
 	// forking attacks
 	Vdf *crypto.VDF `protobuf:"bytes,14,opt,name=vdf,proto3" json:"vdf,omitempty"`
 	// last_quorum_certificate: The quorum certificate from the previous block is included in the block header to ensure
 	// all nodes have the same record of blockchain certificates, preventing discrepancies where the same block
 	// could be accepted with different super-majorities of signatures across nodes.
-	LastQuorumCertificate *QuorumCertificate `protobuf:"bytes,15,opt,name=last_quorum_certificate,json=lastQuorumCertificate,proto3" json:"last_quorum_certificate,omitempty"`
+	LastQuorumCertificate *QuorumCertificate `protobuf:"bytes,15,opt,name=last_quorum_certificate,json=lastQuorumCertificate,proto3" json:"lastQuorumCertificate"` // @gotags: json:"lastQuorumCertificate"
 }
 
 func (x *BlockHeader) Reset() {
@@ -233,7 +233,7 @@ type Block struct {
 	unknownFields protoimpl.UnknownFields
 
 	// block_header: is the essential summary information of the block
-	BlockHeader *BlockHeader `protobuf:"bytes,1,opt,name=block_header,json=blockHeader,proto3" json:"block_header,omitempty"`
+	BlockHeader *BlockHeader `protobuf:"bytes,1,opt,name=block_header,json=blockHeader,proto3" json:"blockHeader"` // @gotags: json:"blockHeader"
 	// transactions: is the batch of transactions in this block
 	Transactions [][]byte `protobuf:"bytes,2,rep,name=transactions,proto3" json:"transactions,omitempty"`
 }
@@ -292,7 +292,7 @@ type BlockResult struct {
 	unknownFields protoimpl.UnknownFields
 
 	// block_header: is the essential summary information of the block
-	BlockHeader *BlockHeader `protobuf:"bytes,1,opt,name=block_header,json=blockHeader,proto3" json:"block_header,omitempty"`
+	BlockHeader *BlockHeader `protobuf:"bytes,1,opt,name=block_header,json=blockHeader,proto3" json:"blockHeader"` // @gotags: json:"blockHeader"
 	// transactions: is a batch of transaction results in this block
 	Transactions []*TxResult `protobuf:"bytes,2,rep,name=transactions,proto3" json:"transactions,omitempty"`
 	// meta: is non-essential metadata about the processing of this block

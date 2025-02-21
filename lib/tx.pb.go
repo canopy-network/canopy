@@ -44,13 +44,13 @@ type Transaction struct {
 	unknownFields protoimpl.UnknownFields
 
 	// message_type: The type of the transaction like 'send' or 'stake'
-	MessageType string `protobuf:"bytes,1,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	MessageType string `protobuf:"bytes,1,opt,name=message_type,json=messageType,proto3" json:"messageType"` // @gotags: json:"messageType"
 	// msg: The actual transaction message payload, which is encapsulated in a generic message format
 	Msg *anypb.Any `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 	// signature: The cryptographic signature used to verify the authenticity of the transaction
 	Signature *Signature `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	// created_height: The height when the transaction was created - allows 'safe pruning'
-	CreatedHeight uint64 `protobuf:"varint,4,opt,name=created_height,json=createdHeight,proto3" json:"created_height,omitempty"`
+	CreatedHeight uint64 `protobuf:"varint,4,opt,name=created_height,json=createdHeight,proto3" json:"createdHeight"` // @gotags: json:"createdHeight"
 	// time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
 	Time uint64 `protobuf:"varint,5,opt,name=time,proto3" json:"time,omitempty"`
 	// fee: The fee associated with processing the transaction
@@ -58,9 +58,9 @@ type Transaction struct {
 	// memo: An optional message or note attached to the transaction
 	Memo string `protobuf:"bytes,7,opt,name=memo,proto3" json:"memo,omitempty"`
 	// network_id: The identity of the network the transaction is intended for
-	NetworkId uint64 `protobuf:"varint,8,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NetworkId uint64 `protobuf:"varint,8,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// chain_id: The identity of the committee the transaction is intended for
-	ChainId uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,9,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 }
 
 func (x *Transaction) Reset() {
@@ -170,7 +170,7 @@ type TxResult struct {
 	// recipient: The address of the user receiving the transaction
 	Recipient []byte `protobuf:"bytes,2,opt,name=recipient,proto3" json:"recipient,omitempty"`
 	// message_type: The type of the transaction like 'send' or 'stake'
-	MessageType string `protobuf:"bytes,3,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`
+	MessageType string `protobuf:"bytes,3,opt,name=message_type,json=messageType,proto3" json:"messageType"` // @gotags: json:"messageType"
 	// height: The block height at which the transaction was included
 	Height uint64 `protobuf:"varint,4,opt,name=height,proto3" json:"height,omitempty"`
 	// index: The position of the transaction within the block
@@ -178,7 +178,7 @@ type TxResult struct {
 	// transaction: The original transaction object
 	Transaction *Transaction `protobuf:"bytes,6,opt,name=transaction,proto3" json:"transaction,omitempty"`
 	// tx_hash: The unique hash that identifies the transaction
-	TxHash string `protobuf:"bytes,7,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
+	TxHash string `protobuf:"bytes,7,opt,name=tx_hash,json=txHash,proto3" json:"txHash"` // @gotags: json:"txHash"
 }
 
 func (x *TxResult) Reset() {
@@ -270,7 +270,7 @@ type Signature struct {
 	unknownFields protoimpl.UnknownFields
 
 	// public_key: is a cryptographic code shared openly, used to verify digital signatures
-	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"publicKey"` // @gotags: json:"publicKey"
 	// signature: the bytes of the signature output from a private key which may be verified with the message and public
 	Signature []byte `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
 }

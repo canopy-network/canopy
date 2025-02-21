@@ -89,13 +89,13 @@ enum Phase {
 // with the successful production of a block or quit prematurely due to an error.
 message View {
   // the unique identifier of the blockchain network
-  uint64 network_id = 1;
+  uint64 network_id = 1; // @gotags: json:"networkID"
   // the unique identifier of the committee within the blockchain network
-  uint64 chain_id = 2;
+  uint64 chain_id = 2; // @gotags: json:"chainID"
   // the height or number of committed blocks in the blockchain
   uint64 height = 3;
   // the root blockchain height also the height that the committee validator set may be verified
-  uint64 root_height = 4;
+  uint64 root_height = 4; // @gotags: json:"rootHeight"
   // each height consists of one or more `rounds` which is a step within the consensus protocol where
   // a new Proposer is selected to lead the validators to agree on the next block if they fail, the
   // round is incremented, more time is granted for consensus timeouts, and the cycle starts over
@@ -128,16 +128,16 @@ message Proposers {
 // the bft process
 message ConsensusValidator {
   // public_key: the operator's aggregable public key that is used to validate signatures from the operator
-  bytes public_key = 1;
+  bytes public_key = 1; // @gotags: json:"publicKey"
   // voting_power: the weight of this node's vote, typically 1 to 1 matched to staked tokens
-  uint64 voting_power = 2;
+  uint64 voting_power = 2; // @gotags: json:"votingPower"
   // net_address: the p2p tcp address of the validator node
-  string net_address = 3;
+  string net_address = 3; // @gotags: json:"netAddress"
 }
 
 // ConsensusValidators is a list of Consensus Validator objects used in the bft process often representing a BFT
 // committee
 message ConsensusValidators {
   // validator_set: is the actual list of Validators and their respective
-  repeated ConsensusValidator ValidatorSet = 1;
+  repeated ConsensusValidator ValidatorSet = 1; // @gotags: json:"validatorSet"
 }

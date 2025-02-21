@@ -38,9 +38,9 @@ message Message {
   QuorumCertificate qc = 3;
   // high_qc: the latest 'round' quorum certificate where a +2/3rds of validators reached quorum for the PRECOMMIT phase
   // This serves as a secure proof to protect those who may have committed in a type II asynchronous network
-  QuorumCertificate high_qc = 4;
+  QuorumCertificate high_qc = 4; // @gotags: json:"highQC"
   // double_sign_evidence: proof that a validator has signed two conflicting proposals at the same View
-  repeated DoubleSignEvidence last_double_sign_evidence = 5;
+  repeated DoubleSignEvidence last_double_sign_evidence = 5; // @gotags: json:"lastDoubleSignEvidence"
   // vdf: a Verifiable Delay Function is a cryptographic function that takes a fixed time to compute
   // but is fast to verify, deterring historical fork attacks like the long-range-attack
   VDF vdf = 6;
@@ -53,16 +53,16 @@ message Message {
 message DoubleSignEvidence {
   // vote_a: one of two quorum certificates that are of the same View that have conflicting payloads both that are
   // signed by one or more validators
-  QuorumCertificate vote_a = 1;
+  QuorumCertificate vote_a = 1; // @gotags: json:"voteA"
   // vote_b: one of two quorum certificates that are of the same View that have conflicting payloads both that are
   // signed by one or more validators
-  QuorumCertificate vote_b = 2;
+  QuorumCertificate vote_b = 2; // @gotags: json:"voteB"
 }
 
 // double_sign_evidences is a de-duplicated list of double sign evidence
 message DoubleSignEvidences {
   // evidence: a list of double sign evidence
-  repeated DoubleSignEvidence Evidence = 1;
+  repeated DoubleSignEvidence Evidence = 1; // @gotags: json:"evidence"
   // de-duplicator: a map structure that prevents accidental collision of evidence in the list
-  map<string, bool> DeDuplicator = 2;
+  map<string, bool> DeDuplicator = 2; // @gotags: json:"deduplicator"
 }

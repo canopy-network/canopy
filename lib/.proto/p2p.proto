@@ -31,7 +31,7 @@ message Envelope {
 // A Packet is a part of a message (or the entire message) that is associated with a specific stream topic and includes an EOF signal
 message Packet {
   // stream_id: the identifier of the stream/topic that this packet belongs to, used for multiplexing
-  Topic stream_id = 1;
+  Topic stream_id = 1; // @gotags: json:"streamID"
   // eof: indicates whether this is the last packet of the message (EOF = true) or if more packets will follow (EOF = false)
   bool eof = 2;
   // bytes: the actual message data transferred in this packet. It could represent the entire message or just a part of it
@@ -59,8 +59,8 @@ message PeerBookResponseMessage{
 // This book helps nodes keep track of available peers for communication and maintaining network connectivity.
 message BookPeer {
   // address: is the peer address object that holds identification and metadata about the peer
-  PeerAddress Address = 1;
+  PeerAddress Address = 1; // @gotags: json:"address"
   // consecutive_failed_dial: is a churn management counter that tracks the number of consecutive failures
   // enough consecutive fails, the BookPeer is evicted from the book
-  int32 consecutive_failed_dial = 2;
+  int32 consecutive_failed_dial = 2; // @gotags: json:"consecutiveFailedDial"
 }

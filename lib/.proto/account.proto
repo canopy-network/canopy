@@ -48,9 +48,9 @@ message Supply {
   // staked: the total locked tokens in the protocol - this includes delegated
   uint64 staked = 2;
   // delegated_only: the total locked tokens that are delegated only
-  uint64 delegated_only = 3;
+  uint64 delegated_only = 3; // @gotags: json:"delegatedOnly"
   // committee_staked: a list of committees and their 'committed (staked + delegated)' tokens, sorted by stake
-  repeated Pool committee_staked = 4;
+  repeated Pool committee_staked = 4; // @gotags: json:"comiteeStaked"
   // committee_delegated_only: a list of committees and their 'delegated only' tokens, sorted by stake
-  repeated Pool committee_delegated_only = 5;
+  repeated Pool committee_delegated_only = 5; // @gotags: json:"comiteeDelegatedOnly"
 }

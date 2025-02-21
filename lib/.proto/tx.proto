@@ -23,13 +23,13 @@ import "google/protobuf/any.proto";
 // within the blockchain system
 message Transaction {
   // message_type: The type of the transaction like 'send' or 'stake'
-  string message_type = 1;
+  string message_type = 1; // @gotags: json:"messageType"
   // msg: The actual transaction message payload, which is encapsulated in a generic message format
   google.protobuf.Any msg = 2;
   // signature: The cryptographic signature used to verify the authenticity of the transaction
   Signature signature = 3;
   // created_height: The height when the transaction was created - allows 'safe pruning'
-  uint64 created_height = 4;
+  uint64 created_height = 4; // @gotags: json:"createdHeight"
   // time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
   uint64 time = 5;
   // fee: The fee associated with processing the transaction
@@ -37,9 +37,9 @@ message Transaction {
   // memo: An optional message or note attached to the transaction
   string memo = 7;
   // network_id: The identity of the network the transaction is intended for
-  uint64 network_id = 8;
+  uint64 network_id = 8; // @gotags: json:"networkID"
   // chain_id: The identity of the committee the transaction is intended for
-  uint64 chain_id = 9;
+  uint64 chain_id = 9; // @gotags: json:"chainID"
 }
 
 // TxResult represents the result of a processed transaction, including information about the sender, recipient,
@@ -50,7 +50,7 @@ message TxResult {
   // recipient: The address of the user receiving the transaction
   bytes recipient = 2;
   // message_type: The type of the transaction like 'send' or 'stake'
-  string message_type = 3;
+  string message_type = 3; // @gotags: json:"messageType"
   // height: The block height at which the transaction was included
   uint64 height = 4;
   // index: The position of the transaction within the block
@@ -58,13 +58,13 @@ message TxResult {
   // transaction: The original transaction object
   Transaction transaction = 6;
   // tx_hash: The unique hash that identifies the transaction
-  string tx_hash = 7;
+  string tx_hash = 7; // @gotags: json:"txHash"
 }
 // A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
 // allowing others to verify the authenticity and integrity of a message using the corresponding public key
 message Signature {
   // public_key: is a cryptographic code shared openly, used to verify digital signatures
-  bytes public_key = 1;
+  bytes public_key = 1; // @gotags: json:"publicKey"
   // signature: the bytes of the signature output from a private key which may be verified with the message and public
   bytes signature = 2;
 }

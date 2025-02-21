@@ -38,16 +38,16 @@ enum GovProposalVoteConfig {
 message Params {
   // consensus: are parameters in the 'consensus' space
   // settings that define how nodes in the blockchain agree on the state of the ledger
-  ConsensusParams Consensus = 1;
+  ConsensusParams Consensus = 1; // @gotags: json:"consensus"
   // validator: are parameters in the 'validator' space
   // settings that define the rules and criteria for validators in the blockchain network
-  ValidatorParams Validator = 2;
+  ValidatorParams Validator = 2; // @gotags: json:"validator"
   // fee: are parameters in the 'fee' space
   // settings that define the various amounts of transaction fees
-  FeeParams Fee = 3;
+  FeeParams Fee = 3; // @gotags: json:"fee"
   // governance: are parameters in the 'gov' space
   // settings that define the rules that enable decentralized and autonomous governing of the network
-  GovernanceParams Governance = 4;
+  GovernanceParams Governance = 4; // @gotags: json:"governance"
 }
 
 // The ProtocolVersion is a string that marks the particular version of rules governing how nodes communicate and
@@ -62,11 +62,11 @@ message ProtocolVersion {
 // ConsensusParams is the parameter space that defines how nodes in the blockchain agree on the state of the ledger
 message ConsensusParams {
   // block_size: is the maximum allowed size of a block (not including the header)
-  uint64 block_size = 1;
+  uint64 block_size = 1; // @gotags: json:"blockSize"
   // protocol_version: is the minimum protocol standard that nodes must run to participate in the network
-  string protocol_version = 2;
+  string protocol_version = 2; // @gotags: json:"protocolVersion"
   // root_chain_id: the identifier of the root chain (source of the validator set)
-  uint64 root_chain_id = 3;
+  uint64 root_chain_id = 3; // @gotags: json:"rootChainID"
   // retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
   uint64 retired = 4;
 }
@@ -76,85 +76,85 @@ message ValidatorParams {
   // unstaking_blocks: is the number of blocks a validator's staked tokens must remain locked and slashable after
   // sending 'unstake_validator'. Without unstaking blocks, validators could withdraw their stake right after attempting
   // malicious behavior, like double-signing or failing to validate correctly
-  uint64 unstaking_blocks = 1;
+  uint64 unstaking_blocks = 1; // @gotags: json:"unstakingBlocks"
   // max_pause_blocks: is the maximum number of blocks a validator may be paused before being 'force unstaked'.
   // This is necessary to prevent dead validators from forever existing in the state
-  uint64 max_pause_blocks = 2;
+  uint64 max_pause_blocks = 2; // @gotags: json:"maxPauseBlocks"
   // double_sign_slash_percentage: is the percentage of staked tokens that are slashed when a Validator is caught
   // performing a double-sign (signing two different blocks for the same block height and round,
   // supporting conflicting versions of the blockchain)
-  uint64 double_sign_slash_percentage = 3;
+  uint64 double_sign_slash_percentage = 3; // @gotags: json:"doubleSignSlashPercentage"
   // non_sign_slash_percentage: is the percentage of staked tokens that are slashed when a Validator doesn't sign a
   // number of blocks over the max_non_sign threshold within the non_sign_window blocks.
-  uint64 non_sign_slash_percentage = 4;
+  uint64 non_sign_slash_percentage = 4; // @gotags: json:"nonSignSlashPercentage"
   // max_non_sign: is the maximum number of blocks a Validator may not sign before being slashed, a threshold system
   // provides lee-way for accidental non-sign faults
-  uint64 max_non_sign = 5;
+  uint64 max_non_sign = 5; // @gotags: json:"maxNonSign"
   // non_sign_window: is the period of blocks in which a validator’s count of missed signatures (non-signs) is tracked
   // before it is reset. During this window, if a validator fails to sign blocks, the missed count is incremented
   // Once the window expires, the non-sign count is reset, providing the validator a chance to recover without immediate
   // penalties
-  uint64 non_sign_window = 6;
+  uint64 non_sign_window = 6; // @gotags: json:"nonSignWindow"
   // max_committees: is the maximum number of committees a validator is allowed to stake for
-  uint64 max_committees = 7;
+  uint64 max_committees = 7; // @gotags: json:"maxCommittees"
   // max_committee_size: is the maximum number of active validators a committee may have participating in BFT at any
   // one view
-  uint64 max_committee_size = 8;
+  uint64 max_committee_size = 8; // @gotags: json:"maxCommitteeSize"
   // early_withdrawal_penalty: is the percent reward deduction if NOT compounding validator rewards
-  uint64 early_withdrawal_penalty = 9;
+  uint64 early_withdrawal_penalty = 9; // @gotags: json:"earlyWithdrawalPenalty"
   // delegate_unstaking_blocks: is the number of blocks a delegate validator's staked tokens must remain locked.
   // Since there's no slashing of delegates, this variable affects economic stability more than security
-  uint64 delegate_unstaking_blocks = 10;
+  uint64 delegate_unstaking_blocks = 10; // @gotags: json:"delegateUnstakingBlocks"
   // minimum_order_size: is the minimum amount a 'sell order' must sell in order to be valid
-  uint64 minimum_order_size = 11;
+  uint64 minimum_order_size = 11; // @gotags: json:"minimumOrderSize"
   // stake_percent_for_subsidized_committee: is the minimum percentage of total stake that a committee must have
   // committed to it in order to be considered "subsidized" by the protocol
-  uint64 stake_percent_for_subsidized_committee = 12;
+  uint64 stake_percent_for_subsidized_committee = 12; // @gotags: json:"stakePercentForSubsidizedCommittee"
   // max_slash_per_committee: is the maximum slash per committee per block that a validator may receive.
   // If the slash exceeds maximum, the validator will be auto-removed from the committee to protect all parties from
   // cascading failures.
-  uint64 max_slash_per_committee = 13;
+  uint64 max_slash_per_committee = 13; // @gotags: json:"maxSlashPerCommittee"
   // delegate_reward_percentage: is the percentage of the block reward that is awarded to the delegates
-  uint64 delegate_reward_percentage = 14;
+  uint64 delegate_reward_percentage = 14; // @gotags: json:"delegateRewardPercentage"
   // buy_deadline_blocks: amount of blocks a 'buyer' has to complete an order they 'reserved'
-  uint64 buy_deadline_blocks = 15;
+  uint64 buy_deadline_blocks = 15; // @gotags: json:"buyDeadlineBlocks"
   // buy_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a buy order
-  uint64 buy_order_fee_multiplier = 16;
+  uint64 buy_order_fee_multiplier = 16; // @gotags: json:"buyOrderFeeMultiplier"
 }
 
 // FeeParams is the parameter space that defines various amounts for transaction fees
 message FeeParams {
   // send_fee: is the fee amount (in uCNPY) for Message Send
-  uint64 send_fee = 1;
+  uint64 send_fee = 1; // @gotags: json:"sendFee"
   // stake_fee: is the fee amount (in uCNPY) for Message Stake
-  uint64 stake_fee = 2;
+  uint64 stake_fee = 2; // @gotags: json:"stakeFee"
   // edit_stake_fee: is the fee amount (in uCNPY) for Message Edit-Stake
-  uint64 edit_stake_fee = 3;
+  uint64 edit_stake_fee = 3; // @gotags: json:"editStakeFee"
   // unstake_stake_fee: is the fee amount (in uCNPY) for Message Unstake
-  uint64 unstake_fee = 4;
+  uint64 unstake_fee = 4; // @gotags: json:"unstakeFee"
   // pause_fee: is the fee amount (in uCNPY) for Message Pause
-  uint64 pause_fee = 5;
+  uint64 pause_fee = 5; // @gotags: json:"pauseFee"
   // unpause_fee: is the fee amount (in uCNPY) for Message Unpause
-  uint64 unpause_fee = 6;
+  uint64 unpause_fee = 6; // @gotags: json:"unpauseFee"
   // change_parameter_fee: is the fee amount (in uCNPY) for Message Change Parameter
-  uint64 change_parameter_fee = 7;
+  uint64 change_parameter_fee = 7; // @gotags: json:"changeParameterFee"
   // dao_transfer: is the fee amount (in uCNPY) for Message DAO transfer
-  uint64 dao_transfer_fee = 8;
+  uint64 dao_transfer_fee = 8; // @gotags: json:"daoTransferFee"
   // certificate_results_fee: is the fee amount (in uCNPY) for Message Certificate Results
-  uint64 certificate_results_fee = 9;
+  uint64 certificate_results_fee = 9; // @gotags: json:"certificateResultsFee"
   // subsidy_fee: is the fee amount (in uCNPY) for Message Subsidy
-  uint64 subsidy_fee = 10;
+  uint64 subsidy_fee = 10; // @gotags: json:"subsidyFee"
   // create_order_fee: is the fee amount (in uCNPY) for Message Create Order
-  uint64 create_order_fee = 11;
+  uint64 create_order_fee = 11; // @gotags: json:"createOrderFee"
   // edit_order_fee: is the fee amount (in uCNPY) for Message Edit Order
-  uint64 edit_order_fee = 12;
+  uint64 edit_order_fee = 12; // @gotags: json:"editOrderFee"
   // delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
-  uint64 delete_order_fee = 13;
+  uint64 delete_order_fee = 13; // @gotags: json:"deleteOrderFee"
 }
 
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous
 // governing of the network
 message GovernanceParams {
   // dao_reward_percent: is the percent of the block reward that is sent to the DAO
-  uint64 dao_reward_percentage = 1;
+  uint64 dao_reward_percentage = 1; // @gotags: json:"daoRewardPercentage"
 }

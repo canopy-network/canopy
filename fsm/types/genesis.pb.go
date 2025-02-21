@@ -54,12 +54,12 @@ type GenesisState struct {
 	Validators []*Validator `protobuf:"bytes,4,rep,name=validators,proto3" json:"validators,omitempty"`
 	// non_signers: a count of validators who haven't signed in some 'non-sign-window' of blocks
 	// this field is not importable
-	NonSigners []*NonSigner `protobuf:"bytes,5,rep,name=non_signers,json=nonSigners,proto3" json:"non_signers,omitempty"`
+	NonSigners []*NonSigner `protobuf:"bytes,5,rep,name=non_signers,json=nonSigners,proto3" json:"nonSigners"` // @gotags: json:"nonSigners"
 	// double_signers: a list of those who 'double-signed' and the heights they double signed on
 	// this field is not importable
-	DoubleSigners []*lib.DoubleSigner `protobuf:"bytes,6,rep,name=double_signers,json=doubleSigners,proto3" json:"double_signers,omitempty"`
+	DoubleSigners []*lib.DoubleSigner `protobuf:"bytes,6,rep,name=double_signers,json=doubleSigners,proto3" json:"doubleSigners"` // @gotags: json:"doubleSigners"
 	// order_books: is a list of active sell orders
-	OrderBooks *lib.OrderBooks `protobuf:"bytes,7,opt,name=order_books,json=orderBooks,proto3" json:"order_books,omitempty"`
+	OrderBooks *lib.OrderBooks `protobuf:"bytes,7,opt,name=order_books,json=orderBooks,proto3" json:"orderBooks"` // @gotags: json:"orderBooks"
 	// params: is a list of governance parameters and their respective values
 	Params *Params `protobuf:"bytes,8,opt,name=params,proto3" json:"params,omitempty"`
 	// supply: keeps track of the total amount of tokens or funds available across the entire blockchain
@@ -69,7 +69,7 @@ type GenesisState struct {
 	// this field is not importable
 	Committees *lib.CommitteesData `protobuf:"bytes,10,opt,name=committees,proto3" json:"committees,omitempty"`
 	// retired committees: a list of the chain ids that are permanently retired
-	RetiredCommittees []uint64 `protobuf:"varint,11,rep,packed,name=retired_committees,json=retiredCommittees,proto3" json:"retired_committees,omitempty"`
+	RetiredCommittees []uint64 `protobuf:"varint,11,rep,packed,name=retired_committees,json=retiredCommittees,proto3" json:"retiredComittees"` // @gotags: json:"retiredComittees"
 }
 
 func (x *GenesisState) Reset() {

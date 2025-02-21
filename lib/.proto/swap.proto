@@ -43,35 +43,35 @@ option go_package = "github.com/canopy-network/canopy/lib";
 // then populated by an 'intent to buy', and finally closed when the committee witnesses the transfer of funds.
 message SellOrder {
   // id: the unique identifier of the order
-  uint64 Id = 1;
+  uint64 Id = 1; // @gotags: json:"id"
   // committee: the id of the committee that is in-charge of escrow for the swap
-  uint64 Committee = 2;
+  uint64 Committee = 2; // @gotags: json:"committee"
   // amount_for_sale: amount of CNPY for sale
-  uint64 AmountForSale = 3;
+  uint64 AmountForSale = 3; // @gotags: json:"amountForSalee"
   // requested_amount: amount of 'counter-asset' to receive
-  uint64 RequestedAmount = 4;
+  uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
   // seller_receive_address: the external chain address to receive the 'counter-asset'
-  bytes SellerReceiveAddress = 5;
+  bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
   // buyer_send_address: the address the buyer will be transferring the funds from
-  bytes BuyerSendAddress = 6;
+  bytes BuyerSendAddress = 6; // @gotags: json:"buyerSendAddress"
   // buyer_receive_address: the buyer Canopy address to receive the CNPY
-  bytes BuyerReceiveAddress = 7;
+  bytes BuyerReceiveAddress = 7; // @gotags: json:"buyerReceiveAddress"
   // buyer_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-  uint64 BuyerChainDeadline = 8;
+  uint64 BuyerChainDeadline = 8; // @gotags: json:"buyerChainDeadline"
   // sellers_send_address: the signing address of seller who is selling the CNPY
-  bytes SellersSendAddress = 9;
+  bytes SellersSendAddress = 9; // @gotags: json:"sellersSendAddress"
 }
 
 // OrderBooks: is a list of order book objects held in the blockchain state
 message OrderBooks {
   // OrderBooks: the actual list of order book objects
-  repeated OrderBook OrderBooks = 1;
+  repeated OrderBook OrderBooks = 1; // @gotags: json:"orderBooks"
 }
 
 // OrderBook: a list of sell orders associated with a particular committee held in the blockchain state
 message OrderBook {
   // chain_id: the unique identifier of the 'counter asset' committee
-  uint64 chainId = 1 ;
+  uint64 chainId = 1 ; // @gotags: json:"chainID"
   // orders: the actual list of sell orders
   repeated SellOrder orders = 2;
 }

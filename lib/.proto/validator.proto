@@ -28,21 +28,21 @@ message Validator {
   bytes address = 1;
   // public_key: the public cryptographic identity of the operator of the service. This key must be an aggregable BLS
   // key for efficiency in the BFT process.
-  bytes public_key = 2;
+  bytes public_key = 2; // @gotags: json:"publicKey"
   // net_address: the tcp peer-to-peer address of the node to enable easy discovery of the peer for multi-consensus
-  string net_address = 3;
+  string net_address = 3; // @gotags: json:"netAddress"
   // staked_amount: the amount of tokens locked as a surety bond against malicious behavior. These tokens may be
   // increased by auto-compounding rewards or by an edit-stake command. This bond is returned to the output address
   // after executing an unstake command and waiting the unstaking period.
-  uint64 staked_amount = 4;
+  uint64 staked_amount = 4; // @gotags: json:"stakedAmount"
   // committees: a list of ids of the committees the validator is offering Validation or Delegation services for
   repeated uint64 committees = 5;
   // max_paused_height: if the Validator is paused, this value tracks the maximum height it may be paused before it
   // automatically begins unstaking
-  uint64 max_paused_height = 6;
+  uint64 max_paused_height = 6; // @gotags: json:"maxPausedHeight"
   // unstaking_height: if the Validator is unstaking, this value tracks the future block height a Validator's surety
   // bond will be returned
-  uint64 unstaking_height = 7;
+  uint64 unstaking_height = 7; // @gotags: json:"unstakingHeight"
   // output: the address where early-withdrawal rewards and the unstaking surety bond are transferred to
   bytes output = 8;
   // delegate: signals whether the Validator is a Delegate or not. If true, the Validator only passively participates

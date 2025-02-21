@@ -114,13 +114,13 @@ type PeerInfo struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Address: the address information of the peer, including its public key and network address
-	Address *PeerAddress `protobuf:"bytes,1,opt,name=Address,proto3" json:"Address,omitempty"`
+	Address *PeerAddress `protobuf:"bytes,1,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
 	// is_outbound: indicates whether the connection to the peer was initiated by this node (true if outbound)
-	IsOutbound bool `protobuf:"varint,2,opt,name=is_outbound,json=isOutbound,proto3" json:"is_outbound,omitempty"`
+	IsOutbound bool `protobuf:"varint,2,opt,name=is_outbound,json=isOutbound,proto3" json:"isOutbound"` // @gotags: json:"isOutbound"
 	// is_must_connect: indicates whether this peer is a required connection that the node must connect to
-	IsMustConnect bool `protobuf:"varint,3,opt,name=is_must_connect,json=isMustConnect,proto3" json:"is_must_connect,omitempty"`
+	IsMustConnect bool `protobuf:"varint,3,opt,name=is_must_connect,json=isMustConnect,proto3" json:"isMustConnect"` // @gotags: json:"isMustConnect"
 	// is_trusted: marks whether this peer is configured as trusted
-	IsTrusted bool `protobuf:"varint,4,opt,name=is_trusted,json=isTrusted,proto3" json:"is_trusted,omitempty"`
+	IsTrusted bool `protobuf:"varint,4,opt,name=is_trusted,json=isTrusted,proto3" json:"isTrusted"` // @gotags: json:"isTrusted"
 	// reputation: a numerical score representing the peer's reputation to this local node
 	Reputation int32 `protobuf:"varint,5,opt,name=reputation,proto3" json:"reputation,omitempty"`
 }
@@ -199,11 +199,11 @@ type PeerAddress struct {
 	unknownFields protoimpl.UnknownFields
 
 	// public_key: the peer's public key used for cryptographic identity
-	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"publicKey"` // @gotags: json:"publicKey"
 	// net_address: the tcp network address of the peer Ex. tcp://8.8.8.8:8080 or 8.8.8.8:8080
-	NetAddress string `protobuf:"bytes,2,opt,name=net_address,json=netAddress,proto3" json:"net_address,omitempty"`
+	NetAddress string `protobuf:"bytes,2,opt,name=net_address,json=netAddress,proto3" json:"netAddress"` // @gotags: json:"netAddress"
 	// peer_meta: additional metadata about the peer, such as the network ID and chains it supports
-	PeerMeta *PeerMeta `protobuf:"bytes,3,opt,name=peer_meta,json=peerMeta,proto3" json:"peer_meta,omitempty"`
+	PeerMeta *PeerMeta `protobuf:"bytes,3,opt,name=peer_meta,json=peerMeta,proto3" json:"peerMeta"` // @gotags: json:"peerMeta"
 }
 
 func (x *PeerAddress) Reset() {
@@ -267,9 +267,9 @@ type PeerMeta struct {
 
 	// network_id: the identifier for the network the peer is part of
 	// this ensures no conflicts among different peering networks (mainnet, testnet, etc.)
-	NetworkId uint64 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NetworkId uint64 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// chain_id the chain identifiers that the peer supports and/or participates in
-	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// signature: a cryptographic signature to verify the authenticity of the peer's metadata
 	Signature []byte `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 }
@@ -334,7 +334,7 @@ type ConsensusMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: is the unique identifier of the committee associated with this message
-	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// message: the bytes of the consensus message that may be unmarshalled into a consensus.Message object
 	Message []byte `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 }
@@ -392,12 +392,12 @@ type BlockRequestMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: is the unique identifier of the committee associated with this message
-	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// height: the height of the block being requested
 	Height uint64 `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
 	// height_only: signals if this is a max-height only request, no block is expected in the response to this type
 	// of message
-	HeightOnly bool `protobuf:"varint,3,opt,name=height_only,json=heightOnly,proto3" json:"height_only,omitempty"`
+	HeightOnly bool `protobuf:"varint,3,opt,name=height_only,json=heightOnly,proto3" json:"heightOnly"` // @gotags: json:"heightOnly"
 }
 
 func (x *BlockRequestMessage) Reset() {
@@ -460,14 +460,14 @@ type BlockMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: is the unique identifier of the committee associated with this message
-	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// max_height: the maximum height of this blockchain the peer is aware of
-	MaxHeight uint64 `protobuf:"varint,2,opt,name=max_height,json=maxHeight,proto3" json:"max_height,omitempty"`
+	MaxHeight uint64 `protobuf:"varint,2,opt,name=max_height,json=maxHeight,proto3" json:"maxHeight"` // @gotags: json:"maxHeight"
 	// total_vdf_iterations: the total number of vdf iterations associated with this blockchain
 	// this helps a peer to chose given a choice between two forks as well as verify the integrity of the peer
-	TotalVdfIterations uint64 `protobuf:"varint,3,opt,name=total_vdf_iterations,json=totalVdfIterations,proto3" json:"total_vdf_iterations,omitempty"`
+	TotalVdfIterations uint64 `protobuf:"varint,3,opt,name=total_vdf_iterations,json=totalVdfIterations,proto3" json:"totalVDFIterations"` // @gotags: json:"totalVDFIterations"
 	// block_and_certificate: is the actual block and the super-majority signed quorum certificate that justifies it
-	BlockAndCertificate *QuorumCertificate `protobuf:"bytes,4,opt,name=BlockAndCertificate,proto3" json:"BlockAndCertificate,omitempty"`
+	BlockAndCertificate *QuorumCertificate `protobuf:"bytes,4,opt,name=BlockAndCertificate,proto3" json:"blockAndCertificate"` // @gotags: json:"blockAndCertificate"
 }
 
 func (x *BlockMessage) Reset() {
@@ -538,7 +538,7 @@ type TxMessage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: is the unique identifier of the committee associated with this message
-	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// tx: is the bytes of the transaction that may be unmarshalled into a Transaction object
 	Tx []byte `protobuf:"bytes,2,opt,name=tx,proto3" json:"tx,omitempty"`
 }

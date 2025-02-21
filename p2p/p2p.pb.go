@@ -95,7 +95,7 @@ type Packet struct {
 	unknownFields protoimpl.UnknownFields
 
 	// stream_id: the identifier of the stream/topic that this packet belongs to, used for multiplexing
-	StreamId lib.Topic `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3,enum=types.Topic" json:"stream_id,omitempty"`
+	StreamId lib.Topic `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3,enum=types.Topic" json:"streamID"` // @gotags: json:"streamID"
 	// eof: indicates whether this is the last packet of the message (EOF = true) or if more packets will follow (EOF = false)
 	Eof bool `protobuf:"varint,2,opt,name=eof,proto3" json:"eof,omitempty"`
 	// bytes: the actual message data transferred in this packet. It could represent the entire message or just a part of it
@@ -331,10 +331,10 @@ type BookPeer struct {
 	unknownFields protoimpl.UnknownFields
 
 	// address: is the peer address object that holds identification and metadata about the peer
-	Address *lib.PeerAddress `protobuf:"bytes,1,opt,name=Address,proto3" json:"Address,omitempty"`
+	Address *lib.PeerAddress `protobuf:"bytes,1,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
 	// consecutive_failed_dial: is a churn management counter that tracks the number of consecutive failures
 	// enough consecutive fails, the BookPeer is evicted from the book
-	ConsecutiveFailedDial int32 `protobuf:"varint,2,opt,name=consecutive_failed_dial,json=consecutiveFailedDial,proto3" json:"consecutive_failed_dial,omitempty"`
+	ConsecutiveFailedDial int32 `protobuf:"varint,2,opt,name=consecutive_failed_dial,json=consecutiveFailedDial,proto3" json:"consecutiveFailedDial"` // @gotags: json:"consecutiveFailedDial"
 }
 
 func (x *BookPeer) Reset() {

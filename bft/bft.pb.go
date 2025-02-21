@@ -56,9 +56,9 @@ type Message struct {
 	Qc *lib.QuorumCertificate `protobuf:"bytes,3,opt,name=qc,proto3" json:"qc,omitempty"`
 	// high_qc: the latest 'round' quorum certificate where a +2/3rds of validators reached quorum for the PRECOMMIT phase
 	// This serves as a secure proof to protect those who may have committed in a type II asynchronous network
-	HighQc *lib.QuorumCertificate `protobuf:"bytes,4,opt,name=high_qc,json=highQc,proto3" json:"high_qc,omitempty"`
+	HighQc *lib.QuorumCertificate `protobuf:"bytes,4,opt,name=high_qc,json=highQc,proto3" json:"highQC"` // @gotags: json:"highQC"
 	// double_sign_evidence: proof that a validator has signed two conflicting proposals at the same View
-	LastDoubleSignEvidence []*DoubleSignEvidence `protobuf:"bytes,5,rep,name=last_double_sign_evidence,json=lastDoubleSignEvidence,proto3" json:"last_double_sign_evidence,omitempty"`
+	LastDoubleSignEvidence []*DoubleSignEvidence `protobuf:"bytes,5,rep,name=last_double_sign_evidence,json=lastDoubleSignEvidence,proto3" json:"lastDoubleSignEvidence"` // @gotags: json:"lastDoubleSignEvidence"
 	// vdf: a Verifiable Delay Function is a cryptographic function that takes a fixed time to compute
 	// but is fast to verify, deterring historical fork attacks like the long-range-attack
 	Vdf *crypto.VDF `protobuf:"bytes,6,opt,name=vdf,proto3" json:"vdf,omitempty"`
@@ -156,10 +156,10 @@ type DoubleSignEvidence struct {
 
 	// vote_a: one of two quorum certificates that are of the same View that have conflicting payloads both that are
 	// signed by one or more validators
-	VoteA *lib.QuorumCertificate `protobuf:"bytes,1,opt,name=vote_a,json=voteA,proto3" json:"vote_a,omitempty"`
+	VoteA *lib.QuorumCertificate `protobuf:"bytes,1,opt,name=vote_a,json=voteA,proto3" json:"voteA"` // @gotags: json:"voteA"
 	// vote_b: one of two quorum certificates that are of the same View that have conflicting payloads both that are
 	// signed by one or more validators
-	VoteB *lib.QuorumCertificate `protobuf:"bytes,2,opt,name=vote_b,json=voteB,proto3" json:"vote_b,omitempty"`
+	VoteB *lib.QuorumCertificate `protobuf:"bytes,2,opt,name=vote_b,json=voteB,proto3" json:"voteB"` // @gotags: json:"voteB"
 }
 
 func (x *DoubleSignEvidence) Reset() {
@@ -215,9 +215,9 @@ type DoubleSignEvidences struct {
 	unknownFields protoimpl.UnknownFields
 
 	// evidence: a list of double sign evidence
-	Evidence []*DoubleSignEvidence `protobuf:"bytes,1,rep,name=Evidence,proto3" json:"Evidence,omitempty"`
+	Evidence []*DoubleSignEvidence `protobuf:"bytes,1,rep,name=Evidence,proto3" json:"evidence"` // @gotags: json:"evidence"
 	// de-duplicator: a map structure that prevents accidental collision of evidence in the list
-	DeDuplicator map[string]bool `protobuf:"bytes,2,rep,name=DeDuplicator,proto3" json:"DeDuplicator,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	DeDuplicator map[string]bool `protobuf:"bytes,2,rep,name=DeDuplicator,proto3" json:"deduplicator" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"` // @gotags: json:"deduplicator"
 }
 
 func (x *DoubleSignEvidences) Reset() {

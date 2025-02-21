@@ -50,21 +50,21 @@ type Validator struct {
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// public_key: the public cryptographic identity of the operator of the service. This key must be an aggregable BLS
 	// key for efficiency in the BFT process.
-	PublicKey []byte `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	PublicKey []byte `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"publicKey"` // @gotags: json:"publicKey"
 	// net_address: the tcp peer-to-peer address of the node to enable easy discovery of the peer for multi-consensus
-	NetAddress string `protobuf:"bytes,3,opt,name=net_address,json=netAddress,proto3" json:"net_address,omitempty"`
+	NetAddress string `protobuf:"bytes,3,opt,name=net_address,json=netAddress,proto3" json:"netAddress"` // @gotags: json:"netAddress"
 	// staked_amount: the amount of tokens locked as a surety bond against malicious behavior. These tokens may be
 	// increased by auto-compounding rewards or by an edit-stake command. This bond is returned to the output address
 	// after executing an unstake command and waiting the unstaking period.
-	StakedAmount uint64 `protobuf:"varint,4,opt,name=staked_amount,json=stakedAmount,proto3" json:"staked_amount,omitempty"`
+	StakedAmount uint64 `protobuf:"varint,4,opt,name=staked_amount,json=stakedAmount,proto3" json:"stakedAmount"` // @gotags: json:"stakedAmount"
 	// committees: a list of ids of the committees the validator is offering Validation or Delegation services for
 	Committees []uint64 `protobuf:"varint,5,rep,packed,name=committees,proto3" json:"committees,omitempty"`
 	// max_paused_height: if the Validator is paused, this value tracks the maximum height it may be paused before it
 	// automatically begins unstaking
-	MaxPausedHeight uint64 `protobuf:"varint,6,opt,name=max_paused_height,json=maxPausedHeight,proto3" json:"max_paused_height,omitempty"`
+	MaxPausedHeight uint64 `protobuf:"varint,6,opt,name=max_paused_height,json=maxPausedHeight,proto3" json:"maxPausedHeight"` // @gotags: json:"maxPausedHeight"
 	// unstaking_height: if the Validator is unstaking, this value tracks the future block height a Validator's surety
 	// bond will be returned
-	UnstakingHeight uint64 `protobuf:"varint,7,opt,name=unstaking_height,json=unstakingHeight,proto3" json:"unstaking_height,omitempty"`
+	UnstakingHeight uint64 `protobuf:"varint,7,opt,name=unstaking_height,json=unstakingHeight,proto3" json:"unstakingHeight"` // @gotags: json:"unstakingHeight"
 	// output: the address where early-withdrawal rewards and the unstaking surety bond are transferred to
 	Output []byte `protobuf:"bytes,8,opt,name=output,proto3" json:"output,omitempty"`
 	// delegate: signals whether the Validator is a Delegate or not. If true, the Validator only passively participates

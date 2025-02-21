@@ -25,9 +25,9 @@ import "certificate.proto";
 // them to the recipient
 message MessageSend {
   // from_address: is the sender of the funds
-  bytes from_address = 1;
+  bytes from_address = 1; // @gotags: json:"fromAddress"
   // to_address: is the recipient of the funds
-  bytes to_address = 2;
+  bytes to_address = 2; // @gotags: json:"toAddress"
   // amount: is the amount of tokens in micro-denomination (uCNPY)
   uint64 amount = 3;
 }
@@ -40,16 +40,16 @@ message MessageSend {
 message MessageStake {
   // public_key: the public cryptographic identity of the Validator operator that is unique to a users
   // secret private key
-  bytes public_key = 1;
+  bytes public_key = 1; // @gotags: json:"publicKey"
   // amount: is the amount of tokens to be removed from the sender account and locked as a surety bond against bad
   // behavior
   uint64 amount = 2;
   // committees: is the list of committees the validator is restaking their tokens towards
   repeated uint64 committees = 3;
   // net_address: is the tcp peer-to-peer address of the peer
-  string net_address = 4;
+  string net_address = 4; // @gotags: json:"netAddress"
   // output_address: is the short version of the public key where reward and unstaking funds will be distributed to
-  bytes output_address = 5;
+  bytes output_address = 5; // @gotags: json:"outputAddress"
   // delegate: signals whether the Validator is a delegate or not
   bool delegate = 6;
   // compound: signals whether the Validator is auto-compounding or not
@@ -69,9 +69,9 @@ message MessageEditStake {
   // committees: the update to the committees the validator is restaking their tokens for
   repeated uint64 committees = 3;
   // net_address: the update to the tcp peer-to-peer address of the peer
-  string net_address = 4;
+  string net_address = 4; // @gotags: json:"netAddress"
   // output_address: the update to the reward address, only the output address may edit this
-  bytes output_address = 5;
+  bytes output_address = 5; // @gotags: json:"outputAddress"
   // compound: the update to the auto-compounding status
   bool compound = 6;
   // signer: this field is needed so that the protocol may save the signer once they're identified by their public key
@@ -106,17 +106,17 @@ message MessageUnpause {
 // block includes this transaction in it.
 message MessageChangeParameter {
   // parameter_space: is the organization path where the parameter is found (val, cons, fee, gov)
-  string parameter_space = 1;
+  string parameter_space = 1; // @gotags: json:"parameterSpace"
   // parameter_key: is the name of the parameter
-  string parameter_key = 2;
+  string parameter_key = 2; // @gotags: json:"parameterKey"
   // parameter_value: is the uint64 or string value of the parameter
-  google.protobuf.Any parameter_value = 3;
+  google.protobuf.Any parameter_value = 3; // @gotags: json:"parameterValue"
   // start_height: is the beginning height where the parameter must be sent
   // this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-  uint64 start_height = 4;
+  uint64 start_height = 4; // @gotags: json:"startHeight"
   // end_height: is the ending height where the parameter must be sent
   // this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-  uint64 end_height = 5;
+  uint64 end_height = 5; // @gotags: json:"endHeight"
   // signer: is the address of the sender / creator of the proposal
   // this field locks in an author of the transaction when it's converted to JSON
   bytes signer = 6;
@@ -134,10 +134,10 @@ message MessageDAOTransfer {
   uint64 amount = 2;
   // start_height: is the beginning height where the parameter must be sent
   // this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-  uint64 start_height = 4;
+  uint64 start_height = 4; // @gotags: json:"startHeight"
   // end_height: is the ending height where the parameter must be sent
   // this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-  uint64 end_height = 5;
+  uint64 end_height = 5; // @gotags: json:"startHeight"
 }
 
 // MessageCertificateResults is a summary from the Leader of a recently completed BFT process in the form of a Quorum
@@ -154,7 +154,7 @@ message MessageSubsidy {
   // address: is the sender of the funds
   bytes address = 1;
   // chain_id: is the id of the committee the funds are being sent to
-  uint64 chain_id = 2;
+  uint64 chain_id = 2; // @gotags: json:"chainID"
   // amount: is the amount of funds that are taken from the sender and transferred to the recipient pool
   uint64 amount = 3;
   // opcode: a generic code field to allow fund designation instructions
@@ -165,15 +165,15 @@ message MessageSubsidy {
 // account and transferring them to an escrow pool while awaiting a buyer
 message MessageCreateOrder {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
-  uint64 ChainId = 1;
+  uint64 ChainId = 1; // @gotags: json:"chainID"
   // amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
-  uint64 AmountForSale = 2;
+  uint64 AmountForSale = 2; // @gotags: json:"amountForSale"
   // requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
-  uint64 RequestedAmount = 3;
+  uint64 RequestedAmount = 3; // @gotags: json:"requestAmount"
   // sellers_receive_address: the address of the seller where the 'counter asset' will be received
-  bytes SellerReceiveAddress = 4;
+  bytes SellerReceiveAddress = 4; // @gotags: json:"sellerReceiveAddress"
   // sellers_send_address: the Canopy address the seller is selling and signing from
-  bytes SellersSendAddress = 5;
+  bytes SellersSendAddress = 5; // @gotags: json:"sellersSendAddress"
 }
 
 // MessageEditOrder modifies an un-claimed token swap 'sell order', token amount may be increased or decreased as well
@@ -182,24 +182,24 @@ message MessageCreateOrder {
 message MessageEditOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   // not modifiable, used for order identification only
-  uint64 OrderId = 1;
+  uint64 OrderId = 1; // @gotags: json:"orderID"
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   // not modifiable, used for order identification only
-  uint64 ChainId = 2;
+  uint64 ChainId = 2; // @gotags: json:"chainID"
   // amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
   // receive address
-  uint64 AmountForSale = 3;
+  uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
   // requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
-  uint64 RequestedAmount = 4;
+  uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
   // sellers_receive_address: the address of the seller where the 'counter asset' will be received
-  bytes SellerReceiveAddress = 5;
+  bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
 }
 
 // MessageDeleteOrder: deletes an un-claimed token swap 'sell order'
 // If an order is already 'claimed' or 'bought', the order may not be deleted
 message MessageDeleteOrder {
   // order_id: is the number id that is unique to this committee to identify the order
-  uint64 OrderId = 1;
+  uint64 OrderId = 1; // @gotags: json:"orderID"
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
-  uint64 ChainId = 2;
+  uint64 ChainId = 2; // @gotags: json:"chainID"
 }

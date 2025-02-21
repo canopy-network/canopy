@@ -168,21 +168,21 @@ type SparseCompactMerkleProof struct {
 	unknownFields protoimpl.UnknownFields
 
 	// SideNodes: is an array of the sibling nodes leading up to the leaf of the proof.
-	SideNodes [][]byte `protobuf:"bytes,1,rep,name=SideNodes,proto3" json:"SideNodes,omitempty"`
+	SideNodes [][]byte `protobuf:"bytes,1,rep,name=SideNodes,proto3" json:"sideNodes"` // @gotags: json:"sideNodes"
 	// NonMembershipLeafData: is the data of the unrelated leaf at the position
 	// of the key being proven, in the case of a non-membership proof. For
 	// membership proofs, is nil.
-	NonMembershipLeafData []byte `protobuf:"bytes,2,opt,name=NonMembershipLeafData,proto3" json:"NonMembershipLeafData,omitempty"`
+	NonMembershipLeafData []byte `protobuf:"bytes,2,opt,name=NonMembershipLeafData,proto3" json:"nonMembershipLeafData"` // @gotags: json:"nonMembershipLeafData"
 	// BitMask: in the case of a compact proof, is a bit mask of the sidenodes
 	// of the proof where an on-bit indicates that the sidenode at the bit's
 	// index is a placeholder. This is only set if the proof is compact.
-	BitMask []byte `protobuf:"bytes,3,opt,name=BitMask,proto3" json:"BitMask,omitempty"`
+	BitMask []byte `protobuf:"bytes,3,opt,name=BitMask,proto3" json:"bitMask"` // @gotags: json:"bitMask"
 	// NumSideNodes: in the case of a compact proof, indicates the number of
 	// sidenodes in the proof when decompacted. This is only set if the proof is compact.
-	NumSideNodes uint32 `protobuf:"varint,4,opt,name=NumSideNodes,proto3" json:"NumSideNodes,omitempty"`
+	NumSideNodes uint32 `protobuf:"varint,4,opt,name=NumSideNodes,proto3" json:"numSideNodes"` // @gotags: json:"numSideNodes"
 	// SiblingData: is the data of the sibling node to the leaf being proven,
 	// required for updatable proofs. For unupdatable proofs, is nil.
-	SiblingData []byte `protobuf:"bytes,5,opt,name=SiblingData,proto3" json:"SiblingData,omitempty"`
+	SiblingData []byte `protobuf:"bytes,5,opt,name=SiblingData,proto3" json:"siblingData"` // @gotags: json:"siblingData"
 }
 
 func (x *SparseCompactMerkleProof) Reset() {
@@ -262,11 +262,11 @@ type Node struct {
 
 	// Value: is the cryptographic hash of the data included in the database
 	// the ValueHash is included in the parent hash
-	Value []byte `protobuf:"bytes,1,opt,name=Value,proto3" json:"Value,omitempty"`
+	Value []byte `protobuf:"bytes,1,opt,name=Value,proto3" json:"value"` // @gotags: json:"value"
 	// LeftChildKey: is the key for the left child node. Nil means no child
-	LeftChildKey []byte `protobuf:"bytes,2,opt,name=LeftChildKey,proto3" json:"LeftChildKey,omitempty"`
+	LeftChildKey []byte `protobuf:"bytes,2,opt,name=LeftChildKey,proto3" json:"leftChildKey"` // @gotags: json:"leftChildKey"
 	// RightChildKey: is the key for the right child node. Nil means no child
-	RightChildKey []byte `protobuf:"bytes,3,opt,name=RightChildKey,proto3" json:"RightChildKey,omitempty"`
+	RightChildKey []byte `protobuf:"bytes,3,opt,name=RightChildKey,proto3" json:"rightChildKey"` // @gotags: json:"rightChildKey"
 }
 
 func (x *Node) Reset() {

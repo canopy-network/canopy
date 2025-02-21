@@ -45,9 +45,9 @@ type MessageSend struct {
 	unknownFields protoimpl.UnknownFields
 
 	// from_address: is the sender of the funds
-	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"from_address,omitempty"`
+	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// to_address: is the recipient of the funds
-	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"to_address,omitempty"`
+	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"` // @gotags: json:"toAddress"
 	// amount: is the amount of tokens in micro-denomination (uCNPY)
 	Amount uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 }
@@ -117,16 +117,16 @@ type MessageStake struct {
 
 	// public_key: the public cryptographic identity of the Validator operator that is unique to a users
 	// secret private key
-	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"publicKey"` // @gotags: json:"publicKey"
 	// amount: is the amount of tokens to be removed from the sender account and locked as a surety bond against bad
 	// behavior
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	// committees: is the list of committees the validator is restaking their tokens towards
 	Committees []uint64 `protobuf:"varint,3,rep,packed,name=committees,proto3" json:"committees,omitempty"`
 	// net_address: is the tcp peer-to-peer address of the peer
-	NetAddress string `protobuf:"bytes,4,opt,name=net_address,json=netAddress,proto3" json:"net_address,omitempty"`
+	NetAddress string `protobuf:"bytes,4,opt,name=net_address,json=netAddress,proto3" json:"netAddress"` // @gotags: json:"netAddress"
 	// output_address: is the short version of the public key where reward and unstaking funds will be distributed to
-	OutputAddress []byte `protobuf:"bytes,5,opt,name=output_address,json=outputAddress,proto3" json:"output_address,omitempty"`
+	OutputAddress []byte `protobuf:"bytes,5,opt,name=output_address,json=outputAddress,proto3" json:"outputAddress"` // @gotags: json:"outputAddress"
 	// delegate: signals whether the Validator is a delegate or not
 	Delegate bool `protobuf:"varint,6,opt,name=delegate,proto3" json:"delegate,omitempty"`
 	// compound: signals whether the Validator is auto-compounding or not
@@ -231,9 +231,9 @@ type MessageEditStake struct {
 	// committees: the update to the committees the validator is restaking their tokens for
 	Committees []uint64 `protobuf:"varint,3,rep,packed,name=committees,proto3" json:"committees,omitempty"`
 	// net_address: the update to the tcp peer-to-peer address of the peer
-	NetAddress string `protobuf:"bytes,4,opt,name=net_address,json=netAddress,proto3" json:"net_address,omitempty"`
+	NetAddress string `protobuf:"bytes,4,opt,name=net_address,json=netAddress,proto3" json:"netAddress"` // @gotags: json:"netAddress"
 	// output_address: the update to the reward address, only the output address may edit this
-	OutputAddress []byte `protobuf:"bytes,5,opt,name=output_address,json=outputAddress,proto3" json:"output_address,omitempty"`
+	OutputAddress []byte `protobuf:"bytes,5,opt,name=output_address,json=outputAddress,proto3" json:"outputAddress"` // @gotags: json:"outputAddress"
 	// compound: the update to the auto-compounding status
 	Compound bool `protobuf:"varint,6,opt,name=compound,proto3" json:"compound,omitempty"`
 	// signer: this field is needed so that the protocol may save the signer once they're identified by their public key
@@ -482,17 +482,17 @@ type MessageChangeParameter struct {
 	unknownFields protoimpl.UnknownFields
 
 	// parameter_space: is the organization path where the parameter is found (val, cons, fee, gov)
-	ParameterSpace string `protobuf:"bytes,1,opt,name=parameter_space,json=parameterSpace,proto3" json:"parameter_space,omitempty"`
+	ParameterSpace string `protobuf:"bytes,1,opt,name=parameter_space,json=parameterSpace,proto3" json:"parameterSpace"` // @gotags: json:"parameterSpace"
 	// parameter_key: is the name of the parameter
-	ParameterKey string `protobuf:"bytes,2,opt,name=parameter_key,json=parameterKey,proto3" json:"parameter_key,omitempty"`
+	ParameterKey string `protobuf:"bytes,2,opt,name=parameter_key,json=parameterKey,proto3" json:"parameterKey"` // @gotags: json:"parameterKey"
 	// parameter_value: is the uint64 or string value of the parameter
-	ParameterValue *anypb.Any `protobuf:"bytes,3,opt,name=parameter_value,json=parameterValue,proto3" json:"parameter_value,omitempty"`
+	ParameterValue *anypb.Any `protobuf:"bytes,3,opt,name=parameter_value,json=parameterValue,proto3" json:"parameterValue"` // @gotags: json:"parameterValue"
 	// start_height: is the beginning height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"start_height,omitempty"`
+	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
 	// end_height: is the ending height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-	EndHeight uint64 `protobuf:"varint,5,opt,name=end_height,json=endHeight,proto3" json:"end_height,omitempty"`
+	EndHeight uint64 `protobuf:"varint,5,opt,name=end_height,json=endHeight,proto3" json:"endHeight"` // @gotags: json:"endHeight"
 	// signer: is the address of the sender / creator of the proposal
 	// this field locks in an author of the transaction when it's converted to JSON
 	Signer []byte `protobuf:"bytes,6,opt,name=signer,proto3" json:"signer,omitempty"`
@@ -588,10 +588,10 @@ type MessageDAOTransfer struct {
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
 	// start_height: is the beginning height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"start_height,omitempty"`
+	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
 	// end_height: is the ending height where the parameter must be sent
 	// this field locks in a block-range when it's converted to JSON and allows Validators a deadline to vote
-	EndHeight uint64 `protobuf:"varint,5,opt,name=end_height,json=endHeight,proto3" json:"end_height,omitempty"`
+	EndHeight uint64 `protobuf:"varint,5,opt,name=end_height,json=endHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
 }
 
 func (x *MessageDAOTransfer) Reset() {
@@ -715,7 +715,7 @@ type MessageSubsidy struct {
 	// address: is the sender of the funds
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// chain_id: is the id of the committee the funds are being sent to
-	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// amount: is the amount of funds that are taken from the sender and transferred to the recipient pool
 	Amount uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	// opcode: a generic code field to allow fund designation instructions
@@ -790,15 +790,15 @@ type MessageCreateOrder struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
-	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"ChainId,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
-	AmountForSale uint64 `protobuf:"varint,2,opt,name=AmountForSale,proto3" json:"AmountForSale,omitempty"`
+	AmountForSale uint64 `protobuf:"varint,2,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
-	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"RequestedAmount,omitempty"`
+	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
 	// sellers_receive_address: the address of the seller where the 'counter asset' will be received
-	SellerReceiveAddress []byte `protobuf:"bytes,4,opt,name=SellerReceiveAddress,proto3" json:"SellerReceiveAddress,omitempty"`
+	SellerReceiveAddress []byte `protobuf:"bytes,4,opt,name=SellerReceiveAddress,proto3" json:"sellerReceiveAddress"` // @gotags: json:"sellerReceiveAddress"
 	// sellers_send_address: the Canopy address the seller is selling and signing from
-	SellersSendAddress []byte `protobuf:"bytes,5,opt,name=SellersSendAddress,proto3" json:"SellersSendAddress,omitempty"`
+	SellersSendAddress []byte `protobuf:"bytes,5,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 }
 
 func (x *MessageCreateOrder) Reset() {
@@ -878,17 +878,17 @@ type MessageEditOrder struct {
 
 	// order_id: is the number id that is unique to this committee to identify the order
 	// not modifiable, used for order identification only
-	OrderId uint64 `protobuf:"varint,1,opt,name=OrderId,proto3" json:"OrderId,omitempty"`
+	OrderId uint64 `protobuf:"varint,1,opt,name=OrderId,proto3" json:"orderID"` // @gotags: json:"orderID"
 	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
 	// not modifiable, used for order identification only
-	ChainId uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"ChainId,omitempty"`
+	ChainId uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
 	// receive address
-	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"AmountForSale,omitempty"`
+	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
-	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"RequestedAmount,omitempty"`
+	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// sellers_receive_address: the address of the seller where the 'counter asset' will be received
-	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"SellerReceiveAddress,omitempty"`
+	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"sellerReceiveAddress"` // @gotags: json:"sellerReceiveAddress"
 }
 
 func (x *MessageEditOrder) Reset() {
@@ -966,9 +966,9 @@ type MessageDeleteOrder struct {
 	unknownFields protoimpl.UnknownFields
 
 	// order_id: is the number id that is unique to this committee to identify the order
-	OrderId uint64 `protobuf:"varint,1,opt,name=OrderId,proto3" json:"OrderId,omitempty"`
+	OrderId uint64 `protobuf:"varint,1,opt,name=OrderId,proto3" json:"orderID"` // @gotags: json:"orderID"
 	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
-	ChainId uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"ChainId,omitempty"`
+	ChainId uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 }
 
 func (x *MessageDeleteOrder) Reset() {

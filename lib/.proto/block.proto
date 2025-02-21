@@ -33,48 +33,48 @@ message BlockHeader {
   bytes hash = 2;
   // network_id: a unique identifier used to distinguish different canopy blockchain networks, ensuring that
   // transactions and blocks are only processed within the correct network
-  uint32 network_id = 3;
+  uint32 network_id = 3;  // @gotags: json:"networkID"
   // time: specific time recorded in a block when it is created by the proposer, indicating when the block was proposed
   uint64 time = 4;
   // num_txs: the count of transactions in the block
-  uint64 num_txs = 5;
+  uint64 num_txs = 5; // @gotags: json:"numTxs"
   // total_txs: the count of transactions in the blockchain
-  uint64 total_txs = 6;
+  uint64 total_txs = 6; // @gotags: json:"totalTxs"
   // total_vdf_iterations: the total number of verifiable random delay function iterations in the blockchain
-  uint64 total_vdf_iterations = 7;
+  uint64 total_vdf_iterations = 7; // @gotags: json:"totalVDFIterations"
   // last_block_hash: the unique identifier of the previous block, chaining this block to the previous, ensuring the
   // continuity of the blockchain
-  bytes last_block_hash = 8;
+  bytes last_block_hash = 8; // @gotags: json:"lastBlockHash"
   // state_root: the merkle root of the 'state commit store' representing  the entire state of the blockchain at
   // this height
-  bytes state_root = 9;
+  bytes state_root = 9; // @gotags: json:"stateRoot"
   // transaction_root: the merkle root of the 'transactions' included in this block
-  bytes transaction_root = 10;
+  bytes transaction_root = 10; // @gotags: json:"transactionRoot"
   // validator_root: the merkle root of the validators that signed the quorum certificate for this height
   // ensuring that the list of validators (who are responsible for proposing and validating blocks) is consistent
   // and tamper-proof, allowing participants to independently verify the integrity of the validator set at any point
   // in the blockchain
-  bytes validator_root = 11;
+  bytes validator_root = 11; // @gotags: json:"validatorRoot"
   // next_validator_root: the merkle root of the validators who are responsible for proposing and validating the next
   // block - ensuring smooth transitions between validator sets. This design allows lite-node operations as just with
   // the block_headers a node is able to validate the signers of the entire blockchain
-  bytes next_validator_root = 12;
+  bytes next_validator_root = 12; // @gotags: json:"nextValidatorRoot"
   // proposer_address: is the short version of the public key of the Validator who proposed this block
-  bytes proposer_address = 13;
+  bytes proposer_address = 13; // @gotags: json:"proposerAddress"
   // vdf: the verifiable delay proof for this block. The VDF serves as a protection mechanism against historical
   // forking attacks
   VDF vdf = 14;
   // last_quorum_certificate: The quorum certificate from the previous block is included in the block header to ensure
   // all nodes have the same record of blockchain certificates, preventing discrepancies where the same block
   // could be accepted with different super-majorities of signatures across nodes.
-  QuorumCertificate last_quorum_certificate = 15;
+  QuorumCertificate last_quorum_certificate = 15; // @gotags: json:"lastQuorumCertificate"
 }
 
 // A block is a batch of transactions and essential header information that marks a unit of committed information in the
 // blockchain. Blocks are linked together in a sequence, creating a secure, verifiable chain of transaction history.
 message Block {
   // block_header: is the essential summary information of the block
-  BlockHeader block_header = 1;
+  BlockHeader block_header = 1; // @gotags: json:"blockHeader"
   // transactions: is the batch of transactions in this block
   repeated bytes transactions = 2;
 }
@@ -83,7 +83,7 @@ message Block {
 // processing that block. A block result is made by applying a 'block' against a state machine.
 message BlockResult {
   // block_header: is the essential summary information of the block
-  BlockHeader block_header = 1;
+  BlockHeader block_header = 1; // @gotags: json:"blockHeader"
   // transactions: is a batch of transaction results in this block
   repeated TxResult transactions = 2;
   // meta: is non-essential metadata about the processing of this block

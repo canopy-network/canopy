@@ -63,23 +63,23 @@ type SellOrder struct {
 	unknownFields protoimpl.UnknownFields
 
 	// id: the unique identifier of the order
-	Id uint64 `protobuf:"varint,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id uint64 `protobuf:"varint,1,opt,name=Id,proto3" json:"id"` // @gotags: json:"id"
 	// committee: the id of the committee that is in-charge of escrow for the swap
-	Committee uint64 `protobuf:"varint,2,opt,name=Committee,proto3" json:"Committee,omitempty"`
+	Committee uint64 `protobuf:"varint,2,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
 	// amount_for_sale: amount of CNPY for sale
-	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"AmountForSale,omitempty"`
+	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"amountForSalee"` // @gotags: json:"amountForSalee"
 	// requested_amount: amount of 'counter-asset' to receive
-	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"RequestedAmount,omitempty"`
+	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// seller_receive_address: the external chain address to receive the 'counter-asset'
-	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"SellerReceiveAddress,omitempty"`
+	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"sellerReceiveAddress"` // @gotags: json:"sellerReceiveAddress"
 	// buyer_send_address: the address the buyer will be transferring the funds from
-	BuyerSendAddress []byte `protobuf:"bytes,6,opt,name=BuyerSendAddress,proto3" json:"BuyerSendAddress,omitempty"`
+	BuyerSendAddress []byte `protobuf:"bytes,6,opt,name=BuyerSendAddress,proto3" json:"buyerSendAddress"` // @gotags: json:"buyerSendAddress"
 	// buyer_receive_address: the buyer Canopy address to receive the CNPY
-	BuyerReceiveAddress []byte `protobuf:"bytes,7,opt,name=BuyerReceiveAddress,proto3" json:"BuyerReceiveAddress,omitempty"`
+	BuyerReceiveAddress []byte `protobuf:"bytes,7,opt,name=BuyerReceiveAddress,proto3" json:"buyerReceiveAddress"` // @gotags: json:"buyerReceiveAddress"
 	// buyer_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-	BuyerChainDeadline uint64 `protobuf:"varint,8,opt,name=BuyerChainDeadline,proto3" json:"BuyerChainDeadline,omitempty"`
+	BuyerChainDeadline uint64 `protobuf:"varint,8,opt,name=BuyerChainDeadline,proto3" json:"buyerChainDeadline"` // @gotags: json:"buyerChainDeadline"
 	// sellers_send_address: the signing address of seller who is selling the CNPY
-	SellersSendAddress []byte `protobuf:"bytes,9,opt,name=SellersSendAddress,proto3" json:"SellersSendAddress,omitempty"`
+	SellersSendAddress []byte `protobuf:"bytes,9,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 }
 
 func (x *SellOrder) Reset() {
@@ -184,7 +184,7 @@ type OrderBooks struct {
 	unknownFields protoimpl.UnknownFields
 
 	// OrderBooks: the actual list of order book objects
-	OrderBooks []*OrderBook `protobuf:"bytes,1,rep,name=OrderBooks,proto3" json:"OrderBooks,omitempty"`
+	OrderBooks []*OrderBook `protobuf:"bytes,1,rep,name=OrderBooks,proto3" json:"orderBooks"` // @gotags: json:"orderBooks"
 }
 
 func (x *OrderBooks) Reset() {
@@ -233,7 +233,7 @@ type OrderBook struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: the unique identifier of the 'counter asset' committee
-	ChainId uint64 `protobuf:"varint,1,opt,name=chainId,proto3" json:"chainId,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// orders: the actual list of sell orders
 	Orders []*SellOrder `protobuf:"bytes,2,rep,name=orders,proto3" json:"orders,omitempty"`
 }

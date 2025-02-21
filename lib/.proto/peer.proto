@@ -44,13 +44,13 @@ enum Topic {
 // and reputation
 message PeerInfo {
   // Address: the address information of the peer, including its public key and network address
-  PeerAddress Address = 1;
+  PeerAddress Address = 1; // @gotags: json:"address"
   // is_outbound: indicates whether the connection to the peer was initiated by this node (true if outbound)
-  bool is_outbound = 2;
+  bool is_outbound = 2; // @gotags: json:"isOutbound"
   // is_must_connect: indicates whether this peer is a required connection that the node must connect to
-  bool is_must_connect = 3;
+  bool is_must_connect = 3; // @gotags: json:"isMustConnect"
   // is_trusted: marks whether this peer is configured as trusted
-  bool is_trusted = 4;
+  bool is_trusted = 4; // @gotags: json:"isTrusted"
   // reputation: a numerical score representing the peer's reputation to this local node
   int32 reputation = 5;
 }
@@ -58,20 +58,20 @@ message PeerInfo {
 // PeerAddress holds the details of the peer's network address and public key
 message PeerAddress {
   // public_key: the peer's public key used for cryptographic identity
-  bytes public_key = 1;
+  bytes public_key = 1; // @gotags: json:"publicKey"
   // net_address: the tcp network address of the peer Ex. tcp://8.8.8.8:8080 or 8.8.8.8:8080
-  string net_address = 2;
+  string net_address = 2; // @gotags: json:"netAddress"
   // peer_meta: additional metadata about the peer, such as the network ID and chains it supports
-  PeerMeta peer_meta = 3;
+  PeerMeta peer_meta = 3; // @gotags: json:"peerMeta"
 }
 
 // PeerMeta contains additional metadata about a peer, including supported networks and chains
 message PeerMeta {
   // network_id: the identifier for the network the peer is part of
   // this ensures no conflicts among different peering networks (mainnet, testnet, etc.)
-  uint64 network_id = 1;
+  uint64 network_id = 1; // @gotags: json:"networkID"
   // chain_id the chain identifiers that the peer supports and/or participates in
-  uint64 chain_id = 2;
+  uint64 chain_id = 2; // @gotags: json:"chainID"
   // signature: a cryptographic signature to verify the authenticity of the peer's metadata
   bytes signature = 3;
 }
@@ -79,7 +79,7 @@ message PeerMeta {
 // ConsensusMessage is a p2p message payload that is handled by the BFT module
 message ConsensusMessage {
   // chain_id: is the unique identifier of the committee associated with this message
-  uint64 chain_id = 1;
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // message: the bytes of the consensus message that may be unmarshalled into a consensus.Message object
   bytes message = 2;
 }
@@ -87,32 +87,32 @@ message ConsensusMessage {
 // BlockRequestMessage is a p2p message payload that is requesting a block and/or max_height of the peer
 message BlockRequestMessage {
   // chain_id: is the unique identifier of the committee associated with this message
-  uint64 chain_id = 1;
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // height: the height of the block being requested
   uint64 height = 2;
   // height_only: signals if this is a max-height only request, no block is expected in the response to this type
   // of message
-  bool height_only = 3;
+  bool height_only = 3; // @gotags: json:"heightOnly"
 }
 
 // BlockMessage is a p2p message payload that is responding to a block request message
 message BlockMessage {
   // chain_id: is the unique identifier of the committee associated with this message
-  uint64 chain_id = 1;
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // max_height: the maximum height of this blockchain the peer is aware of
-  uint64 max_height = 2;
+  uint64 max_height = 2; // @gotags: json:"maxHeight"
   // total_vdf_iterations: the total number of vdf iterations associated with this blockchain
   // this helps a peer to chose given a choice between two forks as well as verify the integrity of the peer
-  uint64 total_vdf_iterations = 3;
+  uint64 total_vdf_iterations = 3; // @gotags: json:"totalVDFIterations"
   // block_and_certificate: is the actual block and the super-majority signed quorum certificate that justifies it
-  QuorumCertificate BlockAndCertificate = 4;
+  QuorumCertificate BlockAndCertificate = 4; // @gotags: json:"blockAndCertificate"
 }
 
 // TxMessage is a p2p message payload that is an inbound transaction to be processed by the blockchain's FSM and saved
 // in that chains mempool
 message TxMessage {
   // chain_id: is the unique identifier of the committee associated with this message
-  uint64 chain_id = 1;
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // tx: is the bytes of the transaction that may be unmarshalled into a Transaction object
   bytes tx = 2;
 }

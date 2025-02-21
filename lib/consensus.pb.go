@@ -170,13 +170,13 @@ type View struct {
 	unknownFields protoimpl.UnknownFields
 
 	// the unique identifier of the blockchain network
-	NetworkId uint64 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	NetworkId uint64 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"networkID"` // @gotags: json:"networkID"
 	// the unique identifier of the committee within the blockchain network
-	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,2,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// the height or number of committed blocks in the blockchain
 	Height uint64 `protobuf:"varint,3,opt,name=height,proto3" json:"height,omitempty"`
 	// the root blockchain height also the height that the committee validator set may be verified
-	RootHeight uint64 `protobuf:"varint,4,opt,name=root_height,json=rootHeight,proto3" json:"root_height,omitempty"`
+	RootHeight uint64 `protobuf:"varint,4,opt,name=root_height,json=rootHeight,proto3" json:"rootHeight"` // @gotags: json:"rootHeight"
 	// each height consists of one or more `rounds` which is a step within the consensus protocol where
 	// a new Proposer is selected to lead the validators to agree on the next block if they fail, the
 	// round is incremented, more time is granted for consensus timeouts, and the cycle starts over
@@ -380,11 +380,11 @@ type ConsensusValidator struct {
 	unknownFields protoimpl.UnknownFields
 
 	// public_key: the operator's aggregable public key that is used to validate signatures from the operator
-	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	PublicKey []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"publicKey"` // @gotags: json:"publicKey"
 	// voting_power: the weight of this node's vote, typically 1 to 1 matched to staked tokens
-	VotingPower uint64 `protobuf:"varint,2,opt,name=voting_power,json=votingPower,proto3" json:"voting_power,omitempty"`
+	VotingPower uint64 `protobuf:"varint,2,opt,name=voting_power,json=votingPower,proto3" json:"votingPower"` // @gotags: json:"votingPower"
 	// net_address: the p2p tcp address of the validator node
-	NetAddress string `protobuf:"bytes,3,opt,name=net_address,json=netAddress,proto3" json:"net_address,omitempty"`
+	NetAddress string `protobuf:"bytes,3,opt,name=net_address,json=netAddress,proto3" json:"netAddress"` // @gotags: json:"netAddress"
 }
 
 func (x *ConsensusValidator) Reset() {
@@ -448,7 +448,7 @@ type ConsensusValidators struct {
 	unknownFields protoimpl.UnknownFields
 
 	// validator_set: is the actual list of Validators and their respective
-	ValidatorSet []*ConsensusValidator `protobuf:"bytes,1,rep,name=ValidatorSet,proto3" json:"ValidatorSet,omitempty"`
+	ValidatorSet []*ConsensusValidator `protobuf:"bytes,1,rep,name=ValidatorSet,proto3" json:"validatorSet"` // @gotags: json:"validatorSet"
 }
 
 func (x *ConsensusValidators) Reset() {

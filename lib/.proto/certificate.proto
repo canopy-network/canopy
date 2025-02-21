@@ -29,14 +29,14 @@ message QuorumCertificate {
   CertificateResult results = 2;
   // results_hash: is the cryptographic integrity bytes for results, results hash may be used to confirm the validator
   // quorum signed off on the results
-  bytes results_hash = 3;
+  bytes results_hash = 3; // @gotags: json:"resultHash"
   // block: the proposed block to be added to the blockchain
   bytes block = 4;
   // block_hash: is the cryptographic integrity bytes for block, block hash may be used to confirm the validator quorum
   // signed off on the block
-  bytes block_hash = 5;
+  bytes block_hash = 5; // @gotags: json:"blockHash"
   // proposer_key: is the public key of the block proposer
-  bytes proposer_key = 6;
+  bytes proposer_key = 6; // @gotags: json:"proposerKey"
   // (aggregate) signature: the compact signature created by combining multiple individual signatures from replica
   // validators. This signature serves as a justification that a super-majority quorum signed off on the certificate
   AggregateSignature signature = 7; // aggregate signature from the current proposer message
@@ -46,10 +46,10 @@ message QuorumCertificate {
 message CertificateResult {
   // reward_recipients: the recipients who are rewarded based on the quorum certificate
   // specifically who the committee agreed to reward from the committee treasury
-  RewardRecipients reward_recipients = 1;
+  RewardRecipients reward_recipients = 1; // @gotags: json:"rewardRecipients"
   // slash_recipients: the recipients who are penalized (slashed) based on the quorum certificate
   // specifically who the committee agreed to slash due to evidence of bad behavior
-  SlashRecipients slash_recipients = 2;
+  SlashRecipients slash_recipients = 2; // @gotags: json:"slashRecipients"
   // orders: contains information regarding the 'buying side' of sell orders
   // including actions like 'buy/reserve order' or 'close/complete order'
   Orders orders = 3;
@@ -63,16 +63,16 @@ message CertificateResult {
 // based on decisions confirmed in a Quorum Certificate
 message RewardRecipients {
   // payment_percents: the percentage of rewards allocated to each recipient
-  repeated PaymentPercents payment_percents = 1;
+  repeated PaymentPercents payment_percents = 1; // @gotags: json:"paymentPercents"
   // number_of_samples: (internal processing only) the number of samples used to determine reward distribution
-  uint64 number_of_samples = 2;
+  uint64 number_of_samples = 2; // @gotags: json:"numberOfSamples"
 }
 
 // SlashRecipients is the list of recipients who are penalized based on misbehavior, like double signing or bad
 // proposing based on a committee agreement confirmed in a Quorum Certificate
 message SlashRecipients {
   // double_signers: a list of actors who the committee agreed double-signed based on evidence
-  repeated DoubleSigner double_signers = 1;
+  repeated DoubleSigner double_signers = 1; // @gotags: json:"doubleSigners"
 }
 
 // Orders: tracks actions related to 'buyer side' activities for sell orders
@@ -81,26 +81,26 @@ message SlashRecipients {
 message Orders {
   // buy_orders: a list of actions where a buyer expresses an intent to purchase an order,
   // often referred to as 'claiming' the order
-  repeated BuyOrder buy_orders = 1;
+  repeated BuyOrder buy_orders = 1; // @gotags: json:"buyOrders"
   // reset_orders: a list of orders where no funds were sent before the deadline,
   // signaling to Canopy to 'un-claim' the order
-  repeated uint64 reset_orders = 2;
+  repeated uint64 reset_orders = 2; // @gotags: json:"resetOrders"
   // close_orders: a list of orders where funds were sent,
   // signaling Canopy to transfer escrowed tokens to the buyer's Canopy address
-  repeated uint64 close_orders = 3;
+  repeated uint64 close_orders = 3; // @gotags: json:"closeOrders"
 }
 
 // BuyOrder is a buyer expressing an intent to purchase an order, often referred to as 'claiming' the order
 message BuyOrder {
   // order_id: is the number id that is unique to this committee to identify the order
-  uint64 order_id = 1;
+  uint64 order_id = 1; // @gotags: json:"orderID"
   // buyer_receive_address: the Canopy address where the tokens may be received
-  bytes buyer_receive_address = 2;
+  bytes buyer_receive_address = 2; // @gotags: json:"buyerReceiveAddress"
   // buyer_send_address: the 'counter asset' address where the tokens will be sent from
-  bytes buyer_send_address = 3;
+  bytes buyer_send_address = 3; // @gotags: json:"buyerSendAddress"
   // buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
   // or the 'intent to buy' will be voided
-  uint64 buyer_chain_deadline = 4;
+  uint64 buyer_chain_deadline = 4; // @gotags: json:"buyerChainDeadline"
 }
 
 // Checkpoint is 3rd party chain information that allows Canopy to provide Checkpointing-as-a-Service for the 3rd party
@@ -110,7 +110,7 @@ message Checkpoint {
   // height: the height of the third party chain
   uint64 height = 1;
   // block_hash: the cryptographic hash of the third party chain block for the height
-  bytes block_hash = 2;
+  bytes block_hash = 2; // @gotags: json:"blockHash"
 }
 
 // PaymentPercents represents the distribution of rewards to recipients from the committee treasury pool
@@ -142,17 +142,17 @@ message CommitteesData {
 // CommitteeData is current status information about the current status of the Committee
 message CommitteeData {
   // chain_id: is the unique identifier of the chain and the committee of Validators responsible for it
-  uint64 chain_id = 1;
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // last_updated_height: is the Canopy height included in the most recently processed Certificate Results transaction
   // This protects against historical committee attacks and ensures sequentiality among committees
-  uint64 last_root_height_updated = 2;
+  uint64 last_root_height_updated = 2; // @gotags: json:"lastRootHeightUpdated"
   // last_chain_height_updated: is the 3rd party chain height included in the most recent processed Certificate Results
   // transaction. This protects against reformatting the replay attacks
-  uint64 last_chain_height_updated = 3;
+  uint64 last_chain_height_updated = 3; // @gotags: json:"lastChainHeightUpdated"
   // payment_percents: a list of recipients and the percentage of rewards they will receive, distributed at the end of
   // the block
-  repeated PaymentPercents  payment_percents = 4;
+  repeated PaymentPercents  payment_percents = 4; // @gotags: json:"paymentPercents"
   // number_of_samples: the total count of processed Certificate Result Transactions, used to dilute reward percentages
   // accurately
-  uint64 number_of_samples = 5;
+  uint64 number_of_samples = 5; // @gotags: json:"numberOfSamples"
 }

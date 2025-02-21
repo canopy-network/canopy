@@ -49,14 +49,14 @@ type QuorumCertificate struct {
 	Results *CertificateResult `protobuf:"bytes,2,opt,name=results,proto3" json:"results,omitempty"`
 	// results_hash: is the cryptographic integrity bytes for results, results hash may be used to confirm the validator
 	// quorum signed off on the results
-	ResultsHash []byte `protobuf:"bytes,3,opt,name=results_hash,json=resultsHash,proto3" json:"results_hash,omitempty"`
+	ResultsHash []byte `protobuf:"bytes,3,opt,name=results_hash,json=resultsHash,proto3" json:"resultHash"` // @gotags: json:"resultHash"
 	// block: the proposed block to be added to the blockchain
 	Block []byte `protobuf:"bytes,4,opt,name=block,proto3" json:"block,omitempty"`
 	// block_hash: is the cryptographic integrity bytes for block, block hash may be used to confirm the validator quorum
 	// signed off on the block
-	BlockHash []byte `protobuf:"bytes,5,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHash []byte `protobuf:"bytes,5,opt,name=block_hash,json=blockHash,proto3" json:"blockHash"` // @gotags: json:"blockHash"
 	// proposer_key: is the public key of the block proposer
-	ProposerKey []byte `protobuf:"bytes,6,opt,name=proposer_key,json=proposerKey,proto3" json:"proposer_key,omitempty"`
+	ProposerKey []byte `protobuf:"bytes,6,opt,name=proposer_key,json=proposerKey,proto3" json:"proposerKey"` // @gotags: json:"proposerKey"
 	// (aggregate) signature: the compact signature created by combining multiple individual signatures from replica
 	// validators. This signature serves as a justification that a super-majority quorum signed off on the certificate
 	Signature *AggregateSignature `protobuf:"bytes,7,opt,name=signature,proto3" json:"signature,omitempty"` // aggregate signature from the current proposer message
@@ -151,10 +151,10 @@ type CertificateResult struct {
 
 	// reward_recipients: the recipients who are rewarded based on the quorum certificate
 	// specifically who the committee agreed to reward from the committee treasury
-	RewardRecipients *RewardRecipients `protobuf:"bytes,1,opt,name=reward_recipients,json=rewardRecipients,proto3" json:"reward_recipients,omitempty"`
+	RewardRecipients *RewardRecipients `protobuf:"bytes,1,opt,name=reward_recipients,json=rewardRecipients,proto3" json:"rewardRecipients"` // @gotags: json:"rewardRecipients"
 	// slash_recipients: the recipients who are penalized (slashed) based on the quorum certificate
 	// specifically who the committee agreed to slash due to evidence of bad behavior
-	SlashRecipients *SlashRecipients `protobuf:"bytes,2,opt,name=slash_recipients,json=slashRecipients,proto3" json:"slash_recipients,omitempty"`
+	SlashRecipients *SlashRecipients `protobuf:"bytes,2,opt,name=slash_recipients,json=slashRecipients,proto3" json:"slashRecipients"` // @gotags: json:"slashRecipients"
 	// orders: contains information regarding the 'buying side' of sell orders
 	// including actions like 'buy/reserve order' or 'close/complete order'
 	Orders *Orders `protobuf:"bytes,3,opt,name=orders,proto3" json:"orders,omitempty"`
@@ -239,9 +239,9 @@ type RewardRecipients struct {
 	unknownFields protoimpl.UnknownFields
 
 	// payment_percents: the percentage of rewards allocated to each recipient
-	PaymentPercents []*PaymentPercents `protobuf:"bytes,1,rep,name=payment_percents,json=paymentPercents,proto3" json:"payment_percents,omitempty"`
+	PaymentPercents []*PaymentPercents `protobuf:"bytes,1,rep,name=payment_percents,json=paymentPercents,proto3" json:"paymentPercents"` // @gotags: json:"paymentPercents"
 	// number_of_samples: (internal processing only) the number of samples used to determine reward distribution
-	NumberOfSamples uint64 `protobuf:"varint,2,opt,name=number_of_samples,json=numberOfSamples,proto3" json:"number_of_samples,omitempty"`
+	NumberOfSamples uint64 `protobuf:"varint,2,opt,name=number_of_samples,json=numberOfSamples,proto3" json:"numberOfSamples"` // @gotags: json:"numberOfSamples"
 }
 
 func (x *RewardRecipients) Reset() {
@@ -298,7 +298,7 @@ type SlashRecipients struct {
 	unknownFields protoimpl.UnknownFields
 
 	// double_signers: a list of actors who the committee agreed double-signed based on evidence
-	DoubleSigners []*DoubleSigner `protobuf:"bytes,1,rep,name=double_signers,json=doubleSigners,proto3" json:"double_signers,omitempty"`
+	DoubleSigners []*DoubleSigner `protobuf:"bytes,1,rep,name=double_signers,json=doubleSigners,proto3" json:"doubleSigners"` // @gotags: json:"doubleSigners"
 }
 
 func (x *SlashRecipients) Reset() {
@@ -350,13 +350,13 @@ type Orders struct {
 
 	// buy_orders: a list of actions where a buyer expresses an intent to purchase an order,
 	// often referred to as 'claiming' the order
-	BuyOrders []*BuyOrder `protobuf:"bytes,1,rep,name=buy_orders,json=buyOrders,proto3" json:"buy_orders,omitempty"`
+	BuyOrders []*BuyOrder `protobuf:"bytes,1,rep,name=buy_orders,json=buyOrders,proto3" json:"buyOrders"` // @gotags: json:"buyOrders"
 	// reset_orders: a list of orders where no funds were sent before the deadline,
 	// signaling to Canopy to 'un-claim' the order
-	ResetOrders []uint64 `protobuf:"varint,2,rep,packed,name=reset_orders,json=resetOrders,proto3" json:"reset_orders,omitempty"`
+	ResetOrders []uint64 `protobuf:"varint,2,rep,packed,name=reset_orders,json=resetOrders,proto3" json:"resetOrders"` // @gotags: json:"resetOrders"
 	// close_orders: a list of orders where funds were sent,
 	// signaling Canopy to transfer escrowed tokens to the buyer's Canopy address
-	CloseOrders []uint64 `protobuf:"varint,3,rep,packed,name=close_orders,json=closeOrders,proto3" json:"close_orders,omitempty"`
+	CloseOrders []uint64 `protobuf:"varint,3,rep,packed,name=close_orders,json=closeOrders,proto3" json:"closeOrders"` // @gotags: json:"closeOrders"
 }
 
 func (x *Orders) Reset() {
@@ -419,14 +419,14 @@ type BuyOrder struct {
 	unknownFields protoimpl.UnknownFields
 
 	// order_id: is the number id that is unique to this committee to identify the order
-	OrderId uint64 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	OrderId uint64 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"orderID"` // @gotags: json:"orderID"
 	// buyer_receive_address: the Canopy address where the tokens may be received
-	BuyerReceiveAddress []byte `protobuf:"bytes,2,opt,name=buyer_receive_address,json=buyerReceiveAddress,proto3" json:"buyer_receive_address,omitempty"`
+	BuyerReceiveAddress []byte `protobuf:"bytes,2,opt,name=buyer_receive_address,json=buyerReceiveAddress,proto3" json:"buyerReceiveAddress"` // @gotags: json:"buyerReceiveAddress"
 	// buyer_send_address: the 'counter asset' address where the tokens will be sent from
-	BuyerSendAddress []byte `protobuf:"bytes,3,opt,name=buyer_send_address,json=buyerSendAddress,proto3" json:"buyer_send_address,omitempty"`
+	BuyerSendAddress []byte `protobuf:"bytes,3,opt,name=buyer_send_address,json=buyerSendAddress,proto3" json:"buyerSendAddress"` // @gotags: json:"buyerSendAddress"
 	// buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
 	// or the 'intent to buy' will be voided
-	BuyerChainDeadline uint64 `protobuf:"varint,4,opt,name=buyer_chain_deadline,json=buyerChainDeadline,proto3" json:"buyer_chain_deadline,omitempty"`
+	BuyerChainDeadline uint64 `protobuf:"varint,4,opt,name=buyer_chain_deadline,json=buyerChainDeadline,proto3" json:"buyerChainDeadline"` // @gotags: json:"buyerChainDeadline"
 }
 
 func (x *BuyOrder) Reset() {
@@ -500,7 +500,7 @@ type Checkpoint struct {
 	// height: the height of the third party chain
 	Height uint64 `protobuf:"varint,1,opt,name=height,proto3" json:"height,omitempty"`
 	// block_hash: the cryptographic hash of the third party chain block for the height
-	BlockHash []byte `protobuf:"bytes,2,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	BlockHash []byte `protobuf:"bytes,2,opt,name=block_hash,json=blockHash,proto3" json:"blockHash"` // @gotags: json:"blockHash"
 }
 
 func (x *Checkpoint) Reset() {
@@ -725,19 +725,19 @@ type CommitteeData struct {
 	unknownFields protoimpl.UnknownFields
 
 	// chain_id: is the unique identifier of the chain and the committee of Validators responsible for it
-	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// last_updated_height: is the Canopy height included in the most recently processed Certificate Results transaction
 	// This protects against historical committee attacks and ensures sequentiality among committees
-	LastRootHeightUpdated uint64 `protobuf:"varint,2,opt,name=last_root_height_updated,json=lastRootHeightUpdated,proto3" json:"last_root_height_updated,omitempty"`
+	LastRootHeightUpdated uint64 `protobuf:"varint,2,opt,name=last_root_height_updated,json=lastRootHeightUpdated,proto3" json:"lastRootHeightUpdated"` // @gotags: json:"lastRootHeightUpdated"
 	// last_chain_height_updated: is the 3rd party chain height included in the most recent processed Certificate Results
 	// transaction. This protects against reformatting the replay attacks
-	LastChainHeightUpdated uint64 `protobuf:"varint,3,opt,name=last_chain_height_updated,json=lastChainHeightUpdated,proto3" json:"last_chain_height_updated,omitempty"`
+	LastChainHeightUpdated uint64 `protobuf:"varint,3,opt,name=last_chain_height_updated,json=lastChainHeightUpdated,proto3" json:"lastChainHeightUpdated"` // @gotags: json:"lastChainHeightUpdated"
 	// payment_percents: a list of recipients and the percentage of rewards they will receive, distributed at the end of
 	// the block
-	PaymentPercents []*PaymentPercents `protobuf:"bytes,4,rep,name=payment_percents,json=paymentPercents,proto3" json:"payment_percents,omitempty"`
+	PaymentPercents []*PaymentPercents `protobuf:"bytes,4,rep,name=payment_percents,json=paymentPercents,proto3" json:"paymentPercents"` // @gotags: json:"paymentPercents"
 	// number_of_samples: the total count of processed Certificate Result Transactions, used to dilute reward percentages
 	// accurately
-	NumberOfSamples uint64 `protobuf:"varint,5,opt,name=number_of_samples,json=numberOfSamples,proto3" json:"number_of_samples,omitempty"`
+	NumberOfSamples uint64 `protobuf:"varint,5,opt,name=number_of_samples,json=numberOfSamples,proto3" json:"numberOfSamples"` // @gotags: json:"numberOfSamples"
 }
 
 func (x *CommitteeData) Reset() {
