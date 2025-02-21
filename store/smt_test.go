@@ -3,11 +3,12 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSet(t *testing.T) {
@@ -1947,6 +1948,232 @@ func TestBytesToBits(t *testing.T) {
 			k := new(key)
 			got := k.byteToBits(test.byt, test.leadingZeroes)
 			require.Equal(t, test.expected, got, fmt.Sprintf("Expected: %v, Got: %v\n", test.expected, got))
+		})
+	}
+}
+
+func TestStoreProof(t *testing.T) {
+	leaf11101111preset := &NodeList{
+		Nodes: []*node{
+			{ // root
+				Key: &key{leastSigBits: []int{1, 0, 0, 1}}, // arbitrary
+				Node: Node{
+					LeftChildKey:  []byte{0b0, 3}, // 0000
+					RightChildKey: []byte{0b1, 0}, // 1
+				},
+			},
+			{ // 0000
+				Key:  &key{leastSigBits: []int{0, 0, 0, 0}},
+				Node: Node{}, // leaf
+			},
+			{ // 1
+				Key: &key{leastSigBits: []int{1}},
+				Node: Node{
+					LeftChildKey:  []byte{0b1000, 0}, // 1000
+					RightChildKey: []byte{0b111, 0},  // 111
+				},
+			},
+			{ // 1000
+				Key: &key{leastSigBits: []int{1, 0, 0, 0}},
+			},
+			{ // 1110
+				Key:  &key{leastSigBits: []int{1, 1, 1, 0}},
+				Node: Node{Value: []byte("some_value")}, // leaf
+			},
+			{ // 111
+				Key: &key{leastSigBits: []int{1, 1, 1}},
+				Node: Node{
+					LeftChildKey:  []byte{0b1110, 0}, // 1110
+					RightChildKey: []byte{0b1111, 0}, // 1111
+				},
+			},
+			{ // 1111
+				Key:  &key{leastSigBits: []int{1, 1, 1, 1}},
+				Node: Node{}, // leaf
+			},
+		},
+	}
+
+	leaf00011111preset := &NodeList{
+		Nodes: []*node{
+			{ // 0001
+				Key: &key{leastSigBits: []int{0, 0, 0, 1}}, // leaf
+				Node: Node{
+					Value: []byte("some_value"),
+				},
+			},
+			{ // 0010
+				Key:  &key{leastSigBits: []int{0, 0, 1, 0}}, // leaf
+				Node: Node{},
+			},
+			{ // 1000
+				Key:  &key{leastSigBits: []int{1, 0, 0, 0}}, // leaf
+				Node: Node{},
+			},
+			{ // 1111
+				Key: &key{leastSigBits: []int{1, 1, 1, 1}}, // leaf
+				Node: Node{
+					Value: []byte("some_value"),
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name               string
+		detail             string
+		keyBitSize         int
+		target             *node
+		preset             *NodeList
+		valid              bool
+		validateMembership bool
+		err                error
+	}{
+		{
+			name: "valid proof of membership with target at 1110",
+			detail: `Preset:  root
+		                         /    \
+		                       0000    1
+		                         /      \
+		                       1000     111
+		                                /   \
+		                            *1110*  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf11101111preset,
+			target:             &node{Key: &key{leastSigBits: []int{1, 1, 1, 0}}, Node: Node{Value: []byte("some_value")}},
+			validateMembership: true,
+			valid:              true,
+			err:                nil,
+		},
+		{
+			name: "valid proof of non membership with target at 1101",
+			detail: `Preset:  root
+		                         /    \
+		                       0000    1
+		                         /      \
+		                       1000     111
+		                                /   \
+		                             1110  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf11101111preset,
+			target:             &node{Key: &key{leastSigBits: []int{1, 1, 0, 1}}, Node: Node{Value: []byte("some_value")}},
+			validateMembership: false,
+			valid:              true,
+			err:                nil,
+		},
+		{
+			name: "invalid proof of non membership with target at 1111 (key exist, values differ)",
+			detail: `Preset:  root
+		                         /    \
+		                       0000    1
+		                         /      \
+		                       1000     111
+		                                /   \
+		                             1110  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf11101111preset,
+			target:             &node{Key: &key{leastSigBits: []int{1, 1, 1, 1}}, Node: Node{Value: []byte("some_value")}},
+			validateMembership: true,
+			valid:              false,
+			err:                nil,
+		},
+		{
+			name: "invalid proof of non membership with target at 1111 (key exists)",
+			detail: `Preset:     root
+		                         /        \
+		                       0           1
+		                     /  \         /   \
+		                   0001 0010    1110  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf00011111preset,
+			target:             &node{Key: &key{leastSigBits: []int{1, 1, 1, 1}}, Node: Node{Value: []byte("some_value")}},
+			validateMembership: false,
+			valid:              false,
+			err:                nil,
+		},
+		{
+			name: "valid proof of membership with target at 0001",
+			detail: `Preset:     root
+		                         /        \
+		                       0           1
+		                     /  \         /   \
+		                   0001 0010    1110  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf00011111preset,
+			target:             &node{Key: &key{leastSigBits: []int{0, 0, 0, 1}}, Node: Node{Value: []byte("some_value")}},
+			validateMembership: true,
+			valid:              true,
+			err:                nil,
+		},
+		{
+			name: "invalid proof of non membership with target at 0001 (values differ)",
+			detail: `Preset:     root
+		                         /        \
+		                       0           1
+		                     /  \         /   \
+		                   0001 0010    1110  1111
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			preset:             leaf00011111preset,
+			target:             &node{Key: &key{leastSigBits: []int{0, 0, 0, 1}}, Node: Node{Value: []byte("some_value1")}},
+			validateMembership: true,
+			valid:              false,
+			err:                nil,
+		},
+		{
+			name: "invalid proof of membership with default smt root value as target (gcp is never equal to root)",
+			detail: `Preset:          *root*
+		                         /        \
+		                       min          max
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			target:             &node{Key: newNodeKey(bytes.Clone(RootKey), MaxKeyBitLength), Node: Node{}},
+			validateMembership: true,
+			valid:              false,
+			err:                nil,
+		},
+		{
+			name: "invalid proof of membership with default smt max value value as target (default min-max keys are not hashed)",
+			detail: `Preset:          root
+		                         /        \
+		                       min          *max*
+							`,
+			keyBitSize:         MaxKeyBitLength,
+			target:             &node{Key: newNodeKey(bytes.Repeat([]byte{255}, 20), MaxKeyBitLength), Node: Node{}},
+			validateMembership: true,
+			valid:              false,
+			err:                nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// create the smt
+			smt, memStore := NewTestSMT(t, nil, test.keyBitSize)
+			defer memStore.Close()
+
+			// preset the nodes manually to trigger rehashing
+			if test.preset != nil {
+				for _, n := range test.preset.Nodes {
+					// set the node in the db
+					require.NoError(t, smt.Set(n.Key.bytes(), n.Value))
+				}
+			}
+
+			// generate the merkle proof
+			proof, err := smt.GetMerkleProof(test.target.Key.bytes())
+			require.NoError(t, err)
+			// verify the proof
+			valid, err := smt.VerifyProof(test.target.Key.bytes(), test.target.Value, test.validateMembership, proof)
+
+			// validate results
+			require.Equal(t, test.err, err)
+			require.Equal(t, test.valid, valid)
 		})
 	}
 }

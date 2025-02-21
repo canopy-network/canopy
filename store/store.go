@@ -3,11 +3,12 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"path/filepath"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
-	"math"
-	"path/filepath"
 )
 
 const (
@@ -188,13 +189,15 @@ func (s *Store) Delete(k []byte) lib.ErrorI {
 }
 
 // GetProof() uses the StateCommitStore to prove membership and non-membership
-func (s *Store) GetProof(k []byte) ([]byte, []byte, lib.ErrorI) {
-	panic("not (yet) implemented")
+func (s *Store) GetProof(key []byte) (*lib.MerkleProof, lib.ErrorI) {
+	return s.sc.GetMerkleProof(key)
 }
 
 // VerifyProof() checks the validity of a member or non-member proof from the StateCommitStore
 // by verifying the proof against the provided key, value, and proof data.
-func (s *Store) VerifyProof(k, v, p []byte) bool { panic("not (yet) implemented") }
+func (s *Store) VerifyProof(key, value []byte, validateMembership bool, proof *lib.MerkleProof) (bool, lib.ErrorI) {
+	return s.sc.VerifyProof(key, value, validateMembership, proof)
+}
 
 // Iterator() returns an object for scanning the StateStore starting from the provided prefix.
 // The iterator allows forward traversal of key-value pairs that match the prefix.
@@ -270,9 +273,6 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 		return err
 	}
 	k := s.commitIDKey(version)
-	if err != nil {
-		return err
-	}
 	return w.Set(k, value)
 }
 

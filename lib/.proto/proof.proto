@@ -1,0 +1,48 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/canopy-network/canopy/lib";
+
+// *****************************************************************************************************
+// This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
+//
+// Protobuf is a language-neutral, platform-neutral serialization format. It allows users
+// to define objects in a way that’s both efficient to store and fast to transmit over the network.
+// These definitions are compiled into code that *enables different systems and programming languages
+// to communicate in a byte-perfect manner*
+//
+// To update these structures, make changes to the source .proto files, then recompile
+// to regenerate this file.
+// These auto-generated files are easily recognized by checking for a `.pb.go` ending
+// *****************************************************************************************************
+//_
+//_
+//_
+// MerkleProof represents Canopy's implementation of a Sparse Merkle Tree Proof.
+// It is utilized for both membership and non-membership proof functionalities.
+// For the array of Nodes, the first two nodes represent the initial leaf node siblings
+// required to compute the parent node's hash. The remaining nodes are the intermediate 
+// node siblings necessary to compute the root hash.
+message MerkleProof {
+  // Nodes: Element in the sparse Merkle tree that are required to compute the root hash, augmented with
+  // the compact key used to traverse the tree
+  repeated ProofNode Nodes = 1;
+  // Root: is the cryptographic hash of the root of the Sparse Merkle Tree at the time of 
+  // the proof
+  bytes Root = 8;
+}
+
+// ProofNode represents Canopy's implementation a node of the  Sparse Merkle Tree implementation.
+// It is the same as the Node implemented in the store, with the addition of the Key field which
+// stores the compact implmentation of the node's key bit sequences. For more information check the
+// `key` struct in the `store/smt.go` file.
+message ProofNode {
+  // Key: is the node's key, for non leaf nodes, is set in a compact form
+  bytes Key = 1;
+  // Value: is the cryptographic hash of the data included in the database
+  // the ValueHash is included in the parent hash
+  bytes Value = 2;
+  // Bitmask: a byte array indicating whether each hash requires the left or right sibling
+  // 0 represents a left sibling, and 1 represents a right sibling
+  int32 Bitmask = 3;
+}
