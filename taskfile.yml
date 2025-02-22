@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  run:
+    cmds:
+      - go run .
+  air:
+    cmds:
+      - air -build.exclude_regex ["^\."]
+  dlv:
+    cmds:
+      - dlv exec ~/go/bin/canopy start
+  build:
+    cmds:
+      - go build -o ~/go/bin/canopy .cmd/cli/...
+  run:
+    cmds:
+      - air --build.cmd "make canopy" --build.bin "/home/enielson/go/bin/canopy start"
+  tx-lock-order-json:
+    cmds:
+      - curl -s -X POST -d "@testdata/tx-lock-order.json" http://localhost:50003/v1/admin/tx-lock-order
+  tx-create-order:
+    cmds:
+      - canopy admin tx-create-order nick123 1000000000 1000000000 1 46914c2436543e2f857a4a21c51bc8d509ca8b61 --password=123
+  tx-lock-order:
+    cmds:
+      - canopy admin tx-lock-order nick123 46914c2436543e2f857a4a21c51bc8d509ca8b61 1 --password=123

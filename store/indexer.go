@@ -3,9 +3,11 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"time"
 )
 
 var _ lib.RWIndexerI = &Indexer{}
@@ -83,6 +85,15 @@ func (t *Indexer) GetBlockByHash(hash []byte) (*lib.BlockResult, lib.ErrorI) {
 
 // GetBlockByHeight() returns the block result by height key
 func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
+	// Measure execution time
+	// startTime := time.Now()
+
+	// Calculate and print the elapsed time
+	defer func() {
+		// elapsedTime := time.Since(startTime)
+		// fmt.Printf("GetBlockByHeight execution time: %s\n", elapsedTime)
+	}()
+
 	// height key points to hash key
 	hashKey, err := t.db.Get(t.blockHeightKey(height))
 	if err != nil {
@@ -149,11 +160,15 @@ func (t *Indexer) IndexQC(qc *lib.QuorumCertificate) lib.ErrorI {
 
 // GetQCByHeight() returns the quorum certificate by height key
 func (t *Indexer) GetQCByHeight(height uint64) (*lib.QuorumCertificate, lib.ErrorI) {
+	// Measure execution time
+	startTime := time.Now()
 	// unlike blocks, QCs are stored by hash key
 	qc, err := t.getQC(t.qcHeightKey(height))
 	if err != nil {
 		return nil, err
 	}
+	elapsedTime := time.Since(startTime)
+	fmt.Printf("getQC execution time: %s\n", elapsedTime)
 	// get the block by height key
 	blkResult, err := t.GetBlockByHeight(height)
 	if err != nil {

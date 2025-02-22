@@ -3,11 +3,12 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"path/filepath"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
-	"math"
-	"path/filepath"
 )
 
 const (
@@ -116,6 +117,7 @@ func NewStoreWithDB(db *badger.DB, log lib.LoggerI, write bool) (*Store, lib.Err
 // NewReadOnly() returns a store without a writer - meant for historical read only queries
 func (s *Store) NewReadOnly(version uint64) (lib.StoreI, lib.ErrorI) {
 	// make a reader for the specified version
+	// this reader must always be closed somewhere. RPC server is not closing these
 	reader := s.db.NewTransactionAt(version, false)
 	// return the store object
 	return &Store{

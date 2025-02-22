@@ -11,6 +11,9 @@ DOCKER_DIR := ./.docker
 build: build-wallet build-explorer
 	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
 
+canopy:
+	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
+
 deps:
 	go mod vendor
 
@@ -31,6 +34,6 @@ docker-down:
 
 docker-up-fast:
 	cd $(DOCKER_DIR) && docker-compose down && docker-compose up -d
-	
+
 docker-logs:
-	cd $(DOCKER_DIR) && docker-compose logs -f
+	cd $(DOCKER_DIR) && docker-compose logs -f --tail=1000

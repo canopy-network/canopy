@@ -897,12 +897,12 @@ func (c *Client) url(routeName, param string, admin ...bool) string {
 	// if rpc port and admin ports are defined then it's a local RPC deployment
 	if c.rpcPort != "" && c.adminPort != "" {
 		if admin != nil && admin[0] {
-			return "http://" + localhost + colon + c.adminPort + router[routeName].Path + param
+			return "http://" + localhost + colon + c.adminPort + routePaths[routeName].Path + param
 		}
-		return c.rpcURL + colon + c.rpcPort + router[routeName].Path + param
+		return c.rpcURL + colon + c.rpcPort + routePaths[routeName].Path + param
 	}
 	// if rpc port is not defined then it's consider a remote RPC deployment
-	return c.rpcURL + router[routeName].Path + param
+	return c.rpcURL + routePaths[routeName].Path + param
 }
 
 func (c *Client) post(routeName string, json []byte, ptr any, admin ...bool) lib.ErrorI {

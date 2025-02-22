@@ -92,8 +92,11 @@ func Start() {
 	}
 	// start the application
 	app.Start()
-	// start the rpc
-	rpc.StartRPC(app, config, l)
+
+	// start the rpc server
+	rpcServer := rpc.NewServer(app, config, l)
+	rpcServer.Start()
+
 	// block until a kill signal is received
 	waitForKill()
 	// gracefully stop the app
