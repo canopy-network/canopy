@@ -1,6 +1,6 @@
 import React, {useEffect, useState, useContext} from "react";
 import Truncate from "react-truncate-inside";
-import JsonView from "@uiw/react-json-view";
+import CanaJSON from "@/components/canaJSON";
 import {Bar} from "react-chartjs-2";
 import {Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend} from "chart.js";
 import {Accordion, Button, Carousel, Container, Form, InputGroup, Modal, Spinner, Table} from "react-bootstrap";
@@ -58,7 +58,7 @@ export default function Governance({keygroup, account: accountWithTxs, validator
     const [primaryColor, setPrimaryColor] = useState('');
     const [secondaryColor, setSecondaryColor] = useState('');
     const [buttonVariant, setButtonVariant] = useState('outline-dark');
-    const [JsonViewVariant, setJsonViewVariant] = useState('darkTheme');
+    const [JsonViewVariant, setJsonViewVariant] = useState('json-dark');
 
     // Using a standalone useEffect here to isolate the color states
     useEffect(() => {
@@ -67,12 +67,12 @@ export default function Governance({keygroup, account: accountWithTxs, validator
 
       if (currentTheme === 'dark') {
         setButtonVariant('outline-light');
-        setJsonViewVariant('lightTheme');
+        setJsonViewVariant('json-dark');
       } else {
         setButtonVariant('outline-dark');
-        setJsonViewVariant('darkTheme');
+        setJsonViewVariant('json-light');
       }
-    }, []);
+    }, [document.documentElement.getAttribute('data-bs-theme')]);
 
   // onFormChange() handles the form input change callback
     function onFormChange(key, value, newValue) {
@@ -398,14 +398,11 @@ export default function Governance({keygroup, account: accountWithTxs, validator
                             onFieldChange={onFormChange}
                         />
                         {!objEmpty(state.txResult) && (
-                            <JsonView
-                              onCopied={(text) => {
-                                copy(state, setState, text, "copied to keyboard!")
-                              }} value={state.txResult} 
-                              shortenTextAfterLength={100} 
-                              displayDataTypes={false}
-                              theme={JsonViewVariant}
-                            />
+                          <CanaJSON
+                            state={{ txResult: state.txResult }}
+                            setState={setState}
+                            JsonViewVariant={JsonViewVariant}
+                          />
                         )}
                     </Modal.Body>
                     <Modal.Footer>
