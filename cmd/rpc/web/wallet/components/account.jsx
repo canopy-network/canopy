@@ -64,7 +64,7 @@ const transactionButtons = [
     {title: "PAUSE", name: "pause", src: PauseIcon},
     {title: "PLAY", name: "unpause", src: UnpauseIcon},
     {title: "SWAP", name: "create_order", src: SwapIcon},
-    {title: "LOCK", name: "buy_order", src: BuyIcon},
+    {title: "LOCK", name: "lock_order", src: BuyIcon},
     {title: "REPRICE", name: "edit_order", src: EditOrderIcon},
     {title: "VOID", name: "delete_order", src: DeleteOrderIcon},
 ];
@@ -289,7 +289,7 @@ export default function Accounts({keygroup, account, validator, setActiveKey}) {
                         r.password,
                         submit,
                     ),
-                buy_order: () => TxBuyOrder(r.sender, r.receiveAddress, numberFromCommas(r.orderId), fee, r.password, submit),
+                lock_order: () => TxLockOrder(r.sender, r.receiveAddress, numberFromCommas(r.orderId), fee, r.password, submit),
                 edit_order: () =>
                     TxEditOrder(
                         r.sender,
