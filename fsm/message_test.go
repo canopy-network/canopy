@@ -1872,10 +1872,10 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 			},
 		},
 		Orders: &lib.Orders{
-			BuyOrders: []*lib.BuyOrder{{
+			LockOrders: []*lib.LockOrder{{
 				OrderId:             0,
-				BuyerReceiveAddress: newTestAddressBytes(t),
-				BuyerChainDeadline:  100,
+				LockerReceiveAddress: newTestAddressBytes(t),
+				LockerChainDeadline:  100,
 			}},
 			ResetOrders: []uint64{1},
 			CloseOrders: []uint64{2},
@@ -2033,16 +2033,16 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 			sm.height++
 			// preset some sell orders to test with
 			for i := 0; i < 3; i++ {
-				var buyerAddress []byte
-				// set order #1, #2 with a buyer for 'reset' and 'close' functionality
+				var lockerAddress []byte
+				// set order #1, #2 with a locker for 'reset' and 'close' functionality
 				if i != 0 {
-					buyerAddress = newTestAddressBytes(t)
+					lockerAddress = newTestAddressBytes(t)
 				}
 				// upsert each order in state
 				_, err = sm.CreateOrder(&lib.SellOrder{
 					Committee:           lib.CanopyChainId + 1,
-					BuyerReceiveAddress: buyerAddress,
-					BuyerChainDeadline:  0,
+					LockerReceiveAddress: lockerAddress,
+					LockerChainDeadline:  0,
 					SellersSendAddress:  newTestAddressBytes(t),
 				}, lib.CanopyChainId+1)
 				// ensure no error
@@ -2056,25 +2056,25 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 				require.ErrorContains(t, err, test.error)
 				return
 			}
-			// 1) validate the 'buy order'
+			// 1) validate the 'lock order'
 			func() {
 				order, e := sm.GetOrder(0, lib.CanopyChainId+1)
 				require.NoError(t, e)
-				// convenience variable for buy order
-				buyOrder := test.msg.Qc.Results.Orders.BuyOrders[0]
+				// convenience variable for lock order
+				lockOrder := test.msg.Qc.Results.Orders.LockOrders[0]
 				// validate the receipt address was set
-				require.Equal(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
+				require.Equal(t, lockOrder.LockerReceiveAddress, order.LockerReceiveAddress)
 				// validate the deadline was set
-				require.Equal(t, buyOrder.BuyerChainDeadline, order.BuyerChainDeadline)
+				require.Equal(t, lockOrder.LockerChainDeadline, order.LockerChainDeadline)
 			}()
 			// 2) validate the 'reset order'
 			func() {
 				order, e := sm.GetOrder(1, lib.CanopyChainId+1)
 				require.NoError(t, e)
 				// validate the receipt address was reset
-				require.Len(t, order.BuyerReceiveAddress, 0)
+				require.Len(t, order.LockerReceiveAddress, 0)
 				// validate the deadline was reset
-				require.Zero(t, order.BuyerChainDeadline)
+				require.Zero(t, order.LockerChainDeadline)
 			}()
 
 			// 3) validate the 'close order'
@@ -2312,15 +2312,15 @@ func TestHandleMessageEditOrder(t *testing.T) {
 		},
 		{
 			name:   "order already accepted",
-			detail: "a buyer has already accepted the order, thus it cannot be edited",
+			detail: "a locker has already accepted the order, thus it cannot be edited",
 			preset: &lib.SellOrder{
 				Id:                   0,
 				Committee:            lib.CanopyChainId,
 				AmountForSale:        1,
 				RequestedAmount:      0,
 				SellerReceiveAddress: newTestAddressBytes(t),
-				BuyerReceiveAddress:  newTestAddressBytes(t, 1), // signals a buyer
-				BuyerChainDeadline:   100,                       // signals a buyer
+				LockerReceiveAddress:  newTestAddressBytes(t, 1), // signals a locker
+				LockerChainDeadline:   100,                       // signals a locker
 				SellersSendAddress:   newTestAddressBytes(t),
 			},
 			msg: &types.MessageEditOrder{
@@ -2527,15 +2527,15 @@ func TestHandleMessageDelete(t *testing.T) {
 		},
 		{
 			name:   "order already accepted",
-			detail: "a buyer has already accepted the order, thus it cannot be edited",
+			detail: "a locker has already accepted the order, thus it cannot be edited",
 			preset: &lib.SellOrder{
 				Id:                   0,
 				Committee:            lib.CanopyChainId,
 				AmountForSale:        1,
 				RequestedAmount:      0,
 				SellerReceiveAddress: newTestAddressBytes(t),
-				BuyerReceiveAddress:  newTestAddressBytes(t, 1), // signals a buyer
-				BuyerChainDeadline:   100,                       // signals a buyer
+				LockerReceiveAddress:  newTestAddressBytes(t, 1), // signals a locker
+				LockerChainDeadline:   100,                       // signals a locker
 				SellersSendAddress:   newTestAddressBytes(t),
 			},
 			msg: &types.MessageDeleteOrder{

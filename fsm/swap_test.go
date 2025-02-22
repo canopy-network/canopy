@@ -15,27 +15,27 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 		preset          []*lib.SellOrder
 		orders          *lib.Orders
 		alreadyAccepted bool
-		noBuyer         bool
+		noLocker         bool
 		notFound        bool
 	}{
 		{
-			name:   "buy order already accepted",
-			detail: "the buy order cannot be claimed as its already reserved",
+			name:   "lock order already accepted",
+			detail: "the lock order cannot be claimed as its already reserved",
 			preset: []*lib.SellOrder{
 				{
 					Committee:           lib.CanopyChainId,
 					AmountForSale:       100,
 					RequestedAmount:     100,
-					BuyerReceiveAddress: newTestAddressBytes(t),
+					LockerReceiveAddress: newTestAddressBytes(t),
 					SellersSendAddress:  newTestAddressBytes(t),
 				},
 			},
 			orders: &lib.Orders{
-				BuyOrders: []*lib.BuyOrder{
+				LockOrders: []*lib.LockOrder{
 					{
 						OrderId:             0,
-						BuyerReceiveAddress: newTestAddressBytes(t, 1),
-						BuyerChainDeadline:  100,
+						LockerReceiveAddress: newTestAddressBytes(t, 1),
+						LockerChainDeadline:  100,
 					},
 				},
 			},
@@ -49,7 +49,7 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 					Committee:           lib.CanopyChainId,
 					AmountForSale:       100,
 					RequestedAmount:     100,
-					BuyerReceiveAddress: newTestAddressBytes(t),
+					LockerReceiveAddress: newTestAddressBytes(t),
 					SellersSendAddress:  newTestAddressBytes(t),
 				},
 			},
@@ -59,8 +59,8 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 			notFound: true,
 		},
 		{
-			name:   "close failed, no buyer",
-			detail: "can't close an order that doesn't have a buyer",
+			name:   "close failed, no locker",
+			detail: "can't close an order that doesn't have a locker",
 			preset: []*lib.SellOrder{
 				{
 					Committee:          lib.CanopyChainId,
@@ -72,11 +72,11 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 			orders: &lib.Orders{
 				CloseOrders: []uint64{0},
 			},
-			noBuyer: true,
+			noLocker: true,
 		},
 		{
-			name:   "buy, reset, sell",
-			detail: "test buy, reset, and sell without error",
+			name:   "lock, reset, sell",
+			detail: "test lock, reset, and sell without error",
 			preset: []*lib.SellOrder{
 				{
 					Committee:          lib.CanopyChainId,
@@ -88,23 +88,23 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 					Committee:           lib.CanopyChainId,
 					AmountForSale:       100,
 					RequestedAmount:     100,
-					BuyerReceiveAddress: newTestAddressBytes(t, 1),
+					LockerReceiveAddress: newTestAddressBytes(t, 1),
 					SellersSendAddress:  newTestAddressBytes(t),
 				},
 				{
 					Committee:           lib.CanopyChainId,
 					AmountForSale:       100,
 					RequestedAmount:     100,
-					BuyerReceiveAddress: newTestAddressBytes(t, 1),
+					LockerReceiveAddress: newTestAddressBytes(t, 1),
 					SellersSendAddress:  newTestAddressBytes(t),
 				},
 			},
 			orders: &lib.Orders{
-				BuyOrders: []*lib.BuyOrder{
+				LockOrders: []*lib.LockOrder{
 					{
 						OrderId:             0,
-						BuyerReceiveAddress: newTestAddressBytes(t, 1),
-						BuyerChainDeadline:  100,
+						LockerReceiveAddress: newTestAddressBytes(t, 1),
+						LockerChainDeadline:  100,
 					},
 				},
 				ResetOrders: []uint64{1},
@@ -127,18 +127,18 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 			}
 			// execute the function call
 			sm.HandleCommitteeSwaps(test.orders, lib.CanopyChainId)
-			// validate the buy orders
-			for _, buyOrder := range test.orders.BuyOrders {
+			// validate the lock orders
+			for _, lockOrder := range test.orders.LockOrders {
 				// get the order
-				order, e := sm.GetOrder(buyOrder.OrderId, lib.CanopyChainId)
+				order, e := sm.GetOrder(lockOrder.OrderId, lib.CanopyChainId)
 				require.NoError(t, e)
-				// if the buy order is already accepted
+				// if the lock order is already accepted
 				if test.alreadyAccepted {
-					require.NotEqual(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
+					require.NotEqual(t, lockOrder.LockerReceiveAddress, order.LockerReceiveAddress)
 				} else {
-					// validate the update of the 'buy' fields
-					require.Equal(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
-					require.Equal(t, buyOrder.BuyerChainDeadline, order.BuyerChainDeadline)
+					// validate the update of the 'lock' fields
+					require.Equal(t, lockOrder.LockerReceiveAddress, order.LockerReceiveAddress)
+					require.Equal(t, lockOrder.LockerChainDeadline, order.LockerChainDeadline)
 				}
 			}
 			// validate the reset orders
@@ -150,9 +150,9 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 					require.ErrorContains(t, e, "not found")
 				} else {
 					require.NoError(t, e)
-					// validate the update of the 'buy' fields
-					require.Empty(t, order.BuyerReceiveAddress)
-					require.Zero(t, order.BuyerChainDeadline)
+					// validate the update of the 'lock' fields
+					require.Empty(t, order.LockerReceiveAddress)
+					require.Zero(t, order.LockerChainDeadline)
 				}
 			}
 			var balanceRemovedFromPool uint64
@@ -162,13 +162,13 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 				order := test.preset[closeOrder]
 				// validate the deletion of the order
 				_, e := sm.GetOrder(closeOrder, lib.CanopyChainId)
-				// if order no buyer to close
-				if test.noBuyer {
+				// if order no locker to close
+				if test.noLocker {
 					require.NoError(t, e)
 				} else {
 					require.ErrorContains(t, e, "not found")
-					// validate the addition of funds to the buyer
-					accountBalance, e := sm.GetAccountBalance(crypto.NewAddress(order.BuyerReceiveAddress))
+					// validate the addition of funds to the locker
+					accountBalance, e := sm.GetAccountBalance(crypto.NewAddress(order.LockerReceiveAddress))
 					require.NoError(t, e)
 					require.Equal(t, order.AmountForSale, accountBalance)
 					balanceRemovedFromPool += order.AmountForSale
@@ -347,56 +347,56 @@ func TestEditOrder(t *testing.T) {
 	}
 }
 
-func TestBuyOrder(t *testing.T) {
+func TestLockOrder(t *testing.T) {
 	tests := []struct {
 		name   string
 		detail string
 		preset *lib.SellOrder
-		order  *lib.BuyOrder
+		order  *lib.LockOrder
 		error  string
 	}{
 		{
-			name:   "buy order not found",
-			detail: "the buy order cannot be found",
-			order: &lib.BuyOrder{
+			name:   "lock order not found",
+			detail: "the lock order cannot be found",
+			order: &lib.LockOrder{
 
 				OrderId:             0,
-				BuyerReceiveAddress: newTestAddressBytes(t, 1),
-				BuyerChainDeadline:  100,
+				LockerReceiveAddress: newTestAddressBytes(t, 1),
+				LockerChainDeadline:  100,
 			},
 			error: "not found",
 		},
 		{
-			name:   "buy order already accepted",
-			detail: "the buy order cannot be claimed as its already reserved",
+			name:   "lock order already accepted",
+			detail: "the lock order cannot be claimed as its already reserved",
 			preset: &lib.SellOrder{
 				Committee:           lib.CanopyChainId,
 				AmountForSale:       100,
 				RequestedAmount:     100,
-				BuyerReceiveAddress: newTestAddressBytes(t),
+				LockerReceiveAddress: newTestAddressBytes(t),
 				SellersSendAddress:  newTestAddressBytes(t),
 			},
-			order: &lib.BuyOrder{
+			order: &lib.LockOrder{
 
 				OrderId:             0,
-				BuyerReceiveAddress: newTestAddressBytes(t, 1),
-				BuyerChainDeadline:  100,
+				LockerReceiveAddress: newTestAddressBytes(t, 1),
+				LockerChainDeadline:  100,
 			},
 			error: "order already accepted",
 		},
 		{
-			name:   "buy order",
-			detail: "successful buy order without error",
+			name:   "lock order",
+			detail: "successful lock order without error",
 			preset: &lib.SellOrder{
 				Committee:          lib.CanopyChainId,
 				AmountForSale:      100,
 				RequestedAmount:    100,
 				SellersSendAddress: newTestAddressBytes(t),
 			},
-			order: &lib.BuyOrder{
+			order: &lib.LockOrder{
 				OrderId:             0,
-				BuyerReceiveAddress: newTestAddressBytes(t, 1),
-				BuyerChainDeadline:  100,
+				LockerReceiveAddress: newTestAddressBytes(t, 1),
+				LockerChainDeadline:  100,
 			},
 		},
 	}
@@ -410,7 +410,7 @@ func TestBuyOrder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			// execute the function call
-			err := sm.BuyOrder(test.order, lib.CanopyChainId)
+			err := sm.LockOrder(test.order, lib.CanopyChainId)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -420,9 +420,9 @@ func TestBuyOrder(t *testing.T) {
 			// get the order
 			order, e := sm.GetOrder(test.order.OrderId, lib.CanopyChainId)
 			require.NoError(t, e)
-			// validate the update of the 'buy' fields
-			require.Equal(t, test.order.BuyerReceiveAddress, order.BuyerReceiveAddress)
-			require.Equal(t, test.order.BuyerChainDeadline, order.BuyerChainDeadline)
+			// validate the update of the 'lock' fields
+			require.Equal(t, test.order.LockerReceiveAddress, order.LockerReceiveAddress)
+			require.Equal(t, test.order.LockerChainDeadline, order.LockerChainDeadline)
 		})
 	}
 }
@@ -437,7 +437,7 @@ func TestResetOrder(t *testing.T) {
 	}{
 		{
 			name:   "reset order not found",
-			detail: "the buy reset cannot be found",
+			detail: "the lock reset cannot be found",
 			order:  0,
 			error:  "not found",
 		},
@@ -448,7 +448,7 @@ func TestResetOrder(t *testing.T) {
 				Committee:           lib.CanopyChainId,
 				AmountForSale:       100,
 				RequestedAmount:     100,
-				BuyerReceiveAddress: newTestAddressBytes(t),
+				LockerReceiveAddress: newTestAddressBytes(t),
 				SellersSendAddress:  newTestAddressBytes(t),
 			},
 			order: 0,
@@ -474,9 +474,9 @@ func TestResetOrder(t *testing.T) {
 			// get the order
 			order, e := sm.GetOrder(test.order, lib.CanopyChainId)
 			require.NoError(t, e)
-			// validate the update of the 'buy' fields
-			require.Empty(t, order.BuyerReceiveAddress)
-			require.Zero(t, order.BuyerChainDeadline)
+			// validate the update of the 'lock' fields
+			require.Empty(t, order.LockerReceiveAddress)
+			require.Zero(t, order.LockerChainDeadline)
 		})
 	}
 }
@@ -491,7 +491,7 @@ func TestCloseOrder(t *testing.T) {
 	}{
 		{
 			name:   "close order not already accepted",
-			detail: "there's no existing buyer for the close order",
+			detail: "there's no existing locker for the close order",
 			preset: &lib.SellOrder{
 				Committee:          lib.CanopyChainId,
 				AmountForSale:      100,
@@ -499,7 +499,7 @@ func TestCloseOrder(t *testing.T) {
 				SellersSendAddress: newTestAddressBytes(t),
 			},
 			order: 0,
-			error: "buy order invalid",
+			error: "lock order invalid",
 		},
 		{
 			name:   "close order",
@@ -508,7 +508,7 @@ func TestCloseOrder(t *testing.T) {
 				Committee:           lib.CanopyChainId,
 				AmountForSale:       100,
 				RequestedAmount:     100,
-				BuyerReceiveAddress: newTestAddressBytes(t),
+				LockerReceiveAddress: newTestAddressBytes(t),
 				SellersSendAddress:  newTestAddressBytes(t),
 			},
 			order: 0,
@@ -537,8 +537,8 @@ func TestCloseOrder(t *testing.T) {
 			// validate the deletion of the order
 			_, e := sm.GetOrder(test.order, lib.CanopyChainId)
 			require.ErrorContains(t, e, "not found")
-			// validate the addition of funds to the buyer
-			accountBalance, e := sm.GetAccountBalance(crypto.NewAddress(order.BuyerReceiveAddress))
+			// validate the addition of funds to the locker
+			accountBalance, e := sm.GetAccountBalance(crypto.NewAddress(order.LockerReceiveAddress))
 			require.NoError(t, e)
 			require.Equal(t, order.AmountForSale, accountBalance)
 			// validate the removal of funds from the escrow pool

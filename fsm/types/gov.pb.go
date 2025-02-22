@@ -358,10 +358,10 @@ type ValidatorParams struct {
 	MaxSlashPerCommittee uint64 `protobuf:"varint,13,opt,name=max_slash_per_committee,json=maxSlashPerCommittee,proto3" json:"max_slash_per_committee,omitempty"`
 	// delegate_reward_percentage: is the percentage of the block reward that is awarded to the delegates
 	DelegateRewardPercentage uint64 `protobuf:"varint,14,opt,name=delegate_reward_percentage,json=delegateRewardPercentage,proto3" json:"delegate_reward_percentage,omitempty"`
-	// buy_deadline_blocks: amount of blocks a 'buyer' has to complete an order they 'reserved'
-	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buy_deadline_blocks,omitempty"`
-	// buy_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a buy order
-	BuyOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=buy_order_fee_multiplier,json=buyOrderFeeMultiplier,proto3" json:"buy_order_fee_multiplier,omitempty"`
+	// lock_deadline_blocks: amount of blocks a 'locker' has to complete an order they 'reserved'
+	LockDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=lock_deadline_blocks,json=lockDeadlineBlocks,proto3" json:"lock_deadline_blocks,omitempty"`
+	// lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
+	LockOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=lock_order_fee_multiplier,json=lockOrderFeeMultiplier,proto3" json:"lock_order_fee_multiplier,omitempty"`
 }
 
 func (x *ValidatorParams) Reset() {
@@ -494,16 +494,16 @@ func (x *ValidatorParams) GetDelegateRewardPercentage() uint64 {
 	return 0
 }
 
-func (x *ValidatorParams) GetBuyDeadlineBlocks() uint64 {
+func (x *ValidatorParams) GetLockDeadlineBlocks() uint64 {
 	if x != nil {
-		return x.BuyDeadlineBlocks
+		return x.LockDeadlineBlocks
 	}
 	return 0
 }
 
-func (x *ValidatorParams) GetBuyOrderFeeMultiplier() uint64 {
+func (x *ValidatorParams) GetLockOrderFeeMultiplier() uint64 {
 	if x != nil {
-		return x.BuyOrderFeeMultiplier
+		return x.LockOrderFeeMultiplier
 	}
 	return 0
 }

@@ -129,10 +129,10 @@ function convertOrder(v) {
     RequestedAmount: toCNPY(v.RequestedAmount),
     SellerReceiveAddress: v.SellerReceiveAddress,
     SellersSendAddress: v.SellersSendAddress,
-    BuyerSendAddress: v.BuyerSendAddress,
-    Status: "BuyerReceiveAddress" in v ? "Reserved" : "Open",
-    BuyerReceiveAddress: v.BuyerReceiveAddress,
-    BuyerChainDeadline: v.BuyerChainDeadline,
+    LockerSendAddress: v.LockerSendAddress,
+    Status: "LockerReceiveAddress" in v ? "Reserved" : "Open",
+    LockerReceiveAddress: v.LockerReceiveAddress,
+    LockerChainDeadline: v.LockerChainDeadline,
   };
 }
 

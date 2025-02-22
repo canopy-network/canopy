@@ -158,7 +158,7 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
             minLength: 40,
             maxLength: 40,
         },
-        buyersReceiveAddress: {
+        lockersReceiveAddress: {
             placeholder: "the canopy address where CNPY will be received",
             tooltip: "the sender of the transaction",
             label: "receiveAddress",
@@ -315,8 +315,8 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
             ];
         case "create_order":
             return [a.account, a.chainId, a.amount, a.receiveAmount, a.receiveAddress, a.memo, a.fee, a.password];
-        case "buy_order":
-            return [a.account, a.buyersReceiveAddress, a.orderId, a.fee, a.password];
+        case "lock_order":
+            return [a.account, a.lockersReceiveAddress, a.orderId, a.fee, a.password];
         case "edit_order":
             return [
                 a.account,

@@ -22,16 +22,16 @@ func (x *OrderBook) AddOrder(order *SellOrder) (id uint64) {
 	return
 }
 
-// BuyOrder() adds a recipient address and deadline height to the order to 'claim' the order and prevent others from 'claiming it'
-func (x *OrderBook) BuyOrder(orderId int, buyersReceiveAddress, buyersSendAddress []byte, buyerChainDeadlineHeight uint64) ErrorI {
+// LockOrder() adds a recipient address and deadline height to the order to 'claim' the order and prevent others from 'claiming it'
+func (x *OrderBook) LockOrder(orderId int, lockersReceiveAddress, lockersSendAddress []byte, lockerChainDeadlineHeight uint64) ErrorI {
 	order, err := x.GetOrder(orderId)
 	if err != nil {
 		return err
 	}
-	if order.BuyerReceiveAddress != nil {
+	if order.LockerReceiveAddress != nil {
 		return ErrOrderAlreadyAccepted()
 	}
-	order.BuyerReceiveAddress, order.BuyerSendAddress, order.BuyerChainDeadline = buyersReceiveAddress, buyersSendAddress, buyerChainDeadlineHeight
+	order.LockerReceiveAddress, order.LockerSendAddress, order.LockerChainDeadline = lockersReceiveAddress, lockersSendAddress, lockerChainDeadlineHeight
 	x.Orders[orderId] = order
 	return nil
 }
@@ -42,7 +42,7 @@ func (x *OrderBook) ResetOrder(orderId int) ErrorI {
 	if err != nil {
 		return err
 	}
-	order.BuyerReceiveAddress, order.BuyerSendAddress, order.BuyerChainDeadline = nil, nil, 0
+	order.LockerReceiveAddress, order.LockerSendAddress, order.LockerChainDeadline = nil, nil, 0
 	x.Orders[orderId] = order
 	return nil
 }
@@ -88,9 +88,9 @@ type jsonSellOrder struct {
 	AmountForSale        uint64   `json:"AmountForSale,omitempty"`        // amount of CNPY for sale
 	RequestedAmount      uint64   `json:"RequestedAmount,omitempty"`      // amount of 'token' to receive
 	SellerReceiveAddress HexBytes `json:"SellerReceiveAddress,omitempty"` // the external chain address to receive the 'token'
-	BuyerSendAddress     HexBytes `json:"BuyerSendAddress,omitempty"`     // the send address from the buyer
-	BuyerReceiveAddress  HexBytes `json:"BuyerReceiveAddress,omitempty"`  // the buyers address to receive the 'coin'
-	BuyerChainDeadline   uint64   `json:"BuyerChainDeadline,omitempty"`   // the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+	LockerSendAddress     HexBytes `json:"LockerSendAddress,omitempty"`     // the send address from the locker
+	LockerReceiveAddress  HexBytes `json:"LockerReceiveAddress,omitempty"`  // the lockers address to receive the 'coin'
+	LockerChainDeadline   uint64   `json:"LockerChainDeadline,omitempty"`   // the external chain height deadline to send the 'tokens' to SellerReceiveAddress
 	SellersSellAddress   HexBytes `json:"SellersSendAddress,omitempty"`   // the address of seller who is selling the 'coin'
 }
 
@@ -102,9 +102,9 @@ func (x SellOrder) MarshalJSON() ([]byte, error) {
 		AmountForSale:        x.AmountForSale,
 		RequestedAmount:      x.RequestedAmount,
 		SellerReceiveAddress: x.SellerReceiveAddress,
-		BuyerSendAddress:     x.BuyerSendAddress,
-		BuyerReceiveAddress:  x.BuyerReceiveAddress,
-		BuyerChainDeadline:   x.BuyerChainDeadline,
+		LockerSendAddress:     x.LockerSendAddress,
+		LockerReceiveAddress:  x.LockerReceiveAddress,
+		LockerChainDeadline:   x.LockerChainDeadline,
 		SellersSellAddress:   x.SellersSendAddress,
 	})
 }
@@ -121,9 +121,9 @@ func (x *SellOrder) UnmarshalJSON(bz []byte) error {
 		AmountForSale:        j.AmountForSale,
 		RequestedAmount:      j.RequestedAmount,
 		SellerReceiveAddress: j.SellerReceiveAddress,
-		BuyerSendAddress:     j.BuyerSendAddress,
-		BuyerReceiveAddress:  j.BuyerReceiveAddress,
-		BuyerChainDeadline:   j.BuyerChainDeadline,
+		LockerSendAddress:     j.LockerSendAddress,
+		LockerReceiveAddress:  j.LockerReceiveAddress,
+		LockerChainDeadline:   j.LockerChainDeadline,
 		SellersSendAddress:   j.SellersSellAddress,
 	}
 	return nil

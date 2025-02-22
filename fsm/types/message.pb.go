@@ -792,7 +792,7 @@ func (x *MessageSubsidy) GetOpcode() string {
 }
 
 // MessageCreateOrder creates a new token swap 'sell order', removing tokens from the sender
-// account and transferring them to an escrow pool while awaiting a buyer
+// account and transferring them to an escrow pool while awaiting a locker
 type MessageCreateOrder struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -802,7 +802,7 @@ type MessageCreateOrder struct {
 	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"ChainId,omitempty"`
 	// amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
 	AmountForSale uint64 `protobuf:"varint,2,opt,name=AmountForSale,proto3" json:"AmountForSale,omitempty"`
-	// requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
+	// requested_amount: the amount of the 'counter asset' the locker must send in order to complete a swap
 	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"RequestedAmount,omitempty"`
 	// sellers_receive_address: the address of the seller where the 'counter asset' will be received
 	SellerReceiveAddress []byte `protobuf:"bytes,4,opt,name=SellerReceiveAddress,proto3" json:"SellerReceiveAddress,omitempty"`
@@ -894,7 +894,7 @@ type MessageEditOrder struct {
 	// amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
 	// receive address
 	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"AmountForSale,omitempty"`
-	// requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
+	// requested_amount: the updated amount of the 'counter asset' the locker must send in order to complete a swap
 	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"RequestedAmount,omitempty"`
 	// sellers_receive_address: the address of the seller where the 'counter asset' will be received
 	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"SellerReceiveAddress,omitempty"`

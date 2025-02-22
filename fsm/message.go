@@ -375,7 +375,7 @@ func (s *StateMachine) HandleMessageEditOrder(msg *types.MessageEditOrder) (err 
 	if err != nil {
 		return
 	}
-	if order.BuyerReceiveAddress != nil {
+	if order.LockerReceiveAddress != nil {
 		return lib.ErrOrderAlreadyAccepted()
 	}
 	valParams, err := s.GetParamsVal()
@@ -423,7 +423,7 @@ func (s *StateMachine) HandleMessageDeleteOrder(msg *types.MessageDeleteOrder) (
 	if err != nil {
 		return
 	}
-	if order.BuyerReceiveAddress != nil {
+	if order.LockerReceiveAddress != nil {
 		return lib.ErrOrderAlreadyAccepted()
 	}
 	// subtract from the committee escrow pool
