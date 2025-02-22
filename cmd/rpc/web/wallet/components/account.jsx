@@ -2,7 +2,7 @@ import {
     KeystoreGet,
     KeystoreImport,
     KeystoreNew,
-    TxBuyOrder,
+    TxLockOrder,
     TxCreateOrder,
     TxDeleteOrder,
     TxEditOrder,

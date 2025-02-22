@@ -8,28 +8,28 @@ import (
 )
 
 // HandleCommitteeSwaps() when the committee submits a 'certificate results transaction', it informs the chain of various actions over sell orders
-// - 'buy' is an actor 'claiming / reserving' the sell order
-// - 'reset' is a 'claimed' order whose 'buyer' did not send the tokens to the seller before the deadline, thus the order is re-opened for sale
-// - 'close' is a 'claimed' order whose 'buyer' sent the tokens to the seller before the deadline, thus the order is 'closed' and the tokens are moved from escrow to the buyer
+// - 'lock' is an actor 'claiming / reserving' the sell order
+// - 'reset' is a 'claimed' order whose 'locker' did not send the tokens to the seller before the deadline, thus the order is re-opened for sale
+// - 'close' is a 'claimed' order whose 'locker' sent the tokens to the seller before the deadline, thus the order is 'closed' and the tokens are moved from escrow to the locker
 func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) {
 	if orders != nil {
-		// buy orders are a result of the committee witnessing a 'reserve transaction' for the order on the 'buyer chain'
-		// think of 'buy orders' like reserving the 'sell order'
-		for _, buyOrder := range orders.BuyOrders {
-			if err := s.BuyOrder(buyOrder, chainId); err != nil {
-				s.log.Warnf("BuyOrder failed (can happen due to asynchronicity): %s", err.Error())
+		// lock orders are a result of the committee witnessing a 'reserve transaction' for the order on the 'locker chain'
+		// think of 'lock orders' like reserving the 'sell order'
+		for _, lockOrder := range orders.LockOrders {
+			if err := s.LockOrder(lockOrder, chainId); err != nil {
+				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", err.Error())
 			}
 		}
-		// reset orders are a result of the committee witnessing 'no-action' from the buyer of the sell order aka NOT sending the
-		// corresponding assets before the 'deadline height' of the 'buyer chain'. The buyer address and deadline height are reset and the
+		// reset orders are a result of the committee witnessing 'no-action' from the locker of the sell order aka NOT sending the
+		// corresponding assets before the 'deadline height' of the 'locker chain'. The locker address and deadline height are reset and the
 		// sell order is listed as 'available' to the rest of the market
 		for _, resetOrderId := range orders.ResetOrders {
 			if err := s.ResetOrder(resetOrderId, chainId); err != nil {
 				s.log.Warnf("ResetOrder failed (can happen due to asynchronicity): %s", err.Error())
 			}
 		}
-		// close orders are a result of the committee witnessing the buyer sending the
-		// buy assets before the 'deadline height' of the 'buyer chain'
+		// close orders are a result of the committee witnessing the locker sending the
+		// lock assets before the 'deadline height' of the 'locker chain'
 		for _, closeOrderId := range orders.CloseOrders {
 			if err := s.CloseOrder(closeOrderId, chainId); err != nil {
 				s.log.Warnf("CloseOrder failed (can happen due to asynchronicity): %s", err.Error())
@@ -39,15 +39,15 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 	return
 }
 
-// ParseBuyOrder() parses a transaction for an embedded buy order messages in the memo field
-func (s *StateMachine) ParseBuyOrder(tx *lib.Transaction, deadlineBlocks uint64) (bo *lib.BuyOrder, ok bool) {
-	bo = new(lib.BuyOrder)
+// ParseLockOrder() parses a transaction for an embedded lock order messages in the memo field
+func (s *StateMachine) ParseLockOrder(tx *lib.Transaction, deadlineBlocks uint64) (bo *lib.LockOrder, ok bool) {
+	bo = new(lib.LockOrder)
 	if err := lib.UnmarshalJSON([]byte(tx.Memo), bo); err == nil {
-		if len(bo.BuyerSendAddress) != 0 && len(bo.BuyerSendAddress) != 0 {
+		if len(bo.LockerSendAddress) != 0 && len(bo.LockerSendAddress) != 0 {
 			ok = true
 		}
-		// set the buyer deadline
-		bo.BuyerChainDeadline = s.Height() + deadlineBlocks
+		// set the locker deadline
+		bo.LockerChainDeadline = s.Height() + deadlineBlocks
 	}
 	return
 }
@@ -77,14 +77,14 @@ func (s *StateMachine) ProcessRootChainOrderBook(book *lib.OrderBook, b *lib.Blo
 	}
 	// for each order
 	for _, order := range book.Orders {
-		// skip buyer-less orders
-		if len(order.BuyerReceiveAddress) == 0 {
+		// skip locker-less orders
+		if len(order.LockerReceiveAddress) == 0 {
 			continue
 		}
 		// extract a key for the totalTransferred map
-		key := lib.BytesToString(append(order.BuyerSendAddress, order.SellerReceiveAddress...))
+		key := lib.BytesToString(append(order.LockerSendAddress, order.SellerReceiveAddress...))
 		// see if expired
-		if s.height > order.BuyerChainDeadline {
+		if s.height > order.LockerChainDeadline {
 			// add to reset orders
 			resetOrders = append(resetOrders, order.Id)
 		} else {
@@ -123,27 +123,27 @@ func (s *StateMachine) ProcessRootChainOrderBook(book *lib.OrderBook, b *lib.Blo
 	return
 }
 
-// ParseBuyOrders() parses the proposal block for memo commands to execute specialized 'buy order' functionality
-func (s *StateMachine) ParseBuyOrders(b *lib.BlockResult) (buyOrders []*lib.BuyOrder) {
+// ParseLockOrders() parses the proposal block for memo commands to execute specialized 'lock order' functionality
+func (s *StateMachine) ParseLockOrders(b *lib.BlockResult) (lockOrders []*lib.LockOrder) {
 	params, err := s.GetParams()
 	if err != nil {
 		s.log.Error(err.Error())
 		return
 	}
-	// calculate the minimum buy order fee
-	minFee := params.Fee.SendFee * params.Validator.BuyOrderFeeMultiplier
+	// calculate the minimum lock order fee
+	minFee := params.Fee.SendFee * params.Validator.LockOrderFeeMultiplier
 	// for each transaction in the block
 	for _, tx := range b.Transactions {
-		deDupeBuyOrders := make(map[uint64]struct{})
+		deDupeLockOrders := make(map[uint64]struct{})
 		// skip over any that doesn't have the minimum fee or isn't the correct type
 		if tx.MessageType != types.MessageSendName && tx.Transaction.Fee < minFee {
 			continue
 		}
-		// parse the transaction for embedded 'buy orders'
-		if buyOrder, ok := s.ParseBuyOrder(tx.Transaction, params.Validator.BuyDeadlineBlocks); ok {
-			if _, found := deDupeBuyOrders[buyOrder.OrderId]; !found {
-				buyOrders = append(buyOrders, buyOrder)
-				deDupeBuyOrders[buyOrder.OrderId] = struct{}{}
+		// parse the transaction for embedded 'lock orders'
+		if lockOrder, ok := s.ParseLockOrder(tx.Transaction, params.Validator.LockDeadlineBlocks); ok {
+			if _, found := deDupeLockOrders[lockOrder.OrderId]; !found {
+				lockOrders = append(lockOrders, lockOrder)
+				deDupeLockOrders[lockOrder.OrderId] = struct{}{}
 			}
 		}
 	}
@@ -174,13 +174,13 @@ func (s *StateMachine) EditOrder(order *lib.SellOrder, chainId uint64) (err lib.
 	return
 }
 
-// BuyOrder() adds a recipient and a deadline height to an existing order and saves it to the state
-func (s *StateMachine) BuyOrder(buyOrder *lib.BuyOrder, chainId uint64) (err lib.ErrorI) {
+// LockOrder() adds a recipient and a deadline height to an existing order and saves it to the state
+func (s *StateMachine) LockOrder(lockOrder *lib.LockOrder, chainId uint64) (err lib.ErrorI) {
 	orderBook, err := s.GetOrderBook(chainId)
 	if err != nil {
 		return
 	}
-	if err = orderBook.BuyOrder(int(buyOrder.OrderId), buyOrder.BuyerReceiveAddress, buyOrder.BuyerSendAddress, buyOrder.BuyerChainDeadline); err != nil {
+	if err = orderBook.LockOrder(int(lockOrder.OrderId), lockOrder.LockerReceiveAddress, lockOrder.LockerSendAddress, lockOrder.LockerChainDeadline); err != nil {
 		return
 	}
 	err = s.SetOrderBook(orderBook)
@@ -200,9 +200,9 @@ func (s *StateMachine) ResetOrder(orderId, chainId uint64) (err lib.ErrorI) {
 	return
 }
 
-// CloseOrder() sends the tokens from escrow to the 'buyer address' and deletes the order
+// CloseOrder() sends the tokens from escrow to the 'locker address' and deletes the order
 func (s *StateMachine) CloseOrder(orderId, chainId uint64) (err lib.ErrorI) {
-	// the order is 'closed' and the tokens are moved from escrow to the buyer
+	// the order is 'closed' and the tokens are moved from escrow to the locker
 	order, err := s.GetOrder(orderId, chainId)
 	if err != nil {
 		// due to the redundancy 'Look Back' design of the swaps submitting a close order that has no available order is allowed
@@ -211,15 +211,15 @@ func (s *StateMachine) CloseOrder(orderId, chainId uint64) (err lib.ErrorI) {
 		return nil
 	}
 	// ensure the order already was 'claimed / reserved'
-	if order.BuyerReceiveAddress == nil {
-		return types.ErrInvalidBuyOrder()
+	if order.LockerReceiveAddress == nil {
+		return types.ErrInvalidLockOrder()
 	}
 	// remove the funds from the escrow pool
 	if err = s.PoolSub(chainId+types.EscrowPoolAddend, order.AmountForSale); err != nil {
 		return err
 	}
 	// send the funds to the recipient address
-	if err = s.AccountAdd(crypto.NewAddress(order.BuyerReceiveAddress), order.AmountForSale); err != nil {
+	if err = s.AccountAdd(crypto.NewAddress(order.LockerReceiveAddress), order.AmountForSale); err != nil {
 		return err
 	}
 	// delete the order
