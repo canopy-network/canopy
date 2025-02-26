@@ -50,8 +50,8 @@ message CertificateResult {
   // slash_recipients: the recipients who are penalized (slashed) based on the quorum certificate
   // specifically who the committee agreed to slash due to evidence of bad behavior
   SlashRecipients slash_recipients = 2; // @gotags: json:"slashRecipients"
-  // orders: contains information regarding the 'buying side' of sell orders
-  // including actions like 'buy/reserve order' or 'close/complete order'
+  // orders: contains information regarding the 'locking side' of sell orders
+  // including actions like 'lock/reserve order' or 'close/complete order'
   Orders orders = 3;
   // checkpoint: contains information from the 3rd party chain in order for Canopy to provide Checkpoint-as-a-Service
   Checkpoint checkpoint = 4;
@@ -75,32 +75,32 @@ message SlashRecipients {
   repeated DoubleSigner double_signers = 1; // @gotags: json:"doubleSigners"
 }
 
-// Orders: tracks actions related to 'buyer side' activities for sell orders
-// The committee monitors the 3rd party chain for actions such as intent to buy, funds sent,
+// Orders: tracks actions related to 'locker side' activities for sell orders
+// The committee monitors the 3rd party chain for actions such as intent to lock, funds sent,
 // and funds not sent, and communicates these states to the Canopy chain
 message Orders {
-  // buy_orders: a list of actions where a buyer expresses an intent to purchase an order,
+  // lock_orders: a list of actions where a locker expresses an intent to purchase an order,
   // often referred to as 'claiming' the order
-  repeated BuyOrder buy_orders = 1; // @gotags: json:"buyOrders"
+  repeated LockOrder lock_orders = 1; // @gotags: json:"lockOrders"
   // reset_orders: a list of orders where no funds were sent before the deadline,
   // signaling to Canopy to 'un-claim' the order
   repeated uint64 reset_orders = 2; // @gotags: json:"resetOrders"
   // close_orders: a list of orders where funds were sent,
-  // signaling Canopy to transfer escrowed tokens to the buyer's Canopy address
+  // signaling Canopy to transfer escrowed tokens to the locker's Canopy address
   repeated uint64 close_orders = 3; // @gotags: json:"closeOrders"
 }
 
-// BuyOrder is a buyer expressing an intent to purchase an order, often referred to as 'claiming' the order
-message BuyOrder {
+// LockOrder is a locker expressing an intent to purchase an order, often referred to as 'claiming' the order
+message LockOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   uint64 order_id = 1; // @gotags: json:"orderID"
-  // buyer_receive_address: the Canopy address where the tokens may be received
-  bytes buyer_receive_address = 2; // @gotags: json:"buyerReceiveAddress"
-  // buyer_send_address: the 'counter asset' address where the tokens will be sent from
-  bytes buyer_send_address = 3; // @gotags: json:"buyerSendAddress"
-  // buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
-  // or the 'intent to buy' will be voided
-  uint64 buyer_chain_deadline = 4; // @gotags: json:"buyerChainDeadline"
+  // locker_receive_address: the Canopy address where the tokens may be received
+  bytes locker_receive_address = 2; // @gotags: json:"lockerReceiveAddress"
+  // locker_send_address: the 'counter asset' address where the tokens will be sent from
+  bytes locker_send_address = 3; // @gotags: json:"lockerSendAddress"
+  // locker_chain_deadline: the 'counter asset' chain height at which the locker must send the 'counter asset' by
+  // or the 'intent to lock' will be voided
+  uint64 locker_chain_deadline = 4; // @gotags: json:"lockerChainDeadline"
 }
 
 // Checkpoint is 3rd party chain information that allows Canopy to provide Checkpointing-as-a-Service for the 3rd party
