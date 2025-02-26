@@ -1,0 +1,167 @@
+package rpc
+
+import (
+	"encoding/json"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+)
+
+type heightRequest struct {
+	Height uint64 `json:"height"`
+}
+
+type orderRequest struct {
+	ChainId uint64 `json:"chainId"`
+	OrderId uint64 `json:"orderId"`
+	heightRequest
+}
+
+type heightsRequest struct {
+	heightRequest
+	StartHeight uint64 `json:"startHeight"`
+}
+
+type idRequest struct {
+	ID uint64 `json:"id"`
+}
+type passwordRequest struct {
+	Password string `json:"password"`
+}
+type nicknameRequest struct {
+	Nickname string `json:"nickname"`
+}
+type voteRequest struct {
+	Approve  bool            `json:"approve"`
+	Proposal json.RawMessage `json:"proposal"`
+}
+
+type paginatedAddressRequest struct {
+	addressRequest
+	lib.PageParams
+}
+
+type paginatedHeightRequest struct {
+	heightRequest
+	lib.PageParams
+	lib.ValidatorFilters
+}
+
+type heightAndAddressRequest struct {
+	heightRequest
+	addressRequest
+}
+
+type heightAndIdRequest struct {
+	heightRequest
+	idRequest
+}
+
+type keystoreRequest struct {
+	addressRequest
+	passwordRequest
+	nicknameRequest
+	PrivateKey lib.HexBytes `json:"privateKey"`
+	crypto.EncryptedPrivateKey
+}
+
+type resourceUsageResponse struct {
+	Process ProcessResourceUsage `json:"process"`
+	System  SystemResourceUsage  `json:"system"`
+}
+
+type peerInfoResponse struct {
+	ID          *lib.PeerAddress `json:"id"`
+	NumPeers    int              `json:"numPeers"`
+	NumInbound  int              `json:"numInbound"`
+	NumOutbound int              `json:"numOutbound"`
+	Peers       []*lib.PeerInfo  `json:"peers"`
+}
+
+type ProcessResourceUsage struct {
+	Name          string  `json:"name"`
+	Status        string  `json:"status"`
+	CreateTime    string  `json:"createTime"`
+	FDCount       uint64  `json:"fdCount"`
+	ThreadCount   uint64  `json:"threadCount"`
+	MemoryPercent float64 `json:"usedMemoryPercent"`
+	CPUPercent    float64 `json:"usedCPUPercent"`
+}
+
+type SystemResourceUsage struct {
+	// ram
+	TotalRAM       uint64  `json:"totalRAM"`
+	AvailableRAM   uint64  `json:"availableRAM"`
+	UsedRAM        uint64  `json:"usedRAM"`
+	UsedRAMPercent float64 `json:"usedRAMPercent"`
+	FreeRAM        uint64  `json:"freeRAM"`
+	// CPU
+	UsedCPUPercent float64 `json:"usedCPUPercent"`
+	UserCPU        float64 `json:"userCPU"`
+	SystemCPU      float64 `json:"systemCPU"`
+	IdleCPU        float64 `json:"idleCPU"`
+	// disk
+	TotalDisk       uint64  `json:"totalDisk"`
+	UsedDisk        uint64  `json:"usedDisk"`
+	UsedDiskPercent float64 `json:"usedDiskPercent"`
+	FreeDisk        uint64  `json:"freeDisk"`
+	// io
+	ReceivedBytesIO uint64 `json:"ReceivedBytesIO"`
+	WrittenBytesIO  uint64 `json:"WrittenBytesIO"`
+}
+
+func (h *heightRequest) GetHeight() uint64 {
+	return h.Height
+}
+
+type queryWithHeight interface {
+	GetHeight() uint64
+}
+
+// Change structures for how we are getting RPC data
+type hashRequest struct {
+	Hash string `json:"hash"`
+}
+
+type addressRequest struct {
+	Address lib.HexBytes `json:"address"`
+}
+
+type committeesRequest struct {
+	Committees string
+}
+
+// Request struct for all transactions
+// Investigate splitting these into smaller, more specific structures
+type txRequest struct {
+	Amount          uint64          `json:"amount"`
+	PubKey          string          `json:"pubKey"`
+	NetAddress      string          `json:"netAddress"`
+	Output          string          `json:"output"`
+	OpCode          string          `json:"opCode"`
+	Fee             uint64          `json:"fee"`
+	Delegate        bool            `json:"delegate"`
+	EarlyWithdrawal bool            `json:"earlyWithdrawal"`
+	Submit          bool            `json:"submit"`
+	ReceiveAmount   uint64          `json:"receiveAmount"`
+	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
+	OrderId         uint64          `json:"orderId"`
+	Memo            string          `json:"memo"`
+	PollJSON        json.RawMessage `json:"pollJSON"`
+	PollApprove     bool            `json:"pollApprove"`
+	Signer          lib.HexBytes    `json:"signer"`
+	SignerNickname  string          `json:"signerNickname"`
+	addressRequest
+	nicknameRequest
+	passwordRequest
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txChangeParamRequest struct {
+	ParamSpace string `json:"paramSpace"`
+	ParamKey   string `json:"paramKey"`
+	ParamValue string `json:"paramValue"`
+	StartBlock uint64 `json:"startBlock"`
+	EndBlock   uint64 `json:"endBlock"`
+}

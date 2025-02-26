@@ -726,3 +726,44 @@ func ErrOrderNotFound(id int) ErrorI {
 func ErrPanic() ErrorI {
 	return NewError(CodePanic, StateMachineModule, "panic")
 }
+
+func ErrServerTimeout() ErrorI {
+	return NewError(CodeRPCTimeout, RPCModule, "server timeout")
+}
+
+func ErrInvalidParams(err error) ErrorI {
+	bz, _ := MarshalJSON(err)
+	return NewError(CodeInvalidParams, RPCModule, fmt.Sprintf("invalid params: %s", string(bz)))
+}
+
+func ErrNewFSM(err error) ErrorI {
+	return NewError(CodeNewFSM, RPCModule, fmt.Sprintf("new fsm failed with err: %s", err.Error()))
+}
+
+func ErrNewStore(err error) ErrorI {
+	return NewError(CodeNewFSM, RPCModule, fmt.Sprintf("new store failed with err: %s", err.Error()))
+}
+
+func ErrTimeMachine(err error) ErrorI {
+	return NewError(CodeTimeMachine, RPCModule, fmt.Sprintf("fsm.TimeMachine() failed with err: %s", err.Error()))
+}
+
+func ErrPostRequest(err error) ErrorI {
+	return NewError(CodePostRequest, RPCModule, fmt.Sprintf("http.Post() failed with err: %s", err.Error()))
+}
+
+func ErrGetRequest(err error) ErrorI {
+	return NewError(CodeGetRequest, RPCModule, fmt.Sprintf("http.Get() failed with err: %s", err.Error()))
+}
+
+func ErrHttpStatus(status string, statusCode int, body []byte) ErrorI {
+	return NewError(CodeHttpStatus, RPCModule, fmt.Sprintf("http response bad status %s with code %d and body %s", status, statusCode, body))
+}
+
+func ErrReadBody(err error) ErrorI {
+	return NewError(CodeReadBody, RPCModule, fmt.Sprintf("io.ReadAll(http.ResponseBody) failed with err: %s", err.Error()))
+}
+
+func ErrStringToCommittee(s string) ErrorI {
+	return NewError(CodeStringToCommittee, RPCModule, fmt.Sprintf("committee arg %s is invalid, requires a comma separated list of <chainId>=<percent> ex. 0=50,21=25,99=25", s))
+}

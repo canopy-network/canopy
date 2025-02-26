@@ -310,11 +310,11 @@ func (c *Client) StateDiff(height, startHeight uint64) (diff string, err lib.Err
 	}
 	resp, e := c.client.Post(c.url(StateDiffRouteName, "", false), ApplicationJSON, bytes.NewBuffer(bz))
 	if e != nil {
-		return "", ErrPostRequest(e)
+		return "", lib.ErrPostRequest(e)
 	}
 	bz, e = io.ReadAll(resp.Body)
 	if e != nil {
-		return "", ErrReadBody(e)
+		return "", lib.ErrReadBody(e)
 	}
 	diff = string(bz)
 	return
@@ -715,11 +715,11 @@ func (c *Client) Config() (returned *lib.Config, err lib.ErrorI) {
 func (c *Client) Logs() (logs string, err lib.ErrorI) {
 	resp, e := c.client.Get(c.url(LogsRouteName, "", true))
 	if e != nil {
-		return "", ErrGetRequest(err)
+		return "", lib.ErrGetRequest(err)
 	}
 	bz, e := io.ReadAll(resp.Body)
 	if e != nil {
-		return "", ErrGetRequest(e)
+		return "", lib.ErrGetRequest(e)
 	}
 	return string(bz), nil
 }
@@ -897,18 +897,18 @@ func (c *Client) url(routeName, param string, admin ...bool) string {
 	// if rpc port and admin ports are defined then it's a local RPC deployment
 	if c.rpcPort != "" && c.adminPort != "" {
 		if admin != nil && admin[0] {
-			return "http://" + localhost + colon + c.adminPort + router[routeName].Path + param
+			return "http://" + localhost + colon + c.adminPort + routePaths[routeName].Path + param
 		}
-		return c.rpcURL + colon + c.rpcPort + router[routeName].Path + param
+		return c.rpcURL + colon + c.rpcPort + routePaths[routeName].Path + param
 	}
 	// if rpc port is not defined then it's consider a remote RPC deployment
-	return c.rpcURL + router[routeName].Path + param
+	return c.rpcURL + routePaths[routeName].Path + param
 }
 
 func (c *Client) post(routeName string, json []byte, ptr any, admin ...bool) lib.ErrorI {
 	resp, err := c.client.Post(c.url(routeName, "", admin...), ApplicationJSON, bytes.NewBuffer(json))
 	if err != nil {
-		return ErrPostRequest(err)
+		return lib.ErrPostRequest(err)
 	}
 	return c.unmarshal(resp, ptr)
 }
@@ -916,7 +916,7 @@ func (c *Client) post(routeName string, json []byte, ptr any, admin ...bool) lib
 func (c *Client) get(routeName, param string, ptr any, admin ...bool) lib.ErrorI {
 	resp, err := c.client.Get(c.url(routeName, param, admin...))
 	if err != nil {
-		return ErrGetRequest(err)
+		return lib.ErrGetRequest(err)
 	}
 	return c.unmarshal(resp, ptr)
 }
@@ -924,10 +924,10 @@ func (c *Client) get(routeName, param string, ptr any, admin ...bool) lib.ErrorI
 func (c *Client) unmarshal(resp *http.Response, ptr any) lib.ErrorI {
 	bz, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ErrReadBody(err)
+		return lib.ErrReadBody(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return ErrHttpStatus(resp.Status, resp.StatusCode, bz)
+		return lib.ErrHttpStatus(resp.Status, resp.StatusCode, bz)
 	}
 	return lib.UnmarshalJSON(bz, ptr)
 }
