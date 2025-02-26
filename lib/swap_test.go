@@ -64,14 +64,14 @@ func TestAddOrder(t *testing.T) {
 	}
 }
 
-func TestBuyOrder(t *testing.T) {
+func TestLockOrder(t *testing.T) {
 	tests := []struct {
 		name                     string
 		initialOrders            []*SellOrder
 		orderId                  int
-		buyersReceiveAddress     []byte
-		buyersSendAddress        []byte
-		buyerChainDeadlineHeight uint64
+		lockersReceiveAddress     []byte
+		lockersSendAddress        []byte
+		lockerChainDeadlineHeight uint64
 		error                    string
 		expectedOrder            *SellOrder
 	}{
@@ -80,41 +80,41 @@ func TestBuyOrder(t *testing.T) {
 			initialOrders: []*SellOrder{
 				{
 					Id:                  0,
-					BuyerReceiveAddress: []byte("existing_receive"),
+					LockerReceiveAddress: []byte("existing_receive"),
 				},
 			},
 			orderId:                  0,
-			buyersReceiveAddress:     []byte("buyer_receive"),
-			buyersSendAddress:        []byte("buyer_send"),
-			buyerChainDeadlineHeight: 200,
+			lockersReceiveAddress:     []byte("locker_receive"),
+			lockersSendAddress:        []byte("locker_send"),
+			lockerChainDeadlineHeight: 200,
 			error:                    "order already accepted",
 			expectedOrder: &SellOrder{
 				Id:                  0,
-				BuyerReceiveAddress: []byte("existing_receive"),
+				LockerReceiveAddress: []byte("existing_receive"),
 			},
 		},
 		{
 			name:                     "Order not found",
 			initialOrders:            []*SellOrder{{Id: 0}},
 			orderId:                  99,
-			buyersReceiveAddress:     []byte("buyer_receive"),
-			buyersSendAddress:        []byte("buyer_send"),
-			buyerChainDeadlineHeight: 300,
+			lockersReceiveAddress:     []byte("locker_receive"),
+			lockersSendAddress:        []byte("locker_send"),
+			lockerChainDeadlineHeight: 300,
 			error:                    "not found",
 			expectedOrder:            nil,
 		},
 		{
 			name:                     "Successful order claim",
-			initialOrders:            []*SellOrder{{Id: 0, BuyerReceiveAddress: nil}},
+			initialOrders:            []*SellOrder{{Id: 0, LockerReceiveAddress: nil}},
 			orderId:                  0,
-			buyersReceiveAddress:     []byte("buyer_receive"),
-			buyersSendAddress:        []byte("buyer_send"),
-			buyerChainDeadlineHeight: 100,
+			lockersReceiveAddress:     []byte("locker_receive"),
+			lockersSendAddress:        []byte("locker_send"),
+			lockerChainDeadlineHeight: 100,
 			expectedOrder: &SellOrder{
 				Id:                  0,
-				BuyerReceiveAddress: []byte("buyer_receive"),
-				BuyerSendAddress:    []byte("buyer_send"),
-				BuyerChainDeadline:  100,
+				LockerReceiveAddress: []byte("locker_receive"),
+				LockerSendAddress:    []byte("locker_send"),
+				LockerChainDeadline:  100,
 			},
 		},
 	}
@@ -124,11 +124,11 @@ func TestBuyOrder(t *testing.T) {
 			// init the OrderBook
 			orderBook := &OrderBook{Orders: test.initialOrders}
 			// execute the function call
-			err := orderBook.BuyOrder(
+			err := orderBook.LockOrder(
 				test.orderId,
-				test.buyersReceiveAddress,
-				test.buyersSendAddress,
-				test.buyerChainDeadlineHeight,
+				test.lockersReceiveAddress,
+				test.lockersSendAddress,
+				test.lockerChainDeadlineHeight,
 			)
 			// check the error
 			if test.error != "" {
@@ -155,8 +155,8 @@ func TestResetOrder(t *testing.T) {
 			initialOrders: []*SellOrder{
 				{
 					Id:                  1,
-					BuyerReceiveAddress: []byte("buyer_receive"),
-					BuyerChainDeadline:  200,
+					LockerReceiveAddress: []byte("locker_receive"),
+					LockerChainDeadline:  200,
 				},
 			},
 			orderId:       99, // Non-existent order
@@ -168,15 +168,15 @@ func TestResetOrder(t *testing.T) {
 			initialOrders: []*SellOrder{
 				{
 					Id:                  0,
-					BuyerReceiveAddress: nil,
-					BuyerChainDeadline:  0,
+					LockerReceiveAddress: nil,
+					LockerChainDeadline:  0,
 				},
 			},
 			orderId: 0,
 			expectedOrder: &SellOrder{
 				Id:                  0,
-				BuyerReceiveAddress: nil,
-				BuyerChainDeadline:  0,
+				LockerReceiveAddress: nil,
+				LockerChainDeadline:  0,
 			},
 		},
 		{
@@ -184,15 +184,15 @@ func TestResetOrder(t *testing.T) {
 			initialOrders: []*SellOrder{
 				{
 					Id:                  0,
-					BuyerReceiveAddress: []byte("buyer_receive"),
-					BuyerChainDeadline:  100,
+					LockerReceiveAddress: []byte("locker_receive"),
+					LockerChainDeadline:  100,
 				},
 			},
 			orderId: 0,
 			expectedOrder: &SellOrder{
 				Id:                  0,
-				BuyerReceiveAddress: nil,
-				BuyerChainDeadline:  0,
+				LockerReceiveAddress: nil,
+				LockerChainDeadline:  0,
 			},
 		},
 	}

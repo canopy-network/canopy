@@ -56,7 +56,7 @@ const (
 //     recipient.
 //
 // SellOrder is a structure that holds relevant data to complete a token swap. It's created by a 'request to sell'
-// then populated by an 'intent to buy', and finally closed when the committee witnesses the transfer of funds.
+// then populated by an 'intent to lock', and finally closed when the committee witnesses the transfer of funds.
 type SellOrder struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -72,12 +72,12 @@ type SellOrder struct {
 	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// seller_receive_address: the external chain address to receive the 'counter-asset'
 	SellerReceiveAddress []byte `protobuf:"bytes,5,opt,name=SellerReceiveAddress,proto3" json:"sellerReceiveAddress"` // @gotags: json:"sellerReceiveAddress"
-	// buyer_send_address: the address the buyer will be transferring the funds from
-	BuyerSendAddress []byte `protobuf:"bytes,6,opt,name=BuyerSendAddress,proto3" json:"buyerSendAddress"` // @gotags: json:"buyerSendAddress"
-	// buyer_receive_address: the buyer Canopy address to receive the CNPY
-	BuyerReceiveAddress []byte `protobuf:"bytes,7,opt,name=BuyerReceiveAddress,proto3" json:"buyerReceiveAddress"` // @gotags: json:"buyerReceiveAddress"
-	// buyer_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-	BuyerChainDeadline uint64 `protobuf:"varint,8,opt,name=BuyerChainDeadline,proto3" json:"buyerChainDeadline"` // @gotags: json:"buyerChainDeadline"
+	// locker_send_address: the address the locker will be transferring the funds from
+	LockerSendAddress []byte `protobuf:"bytes,6,opt,name=LockerSendAddress,proto3" json:"lockerSendAddress"` // @gotags: json:"lockerSendAddress"
+	// locker_receive_address: the locker Canopy address to receive the CNPY
+	LockerReceiveAddress []byte `protobuf:"bytes,7,opt,name=LockerReceiveAddress,proto3" json:"lockerReceiveAddress"` // @gotags: json:"lockerReceiveAddress"
+	// locker_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+	LockerChainDeadline uint64 `protobuf:"varint,8,opt,name=LockerChainDeadline,proto3" json:"lockerChainDeadline"` // @gotags: json:"lockerChainDeadline"
 	// sellers_send_address: the signing address of seller who is selling the CNPY
 	SellersSendAddress []byte `protobuf:"bytes,9,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 }
@@ -149,23 +149,23 @@ func (x *SellOrder) GetSellerReceiveAddress() []byte {
 	return nil
 }
 
-func (x *SellOrder) GetBuyerSendAddress() []byte {
+func (x *SellOrder) GetLockerSendAddress() []byte {
 	if x != nil {
-		return x.BuyerSendAddress
+		return x.LockerSendAddress
 	}
 	return nil
 }
 
-func (x *SellOrder) GetBuyerReceiveAddress() []byte {
+func (x *SellOrder) GetLockerReceiveAddress() []byte {
 	if x != nil {
-		return x.BuyerReceiveAddress
+		return x.LockerReceiveAddress
 	}
 	return nil
 }
 
-func (x *SellOrder) GetBuyerChainDeadline() uint64 {
+func (x *SellOrder) GetLockerChainDeadline() uint64 {
 	if x != nil {
-		return x.BuyerChainDeadline
+		return x.LockerChainDeadline
 	}
 	return 0
 }

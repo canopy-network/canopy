@@ -319,10 +319,10 @@ func (c *Controller) CalculateRewardRecipients(proposerAddress []byte, rootChain
 	return
 }
 
-// HandleSwaps() handles the 'buy' side of the sell orders
+// HandleSwaps() handles the 'lock' side of the sell orders
 func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.CertificateResult, rootChainHeight uint64) {
-	// parse the last block for buy orders and polling
-	buyOrders := c.FSM.ParseBuyOrders(blockResult)
+	// parse the last block for lock orders and polling
+	lockOrders := c.FSM.ParseLockOrders(blockResult)
 	// get orders from the root-Chain
 	orders, e := c.LoadRootChainOrderBook(rootChainHeight)
 	if e != nil {
@@ -333,7 +333,7 @@ func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.Cert
 	// add the orders to the certificate result
 	// truncate for defensive spam protection
 	results.Orders = &lib.Orders{
-		BuyOrders:   lib.TruncateSlice(buyOrders, 1000),
+		LockOrders:   lib.TruncateSlice(lockOrders, 1000),
 		ResetOrders: resetOrders,
 		CloseOrders: closeOrders,
 	}

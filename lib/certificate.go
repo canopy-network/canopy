@@ -504,13 +504,13 @@ func (x *Orders) CheckBasic() ErrorI {
 	if x == nil {
 		return nil
 	}
-	// check the buy orders
-	for _, buy := range x.BuyOrders {
-		if buy == nil {
-			return ErrNilBuyOrder()
+	// check the lock orders
+	for _, lock := range x.LockOrders {
+		if lock == nil {
+			return ErrNilLockOrder()
 		}
-		if buy.BuyerReceiveAddress == nil {
-			return ErrInvalidBuyerReceiveAddress()
+		if lock.LockerReceiveAddress == nil {
+			return ErrInvalidLockerReceiveAddress()
 		}
 	}
 	return nil
@@ -530,71 +530,71 @@ func (x *Orders) Equals(y *Orders) bool {
 	if !slices.Equal(x.ResetOrders, y.ResetOrders) {
 		return false
 	}
-	if len(x.BuyOrders) != len(y.BuyOrders) {
+	if len(x.LockOrders) != len(y.LockOrders) {
 		return false
 	}
-	for i, o := range x.BuyOrders {
-		if !o.Equals(y.BuyOrders[i]) {
+	for i, o := range x.LockOrders {
+		if !o.Equals(y.LockOrders[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// Equals() compares two BuyOrders for equality
-func (x *BuyOrder) Equals(y *BuyOrder) bool {
+// Equals() compares two LockOrders for equality
+func (x *LockOrder) Equals(y *LockOrder) bool {
 	if x == nil && y == nil {
 		return true
 	}
 	if x == nil || y == nil {
 		return false
 	}
-	if !bytes.Equal(x.BuyerReceiveAddress, y.BuyerReceiveAddress) {
+	if !bytes.Equal(x.LockerReceiveAddress, y.LockerReceiveAddress) {
 		return false
 	}
-	if !bytes.Equal(x.BuyerSendAddress, y.BuyerSendAddress) {
+	if !bytes.Equal(x.LockerSendAddress, y.LockerSendAddress) {
 		return false
 	}
 	if x.OrderId != y.OrderId {
 		return false
 	}
-	return x.BuyerChainDeadline == y.BuyerChainDeadline
+	return x.LockerChainDeadline == y.LockerChainDeadline
 }
 
-// buyOrderJSON implements the json.Marshaller & json.Unmarshaler interfaces for BuyOrder
-type buyOrderJSON struct {
+// lockOrderJSON implements the json.Marshaller & json.Unmarshaler interfaces for LockOrder
+type lockOrderJSON struct {
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId uint64 `json:"order_id,omitempty"`
-	// buyers_send_address: the Canopy address where the tokens may be received
-	BuyersSendAddress HexBytes `json:"buyers_send_address,omitempty"`
-	// buyer_receive_address: the Canopy address where the tokens may be received
-	BuyerReceiveAddress HexBytes `json:"buyer_receive_address,omitempty"`
-	// buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
-	// or the 'intent to buy' will be voided
-	BuyerChainDeadline uint64 `json:"buyer_chain_deadline,omitempty"`
+	// lockers_send_address: the Canopy address where the tokens may be received
+	LockersSendAddress HexBytes `json:"lockers_send_address,omitempty"`
+	// locker_receive_address: the Canopy address where the tokens may be received
+	LockerReceiveAddress HexBytes `json:"locker_receive_address,omitempty"`
+	// locker_chain_deadline: the 'counter asset' chain height at which the locker must send the 'counter asset' by
+	// or the 'intent to lock' will be voided
+	LockerChainDeadline uint64 `json:"locker_chain_deadline,omitempty"`
 }
 
-// MarshalJSON() implements the json.Marshaller interface for BuyOrder
-func (x BuyOrder) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&buyOrderJSON{
+// MarshalJSON() implements the json.Marshaller interface for LockOrder
+func (x LockOrder) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&lockOrderJSON{
 		OrderId:             x.OrderId,
-		BuyersSendAddress:   x.BuyerSendAddress,
-		BuyerReceiveAddress: x.BuyerReceiveAddress,
-		BuyerChainDeadline:  x.BuyerChainDeadline,
+		LockersSendAddress:   x.LockerSendAddress,
+		LockerReceiveAddress: x.LockerReceiveAddress,
+		LockerChainDeadline:  x.LockerChainDeadline,
 	})
 }
 
-// UnmarshalJSON() implements the json.Unmarshaler interface for BuyOrder
-func (x *BuyOrder) UnmarshalJSON(b []byte) (err error) {
-	j := new(buyOrderJSON)
+// UnmarshalJSON() implements the json.Unmarshaler interface for LockOrder
+func (x *LockOrder) UnmarshalJSON(b []byte) (err error) {
+	j := new(lockOrderJSON)
 	if err = json.Unmarshal(b, j); err != nil {
 		return
 	}
-	*x = BuyOrder{
+	*x = LockOrder{
 		OrderId:             j.OrderId,
-		BuyerReceiveAddress: j.BuyerReceiveAddress,
-		BuyerSendAddress:    j.BuyersSendAddress,
-		BuyerChainDeadline:  j.BuyerChainDeadline,
+		LockerReceiveAddress: j.LockerReceiveAddress,
+		LockerSendAddress:    j.LockersSendAddress,
+		LockerChainDeadline:  j.LockerChainDeadline,
 	}
 	return
 }

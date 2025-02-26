@@ -40,7 +40,7 @@ option go_package = "github.com/canopy-network/canopy/lib";
 //
 //
 // SellOrder is a structure that holds relevant data to complete a token swap. It's created by a 'request to sell'
-// then populated by an 'intent to buy', and finally closed when the committee witnesses the transfer of funds.
+// then populated by an 'intent to lock', and finally closed when the committee witnesses the transfer of funds.
 message SellOrder {
   // id: the unique identifier of the order
   uint64 Id = 1; // @gotags: json:"id"
@@ -52,12 +52,12 @@ message SellOrder {
   uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
   // seller_receive_address: the external chain address to receive the 'counter-asset'
   bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
-  // buyer_send_address: the address the buyer will be transferring the funds from
-  bytes BuyerSendAddress = 6; // @gotags: json:"buyerSendAddress"
-  // buyer_receive_address: the buyer Canopy address to receive the CNPY
-  bytes BuyerReceiveAddress = 7; // @gotags: json:"buyerReceiveAddress"
-  // buyer_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-  uint64 BuyerChainDeadline = 8; // @gotags: json:"buyerChainDeadline"
+  // locker_send_address: the address the locker will be transferring the funds from
+  bytes LockerSendAddress = 6; // @gotags: json:"lockerSendAddress"
+  // locker_receive_address: the locker Canopy address to receive the CNPY
+  bytes LockerReceiveAddress = 7; // @gotags: json:"lockerReceiveAddress"
+  // locker_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+  uint64 LockerChainDeadline = 8; // @gotags: json:"lockerChainDeadline"
   // sellers_send_address: the signing address of seller who is selling the CNPY
   bytes SellersSendAddress = 9; // @gotags: json:"sellersSendAddress"
 }

@@ -138,8 +138,8 @@ const (
 	CodeNonNilCertResults               ErrorCode = 40
 	CodeInvalidMemo                     ErrorCode = 41
 	CodeNilCertResult                   ErrorCode = 42
-	CodeNilBuyOrder                     ErrorCode = 43
-	CodeInvalidBuyerReceiveAddress      ErrorCode = 44
+	CodeNilLockOrder                     ErrorCode = 43
+	CodeInvalidLockerReceiveAddress      ErrorCode = 44
 	CodeEmptyTransaction                ErrorCode = 45
 	CodeHashSize                        ErrorCode = 46
 	CodeInvalidLastQC                   ErrorCode = 47
@@ -237,9 +237,9 @@ const (
 	CodeUnauthorizedOrderChange           ErrorCode = 75
 	CodeMinimumOrderSize                  ErrorCode = 76
 	CodeOrderAlreadyAccepted              ErrorCode = 77
-	CodeInvalidBuyOrder                   ErrorCode = 78
-	CodeDuplicateBuyOrder                 ErrorCode = 79
-	CodeInvalidBuyerDeadline              ErrorCode = 80
+	CodeInvalidLockOrder                   ErrorCode = 78
+	CodeDuplicateLockOrder                 ErrorCode = 79
+	CodeInvalidLockerDeadline              ErrorCode = 80
 	CodeInvalidCloseOrder                 ErrorCode = 81
 	CodeInvalidResetOrder                 ErrorCode = 82
 	CodeInvalidCheckpoint                 ErrorCode = 83
@@ -680,12 +680,12 @@ func ErrNonNilCertResults() ErrorI {
 	return NewError(CodeNonNilCertResults, MainModule, "the certificate results is not empty")
 }
 
-func ErrNilBuyOrder() ErrorI {
-	return NewError(CodeNilBuyOrder, MainModule, "buy order is nil")
+func ErrNilLockOrder() ErrorI {
+	return NewError(CodeNilLockOrder, MainModule, "lock order is nil")
 }
 
-func ErrInvalidBuyerReceiveAddress() ErrorI {
-	return NewError(CodeInvalidBuyerReceiveAddress, MainModule, "invalid buyer receive address")
+func ErrInvalidLockerReceiveAddress() ErrorI {
+	return NewError(CodeInvalidLockerReceiveAddress, MainModule, "invalid locker receive address")
 }
 
 func ErrNilCertResults() ErrorI {
