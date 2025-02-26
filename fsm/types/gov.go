@@ -68,8 +68,8 @@ func DefaultParams() *Params {
 			StakePercentForSubsidizedCommittee: 33,
 			MaxSlashPerCommittee:               15,
 			DelegateRewardPercentage:           10,
-			LockDeadlineBlocks:                  15,
-			LockOrderFeeMultiplier:              2,
+			LockDeadlineBlocks:                 15,
+			LockOrderFeeMultiplier:             2,
 		},
 		Fee: &FeeParams{
 			SendFee:               10000,
@@ -227,8 +227,8 @@ const (
 	ParamStakePercentForSubsidizedCommittee = "stakePercentForSubsidizedCommittee" // the minimum percentage of total stake needed to be a 'paid committee'
 	ParamMaxSlashPerCommittee               = "maxSlashPerCommittee"               // the maximum validator slash per committee per block
 	ParamDelegateRewardPercentage           = "delegateRewardPercentage"           // the percentage of the block reward that is awarded to the delegates
-	ParamBuyDeadlineBlocks                  = "buyDeadlineBlocks"                  // the amount of blocks a 'buyer' has to complete an order they reserved
-	ParamBuyOrderFeeMultiplier              = "buyOrderFeeMultiplier"              // the fee multiplier of the 'send' fee that is required to execute a buy order
+	ParamLockDeadlineBlocks                 = "lockDeadlineBlocks"                 // the amount of blocks a 'locker' has to complete an order they reserved
+	ParamLockOrderFeeMultiplier             = "lockOrderFeeMultiplier"             // the fee multiplier of the 'send' fee that is required to execute a lock order
 )
 
 // Check() validates the Validator params
