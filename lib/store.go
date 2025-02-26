@@ -12,7 +12,7 @@ import (
 // StoreI defines the interface for interacting with blockchain storage
 type StoreI interface {
 	RWStoreI                                     // reading and writing
-	ProveStoreI                                  // proving membership / non-membership TODO
+	ProveStoreI                                  // proving membership / non-membership
 	RWIndexerI                                   // reading and writing indexer
 	NewTxn() StoreTxnI                           // wrap the store in a discardable txn
 	Root() ([]byte, ErrorI)                      // get the merkle root from the store
@@ -99,8 +99,9 @@ type RStoreI interface {
 
 // ProveStoreI defines an interface
 type ProveStoreI interface {
-	GetProof(key []byte) (proof, value []byte, err ErrorI) // Get gets the bytes for a compact merkle proof
-	VerifyProof(key, value, proof []byte) bool             // VerifyProof validates the merkle proof
+	GetProof(key []byte) (proof []*Node, err ErrorI) // Get gets the bytes for a compact merkle proof
+	VerifyProof(key, value []byte, validateMembership bool,
+		root []byte, proof []*Node) (valid bool, err ErrorI) // VerifyProof validates the merkle proof
 }
 
 // IteratorI defines an interface for iterating over key-value pairs in a data store

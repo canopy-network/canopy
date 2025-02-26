@@ -3,11 +3,12 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"path/filepath"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
-	"math"
-	"path/filepath"
 )
 
 const (
@@ -188,13 +189,15 @@ func (s *Store) Delete(k []byte) lib.ErrorI {
 }
 
 // GetProof() uses the StateCommitStore to prove membership and non-membership
-func (s *Store) GetProof(k []byte) ([]byte, []byte, lib.ErrorI) {
-	panic("not (yet) implemented")
+func (s *Store) GetProof(key []byte) ([]*lib.Node, lib.ErrorI) {
+	return s.sc.GetMerkleProof(key)
 }
 
 // VerifyProof() checks the validity of a member or non-member proof from the StateCommitStore
 // by verifying the proof against the provided key, value, and proof data.
-func (s *Store) VerifyProof(k, v, p []byte) bool { panic("not (yet) implemented") }
+func (s *Store) VerifyProof(key, value []byte, validateMembership bool, root []byte, proof []*lib.Node) (bool, lib.ErrorI) {
+	return s.sc.VerifyProof(key, value, validateMembership, root, proof)
+}
 
 // Iterator() returns an object for scanning the StateStore starting from the provided prefix.
 // The iterator allows forward traversal of key-value pairs that match the prefix.
@@ -244,7 +247,7 @@ func (s *Store) commitIDKey(version uint64) []byte {
 }
 
 // getCommitID() retrieves the CommitID value for the specified version from the database
-func (s *Store) getCommitID(version uint64) (id CommitID, err lib.ErrorI) {
+func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 	var bz []byte
 	bz, err = NewTxnWrapper(s.writer, s.log, "").Get(s.commitIDKey(version))
 	if err != nil {
@@ -259,7 +262,7 @@ func (s *Store) getCommitID(version uint64) (id CommitID, err lib.ErrorI) {
 // setCommitID() stores the CommitID for the specified version and root in the database
 func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 	w := NewTxnWrapper(s.writer, s.log, "")
-	value, err := lib.Marshal(&CommitID{
+	value, err := lib.Marshal(&lib.CommitID{
 		Height: version,
 		Root:   root,
 	})
@@ -270,17 +273,14 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 		return err
 	}
 	k := s.commitIDKey(version)
-	if err != nil {
-		return err
-	}
 	return w.Set(k, value)
 }
 
 // getLatestCommitID() retrieves the latest CommitID from the database
-func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *CommitID) {
+func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *lib.CommitID) {
 	tx := NewTxnWrapper(db.NewTransactionAt(math.MaxUint64, false), log, "")
 	defer tx.Close()
-	id = new(CommitID)
+	id = new(lib.CommitID)
 	bz, err := tx.Get([]byte(lastCommitIDPrefix))
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())

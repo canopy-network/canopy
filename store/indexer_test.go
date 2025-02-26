@@ -2,11 +2,12 @@ package store
 
 import (
 	"bytes"
+	"testing"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const testHeight = 1
@@ -40,10 +41,10 @@ func TestGetTxByHeight(t *testing.T) {
 	require.True(t, bytes.Equal(gotBytes, wantedBytes))
 }
 
-func newTestTxResult(t *testing.T) (r *lib.TxResult, tx *lib.Transaction, hash []byte, msg *CommitID, address crypto.AddressI) {
+func newTestTxResult(t *testing.T) (r *lib.TxResult, tx *lib.Transaction, hash []byte, msg *lib.CommitID, address crypto.AddressI) {
 	pk, err := crypto.NewEd25519PrivateKey()
 	require.NoError(t, err)
-	msg = &CommitID{
+	msg = &lib.CommitID{
 		Height: 1,
 		Root:   []byte("root"),
 	}

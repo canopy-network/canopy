@@ -2,9 +2,10 @@ package store
 
 import (
 	"bytes"
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 // =====================================================
@@ -94,7 +95,7 @@ type node struct {
 	// Key: the structure that is used to interpret node keys (bytes, fromBytes, etc.)
 	Key *key
 	// Node: is the structure persisted on disk under the above key bytes
-	Node
+	lib.Node
 }
 
 // OpData: data for each operation (set, delete)
@@ -107,11 +108,18 @@ type OpData struct {
 	pathBit int
 	// target: the node that is being added or deleted (or its ID)
 	target *node
-	// current: the current selected nod
+	// current: the current selected node
 	current *node
 	// traversed: a descending list of traversed nodes from root to parent of current
 	traversed *NodeList
 }
+
+const (
+	// leftChild: enum identifier of left child (0)
+	leftChild = iota
+	// leftChild: enum identifier of right child (1)
+	rightChild
+)
 
 // NewDefaultSMT() creates a new abstraction fo the SMT object using default parameters
 func NewDefaultSMT(store lib.RWStoreI) (smt *SMT) {
@@ -145,8 +153,12 @@ func (s *SMT) Root() []byte { return bytes.Clone(s.root.Value) }
 
 // Set: insert or update a target
 func (s *SMT) Set(k, v []byte) lib.ErrorI {
+	return s.set(&node{Key: newNodeKey(crypto.Hash(k), s.keyBitLength), Node: lib.Node{Value: crypto.Hash(v)}})
+}
+
+func (s *SMT) set(target *node) lib.ErrorI {
 	// calculate the key and value to upsert
-	s.target = &node{Key: newNodeKey(crypto.Hash(k), s.keyBitLength), Node: Node{Value: crypto.Hash(v)}}
+	s.target = target
 	// check to make sure the target is valid
 	if err := s.validateTarget(); err != nil {
 		return err
@@ -207,7 +219,7 @@ func (s *SMT) Delete(k []byte) lib.ErrorI {
 	// get the parent and grandparent
 	parent, grandparent := s.traversed.Parent(), s.traversed.GrandParent()
 	// get the sibling of the target
-	sibling := parent.getOtherChild(targetBytes)
+	sibling, _ := parent.getOtherChild(targetBytes)
 	// replace the parent reference with the sibling in the grandparent
 	grandparent.replaceChild(parent.Key.bytes(), sibling)
 	// delete the parent from the database and remove it from the traversal array
@@ -244,17 +256,10 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		if err != nil {
 			return
 		}
-		// assert current key isn't nil
-		if currentKey == nil {
-			panic("nil current key")
-		}
 		// load the bytes into the key
 		s.current.Key.fromBytes(currentKey)
 		// update the greatest common prefix and the bit position based on the new current key
 		s.target.Key.greatestCommonPrefix(&s.bitPos, s.gcp, s.current.Key)
-		if err != nil {
-			return
-		}
 		// exit conditions
 		if !s.current.Key.equals(s.gcp) || s.target.Key.equals(s.gcp) {
 			return // exit loop
@@ -292,8 +297,8 @@ func (s *SMT) rehash() lib.ErrorI {
 // this allows the logic to be without root edge cases for insert and delete
 func (s *SMT) initializeTree(rootKey *key) {
 	// create a min and max node, this enables no edge cases for root
-	minNode := &node{Key: newNodeKey(bytes.Repeat([]byte{0}, 20), s.keyBitLength), Node: Node{Value: bytes.Repeat([]byte{0}, 20)}}
-	maxNode := &node{Key: newNodeKey(bytes.Repeat([]byte{255}, 20), s.keyBitLength), Node: Node{Value: bytes.Repeat([]byte{255}, 20)}}
+	minNode := &node{Key: newNodeKey(bytes.Repeat([]byte{0}, 20), s.keyBitLength), Node: lib.Node{Value: bytes.Repeat([]byte{0}, 20)}}
+	maxNode := &node{Key: newNodeKey(bytes.Repeat([]byte{255}, 20), s.keyBitLength), Node: lib.Node{Value: bytes.Repeat([]byte{255}, 20)}}
 	// set min and max node in the database
 	if err := s.setNode(minNode); err != nil {
 		panic(err)
@@ -304,7 +309,7 @@ func (s *SMT) initializeTree(rootKey *key) {
 	// update root
 	s.root = &node{
 		Key: rootKey,
-		Node: Node{
+		Node: lib.Node{
 			LeftChildKey:  minNode.Key.bytes(),
 			RightChildKey: maxNode.Key.bytes(),
 		},
@@ -419,6 +424,162 @@ func (s *SMT) validateTarget() lib.ErrorI {
 	return nil
 }
 
+// GetMerkleProof() returns the merkle proof-of-membership for a given key if it exists,
+// and the proof of non-membership otherwise
+func (s *SMT) GetMerkleProof(key []byte) ([]*lib.Node, lib.ErrorI) {
+	// calculate the key and value to traverse
+	s.target = &node{Key: newNodeKey(crypto.Hash(key), s.keyBitLength)}
+	// check to make sure the target is valid
+	if err := s.validateTarget(); err != nil {
+		return nil, err
+	}
+
+	proof := make([]*lib.Node, 0)
+
+	// navigates the tree downward
+	if err := s.traverse(); err != nil {
+		return nil, err
+	}
+
+	// Add current to the list of traversed nodes (actual node in case of proof of membership),
+	// possible location in the case of proof of non-membership
+	s.traversed.Nodes = append(s.traversed.Nodes, s.current.copy())
+
+	// traverse the nodes back up to the root to generate the proof
+	for i := len(s.traversed.Nodes) - 1; i > 0; i-- {
+		node := s.traversed.Nodes[i]
+		parent := s.traversed.Nodes[i-1]
+		siblingKey, order := parent.getOtherChild(node.Key.bytes())
+		siblingNode, err := s.getNode(siblingKey)
+		if err != nil {
+			return nil, err
+		}
+
+		proof = append(proof, &lib.Node{
+			Key:     node.Key.bytes(),
+			Value:   node.Value,
+			Bitmask: int32(order),
+		})
+		proof = append(proof, &lib.Node{
+			Key:     siblingNode.Key.bytes(),
+			Value:   siblingNode.Value,
+			Bitmask: int32(order),
+		})
+
+		// If the proof slice contains only two nodes, it signifies that it includes only
+		// the leaf nodes (or the parents of the leaf in the case of non-membership).
+		// Verify the sibling's position to ascertain whether it is a left or right child.
+		// If it is a left child, the two node positions need to be swapped to construct
+		// the proof accurately.
+		if len(proof) == 2 && order == leftChild {
+			proof[0], proof[1] = proof[1], proof[0]
+		}
+	}
+
+	return proof, nil
+}
+
+// VerifyProof verifies a Sparse Merkle Tree proof for a given value
+// reconstructing the root hash and comparing it against the provided root hash
+// depending on the proof type (membership or non-membership)
+func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []byte, proof []*lib.Node) (bool, lib.ErrorI) {
+	// A valid proof is expected to have at least two nodes (the leaf nodes) in order to build the root
+	// and always should include an even number of nodes representing the siblings of the nodes in the tree
+	proofLen := len(proof)
+	if proofLen < 2 || proofLen%2 != 0 {
+		return false, ErrInvalidMerkleTreeProof()
+	}
+
+	// Generate the initial hash from the leaves of the proof
+	leftLeaf := proof[0]
+	rightLeaf := proof[1]
+
+	hash := crypto.Hash(append(append(leftLeaf.Key, leftLeaf.Value...),
+		append(rightLeaf.Key, rightLeaf.Value...)...))
+
+	internalNodes := proof[2:]
+
+	for i := 0; i < len(internalNodes); i += 2 {
+		if internalNodes[i].Bitmask == leftChild {
+			// left sibling of the given node
+			hash = crypto.Hash(
+				append(append(internalNodes[i+1].Key, internalNodes[i+1].Value...),
+					append(internalNodes[i].Key, hash...)...),
+			)
+		} else {
+			// right sibling of the given node
+			hash = crypto.Hash(
+				append(append(internalNodes[i].Key, hash...),
+					append(internalNodes[i+1].Key, internalNodes[i+1].Value...)...),
+			)
+		}
+	}
+
+	// compare the calculated root hash against the provided root hash
+	if !bytes.Equal(hash, root) {
+		return false, nil
+	}
+
+	// Rebuild a similar merkle tree using the proof nodes, to be able to traverse it
+	// again and confirm whether the given key and value are part of the tree, to
+	// confirm the proof-of-non-membership as if the key is not part of the tree
+	memStore, err := NewStoreInMemory(lib.NewDefaultLogger())
+	if err != nil {
+		return false, err
+	}
+	smt := NewSMT(RootKey, s.keyBitLength, memStore)
+
+	// add the leaf nodes
+	nodeKey := &key{}
+	for _, intermediateNode := range proof[:2] {
+		nodeKey.fromBytes(intermediateNode.Key)
+		n := &node{Key: nodeKey, Node: lib.Node{Value: intermediateNode.Value}}
+		// Leaf nodes could be one of the two children of the root.
+		if err := smt.set(n); err != nil {
+			continue
+		}
+	}
+
+	smt.target = &node{Key: newNodeKey(crypto.Hash(k), smt.keyBitLength)}
+	// make sure the target is valid
+	if err := smt.validateTarget(); err != nil {
+		return false, err
+	}
+	// navigates the tree downward
+	if err := smt.traverse(); err != nil {
+		return false, err
+	}
+
+	// Verify whether the key exists in the tree and what kind of proof is being validated
+	// (membership or non-membership).
+	// if the key does not exist in the tree and the proof is for membership or
+	// if the key exists in the tree and the proof is for non-membership, return false.
+	nodeExists := smt.target.Key.equals(smt.gcp)
+	if (!nodeExists && validateMembership) || (nodeExists && !validateMembership) {
+		return false, nil
+	}
+	// if the key does not exist in the tree and the proof is for non-membership, return true.
+	if !nodeExists && !validateMembership {
+		return true, nil
+	}
+
+	// If the key exists in the tree, obtain to value of the target node to verify it against
+	// the provided value.
+	targetNode, err := smt.getNode(smt.target.Key.bytes())
+	if err != nil {
+		return false, err
+	}
+	// Verify if the value matches the provided value.
+	// This confirms the proof-of-non-membership as the intermediate nodes are constructed
+	// based on the children's key + values, so a different value indicates
+	// that the Merkle root could not have been constructed using this
+	if !bytes.Equal(targetNode.Value, crypto.Hash(v)) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // NODE KEY CODE BELOW
 
 /*
@@ -503,7 +664,6 @@ func (k *key) greatestCommonPrefix(bitPos *int, gcp *key, current *key) {
 		// if the bits match, add to the common prefix
 		gcp.addBit(bit1)
 	}
-	return
 }
 
 // bitAt() returns the bit value <0 or 1> at a 0 indexed position left to right (MSB)
@@ -647,13 +807,13 @@ func (x *node) setChildren(leftKey, rightKey []byte) {
 	x.LeftChildKey, x.RightChildKey = leftKey, rightKey
 }
 
-// getOtherChild() returns the sibling for the child key passed
-func (x *node) getOtherChild(childKey []byte) []byte {
+// getOtherChild() returns the sibling for the child key passed and which child it is
+func (x *node) getOtherChild(childKey []byte) ([]byte, byte) {
 	switch {
 	case bytes.Equal(x.LeftChildKey, childKey):
-		return x.RightChildKey
+		return x.RightChildKey, rightChild
 	case bytes.Equal(x.RightChildKey, childKey):
-		return x.LeftChildKey
+		return x.LeftChildKey, leftChild
 	}
 	panic("no child node was a match for getOtherChild")
 }
@@ -678,7 +838,7 @@ func (x *node) copy() *node {
 			mostSigBytes: append([]byte(nil), x.Key.mostSigBytes...),
 			leastSigBits: append([]int(nil), x.Key.leastSigBits...),
 		},
-		Node: Node{
+		Node: lib.Node{
 			Value:         append([]byte(nil), x.Value...),
 			LeftChildKey:  append([]byte(nil), x.LeftChildKey...),
 			RightChildKey: append([]byte(nil), x.RightChildKey...),
@@ -688,7 +848,7 @@ func (x *node) copy() *node {
 
 // NODE LIST CODE BELOW
 
-// NodeList defines a list of nodes, used for traversal and merkle proofs
+// NodeList defines a list of nodes, used for traversal
 type NodeList struct {
 	Nodes []*node
 }

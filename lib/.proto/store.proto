@@ -1,7 +1,7 @@
 syntax = "proto3";
 package types;
 
-option go_package = "github.com/canopy-network/canopy/store";
+option go_package = "github.com/canopy-network/canopy/lib";
 
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
@@ -26,37 +26,6 @@ message CommitID {
   bytes root = 2;
 }
 
-// StoreMerkleProof Celestia's implementation of a Sparse Merkle Tree Proof
-// used for membership and non-membership proofs for lite node functionality
-message StoreMerkleProof {
-  // key: the key of the key-value pair to be proved
-  bytes key = 1;
-  // value: the value of the key-value pair to be proved
-  bytes value = 2;
-  // proof: the compacted merkle proof from the SMT tree
-  SparseCompactMerkleProof proof = 3;
-}
-
-// SparseCompactMerkleProof Celestia's implementation of a Sparse Compact Merkle Tree Proof
-message SparseCompactMerkleProof {
-  // SideNodes: is an array of the sibling nodes leading up to the leaf of the proof.
-  repeated bytes SideNodes = 1; // @gotags: json:"sideNodes"
-  // NonMembershipLeafData: is the data of the unrelated leaf at the position
-  // of the key being proven, in the case of a non-membership proof. For
-  // membership proofs, is nil.
-  bytes NonMembershipLeafData = 2; // @gotags: json:"nonMembershipLeafData"
-  // BitMask: in the case of a compact proof, is a bit mask of the sidenodes
-  // of the proof where an on-bit indicates that the sidenode at the bit's
-  // index is a placeholder. This is only set if the proof is compact.
-  bytes BitMask = 3; // @gotags: json:"bitMask"
-  // NumSideNodes: in the case of a compact proof, indicates the number of
-  // sidenodes in the proof when decompacted. This is only set if the proof is compact.
-  uint32 NumSideNodes = 4; // @gotags: json:"numSideNodes"
-  // SiblingData: is the data of the sibling node to the leaf being proven,
-  // required for updatable proofs. For unupdatable proofs, is nil.
-  bytes SiblingData = 5; // @gotags: json:"siblingData"
-}
-
 // Node represents a single element in a sparse Merkle tree
 // It stores the cryptographic hash of data and the structural information
 // required to traverse and reconstruct the tree
@@ -67,5 +36,12 @@ message Node {
   // LeftChildKey: is the key for the left child node. Nil means no child
   bytes LeftChildKey = 2; // @gotags: json:"leftChildKey"
   // RightChildKey: is the key for the right child node. Nil means no child
-  bytes RightChildKey = 3; // @gotags: json:"rightChildKey"
+  bytes RightChildKey = 3;
+  // Key: used for merkle proof generation and verification. It is the compact
+  // representation of the node's key bit sequences
+  bytes Key = 4;
+  // Bitmask: Used for Merkle proof generation and verification. Indicates 
+  // whether each hash requires the left or right sibling, where 0 
+  // represents a left sibling and 1 represents a right sibling
+  int32 Bitmask = 5;
 }

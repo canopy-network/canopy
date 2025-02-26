@@ -2,19 +2,18 @@ package store
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"github.com/alecthomas/units"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
-	"github.com/stretchr/testify/require"
 	math2 "math"
-	math "math/rand"
 	"os"
 	"runtime/debug"
 	"testing"
 	"time"
+
+	"github.com/alecthomas/units"
+	"github.com/canopy-network/canopy/lib"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMaxTransaction(t *testing.T) {
@@ -160,43 +159,6 @@ func TestPrune(t *testing.T) {
 	got, err := readOnly.Get([]byte("key"))
 	require.NoError(t, err)
 	fmt.Println(string(got))
-}
-
-//func TestProof(t *testing.T) {
-//	store, _, cleanup := testStore(t)
-//	defer cleanup()
-//	key, val := []byte("key"), []byte("val")
-//	require.NoError(t, store.Set(key, val))
-//	addRandomValues(t, store)
-//	proof, value, err := store.GetProof(key)
-//	require.NoError(t, err)
-//	require.Equal(t, val, value, fmt.Sprintf("wanted %s got %s", string(val), string(value)))
-//	testProof(t, store, key, value, proof)
-//	// proof of non-inclusion
-//	nonInclusionKey := []byte("lther")
-//	proof, value, err = store.GetProof(nonInclusionKey)
-//	require.NoError(t, err)
-//	require.Nil(t, value, "wanted nil bytes for non-inclusion")
-//	testProof(t, store, nonInclusionKey, value, proof)
-//}
-//
-//func testProof(t *testing.T, store *Store, key, value, proof []byte) {
-//	require.True(t, store.VerifyProof(key, value, proof), "expected valid proof")
-//	require.False(t, store.VerifyProof(key, []byte("other value"), proof), "expected invalid proof; other val")
-//	require.False(t, store.VerifyProof([]byte("other key"), value, proof), "expected invalid proof; other key")
-//}
-
-func addRandomValues(t *testing.T, store *Store) {
-	for i := 0; i < math.Intn(1000); i++ {
-		key := make([]byte, 256)
-		_, err := rand.Read(key)
-		require.NoError(t, err)
-		value := make([]byte, 256)
-		_, err = rand.Read(value)
-		require.NoError(t, err)
-		err = store.Set(key, value)
-		require.NoError(t, err)
-	}
 }
 
 func testStore(t *testing.T) (*Store, *badger.DB, func()) {
