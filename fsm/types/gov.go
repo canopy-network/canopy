@@ -68,8 +68,8 @@ func DefaultParams() *Params {
 			StakePercentForSubsidizedCommittee: 33,
 			MaxSlashPerCommittee:               15,
 			DelegateRewardPercentage:           10,
-			BuyDeadlineBlocks:                  15,
-			BuyOrderFeeMultiplier:              2,
+			LockDeadlineBlocks:                  15,
+			LockOrderFeeMultiplier:              2,
 		},
 		Fee: &FeeParams{
 			SendFee:               10000,
@@ -272,11 +272,11 @@ func (x *ValidatorParams) Check() lib.ErrorI {
 	if x.DelegateRewardPercentage == 0 || x.DelegateRewardPercentage > 100 {
 		return ErrInvalidParam(ParamDelegateRewardPercentage)
 	}
-	if x.BuyDeadlineBlocks == 0 {
-		return ErrInvalidParam(ParamBuyDeadlineBlocks)
+	if x.LockDeadlineBlocks == 0 {
+		return ErrInvalidParam(ParamLockDeadlineBlocks)
 	}
-	if x.BuyOrderFeeMultiplier == 0 {
-		return ErrInvalidParam(ParamBuyOrderFeeMultiplier)
+	if x.LockOrderFeeMultiplier == 0 {
+		return ErrInvalidParam(ParamLockOrderFeeMultiplier)
 	}
 	return nil
 }
@@ -312,10 +312,10 @@ func (x *ValidatorParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.MaxSlashPerCommittee = value
 	case ParamDelegateRewardPercentage:
 		x.DelegateRewardPercentage = value
-	case ParamBuyDeadlineBlocks:
-		x.BuyDeadlineBlocks = value
-	case ParamBuyOrderFeeMultiplier:
-		x.BuyOrderFeeMultiplier = value
+	case ParamLockDeadlineBlocks:
+		x.LockDeadlineBlocks = value
+	case ParamLockOrderFeeMultiplier:
+		x.LockOrderFeeMultiplier = value
 	default:
 		return ErrUnknownParam()
 	}

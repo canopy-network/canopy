@@ -155,8 +155,8 @@ type CertificateResult struct {
 	// slash_recipients: the recipients who are penalized (slashed) based on the quorum certificate
 	// specifically who the committee agreed to slash due to evidence of bad behavior
 	SlashRecipients *SlashRecipients `protobuf:"bytes,2,opt,name=slash_recipients,json=slashRecipients,proto3" json:"slashRecipients"` // @gotags: json:"slashRecipients"
-	// orders: contains information regarding the 'buying side' of sell orders
-	// including actions like 'buy/reserve order' or 'close/complete order'
+	// orders: contains information regarding the 'locking side' of sell orders
+	// including actions like 'lock/reserve order' or 'close/complete order'
 	Orders *Orders `protobuf:"bytes,3,opt,name=orders,proto3" json:"orders,omitempty"`
 	// checkpoint: contains information from the 3rd party chain in order for Canopy to provide Checkpoint-as-a-Service
 	Checkpoint *Checkpoint `protobuf:"bytes,4,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
@@ -340,22 +340,22 @@ func (x *SlashRecipients) GetDoubleSigners() []*DoubleSigner {
 	return nil
 }
 
-// Orders: tracks actions related to 'buyer side' activities for sell orders
-// The committee monitors the 3rd party chain for actions such as intent to buy, funds sent,
+// Orders: tracks actions related to 'locker side' activities for sell orders
+// The committee monitors the 3rd party chain for actions such as intent to lock, funds sent,
 // and funds not sent, and communicates these states to the Canopy chain
 type Orders struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// buy_orders: a list of actions where a buyer expresses an intent to purchase an order,
+	// lock_orders: a list of actions where a locker expresses an intent to purchase an order,
 	// often referred to as 'claiming' the order
-	BuyOrders []*BuyOrder `protobuf:"bytes,1,rep,name=buy_orders,json=buyOrders,proto3" json:"buyOrders"` // @gotags: json:"buyOrders"
+	LockOrders []*LockOrder `protobuf:"bytes,1,rep,name=lock_orders,json=lockOrders,proto3" json:"lockOrders"` // @gotags: json:"lockOrders"
 	// reset_orders: a list of orders where no funds were sent before the deadline,
 	// signaling to Canopy to 'un-claim' the order
 	ResetOrders []uint64 `protobuf:"varint,2,rep,packed,name=reset_orders,json=resetOrders,proto3" json:"resetOrders"` // @gotags: json:"resetOrders"
 	// close_orders: a list of orders where funds were sent,
-	// signaling Canopy to transfer escrowed tokens to the buyer's Canopy address
+	// signaling Canopy to transfer escrowed tokens to the locker's Canopy address
 	CloseOrders []uint64 `protobuf:"varint,3,rep,packed,name=close_orders,json=closeOrders,proto3" json:"closeOrders"` // @gotags: json:"closeOrders"
 }
 
@@ -391,9 +391,9 @@ func (*Orders) Descriptor() ([]byte, []int) {
 	return file_certificate_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *Orders) GetBuyOrders() []*BuyOrder {
+func (x *Orders) GetLockOrders() []*LockOrder {
 	if x != nil {
-		return x.BuyOrders
+		return x.LockOrders
 	}
 	return nil
 }
@@ -412,25 +412,25 @@ func (x *Orders) GetCloseOrders() []uint64 {
 	return nil
 }
 
-// BuyOrder is a buyer expressing an intent to purchase an order, often referred to as 'claiming' the order
-type BuyOrder struct {
+// LockOrder is a locker expressing an intent to purchase an order, often referred to as 'claiming' the order
+type LockOrder struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId uint64 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"orderID"` // @gotags: json:"orderID"
-	// buyer_receive_address: the Canopy address where the tokens may be received
-	BuyerReceiveAddress []byte `protobuf:"bytes,2,opt,name=buyer_receive_address,json=buyerReceiveAddress,proto3" json:"buyerReceiveAddress"` // @gotags: json:"buyerReceiveAddress"
-	// buyer_send_address: the 'counter asset' address where the tokens will be sent from
-	BuyerSendAddress []byte `protobuf:"bytes,3,opt,name=buyer_send_address,json=buyerSendAddress,proto3" json:"buyerSendAddress"` // @gotags: json:"buyerSendAddress"
-	// buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
-	// or the 'intent to buy' will be voided
-	BuyerChainDeadline uint64 `protobuf:"varint,4,opt,name=buyer_chain_deadline,json=buyerChainDeadline,proto3" json:"buyerChainDeadline"` // @gotags: json:"buyerChainDeadline"
+	// locker_receive_address: the Canopy address where the tokens may be received
+	LockerReceiveAddress []byte `protobuf:"bytes,2,opt,name=locker_receive_address,json=lockerReceiveAddress,proto3" json:"lockerReceiveAddress"` // @gotags: json:"lockerReceiveAddress"
+	// locker_send_address: the 'counter asset' address where the tokens will be sent from
+	LockerSendAddress []byte `protobuf:"bytes,3,opt,name=locker_send_address,json=lockerSendAddress,proto3" json:"lockerSendAddress"` // @gotags: json:"lockerSendAddress"
+	// locker_chain_deadline: the 'counter asset' chain height at which the locker must send the 'counter asset' by
+	// or the 'intent to lock' will be voided
+	LockerChainDeadline uint64 `protobuf:"varint,4,opt,name=locker_chain_deadline,json=lockerChainDeadline,proto3" json:"lockerChainDeadline"` // @gotags: json:"lockerChainDeadline"
 }
 
-func (x *BuyOrder) Reset() {
-	*x = BuyOrder{}
+func (x *LockOrder) Reset() {
+	*x = LockOrder{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_certificate_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -438,13 +438,13 @@ func (x *BuyOrder) Reset() {
 	}
 }
 
-func (x *BuyOrder) String() string {
+func (x *LockOrder) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BuyOrder) ProtoMessage() {}
+func (*LockOrder) ProtoMessage() {}
 
-func (x *BuyOrder) ProtoReflect() protoreflect.Message {
+func (x *LockOrder) ProtoReflect() protoreflect.Message {
 	mi := &file_certificate_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -456,35 +456,35 @@ func (x *BuyOrder) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BuyOrder.ProtoReflect.Descriptor instead.
-func (*BuyOrder) Descriptor() ([]byte, []int) {
+// Deprecated: Use LockOrder.ProtoReflect.Descriptor instead.
+func (*LockOrder) Descriptor() ([]byte, []int) {
 	return file_certificate_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *BuyOrder) GetOrderId() uint64 {
+func (x *LockOrder) GetOrderId() uint64 {
 	if x != nil {
 		return x.OrderId
 	}
 	return 0
 }
 
-func (x *BuyOrder) GetBuyerReceiveAddress() []byte {
+func (x *LockOrder) GetLockerReceiveAddress() []byte {
 	if x != nil {
-		return x.BuyerReceiveAddress
+		return x.LockerReceiveAddress
 	}
 	return nil
 }
 
-func (x *BuyOrder) GetBuyerSendAddress() []byte {
+func (x *LockOrder) GetLockerSendAddress() []byte {
 	if x != nil {
-		return x.BuyerSendAddress
+		return x.LockerSendAddress
 	}
 	return nil
 }
 
-func (x *BuyOrder) GetBuyerChainDeadline() uint64 {
+func (x *LockOrder) GetLockerChainDeadline() uint64 {
 	if x != nil {
-		return x.BuyerChainDeadline
+		return x.LockerChainDeadline
 	}
 	return 0
 }
@@ -939,7 +939,7 @@ var file_certificate_proto_goTypes = []interface{}{
 	(*RewardRecipients)(nil),   // 2: types.RewardRecipients
 	(*SlashRecipients)(nil),    // 3: types.SlashRecipients
 	(*Orders)(nil),             // 4: types.Orders
-	(*BuyOrder)(nil),           // 5: types.BuyOrder
+	(*LockOrder)(nil),           // 5: types.LockOrder
 	(*Checkpoint)(nil),         // 6: types.Checkpoint
 	(*PaymentPercents)(nil),    // 7: types.PaymentPercents
 	(*DoubleSigner)(nil),       // 8: types.DoubleSigner
@@ -958,7 +958,7 @@ var file_certificate_proto_depIdxs = []int32{
 	6,  // 6: types.CertificateResult.checkpoint:type_name -> types.Checkpoint
 	7,  // 7: types.RewardRecipients.payment_percents:type_name -> types.PaymentPercents
 	8,  // 8: types.SlashRecipients.double_signers:type_name -> types.DoubleSigner
-	5,  // 9: types.Orders.buy_orders:type_name -> types.BuyOrder
+	5,  // 9: types.Orders.lock_orders:type_name -> types.LockOrder
 	10, // 10: types.CommitteesData.list:type_name -> types.CommitteeData
 	7,  // 11: types.CommitteeData.payment_percents:type_name -> types.PaymentPercents
 	12, // [12:12] is the sub-list for method output_type
@@ -1036,7 +1036,7 @@ func file_certificate_proto_init() {
 			}
 		}
 		file_certificate_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BuyOrder); i {
+			switch v := v.(*LockOrder); i {
 			case 0:
 				return &v.state
 			case 1:
