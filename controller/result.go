@@ -2,10 +2,11 @@ package controller
 
 import (
 	"bytes"
+	"slices"
+
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/fsm/types"
 	"github.com/canopy-network/canopy/lib"
-	"slices"
 )
 
 /* This file implements the 'Certificate Result' logic which ensures the */
@@ -173,8 +174,8 @@ func (c *Controller) addPaymentPercent(toAdd *lib.LotteryWinner, results *lib.Ce
 
 // HandleSwaps() handles the 'buy' side of the sell orders
 func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.CertificateResult, rootChainHeight uint64) {
-	// parse the last block for 'buy orders'
-	buyOrders := c.FSM.ParseBuyOrders(blockResult)
+	// parse the last block for 'lock orders'
+	lockOrders := c.FSM.ParseLockOrders(blockResult)
 	// get orders from the root-Chain
 	orders, err := c.LoadRootChainOrderBook(rootChainHeight)
 	// if an error occurred while loading the orders
@@ -186,7 +187,7 @@ func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.Cert
 	closeOrders, resetOrders := c.FSM.ProcessRootChainOrderBook(orders, blockResult)
 	// add the orders to the certificate result - truncating the 'lock orders' for defensive spam protection
 	results.Orders = &lib.Orders{
-		BuyOrders:   lib.TruncateSlice(buyOrders, 1000),
+		LockOrders:  lib.TruncateSlice(lockOrders, 1000),
 		ResetOrders: resetOrders,
 		CloseOrders: closeOrders,
 	}

@@ -782,17 +782,17 @@ func checkStartEndHeight(proposal GovProposal) lib.ErrorI {
 func checkOrders(orders *lib.Orders) lib.ErrorI {
 	if orders != nil {
 		deDupe := lib.NewDeDuplicator[uint64]()
-		for _, buyOrder := range orders.BuyOrders {
-			if buyOrder == nil {
-				return ErrInvalidBuyOrder()
+		for _, lockOrder := range orders.LockOrders {
+			if lockOrder == nil {
+				return ErrInvalidLockOrder()
 			}
-			if found := deDupe.Found(buyOrder.OrderId); found {
-				return ErrDuplicateBuyOrder()
+			if found := deDupe.Found(lockOrder.OrderId); found {
+				return ErrDuplicateLockOrder()
 			}
-			if err := checkAddress(buyOrder.BuyerReceiveAddress); err != nil {
+			if err := checkAddress(lockOrder.BuyerReceiveAddress); err != nil {
 				return err
 			}
-			if buyOrder.BuyerChainDeadline == 0 {
+			if lockOrder.BuyerChainDeadline == 0 {
 				return ErrInvalidBuyerDeadline()
 			}
 		}

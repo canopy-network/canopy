@@ -33,7 +33,7 @@ const txUnpausePath = "/v1/admin/tx-unpause";
 const txChangeParamPath = "/v1/admin/tx-change-param";
 const txDaoTransfer = "/v1/admin/tx-dao-transfer";
 const txCreateOrder = "/v1/admin/tx-create-order";
-const txBuyOrder = "/v1/admin/tx-buy-order";
+const txLockOrder = "/v1/admin/tx-lock-order";
 const txEditOrder = "/v1/admin/tx-edit-order";
 const txDeleteOrder = "/v1/admin/tx-delete-order";
 const txStartPoll = "/v1/admin/tx-start-poll";
@@ -187,7 +187,7 @@ function newSellOrderTxRequest(
   });
 }
 
-function newBuyOrderTxRequest(address, receiveAddress, orderId, fee, submit, password) {
+function newLockOrderTxRequest(address, receiveAddress, orderId, fee, submit, password) {
   return JSON.stringify({
     address: address,
     receiveAddress: receiveAddress,
@@ -517,11 +517,11 @@ export async function TxCreateOrder(
   );
 }
 
-export async function TxBuyOrder(address, receiveAddress, orderId, fee, password, submit) {
+export async function TxLockOrder(address, receiveAddress, orderId, fee, password, submit) {
   return POST(
     adminRPCURL,
-    txBuyOrder,
-    newBuyOrderTxRequest(address, receiveAddress, Number(orderId), Number(fee), submit, password),
+    txLockOrder,
+    newLockOrderTxRequest(address, receiveAddress, Number(orderId), Number(fee), submit, password),
   );
 }
 

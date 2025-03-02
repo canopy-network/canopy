@@ -22,8 +22,8 @@ func (x *OrderBook) AddOrder(order *SellOrder) (id uint64) {
 	return
 }
 
-// BuyOrder() adds a recipient address and deadline height to the order to 'claim' the order and prevent others from 'claiming it'
-func (x *OrderBook) BuyOrder(orderId int, buyersReceiveAddress, buyersSendAddress []byte, buyerChainDeadlineHeight uint64) ErrorI {
+// LockOrder() adds a recipient address and deadline height to the order to 'claim' the order and prevent others from 'claiming it'
+func (x *OrderBook) LockOrder(orderId int, buyersReceiveAddress, buyersSendAddress []byte, buyerChainDeadlineHeight uint64) ErrorI {
 	order, err := x.GetOrder(orderId)
 	if err != nil {
 		return err

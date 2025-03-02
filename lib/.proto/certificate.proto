@@ -79,9 +79,9 @@ message SlashRecipients {
 // The committee monitors the 3rd party chain for actions such as intent to buy, funds sent,
 // and funds not sent, and communicates these states to the Canopy chain
 message Orders {
-  // buy_orders: a list of actions where a buyer expresses an intent to purchase an order,
+  // lock_orders: a list of actions where a buyer expresses an intent to purchase an order,
   // often referred to as 'claiming' the order
-  repeated BuyOrder buy_orders = 1; // @gotags: json:"buyOrders"
+  repeated LockOrder lock_orders = 1; // @gotags: json:"buyOrders"
   // reset_orders: a list of orders where no funds were sent before the deadline,
   // signaling to Canopy to 'un-claim' the order
   repeated uint64 reset_orders = 2; // @gotags: json:"resetOrders"
@@ -90,8 +90,8 @@ message Orders {
   repeated uint64 close_orders = 3; // @gotags: json:"closeOrders"
 }
 
-// BuyOrder is a buyer expressing an intent to purchase an order, often referred to as 'claiming' the order
-message BuyOrder {
+// LockOrder is a buyer expressing an intent to purchase an order, often referred to as 'claiming' the order
+message LockOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   uint64 order_id = 1; // @gotags: json:"orderID"
   // buyer_receive_address: the Canopy address where the tokens may be received

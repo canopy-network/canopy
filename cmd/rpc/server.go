@@ -117,7 +117,7 @@ const (
 	TxCreateOrderRouteName     = "tx-create-order"
 	TxEditOrderRouteName       = "tx-edit-order"
 	TxDeleteOrderRouteName     = "tx-delete-order"
-	TxBuyOrderRouteName        = "tx-buy-order"
+	TxLockOrderRouteName        = "tx-lock-order"
 	TxStartPollRouteName       = "tx-start-poll"
 	TxVotePollRouteName        = "tx-vote-poll"
 	ResourceUsageRouteName     = "resource-usage"
@@ -208,7 +208,7 @@ var (
 		TxCreateOrderRouteName:     {Method: http.MethodPost, Path: "/v1/admin/tx-create-order", HandlerFunc: TransactionCreateOrder, AdminOnly: true},
 		TxEditOrderRouteName:       {Method: http.MethodPost, Path: "/v1/admin/tx-edit-order", HandlerFunc: TransactionEditOrder, AdminOnly: true},
 		TxDeleteOrderRouteName:     {Method: http.MethodPost, Path: "/v1/admin/tx-delete-order", HandlerFunc: TransactionDeleteOrder, AdminOnly: true},
-		TxBuyOrderRouteName:        {Method: http.MethodPost, Path: "/v1/admin/tx-buy-order", HandlerFunc: TransactionBuyOrder, AdminOnly: true},
+		TxLockOrderRouteName:        {Method: http.MethodPost, Path: "/v1/admin/tx-lock-order", HandlerFunc: TransactionLockOrder, AdminOnly: true},
 		TxSubsidyRouteName:         {Method: http.MethodPost, Path: "/v1/admin/subsidy", HandlerFunc: TransactionSubsidy, AdminOnly: true},
 		TxStartPollRouteName:       {Method: http.MethodPost, Path: "/v1/admin/tx-start-poll", HandlerFunc: TransactionStartPoll, AdminOnly: true},
 		TxVotePollRouteName:        {Method: http.MethodPost, Path: "/v1/admin/tx-vote-poll", HandlerFunc: TransactionVotePoll, AdminOnly: true},
@@ -904,7 +904,7 @@ func TransactionSend(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	})
 }
 
-func GetFeeFromState(w http.ResponseWriter, ptr *txRequest, messageName string, buyOrder ...bool) lib.ErrorI {
+func GetFeeFromState(w http.ResponseWriter, ptr *txRequest, messageName string, lockOrder ...bool) lib.ErrorI {
 	state, ok := getStateMachineWithHeight(0, w)
 	if !ok {
 		return ErrTimeMachine(fmt.Errorf("getStateMachineWithHeight failed"))
@@ -914,12 +914,12 @@ func GetFeeFromState(w http.ResponseWriter, ptr *txRequest, messageName string, 
 	if err != nil {
 		return err
 	}
-	if len(buyOrder) == 1 && buyOrder[0] == true {
+	if len(lockOrder) == 1 && lockOrder[0] == true {
 		params, e := state.GetParamsVal()
 		if e != nil {
 			return e
 		}
-		minimumFee *= params.BuyOrderFeeMultiplier
+		minimumFee *= params.LockOrderFeeMultiplier
 	}
 	if ptr.Fee == 0 {
 		ptr.Fee = minimumFee
@@ -1073,12 +1073,12 @@ func TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, _ httprouter
 	})
 }
 
-func TransactionBuyOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		if err := GetFeeFromState(w, ptr, types.MessageSendName, true); err != nil {
 			return nil, err
 		}
-		return types.NewBuyOrderTx(p, lib.BuyOrder{OrderId: ptr.OrderId, BuyerSendAddress: p.PublicKey().Address().Bytes(), BuyerReceiveAddress: ptr.ReceiveAddress}, conf.NetworkID, conf.ChainId, ptr.Fee, app.ChainHeight())
+		return types.NewLockOrderTx(p, lib.LockOrder{OrderId: ptr.OrderId, BuyerSendAddress: p.PublicKey().Address().Bytes(), BuyerReceiveAddress: ptr.ReceiveAddress}, conf.NetworkID, conf.ChainId, ptr.Fee, app.ChainHeight())
 	})
 }
 

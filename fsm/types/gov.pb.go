@@ -360,8 +360,8 @@ type ValidatorParams struct {
 	DelegateRewardPercentage uint64 `protobuf:"varint,14,opt,name=delegate_reward_percentage,json=delegateRewardPercentage,proto3" json:"delegateRewardPercentage"` // @gotags: json:"delegateRewardPercentage"
 	// buy_deadline_blocks: amount of blocks a 'buyer' has to complete an order they 'reserved'
 	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buyDeadlineBlocks"` // @gotags: json:"buyDeadlineBlocks"
-	// buy_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a buy order
-	BuyOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=buy_order_fee_multiplier,json=buyOrderFeeMultiplier,proto3" json:"buyOrderFeeMultiplier"` // @gotags: json:"buyOrderFeeMultiplier"
+	// lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
+	LockOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=lock_order_fee_multiplier,json=lockOrderFeeMultiplier,proto3" json:"lockOrderFeeMultiplier"` // @gotags: json:"lockOrderFeeMultiplier"
 }
 
 func (x *ValidatorParams) Reset() {
@@ -501,9 +501,9 @@ func (x *ValidatorParams) GetBuyDeadlineBlocks() uint64 {
 	return 0
 }
 
-func (x *ValidatorParams) GetBuyOrderFeeMultiplier() uint64 {
+func (x *ValidatorParams) GetLockOrderFeeMultiplier() uint64 {
 	if x != nil {
-		return x.BuyOrderFeeMultiplier
+		return x.LockOrderFeeMultiplier
 	}
 	return 0
 }

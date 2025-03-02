@@ -53,7 +53,7 @@ func init() {
 	adminCmd.AddCommand(txCreateOrderCmd)
 	adminCmd.AddCommand(txEditOrderCmd)
 	adminCmd.AddCommand(txDeleteOrderCmd)
-	adminCmd.AddCommand(txBuyOrderCmd)
+	adminCmd.AddCommand(txLockOrderCmd)
 	adminCmd.AddCommand(txStartPollCmd)
 	adminCmd.AddCommand(approveTxVotePoll)
 	adminCmd.AddCommand(rejectTxVotePoll)
@@ -241,12 +241,12 @@ var (
 		},
 	}
 
-	txBuyOrderCmd = &cobra.Command{
-		Use:   "tx-buy-order <address or nickname> <canopy-receive-address> <order-id> --fee=10000 --simulate=true",
-		Short: "buy an existing sell order - use the simulate flag to generate json only",
+	txLockOrderCmd = &cobra.Command{
+		Use:   "tx-lock-order <address or nickname> <canopy-receive-address> <order-id> --fee=10000 --simulate=true",
+		Short: "lock an existing sell order - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeTxResultToConsole(client.TxBuyOrder(argGetAddrOrNickname(args[0]), argGetAddr(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
+			writeTxResultToConsole(client.TxLockOrder(argGetAddrOrNickname(args[0]), argGetAddr(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
 		},
 	}
 

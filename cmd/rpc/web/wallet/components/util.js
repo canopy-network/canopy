@@ -315,7 +315,7 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
             ];
         case "create_order":
             return [a.account, a.chainId, a.amount, a.receiveAmount, a.receiveAddress, a.memo, a.fee, a.password];
-        case "buy_order":
+        case "lock_order":
             return [a.account, a.buyersReceiveAddress, a.orderId, a.fee, a.password];
         case "edit_order":
             return [

@@ -139,7 +139,7 @@ const (
 	CodeNonNilCertResults               ErrorCode = 40
 	CodeInvalidMemo                     ErrorCode = 41
 	CodeNilCertResult                   ErrorCode = 42
-	CodeNilBuyOrder                     ErrorCode = 43
+	CodeNilLockOrder                     ErrorCode = 43
 	CodeInvalidBuyerReceiveAddress      ErrorCode = 44
 	CodeEmptyTransaction                ErrorCode = 45
 	CodeHashSize                        ErrorCode = 46
@@ -241,8 +241,8 @@ const (
 	CodeUnauthorizedOrderChange           ErrorCode = 75
 	CodeMinimumOrderSize                  ErrorCode = 76
 	CodeOrderAlreadyAccepted              ErrorCode = 77
-	CodeInvalidBuyOrder                   ErrorCode = 78
-	CodeDuplicateBuyOrder                 ErrorCode = 79
+	CodeInvalidLockOrder                   ErrorCode = 78
+	CodeDuplicateLockOrder                 ErrorCode = 79
 	CodeInvalidBuyerDeadline              ErrorCode = 80
 	CodeInvalidCloseOrder                 ErrorCode = 81
 	CodeInvalidResetOrder                 ErrorCode = 82
@@ -683,8 +683,8 @@ func ErrNonNilCertResults() ErrorI {
 	return NewError(CodeNonNilCertResults, MainModule, "the certificate results is not empty")
 }
 
-func ErrNilBuyOrder() ErrorI {
-	return NewError(CodeNilBuyOrder, MainModule, "buy order is nil")
+func ErrNilLockOrder() ErrorI {
+	return NewError(CodeNilLockOrder, MainModule, "lock order is nil")
 }
 
 func ErrInvalidBuyerReceiveAddress() ErrorI {

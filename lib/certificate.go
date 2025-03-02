@@ -609,20 +609,20 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		// exit with no error
 		return
 	}
-	// for each buy order
-	for _, buy := range x.BuyOrders {
-		// if the buy order is empty
-		if buy == nil {
+	// for each lock order
+	for _, lock := range x.LockOrders {
+		// if the lock order is empty
+		if lock == nil {
 			// exit with empty error
-			return ErrNilBuyOrder()
+			return ErrNilLockOrder()
 		}
 		// ensure the sending address actually has some bytes
-		if len(buy.BuyerSendAddress) == 0 {
+		if len(lock.BuyerSendAddress) == 0 {
 			// exit with address error
 			return ErrInvalidBuyerSendAddress()
 		}
 		// ensure the receive address is exactly 20 bytes
-		if len(buy.BuyerReceiveAddress) != crypto.AddressSize {
+		if len(lock.BuyerReceiveAddress) != crypto.AddressSize {
 			// exit with address error
 			return ErrInvalidBuyerReceiveAddress()
 		}
@@ -673,15 +673,15 @@ func (x *Orders) Equals(y *Orders) bool {
 		// exit with 'unequal'
 		return false
 	}
-	// if the buy orders lists are not equal size
-	if len(x.BuyOrders) != len(y.BuyOrders) {
+	// if the lock orders lists are not equal size
+	if len(x.LockOrders) != len(y.LockOrders) {
 		// exit with 'unequal'
 		return false
 	}
-	// for each buy order
-	for i, buyOrder := range x.BuyOrders {
-		// if the individual buy orders are unequal
-		if !buyOrder.Equals(y.BuyOrders[i]) {
+	// for each lock order
+	for i, lockOrder := range x.LockOrders {
+		// if the individual lock orders are unequal
+		if !lockOrder.Equals(y.LockOrders[i]) {
 			// exit with 'unequal'
 			return false
 		}
@@ -690,9 +690,9 @@ func (x *Orders) Equals(y *Orders) bool {
 	return true
 }
 
-// Equals() compares two BuyOrders for equality
-func (x *BuyOrder) Equals(y *BuyOrder) bool {
-	// if both the buy orders are empty
+// Equals() compares two LockOrders for equality
+func (x *LockOrder) Equals(y *LockOrder) bool {
+	// if both the lock orders are empty
 	if x == nil && y == nil {
 		// exit with 'equal'
 		return true
@@ -721,8 +721,8 @@ func (x *BuyOrder) Equals(y *BuyOrder) bool {
 	return x.BuyerChainDeadline == y.BuyerChainDeadline
 }
 
-// buyOrderJSON implements the json.Marshaller & json.Unmarshaler interfaces for BuyOrder
-type buyOrderJSON struct {
+// lockOrderJSON implements the json.Marshaller & json.Unmarshaler interfaces for LockOrder
+type lockOrderJSON struct {
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId uint64 `json:"order_id,omitempty"`
 	// buyers_send_address: the Canopy address where the tokens may be received
@@ -734,10 +734,10 @@ type buyOrderJSON struct {
 	BuyerChainDeadline uint64 `json:"buyer_chain_deadline,omitempty"`
 }
 
-// MarshalJSON() implements the json.Marshaller interface for BuyOrder
-func (x BuyOrder) MarshalJSON() ([]byte, error) {
-	// convert the buy order to json bytes using the json object
-	return json.Marshal(&buyOrderJSON{
+// MarshalJSON() implements the json.Marshaller interface for LockOrder
+func (x LockOrder) MarshalJSON() ([]byte, error) {
+	// convert the lock order to json bytes using the json object
+	return json.Marshal(&lockOrderJSON{
 		OrderId:             x.OrderId,
 		BuyersSendAddress:   x.BuyerSendAddress,
 		BuyerReceiveAddress: x.BuyerReceiveAddress,
@@ -746,16 +746,16 @@ func (x BuyOrder) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON() implements the json.Unmarshaler interface for BuyOrder
-func (x *BuyOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
+func (x *LockOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// create a new json object reference to ensure a non nil result
-	j := new(buyOrderJSON)
+	j := new(lockOrderJSON)
 	// populate the json object ref with json bytes
 	if err = json.Unmarshal(jsonBytes, j); err != nil {
 		// exit with error
 		return
 	}
 	// populate the underlying structure using the json object
-	*x = BuyOrder{
+	*x = LockOrder{
 		OrderId:             j.OrderId,
 		BuyerReceiveAddress: j.BuyerReceiveAddress,
 		BuyerSendAddress:    j.BuyersSendAddress,

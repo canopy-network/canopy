@@ -19,8 +19,8 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 		notFound        bool
 	}{
 		{
-			name:   "buy order already accepted",
-			detail: "the buy order cannot be claimed as its already reserved",
+			name:   "lock order already accepted",
+			detail: "the lock order cannot be claimed as its already reserved",
 			preset: []*lib.SellOrder{
 				{
 					Committee:           lib.CanopyChainId,
@@ -31,7 +31,7 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 				},
 			},
 			orders: &lib.Orders{
-				BuyOrders: []*lib.BuyOrder{
+				LockOrders: []*lib.LockOrder{
 					{
 						OrderId:             0,
 						BuyerReceiveAddress: newTestAddressBytes(t, 1),
@@ -100,7 +100,7 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 				},
 			},
 			orders: &lib.Orders{
-				BuyOrders: []*lib.BuyOrder{
+				LockOrders: []*lib.LockOrder{
 					{
 						OrderId:             0,
 						BuyerReceiveAddress: newTestAddressBytes(t, 1),
@@ -127,18 +127,18 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 			}
 			// execute the function call
 			sm.HandleCommitteeSwaps(test.orders, lib.CanopyChainId)
-			// validate the buy orders
-			for _, buyOrder := range test.orders.BuyOrders {
+			// validate the lock orders
+			for _, lockOrder := range test.orders.LockOrders {
 				// get the order
-				order, e := sm.GetOrder(buyOrder.OrderId, lib.CanopyChainId)
+				order, e := sm.GetOrder(lockOrder.OrderId, lib.CanopyChainId)
 				require.NoError(t, e)
-				// if the buy order is already accepted
+				// if the lock order is already accepted
 				if test.alreadyAccepted {
-					require.NotEqual(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
+					require.NotEqual(t, lockOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
 				} else {
 					// validate the update of the 'buy' fields
-					require.Equal(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
-					require.Equal(t, buyOrder.BuyerChainDeadline, order.BuyerChainDeadline)
+					require.Equal(t, lockOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
+					require.Equal(t, lockOrder.BuyerChainDeadline, order.BuyerChainDeadline)
 				}
 			}
 			// validate the reset orders
@@ -347,18 +347,18 @@ func TestEditOrder(t *testing.T) {
 	}
 }
 
-func TestBuyOrder(t *testing.T) {
+func TestLockOrder(t *testing.T) {
 	tests := []struct {
 		name   string
 		detail string
 		preset *lib.SellOrder
-		order  *lib.BuyOrder
+		order  *lib.LockOrder
 		error  string
 	}{
 		{
-			name:   "buy order not found",
-			detail: "the buy order cannot be found",
-			order: &lib.BuyOrder{
+			name:   "lock order not found",
+			detail: "the lock order cannot be found",
+			order: &lib.LockOrder{
 
 				OrderId:             0,
 				BuyerReceiveAddress: newTestAddressBytes(t, 1),
@@ -367,8 +367,8 @@ func TestBuyOrder(t *testing.T) {
 			error: "not found",
 		},
 		{
-			name:   "buy order already accepted",
-			detail: "the buy order cannot be claimed as its already reserved",
+			name:   "lock order already accepted",
+			detail: "the lock order cannot be claimed as its already reserved",
 			preset: &lib.SellOrder{
 				Committee:           lib.CanopyChainId,
 				AmountForSale:       100,
@@ -376,7 +376,7 @@ func TestBuyOrder(t *testing.T) {
 				BuyerReceiveAddress: newTestAddressBytes(t),
 				SellersSendAddress:  newTestAddressBytes(t),
 			},
-			order: &lib.BuyOrder{
+			order: &lib.LockOrder{
 
 				OrderId:             0,
 				BuyerReceiveAddress: newTestAddressBytes(t, 1),
@@ -385,15 +385,15 @@ func TestBuyOrder(t *testing.T) {
 			error: "order already accepted",
 		},
 		{
-			name:   "buy order",
-			detail: "successful buy order without error",
+			name:   "lock order",
+			detail: "successful lock order without error",
 			preset: &lib.SellOrder{
 				Committee:          lib.CanopyChainId,
 				AmountForSale:      100,
 				RequestedAmount:    100,
 				SellersSendAddress: newTestAddressBytes(t),
 			},
-			order: &lib.BuyOrder{
+			order: &lib.LockOrder{
 				OrderId:             0,
 				BuyerReceiveAddress: newTestAddressBytes(t, 1),
 				BuyerChainDeadline:  100,
@@ -410,7 +410,7 @@ func TestBuyOrder(t *testing.T) {
 				require.NoError(t, err)
 			}
 			// execute the function call
-			err := sm.BuyOrder(test.order, lib.CanopyChainId)
+			err := sm.LockOrder(test.order, lib.CanopyChainId)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -499,7 +499,7 @@ func TestCloseOrder(t *testing.T) {
 				SellersSendAddress: newTestAddressBytes(t),
 			},
 			order: 0,
-			error: "buy order invalid",
+			error: "lock order invalid",
 		},
 		{
 			name:   "close order",

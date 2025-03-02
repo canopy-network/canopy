@@ -272,8 +272,8 @@ func ErrInvalidOrders() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidOrders, lib.StateMachineModule, "orders are invalid")
 }
 
-func ErrInvalidBuyOrder() lib.ErrorI {
-	return lib.NewError(lib.CodeInvalidBuyOrder, lib.StateMachineModule, "buy order invalid")
+func ErrInvalidLockOrder() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidLockOrder, lib.StateMachineModule, "lock order invalid")
 }
 
 func InvalidSellOrder() lib.ErrorI {
@@ -288,12 +288,12 @@ func ErrInvalidResetOrder() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidResetOrder, lib.StateMachineModule, "reset order invalid")
 }
 
-func ErrDuplicateBuyOrder() lib.ErrorI {
-	return lib.NewError(lib.CodeDuplicateBuyOrder, lib.StateMachineModule, "buy order is a duplicate")
+func ErrDuplicateLockOrder() lib.ErrorI {
+	return lib.NewError(lib.CodeDuplicateLockOrder, lib.StateMachineModule, "lock order is a duplicate")
 }
 
 func ErrInvalidBuyerDeadline() lib.ErrorI {
-	return lib.NewError(lib.CodeInvalidBuyerDeadline, lib.StateMachineModule, "buy order deadline height is invalid")
+	return lib.NewError(lib.CodeInvalidBuyerDeadline, lib.StateMachineModule, "lock order deadline height is invalid")
 }
 
 func ErrInvalidCheckpoint() lib.ErrorI {

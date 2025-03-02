@@ -142,8 +142,8 @@ func NewDeleteOrderTx(from crypto.PrivateKeyI, orderId, committeeId uint64, netw
 	}, networkId, chainId, fee, height, memo)
 }
 
-// NewBuyOrderTx() reserves a sell order using a send-tx and the memo field
-func NewBuyOrderTx(from crypto.PrivateKeyI, order lib.BuyOrder, networkId, chainId, fee, height uint64) (lib.TransactionI, lib.ErrorI) {
+// NewLockOrderTx() reserves a sell order using a send-tx and the memo field
+func NewLockOrderTx(from crypto.PrivateKeyI, order lib.LockOrder, networkId, chainId, fee, height uint64) (lib.TransactionI, lib.ErrorI) {
 	jsonBytes, err := lib.MarshalJSON(order)
 	if err != nil {
 		return nil, err

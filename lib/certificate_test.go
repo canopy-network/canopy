@@ -3,9 +3,10 @@ package lib
 import (
 	"bytes"
 	"encoding/json"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestCertificateCheckBasic(t *testing.T) {
@@ -289,8 +290,8 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 			error: "double signer is invalid",
 		},
 		{
-			name:   "nil buy order",
-			detail: "a buy order cannot be nil",
+			name:   "nil lock order",
+			detail: "a lock order cannot be nil",
 			result: &CertificateResult{
 				RewardRecipients: &RewardRecipients{
 					PaymentPercents: []*PaymentPercents{{
@@ -300,16 +301,16 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 					}},
 				},
 				Orders: &Orders{
-					BuyOrders: []*BuyOrder{
+					LockOrders: []*LockOrder{
 						nil,
 					},
 				},
 			},
-			error: "buy order is nil",
+			error: "lock order is nil",
 		},
 		{
-			name:   "invalid buy order",
-			detail: "a buy order send address is invalid",
+			name:   "invalid lock order",
+			detail: "a lock order send address is invalid",
 			result: &CertificateResult{
 				RewardRecipients: &RewardRecipients{
 					PaymentPercents: []*PaymentPercents{{
@@ -319,7 +320,7 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 					}},
 				},
 				Orders: &Orders{
-					BuyOrders: []*BuyOrder{
+					LockOrders: []*LockOrder{
 						{
 							OrderId:             0,
 							BuyerSendAddress:    nil,
@@ -343,7 +344,7 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 					}},
 				},
 				Orders: &Orders{
-					BuyOrders: []*BuyOrder{
+					LockOrders: []*LockOrder{
 						{
 							OrderId:             0,
 							BuyerSendAddress:    newTestAddressBytes(t),
@@ -398,7 +399,7 @@ func TestCheckpointHash(t *testing.T) {
 			}},
 		},
 		Orders: &Orders{
-			BuyOrders: []*BuyOrder{
+			LockOrders: []*LockOrder{
 				{
 					OrderId:             0,
 					BuyerReceiveAddress: newTestAddressBytes(t),

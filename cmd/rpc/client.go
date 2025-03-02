@@ -629,7 +629,7 @@ func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId, chainId uint64,
 	return c.transactionRequest(TxDeleteOrderRouteName, txReq)
 }
 
-func (c *Client) TxBuyOrder(from AddrOrNickname, receiveAddress string, orderId uint64,
+func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId uint64,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	receiveHex, err := lib.NewHexBytesFromString(receiveAddress)
 	if err != nil {
@@ -646,7 +646,7 @@ func (c *Client) TxBuyOrder(from AddrOrNickname, receiveAddress string, orderId 
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxBuyOrderRouteName, txReq)
+	return c.transactionRequest(TxLockOrderRouteName, txReq)
 }
 
 func (c *Client) TxStartPoll(from AddrOrNickname, pollJSON json.RawMessage,

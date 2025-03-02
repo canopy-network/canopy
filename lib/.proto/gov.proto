@@ -118,8 +118,8 @@ message ValidatorParams {
   uint64 delegate_reward_percentage = 14; // @gotags: json:"delegateRewardPercentage"
   // buy_deadline_blocks: amount of blocks a 'buyer' has to complete an order they 'reserved'
   uint64 buy_deadline_blocks = 15; // @gotags: json:"buyDeadlineBlocks"
-  // buy_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a buy order
-  uint64 buy_order_fee_multiplier = 16; // @gotags: json:"buyOrderFeeMultiplier"
+  // lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
+  uint64 lock_order_fee_multiplier = 16; // @gotags: json:"lockOrderFeeMultiplier"
 }
 
 // FeeParams is the parameter space that defines various amounts for transaction fees

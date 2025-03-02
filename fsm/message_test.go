@@ -1872,7 +1872,7 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 			},
 		},
 		Orders: &lib.Orders{
-			BuyOrders: []*lib.BuyOrder{{
+			LockOrders: []*lib.LockOrder{{
 				OrderId:             0,
 				BuyerSendAddress:    newTestAddressBytes(t),
 				BuyerReceiveAddress: newTestAddressBytes(t),
@@ -2057,16 +2057,16 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 				require.ErrorContains(t, err, test.error)
 				return
 			}
-			// 1) validate the 'buy order'
+			// 1) validate the 'lock order'
 			func() {
 				order, e := sm.GetOrder(0, lib.CanopyChainId+1)
 				require.NoError(t, e)
-				// convenience variable for buy order
-				buyOrder := test.msg.Qc.Results.Orders.BuyOrders[0]
+				// convenience variable for lock order
+				lockOrder := test.msg.Qc.Results.Orders.LockOrders[0]
 				// validate the receipt address was set
-				require.Equal(t, buyOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
+				require.Equal(t, lockOrder.BuyerReceiveAddress, order.BuyerReceiveAddress)
 				// validate the deadline was set
-				require.Equal(t, buyOrder.BuyerChainDeadline, order.BuyerChainDeadline)
+				require.Equal(t, lockOrder.BuyerChainDeadline, order.BuyerChainDeadline)
 			}()
 			// 2) validate the 'reset order'
 			func() {

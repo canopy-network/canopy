@@ -64,7 +64,7 @@ func TestAddOrder(t *testing.T) {
 	}
 }
 
-func TestBuyOrder(t *testing.T) {
+func TestLockOrder(t *testing.T) {
 	tests := []struct {
 		name                     string
 		initialOrders            []*SellOrder
@@ -124,7 +124,7 @@ func TestBuyOrder(t *testing.T) {
 			// init the OrderBook
 			orderBook := &OrderBook{Orders: test.initialOrders}
 			// execute the function call
-			err := orderBook.BuyOrder(
+			err := orderBook.LockOrder(
 				test.orderId,
 				test.buyersReceiveAddress,
 				test.buyersSendAddress,
