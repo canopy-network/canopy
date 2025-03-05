@@ -60,7 +60,7 @@
       "maxSlashPerCommittee": 15,
       "delegateRewardPercentage": 10,
       "buyDeadlineBlocks": 15,
-      "buyOrderFeeMultiplier": 2
+      "lockOrderFeeMultiplier": 2
     },
     "fee": {
       "sendFee": 10000,

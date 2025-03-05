@@ -697,7 +697,7 @@ func (x *LockOrder) Equals(y *LockOrder) bool {
 		// exit with 'equal'
 		return true
 	}
-	// if either of the buy orders are empty
+	// if either of the lock orders are empty
 	if x == nil || y == nil {
 		// exit with 'unequal'
 		return false
@@ -745,7 +745,7 @@ func (x LockOrder) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON() implements the json.Unmarshaler interface for BuyOrder
+// UnmarshalJSON() implements the json.Unmarshaler interface for LockOrder
 func (x *LockOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// create a new json object reference to ensure a non nil result
 	j := new(lockOrderJSON)

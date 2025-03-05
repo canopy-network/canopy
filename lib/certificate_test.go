@@ -333,8 +333,8 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 			error: "invalid buyer send address",
 		},
 		{
-			name:   "invalid buy order",
-			detail: "a buy order receive address is invalid",
+			name:   "invalid lock order",
+			detail: "a lock order receive address is invalid",
 			result: &CertificateResult{
 				RewardRecipients: &RewardRecipients{
 					PaymentPercents: []*PaymentPercents{{
