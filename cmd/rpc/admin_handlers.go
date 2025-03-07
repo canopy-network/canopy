@@ -338,8 +338,8 @@ func (s *Server) TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
-// TransactionBuyOrder buys an existing sell order
-func (s *Server) TransactionBuyOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// TransactionLockOrder locks an existing sell order
+func (s *Server) TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction

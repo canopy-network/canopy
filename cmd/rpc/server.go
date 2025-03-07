@@ -133,37 +133,104 @@ func (s *Server) updatePollResults() {
 				return
 			}
 
-			// create a new read-only state machine for the latest block
-			sm, err := s.controller.FSM.TimeMachine(0)
-			if err != nil {
-				return err
-			}
+			s.readOnlyState(0, func(sm *fsm.StateMachine) lib.ErrorI {
+				// cleanup old polls
+				p.Cleanup(sm.Height())
+				if err := p.SaveToFile(s.config.DataDirPath); err != nil {
+					return err
+				}
 
-			// safely discard state machine
-			defer sm.Discard()
+				// convert the poll to a result
+				result, err := sm.PollsToResults(p)
+				if err != nil || len(result) == 0 {
+					return err
+				}
 
-			// cleanup old polls
-			p.Cleanup(sm.Height())
-			if err = p.SaveToFile(s.config.DataDirPath); err != nil {
-				return
-			}
+				// make results available to RPC clients
+				s.pollMux.Lock()
+				s.poll = result
+				s.pollMux.Unlock()
+				return nil
+			})
+			return nil
 
-			// convert the poll to a result
-			result, err := sm.PollsToResults(p)
-			if err != nil || len(result) == 0 {
-				return
-			}
-
-			// make results available to RPC clients
-			s.pollMux.Lock()
-			s.poll = result
-			s.pollMux.Unlock()
-			return
 		}(); err != nil {
 			s.logger.Error(err.Error())
 		}
 		time.Sleep(time.Second * 3)
 	}
+}
+
+// updateRootChainHeight queries and updates the root chain height
+func updateRootChainHeight(s *Server, state *fsm.StateMachine, rootChainHeight *uint64) (err lib.ErrorI) {
+	// get the consensus params from the app
+	consParams, err := state.GetParamsCons()
+	if err != nil {
+		return
+	}
+	// get the url for the root chain as set by the state
+	var rootChainUrl string
+	for _, chain := range s.config.RootChain {
+		if chain.ChainId == consParams.RootChainId {
+			rootChainUrl = chain.Url
+		}
+	}
+	// check if root chain url isn't empty
+	if rootChainUrl == "" {
+		s.logger.Errorf("Config.JSON missing RootChainID=%d failed with", consParams.RootChainId)
+		return lib.ErrEmptyChainId()
+	}
+	// create a rpc client
+	rpcClient := NewClient(rootChainUrl, "", "")
+	// set the apps callbacks
+	s.controller.RootChainInfo.RemoteCallbacks = &lib.RemoteCallbacks{
+		Checkpoint:            rpcClient.Checkpoint,
+		ValidatorSet:          rpcClient.ValidatorSet,
+		IsValidDoubleSigner:   rpcClient.IsValidDoubleSigner,
+		Transaction:           rpcClient.Transaction,
+		LastProposers:         rpcClient.LastProposers,
+		MinimumEvidenceHeight: rpcClient.MinimumEvidenceHeight,
+		CommitteeData:         rpcClient.CommitteeData,
+		Lottery:               rpcClient.Lottery,
+		Orders:                rpcClient.Orders,
+	}
+	// query the base chain height
+	height, err := rpcClient.Height()
+	if err != nil {
+		s.logger.Errorf("GetRootChainHeight failed with err")
+		return err
+	}
+	// check if a new height was received
+	if *height <= *rootChainHeight {
+		return
+	}
+	// update the base chain height
+	rootChainHeight = height
+	// if a new height received
+	s.logger.Infof("New RootChain height %d detected!", rootChainHeight)
+	// execute the requests to get the base chain information
+	for retry := lib.NewRetry(s.config.RootChainPollMS, 3); retry.WaitAndDoRetry(); {
+		// retrieve the root-Chain info
+		rootChainInfo, e := rpcClient.RootChainInfo(*rootChainHeight, s.config.ChainId)
+		if e == nil {
+			// update the controller with new root-Chain info
+			s.controller.UpdateRootChainInfo(rootChainInfo)
+			s.logger.Info("Updated RootChain information")
+			break
+		}
+		s.logger.Errorf("GetRootChainInfo failed with err %s", e.Error())
+		// update with empty root-Chain info to stop consensus
+		s.controller.UpdateRootChainInfo(&lib.RootChainInfo{
+			Height:           *rootChainHeight,
+			ValidatorSet:     lib.ValidatorSet{},
+			LastValidatorSet: lib.ValidatorSet{},
+			LastProposers:    &lib.Proposers{},
+			LotteryWinner:    &lib.LotteryWinner{},
+			Orders:           &lib.OrderBook{},
+		})
+	}
+	return
+
 }
 
 // pollRootChainInfo() retrieves information from the root-Chain required for consensus
@@ -176,82 +243,11 @@ func (s *Server) pollRootChainInfo() {
 	ticker := time.NewTicker(time.Duration(s.config.RootChainPollMS) * time.Millisecond)
 	for range ticker.C {
 		if err := func() (err error) {
-			// Create a new read-only state machine for the latest block
-			state, err := s.controller.FSM.TimeMachine(0)
-			if err != nil {
-				return
-			}
 
-			// Safely close state machine
-			defer state.Discard()
-
-			// get the consensus params from the app
-			consParams, err := state.GetParamsCons()
-			if err != nil {
-				return
-			}
-
-			// get the url for the root chain as set by the state
-			var rootChainUrl string
-			for _, chain := range s.config.RootChain {
-				if chain.ChainId == consParams.RootChainId {
-					rootChainUrl = chain.Url
-				}
-			}
-			// check if root chain url isn't empty
-			if rootChainUrl == "" {
-				s.logger.Errorf("Config.JSON missing RootChainID=%d failed with", consParams.RootChainId)
-				return lib.ErrEmptyChainId()
-			}
-			// create a rpc client
-			rpcClient := NewClient(rootChainUrl, "", "")
-			// set the apps callbacks
-			s.controller.RootChainInfo.RemoteCallbacks = &lib.RemoteCallbacks{
-				Checkpoint:            rpcClient.Checkpoint,
-				ValidatorSet:          rpcClient.ValidatorSet,
-				IsValidDoubleSigner:   rpcClient.IsValidDoubleSigner,
-				Transaction:           rpcClient.Transaction,
-				LastProposers:         rpcClient.LastProposers,
-				MinimumEvidenceHeight: rpcClient.MinimumEvidenceHeight,
-				CommitteeData:         rpcClient.CommitteeData,
-				Lottery:               rpcClient.Lottery,
-				Orders:                rpcClient.Orders,
-			}
-			// query the base chain height
-			height, err := rpcClient.Height()
-			if err != nil {
-				s.logger.Errorf("GetRootChainHeight failed with err")
-				return err
-			}
-			// check if a new height was received
-			if *height <= rootChainHeight {
-				return
-			}
-			// update the base chain height
-			rootChainHeight = *height
-			// if a new height received
-			s.logger.Infof("New RootChain height %d detected!", rootChainHeight)
-			// execute the requests to get the base chain information
-			for retry := lib.NewRetry(s.config.RootChainPollMS, 3); retry.WaitAndDoRetry(); {
-				// retrieve the root-Chain info
-				rootChainInfo, e := rpcClient.RootChainInfo(rootChainHeight, s.config.ChainId)
-				if e == nil {
-					// update the controller with new root-Chain info
-					s.controller.UpdateRootChainInfo(rootChainInfo)
-					s.logger.Info("Updated RootChain information")
-					break
-				}
-				s.logger.Errorf("GetRootChainInfo failed with err %s", e.Error())
-				// update with empty root-Chain info to stop consensus
-				s.controller.UpdateRootChainInfo(&lib.RootChainInfo{
-					Height:           rootChainHeight,
-					ValidatorSet:     lib.ValidatorSet{},
-					LastValidatorSet: lib.ValidatorSet{},
-					LastProposers:    &lib.Proposers{},
-					LotteryWinner:    &lib.LotteryWinner{},
-					Orders:           &lib.OrderBook{},
-				})
-			}
+			// Initialize a read-only state machine and use it to query the root chain height
+			s.readOnlyState(0, func(state *fsm.StateMachine) (err lib.ErrorI) {
+				return updateRootChainHeight(s, state, &rootChainHeight)
+			})
 			return
 		}(); err != nil {
 			s.logger.Warnf(err.Error())
@@ -302,36 +298,76 @@ func (s *Server) getStateMachineWithHeight(height uint64, w http.ResponseWriter)
 
 // getFeeFromState populates txRequest with the fee for the transaction type specified in messageName
 func (s *Server) getFeeFromState(w http.ResponseWriter, ptr *txRequest, messageName string, lockorder ...bool) lib.ErrorI {
-	// Get a read-only state machine for the latest block
-	state, ok := s.getStateMachineWithHeight(0, w)
-	if !ok {
-		return lib.ErrTimeMachine(fmt.Errorf("getStateMachineWithHeight failed"))
+	return s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
+		// Get fee for transaction
+		minimumFee, err := state.GetFeeForMessageName(messageName)
+		if err != nil {
+			return err
+		}
+		// Apply the fee multiplier for buy orders
+		isLockorder := len(lockorder) == 1 && lockorder[0]
+		if isLockorder {
+			// Get governance params
+			params, e := state.GetParamsVal()
+			if e != nil {
+				return e
+			}
+			// Apply the fee multiplier
+			minimumFee *= params.LockOrderFeeMultiplier
+		}
+		// Apply a minimum fee in the case of 0 fees
+		if ptr.Fee == 0 {
+			ptr.Fee = minimumFee
+		}
+		// Error if fee below minimum
+		if ptr.Fee < minimumFee {
+			return types.ErrTxFeeBelowStateLimit()
+		}
+		return nil
+	})
+}
+
+// readOnlyStateFromHeightParams is a helper function to safely wrap TimeMachine access
+func (s *Server) readOnlyStateFromHeightParams(w http.ResponseWriter, r *http.Request, ptr queryWithHeight, callback func(s *fsm.StateMachine) lib.ErrorI) (err lib.ErrorI) {
+
+	// Unmarshal request parameters
+	if ok := unmarshal(w, r, ptr); !ok {
+		return
 	}
-	// Safely close state machine
+
+	// Create a new TimeMachine at specified height
+	state, err := s.controller.FSM.TimeMachine(ptr.GetHeight())
+	if err != nil {
+		return lib.ErrTimeMachine(err)
+	}
+
+	// Discard state, ensuring proper cleanup is performed
 	defer state.Discard()
-	// Get fee for transaction
-	minimumFee, err := state.GetFeeForMessageName(messageName)
+
+	// Execute the provided callback function with the read-only state
+	err = callback(state)
 	if err != nil {
 		return err
 	}
-	// Apply the fee multiplier for buy orders
-	isLockorder := len(lockorder) == 1 && lockorder[0]
-	if isLockorder {
-		// Get governance params
-		params, e := state.GetParamsVal()
-		if e != nil {
-			return e
-		}
-		// Apply the fee multiplier
-		minimumFee *= params.LockOrderFeeMultiplier
+	return nil
+}
+
+// readOnlyState is a helper function to safely wrap TimeMachine access
+func (s *Server) readOnlyState(height uint64, callback func(s *fsm.StateMachine) lib.ErrorI) lib.ErrorI {
+
+	// Create a new TimeMachine at specified height
+	state, err := s.controller.FSM.TimeMachine(height)
+	if err != nil {
+		return lib.ErrTimeMachine(err)
 	}
-	// Apply a minimum fee in the case of 0 fees
-	if ptr.Fee == 0 {
-		ptr.Fee = minimumFee
-	}
-	// Error if fee below minimum
-	if ptr.Fee < minimumFee {
-		return types.ErrTxFeeBelowStateLimit()
+
+	// Discard state, ensuring proper cleanup is performed
+	defer state.Discard()
+
+	// Execute the provided callback function with the read-only state
+	err = callback(state)
+	if err != nil {
+		return err
 	}
 	return nil
 }

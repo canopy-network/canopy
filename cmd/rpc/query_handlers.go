@@ -39,13 +39,11 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 // Height response with the latest block
 func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 
-	// Create a read-only state machine at the latest block height
-	state, ok := s.getStateMachineWithHeight(0, w)
-	if !ok {
-		return
-	}
-
-	write(w, state.Height(), http.StatusOK)
+	// Create a read-only state for the latest block and write the height
+	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
+		write(w, state.Height(), http.StatusOK)
+		return nil
+	})
 }
 
 // BlockByHeight responds with the block data found at a specific height
@@ -387,17 +385,16 @@ func (s *Server) State(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 		return
 	}
 	request.Height = parseUint64FromString(r.Form.Get("height"))
-	sm, ok := s.getStateMachineWithHeight(request.Height, w)
-	if !ok {
+
+	s.readOnlyState(request.Height, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		exported, err := state.ExportState()
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, exported, http.StatusOK)
 		return
-	}
-	defer sm.Discard()
-	state, err := sm.ExportState()
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, state, http.StatusOK)
+	})
 }
 
 // StateDiff returns the different between the state at two block heights
@@ -482,88 +479,76 @@ func (s *Server) Poll(w http.ResponseWriter, _ *http.Request, _ httprouter.Param
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request
 func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *orderRequest) (any, lib.ErrorI)) {
 	req := new(orderRequest)
-	state, ok := s.getStateMachineFromHeightParams(w, r, req)
-	if !ok {
+
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
 		return
-	}
-	p, err := callback(state, req)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
+	})
 }
 
 // heightParams is a helper function to abstract common workflows around a callback requiring a state machine
 func (s *Server) heightParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine) (any, lib.ErrorI)) {
 	req := new(heightRequest)
-	state, ok := s.getStateMachineFromHeightParams(w, r, req)
-	if !ok {
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
 		return
-	}
-	p, err := callback(state)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
+	})
 }
 
 // heightPaginated is a helper function to abstract common workflows around a callback requiring a state machine and page parameters
 func (s *Server) heightPaginated(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, p *paginatedHeightRequest) (any, lib.ErrorI)) {
 	req := new(paginatedHeightRequest)
-	state, ok := s.getStateMachineFromHeightParams(w, r, req)
-	if !ok {
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
 		return
-	}
-	p, err := callback(state, req)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
+	})
 }
 
 // heightAndAddressParams is a helper function to execute a callback with a state machine and address as parameters
 func (s *Server) heightAndAddressParams(w http.ResponseWriter, r *http.Request, callback func(*fsm.StateMachine, lib.HexBytes) (any, lib.ErrorI)) {
 	req := new(heightAndAddressRequest)
-	state, ok := s.getStateMachineFromHeightParams(w, r, req)
-	if !ok {
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		if req.Address == nil {
+			write(w, types.ErrAddressEmpty(), http.StatusBadRequest)
+			return
+		}
+		p, err := callback(state, req.Address)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
 		return
-	}
-	if req.Address == nil {
-		write(w, types.ErrAddressEmpty(), http.StatusBadRequest)
-		return
-	}
-	p, err := callback(state, req.Address)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
+	})
 }
 
 // heightAndIdParams is a helper function to execute a callback with a state machine and ID as parameters
 func (s *Server) heightAndIdParams(w http.ResponseWriter, r *http.Request, callback func(*fsm.StateMachine, uint64) (any, lib.ErrorI)) {
 	req := new(heightAndIdRequest)
-	state, ok := s.getStateMachineFromHeightParams(w, r, req)
-	if !ok {
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req.ID)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
 		return
-	}
-	p, err := callback(state, req.ID)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
-}
-
-// getStateMachineFromHeightParams is a helper function to get a read-only state machine at the specified height
-func (s *Server) getStateMachineFromHeightParams(w http.ResponseWriter, r *http.Request, ptr queryWithHeight) (sm *fsm.StateMachine, ok bool) {
-	if ok = unmarshal(w, r, ptr); !ok {
-		return
-	}
-	return s.getStateMachineWithHeight(ptr.GetHeight(), w)
+	})
 }
 
 // getDoubleStateMachineFromHeightParams is a helper function to get two read-only state machines at the specified heights

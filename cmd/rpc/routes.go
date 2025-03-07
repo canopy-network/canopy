@@ -77,7 +77,7 @@ const (
 	TxCreateOrderRoutePath     = "/v1/admin/tx-create-order"
 	TxEditOrderRoutePath       = "/v1/admin/tx-edit-order"
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
-	TxBuyOrderRoutePath        = "/v1/admin/tx-buy-order"
+	TxLockOrderRoutePath       = "/v1/admin/tx-buy-order"
 	TxSubsidyRoutePath         = "/v1/admin/subsidy"
 	TxStartPollRoutePath       = "/v1/admin/tx-start-poll"
 	TxVotePollRoutePath        = "/v1/admin/tx-vote-poll"
@@ -162,7 +162,7 @@ const (
 	TxCreateOrderRouteName     = "tx-create-order"
 	TxEditOrderRouteName       = "tx-edit-order"
 	TxDeleteOrderRouteName     = "tx-delete-order"
-	TxBuyOrderRouteName        = "tx-buy-order"
+	TxLockOrderRouteName       = "tx-lock-order"
 	TxStartPollRouteName       = "tx-start-poll"
 	TxVotePollRouteName        = "tx-vote-poll"
 	ResourceUsageRouteName     = "resource-usage"
@@ -253,7 +253,7 @@ var routePaths = routes{
 	TxCreateOrderRouteName:     {Method: http.MethodPost, Path: TxCreateOrderRoutePath},
 	TxEditOrderRouteName:       {Method: http.MethodPost, Path: TxEditStakeRoutePath},
 	TxDeleteOrderRouteName:     {Method: http.MethodPost, Path: TxDeleteOrderRoutePath},
-	TxBuyOrderRouteName:        {Method: http.MethodPost, Path: TxBuyOrderRoutePath},
+	TxLockOrderRouteName:       {Method: http.MethodPost, Path: TxLockOrderRoutePath},
 	TxSubsidyRouteName:         {Method: http.MethodPost, Path: TxSubsidyRoutePath},
 	TxStartPollRouteName:       {Method: http.MethodPost, Path: TxStartPollRoutePath},
 	TxVotePollRouteName:        {Method: http.MethodPost, Path: TxVotePollRoutePath},
@@ -350,7 +350,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		TxCreateOrderRouteName:     s.TransactionCreateOrder,
 		TxEditOrderRouteName:       s.TransactionEditOrder,
 		TxDeleteOrderRouteName:     s.TransactionDeleteOrder,
-		TxBuyOrderRouteName:        s.TransactionBuyOrder,
+		TxLockOrderRouteName:       s.TransactionLockOrder,
 		TxSubsidyRouteName:         s.TransactionSubsidy,
 		TxStartPollRouteName:       s.TransactionStartPoll,
 		TxVotePollRouteName:        s.TransactionVotePoll,
