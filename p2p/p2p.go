@@ -4,17 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
+	"runtime/debug"
+	"slices"
+	"sync"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/phuslu/iploc"
 	"golang.org/x/net/netutil"
 	"google.golang.org/protobuf/proto"
-	"net"
-	"runtime/debug"
-	"slices"
-	"sync"
-	"time"
 )
 
 /*
@@ -311,7 +312,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 		streams[i] = &Stream{
 			topic:        i,
 			msgAssembler: make([]byte, 0, maxMessageSize),
-			sendQueue:    make(chan []byte, maxQueueSize),
+			sendQueue:    make(chan *Packet, maxQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}

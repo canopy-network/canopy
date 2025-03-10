@@ -2,10 +2,11 @@ package p2p
 
 import (
 	"fmt"
-	"github.com/canopy-network/canopy/lib"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -146,4 +147,8 @@ func ErrMaxOutbound() lib.ErrorI {
 
 func ErrMaxInbound() lib.ErrorI {
 	return lib.NewError(lib.CodeMaxInbound, lib.P2PModule, "max inbound peers")
+}
+
+func ErrSemaphoreFailed(err error, packet *Packet) lib.ErrorI {
+	return lib.NewError(lib.CodeSemaphoreFailed, lib.P2PModule, fmt.Sprintf("semaphore for Packet(ID:%s, L:%d, E:%t) failed with error: %v", lib.Topic_name[int32(packet.StreamId)], len(packet.Bytes), packet.Eof, err.Error()))
 }
