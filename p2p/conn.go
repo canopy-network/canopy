@@ -61,6 +61,7 @@ type MultiConn struct {
 	quitReceiving chan struct{}               // signal to quit
 	sendPong      chan struct{}               // signal to send keep alive message
 	receivedPong  chan struct{}               // signal that received keep alive message
+	packetOut     chan *Packet                // Main output channel for all packets
 	onError       func(error, []byte, string) // callback to call if peer errors
 	error         sync.Once                   // thread safety to ensure MultiConn.onError is only called once
 	p2p           *P2P                        // a pointer reference to the P2P module
@@ -82,6 +83,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		quitReceiving: make(chan struct{}, maxChanSize),
 		sendPong:      make(chan struct{}, maxChanSize),
 		receivedPong:  make(chan struct{}, maxChanSize),
+		packetOut:     make(chan *Packet, maxQueueSize),
 		onError:       p.OnPeerError,
 		error:         sync.Once{},
 		p2p:           p,
@@ -98,6 +100,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 func (c *MultiConn) Start() {
 	go c.startSendService()
 	go c.startReceiveService()
+	go c.streamFanIn()
 }
 
 // Stop() sends exit signals for send and receive loops and closes the connection
@@ -120,8 +123,15 @@ func (c *MultiConn) Send(topic lib.Topic, msg *Envelope) (ok bool) {
 	if err != nil {
 		return false
 	}
-	ok = stream.queueSend(bz)
-	return
+
+	select {
+	case stream.sendQueue <- bz:
+		ok = true
+		return
+	default:
+		// The channel is full, return ok false
+		return
+	}
 }
 
 // startSendService() starts the main send service
@@ -129,18 +139,16 @@ func (c *MultiConn) Send(topic lib.Topic, msg *Envelope) (ok bool) {
 // - manages the keep alive protocol by sending pings and monitoring the receipt of the corresponding pong
 func (c *MultiConn) startSendService() {
 	defer lib.CatchPanic(c.log)
-	send, m := time.NewTicker(sendInterval), limiter.New(0, 0)
+	m := limiter.New(0, 0)
 	ping, err := time.NewTicker(pingInterval), lib.ErrorI(nil)
 	pongTimer := time.NewTimer(pongTimeoutDuration)
-	defer func() { lib.StopTimer(pongTimer); ping.Stop(); send.Stop(); m.Done() }()
+	defer func() { lib.StopTimer(pongTimer); ping.Stop(); m.Done() }()
 	for {
 		// select statement ensures the sequential coordination of the concurrent processes
 		select {
-		case <-send.C: // fires every 'sendInterval'
-			if packet := c.getNextPacket(); packet != nil {
-				c.log.Debugf("Send Packet(ID:%s, L:%d, E:%t)", lib.Topic_name[int32(packet.StreamId)], len(packet.Bytes), packet.Eof)
-				err = c.sendWireBytes(packet, m)
-			}
+		case packet := <-c.packetOut: // A stream has a new packet to send
+			c.log.Debugf("Send Packet(ID:%s, L:%d, E:%t)", lib.Topic_name[int32(packet.StreamId)], len(packet.Bytes), packet.Eof)
+			err = c.sendWireBytes(packet, m)
 		case <-ping.C: // fires every 'pingInterval'
 			c.log.Debugf("Send Ping to: %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 			// send a ping to the peer
@@ -303,55 +311,62 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) (er
 	return
 }
 
-// getNextPacket() returns the next packet to send ordered by stream.Topic priority
-func (c *MultiConn) getNextPacket() *Packet {
-	// ordered by stream priority
-	// NOTE: switching between streams mid 'Message' is not
-	// a problem as each stream has a unique receiving buffer
-	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
-		stream := c.streams[i]
-		if stream.hasStuffToSend() {
-			return stream.nextPacket()
+// streamFanIn checks all streams, in priority order, fanning any packets in to the common output channel
+func (c *MultiConn) streamFanIn() {
+	for {
+		var sent bool // Flag to track if a packet has been sent in this iteration
+		// Check each stream, in priority order, for its next packet
+		// NOTE: switching between streams mid 'Message' is not
+		// a problem as each stream has a unique receiving buffer
+		for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
+			stream := c.streams[i]
+			select {
+			case packet := <-stream.packetOut:
+				c.packetOut <- packet // Send available packet to main output channel
+				sent = true           // Mark sent so the sleep does not execute
+				break                 // Break back to outer loop to keep topic priority
+			default:
+				continue
+			}
+		}
+		if !sent {
+			// No packets were sent, sleep to conserve CPU during idle periods
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	return nil
 }
 
 // Stream: an independent, bidirectional communication channel that is scoped to a single topic.
 // In a multiplexed connection there is typically more than one stream per connection
 type Stream struct {
 	topic        lib.Topic                    // the subject and priority of the stream
-	sendQueue    chan []byte                  // a queue of unsent messages
+	sendQueue    chan []byte                  // a queue of incoming messages
+	packetOut    chan *Packet                 // a queue of outoing packets
 	upNextToSend []byte                       // a buffer holding unsent portions of the next message
 	msgAssembler []byte                       // collects and adds incoming packets until the entire message is received (EOF signal)
 	inbox        chan *lib.MessageAndMetadata // the channel where fully received messages are held for other parts of the app to read
 	logger       lib.LoggerI
 }
 
-// queueSend() schedules the bytes to be sent
-// NOTE: at this phase these bytes are the entire message, not just a chunk/packet
-func (s *Stream) queueSend(b []byte) bool {
-	select {
-	case s.sendQueue <- b: // enqueue to the back of the line
-		return true
-	case <-time.After(queueSendTimeout): // may timeout if queue remains full
-		return false
-	}
-}
+// The sendController function manages the flow of outgoing messages for a stream.
+// It coordinates queuing, chunking, and sending of messages to ensure proper delivery.
+func (s *Stream) sendController() {
+	for {
+		if len(s.upNextToSend) > 0 {
+			// Send the next packet; it may be chunked if needed.
+			// This will block until the send service reads it
+			s.packetOut <- s.nextPacket()
+			// nextPacket() will re-populate s.upNextToSend, restart loop to check again
+			continue
+		}
 
-// hasStuffToSend() checks the stream to see if there's anything in the outbox
-func (s *Stream) hasStuffToSend() bool {
-	// if there's unsent parts of the next message
-	if len(s.upNextToSend) != 0 {
-		return true
+		// All queued bytes have been sent, wait for more to arrive
+		select {
+		case bz := <-s.sendQueue:
+			// Enqueue new message for sending
+			s.upNextToSend = bz
+		}
 	}
-	// if there's unsent messages in the queue
-	if len(s.sendQueue) != 0 {
-		s.upNextToSend = <-s.sendQueue
-		return true
-	}
-	// nothing to send
-	return false
 }
 
 // nextPacket() creates a new packet from the next unsent chunk
