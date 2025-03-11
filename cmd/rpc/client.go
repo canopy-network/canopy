@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/canopy-network/canopy/fsm"
 	"io"
 	"net/http"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
@@ -434,54 +435,45 @@ func (c *Client) KeystoreGet(addrOrNickname AddrOrNickname, password string) (re
 	return
 }
 
-func setFrom(from AddrOrNickname, txReq txRequest) (txRequest, lib.ErrorI) {
-	if from.Address != "" {
-		fromHex, err := lib.NewHexBytesFromString(from.Address)
+func getFrom(address, nickname string) (from fromFields, err lib.ErrorI) {
+	if address != "" {
+		from.Address, err = lib.NewHexBytesFromString(address)
 		if err != nil {
-			return txRequest{}, err
+			return
 		}
-		txReq.Address = fromHex
 	}
 
-	if from.Nickname != "" {
-		txReq.Nickname = from.Nickname
-	}
-
-	return txReq, nil
+	from.Nickname = nickname
+	return from, nil
 }
 
-func setSigner(signer AddrOrNickname, txReq txRequest) (txRequest, lib.ErrorI) {
+func getSigner(signer AddrOrNickname) (s signerFields, err lib.ErrorI) {
 	if signer.Address != "" {
-		fromHex, err := lib.NewHexBytesFromString(signer.Address)
+		s.Signer, err = lib.NewHexBytesFromString(signer.Address)
 		if err != nil {
-			return txRequest{}, err
+			return
 		}
-		txReq.Signer = fromHex
 	}
 
-	if signer.Nickname != "" {
-		txReq.SignerNickname = signer.Nickname
-	}
-
-	return txReq, nil
+	s.SignerNickname = signer.Nickname
+	return
 }
 
 func (c *Client) TxSend(from AddrOrNickname, rec string, amt uint64, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Amount:          amt,
-		Output:          rec,
-		Fee:             optFee,
-		Submit:          submit,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txSend{
+		Fee:      optFee,
+		Amount:   amt,
+		Output:   rec,
+		Password: pwd,
 	}
 
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return c.transactionRequest(TxSendRouteName, txReq)
+	return c.transactionRequest(TxSendRouteName, txReq, submit)
 }
 
 func (c *Client) TxStake(addrOrNick AddrOrNickname, netAddr string, amt uint64, committees, output string, signer AddrOrNickname, delegate, earlyWithdrawal bool, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
@@ -506,10 +498,9 @@ func (c *Client) TxUnpause(addrOrNick, signer AddrOrNickname, pwd string, submit
 
 func (c *Client) TxChangeParam(from AddrOrNickname, pSpace, pKey, pValue string, startBlk, endBlk uint64,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txChangeParam{
+		Fee:      optFee,
+		Password: pwd,
 		txChangeParamRequest: txChangeParamRequest{
 			ParamSpace: pSpace,
 			ParamKey:   pKey,
@@ -519,49 +510,48 @@ func (c *Client) TxChangeParam(from AddrOrNickname, pSpace, pKey, pValue string,
 		},
 	}
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxChangeParamRouteName, txReq)
+	return c.transactionRequest(TxChangeParamRouteName, txReq, submit)
 }
 
 func (c *Client) TxDaoTransfer(from AddrOrNickname, amt, startBlk, endBlk uint64,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Amount:          amt,
-		Fee:             optFee,
-		Submit:          submit,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txDaoTransfer{
+		Fee:      optFee,
+		Password: pwd,
+		Amount:   amt,
 		txChangeParamRequest: txChangeParamRequest{
 			StartBlock: startBlk,
 			EndBlock:   endBlk,
 		},
 	}
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxDAOTransferRouteName, txReq)
+	return c.transactionRequest(TxDAOTransferRouteName, txReq, submit)
 }
 
 func (c *Client) TxSubsidy(from AddrOrNickname, amt, chainId uint64, opCode string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Amount:            amt,
+	txReq := txSubsidy{
 		Fee:               optFee,
+		Password:          pwd,
+		Amount:            amt,
 		OpCode:            opCode,
 		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
-		Submit:            submit,
-		passwordRequest:   passwordRequest{Password: pwd},
 	}
+
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxSubsidyRouteName, txReq)
+	return c.transactionRequest(TxSubsidyRouteName, txReq, submit)
 }
 
 func (c *Client) TxCreateOrder(from AddrOrNickname, sellAmount, receiveAmount, chainId uint64, receiveAddress string,
@@ -570,21 +560,22 @@ func (c *Client) TxCreateOrder(from AddrOrNickname, sellAmount, receiveAmount, c
 	if err != nil {
 		return nil, nil, err
 	}
-	txReq := txRequest{
-		Amount:               sellAmount,
+	txReq := txCreateOrder{
 		Fee:                  optFee,
+		Amount:               sellAmount,
 		Submit:               submit,
 		ReceiveAmount:        receiveAmount,
 		ReceiveAddress:       receiveAddr,
-		passwordRequest:      passwordRequest{Password: pwd},
+		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{fmt.Sprintf("%d", chainId)},
 	}
-	txReq, err = setFrom(from, txReq)
+
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxCreateOrderRouteName, txReq)
+	return c.transactionRequest(TxCreateOrderRouteName, txReq, submit)
 }
 
 func (c *Client) TxEditOrder(from AddrOrNickname, sellAmount, receiveAmount, orderId, chainId uint64, receiveAddress string,
@@ -593,39 +584,40 @@ func (c *Client) TxEditOrder(from AddrOrNickname, sellAmount, receiveAmount, ord
 	if err != nil {
 		return nil, nil, err
 	}
-	txReq := txRequest{
-		Amount:               sellAmount,
+	txReq := txEditOrder{
 		Fee:                  optFee,
-		Submit:               submit,
+		Amount:               sellAmount,
 		ReceiveAmount:        receiveAmount,
 		ReceiveAddress:       receiveAddr,
 		OrderId:              orderId,
-		passwordRequest:      passwordRequest{Password: pwd},
+		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{fmt.Sprintf("%d", chainId)},
 	}
-	txReq, err = setFrom(from, txReq)
+
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxEditOrderRouteName, txReq)
+
+	return c.transactionRequest(TxEditOrderRouteName, txReq, submit)
 }
 
 func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId, chainId uint64,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
+	txReq := txDeleteOrder{
 		Fee:               optFee,
-		Submit:            submit,
 		OrderId:           orderId,
-		passwordRequest:   passwordRequest{Password: pwd},
+		Password:          pwd,
 		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
 	}
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxDeleteOrderRouteName, txReq)
+
+	return c.transactionRequest(TxDeleteOrderRouteName, txReq, submit)
 }
 
 func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId uint64,
@@ -634,65 +626,69 @@ func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId
 	if err != nil {
 		return nil, nil, err
 	}
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		OrderId:         orderId,
-		ReceiveAddress:  receiveHex,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txLockOrder{
+		Fee:            optFee,
+		OrderId:        orderId,
+		ReceiveAddress: receiveHex,
+		Password:       pwd,
 	}
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxLockOrderRouteName, txReq)
+
+	return c.transactionRequest(TxLockOrderRouteName, txReq, submit)
 }
 
 func (c *Client) TxCloseOrder(from AddrOrNickname, orderId uint64, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		OrderId:         orderId,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txCloseOrder{
+		Fee:      optFee,
+		OrderId:  orderId,
+		Password: pwd,
 	}
-	txReq, err := setFrom(from, txReq)
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxCloseOrderRouteName, txReq)
+
+	return c.transactionRequest(TxCloseOrderRouteName, txReq, submit)
 }
 
 func (c *Client) TxStartPoll(from AddrOrNickname, pollJSON json.RawMessage,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		PollJSON:        pollJSON,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txStartPoll{
+		Fee:      optFee,
+		PollJSON: pollJSON,
+		Password: pwd,
 	}
+
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxStartPollRouteName, txReq)
+
+	return c.transactionRequest(TxStartPollRouteName, txReq, submit)
 }
 
 func (c *Client) TxVotePoll(from AddrOrNickname, pollJSON json.RawMessage, pollApprove bool,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		PollJSON:        pollJSON,
-		PollApprove:     pollApprove,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txVolePoll{
+		Fee:         optFee,
+		PollJSON:    pollJSON,
+		PollApprove: pollApprove,
+		Password:    pwd,
 	}
+
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c.transactionRequest(TxStartPollRouteName, txReq)
+
+	return c.transactionRequest(TxVotePollRouteName, txReq, submit)
 }
 
 func (c *Client) ResourceUsage() (returned *resourceUsageResponse, err lib.ErrorI) {
@@ -738,35 +734,34 @@ func (c *Client) Logs() (logs string, err lib.ErrorI) {
 }
 
 func (c *Client) txAddress(route string, from, signer AddrOrNickname, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
-		Fee:             optFee,
-		Submit:          submit,
-		passwordRequest: passwordRequest{Password: pwd},
+	txReq := txAddress{
+		Fee:      optFee,
+		Password: pwd,
 	}
 
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
-	if err != nil {
-		return nil, nil, err
-	}
-	txReq, err = setSigner(signer, txReq)
+	txReq.signerFields, err = getSigner(signer)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return c.transactionRequest(route, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(route, txReq, submit)
 }
 
 func (c *Client) txStake(from AddrOrNickname, netAddr string, amt uint64, committees, output string, delegate, earlyWithdrawal bool, signer AddrOrNickname, pwd string, submit, edit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txRequest{
+	txReq := txStake{
+		Fee:                  optFee,
 		Amount:               amt,
 		NetAddress:           netAddr,
 		Output:               output,
-		Fee:                  optFee,
 		Delegate:             delegate,
 		EarlyWithdrawal:      earlyWithdrawal,
-		Submit:               submit,
-		passwordRequest:      passwordRequest{Password: pwd},
+		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{Committees: committees},
 	}
@@ -776,24 +771,25 @@ func (c *Client) txStake(from AddrOrNickname, netAddr string, amt uint64, commit
 	}
 
 	var err lib.ErrorI
-	txReq, err = setFrom(from, txReq)
-	if err != nil {
-		return nil, nil, err
-	}
-	txReq, err = setSigner(signer, txReq)
+	txReq.signerFields, err = getSigner(signer)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return c.transactionRequest(route, txReq)
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(route, txReq, submit)
 }
 
-func (c *Client) transactionRequest(routeName string, txRequest txRequest) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+func (c *Client) transactionRequest(routeName string, txRequest any, submit bool) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	bz, e := lib.MarshalJSON(txRequest)
 	if e != nil {
 		return
 	}
-	if txRequest.Submit {
+	if submit {
 		hash = new(string)
 		e = c.post(routeName, bz, hash, true)
 	} else {
