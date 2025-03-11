@@ -83,7 +83,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		quitReceiving: make(chan struct{}, maxChanSize),
 		sendPong:      make(chan struct{}, maxChanSize),
 		receivedPong:  make(chan struct{}, maxChanSize),
-		packetOut:     make(chan *Packet, maxQueueSize),
+		packetOut:     make(chan *Packet, 0),
 		onError:       p.OnPeerError,
 		error:         sync.Once{},
 		p2p:           p,
