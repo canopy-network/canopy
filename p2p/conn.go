@@ -341,7 +341,7 @@ func (c *MultiConn) streamFanIn() {
 type Stream struct {
 	topic        lib.Topic                    // the subject and priority of the stream
 	sendQueue    chan []byte                  // a queue of incoming messages
-	packetOut    chan *Packet                 // a queue of outoing packets
+	packetOut    chan *Packet                 // a queue of outgoing packets
 	upNextToSend []byte                       // a buffer holding unsent portions of the next message
 	msgAssembler []byte                       // collects and adds incoming packets until the entire message is received (EOF signal)
 	inbox        chan *lib.MessageAndMetadata // the channel where fully received messages are held for other parts of the app to read
