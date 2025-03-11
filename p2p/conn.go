@@ -356,7 +356,7 @@ func (s *Stream) sendController() {
 			// Send the next packet; it may be chunked if needed.
 			// This will block until the send service reads it
 			s.packetOut <- s.nextPacket()
-			// nextPacket() will re-populate s.upNextToSend, restart loop to check again
+			// nextPacket() will re-populate s.upNextToSend, continue loop to check again
 			continue
 		}
 
