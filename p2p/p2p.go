@@ -316,6 +316,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}
+		go streams[i].sendController()
 	}
 	return
 }
