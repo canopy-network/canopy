@@ -1,5 +1,5 @@
 import Navigation from "@/components/navbar";
-import { AccountWithTxs, Height, Keystore, Validator } from "@/components/api";
+import { AccountWithTxs, Height, Keystore, Params, Validator } from "@/components/api";
 import { createContext, use, useEffect, useState } from "react";
 import Accounts from "@/components/account";
 import Dashboard from "@/components/dashboard";
@@ -18,6 +18,7 @@ export default function Home() {
     validator: {},
     height: 0,
     keys: [],
+    params: {},
   });
   const setNavIdx = (i) => setState({ ...state, navIdx: i });
 
@@ -39,6 +40,7 @@ export default function Home() {
         AccountWithTxs(0, mergedKS[Object.keys(mergedKS)[i]].keyAddress, Object.keys(mergedKS)[i], 0),
         Validator(0, mergedKS[Object.keys(mergedKS)[i]].keyAddress, Object.keys(mergedKS)[i]),
         Height(),
+        Params(0),
       ]).then((results) => {
         let settledResults = [];
         for (const result of results) {
@@ -57,6 +59,7 @@ export default function Home() {
           account: settledResults[0],
           validator: settledResults[1],
           height: settledResults[2],
+          params: settledResults[3],
         });
       });
     });

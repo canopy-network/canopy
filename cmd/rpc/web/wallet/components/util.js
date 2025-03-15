@@ -663,3 +663,37 @@ export async function retryWithDelay(fn, onFailure, retries = 8, delayMs = 1000,
         }
     }
 }
+
+// getActionFee() returns the fee for a given action based on the params
+export function getActionFee(action, params) {
+  switch (action) {
+      case "send":
+          return params.sendFee;
+      case "stake":
+          return params.stakeFee;
+      case "create_order":
+          return params.createOrderFee;
+      case "lock_order":
+          return params.lockOrderFee;
+      case "close_order":
+          return params.closeOrderFee;
+      case "edit_order":
+          return params.editOrderFee;
+      case "delete_order":
+          return params.deleteOrderFee;
+      case "edit-stake":
+          return params.editStakeFee;
+      case "change-param":
+          return params.changeParamFee;
+      case "dao-transfer":
+          return params.daoTransferFee;
+      case "pause":
+          return params.pauseFee;
+      case "unpause":
+          return params.unpauseFee;
+      case "unstake":
+          return params.unstakeFee;
+      default:
+          return 0;
+  }
+}
