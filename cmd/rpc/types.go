@@ -7,6 +7,9 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 )
 
+// =====================================================
+// Query Request Types
+// =====================================================
 type heightRequest struct {
 	Height uint64 `json:"height"`
 }
@@ -25,12 +28,15 @@ type heightsRequest struct {
 type idRequest struct {
 	ID uint64 `json:"id"`
 }
+
 type passwordRequest struct {
 	Password string `json:"password"`
 }
+
 type nicknameRequest struct {
 	Nickname string `json:"nickname"`
 }
+
 type voteRequest struct {
 	Approve  bool            `json:"approve"`
 	Proposal json.RawMessage `json:"proposal"`
@@ -63,11 +69,6 @@ type keystoreRequest struct {
 	nicknameRequest
 	PrivateKey lib.HexBytes `json:"privateKey"`
 	crypto.EncryptedPrivateKey
-}
-
-type resourceUsageResponse struct {
-	Process ProcessResourceUsage `json:"process"`
-	System  SystemResourceUsage  `json:"system"`
 }
 
 type peerInfoResponse struct {
@@ -110,6 +111,11 @@ type SystemResourceUsage struct {
 	WrittenBytesIO  uint64 `json:"WrittenBytesIO"`
 }
 
+type resourceUsageResponse struct {
+	Process ProcessResourceUsage `json:"process"`
+	System  SystemResourceUsage  `json:"system"`
+}
+
 func (h *heightRequest) GetHeight() uint64 {
 	return h.Height
 }
@@ -118,7 +124,6 @@ type queryWithHeight interface {
 	GetHeight() uint64
 }
 
-// Change structures for how we are getting RPC data
 type hashRequest struct {
 	Hash string `json:"hash"`
 }
@@ -131,8 +136,150 @@ type committeesRequest struct {
 	Committees string
 }
 
-// Request struct for all transactions
-// Investigate splitting these into smaller, more specific structures
+// =====================================================
+// Transaction Request Types
+// =====================================================
+type txSend struct {
+	Fee      uint64 `json:"fee"`
+	Amount   uint64 `json:"amount"`
+	Output   string `json:"output"`
+	Password string `json:"password"`
+	fromFields
+}
+
+type txAddress struct {
+	Fee uint64 `json:"fee"`
+	fromFields
+	Password string `json:"password"`
+	signerFields
+}
+
+type txStake struct {
+	Fee             uint64 `json:"fee"`
+	Amount          uint64 `json:"amount"`
+	Output          string `json:"output"`
+	Password        string `json:"password"`
+	Delegate        bool   `json:"delegate"`
+	EarlyWithdrawal bool   `json:"earlyWithdrawal"`
+	NetAddress      string `json:"netAddress"`
+	fromFields
+	signerFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txChangeParam struct {
+	Fee      uint64 `json:"fee"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+}
+
+type txDaoTransfer struct {
+	Fee      uint64 `json:"fee"`
+	Amount   uint64 `json:"amount"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+}
+
+type txSubsidy struct {
+	Fee      uint64 `json:"fee"`
+	Amount   uint64 `json:"amount"`
+	Password string `json:"password"`
+	OpCode   string `json:"opCode"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txCreateOrder struct {
+	Fee            uint64       `json:"fee"`
+	Amount         uint64       `json:"amount"`
+	Password       string       `json:"password"`
+	Submit         bool         `json:"submit"`
+	ReceiveAmount  uint64       `json:"receiveAmount"`
+	ReceiveAddress lib.HexBytes `json:"receiveAddress"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txEditOrder struct {
+	Fee            uint64       `json:"fee"`
+	Amount         uint64       `json:"amount"`
+	Password       string       `json:"password"`
+	Submit         bool         `json:"submit"`
+	ReceiveAmount  uint64       `json:"receiveAmount"`
+	ReceiveAddress lib.HexBytes `json:"receiveAddress"`
+	OrderId        uint64       `json:"orderId"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txDeleteOrder struct {
+	Fee      uint64 `json:"fee"`
+	OrderId  uint64 `json:"orderId"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txLockOrder struct {
+	Fee            uint64       `json:"fee"`
+	OrderId        uint64       `json:"orderId"`
+	Password       string       `json:"password"`
+	ReceiveAddress lib.HexBytes `json:"receiveAddress"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txCloseOrder struct {
+	Fee      uint64 `json:"fee"`
+	OrderId  uint64 `json:"orderId"`
+	Password string `json:"password"`
+	fromFields
+}
+
+type txStartPoll struct {
+	Fee      uint64          `json:"fee"`
+	PollJSON json.RawMessage `json:"pollJSON"`
+	Password string          `json:"password"`
+	fromFields
+}
+
+type txVolePoll struct {
+	Fee         uint64          `json:"fee"`
+	PollJSON    json.RawMessage `json:"pollJSON"`
+	PollApprove bool            `json:"pollApprove"`
+	Password    string          `json:"password"`
+	fromFields
+}
+
+type txChangeParamRequest struct {
+	ParamSpace string `json:"paramSpace"`
+	ParamKey   string `json:"paramKey"`
+	ParamValue string `json:"paramValue"`
+	StartBlock uint64 `json:"startBlock"`
+	EndBlock   uint64 `json:"endBlock"`
+}
+
+// fromFields contains the address and/or nickname for the from fields
+type fromFields struct {
+	Address  lib.HexBytes `json:"address"`
+	Nickname string       `json:"nickname"`
+}
+
+// signerFields contains the signer address and/or nickname for the signer fields
+type signerFields struct {
+	Signer         lib.HexBytes `json:"signer"`
+	SignerNickname string       `json:"signerNickname"`
+}
+
+// txRequest is used server side to unmarshall all transaction requests
 type txRequest struct {
 	Amount          uint64          `json:"amount"`
 	PubKey          string          `json:"pubKey"`
@@ -156,12 +303,4 @@ type txRequest struct {
 	passwordRequest
 	txChangeParamRequest
 	committeesRequest
-}
-
-type txChangeParamRequest struct {
-	ParamSpace string `json:"paramSpace"`
-	ParamKey   string `json:"paramKey"`
-	ParamValue string `json:"paramValue"`
-	StartBlock uint64 `json:"startBlock"`
-	EndBlock   uint64 `json:"endBlock"`
 }
