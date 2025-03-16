@@ -14,6 +14,10 @@ type heightRequest struct {
 	Height uint64 `json:"height"`
 }
 
+type chainRequest struct {
+	ChainId uint64 `json:"chainId"`
+}
+
 type orderRequest struct {
 	ChainId uint64 `json:"chainId"`
 	OrderId uint64 `json:"orderId"`
@@ -134,6 +138,14 @@ type addressRequest struct {
 
 type committeesRequest struct {
 	Committees string
+}
+
+type economicParameterResponse struct {
+	MintPerBlock     uint64 `json:"MintPerBlock"`
+	MintPerCommittee uint64 `json:"MintPerCommittee"`
+	DAOCut           uint64 `json:"DAOCut"`
+	ProposerCut      uint64 `json:"ProposerCut"`
+	DelegateCut      uint64 `json:"DelegateCut"`
 }
 
 // =====================================================
