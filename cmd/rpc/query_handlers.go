@@ -62,6 +62,7 @@ func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprou
 			return err
 		}
 
+		// Get the root id
 		rootChainId, err := state.GetRootChainId()
 		if err != nil {
 			return err
