@@ -180,7 +180,7 @@ export function Pending(page, _) {
   return POST(rpcURL, pageAddrReq(page, ""), pendingPath);
 }
 
-export function EconomicParameters(chain_id) {
+export function EcoParams(chain_id) {
   return POST(rpcURL, chainRequest(chain_id), ecoParamsPath);
 }
 
@@ -236,7 +236,7 @@ export async function getCardData() {
   cardData.supply = await Supply(0, 0);
   cardData.pool = await DAO(0, 0);
   cardData.params = await Params(0, 0);
-  cardData.ecoParams = await EconomicParameters(0, 0);
+  cardData.ecoParams = await EcoParams(0, 0);
   return cardData;
 }
 
