@@ -2,12 +2,142 @@ package fsm
 
 import (
 	"fmt"
+	"math"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"math"
-	"testing"
 )
+
+func TestGetEconomicParameters(t *testing.T) {
+	const (
+		minPercentForPaidCommittee = 10
+	)
+	type expected struct {
+		daoCut           uint64
+		totalMint        uint64
+		perCommitteeMint uint64
+	}
+	tests := []struct {
+		name          string
+		detail        string
+		mintAmount    uint64
+		daoCutPercent uint64
+		supply        *Supply
+		expected      expected
+	}{
+		{
+			name:          "1 paid committee",
+			detail:        "1 paid committee should result in 1 distribution to the DAO and 1 distribution to the committee",
+			mintAmount:    100,
+			daoCutPercent: 10,
+			supply: &Supply{
+				Staked: 100,
+				CommitteeStaked: []*Pool{
+					{
+						Id:     lib.CanopyChainId,
+						Amount: 10,
+					},
+				},
+			},
+			expected: expected{
+				daoCut:           10,
+				totalMint:        100,
+				perCommitteeMint: 90,
+			},
+		},
+		{
+			name:          "2 paid committees",
+			detail:        "2 paid committees should result in 1 distribution to the DAO and 2 distributions to the committees",
+			mintAmount:    100,
+			daoCutPercent: 10,
+			supply: &Supply{
+				Staked: 100,
+				CommitteeStaked: []*Pool{
+					{
+						Id:     lib.CanopyChainId,
+						Amount: 10,
+					},
+					{
+						Id:     lib.CanopyChainId + 1,
+						Amount: 10,
+					},
+				},
+			},
+			expected: expected{
+				daoCut:           10,
+				totalMint:        100,
+				perCommitteeMint: 45,
+			},
+		},
+		{
+			name:          "4 paid committees with round down",
+			detail:        "4 paid committees should result in 1 distribution to the DAO and 4 distributions to the committees (rounded down)",
+			mintAmount:    98,
+			daoCutPercent: 10,
+			supply: &Supply{
+				Staked: 100,
+				CommitteeStaked: []*Pool{
+					{
+						Id:     lib.CanopyChainId,
+						Amount: 10,
+					},
+					{
+						Id:     lib.CanopyChainId + 1,
+						Amount: 10,
+					},
+					{
+						Id:     lib.CanopyChainId + 2,
+						Amount: 10,
+					},
+					{
+						Id:     lib.CanopyChainId + 3,
+						Amount: 10,
+					},
+				},
+			},
+			expected: expected{
+				daoCut:           10,
+				totalMint:        98,
+				perCommitteeMint: 22,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// create a state machine instance with default parameters
+			sm := newTestStateMachine(t)
+			// get validator params
+			params, err := sm.GetParams()
+			require.NoError(t, err)
+			// override the minimum percent for paid committee
+			params.Validator.StakePercentForSubsidizedCommittee = minPercentForPaidCommittee
+			// override the mint amount
+			InitialTokensPerBlock = int(test.mintAmount)
+			// override the DAO cut percent
+			params.Governance.DaoRewardPercentage = test.daoCutPercent
+			// set the params back in state
+			require.NoError(t, sm.SetParams(params))
+			// get the supply in state
+			supply, err := sm.GetSupply()
+			require.NoError(t, err)
+			// set the test supply
+			supply.Staked = test.supply.Staked
+			supply.CommitteeStaked = test.supply.CommitteeStaked
+			// set the supply back in state
+			require.NoError(t, sm.SetSupply(supply))
+			// execute the function call
+			daoCut, totalMint, perCommitteeMint, err := sm.GetBlockMintStats(lib.CanopyChainId)
+			require.NoError(t, err)
+			require.EqualValues(t, test.expected, expected{
+				daoCut:           daoCut,
+				totalMint:        totalMint,
+				perCommitteeMint: perCommitteeMint,
+			})
+		})
+	}
+}
 
 func TestFundCommitteeRewardPools(t *testing.T) {
 	const (
