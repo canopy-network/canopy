@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Button, Form, InputGroup } from "react-bootstrap";
+import { useState, useEffect, forwardRef } from "react";
+import { Button, Form, InputGroup, Dropdown, FormControl as MultiSelectControl, Alert } from "react-bootstrap";
 import {
   formatNumber,
   sanitizeNumberInput,
@@ -58,6 +58,18 @@ export default function FormInputs({ keygroup, account, validator, fields, show,
           idx={i}
           formValues={formValues[input.label]}
           onChange={handleInputChange}
+        />
+      );
+    }
+    if (input.type === "multiselect") {
+      return (
+        <FormMultiSelect
+          input={input}
+          key={input.label}
+          idx={i}
+          formValues={formValues}
+          onChange={handleInputChange}
+          account={account}
         />
       );
     }
@@ -166,5 +178,134 @@ const RenderAmountInput = ({ amount, onClick, input, inputValue }) => {
         </Button>
       </Form.Text>
     </div>
+  );
+};
+
+// Custom input toggle component for the multi select dropdown
+const CustomToggleInput = forwardRef(({ value, onChange, onFocus }, ref) => (
+  <MultiSelectControl
+    ref={ref}
+    value={value}
+    onChange={onChange}
+    onFocus={onFocus}
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }}
+    className="input-text-field"
+  />
+));
+
+// Multi select component
+const FormMultiSelect = ({ input, validate, placeholder }) => {
+  const [selectedValues, setSelectedValues] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Pulling default values from inputs to use as options
+  const options = input.defaultValue.split(",") || "";
+
+  // Filter options based on searchTerm (case-insensitive)
+  const getFilteredOptions = () => {
+    return options.filter((opt) => opt.toLowerCase().includes(searchTerm.toLowerCase())).sort();
+  };
+
+  // Update input value and selected values based on user input
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInputValue(val);
+    setError("");
+    const values = val
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => v !== "");
+    const validationMessage = validate(values, options);
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+    setSelectedValues(values);
+  };
+
+  // Handle checkbox toggling in the dropdown menu
+  const handleCheckboxChange = (option, isChecked, e) => {
+    e.stopPropagation();
+    let updatedSelected;
+    if (isChecked) {
+      if (selectedValues.includes(option)) {
+        alert(`"${option}" is already selected.`);
+        return;
+      }
+      updatedSelected = [...selectedValues, option];
+    } else {
+      updatedSelected = selectedValues.filter((v) => v !== option);
+    }
+    setSelectedValues(updatedSelected);
+    setInputValue(updatedSelected.join(", "));
+    setError("");
+  };
+
+  const filteredOptions = getFilteredOptions();
+  const selectedOptions = filteredOptions.filter((opt) => selectedValues.includes(opt));
+  const unselectedOptions = filteredOptions.filter((opt) => !selectedValues.includes(opt));
+
+  return (
+    <FormGroup input={input}>
+      {error && <Alert variant="danger">{error}</Alert>}
+      <Dropdown autoClose="outside" show={showDropdown} onToggle={setShowDropdown}>
+        <Dropdown.Toggle
+          as={CustomToggleInput}
+          value={inputValue}
+          onChange={handleInputChange}
+          placeholder={placeholder || "Enter values"}
+          onFocus={() => setShowDropdown(true)}
+        />
+        <Dropdown.Menu className="p-0">
+          {/* Search field inside dropdown */}
+          <MultiSelectControl
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div className="overflow-auto" style={{ maxHeight: "200px" }}>
+            {selectedOptions.length > 0 && (
+              <>
+                {selectedOptions.map((option) => (
+                  <Dropdown.Item key={option} as="div" className="px-3 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>{option}</span>
+                      <Form.Check
+                        type="checkbox"
+                        id={`chk-${option}`}
+                        checked={true}
+                        onChange={(e) => handleCheckboxChange(option, e.target.checked, e)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </Dropdown.Item>
+                ))}
+                <Dropdown.Divider />
+              </>
+            )}
+            {unselectedOptions.map((option) => (
+              <Dropdown.Item key={option} className="px-3 py-2">
+                <div className="d-flex justify-content-between align-items-center">
+                  <span>{option}</span>
+                  <Form.Check
+                    type="checkbox"
+                    id={`chk-${option}`}
+                    checked={false}
+                    onChange={(e) => handleCheckboxChange(option, e.target.checked, e)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </Dropdown.Item>
+            ))}
+          </div>
+        </Dropdown.Menu>
+      </Dropdown>
+    </FormGroup>
   );
 };

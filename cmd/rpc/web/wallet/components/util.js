@@ -48,7 +48,7 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
       inputText: "committees",
       feedback: "please input at least 1 committee",
       required: true,
-      type: "text",
+      type: "multiselect",
       minLength: 1,
       maxLength: 200,
     },
