@@ -29,6 +29,7 @@ const (
 	GovParamRoutePath              = "/v1/query/gov-params"
 	ConParamsRoutePath             = "/v1/query/con-params"
 	ValParamRoutePath              = "/v1/query/val-params"
+	EcoParamRoutePath              = "/v1/query/eco-params"
 	StateRoutePath                 = "/v1/query/state"
 	StateDiffRoutePath             = "/v1/query/state-diff"
 	StateDiffGetRoutePath          = "/v1/query/state-diff"
@@ -109,6 +110,7 @@ const (
 	GovParamRouteName              = "gov-params"
 	ConParamsRouteName             = "con-params"
 	ValParamRouteName              = "val-params"
+	EcoParamRouteName              = "eco-params"
 	StateRouteName                 = "state"
 	StateDiffRouteName             = "state-diff"
 	StateDiffGetRouteName          = "state-diff-get"
@@ -206,6 +208,7 @@ var routePaths = routes{
 	GovParamRouteName:              {Method: http.MethodPost, Path: GovParamRoutePath},
 	ConParamsRouteName:             {Method: http.MethodPost, Path: ConParamsRoutePath},
 	ValParamRouteName:              {Method: http.MethodPost, Path: ValParamRoutePath},
+	EcoParamRouteName:              {Method: http.MethodPost, Path: EcoParamRoutePath},
 	StateRouteName:                 {Method: http.MethodGet, Path: StateRoutePath},
 	StateDiffRouteName:             {Method: http.MethodPost, Path: StateDiffRoutePath},
 	StateDiffGetRouteName:          {Method: http.MethodGet, Path: StateDiffGetRoutePath},
@@ -296,6 +299,7 @@ func createRouter(s *Server) *httprouter.Router {
 		GovParamRouteName:              s.GovParams,
 		ConParamsRouteName:             s.ConParams,
 		ValParamRouteName:              s.ValParams,
+		EcoParamRouteName:              s.EcoParameters,
 		StateRouteName:                 s.State,
 		StateDiffRouteName:             s.StateDiff,
 		StateDiffGetRouteName:          s.StateDiff,
