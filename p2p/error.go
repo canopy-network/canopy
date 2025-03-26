@@ -2,10 +2,11 @@ package p2p
 
 import (
 	"fmt"
-	"github.com/canopy-network/canopy/lib"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
