@@ -1,32 +1,24 @@
 # BFT
 
-`bft.go` contains the `bft` type and the implementation of Hotstuff's Phases
+`bft.go` contains the high level logic for Canopy's implementation of the Hotstuff BFT Consensus protocol. Canopy implements Hotstuff with these eight phases:
 
-Election (Replicas gossip candidacy) -> Election Vote (Replicas determine Leader)
-Propose (Leader creates & gossips block) -> ProposeVote (Replicas validate block)
-Precommit (Leader reviews block validation messages, gossips result)-> PrecommitVote (Replicas validate block & 2/3rds signature)
-Commit (Very precommit votes & 23 sig)-> CommitProcess (Replicas verify commit message & commit block)
+1. Election - Replicas gossip candidacy
+2. ElectionVote - Replicas determine leader from candidates
+3. Propose - Leader proposes block
+4. ProposeVote - Replicas validate proposed block
+5. Precommit - Leader reviews block validations
+6. PrecommitVote - Replicas validate majority approved block
+7. Commit - Leader verifies majority vote
+8. CommitProcess - Replicas verify commit message and commit block
 
-RountInterrupt (Gossip Round Interrupt Message)-> Pacemaker (Finds highest round)
+There are two phases to handle errors and failure to achieve concensus:
+
+1. RoundInterrupt - Entered on error or failure to reach consensus
+2. Pacemaker - Ensures replicas are on the same round and restarts consensus process at Election
 
 # Canopy BFT Phases
 
 Canopy's BFT implementation uses eight phases as defined at the end of `bft.go`:
-
-```go
-const (
-	Election       = lib.Phase_ELECTION
-	ElectionVote   = lib.Phase_ELECTION_VOTE
-	Propose        = lib.Phase_PROPOSE
-	ProposeVote    = lib.Phase_PROPOSE_VOTE
-	Precommit      = lib.Phase_PRECOMMIT
-	PrecommitVote  = lib.Phase_PRECOMMIT_VOTE
-	Commit         = lib.Phase_COMMIT
-	CommitProcess  = lib.Phase_COMMIT_PROCESS
-	RoundInterrupt = lib.Phase_ROUND_INTERRUPT
-	Pacemaker      = lib.Phase_PACEMAKER
-)
-```
 
 The final two phases are only used in case of consensus failure. These two phases allow consensus to be attempted again with some timing modifications to allow for network sync issues.
 
