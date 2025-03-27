@@ -23,15 +23,26 @@ A consensus round begins at the Election phase and during normal operation, proc
 
 ### Election Phase
 
-The election phase serves to establish the set of validators that are eligible to be the next proposer.
+The election phase serves to establish the set of validators that are eligible to be included in the election.
 
 To do this, each validator performs the following steps:
 
-1. Constructs new sortition parameters based on a combination of data points to ensure, among other things, uniquess across differing chain heights and consensus rounds.
+1. Run the sortition process, using the following data points:
+  - Last Proposer Addresses
+  - Root Height
+  - Height
+  - Round
+  - PrivateKey
+
+    There are two important data points here:
+
+    - Last Proposer Address is used to prevent the Leader from manipulating the election proces
+    - The current round is used to ensure the output of the VRF is different so should one round fail to achieve consensus, the next round's election will likely result in a different leader.
+
 2. Use sortition parameters to determine replica eligibility in election
 3. If replica is eligible, sign components of the sortition data and send it to all replicas for the election vote phase
 
-Output: Eligible replicas gossip candidacy
+P2P: Eligible replicas gossip candidacy
 
 ### ElectionVote Phase
 
