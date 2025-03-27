@@ -1,100 +1,113 @@
 # BFT
 
-`bft.go` contains the high level logic for Canopy's implementation of the Hotstuff BFT Consensus protocol. Canopy implements Hotstuff with these eight phases:
+`bft.go` contains the core logic for Canopy's implementation of the Hotstuff BFT Consensus protocol. Canopy implements Hotstuff with these eight phases:
 
-1. Election - Replicas gossip candidacy
-2. ElectionVote - Replicas determine leader from candidates
-3. Propose - Leader proposes block
-4. ProposeVote - Replicas validate proposed block
-5. Precommit - Leader reviews block validations
-6. PrecommitVote - Replicas validate majority approved block
-7. Commit - Leader verifies majority vote
-8. CommitProcess - Replicas verify commit message and commit block
+1. Election: Replicas gossip candidacy
+2. ElectionVote: Replicas select a leader from the pool of gossiped candidates
+3. Propose: The elected leader puts forth a proposed block for consideration
+4. ProposeVote: Replicas validate proposed block
+5. Precommit: Leader reviews block validations received from replicas
+6. PrecommitVote: Replicas validate the block that received majority approval
+7. Commit: Leader verifies majority vote results
+8. CommitProcess: Replicas validate majority signature and proceed to commit block
 
-There are two other phases to handle errors and failure to achieve concensus:
+Additionally, there are two phases designed to address errors and failures when achieving consensus:
 
-1. RoundInterrupt - Entered on error or failure to reach consensus
-2. Pacemaker - Ensures replicas are on the same round and restarts consensus process at Election
+1. **RoundInterrupt**: This phase is activated in case of errors or if consensus
+cannot be reached. The pacemaker phase follows.
+2. **Pacemaker**: This mechanism ensures all replicas are synchronized to the same
+round and initiates a restart of the consensus process beginning with the
+Election phase.
 
-## Consensus Rounds
+## Consensus Phases & Rounds
 
-A consensus round begins at the Election phase and during normal operation, proceeds sequentially through each phase until the proposed block is commited during the final phase.
+A consensus round begins with the Election phase. During normal operations, this
+round progresses sequentially through each phase until the proposed block is
+successfully committed in the final phase.
 
+If consensus is not achieved during a round, the round counter is incremented to
+increase the chances of a successful outcome in the next attempt.
+
+Incrementing the round counter helps in the following ways:
+
+- If consensus failure is due to an issue with the elected leader, incrementing
+  the round ensures that the Verifiable Random Function (VRF) output changes,
+  increasing the likelihood of selecting a different leader in the subsequent
+  round.
+- In the case of consensus failure caused by asynchronous network issues,
+  incrementing the round counter introduces backoff timing, which reduces the
+  risk of repeated failures in successive rounds.
 
 ### Election Phase
 
-The election phase serves to establish the set of validators that are eligible to be included in the election.
+The election phase serves to establish the set of validators that are eligible to participate in the leader election.
 
-To do this, each validator performs the following steps:
+To do this each validator runs the sortition process, signing the VRF output and generating election elibility status.
 
-1. Run the sortition process, using the following data points:
-  - Last Proposer Addresses
-  - Root Height
-  - Height
-  - Round
-  - PrivateKey
+The last proposer addresses and current round are used as input for the VRF function. Using thelat proposer address ensures the leaders cannot manipulate eligibility.
 
-    There are two important data points here:
-
-    - Last Proposer Address is used to prevent the Leader from manipulating the election proces
-    - The current round is used to ensure the output of the VRF is different so should one round fail to achieve consensus, the next round's election will likely result in a different leader.
-
-2. Use sortition parameters to determine replica eligibility in election
-3. If replica is eligible, sign components of the sortition data and send it to all replicas for the election vote phase
-
-P2P: Eligible replicas gossip candidacy
+P2P: Eligible validators broadcast their candidacy to the replicas.
 
 ### ElectionVote Phase
 
-The election vote phase is where the next proposer is determined.
+The election vote phase is dedicated to selecting the next proposer from the
+pool of eligible candidates.
 
-Each replica collects all candidate messages sent in the Election Phase and uses them to select the next proposer.
+During this phase, each replica evaluates the candidacy messages collected
+during the Election Phase and chooses the candidate with the lowest VRF out
+signature as the next leader.
 
-Once proposer is selected, the replica sends a message directly to that replica stating the local replica believes the remote replica to be the new proposer.
-
-Output: Replicas send signed vote to proposer
+P2P: Replicas send their signed vote to the chosen proposer, endorsing them as
+the leader.
 
 ### Propose Phase
 
-The propose phase is where the proposer proposes the next block. This phase is only for the proposer.
+During this phase each replica checks to see if it was chosen as the proposer by the majority vote. The chosen replica then creates and proposes the next block.
 
-When a proposal is created, a block is created along with a result containing the reward and slash recipients. Will use HighQC instead of creating another proposal.
+When a proposal is created, a block is created along with a result containing the reward and slash recipients. Should a previously locked block exist, this one will be used as the proposed block.
 
-A quorum certificate is created containing the block bytes and result data and sent in a message to all replicas.
-
-Output: Proposal 
+P2P: A proposal containing the block and results are gossiped to replicas.
 
 ### ProposeVote Phase
 
-Replica receives proposal from proposer
-Checks for locked proposal, verifies safe node predicate if so
-Validates proposal
-Sends verified block hash and results hash back to proposer (the propose vote)
+In this phase, replicas receive and examine a proposal.
+
+If there is a previously locked proposal, the replicas verify that the safe node
+predicate has been met before unlocking and using the received proposal.
+
+Replicas then validate the proposal, applying any double signing evidence.
+
+P2P: Replica sends validated proposal back to proposer.
 
 ### Precommit Phase
 
-Leader reviews collected replica propose votes
-Verifies 2/3rd majority signatures by voting power
-Send precommit message to replicas
+In this phase the leader reviews the received replica proposal votes and verifies 2/3rd majority signatures by voting power
+
+P2P: Leader sends precommit message to replicas
 
 ### PrecommitVote Phase
 
-Replicas review messages from the leader validating the 2/3rd signature
-Replica locks the proposal
-Replicas send signed (aggregable) propose vote to leader
+In this phase replicas review the precommit message from the leader and
+validate the majority vote signature.
+
+Replicas lock the proposal
+
+P2P: Replicas send signed propose vote to leader
 
 ### Commit Phase
 
-Leader reviews collected precommit votes (votes signing off on validity of Leader's Proposal)
-Verify 2/3rds signature
-Send commit message with multisig to replicas
+In the Commit phase, the leader examines the precommit votes it has received,
+which confirm the validity of the leader’s proposal. The leader then verifies
+that these precommit votes collectively contain signatures from at least
+two-thirds of the replicas. Upon successful verification, the leader sends a
+commit message, which includes a multisignature, to all replicas.
 
 ### Commit Process Phase
 
-Replica reviews message from Leader by validating 2/3rds signature
-Clears byzantine evidence
-Gossip QC message to peers
-This ends the block time
+During the Commit Process phase, each replica reviews the commit message and
+verifies it is the correct proposal and comes from the correct proposer.
+
+Once verified, the block is commited and gossiped to replicas.
 
 ### Round Interrupt Phase
 
@@ -104,7 +117,7 @@ When this happens, phase processing is halted the replica will idle until the fi
 
 Causes:
 - ProposeVote phase didn't get a valid message from proposer
-- ProposeVote HighQC but not SafeNode
+
 - ProposeVote invalid proposal
 - Precommit phase couldn't get majority vote
 - PrecommitVote did not get a valid message from proposer
