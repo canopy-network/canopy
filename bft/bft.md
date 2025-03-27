@@ -1,15 +1,15 @@
 # BFT
 
-`bft.go` contains the core logic for Canopy's implementation of the Hotstuff BFT Consensus protocol. Canopy implements Hotstuff with these eight phases:
+`bft.go` contains the core logic for Canopy's implementation of the `NestBFT` protocol. Below is a list of each phase and its primary purpose:
 
-1. Election: Replicas gossip candidacy
-2. ElectionVote: Replicas select a leader from the pool of gossiped candidates
-3. Propose: The elected leader puts forth a proposed block for consideration
-4. ProposeVote: Replicas validate proposed block
-5. Precommit: Leader reviews block validations received from replicas
-6. PrecommitVote: Replicas validate the block that received majority approval
-7. Commit: Leader verifies majority vote results
-8. CommitProcess: Replicas validate majority signature and proceed to commit block
+1. **Election**: Replicas gossip candidacy
+2. **ElectionVote**: Replicas select a leader from the pool of gossiped candidates
+3. **Propose**: The elected leader puts forth a proposed block for consideration
+4. **ProposeVote**: Replicas validate proposed block
+5. **Precommit**: Leader reviews block validations received from replicas
+6. **PrecommitVote**: Replicas validate the block that received majority approval
+7. **Commit**: Leader verifies majority vote results
+8. **CommitProcess**: Replicas validate majority signature and proceed to commit block
 
 Additionally, there are two phases designed to address errors and failures when achieving consensus:
 
