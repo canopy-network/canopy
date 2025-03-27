@@ -40,13 +40,17 @@ Incrementing the round counter helps in the following ways:
 
 ### Election Phase
 
-The election phase serves to establish the set of validators that are eligible to participate in the leader election.
+The election phase serves to establish the set of validators that are eligible
+to participate in the leader election.
 
-To do this each validator runs the sortition process, signing the VRF output and generating election elibility status.
+To do this each validator runs the sortition process, signing the VRF output and
+generating election elibility status.
 
-The last proposer addresses and current round are used as input for the VRF function. Using thelat proposer address ensures the leaders cannot manipulate eligibility.
+The last proposer addresses and current round are used as input for the VRF
+function. Using thelat proposer address ensures the leaders cannot manipulate
+eligibility.
 
-P2P: Eligible validators broadcast their candidacy to the replicas.
+Eligible validators broadcast their candidacy to the replicas.
 
 ### ElectionVote Phase
 
@@ -57,16 +61,20 @@ During this phase, each replica evaluates the candidacy messages collected
 during the Election Phase and chooses the candidate with the lowest VRF out
 signature as the next leader.
 
-P2P: Replicas send their signed vote to the chosen proposer, endorsing them as
-the leader.
+Replicas send their signed vote to the chosen proposer, endorsing them as the
+leader.
 
 ### Propose Phase
 
-During this phase each replica checks to see if it was chosen as the proposer by the majority vote. The chosen replica then creates and proposes the next block.
+During this phase each replica checks to see if it was chosen as the proposer by
+the majority vote. The chosen replica then creates and proposes the next block.
 
-When a proposal is created, a block is created along with a result containing the reward and slash recipients. Should a previously locked block exist, this one will be used as the proposed block.
+When a proposal is created, a block is created along with a result containing
+the reward and slash recipients. Should a previously locked block exist, this
+one will be used as the proposed block.
 
-P2P: A proposal containing the block and results are gossiped to replicas.
+Once complete, a proposal containing the block and results are gossiped to
+replicas.
 
 ### ProposeVote Phase
 
@@ -75,32 +83,27 @@ In this phase, replicas receive and examine a proposal.
 If there is a previously locked proposal, the replicas verify that the safe node
 predicate has been met before unlocking and using the received proposal.
 
-Replicas then validate the proposal, applying any double signing evidence.
-
-P2P: Replica sends validated proposal back to proposer.
+Replicas then validate the proposal, applying any double signing evidence, sending the validated proposal back to the proposer.
 
 ### Precommit Phase
 
-In this phase the leader reviews the received replica proposal votes and verifies 2/3rd majority signatures by voting power
+In this phase the leader reviews the received replica proposal votes and verifies it has the majority vote.
 
-P2P: Leader sends precommit message to replicas
+If so, the leader sends a precommit message to replicas.
 
 ### PrecommitVote Phase
 
 In this phase replicas review the precommit message from the leader and
 validate the majority vote signature.
 
-Replicas lock the proposal
-
-P2P: Replicas send signed propose vote to leader
+Replicas lock the proposal and signed the signed propose vote to the leader.
 
 ### Commit Phase
 
-In the Commit phase, the leader examines the precommit votes it has received,
-which confirm the validity of the leader’s proposal. The leader then verifies
-that these precommit votes collectively contain signatures from at least
-two-thirds of the replicas. Upon successful verification, the leader sends a
-commit message, which includes a multisignature, to all replicas.
+In the Commit phase, the leader examines the precommit votes it has received and
+confirms the majority vote.
+
+Upon successful verification, the leader sends a commit message to all replicas.
 
 ### Commit Process Phase
 
