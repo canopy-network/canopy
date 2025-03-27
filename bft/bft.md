@@ -11,26 +11,17 @@
 7. Commit - Leader verifies majority vote
 8. CommitProcess - Replicas verify commit message and commit block
 
-There are two phases to handle errors and failure to achieve concensus:
+There are two other phases to handle errors and failure to achieve concensus:
 
 1. RoundInterrupt - Entered on error or failure to reach consensus
 2. Pacemaker - Ensures replicas are on the same round and restarts consensus process at Election
 
-# Canopy BFT Phases
-
-Canopy's BFT implementation uses eight phases as defined at the end of `bft.go`:
-
-The final two phases are only used in case of consensus failure. These two phases allow consensus to be attempted again with some timing modifications to allow for network sync issues.
-
-Consensus of the block (transactions) and consensus of the results being the same.
-
 ## Consensus Rounds
 
-Every height starts at round 0. Should there be consensus failure, the round counter will be incremented and another round will be executed starting again at the election phase.
+A consensus round begins at the Election phase and during normal operation, proceeds sequentially through each phase until the proposed block is commited during the final phase.
 
-Since a full consensus round has passed, the next proposal will contain a greater number of transactions.
 
-## Election Phase
+### Election Phase
 
 The election phase serves to establish the set of validators that are eligible to be the next proposer.
 
@@ -42,7 +33,7 @@ To do this, each validator performs the following steps:
 
 Output: Eligible replicas gossip candidacy
 
-## ElectionVote Phase
+### ElectionVote Phase
 
 The election vote phase is where the next proposer is determined.
 
@@ -52,7 +43,7 @@ Once proposer is selected, the replica sends a message directly to that replica 
 
 Output: Replicas send signed vote to proposer
 
-## Propose Phase
+### Propose Phase
 
 The propose phase is where the proposer proposes the next block. This phase is only for the proposer.
 
@@ -62,39 +53,39 @@ A quorum certificate is created containing the block bytes and result data and s
 
 Output: Proposal 
 
-## ProposeVote Phase
+### ProposeVote Phase
 
 Replica receives proposal from proposer
 Checks for locked proposal, verifies safe node predicate if so
 Validates proposal
 Sends verified block hash and results hash back to proposer (the propose vote)
 
-## Precommit Phase
+### Precommit Phase
 
 Leader reviews collected replica propose votes
 Verifies 2/3rd majority signatures by voting power
 Send precommit message to replicas
 
-## PrecommitVote Phase
+### PrecommitVote Phase
 
 Replicas review messages from the leader validating the 2/3rd signature
 Replica locks the proposal
 Replicas send signed (aggregable) propose vote to leader
 
-## Commit Phase
+### Commit Phase
 
 Leader reviews collected precommit votes (votes signing off on validity of Leader's Proposal)
 Verify 2/3rds signature
 Send commit message with multisig to replicas
 
-## Commit Process Phase
+### Commit Process Phase
 
 Replica reviews message from Leader by validating 2/3rds signature
 Clears byzantine evidence
 Gossip QC message to peers
 This ends the block time
 
-## Round Interrupt Phase
+### Round Interrupt Phase
 
 Should there be an unexpected error or condition during any other phases, the replicas will abandon the current phase, send a pacemaker message to all replicas, and enter a round interrupt phase.
 
@@ -111,7 +102,7 @@ Causes:
 - CommitProcess did not get a valid message from proposer
 - CommitProcess got invalid proposer or proposal
 
-## Pacemaker Phase
+### Pacemaker Phase
 
 Replica examines all received pacemaker messages to find the highest round that majority has seen
 
@@ -173,8 +164,8 @@ block-beta
 
     E--"Replicas Send Candidacy"-->EV
     EV--"Replicas Choose Leader"-->P
-    P--"Block Proposal"-->PV
-    PV--"Verified Proposal"-->PC
+    P--"Leader Proposes Block"-->PV
+    PV--"Replices Verify Proposal"-->PC
     PC--"Verified Majority"-->PCV
     PCV--"Replicas Validate Proposal"-->C
     C--"Majority Confirmed"-->CP
