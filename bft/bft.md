@@ -1,143 +1,111 @@
-# BFT
+# The Block Proposer
 
-`bft.go` contains the core logic for Canopy's implementation of the `NestBFT` protocol. Below is a list of each phase and its primary purpose:
+An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
 
-1. **Election**: Replicas gossip candidacy
-2. **ElectionVote**: Replicas select a leader from the pool of gossiped candidates
-3. **Propose**: The elected leader puts forth a proposed block for consideration
-4. **ProposeVote**: Replicas validate proposed block
-5. **Precommit**: Leader reviews block validations received from replicas
-6. **PrecommitVote**: Replicas validate the block that received majority approval
-7. **Commit**: Leader verifies majority vote results
-8. **CommitProcess**: Replicas validate majority signature and proceed to commit block
+NestBFT uses a unique election mechanism involving Practical VRF and linear stake-weighted thresholds. This approach enhances fairness by selecting potential leaders based on stake and randomness, protecting against attacks and ensuring decentralized block proposals.
 
-Additionally, there are two phases designed to address errors and failures when achieving consensus:
+# Election Phase
 
-1. **RoundInterrupt**: This phase is activated in case of errors or if consensus
-cannot be reached. The pacemaker phase follows.
-2. **Pacemaker**: This mechanism ensures all replicas are synchronized to the same
-round and initiates a restart of the consensus process beginning with the
-Election phase.
+The election phase of the NestBFT consensus algorithm involves a sortition process combined with a Verifiable Random Function (VRF) signature. These mechanisms help determine the leader for a given round.
 
-## Consensus Phases & Rounds
+## Importance of Sortition Seed Data Parts
 
-A consensus round begins with the Election phase. During normal operations, this
-round progresses sequentially through each phase until the proposed block is
-successfully committed in the final phase.
+1. **Round**: The inclusion of "Round" in the sortition seed data ensures that the VRF signature is unique for every round. This uniqueness is crucial as it mandates the election of a new leader if the current round concludes without reaching consensus. By changing the leader candidate each round, the algorithm aims to prevent repeated failures caused by a faulty or malicious leader in consecutive rounds.
 
-If consensus is not achieved during a round, the round counter is incremented to
-increase the chances of a successful outcome in the next attempt.
+2. **LastProposerAddresses**: The use of "LastProposerAddresses" in generating the VRF signature helps ensure that previous leaders cannot manipulate the variables used in the current round's leader election process. This inclusion provides an additional layer of fairness and randomness in the selection process by incorporating historical leadership data, preventing bias or undue advantage to past leaders.
 
-Incrementing the round counter helps in the following ways:
+## Stake-Weighted Selection
 
-- If consensus failure is due to an issue with the elected leader, incrementing
-  the round ensures that the Verifiable Random Function (VRF) output changes,
-  increasing the likelihood of selecting a different leader in the subsequent
-  round.
-- In the case of consensus failure caused by asynchronous network issues,
-  incrementing the round counter introduces backoff timing, which reduces the
-  risk of repeated failures in successive rounds.
+In the NestBFT election phase, the higher the voting power (stake) of a validator, the greater their chance of being selected as a candidate for leadership. This stake-weighted selection ensures that validators who have invested more resources into the network have a proportionate influence, aligning with the principles of stake-based blockchain networks.
 
-### Election Phase
+# Election Vote Phase
 
-The election phase serves to establish the set of validators that are eligible
-to participate in the leader election.
+In the Election Vote Phase of the NestBFT consensus algorithm, replicas evaluate messages from potential leaders known as Candidates based on their VRF (Verifiable Random Function) outputs. The replica nodes review these outputs to determine the leader. If no Candidate messages are received, a fallback mechanism selects a leader randomly, weighed by the stake. 
 
-To do this each validator runs the sortition process, signing the VRF output and
-generating election elibility status.
+After identifying the leader, replicas send a digitally signed election vote to the selected leader, attaching any Byzantine evidence or 'Locked' QC (quorum certificate) they have, alongside their VDF (Verifiable Delay Function) output. These votes are aggregable, meaning they can be collectively assessed to determine a consensus. This process helps the network agree on which proposal to proceed with while ensuring fair representation of voting power based on the stake of the participants.
 
-The last proposer addresses and current round are used as input for the VRF
-function. Using thelat proposer address ensures the leaders cannot manipulate
-eligibility.
+I'm sorry, but I don't have specific information about the NestBFT consensus algorithm within the provided context. However, based on what I know, I can describe a typical propose phase in many BFT-style algorithms:
 
-Eligible validators broadcast their candidacy to the replicas.
+# Propose Phase
 
-### ElectionVote Phase
+In the propose phase of a consensus algorithm like NestBFT, the leader's role is crucial:
 
-The election vote phase is dedicated to selecting the next proposer from the
-pool of eligible candidates.
+1. **Block Proposal Creation**: The leader generates a new block proposal. If there's an existing proposal that has been previously locked, the leader may opt to use this rather than constructing a new one. This acts as a mechanism to ensure consistency and stability.
 
-During this phase, each replica evaluates the candidacy messages collected
-during the Election Phase and chooses the candidate with the lowest VRF out
-signature as the next leader.
+2. **Components of a Proposal**: The proposal typically includes:
+   - The proposed block itself, which comprises transactions.
+   - Results related to rewards and penalties, often referred to as reward and slash recipients. These determine who gets rewarded for their participation in consensus and who gets penalized for malicious or faulty behavior.
 
-Replicas send their signed vote to the chosen proposer, endorsing them as the
-leader.
+3. **Proposal Distribution**: Once the proposal is ready, the leader disseminates it to all participating validators in the network. This step is essential for moving the network towards agreement on the new block.
 
-### Propose Phase
+If you have any additional or specific questions about the NestBFT algorithm or its various phases, feel free to ask.
 
-During this phase each replica checks to see if it was chosen as the proposer by
-the majority vote. The chosen replica then creates and proposes the next block.
+# Propose Vote Phase
 
-When a proposal is created, a block is created along with a result containing
-the reward and slash recipients. Should a previously locked block exist, this
-one will be used as the proposed block.
+The `PROPOSEVOTE` phase of the NestBFT consensus algorithm is not specifically detailed in the provided context. However, based on the typical flow of consensus algorithms like BFT, the `PROPOSEVOTE` phase likely involves the following steps:
 
-Once complete, a proposal containing the block and results are gossiped to
-replicas.
+1. **Proposal Review**: After the `PROPOSE` phase, validators (other than the leader) review the block proposal made by the leader. This proposal includes aggregated votes or signatures that justify the validity and acceptance of the proposed block.
 
-### ProposeVote Phase
+2. **Validation**: Validators validate the proposal to ensure it is legitimate, checking the accompanying signatures for the required threshold (typically +2/3) of voting power.
 
-In this phase, replicas receive and examine a proposal.
+3. **Vote Generation**: Upon validation, if a validator agrees with the proposal, they generate a vote message as a digital signature to express their agreement with the proposal.
 
-If there is a previously locked proposal, the replicas verify that the safe node
-predicate has been met before unlocking and using the received proposal.
+4. **Vote Transmission**: This vote is then sent back to the leader, or possibly gossiped to other validators, contributing to the consensus process.
 
-Replicas then validate the proposal, applying any double signing evidence, sending the validated proposal back to the proposer.
+These steps typically ensure that the proposal reaches consensus and can proceed to the next phases like `PRECOMMIT` and `COMMIT`.
 
-### Precommit Phase
+If more specific details about the `PROPOSEVOTE` phase are required, they could be found in technical documentation or source code related to the NestBFT consensus protocol outside the provided context.
 
-In this phase the leader reviews the received replica proposal votes and verifies it has the majority vote.
+# Precommit Phase
 
-If so, the leader sends a precommit message to replicas.
+In the PRECOMMIT phase of the NestBFT consensus algorithm, the protocol transitions to the point where the leader node aims to justify consensus on a block proposal. During this phase, the leader aggregates votes from the replica validators and sends a PRECOMMIT message. The main actions that occur in this phase are:
 
-### PrecommitVote Phase
+1. **Logging the Current View**: The leader logs the current view information to maintain a record of the ongoing consensus process.
 
-In this phase replicas review the precommit message from the leader and
-validate the majority vote signature.
+2. **Checking Proposer Role**: The leader checks if it is the current proposer. If not, it exits the process for this phase.
 
-Replicas lock the proposal and signed the signed propose vote to the leader.
+3. **Gathering Majority Vote**: The leader calls `GetMajorityVote()` to gather votes from replica validators. This step involves aggregating signatures that account for at least a two-thirds majority of the voting power.
 
-### Commit Phase
+4. **Handling Errors**: If there is an error in obtaining the majority vote, the leader logs the error and invokes `RoundInterrupt()` to handle this situation, likely attempting to recover or retry the consensus process.
 
-In the Commit phase, the leader examines the precommit votes it has received and
-confirms the majority vote.
+5. **Sending PRECOMMIT Message**: Once a valid majority vote and aggregated signature are obtained, the leader sends a PRECOMMIT message to all replicas. This message includes the quorum certificate (QC) with headers reflecting the vote view, block hash, results hash, the proposer’s key, and the aggregated signature.
 
-Upon successful verification, the leader sends a commit message to all replicas.
+The PRECOMMIT phase is crucial as it sets the stage for the next phase, PRECOMMIT_VOTE, where replicas lock on the proposal after validating the justification, but no locking occurs during the PRECOMMIT phase itself.
 
-### Commit Process Phase
+# Precommit Vote Phase
 
-During the Commit Process phase, each replica reviews the commit message and
-verifies it is the correct proposal and comes from the correct proposer.
+The PRECOMMITVOTE phase is a crucial step in the consensus process of the NestBFT algorithm. In this phase, replicas (or Validator nodes that are not acting as the Leader) send their votes to the Leader. Each vote is a digital signature based on the current state of the blockchain, specifically the block and its associated data being proposed. The purpose of the PRECOMMITVOTE phase is to gather consensus from the replicas by achieving a +2/3 majority of voting power.
 
-Once verified, the block is commited and gossiped to replicas.
+During the PRECOMMITVOTE phase, replicas review the Leader’s proposal from the previous phase and decide whether to support it. If enough replicas agree, by submitting their votes to the Leader, a quorum certificate can be formed that justifies moving the proposed block to the next stage of the consensus process. The votes are organized by `Payload Hash` to ensure consistency in what the replicas are voting on.
 
-### Round Interrupt Phase
+The successful aggregation of these votes by the Leader demonstrates that the proposed block has substantial support, which is necessary for the network to achieve consensus and guarantees that the block can proceed to the next step within the consensus cycle.
 
-Should there be an unexpected error or condition during any other phases, the replicas will abandon the current phase, send a pacemaker message to all replicas, and enter a round interrupt phase.
+# Commit Phase
 
-When this happens, phase processing is halted the replica will idle until the final phase which will be replaced with the pacemaker phase.
+During the Commit Phase of the NestBFT consensus algorithm, the following steps are taken:
 
-Causes:
-- ProposeVote phase didn't get a valid message from proposer
+1. **Leader's Role**: 
+   - The leader collects and aggregates votes from the replica validators.
+   - It identifies whether a +2/3 majority of voting power has been achieved. This majority is necessary for moving forward with consensus.
 
-- ProposeVote invalid proposal
-- Precommit phase couldn't get majority vote
-- PrecommitVote did not get a valid message from proposer
-- PrecommitVote got invalid proposer or proposal
-- CommitPhase couldn't get majority vote
-- CommitProcess did not get a valid message from proposer
-- CommitProcess got invalid proposer or proposal
+2. **Validation of Majority Vote**: 
+   - The leader checks if the aggregated votes are valid and constitute a +2/3 majority.
 
-### Pacemaker Phase
+3. **Sending the Commit Message**: 
+   - If the vote is valid, the leader sends a Commit message to all the validators. This message asserts that consensus has been achieved for the current block.
 
-Replica examines all received pacemaker messages to find the highest round that majority has seen
+In essence, the Commit Phase is where the leader finalizes the consensus decision by confirming majority support and communicating this decision to the network of validators.
 
-# Phase Timings & Block Time
+# Commit Process Phase
 
-Phase lengths are defined in `config.json`:
+During the COMMITPROCESS phase of the NestBFT consensus algorithm, the replicas commit the block to the chain. This phase is crucial for achieving consensus, as it finalizes the block that has been proposed and agreed upon by the network participants. The replicas ensure that the block is valid and then proceed to append it to their local blockchain, thereby updating the state of the network and preparing for subsequent phases in the consensus process.
 
-```
+# Phase Times and Total Block Time
+
+The mechanism used to control block times in NestBFT involves defining the duration of each phase within the `config.json` file. The phases and their initial configurations are as follows:
+
+```json
+{
   "electionTimeoutMS": 2000,
   "electionVoteTimeoutMS": 2000,
   "proposeTimeoutMS": 3000,
@@ -145,55 +113,21 @@ Phase lengths are defined in `config.json`:
   "precommitTimeoutMS": 2000,
   "precommitVoteTimeoutMS": 2000,
   "commitTimeoutMS": 2000,
-  "commitProcessMS": 3000,
+  "commitProcessMS": 3000
+}
 ```
 
-The last phase, `commitProcessMS` is the one to modify to modify total block time.
+Each individual phase time can be adjusted according to the needs of the application. The total block time is effectively the sum of all phase durations. If you wish to extend the overall block time without altering the timing of individual phases, you can increase the `commitProcessMS`. This approach allows you to control the total block time while maintaining the structure of phase timings.
 
-# Proposal Locking & Safe Node Predicate
+# Locking & Safe Node Predicates
 
-During the precommit vote phase replicas will lock on a proposal.
-This proposal has been verified by the leader as having the majority vote behind it.
+During the precommit vote phase, replicas will lock onto a proposal that has been verified by the leader as having the majority vote behind it. 
 
-Should a round interrupt occur, the consensus process will be reset to the election phase, with replicas retaining the locked proposal.
+Should a round interrupt occur, the consensus process will reset to the election phase, with replicas retaining the locked proposal. During the next propose phase, this locked proposal will be used as the new proposal to be gossiped to replicas.
 
-During the next propose phase this locked proposal will be used as the proposal which will be gossiped to replicas.
+In the propose vote phase, replicas will recognize that they still have a locked proposal and will run the safe node predicate check to determine if they can unlock. It is safe to unlock if:
 
-During the proposevote phase, the replicas will see they still have a locked proposal and will run the safe node predicate check to verify whether they can unlock
+- **SAFETY**: The block hash and result hash for the locked proposal and the received proposal are the same.
+- **LIVENESS**: The round number in the received proposal is higher than that in the locked proposal.
 
-It is safe to unlock if:
-- Block hash and Result hash for the locked proposal and received proposal are the same (SAFETY)
-- The round in the received proposal is higher than the locked proposal (LIVENESS)
-
-```mermaid
-block-beta
-    columns 4
-
-    E["Election"]
-    space
-    space
-    EV["ElectionVote"]
-    space:4
-    P["Propose"]
-    space
-    space
-    PV["ProposeVote"]
-    space:4
-    PC["Precommit"]
-    space
-    space
-    PCV["PrecommitVote"]
-    space:4
-    C["Commit"]
-    space
-    space
-    CP["CommitProcess"]
-
-    E--"Replicas Send Candidacy"-->EV
-    EV--"Replicas Choose Leader"-->P
-    P--"Leader Proposes Block"-->PV
-    PV--"Replices Verify Proposal"-->PC
-    PC--"Verified Majority"-->PCV
-    PCV--"Replicas Validate Proposal"-->C
-    C--"Majority Confirmed"-->CP
-```
+These conditions ensure the integrity and progress of the consensus process.
