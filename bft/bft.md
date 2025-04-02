@@ -41,9 +41,13 @@ premature exit to the round.
 ### View
 
 A view tracks the current state of the consensus from the perspective of a
-replica, maintaining the current height, round, and phase. Combined with the
-recovery phases, this allows all replicas to remain synchronized during the
-consensus process and recover in the case of consensus failure.
+replica, maintaining the current height, round, and phase.
+
+In the case of consensus error, each replica sends its View to all other
+replicas during the pacemaker phase. By sharing this information, replicas can
+synchronize and jump to the highest round observed by the majority, ensuring all
+replicas are on the same round and can proceed with another attempt at
+consensus.
 
 ### Super-Majority Votes
 
@@ -72,19 +76,6 @@ on a particular aspect of the consensus process. By doing so, QCs enable
 replicas to interact and validate actions with assurance. These certificates
 play a critical role by confirming that consensus has been reached without
 necessitating constant direct communication among all replicas.
-The context appears to be readable and of good quality, so here's an introductory paragraph for the core logic of the BFT consensus.
-
-# NestBFT
-
-Welcome to the world of Byzantine Fault Tolerant (BFT) consensus, specifically tailored for blockchain developers. In this algorithm, the focus is on achieving consensus through a series of structured phases. Here’s a brief overview of the process, using terms like "voting power" and "majority vote" that you'll encounter frequently:
-
-- **ELECTION:** This is where it begins. Each replica runs a Verifiable Random Function (VRF) to determine if it's selected as a candidate, sending its VRF output to other replicas. The successors depend on the ELECTION votes from this phase.
-
-- **ELECTION-VOTE:** Replicas cast ELECTION votes for the leader, determined by the lowest VRF value. If no candidates emerge, a fallback to stake-weighted pseudorandom selection occurs. The majority of these votes set the stage for the next phase, the proposal formulation.
-
-- **PROPOSE:** The leader, chosen with +2/3 voting power, compiles these votes, including their locks and evidence, to craft a new block proposal. The next phase hinges on the acceptance of this proposal. 
-
-Each phase interacts symbiotically with the preceding and succeeding phases to fortify the consensus process. This algorithm leverages the power dynamics of voting to achieve a robust and decentralized consensus. 
 # The Block Proposer
 
 An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
