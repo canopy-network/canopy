@@ -37,28 +37,27 @@ premature exit to the round.
    super-majority has seen and restarts the consensus process beginning with the
    Election phase.
 
-## View
+### View
 
 A view tracks the current state of the consensus from the perspective of a
 replica, maintaining the current height, round, and phase. Combined with the
 recovery phases, this allows all replicas to remain synchronized during the
 consensus process and recover in the case of consensus failure.
 
-## Super-Majority Votes
+### Super-Majority Votes
 
 Defined as two-thirds of replica votes, super-majorities are used to ensure that
 all actions are justified with the required number of replicas in agreement.
 
-## Proposal Locking
+### Proposal Locking
 
 Allows the replica to "lock" on to a proposal to aid in recovery should the
 consensus process fail before the round is complete.
 
-## Quorum Certificates
+### Quorum Certificates
 
 Quorum certificates are used to validate and communicate actions taken by nodes,
 ensuring that decisions are backed by a majority of voting power.
-
 
 ## The BFT type
 
