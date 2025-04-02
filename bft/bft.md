@@ -1,31 +1,30 @@
 # Documentation for `bft.go`
 
-# 1. Description
+# Description
 
-The `bft.go` file implements a consensus mechanism for a blockchain system. It defines structures and processes to coordinate validators in reaching a consensus on proposed blocks. The focus is on organizing data flows and operations around a series of phases that establish agreement among participants using digital signatures and voting power. It entails leader election, proposal creation, vote collection, and validation through quorum certificates.
+The `bft.go` file implements the core structures and logic for managing the consensus process in blockchain systems using a specific BFT algorithm. It handles the flow of information and actions across different phases of consensus to ensure all replicas reach agreement on new blocks in a decentralized network.
 
-# 3. Key Components
+# Key Components
 
-## BFT struct
+## The BFT type
 
-- **View Management**: This manages the current period, known as height, round, and phase, during which the consensus process is happening.
+The `bft` type encapsulates all state required for replicas to synchronously transition through each phase in unison.
 
-- **Vote Collection**: Votes from Replica Validators are tracked. These votes are essential for making decisions about proposed blocks, as they represent the voting power of participants.
+- **View Management**: Tracks the current state of the consensus process, maintaining the current height, round, and phase. This, combined with the recovery phases, allows all replicas to remain synchronized during the consensus process and recover in the case of consensus failure.
 
-- **Proposal Management**: Proposal blocks from the leader are managed. This involves collecting and validating proposals to ensure they meet the necessary criteria for the next phase.
+- **Leader Election**: Uses Verifiable Random Functions (VRF) and sortition seed data to elect a leader and ensure a fair election process.
 
-- **Leader Election**: The mechanism for leader election is outlined. This uses a verifiable random function (VRF) and other criteria to select a leader who can propose new blocks.
+- **Validator Coordination**: The structure coordinates between different validators in the network, organizing their votes and proposals through fields like *Votes* and *Proposals* to achieve consensus.
 
-- **Quorum and Validation**: Quorum certificates are gathered and stored to validate the actions taken by nodes, ensuring that decisions are backed by a majority of voting power. This validation process involves slashing and rewarding decisions for nodes.
+- **Super-Majority Votes**: Defined as two-thirds of replica votes, super-majorities are used to ensure that all actions are justified with the required number of replicas in agreement.
 
-## Quorum Certificates
+- **Proposal Locking**: Allows the replica to "lock" onto a proposal to aid in recovery should the consensus process fail before the round is complete.
 
-- Quorum certificates serve as the proof that a proposal or decision has garnered enough support, specifically a super-majority (over two-thirds) of the voting power, from the participants. They are vital in the election and proposal phases as they justify the actions of leaders and replicas, providing a secure and verifiable means to progress through the consensus phases. The certificates ensure that decisions made during the consensus process are legitimate and supported by a qualified majority.
-# NestBFT
+- **Quorum Certificates**: Quorum certificates are used to validate and communicate actions taken by nodes, ensuring that decisions are backed by a majority of voting power.
 
-In the world of blockchain, achieving consensus efficiently and securely is crucial. This is where NestBFT comes in, leveraging voting power and majority votes to reach agreement on the next block in the chain. The approach involves multiple phases where each replica—or participant—interacts and contributes its part to the process.
+- **Block Management**: Handles new block proposals by allowing the elected leader to put forth proposals for the next block. Replicas then evaluate these proposals, and upon receiving sufficient votes of confidence, the block is committed to the chain.
 
-Each phase in the NestBFT process builds upon the last and sets the stage for the next. For instance, data from the Election phase feeds into ElectionVote, establishing a leader whom the replicas can support or challenge. A super-majority serves as justification for decisions, ensuring consensus integrity at every stage.
+- **Byzantine Evidence**: Maintains evidence of Byzantine behavior to track and prevent issues like double signing.
 
 ## Consensus Phases & Rounds
 
@@ -33,21 +32,33 @@ The consensus process is broken down into 8 core phases and 2 recovery phases. E
 
 Below is a list of each core phase and their primary purpose:
 
-1. **Election**: Replicas gossip candidacy
-2. **ElectionVote**: Replicas vote for a leader selected from the pool of gossiped candidates
-3. **Propose**: The elected leader puts forth a proposed block for consideration
-4. **ProposeVote**: Replicas validate proposed block and sends vote to leader
-5. **Precommit**: Leader reviews block votes received from replicas
-6. **PrecommitVote**: Replicas validate majority approval and send vote to leader
-7. **Commit**: Leader verifies majority vote results
-8. **CommitProcess**: Replicas validate majority signature and proceed to commit block
+1. **Election**: Replicas gossip candidacy.
+2. **ElectionVote**: Replicas vote for a leader selected from the pool of gossiped candidates.
+3. **Propose**: The elected leader puts forth a proposed block for consideration.
+4. **ProposeVote**: Replicas validate the proposed block and send a vote to the leader.
+5. **Precommit**: The leader reviews block votes received from replicas.
+6. **PrecommitVote**: Replicas validate majority approval and send votes to the leader.
+7. **Commit**: The leader verifies majority vote results.
+8. **CommitProcess**: Replicas validate the majority signature and proceed to commit the block.
 
 The two recovery phases are used when an error in the consensus process causes a premature exit to the round.
 
-1. **RoundInterrupt**: During this phase each replica sends View to all other replicas to enable synchronization in the Pacemaker phase.
+1. **RoundInterrupt**: During this phase, each replica sends a View to all other replicas to enable synchronization in the Pacemaker phase.
 
 2. **Pacemaker**: This phase synchronizes each replica to the highest round a super-majority has seen and restarts the consensus process beginning with the Election phase.
+The context appears to be readable and of good quality, so here's an introductory paragraph for the core logic of the BFT consensus.
 
+# NestBFT
+
+Welcome to the world of Byzantine Fault Tolerant (BFT) consensus, specifically tailored for blockchain developers. In this algorithm, the focus is on achieving consensus through a series of structured phases. Here’s a brief overview of the process, using terms like "voting power" and "majority vote" that you'll encounter frequently:
+
+- **ELECTION:** This is where it begins. Each replica runs a Verifiable Random Function (VRF) to determine if it's selected as a candidate, sending its VRF output to other replicas. The successors depend on the ELECTION votes from this phase.
+
+- **ELECTION-VOTE:** Replicas cast ELECTION votes for the leader, determined by the lowest VRF value. If no candidates emerge, a fallback to stake-weighted pseudorandom selection occurs. The majority of these votes set the stage for the next phase, the proposal formulation.
+
+- **PROPOSE:** The leader, chosen with +2/3 voting power, compiles these votes, including their locks and evidence, to craft a new block proposal. The next phase hinges on the acceptance of this proposal. 
+
+Each phase interacts symbiotically with the preceding and succeeding phases to fortify the consensus process. This algorithm leverages the power dynamics of voting to achieve a robust and decentralized consensus. 
 # BFT Structure
 
 The BFT structure is central to the consensus process, helping organize and facilitate the achievement of agreement among replicas in a decentralized network. It's like the backbone that ensures everyone is on the same page when creating new blocks. Here's a breakdown of its key roles:
