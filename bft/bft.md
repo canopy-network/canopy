@@ -9,7 +9,7 @@ ensure all replicas reach agreement on new blocks in a decentralized network.
 
 # Key Concepts
 
-- ### Consensus Phases & Rounds
+## Consensus Phases & Rounds
 
 The consensus process is broken down into 8 core phases and 2 recovery phases.
 Each phase represents the smallest unit of the concensus process. Each round
@@ -38,7 +38,7 @@ premature exit to the round.
    super-majority has seen and restarts the consensus process beginning with the
    Election phase.
 
-- ### View
+### View
 
 A view tracks the current state of the consensus from the perspective of a
 replica, maintaining the current height, round, and phase.
@@ -49,12 +49,12 @@ synchronize and jump to the highest round observed by the majority, ensuring all
 replicas are on the same round and can proceed with another attempt at
 consensus.
 
-- ### Super-Majority Votes
+### Super-Majority Votes
 
 Defined as two-thirds of replica votes, super-majorities are used to ensure that
 all actions are justified with the required number of replicas in agreement.
 
-- ### Proposal Locking
+### Proposal Locking
 
 Once a super-majority of replicas validate a proposal, each replica "locks" the
 proposal.
@@ -64,7 +64,7 @@ be retained for subsequent rounds. The leader in a new round can propose this
 locked block because it has already received a quorum certificate, indicating
 that it was previously agreed upon by the network.
 
-- ### Quorum Certificates
+### Quorum Certificates
 
 Replicas utilize the Quorum Certificate (QC) to convey critical information to
 other replicas. This information can include the current view of a replica, a
@@ -76,12 +76,6 @@ on a particular aspect of the consensus process. By doing so, QCs enable
 replicas to interact and validate actions with assurance. These certificates
 play a critical role by confirming that consensus has been reached without
 necessitating constant direct communication among all replicas.
-# The Block Proposer
-
-An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
-
-NestBFT uses a unique election mechanism involving Practical VRF and linear stake-weighted thresholds. This approach enhances fairness by selecting potential leaders based on stake and randomness, protecting against attacks and ensuring decentralized block proposals.
-
 # Election Phase
 
 In the NestBFT consensus algorithm, the election phase leverages a sortition process combined with a Verifiable Random Function (VRF) to ensure a fair, uniform, and unpredictable selection of leaders. The process counts on the unique and non-manipulatable inputs of seed data to resist manipulation, providing a robust defense against potential biases. Validators generate a digital signature on this sortition seed data, where their stake is a critical factor, increasing the likelihood of becoming a candidate based on their voting power.
