@@ -59,37 +59,6 @@ Welcome to the world of Byzantine Fault Tolerant (BFT) consensus, specifically t
 - **PROPOSE:** The leader, chosen with +2/3 voting power, compiles these votes, including their locks and evidence, to craft a new block proposal. The next phase hinges on the acceptance of this proposal. 
 
 Each phase interacts symbiotically with the preceding and succeeding phases to fortify the consensus process. This algorithm leverages the power dynamics of voting to achieve a robust and decentralized consensus. 
-# BFT Structure
-
-The BFT structure is central to the consensus process, helping organize and facilitate the achievement of agreement among replicas in a decentralized network. It's like the backbone that ensures everyone is on the same page when creating new blocks. Here's a breakdown of its key roles:
-
-- **Manage Current State**: Keeps track of the current period of the consensus process, such as the current height, round, and phase. This helps ensure the network is synchronized and progressing together.
-
-- **Vote and Proposal Handling**: Organizes and records votes and proposals from replicas and the leader. By tracking these, it helps ensure that decisions are made with the required super-majority support, adding legitimacy to the consensus achieved.
-
-- **Leader Election**: Utilizes Verifiable Random Function (VRF) to help select a leader fairly among replicas. It balances randomness and replicator voting power, ensuring that the elected leader can propose new blocks.
-
-- **Verification and Security**: Features mechanisms for validating proposals, certificates, and voting power. This includes methods for handling locks and ensuring that the conditions meet safe node predicates, strengthening security against double-spending or tampering.
-
-- **P2P Communication**: Supports sending messages between replicas for consensus messaging and block gossip, facilitating smooth communication among network participants.
-
-- **External Interaction Management**: Connects with other parts of the network and application layers, interfacing with components like the FSM, P2P network, and storage facilities to streamline operations.
-# bft structure
-
-- **Consensus Management**: NestBFT manages the consensus process for a blockchain system, specifically through a series of ordered phases derived from the Hotstuff protocol, aiming to reach agreement on new blocks efficiently.
-
-- **Validator Coordination**: The structure coordinates between different validators in the network, organizing their votes and proposals through fields like *Votes* and *Proposals* to achieve consensus.
-
-- **Leader Election**: Uses Verifiable Random Functions (VRF) and other cryptographic primitives to determine leadership roles and ensure a fair election process, as seen with fields such as *ProposerKey* and *SortitionData*.
-
-- **Security Assurance**: Ensures the safety of the blockchain system by using cryptographic measures like quorum certificates (such as *HighQC*) and Verifiable Delay Functions (VDF) to protect against various attacks, thereby maintaining the integrity of the system.
-
-- **Block Management**: Handles the current block being voted on and its associated data with fields like *Block*, *BlockHash*, ensuring that each new block is properly proposed and verified according to the consensus rules.
-
-- **Result and Evidence Handling**: Manages the results of consensus rounds and possible slashing conditions through fields like *Results* to ensure accountability and trustworthiness among participants.
-
-- **Decentralized Networking**: Interacts with decentralized network components to handle messages and support peer-to-peer communication within the consensus process.
-
 # The Block Proposer
 
 An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
