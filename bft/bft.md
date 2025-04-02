@@ -62,15 +62,16 @@ that it was previously agreed upon by the network.
 
 ### Quorum Certificates
 
-Generally speaking, replicas use the QC to communicate important information to
-other replicas. This can be a replica's current view, a vote, or a
-super-majority consensus to justify an action.
+Replicas utilize the Quorum Certificate (QC) to convey critical information to
+other replicas. This information can include the current view of a replica, a
+vote, or a super-majority consensus that serves to validate an action.
 
-Critically, QCs serve as proof that a certain number of replicas (at least
-two-thirds) have verified and agreed on some part of the consensus process,
-allowing replicas to communicate and validate actions with confidence. These
-certificates are used to verify that consensus has been achieved without
-requiring all replicas to communicate directly with each other continuously.
+Quality Certificates (QCs) are essential in demonstrating that a specified
+majority of replicas (at least two-thirds) have verified and reached agreement
+on a particular aspect of the consensus process. By doing so, QCs enable
+replicas to interact and validate actions with assurance. These certificates
+play a critical role by confirming that consensus has been reached without
+necessitating constant direct communication among all replicas.
 The context appears to be readable and of good quality, so here's an introductory paragraph for the core logic of the BFT consensus.
 
 # NestBFT
