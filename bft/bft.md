@@ -9,7 +9,7 @@ ensure all replicas reach agreement on new blocks in a decentralized network.
 
 # Key Concepts
 
-### - Consensus Phases & Rounds
+- ### Consensus Phases & Rounds
 
 The consensus process is broken down into 8 core phases and 2 recovery phases.
 Each phase represents the smallest unit of the concensus process. Each round
@@ -38,7 +38,7 @@ premature exit to the round.
    super-majority has seen and restarts the consensus process beginning with the
    Election phase.
 
-### - View
+- ### View
 
 A view tracks the current state of the consensus from the perspective of a
 replica, maintaining the current height, round, and phase.
@@ -49,12 +49,12 @@ synchronize and jump to the highest round observed by the majority, ensuring all
 replicas are on the same round and can proceed with another attempt at
 consensus.
 
-### - Super-Majority Votes
+- ### Super-Majority Votes
 
 Defined as two-thirds of replica votes, super-majorities are used to ensure that
 all actions are justified with the required number of replicas in agreement.
 
-### - Proposal Locking
+- ### Proposal Locking
 
 Once a super-majority of replicas validate a proposal, each replica "locks" the
 proposal.
@@ -64,7 +64,7 @@ be retained for subsequent rounds. The leader in a new round can propose this
 locked block because it has already received a quorum certificate, indicating
 that it was previously agreed upon by the network.
 
-### - Quorum Certificates
+- ### Quorum Certificates
 
 Replicas utilize the Quorum Certificate (QC) to convey critical information to
 other replicas. This information can include the current view of a replica, a
