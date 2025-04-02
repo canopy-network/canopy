@@ -1,38 +1,26 @@
 # Documentation for `bft.go`
 
-## 1. Description
+# 1. Description
 
-This file implements the core mechanisms for a BFT (Byzantine Fault Tolerance) consensus algorithm, detailing the data structures and processes essential for achieving consensus among distributed nodes in a blockchain network.
+The `bft.go` file implements a consensus mechanism for a blockchain system. It defines structures and processes to coordinate validators in reaching a consensus on proposed blocks. The focus is on organizing data flows and operations around a series of phases that establish agreement among participants using digital signatures and voting power. It entails leader election, proposal creation, vote collection, and validation through quorum certificates.
 
-## 2. Purpose
+# 3. Key Components
 
-The main goal of this module is to facilitate the execution of BFT consensus, enabling distributed blockchain nodes to agree on the next block to be added to the chain. This involves roles for both leader and replica nodes to ensure reliability and fault tolerance amidst potential byzantine failures.
+## BFT struct
 
-## 3. Key Components
+- **View Management**: This manages the current period, known as height, round, and phase, during which the consensus process is happening.
 
-### BFT Struct
+- **Vote Collection**: Votes from Replica Validators are tracked. These votes are essential for making decisions about proposed blocks, as they represent the voting power of participants.
 
-- **Overview**: The `BFT` struct serves as the backbone for managing the state and interactions required during the BFT consensus process.
-- **Fields**:
-  - `View`: Represents the current period, including height, round, and phase of the BFT.
-  - `Votes`: Records votes received from non-leader validators.
-  - `Proposals`: Stores proposals from leader validators, necessary for the election phase.
-  - `ProposerKey`: Public key identifying the proposer.
-  - `ValidatorSet`: Current set of validators participating in consensus.
-  - `HighQC`: The highest quorum certificate known, ensuring proposal validity.
-  - `Block`: The block currently being considered for voting.
-  - `BlockHash`: Hash of the current block under consideration.
-  - `Results`: Outcome of the voting, dictating rewards and slashes.
-  - `SortitionData`: Data used for random leader selection.
-  - `VDFService`: Verifiable delay function to protect against long-range attacks.
-  - `HighVDF`: Highest VDF output known, adding additional security against long-range attacks.
+- **Proposal Management**: Proposal blocks from the leader are managed. This involves collecting and validating proposals to ensure they meet the necessary criteria for the next phase.
 
-### Quorum Certificate
+- **Leader Election**: The mechanism for leader election is outlined. This uses a verifiable random function (VRF) and other criteria to select a leader who can propose new blocks.
 
-- **Explanation**: A Quorum Certificate (QC) serves as proof that a super-majority of validators (> 2/3) have agreed on a specific block or decision, forming the basis of justified proposals. This agreement is crucial for the leader to establish the validity of its proposal in the consensus process.
-- **Usage**: QCs play a central role in the validity of the proposals during the consensus process, acting as a critical piece of evidence to secure super-majority approval.
+- **Quorum and Validation**: Quorum certificates are gathered and stored to validate the actions taken by nodes, ensuring that decisions are backed by a majority of voting power. This validation process involves slashing and rewarding decisions for nodes.
 
-This documentation overview breaks down the components effectively, making it accessible to blockchain developers who may be familiar with BFT concepts or newer learners seeking to understand its application within the blockchain architecture.
+## Quorum Certificates
+
+- Quorum certificates serve as the proof that a proposal or decision has garnered enough support, specifically a super-majority (over two-thirds) of the voting power, from the participants. They are vital in the election and proposal phases as they justify the actions of leaders and replicas, providing a secure and verifiable means to progress through the consensus phases. The certificates ensure that decisions made during the consensus process are legitimate and supported by a qualified majority.
 # NestBFT
 
 In the world of blockchain, achieving consensus efficiently and securely is crucial. This is where NestBFT comes in, leveraging voting power and majority votes to reach agreement on the next block in the chain. The approach involves multiple phases where each replica—or participant—interacts and contributes its part to the process.
