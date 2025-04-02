@@ -479,3 +479,36 @@ In the propose vote phase, replicas will recognize that they still have a locked
 
 These conditions ensure the integrity and progress of the consensus process.
 
+# Chart
+```mermaid
+block-beta
+    columns 4
+
+    E["Election"]
+    space
+    space
+    EV["ElectionVote"]
+    space:4
+    P["Propose"]
+    space
+    space
+    PV["ProposeVote"]
+    space:4
+    PC["Precommit"]
+    space
+    space
+    PCV["PrecommitVote"]
+    space:4
+    C["Commit"]
+    space
+    space
+    CP["CommitProcess"]
+
+    E--"Replicas Send Candidacy"-->EV
+    EV--"Replicas Choose Leader"-->P
+    P--"Leader Proposes Block"-->PV
+    PV--"Replices Verify Proposal"-->PC
+    PC--"Verified Majority"-->PCV
+    PCV--"Replicas Validate Proposal"-->C
+    C--"Majority Confirmed"-->CP
+```
