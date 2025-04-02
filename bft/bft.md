@@ -1,4 +1,93 @@
-# NestBFT Phases
+### QC
+
+A quorum certificate (QC) is used in the context of Byzantine Fault Tolerance (BFT) as a form of proof within a consensus process. It is typically a collection of cryptographic signatures from validators in the network, indicating that a sufficiently large subset (usually more than two-thirds) of nodes have agreed on a particular value, such as a block in a blockchain.
+
+In the context of the BFT process described, the quorum certificate is used to justify the validity of messages and proposals made by the leader or proposer. When a leader collects enough votes from the replicas (non-leader nodes), forming a +2/3 majority, it creates a quorum certificate. This certificate can then be used to propose, precommit, and finally commit a block. The QC ensures that the transition to the next phase has buy-in from a majority of the network, thus maintaining the integrity and safety of the consensus process.
+
+### Key Features of the `BFT` Struct:
+
+- **Consensus Cycle Management**: The `BFT` struct encapsulates various attributes and methods to conduct consensus over a blockchain network, involving phases such as Election, Proposal, Precommit, Commit, etc.
+
+- **Voting Management**: It tracks and handles votes (`VotesForHeight`) and proposals (`ProposalsForHeight`) as part of the consensus process, ensuring that decisions are made based on a supermajority of +2/3.
+
+- **Quorum Certificates**: Maintains Quorum Certificates (`HighQC`), which are evidence of agreement among replicant nodes, to move safely to the next steps of consensus.
+
+- **Byzantine Fault Tolerance**: Collects evidence of faulty or malicious behavior among validators (`ByzantineEvidence`) to enhance the robustness against attacks.
+
+- **Leadership Election**: Utilizes Verifiable Random Functions (VRF) and Cumulative Distribution Functions (CDF) to elect leaders for proposing new blocks, using `SortitionData`.
+
+- **Synchronization**: Manages timers and synchronization with other nodes using the `PhaseTimer` and various control structures to handle timeouts and reset triggers (`ResetBFT`).
+
+- **Security Enhancements**: Includes Verifiable Delay Functions (VDF) as a measure against long-range attacks by ensuring computational work before making decisions.
+
+### Methods and Workflow:
+- Each phase (Election, Propose, Precommit, Commit) is implemented with specific start methods like `StartElectionPhase()`, `StartProposePhase()`, etc., which conduct the respective operations.
+
+- **Phase stepping**: Methods like `HandlePhase()` are responsible for transitioning between phases based on conditions such as phase timeouts or received messages.
+
+- **Timeout Management**: Uses internally-managed timers to optimize synchronization speed and voter participation under varying network conditions.
+
+- **Round and Height Management**: Features mechanisms to reset and increment consensus rounds and heights, adjusting the validator states and decisions accordingly.
+
+Overall, this file provides a structured implementation of a BFT consensus mechanism, focusing on ensuring secure and efficient consensus even in the presence of faults or network delays. While it mentions HotStuff BFT, it appears to implement a tailored variant or part of the broader NestBFT under the Canopy network setup.
+
+# Documentation for `bft.go`
+
+## 1. Description
+
+This file implements [briefly explain the core functionality, e.g., utility functions for string manipulation, the main application logic, data structures for X, etc.].
+
+## 2. Purpose
+
+The main goal of this module is to [explain the specific problem solved or responsibility handled, e.g., centralize all configuration loading, provide an interface for interacting with the database, define the core business logic for user authentication].
+
+## 3. Key Components
+
+### 3.1. Types
+
+#### `type MyStructName`
+
+Represents [describe what the struct represents].
+
+* `FieldName1`: `type` - [Description of field purpose]
+* `FieldName2`: `type` - [Description of field purpose]
+    * #### `type MyInterfaceName`
+
+Defines the contract for [describe what implementers of this interface should do].
+
+* `MethodName1(params) returnType`: [Description of method purpose]
+* `MethodName2(params) returnType`: [Description of method purpose]
+
+### 3.2. Functions
+
+#### `func FunctionName(param1 type, param2 type) (returnType, error)`
+
+This function [describe what the function does].
+
+* **Parameters:**
+    * `param1`: [Description of parameter purpose and constraints]
+    * `param2`: [Description of parameter purpose and constraints]
+* **Returns:**
+    * `returnType`: [Description of the successful return value]
+    * `error`: [Description of potential errors returned]
+* **Usage Notes:** [Any specific context or important considerations when using this function]
+
+### 3.3. Constants & Variables
+
+* `const MyConstant = value`: [Description of the constant's purpose]
+* `var myPackageVar type`: [Description of the variable's purpose and scope]
+
+## 4. Usage
+
+To use the functionality provided by this file:
+
+1.  Import the package: `import "[your_module_path]/[package_name]"`
+2.  [Explain how to instantiate types or call functions, e.g., Create an instance of `MyStructName`, Call `FunctionName` with appropriate parameters...]
+# NestBFT
+
+In the world of blockchain, achieving consensus efficiently and securely is crucial. This is where NestBFT comes in, leveraging voting power and majority votes to reach agreement on the next block in the chain. The approach involves multiple phases where each replica—or participant—interacts and contributes its part to the process.
+
+Each phase in the NestBFT process builds upon the last and sets the stage for the next. For instance, data from the Election phase feeds into ElectionVote, establishing a leader whom the replicas can support or challenge. A super-majority serves as justification for decisions, ensuring consensus integrity at every stage.
 
 ## Consensus Phases & Rounds
 
@@ -17,9 +106,41 @@ Below is a list of each core phase and their primary purpose:
 
 The two recovery phases are used when an error in the consensus process causes a premature exit to the round.
 
-1. **RoundInterrupt**: During this phase, each replica sends View to all other replicas to enable synchronization in the Pacemaker phase.
+1. **RoundInterrupt**: During this phase each replica sends View to all other replicas to enable synchronization in the Pacemaker phase.
+
 2. **Pacemaker**: This phase synchronizes each replica to the highest round a super-majority has seen and restarts the consensus process beginning with the Election phase.
 
+# bft structure
+
+- **Consensus Management**: NestBFT manages the consensus process for a blockchain system, specifically through a series of ordered phases derived from the Hotstuff protocol, aiming to reach agreement on new blocks efficiently.
+
+- **Validator Coordination**: The structure coordinates between different validators in the network, organizing their votes and proposals through fields like *Votes* and *Proposals* to achieve consensus.
+
+- **Leader Election**: Uses Verifiable Random Functions (VRF) and other cryptographic primitives to determine leadership roles and ensure a fair election process, as seen with fields such as *ProposerKey* and *SortitionData*.
+
+- **Security Assurance**: Ensures the safety of the blockchain system by using cryptographic measures like quorum certificates (such as *HighQC*) and Verifiable Delay Functions (VDF) to protect against various attacks, thereby maintaining the integrity of the system.
+
+- **Block Management**: Handles the current block being voted on and its associated data with fields like *Block*, *BlockHash*, ensuring that each new block is properly proposed and verified according to the consensus rules.
+
+- **Result and Evidence Handling**: Manages the results of consensus rounds and possible slashing conditions through fields like *Results* to ensure accountability and trustworthiness among participants.
+
+- **Decentralized Networking**: Interacts with decentralized network components to handle messages and support peer-to-peer communication within the consensus process.
+
+# BFT Structure
+
+The BFT structure is central to the consensus process, helping organize and facilitate the achievement of agreement among replicas in a decentralized network. It's like the backbone that ensures everyone is on the same page when creating new blocks. Here's a breakdown of its key roles:
+
+- **Manage Current State**: Keeps track of the current period of the consensus process, such as the current height, round, and phase. This helps ensure the network is synchronized and progressing together.
+
+- **Vote and Proposal Handling**: Organizes and records votes and proposals from replicas and the leader. By tracking these, it helps ensure that decisions are made with the required super-majority support, adding legitimacy to the consensus achieved.
+
+- **Leader Election**: Utilizes Verifiable Random Function (VRF) to help select a leader fairly among replicas. It balances randomness and replicator voting power, ensuring that the elected leader can propose new blocks.
+
+- **Verification and Security**: Features mechanisms for validating proposals, certificates, and voting power. This includes methods for handling locks and ensuring that the conditions meet safe node predicates, strengthening security against double-spending or tampering.
+
+- **P2P Communication**: Supports sending messages between replicas for consensus messaging and block gossip, facilitating smooth communication among network participants.
+
+- **External Interaction Management**: Connects with other parts of the network and application layers, interfacing with components like the FSM, P2P network, and storage facilities to streamline operations.
 # The Block Proposer
 
 An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
