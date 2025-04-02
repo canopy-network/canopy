@@ -40,14 +40,17 @@ premature exit to the round.
 
 ### View
 
-A view tracks the current state of the consensus from the perspective of a
-replica, maintaining the current height, round, and phase.
+The `View` field in the `BFT` struct represents the perspective of a replica.
+This field is crucial as it encapsulates the current period a particular replica
+beleives it is in within the consensus process. It includes details such as the
+`Height`, `Round`, and `Phase`, which are essential for identifying the progress
+and state of the consensus process.
 
-In the case of consensus error, each replica sends its View to all other
-replicas during the pacemaker phase. By sharing this information, replicas can
-synchronize and jump to the highest round observed by the majority, ensuring all
-replicas are on the same round and can proceed with another attempt at
-consensus.
+The `View` helps in synchronizing the validators by providing a consistent
+reference point for the current state of the blockchain. It ensures that all
+validators are aligned in terms of which block height, round, and phase they are
+operating in. This alignment is necessary for validators to correctly interpret
+proposals, cast votes, and validate the results of the consensus process.
 
 ### Super-Majority Votes
 
