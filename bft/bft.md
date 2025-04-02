@@ -14,7 +14,8 @@ ensure all replicas reach agreement on new blocks in a decentralized network.
 The consensus process is broken down into 8 core phases and 2 recovery phases.
 Each phase represents the smallest unit of the concensus process. Each round
 consists of multiple phases, and each height may consist of multiple rounds.
-These phases are executed sequentially to achieve consensus on the next block.
+These phases are executed sequentially and upon successful completion achieve
+consensus on the next block.
 
 Below is a list of each core phase and their primary purpose:
 
@@ -23,8 +24,8 @@ Below is a list of each core phase and their primary purpose:
 3. **Propose**: The elected leader produces a block proposal, relaying it to replicas
 4. **ProposeVote**: Replicas validate proposed block and send validation vote to leader
 5. **Precommit**: Leader reviews validation votes for super-majority consensus
-6. **PrecommitVote**: Replicas validate consensus and send approval vote to leader
-7. **Commit**: Leader verifies majority of replicas approved
+6. **PrecommitVote**: Replicas validate consensus and send validation vote to leader
+7. **Commit**: Leader aggregates votes, verifies majority of replicas approved
 8. **CommitProcess**: Replicas verify proposer and proposal and commit block
 
 The two recovery phases are used when an error in the consensus process causes a
@@ -51,31 +52,25 @@ all actions are justified with the required number of replicas in agreement.
 
 ### Proposal Locking
 
-Allows the replica to "lock" on to a proposal to aid in recovery should the
-consensus process fail before the round is complete.
+Once a super-majority of replicas validate a proposal, each replica "locks" the
+proposal.
+
+If consensus cannot be reached in a particular round, the locked proposal will
+be retained for subsequent rounds. The leader in a new round can propose this
+locked block because it has already received a quorum certificate, indicating
+that it was previously agreed upon by the network.
 
 ### Quorum Certificates
 
-Quorum certificates are used to validate and communicate actions taken by nodes,
-ensuring that decisions are backed by a majority of voting power.
+Generally speaking, replicas use the QC to communicate important information to
+other replicas. This can be a replica's current view, a vote, or a
+super-majority consensus to justify an action.
 
-## The BFT type
-
-The ``bft`` type encapsulates all state required for replicas to synchronously
-transition through each phase in unison.
-
-- **Leader Election**: Uses Verifiable Random Functions (VRF) and sortition seed
-    data to elect a leader and ensure a fair election process.
-
-- **Validator Coordination**: The structure coordinates between different
-    validators in the network, organizing their votes and proposals through
-    fields like *Votes* and *Proposals* to achieve consensus.
-
-- **Block Management**: Handles new block proposals and their results.
-    <elaborate with a few lines. really, a few lines. dont be like that>
-
-- **Byzantine Evidence**: Maintains byzantine evidence for nodes to track and
-    prevent byzantine behavior such as double signing.
+Critically, QCs serve as proof that a certain number of replicas (at least
+two-thirds) have verified and agreed on some part of the consensus process,
+allowing replicas to communicate and validate actions with confidence. These
+certificates are used to verify that consensus has been achieved without
+requiring all replicas to communicate directly with each other continuously.
 The context appears to be readable and of good quality, so here's an introductory paragraph for the core logic of the BFT consensus.
 
 # NestBFT
