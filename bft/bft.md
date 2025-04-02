@@ -1,88 +1,38 @@
-### QC
-
-A quorum certificate (QC) is used in the context of Byzantine Fault Tolerance (BFT) as a form of proof within a consensus process. It is typically a collection of cryptographic signatures from validators in the network, indicating that a sufficiently large subset (usually more than two-thirds) of nodes have agreed on a particular value, such as a block in a blockchain.
-
-In the context of the BFT process described, the quorum certificate is used to justify the validity of messages and proposals made by the leader or proposer. When a leader collects enough votes from the replicas (non-leader nodes), forming a +2/3 majority, it creates a quorum certificate. This certificate can then be used to propose, precommit, and finally commit a block. The QC ensures that the transition to the next phase has buy-in from a majority of the network, thus maintaining the integrity and safety of the consensus process.
-
-### Key Features of the `BFT` Struct:
-
-- **Consensus Cycle Management**: The `BFT` struct encapsulates various attributes and methods to conduct consensus over a blockchain network, involving phases such as Election, Proposal, Precommit, Commit, etc.
-
-- **Voting Management**: It tracks and handles votes (`VotesForHeight`) and proposals (`ProposalsForHeight`) as part of the consensus process, ensuring that decisions are made based on a supermajority of +2/3.
-
-- **Quorum Certificates**: Maintains Quorum Certificates (`HighQC`), which are evidence of agreement among replicant nodes, to move safely to the next steps of consensus.
-
-- **Byzantine Fault Tolerance**: Collects evidence of faulty or malicious behavior among validators (`ByzantineEvidence`) to enhance the robustness against attacks.
-
-- **Leadership Election**: Utilizes Verifiable Random Functions (VRF) and Cumulative Distribution Functions (CDF) to elect leaders for proposing new blocks, using `SortitionData`.
-
-- **Synchronization**: Manages timers and synchronization with other nodes using the `PhaseTimer` and various control structures to handle timeouts and reset triggers (`ResetBFT`).
-
-- **Security Enhancements**: Includes Verifiable Delay Functions (VDF) as a measure against long-range attacks by ensuring computational work before making decisions.
-
-### Methods and Workflow:
-- Each phase (Election, Propose, Precommit, Commit) is implemented with specific start methods like `StartElectionPhase()`, `StartProposePhase()`, etc., which conduct the respective operations.
-
-- **Phase stepping**: Methods like `HandlePhase()` are responsible for transitioning between phases based on conditions such as phase timeouts or received messages.
-
-- **Timeout Management**: Uses internally-managed timers to optimize synchronization speed and voter participation under varying network conditions.
-
-- **Round and Height Management**: Features mechanisms to reset and increment consensus rounds and heights, adjusting the validator states and decisions accordingly.
-
-Overall, this file provides a structured implementation of a BFT consensus mechanism, focusing on ensuring secure and efficient consensus even in the presence of faults or network delays. While it mentions HotStuff BFT, it appears to implement a tailored variant or part of the broader NestBFT under the Canopy network setup.
-
 # Documentation for `bft.go`
 
 ## 1. Description
 
-This file implements [briefly explain the core functionality, e.g., utility functions for string manipulation, the main application logic, data structures for X, etc.].
+This file implements the core mechanisms for a BFT (Byzantine Fault Tolerance) consensus algorithm, detailing the data structures and processes essential for achieving consensus among distributed nodes in a blockchain network.
 
 ## 2. Purpose
 
-The main goal of this module is to [explain the specific problem solved or responsibility handled, e.g., centralize all configuration loading, provide an interface for interacting with the database, define the core business logic for user authentication].
+The main goal of this module is to facilitate the execution of BFT consensus, enabling distributed blockchain nodes to agree on the next block to be added to the chain. This involves roles for both leader and replica nodes to ensure reliability and fault tolerance amidst potential byzantine failures.
 
 ## 3. Key Components
 
-### 3.1. Types
+### BFT Struct
 
-#### `type MyStructName`
+- **Overview**: The `BFT` struct serves as the backbone for managing the state and interactions required during the BFT consensus process.
+- **Fields**:
+  - `View`: Represents the current period, including height, round, and phase of the BFT.
+  - `Votes`: Records votes received from non-leader validators.
+  - `Proposals`: Stores proposals from leader validators, necessary for the election phase.
+  - `ProposerKey`: Public key identifying the proposer.
+  - `ValidatorSet`: Current set of validators participating in consensus.
+  - `HighQC`: The highest quorum certificate known, ensuring proposal validity.
+  - `Block`: The block currently being considered for voting.
+  - `BlockHash`: Hash of the current block under consideration.
+  - `Results`: Outcome of the voting, dictating rewards and slashes.
+  - `SortitionData`: Data used for random leader selection.
+  - `VDFService`: Verifiable delay function to protect against long-range attacks.
+  - `HighVDF`: Highest VDF output known, adding additional security against long-range attacks.
 
-Represents [describe what the struct represents].
+### Quorum Certificate
 
-* `FieldName1`: `type` - [Description of field purpose]
-* `FieldName2`: `type` - [Description of field purpose]
-    * #### `type MyInterfaceName`
+- **Explanation**: A Quorum Certificate (QC) serves as proof that a super-majority of validators (> 2/3) have agreed on a specific block or decision, forming the basis of justified proposals. This agreement is crucial for the leader to establish the validity of its proposal in the consensus process.
+- **Usage**: QCs play a central role in the validity of the proposals during the consensus process, acting as a critical piece of evidence to secure super-majority approval.
 
-Defines the contract for [describe what implementers of this interface should do].
-
-* `MethodName1(params) returnType`: [Description of method purpose]
-* `MethodName2(params) returnType`: [Description of method purpose]
-
-### 3.2. Functions
-
-#### `func FunctionName(param1 type, param2 type) (returnType, error)`
-
-This function [describe what the function does].
-
-* **Parameters:**
-    * `param1`: [Description of parameter purpose and constraints]
-    * `param2`: [Description of parameter purpose and constraints]
-* **Returns:**
-    * `returnType`: [Description of the successful return value]
-    * `error`: [Description of potential errors returned]
-* **Usage Notes:** [Any specific context or important considerations when using this function]
-
-### 3.3. Constants & Variables
-
-* `const MyConstant = value`: [Description of the constant's purpose]
-* `var myPackageVar type`: [Description of the variable's purpose and scope]
-
-## 4. Usage
-
-To use the functionality provided by this file:
-
-1.  Import the package: `import "[your_module_path]/[package_name]"`
-2.  [Explain how to instantiate types or call functions, e.g., Create an instance of `MyStructName`, Call `FunctionName` with appropriate parameters...]
+This documentation overview breaks down the components effectively, making it accessible to blockchain developers who may be familiar with BFT concepts or newer learners seeking to understand its application within the blockchain architecture.
 # NestBFT
 
 In the world of blockchain, achieving consensus efficiently and securely is crucial. This is where NestBFT comes in, leveraging voting power and majority votes to reach agreement on the next block in the chain. The approach involves multiple phases where each replica—or participant—interacts and contributes its part to the process.
