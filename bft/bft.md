@@ -110,6 +110,21 @@ The two recovery phases are used when an error in the consensus process causes a
 
 2. **Pacemaker**: This phase synchronizes each replica to the highest round a super-majority has seen and restarts the consensus process beginning with the Election phase.
 
+# BFT Structure
+
+The BFT structure is central to the consensus process, helping organize and facilitate the achievement of agreement among replicas in a decentralized network. It's like the backbone that ensures everyone is on the same page when creating new blocks. Here's a breakdown of its key roles:
+
+- **Manage Current State**: Keeps track of the current period of the consensus process, such as the current height, round, and phase. This helps ensure the network is synchronized and progressing together.
+
+- **Vote and Proposal Handling**: Organizes and records votes and proposals from replicas and the leader. By tracking these, it helps ensure that decisions are made with the required super-majority support, adding legitimacy to the consensus achieved.
+
+- **Leader Election**: Utilizes Verifiable Random Function (VRF) to help select a leader fairly among replicas. It balances randomness and replicator voting power, ensuring that the elected leader can propose new blocks.
+
+- **Verification and Security**: Features mechanisms for validating proposals, certificates, and voting power. This includes methods for handling locks and ensuring that the conditions meet safe node predicates, strengthening security against double-spending or tampering.
+
+- **P2P Communication**: Supports sending messages between replicas for consensus messaging and block gossip, facilitating smooth communication among network participants.
+
+- **External Interaction Management**: Connects with other parts of the network and application layers, interfacing with components like the FSM, P2P network, and storage facilities to streamline operations.
 # bft structure
 
 - **Consensus Management**: NestBFT manages the consensus process for a blockchain system, specifically through a series of ordered phases derived from the Hotstuff protocol, aiming to reach agreement on new blocks efficiently.
@@ -126,21 +141,6 @@ The two recovery phases are used when an error in the consensus process causes a
 
 - **Decentralized Networking**: Interacts with decentralized network components to handle messages and support peer-to-peer communication within the consensus process.
 
-# BFT Structure
-
-The BFT structure is central to the consensus process, helping organize and facilitate the achievement of agreement among replicas in a decentralized network. It's like the backbone that ensures everyone is on the same page when creating new blocks. Here's a breakdown of its key roles:
-
-- **Manage Current State**: Keeps track of the current period of the consensus process, such as the current height, round, and phase. This helps ensure the network is synchronized and progressing together.
-
-- **Vote and Proposal Handling**: Organizes and records votes and proposals from replicas and the leader. By tracking these, it helps ensure that decisions are made with the required super-majority support, adding legitimacy to the consensus achieved.
-
-- **Leader Election**: Utilizes Verifiable Random Function (VRF) to help select a leader fairly among replicas. It balances randomness and replicator voting power, ensuring that the elected leader can propose new blocks.
-
-- **Verification and Security**: Features mechanisms for validating proposals, certificates, and voting power. This includes methods for handling locks and ensuring that the conditions meet safe node predicates, strengthening security against double-spending or tampering.
-
-- **P2P Communication**: Supports sending messages between replicas for consensus messaging and block gossip, facilitating smooth communication among network participants.
-
-- **External Interaction Management**: Connects with other parts of the network and application layers, interfacing with components like the FSM, P2P network, and storage facilities to streamline operations.
 # The Block Proposer
 
 An election is necessary to determine the next block proposer to ensure fair and decentralized decision-making. Without it, control could be manipulated by a single entity, compromising the blockchain's integrity and security.
