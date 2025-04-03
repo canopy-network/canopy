@@ -4,16 +4,46 @@
 
 The main goal of the code is to define the consensus process that facilitates secure and efficient block validation and commitment in a distributed network. This involves ensuring that a majority consensus of replicas agree on the same sequence of blocks despite potential network disruptions or malicious nodes.
 
+## `bft` Type
+
+The `bft` type is a comprehensive structure that encapsulates the state and operations of the NestBFT consensus algorithm.
+
+The `bft` type in the Canopy project is responsible for managing the consensus process using the NestBFT algorithm. Here's a high-level list of its functions:
+
+1. **View Management**: Keeps track of the current period or phase of the consensus process.
+
+2. **Vote Handling**: Manages votes received from non-leader validators.
+
+3. **Proposal Management**: Handles proposals received from leader validators.
+
+4. **Proposer Identification**: Stores the public key of the current proposer.
+
+5. **Validator Set Management**: Maintains the current set of validators participating in the consensus.
+
+6. **Quorum Certificate Tracking**: Keeps track of the highest PRECOMMIT quorum certificate known for the current height.
+
+7. **Block Management**: Manages the current block being voted on, including its hash.
+
+8. **Result Management**: Handles the results being voted on, such as reward and slash recipients.
+
+9. **Leader Election**: Utilizes sortition data for VRF+CDF-based leader election.
+
+10. **VDF Service**: Runs a verifiable delay function service to deter long-range attacks.
+
+11. **VDF Tracking**: Keeps track of the highest VDF among replicas for long-range attack protection.
+
+## Consensus Phase Overview
+
 The consensus process is broken down into 8 core phases and 2 recovery phases.
 Each phase represents the smallest unit of the concensus process. Each round
 consists of multiple phases, and each height may consist of multiple rounds.
 These phases are executed sequentially and upon successful completion achieve
 consensus on the next block.
 
-Below is a list of each core phase and their primary purpose:
+Here's a breakdown of each core phase and its main purpose:
 
-1. **Election**: Eligible replicas gossip their candidacy for the election
-2. **ElectionVote**: Replicas vote for a leader from the pool of gossiped candidates
+1. **Election**: Eligible replicas broadcast their candidacy for the leader role
+2. **ElectionVote**: Replicas vote for a leader from the pool of announced candidates
 3. **Propose**: The elected leader produces a block proposal, relaying it to replicas
 4. **ProposeVote**: Replicas validate proposed block and send validation vote to leader
 5. **Precommit**: Leader reviews validation votes for super-majority consensus
