@@ -4,9 +4,7 @@
 
 The `bft.go` source code file is a core component of the Canopy blockchain project, implementing the NestBFT consensus algorithm. This file defines the structure and functionality necessary for managing the consensus process, including handling and routing incoming consensus messages from validator peers. It outlines the data structures and methods used to facilitate the consensus process, such as the `BFT` structure, which holds information about the current view, votes, proposals, and validator set. Additionally, it includes mechanisms for digital signatures, quorum certificates, and leader election, ensuring secure and efficient consensus operations within the Canopy network.
 
-# Key Concepts
-
-## Consensus Phases & Rounds
+The main goal of the code is to define the consensus process that facilitates secure and efficient block validation and commitment in a distributed network. This involves ensuring that all non-faulty replicas agree on the same sequence of blocks despite potential network disruptions or malevolent nodes.
 
 The consensus process is broken down into 8 core phases and 2 recovery phases.
 Each phase represents the smallest unit of the concensus process. Each round
@@ -34,6 +32,9 @@ premature exit to the round:
 2. **Pacemaker**: This phase synchronizes each replica to the highest round a
    super-majority has seen and restarts the consensus process beginning with the
    Election phase.
+
+# Key Concepts
+
 
 ### View
 
