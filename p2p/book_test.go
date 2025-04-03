@@ -2,13 +2,16 @@ package p2p
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStartPeerBookService(t *testing.T) {
+	isTest = true
+	defer func() { isTest = false }()
 	n1, n2, cleanup := newTestP2PPair(t)
 	defer cleanup()
 	n3, n4 := newTestP2PNode(t), newTestP2PNode(t)

@@ -1,15 +1,18 @@
 package p2p
 
 import (
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/stretchr/testify/require"
 	"net"
 	"sync"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEncryptedConn(t *testing.T) {
+	isTest = true
+	defer func() { isTest = false }()
 	msg1, msg2 := []byte("foo"), []byte("bar")
 	p1, err := crypto.NewBLS12381PrivateKey()
 	require.NoError(t, err)
