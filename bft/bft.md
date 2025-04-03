@@ -2,10 +2,7 @@
 
 # Description
 
-The bft.go file implements the core structures and logic for managing the
-consensus process in blockchain systems using the NestBFT consensus algorithm. It handles
-the flow of information and actions across different phases of consensus to
-ensure all replicas reach agreement on new blocks in a decentralized network.
+The `bft.go` source code file is a core component of the Canopy blockchain project, implementing the NestBFT consensus algorithm. This file defines the structure and functionality necessary for managing the consensus process, including handling and routing incoming consensus messages from validator peers. It outlines the data structures and methods used to facilitate the consensus process, such as the `BFT` structure, which holds information about the current view, votes, proposals, and validator set. Additionally, it includes mechanisms for digital signatures, quorum certificates, and leader election, ensuring secure and efficient consensus operations within the Canopy network.
 
 # Key Concepts
 
@@ -28,8 +25,8 @@ Below is a list of each core phase and their primary purpose:
 7. **Commit**: Leader aggregates votes, verifies majority of replicas approved
 8. **CommitProcess**: Replicas verify proposer and proposal and commit block
 
-The two recovery phases are used when an error in the consensus process causes a
-premature exit to the round.
+The two recovery phases address when errors in the consensus process cause a
+premature exit to the round:
 
 1. **RoundInterrupt**: During this phase each replica sends their current View
    to all other replicas to enable synchronization in the Pacemaker phase.
@@ -52,20 +49,50 @@ validators are aligned in terms of which block height, round, and phase they are
 operating in. This alignment is necessary for validators to correctly interpret
 proposals, cast votes, and validate the results of the consensus process.
 
-### Super-Majority Votes
+### Super-Majority
 
-Defined as two-thirds of replica votes, super-majorities are used to ensure that
-all actions are justified with the required number of replicas in agreement.
+A super-majority refers to a threshold of agreement among the participating
+replicas (nodes) that is greater than a simple majority. Specifically, it
+requires more than two-thirds (+2/3) of the voting power or votes from the
+replicas to agree on a proposal or decision.
+
+This super-majority is crucial for achieving consensus in a Byzantine Fault
+Tolerant (BFT) system like NestBFT. It ensures that even if some replicas are
+faulty or malicious, the system can still reach a reliable consensus. The
+super-majority threshold is used in various phases of the consensus process,
+such as PROPOSE-VOTE, PRECOMMIT, and COMMIT, to validate and finalize blocks.
+
+In these phases, the leader collects votes from the replicas, and if the votes
+meet or exceed the super-majority threshold, the proposal is considered valid
+and can proceed to the next phase. This mechanism helps maintain the integrity
+and security of the blockchain by requiring a significant level of agreement
+among the nodes before any changes are committed.
+
+Additionally, the concept of a super-majority is important in the recovery
+phases like ROUND INTERRUPT and PACEMAKER, where it helps in resolving
+synchronization issues and ensuring that the network can recover from failures
+effectively.
 
 ### Proposal Locking
 
 Once a super-majority of replicas validate a proposal, each replica "locks" the
-proposal.
+proposal. This locking mechanism ensures that the proposal is recognized as
+valid and agreed upon by a significant portion of the network, specifically +2/3
+of the replicas.
 
-If consensus cannot be reached in a particular round, the locked proposal will
-be retained for subsequent rounds. The leader in a new round can propose this
-locked block because it has already received a quorum certificate, indicating
-that it was previously agreed upon by the network.
+If consensus cannot be reached in a particular round, the locked proposal is
+retained for subsequent rounds. This means that even if the current round fails
+to achieve consensus, the proposal is not discarded. Instead, it remains a valid
+proposal for future rounds. The leader in a new round can propose this locked
+block because it has already received a quorum certificate. A quorum certificate
+is a form of proof that the proposal was previously agreed upon by the network,
+as it includes signatures from +2/3 of the replicas.
+
+This mechanism helps maintain continuity and efficiency in the consensus
+process, as it allows the network to build upon previously validated proposals
+rather than starting from scratch in each new round. It also ensures that the
+network can recover from temporary disruptions or disagreements without losing
+progress.
 
 ### Quorum Certificates
 
@@ -75,21 +102,26 @@ vote, or a super-majority consensus that serves to validate an action.
 
 Quality Certificates (QCs) are essential in demonstrating that a specified
 majority of replicas (at least two-thirds) have verified and reached agreement
-on a particular aspect of the consensus process. By doing so, QCs enable
-replicas to interact and validate actions with assurance. These certificates
-play a critical role by confirming that consensus has been reached without
+on a particular aspect of the consensus process. These certificates play a
+critical role by confirming that consensus has been reached without
 necessitating constant direct communication among all replicas.
 
 # Election Phase
 
-In the NestBFT consensus algorithm, the election phase leverages a sortition
-process combined with a Verifiable Random Function (VRF) to ensure a fair,
-uniform, and unpredictable selection of leaders. The process counts on the
-unique and non-manipulatable inputs of seed data to resist manipulation,
-providing a robust defense against potential biases. Validators generate a
-digital signature on this sortition seed data, where their stake is a critical
-factor, increasing the likelihood of becoming a candidate based on their voting
-power.
+The election phase utilizes a sortition process in conjunction with a Verifiable
+Random Function (VRF) to ensure the selection of leaders is fair, uniform, and
+unpredictable. This process relies on unique and non-manipulatable inputs of
+seed data, which are crucial in resisting manipulation and providing a robust
+defense against potential biases. The use of VRF ensures that the selection
+process is both random and publically verifiable.
+
+Validators play a significant role in this process by generating a digital
+signature on the sortition seed data. Their stake is a factor in this phase as
+it increases the likelihood of becoming a candidate based on their voting power.
+This stake-weighted approach ensures that validators with more significant
+contributions to the network have a higher chance of being selected, aligning
+the incentives of the network participants with the overall security and
+integrity of the blockchain.
 
 ### Sortition Seed Data
 
@@ -101,10 +133,8 @@ network.
 
 - **Round Field Inclusion**: The incorporation of the round field into the
   sortition data reduces the likelihood of the same leader being chosen
-  consecutively, promoting leader rotation. This mechanism benefits the network
-  by mitigating the risk posed by a potentially malicious leader or one that
-  contributed to a consensus failure, thus enhancing reliability and trust in
-  the process.
+  consecutive rounds. This mechanism benefits the network by mitigating the risk
+  posed by a malicious or faulty leader.
 
 - **Last Proposer Addresses Field**: NestBFT distinguishes itself from other
   protocols by utilizing the LastProposerAddresses field within its sortition
@@ -115,49 +145,27 @@ network.
 
 # Election Vote Phase
 
-In the Election Vote phase, each replica examines candidate messages received
-from others, setting the stage for leader selection. By choosing the candidate
-with the lowest VRF output, replicas ensure that the process remains fair and
-unbiased. This phase seamlessly follows the election phase where potential
-leaders were identified and prepares the ground for the proposal phase, where
-the selected leader will propose the next block.
+In the Election Vote phase, each replica evaluates candidate messages received from other replicas. Each candidate message includes a Verifiable Random Function (VRF) output, which is a cryptographic function that produces a random output that can be publicly verified. The replicas select the candidate with the lowest VRF output as the leader, ensuring that the selection process is fair and unbiased.
 
-If no candidates are available, the process defaults to
-stake-weight-pseudorandom selection, ensuring progress is always made. Each
-replica then forwards its local VDF to the selected proposer, adding to their
-voting power. Finally, by sending their vote to the chosen proposer, replicas
-collectively build toward a majority vote, aligning consensus towards the next
-block proposal.
+If no votes are received, the process falls back to a stake-weighted-pseudorandom selection to ensure a leader is always chosen.
+
+Once a candidate is chosen, each replica sends a signed Election Vote to the selected leader.
+
+In the subsequent phase, the leader aggregates these votes. If they receive votes from more than two-thirds of the replicas, they can use this as justification to propose a new block. This aggregation of votes is important as it demonstrates a consensus among the replicas.
 
 # Propose Phase
 
-During the PROPOSE phase of the NestBFT consensus algorithm, the leader is
-responsible for producing a new block proposal. Here are the steps involved in
-this phase:
+During the PROPOSE phase of the NestBFT consensus algorithm, the leader is responsible for producing a new block proposal. Here are the steps involved in this phase:
 
-1. **Collecting ELECTION.VOTES**: The leader gathers ELECTION.VOTES from more
-   than two-thirds (+2/3) of the replicas. Each vote includes the lock,
-   evidence, and signature from the sender. This serves as proof of the leader's
-   qualification to propose a block.
+1. **Collecting Election Votes**: The leader gathers election votes from more than two-thirds (+2/3) of the replicas. This serves as proof of the leader's qualification to propose a block.
 
 2. **Proposal Block Selection**:
-   - If a valid lock exists for the current height that meets the criteria of
-     Hotstuff's SAFE NODE PREDICATE, the leader uses the locked block as the
-     proposal block.
-   - If no valid lock is found, the leader creates a new block to extend the
-     blockchain.
+   - If a valid lock exists for the current height, the leader uses the locked block as the proposal block. This ensures that the proposal is based on a previously agreed-upon state, enhancing the stability and reliability of the consensus process.
+   - If no valid lock is found, the leader creates a new block to extend the blockchain. This new block is constructed with the maximum number of transactions available in the mempool, ensuring efficient use of network resources.
 
-3. **Creating the Proposal**: The proposal consists of the new proposed block
-   and the associated results, which include the reward and slash recipients. A
-   block contains the transactions to be processed.
+3. **Creating the Proposal**: The proposal consists of the new proposed block and the associated results, which include the reward and slash recipients. A block contains the transactions to be processed, and the proposal is backed by the signatures from the election votes, confirming the leader's legitimacy.
 
-4. **Distribution of Proposal**: The leader sends the newly created proposal
-   (block, results, evidence) to all validators. The proposal is justified by
-   attaching the signatures from more than two-thirds (+2/3) of the
-   ELECTION.VOTES, confirming the leader's legitimacy.
-
-This phase is crucial as it lays the foundation for achieving consensus on the
-next block in the blockchain.
+4. **Distribution of Proposal**: The leader sends the newly created proposal (block, results, evidence) to all validators. The proposal is justified by attaching the signatures from more than two-thirds (+2/3) of the election votes, confirming the leader's legitimacy.
 
 # Propose Vote Phase
 
