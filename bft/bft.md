@@ -109,14 +109,14 @@ effectively.
 
 #### Proposal Locking
 
-Once a super-majority of replicas validate a proposal, each replica "locks" the
-proposal.
+    Once a super-majority of replicas validate a proposal, each replica "locks" the
+    proposal.
 
-If consensus cannot be reached in a particular round, the locked proposal is
-retained for subsequent rounds. This means that even if the current round fails
-to achieve consensus, the proposal is not discarded. Instead, it remains a valid
-proposal for future rounds. The leader in a new round can propose this proposal
-because it has already received a majority vote.
+    If consensus cannot be reached in a particular round, the locked proposal is
+    retained for subsequent rounds. This means that even if the current round fails
+    to achieve consensus, the proposal is not discarded. Instead, it remains a valid
+    proposal for future rounds. The leader in a new round can propose this proposal
+    because it has already received a majority vote.
 
 This mechanism helps maintain continuity and efficiency in the consensus
 process, as it allows the network to build upon previously validated proposals
