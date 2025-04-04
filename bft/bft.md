@@ -11,7 +11,7 @@ The `bft` type is a comprehensive structure that encapsulates the state and core
   - Through p2p communication it coordinates parallel phase progression between other participating replicas.
 
 - **Leader Election**:
-  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
+  - Employs Verifiable Random Functions (VRF) and a Sortition proces to ensure fair and unbiased leader selection.
   - The leader is elected based on a combination of randomness and voting power.
 
 
@@ -78,11 +78,18 @@ The two recovery phases address situations where errors cause a premature exit f
 
 #### View
 
-The `View` field within the `BFT` struct is a component for tracking the current period of the consensus process, defined by `Height`, `Round`, and `Phase`.
+The `View` field within the `BFT` struct is a component for tracking the current
+period of the consensus process, defined by `Height`, `Round`, and `Phase`.
 
-The `View` aids in synchronizing validators by providing a consistent reference point for the current state of the blockchain. It ensures that all validators are aligned regarding the block height, round, and phase they are operating in. This alignment allows validators to correctly interpret proposals, cast votes, and validate the results of the consensus process.
+The `View` aids in synchronizing validators by providing a consistent reference
+point for the current state of the blockchain. It ensures that all validators
+are aligned regarding the block height, round, and phase they are operating in.
+This alignment allows validators to correctly interpret proposals, cast votes,
+and validate the results of the consensus process.
 
-The `View` is included with every message sent between nodes and plays a role during the recovery phases, where it is used to synchronize all replicas to highest round seen my the super-majority of nodes.
+The `View` is included with every message sent between nodes and is required
+during the recovery phases, where it is used to synchronize all replicas to
+highest round seen by the super-majority of nodes.
 
 #### Super-Majority
 
@@ -91,45 +98,31 @@ replicas that is greater than a simple majority. Specifically, it requires more
 than two-thirds (+2/3) of the voting power or votes from the replicas to agree
 on a proposal or vote to be considered in consensus.
 
-This super-majority is crucial for achieving consensus in a Byzantine Fault
-Tolerant (BFT) system like NestBFT. It ensures that even if some replicas are
-faulty or malicious, the system can still reach a reliable consensus. The
-super-majority threshold is used in various phases of the consensus process,
-such as PROPOSE-VOTE, PRECOMMIT, and COMMIT, to validate and finalize blocks.
+The super-majority threshold is applied in various phases of the consensus
+process, such as during the ELECTION, PROPOSE, PRECOMMIT, and COMMIT phases,
+where the leader collects votes from +2/3 of the replicas to justify consensus
+on an election or proposal. This mechanism ensures that the system can function
+effectively despite potential faulty or Byzantine nodes.
 
-Additionally, the concept of a super-majority is important in the recovery
-phases like ROUND INTERRUPT and PACEMAKER, where it helps in resolving
-synchronization issues and ensuring that the network can recover from failures
-effectively.
+#### Proposal Locks
 
-#### Proposal Locking
-
-Once a super-majority of replicas validate a proposal, each replica "locks" the
-proposal.
-
-If consensus cannot be reached in a particular round, the locked proposal is
-retained for subsequent rounds. This means that even if the current round fails
-to achieve consensus, the proposal is not discarded. Instead, it remains a valid
-proposal for future rounds. The leader in a new round can propose this proposal
-because it has already received a majority vote.
-
-This mechanism helps maintain continuity and efficiency in the consensus
-process, as it allows the network to build upon previously validated proposals
-rather than starting from scratch in each new round. It also ensures that the
-network can recover from temporary disruptions or disagreements without losing
-progress.
+Once a proposal is supported by a quorum certificate, replicas will `lock` onto
+the proposal. If consensus is not achieved in a specific round, the locked
+proposal is preserved for future rounds. This ensures that even if the current
+round does not reach consensus, the proposal is not discarded. Instead, it
+remains a valid proposal for subsequent rounds. The leader in the next round can
+propose this same proposal again, as it already has quorum support.
 
 #### Quorum Certificates
 
-Replicas utilize the Quorum Certificate (QC) to convey critical information to
-other replicas. This information can include the current view of a replica, a
-vote, or a super-majority consensus that serves to validate an action.
+Replicas use the Quorum Certificate (QC) to share important information with
+other replicas. This information may include the current view of a replica, a
+vote, or a super-majority consensus that validates an action.
 
-Quality Certificates (QCs) are essential in demonstrating that a specified
-majority of replicas (at least two-thirds) have verified and reached agreement
-on a particular aspect of the consensus process. These certificates play a
-critical role by confirming that consensus has been reached without
-necessitating constant direct communication among all replicas.
+Quorum Certificates (QCs) demonstrate that a specified majority of replicas (at
+least two-thirds) have verified and agreed on a particular aspect of the
+consensus process. These certificates confirm that consensus has been reached
+without requiring constant direct communication among all replicas.
 
 # Election Phase
 
@@ -140,13 +133,14 @@ seed data, which are crucial in resisting manipulation and providing a robust
 defense against potential biases. The use of VRF ensures that the selection
 process is both random and publically verifiable.
 
-Validators play a significant role in this process by generating a digital
-signature on the sortition seed data. Their stake is a factor in this phase as
-it increases the likelihood of becoming a candidate based on their voting power.
-This stake-weighted approach ensures that validators with more significant
-contributions to the network have a higher chance of being selected, aligning
-the incentives of the network participants with the overall security and
-integrity of the blockchain.
+Validators create a digital signature on the sortition seed data using their
+private key. The integer value derived from this signature, combined with their
+voting power, determines their candidacy. The stake of a validator influences
+this process, as a higher stake increases the probability of becoming a
+candidate. This stake-weighted method ensures that validators with larger
+contributions to the network have a greater likelihood of selection, aligning
+the incentives of network participants with the security and integrity of the
+blockchain.
 
 ### Sortition Seed Data
 
@@ -157,9 +151,9 @@ leadership is assigned fairly, maintaining unpredictability and fairness in the
 network.
 
 - **Round Field Inclusion**: The incorporation of the round field into the
-  sortition data reduces the likelihood of the same leader being chosen
-  consecutive rounds. This mechanism benefits the network by mitigating the risk
-  posed by a malicious or faulty leader.
+  sortition data reduces the likelihood of the same leader being chosen in
+  consecutive rounds. This mechanism mitigates the risk posed by a malicious or
+  faulty leader.
 
 - **Last Proposer Addresses Field**: NestBFT distinguishes itself from other
   protocols by utilizing the LastProposerAddresses field within its sortition
@@ -170,13 +164,19 @@ network.
 
 # Election Vote Phase
 
-In the Election Vote phase, each replica evaluates candidate messages received from other replicas. Each candidate message includes a Verifiable Random Function (VRF) output, which is a cryptographic function that produces a random output that can be publicly verified. The replicas select the candidate with the lowest VRF output as the leader, ensuring that the selection process is fair and unbiased.
+In the ELECTION VOTE phase, each replica reviews messages from candidates, which
+include a Verifiable Random Function (VRF) output. This cryptographic function
+generates a publicly verifiable random output. The replicas select the candidate
+with the lowest VRF output as the leader, promoting a fair selection process.
 
-If no votes are received, the process falls back to a stake-weighted-pseudorandom selection to ensure a leader is always chosen.
+If no candidate messages are received, the process defaults to a
+stake-weighted-pseudorandom selection to ensure a leader is chosen.
 
-Once a candidate is chosen, each replica sends a signed Election Vote to the selected leader.
-
-In the subsequent phase, the leader aggregates these votes. If they receive votes from more than two-thirds of the replicas, they can use this as justification to propose a new block. This aggregation of votes is important as it demonstrates a consensus among the replicas.
+Once a leader is determined, each replica sends a signed ELECTION vote to the
+selected leader. In the following phase, the leader aggregates these votes. If
+they receive votes from more than two-thirds of the replicas, they can justify
+proposing a new block. This vote aggregation indicates consensus among the
+replicas.
 
 # Propose Phase
 
