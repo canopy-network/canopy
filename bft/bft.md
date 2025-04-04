@@ -64,10 +64,10 @@ recovery phases are initiated in order to continue consensus.
 - **CommitProcess:**
   - Each replica validates the COMMIT message by verifying the aggregate signature. If valid, the replica commits the block to finality and resets the BFT for the next height.
 
-The two recovery phases in the NestBFT consensus process for Canopy address situations where errors cause a premature exit from a round:
+The two recovery phases address situations where errors cause a premature exit from a round:
 
 - **Round Interrupt**:
-  - In this phase, each replica sends its current View to all other replicas to help synchronize the round in the subsequent Pacemaker phase.
+  - In this phase concensus is halted and reset. Each replica shares its current View with all other replicas. This allows replicas to synchronize in the Pacemaker phase.
 
 - **Pacemaker**:
   - This phase synchronizes each replica to the highest round that a super-majority has observed, allowing the consensus process to restart with the Election phase.
