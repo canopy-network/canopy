@@ -60,9 +60,11 @@ consensus on the next block.
 
 The two recovery phases in the NestBFT consensus process for Canopy address situations where errors cause a premature exit from a round:
 
-- **Round Interrupt**: In this phase, each replica sends its current View to all other replicas to help synchronize the round in the subsequent Pacemaker phase.
+- **Round Interrupt**:
+  - In this phase, each replica sends its current View to all other replicas to help synchronize the round in the subsequent Pacemaker phase.
 
-- **Pacemaker**: This phase synchronizes each replica to the highest round that a super-majority has observed, allowing the consensus process to restart with the Election phase.
+- **Pacemaker**:
+  - This phase synchronizes each replica to the highest round that a super-majority has observed, allowing the consensus process to restart with the Election phase.
 
 # Key Concepts
 
