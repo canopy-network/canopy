@@ -185,9 +185,7 @@ const RenderAmountInput = ({ amount, onClick, input, inputValue }) => {
 const MultiSelectToggle = forwardRef(({ value, onChange, placeholder, onClick, input }, ref) => (
   <Form.Control
     ref={ref}
-    type="text"
-    value={value}
-    placeholder={placeholder}
+    className="input-text-field"
     onChange={onChange}
     onClick={(e) => {
       e.preventDefault();
@@ -199,6 +197,13 @@ const MultiSelectToggle = forwardRef(({ value, onChange, placeholder, onClick, i
       e.stopPropagation();
       onClick(e);
     }}
+    type="text"
+    value={value}
+    placeholder={input.placeholder}
+    required={input.required}
+    min={0}
+    minLength={input.minLength}
+    maxLength={input.maxLength}
     aria-label={input.label}
     aria-describedby="emailHelp"
   />
@@ -225,7 +230,7 @@ const MultiSelectMenu = forwardRef(({ children, style, className, "aria-labelled
     <div ref={ref} style={style} className={className} aria-labelledby={labeledBy}>
       <Form.Control
         autoFocus
-        className="mx-3 my-2 w-auto"
+        className="my-2"
         placeholder="Type to filter..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -326,52 +331,53 @@ const FormMultiSelect = ({ options, placeholder, validate, onInputChange, input 
           })
         }
       >
-        {/* <div> */}
         <Dropdown show={show} onToggle={(nextShow) => setShow(nextShow)} autoClose="outside">
-          <Dropdown.Toggle
-            as={MultiSelectToggle}
-            value={inputValue}
-            onChange={handleInputChange}
-            placeholder={placeholder || "Enter values"}
-            onClick={(e) => {
-              setShow(true), e.stopPropagation(), e.preventDefault();
-            }}
-            input={input}
-          />
-          <Dropdown.Menu as={MultiSelectMenu}>
-            {/* Map dropdown items that are selected */}
-            {selectedOptions.map((opt) => (
-              <Dropdown.Item key={opt} eventKey={opt} className="d-flex justify-content-between align-items-center">
-                <span>{opt}</span>
-                <Form.Check
-                  type="checkbox"
-                  checked={true}
-                  onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="multicheckbox"
-                />
-              </Dropdown.Item>
-            ))}
+          <div className="d-flex flex-fill position-relative">
+            <Dropdown.Toggle
+              as={MultiSelectToggle}
+              value={inputValue}
+              onChange={handleInputChange}
+              placeholder={placeholder || "Enter values"}
+              onClick={(e) => {
+                setShow(true), e.stopPropagation(), e.preventDefault();
+              }}
+              input={input}
+              className=""
+            />
+            <Dropdown.Menu as={MultiSelectMenu} className="position-absolute px-3 w-100">
+              {/* Map dropdown items that are selected */}
+              {selectedOptions.map((opt) => (
+                <Dropdown.Item key={opt} eventKey={opt} className="d-flex justify-content-between">
+                  <span>{opt}</span>
+                  <Form.Check
+                    type="checkbox"
+                    checked={true}
+                    onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="multicheckbox"
+                  />
+                </Dropdown.Item>
+              ))}
 
-            {/* Divider between selected and unselected */}
-            {selectedOptions.length > 0 && unselectedOptions.length > 0 && <Dropdown.Divider key="divider" />}
+              {/* Divider between selected and unselected */}
+              {selectedOptions.length > 0 && unselectedOptions.length > 0 && <Dropdown.Divider key="divider" />}
 
-            {/* Map dropdown items that are unselected */}
-            {unselectedOptions.map((opt) => (
-              <Dropdown.Item key={opt} eventKey={opt} className="d-flex justify-content-between align-items-center">
-                <span>{opt}</span>
-                <Form.Check
-                  type="checkbox"
-                  checked={false}
-                  onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="multicheckbox"
-                />
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Menu>
+              {/* Map dropdown items that are unselected */}
+              {unselectedOptions.map((opt) => (
+                <Dropdown.Item key={opt} eventKey={opt} className="d-flex justify-content-between">
+                  <span>{opt}</span>
+                  <Form.Check
+                    type="checkbox"
+                    checked={false}
+                    onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="multicheckbox"
+                  />
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </div>
         </Dropdown>
-        {/* </div> */}
       </FormGroup>
     </>
   );
