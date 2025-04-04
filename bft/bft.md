@@ -78,7 +78,7 @@ The two recovery phases address situations where errors cause a premature exit f
 
 #### View
 
-The `View` field within the `BFT` struct is a component for tracking the current
+The `View` field within the `BFT` struct is a component tracking the current
 period of the consensus process, defined by `Height`, `Round`, and `Phase`.
 
 The `View` aids in synchronizing validators by providing a consistent reference
@@ -134,15 +134,15 @@ defense against potential biases. The use of VRF ensures that the selection
 process is both random and publically verifiable.
 
 Validators create a digital signature on the sortition seed data using their
-private key. The integer value derived from this signature, combined with their
-voting power, determines their candidacy. The stake of a validator influences
-this process, as a higher stake increases the probability of becoming a
-candidate. This stake-weighted method ensures that validators with larger
-contributions to the network have a greater likelihood of selection, aligning
-the incentives of network participants with the security and integrity of the
-blockchain.
+private key. The integer value of this signature is the random component in the
+election process. This combined with their voting power, determines their
+candidacy. The stake of a validator influences this process, as a higher stake
+increases the probability of becoming a candidate. This stake-weighted method
+ensures that validators with larger contributions to the network have a greater
+likelihood of selection, aligning the incentives of network participants with
+the security and integrity of the blockchain.
 
-### Sortition Seed Data
+- Sortition Seed Data
 
 The integrity of the sortition seed data is paramount, as any manipulation could
 lead to predictable and biased leader selection. By ensuring that the seed data
@@ -150,12 +150,16 @@ remains secure and non-manipulatable, NestBFT fosters an environment where
 leadership is assigned fairly, maintaining unpredictability and fairness in the
 network.
 
-- **Round Field Inclusion**: The incorporation of the round field into the
-  sortition data reduces the likelihood of the same leader being chosen in
-  consecutive rounds. This mechanism mitigates the risk posed by a malicious or
+Two seed data fields in particular provide essential reliability and security:
+
+-- **Round**: The inclusion of the round field in the sortition data helps ensure
+  that the same leader is not selected in consecutive rounds. This is achieved
+  because the Verifiable Random Function (VRF) output signature changes with
+  each round, reducing the probability of repeated leader selection. This
+  mechanism helps mitigate risks associated with a potentially malicious or
   faulty leader.
 
-- **Last Proposer Addresses Field**: NestBFT distinguishes itself from other
+-- **Last Proposer Addresses**: NestBFT distinguishes itself from other
   protocols by utilizing the LastProposerAddresses field within its sortition
   seed data. This approach avoids reliance on manipulable inputs, such as the
   last block hash, which are susceptible to bias and grinding attacks. By
