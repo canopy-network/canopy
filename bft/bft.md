@@ -4,11 +4,16 @@
 
 ## `bft` Type
 
-The `bft` type is a comprehensive structure that encapsulates the state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through consensus phases, ensuring the secure and timely operation of the Canopy blockchain.
+The `bft` type is a comprehensive structure that encapsulates the state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through the core consensus phases, ensuring trusted and timely operation of the Canopy blockchain.
 
 - **Consensus and View Management**:
   - Manages the current consensus phase for each replica. Tracks the current view from the perspective of the replica.
   - Through p2p communication it coordinates parallel phase progression between other participating replicas.
+
+- **Leader Election**:
+  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
+  - The leader is elected based on a combination of randomness and voting power.
+
 
 - **Block and Result Management**:
   - Manages the current blockchain block and its related data.
@@ -16,10 +21,6 @@ The `bft` type is a comprehensive structure that encapsulates the state and core
 
 - **Vote and Proposal Management**:
   - Records the votes received from the validators and the proposals originating from the leader.
-
-- **Leader Election**:
-  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
-  - The leader is elected based on a combination of randomness and voting power.
 
 - **Security Assurance**:
   - Employs security mitigations for griding and long chain attacks.
@@ -77,17 +78,11 @@ The two recovery phases address situations where errors cause a premature exit f
 
 #### View
 
-The `View` field in the `BFT` struct represents the perspective of a replica.
-This field is crucial as it encapsulates the current period a particular replica
-beleives it is in within the consensus process. It includes details such as the
-`Height`, `Round`, and `Phase`, which are essential for identifying the progress
-and state of the consensus process.
+The `View` field within the `BFT` struct is a component for tracking the current period of the consensus process, defined by `Height`, `Round`, and `Phase`.
 
-The `View` helps in synchronizing the validators by providing a consistent
-reference point for the current state of the blockchain. It ensures that all
-validators are aligned in terms of which block height, round, and phase they are
-operating in. This alignment is necessary for validators to correctly interpret
-proposals, cast votes, and validate the results of the consensus process.
+The `View` aids in synchronizing validators by providing a consistent reference point for the current state of the blockchain. It ensures that all validators are aligned regarding the block height, round, and phase they are operating in. This alignment allows validators to correctly interpret proposals, cast votes, and validate the results of the consensus process.
+
+The `View` is included with every message sent between nodes and plays a role during the recovery phases, where it is used to synchronize all replicas to highest round seen my the super-majority of nodes.
 
 #### Super-Majority
 
