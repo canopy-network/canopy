@@ -75,7 +75,7 @@ The two recovery phases address situations where errors cause a premature exit f
 # Key Concepts
 
 
-- View
+#### View
 
 The `View` field in the `BFT` struct represents the perspective of a replica.
 This field is crucial as it encapsulates the current period a particular replica
@@ -89,7 +89,7 @@ validators are aligned in terms of which block height, round, and phase they are
 operating in. This alignment is necessary for validators to correctly interpret
 proposals, cast votes, and validate the results of the consensus process.
 
-- Super-Majority
+#### Super-Majority
 
 A super-majority refers to a threshold of agreement among the participating
 replicas that is greater than a simple majority. Specifically, it requires more
@@ -107,7 +107,7 @@ phases like ROUND INTERRUPT and PACEMAKER, where it helps in resolving
 synchronization issues and ensuring that the network can recover from failures
 effectively.
 
-- Proposal Locking
+#### Proposal Locking
 
 Once a super-majority of replicas validate a proposal, each replica "locks" the
 proposal.
@@ -124,7 +124,7 @@ rather than starting from scratch in each new round. It also ensures that the
 network can recover from temporary disruptions or disagreements without losing
 progress.
 
-- Quorum Certificates
+#### Quorum Certificates
 
 Replicas utilize the Quorum Certificate (QC) to convey critical information to
 other replicas. This information can include the current view of a replica, a
