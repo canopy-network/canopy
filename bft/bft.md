@@ -26,13 +26,6 @@ The `bft` type is a comprehensive structure that encapsulates the state and oper
   - Manages the current blockchain block and its related data.
   - Guarantees proper proposal crafting and verification per consensus rules whilst documenting consensus results and slashing conditions.
 
-- **Decentralized Networking and P2P Communication**:
-  - Enhances messaging exchanges between replicas essential for consensus and block gossip.
-  - Aids in the interaction with network components to ensure smooth communication and operations, playing a vital role in disseminating consensus data across phases.
-
-- **External Interaction Management**:
-  - Liaises with other network components like FSM and storage, ensuring smooth multitier interactions and operations across the network layers.
-
 ## Consensus Phase Overview
 
 The consensus process is broken down into 8 core phases and 2 recovery phases.
@@ -43,14 +36,29 @@ consensus on the next block.
 
 Here's a breakdown of each core phase and its main purpose:
 
-1. **Election**: Eligible replicas broadcast their candidacy for the leader role
-2. **ElectionVote**: Replicas vote for a leader from the pool of announced candidates
-3. **Propose**: The elected leader produces a block proposal, relaying it to replicas
-4. **ProposeVote**: Replicas validate proposed block and send validation vote to leader
-5. **Precommit**: Leader reviews validation votes for super-majority consensus
-6. **PrecommitVote**: Replicas validate consensus and send validation vote to leader
-7. **Commit**: Leader aggregates votes, verifies majority of replicas approved
-8. **CommitProcess**: Replicas verify proposer and proposal and commit block
+1. **Election**: 
+   - Eligible replicas broadcast their candidacy for the leader role
+
+2. **ElectionVote**: 
+   - Replicas vote for a leader from the pool of announced candidates
+
+3. **Propose**: 
+   - The elected leader produces a block proposal, relaying it to replicas
+
+4. **ProposeVote**: 
+   - Replicas validate proposed block and send validation vote to leader
+
+5. **Precommit**: 
+   - Leader reviews validation votes for super-majority consensus
+
+6. **PrecommitVote**: 
+   - Replicas validate consensus and send validation vote to leader
+
+7. **Commit**: 
+   - Leader aggregates votes, verifies majority of replicas approved
+
+8. **CommitProcess**: 
+   - Replicas verify proposer and proposal and commit block
 
 The two recovery phases address when errors in the consensus process cause a
 premature exit to the round:
