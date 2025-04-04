@@ -4,16 +4,15 @@
 
 ## `bft` Type
 
-The `bft` type is a comprehensive structure that encapsulates the state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through the core consensus phases, ensuring trusted and timely operation of the Canopy blockchain.
+The `bft` type is a comprehensive structure that encapsulates the current state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through the core consensus phases, ensuring the trusted and timely operation of the Canopy blockchain.
 
 - **Consensus and View Management**:
-  - Manages the current consensus phase for each replica. Tracks the current view from the perspective of the replica.
-  - Through p2p communication it coordinates parallel phase progression between other participating replicas.
+  - Manages the current consensus phase for each replica and tracks the current `View` from the perspective of the replica.
+  - Through p2p communication it coordinates parallel phase progression between participating replicas.
 
 - **Leader Election**:
   - Employs Verifiable Random Functions (VRF) and a Sortition proces to ensure fair and unbiased leader selection.
   - The leader is elected based on a combination of randomness and voting power.
-
 
 - **Block and Result Management**:
   - Manages the current blockchain block and its related data.
@@ -138,7 +137,9 @@ process is both random and publically verifiable.
 Validators create a digital signature on the sortition seed data using their
 private key. The integer value of this signature is the random component in the
 election process. This combined with their voting power, determines their
-candidacy. The stake of a validator influences this process, as a higher stake
+candidacy.
+
+The stake of a validator influences this process, as a higher stake
 increases the probability of becoming a candidate. This stake-weighted method
 ensures that validators with larger contributions to the network have a greater
 likelihood of selection, aligning the incentives of network participants with
@@ -170,111 +171,93 @@ Two seed data fields in particular provide essential reliability and security:
 
 ## Election Vote Phase
 
-In the ELECTION VOTE phase, each replica reviews messages from candidates, which
-include a Verifiable Random Function (VRF) output. This cryptographic function
-generates a publicly verifiable random output. The replicas select the candidate
-with the lowest VRF output as the leader, promoting a fair selection process.
+During this phase, each replica reviews candidate messages from the previous
+phase to select a leader. The candidate with the lowest Verifiable Random
+Function (VRF) output is chosen as the leader. If no candidate messages are
+received, the process defaults to a stake-weighted pseudorandom selection to
+ensure a leader is chosen.
 
-If no candidate messages are received, the process defaults to a
-stake-weighted-pseudorandom selection to ensure a leader is chosen.
+Once a replica determines which replica it will vote for, it sends a signed
+election vote to that replica. In the subsequent phase, each replica aggregates
+the received votes. The replica that receives more than two-thirds of the votes
+uses this super-majority to justify acting as the leader.
 
-Once a leader is determined, each replica sends a signed ELECTION vote to the
-selected leader. In the following phase, the leader aggregates these votes. If
-they receive votes from more than two-thirds of the replicas, they can justify
-proposing a new block. This vote aggregation indicates consensus among the
-replicas.
+The signed election vote includes the highest Quorum Certificate (HighQC), the
+highest Verifiable Delay Function (HighVDF), and any Byzantine evidence.
 
 ## Propose Phase
 
-During the PROPOSE phase of the NestBFT consensus algorithm, the leader is
-responsible for producing a new block proposal. Here are the steps involved in
-this phase:
+During this phase the leader is tasked with proposing the next block to the
+network. After collecting the necessary election votes to justify their role as
+leader, the elected replica either unlocks a previously locked proposal or
+creates a new one.
 
-1. **Collecting Election Votes**: The leader gathers election votes from more
-   than two-thirds (+2/3) of the replicas. This serves as proof of the leader's
-   qualification to propose a block.
+If a locked proposal exists from a previous round, the leader uses that proposal
+as the next proposal. If no lock is found, the leader constructs a new block
+proposal. The leader pulls transactions from the mempool and validates the VDF,
+mitigating long-range attacks.
 
-2. **Proposal Block Selection**:
-   - If a valid lock exists for the current height, the leader uses the locked
-     block as the proposal block. This ensures that the proposal is based on a
-     previously agreed-upon state, enhancing the stability and reliability of
-     the consensus process.
-   - If no valid lock is found, the leader creates a new block to extend the
-     blockchain. This new block is constructed with the maximum number of
-     transactions available in the mempool, ensuring efficient use of network
-     resources.
-
-3. **Creating the Proposal**: The proposal consists of the new proposed block
-   and the associated results, which include the reward and slash recipients. A
-   block contains the transactions to be processed, and the proposal is backed
-   by the signatures from the election votes, confirming the leader's
-   legitimacy.
-
-4. **Distribution of Proposal**: The leader sends the newly created proposal
-   (block, results, evidence) to all validators. The proposal is justified by
-   attaching the aggregate signatures from more than two-thirds (+2/3) of the
-   election votes, confirming the leader's legitimacy.
+The proposal includes the new block and associated results (reward and slash
+recipients). The leader then distributes the proposal, backed by the aggregate
+signature proving the quorum accepts this proposer as the leader.
 
 ## Propose Vote Phase
 
-In the NestBFT consensus algorithm, the PROPOSE VOTE phase involves several
-critical steps where the replicas (nodes) validate the proposal put forward by
-the leader. Each replica follows a systematic approach to ensure the proposal's
-validity:
+The PROPOSE VOTE phase involves several steps where replicas validate the
+proposal put forward by the leader. Each replica follows a systematic approach
+to ensure the proposal's validity:
 
 1. **Proposal Validation**: Each replica receives the PROPOSE message from the
    leader and must validate it by checking the aggregate signature. This step
    confirms that the leader's role is justified by having received votes from at
    least 2/3 of the replicas.
 
-2. **Proposal Unlock**: If a valid lock exists for the current height and meets
-   the safe node predicate, the leader uses that block as the proposed block. If
-   no valid lock is found, the leader creates a new proposal.
+2. **Proposal Unlock**: If a locked proposal exists for the current height, the
+   replica must apply the safe node predicate conditions to decide whether it is
+   safe to unlock and use the received proposal.
 
-3. **State Application**: Replicas apply the proposal block against their
-   individual state machines, ensuring consistency and accuracy with their own
-   data and expected outcomes.
+3. **State Application and Verification**: Replicas process the proposed block
+   using their state machines, confirming that both the header and results match
+   those in the original proposal. This guarantees that the replica has achieved
+   the same outcomes as the leader, allowing the replica to consider the
+   proposal valid.
 
-4. **Header and Results Verification**: Each replica checks the header and the
-   results of the proposal against what they themselves have produced. This
-   ensures there's no discrepancy in the transactions and resulting state
-   machine updates.
-
-5. **Signature Voting**: If the proposal is deemed valid, the replica sends a
-   signature to the leader, effectively casting their vote. This vote endorses
-   the validity of the proposal and confirms the approval of the replica in its
-   execution.
+4. **Signature Voting**: If the proposal is deemed valid, the replica sends a
+   signature to the leader, endorsing the validity of this proposal. In the next
+   phase the leader will collect these votes from replicas to establish
+   consensus on this proposal.
 
 ## Precommit Phase
 
-In the PRECOMMIT phase of the NestBFT consensus algorithm, the leader collects
-PROPOSE VOTES from more than two-thirds of the replicas. The aim of this phase
-is to confirm that the proposed block has the backing of a super-majority.
+In the Precommit Phase, the leader's objective is to verify that the proposed
+block has the support of a super-majority of replicas. The leader gathers
+propose votes from more than two-thirds of the replicas, each vote accompanied
+by a signature from the sender. This collection of votes serves as evidence that
+a super-majority of the quorum believes the proposal is valid.
 
-During this phase, the leader compiles evidence that the proposed block is
-broadly accepted by ensuring that over two-thirds of the quorum agree on the
-proposal's validity.
+Once the leader has collected the necessary votes, a PRECOMMIT message is sent
+to all replicas. This message includes the aggregate signature derived from the
+propose votes, which serves as justification that the proposal has achieved
+super-majority consensus approval.
 
 ## Precommit Vote Phase
 
 In the PRECOMMIT-VOTE phase of the NestBFT consensus algorithm, each replica is
 tasked with verifying the PRECOMMIT message. This involves ensuring that the
 proposal comes from the expected proposer and that it is the expected proposal.
-The replicas achieve this by validating the aggregate signature contained within
-the PRECOMMIT message. If the aggregate signature is valid each replica will
-`lock` the proposal.
 
-Once the proposal is verified, each participating replica sends a vote back to
-the proposer. This vote signals that the replica has verified and agrees with
-the proposal, expressing its support for the super-majority needed to advance to
-the next phase of the consensus process. The votes collected during this phase
-allow the leader justify that the required super-majority quorum believes the
-proposal is valid and ready to be committed to the blockchain.
+The replicas achieve this by validating the aggregate signature contained within
+the PRECOMMIT message. In addition, if the aggregate signature is valid each
+replica will `lock` the proposal, allowing some optimization for error recovery.
+
+Once the PRECOMMIT message is verified, each participating replica sends a vote
+back to the leader, signalling this replica has endorsed the consensus behind
+the proposal.
 
 ## Commit Phase
 
 During the COMMIT phase of the NestBFT consensus algorithm, the leader collects
-PRECOMMIT votes from more than two-thirds (i.e., +2/3) of the replicas. Each of
+PRECOMMIT VOTES from more than two-thirds (i.e., +2/3) of the replicas. Each of
 these votes includes a signature from the sender, which the leader then uses to
 construct a COMMIT message. This message attaches the +2/3 signatures from the
 PRECOMMIT VOTE messages, which serves as justification that a super-majority of
@@ -283,29 +266,24 @@ the quorum believes the proposal is valid.
 Once the leader has prepared the COMMIT message, it is sent to all validators.
 Upon receiving the COMMIT message, each replica validates it by verifying the
 aggregate signature provided. If the validation is successful, each replica will
-then commit the block to finality. Following this, the BFT setup is reset in
-preparation for reaching consensus on the next block height. This phase
-solidifies the proposed block, ensuring that it becomes a permanent part of the
-blockchain.
+then commit the block to finality.
 
 ## Commit Process Phase
 
-The COMMIT PROCESS phase in the NestBFT consensus algorithm involves the
-validation of the COMMIT message. Each replica verifies the aggregate signature
-included in the COMMIT message to ensure that it is from the expected proposer
-and that the proposal is valid. Once the aggregate signature is verified, the
-proposal signifies that +2/3 of the quorum agrees that a super-majority believes
-the proposal is valid.
+The COMMIT PROCESS phase each replica verifies the aggregate signature included
+in the COMMIT message to ensure that it is from the expected proposer and that
+the proposal is valid. Once the aggregate signature is verified, the proposal
+signifies that +2/3 of the quorum agrees that a super-majority believes the
+proposal is valid.
 
 Upon successful verification, the block is gossiped throughout the network and
-committed to the local chain. This step finalizes the block within the chain at
+committed to the local store. This step finalizes the block within the chain at
 the current height. Following the commitment, the replicas then reset the BFT
-process for the next block height, enabling the continuation of the consensus
-process for subsequent blocks.
+process for the next block height, restarting the consensus process at round 0 and the Election phase.
 
 # Recovery Phases
 
-## ROUND INTERRUPT
+## Round Interrupt
 
 The ROUND INTERRUPT phase occurs in response to a failure in the BFT cycle,
 resulting in a premature exit from a round. This leads to the initiation of a
