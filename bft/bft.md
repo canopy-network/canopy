@@ -124,7 +124,9 @@ least two-thirds) have verified and agreed on a particular aspect of the
 consensus process. These certificates confirm that consensus has been reached
 without requiring constant direct communication among all replicas.
 
-# Election Phase
+# Core Phases
+
+## Election Phase
 
 The election phase utilizes a sortition process in conjunction with a Verifiable
 Random Function (VRF) to ensure the selection of leaders is fair, uniform, and
@@ -142,7 +144,7 @@ ensures that validators with larger contributions to the network have a greater
 likelihood of selection, aligning the incentives of network participants with
 the security and integrity of the blockchain.
 
-### Sortition Seed Data
+#### Sortition Seed Data
 
 The integrity of the sortition seed data is paramount, as any manipulation could
 lead to predictable and biased leader selection. By ensuring that the seed data
@@ -166,7 +168,7 @@ Two seed data fields in particular provide essential reliability and security:
   eliminating these vulnerabilities, NestBFT ensures a fairer and less
   predictable leader selection process.
 
-# Election Vote Phase
+## Election Vote Phase
 
 In the ELECTION VOTE phase, each replica reviews messages from candidates, which
 include a Verifiable Random Function (VRF) output. This cryptographic function
@@ -182,7 +184,7 @@ they receive votes from more than two-thirds of the replicas, they can justify
 proposing a new block. This vote aggregation indicates consensus among the
 replicas.
 
-# Propose Phase
+## Propose Phase
 
 During the PROPOSE phase of the NestBFT consensus algorithm, the leader is
 responsible for producing a new block proposal. Here are the steps involved in
@@ -213,7 +215,7 @@ this phase:
    attaching the aggregate signatures from more than two-thirds (+2/3) of the
    election votes, confirming the leader's legitimacy.
 
-# Propose Vote Phase
+## Propose Vote Phase
 
 In the NestBFT consensus algorithm, the PROPOSE VOTE phase involves several
 critical steps where the replicas (nodes) validate the proposal put forward by
@@ -243,7 +245,7 @@ validity:
    the validity of the proposal and confirms the approval of the replica in its
    execution.
 
-# Precommit Phase
+## Precommit Phase
 
 In the PRECOMMIT phase of the NestBFT consensus algorithm, the leader collects
 PROPOSE VOTES from more than two-thirds of the replicas. The aim of this phase
@@ -253,7 +255,7 @@ During this phase, the leader compiles evidence that the proposed block is
 broadly accepted by ensuring that over two-thirds of the quorum agree on the
 proposal's validity.
 
-# Precommit Vote Phase
+## Precommit Vote Phase
 
 In the PRECOMMIT-VOTE phase of the NestBFT consensus algorithm, each replica is
 tasked with verifying the PRECOMMIT message. This involves ensuring that the
@@ -269,7 +271,7 @@ the next phase of the consensus process. The votes collected during this phase
 allow the leader justify that the required super-majority quorum believes the
 proposal is valid and ready to be committed to the blockchain.
 
-# Commit Phase
+## Commit Phase
 
 During the COMMIT phase of the NestBFT consensus algorithm, the leader collects
 PRECOMMIT votes from more than two-thirds (i.e., +2/3) of the replicas. Each of
@@ -286,7 +288,7 @@ preparation for reaching consensus on the next block height. This phase
 solidifies the proposed block, ensuring that it becomes a permanent part of the
 blockchain.
 
-# Commit Process Phase
+## Commit Process Phase
 
 The COMMIT PROCESS phase in the NestBFT consensus algorithm involves the
 validation of the COMMIT message. Each replica verifies the aggregate signature
