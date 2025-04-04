@@ -2,35 +2,36 @@
 
 # Description
 
-The main goal of the code is to define the consensus process that facilitates secure and efficient block validation and commitment in a distributed network. This involves ensuring that a majority consensus of replicas agree on the same sequence of blocks despite potential network disruptions or malicious nodes.
-
 ## `bft` Type
 
 The `bft` type is a comprehensive structure that encapsulates the state and operations of the NestBFT consensus algorithm.
 
-The `bft` type in the Canopy project is responsible for managing the consensus process using the NestBFT algorithm. Here's a high-level list of its functions:
+- **Consensus and View Management**:
+  - This feature is all about managing the consensus process. It keeps tabs on the current view of each replica and tracks the overarching consensus state.
+  - It seamlessly integrates data from both preceding and succeeding phases to maintain consensus flow.
 
-1. **View Management**: Keeps track of the current period or phase of the consensus process.
+- **Vote and Proposal Management**:
+  - Records the votes received from the validators and the proposals originating from the leader.
+  - By facilitating the transition of data from the proposal phase to the voting phase, this function ensures a streamlined flow of consensus votes and actions.
 
-2. **Vote Handling**: Manages votes received from non-leader validators.
+- **Leader Election**:
+  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
+  - The leader is elected based on a combination of randomness and voting power, maintaining fair ground rules.
 
-3. **Proposal Management**: Handles proposals received from leader validators.
+- **Quorum and Security Assurance**:
+  - Validates the leader's proposals to obtain quorum certificates while ensuring safe node predicates are met.
+  - Enforces slashing and rewarding mechanisms to bolster network security by drawing on data from preceding and succeeding proposal evaluations.
 
-4. **Proposer Identification**: Stores the public key of the current proposer.
+- **Block and Result Management**:
+  - Manages the current blockchain block and its related data.
+  - Guarantees proper proposal crafting and verification per consensus rules whilst documenting consensus results and slashing conditions.
 
-5. **Validator Set Management**: Maintains the current set of validators participating in the consensus.
+- **Decentralized Networking and P2P Communication**:
+  - Enhances messaging exchanges between replicas essential for consensus and block gossip.
+  - Aids in the interaction with network components to ensure smooth communication and operations, playing a vital role in disseminating consensus data across phases.
 
-6. **Quorum Certificate Tracking**: Keeps track of the highest PRECOMMIT quorum certificate known for the current height.
-
-7. **Block Management**: Manages the current block being voted on, including its hash.
-
-8. **Result Management**: Handles the results being voted on, such as reward and slash recipients.
-
-9. **Leader Election**: Utilizes sortition data for VRF+CDF-based leader election.
-
-10. **VDF Service**: Runs a verifiable delay function service to deter long-range attacks.
-
-11. **VDF Tracking**: Keeps track of the highest VDF among replicas for long-range attack protection.
+- **External Interaction Management**:
+  - Liaises with other network components like FSM and storage, ensuring smooth multitier interactions and operations across the network layers.
 
 ## Consensus Phase Overview
 
