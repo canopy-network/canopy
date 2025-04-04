@@ -142,7 +142,7 @@ ensures that validators with larger contributions to the network have a greater
 likelihood of selection, aligning the incentives of network participants with
 the security and integrity of the blockchain.
 
-- Sortition Seed Data
+### Sortition Seed Data
 
 The integrity of the sortition seed data is paramount, as any manipulation could
 lead to predictable and biased leader selection. By ensuring that the seed data
@@ -152,14 +152,14 @@ network.
 
 Two seed data fields in particular provide essential reliability and security:
 
--- **Round**: The inclusion of the round field in the sortition data helps ensure
+- **Round**: The inclusion of the round field in the sortition data helps ensure
   that the same leader is not selected in consecutive rounds. This is achieved
   because the Verifiable Random Function (VRF) output signature changes with
   each round, reducing the probability of repeated leader selection. This
   mechanism helps mitigate risks associated with a potentially malicious or
   faulty leader.
 
--- **Last Proposer Addresses**: NestBFT distinguishes itself from other
+- **Last Proposer Addresses**: NestBFT distinguishes itself from other
   protocols by utilizing the LastProposerAddresses field within its sortition
   seed data. This approach avoids reliance on manipulable inputs, such as the
   last block hash, which are susceptible to bias and grinding attacks. By
