@@ -4,7 +4,7 @@
 
 ## `bft` Type
 
-The `bft` type is a comprehensive structure that encapsulates the state and operations of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward.
+The `bft` type is a comprehensive structure that encapsulates the state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through consensus phases, ensuring the secure and timely operation of the Canopy blockchain.
 
 - **Consensus and View Management**:
   - Manages the current consensus phase for each replica. Tracks the current view from the perspective of the replica.
@@ -109,14 +109,14 @@ effectively.
 
 #### Proposal Locking
 
-    Once a super-majority of replicas validate a proposal, each replica "locks" the
-    proposal.
+Once a super-majority of replicas validate a proposal, each replica "locks" the
+proposal.
 
-    If consensus cannot be reached in a particular round, the locked proposal is
-    retained for subsequent rounds. This means that even if the current round fails
-    to achieve consensus, the proposal is not discarded. Instead, it remains a valid
-    proposal for future rounds. The leader in a new round can propose this proposal
-    because it has already received a majority vote.
+If consensus cannot be reached in a particular round, the locked proposal is
+retained for subsequent rounds. This means that even if the current round fails
+to achieve consensus, the proposal is not discarded. Instead, it remains a valid
+proposal for future rounds. The leader in a new round can propose this proposal
+because it has already received a majority vote.
 
 This mechanism helps maintain continuity and efficiency in the consensus
 process, as it allows the network to build upon previously validated proposals
