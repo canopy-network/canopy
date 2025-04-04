@@ -34,41 +34,35 @@ consists of multiple phases, and each height may consist of multiple rounds.
 These phases are executed sequentially and upon successful completion achieve
 consensus on the next block.
 
-Here's a breakdown of each core phase and its main purpose:
+- **Election:**
+  - Each replica runs a Verifiable Random Function (VRF); if selected as a candidate, the replica sends its VRF output to the other replicas.
 
-1. **Election**: 
-   - Eligible replicas broadcast their candidacy for the leader role
+- **ElectionVote:**
+  - Each replica sends ELECTION votes (signature) for the leader based on the lowest VRF value. If no candidates exist, the process falls back to a stake-weighted-pseudorandom selection.
 
-2. **ElectionVote**: 
-   - Replicas vote for a leader from the pool of announced candidates
+- **Propose:**
+  - The leader collects ELECTION.VOTES from +2/3 of the replicas, each including the lock, evidence, and signature from the sender. If a valid lock exists for the current height, the leader uses that block as the proposal block. If no valid lock is found, the leader creates a new block to extend the blockchain.
 
-3. **Propose**: 
-   - The elected leader produces a block proposal, relaying it to replicas
+- **ProposeVote:**
+  - Each replica validates the PROPOSE message by verifying the aggregate signature, applying the proposal block against their state machine, and checking the header and results against what they produced. If valid, the replica sends a vote (signature) to the leader.
 
-4. **ProposeVote**: 
-   - Replicas validate proposed block and send validation vote to leader
+- **Precommit:**
+  - The leader collects PROPOSE VOTES from +2/3 of the replicas, each including a signature from the sender. The leader sends a PRECOMMIT message attaching +2/3 signatures from the PROPOSE VOTE messages.
 
-5. **Precommit**: 
-   - Leader reviews validation votes for super-majority consensus
+- **PrecommitVote:**
+  - Each replica validates the PRECOMMIT message by verifying the aggregate signature. If valid, the replica sends a vote to the leader.
 
-6. **PrecommitVote**: 
-   - Replicas validate consensus and send validation vote to leader
+- **Commit:**
+  - The leader collects PRECOMMIT VOTES from +2/3 of the replicas, each including a signature from the sender. The leader sends a COMMIT message attaching +2/3 signatures from the PRECOMMIT VOTE messages.
 
-7. **Commit**: 
-   - Leader aggregates votes, verifies majority of replicas approved
+- **CommitProcess:**
+  - Each replica validates the COMMIT message by verifying the aggregate signature. If valid, the replica commits the block to finality and resets the BFT for the next height.
 
-8. **CommitProcess**: 
-   - Replicas verify proposer and proposal and commit block
+The two recovery phases in the NestBFT consensus process for Canopy address situations where errors cause a premature exit from a round:
 
-The two recovery phases address when errors in the consensus process cause a
-premature exit to the round:
+- **Round Interrupt**: In this phase, each replica sends its current View to all other replicas to help synchronize the round in the subsequent Pacemaker phase.
 
-1. **RoundInterrupt**: During this phase each replica sends their current View
-   to all other replicas to enable synchronization in the Pacemaker phase.
-
-2. **Pacemaker**: This phase synchronizes each replica to the highest round a
-   super-majority has seen and restarts the consensus process beginning with the
-   Election phase.
+- **Pacemaker**: This phase synchronizes each replica to the highest round that a super-majority has observed, allowing the consensus process to restart with the Election phase.
 
 # Key Concepts
 
