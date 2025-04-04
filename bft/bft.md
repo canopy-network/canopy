@@ -4,27 +4,27 @@
 
 ## `bft` Type
 
-The `bft` type is a comprehensive structure that encapsulates the state and operations of the NestBFT consensus algorithm.
+The `bft` type is a comprehensive structure that encapsulates the state and operations of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward.
 
 - **Consensus and View Management**:
-  - This feature is all about managing the consensus process. It keeps tabs on the current view of each replica and tracks the overarching consensus state.
-  - It seamlessly integrates data from both preceding and succeeding phases to maintain consensus flow.
-
-- **Vote and Proposal Management**:
-  - Records the votes received from the validators and the proposals originating from the leader.
-  - By facilitating the transition of data from the proposal phase to the voting phase, this function ensures a streamlined flow of consensus votes and actions.
-
-- **Leader Election**:
-  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
-  - The leader is elected based on a combination of randomness and voting power, maintaining fair ground rules.
-
-- **Quorum and Security Assurance**:
-  - Validates the leader's proposals to obtain quorum certificates while ensuring safe node predicates are met.
-  - Enforces slashing and rewarding mechanisms to bolster network security by drawing on data from preceding and succeeding proposal evaluations.
+  - Manages the current consensus phase for each replica. Tracks the current view from the perspective of the replica.
+  - Through p2p communication it coordinates parallel phase progression between all participating replicas.
 
 - **Block and Result Management**:
   - Manages the current blockchain block and its related data.
   - Guarantees proper proposal crafting and verification per consensus rules whilst documenting consensus results and slashing conditions.
+
+- **Vote and Proposal Management**:
+  - Records the votes received from the validators and the proposals originating from the leader.
+
+- **Leader Election**:
+  - Employs Verifiable Random Functions (VRF) and Sortition to ensure fair and unbiased leader selection.
+  - The leader is elected based on a combination of randomness and voting power.
+
+- **Security Assurance**:
+  - Employs security mitigations for griding and long chain attacks.
+  - Enforces slashing and rewarding mechanisms.
+  - Validates all proposals and votes.
 
 ## Consensus Phase Overview
 
@@ -86,21 +86,15 @@ proposals, cast votes, and validate the results of the consensus process.
 ### Super-Majority
 
 A super-majority refers to a threshold of agreement among the participating
-replicas (nodes) that is greater than a simple majority. Specifically, it
-requires more than two-thirds (+2/3) of the voting power or votes from the
-replicas to agree on a proposal or decision.
+replicas that is greater than a simple majority. Specifically, it requires more
+than two-thirds (+2/3) of the voting power or votes from the replicas to agree
+on a proposal or vote to be considered in consensus.
 
 This super-majority is crucial for achieving consensus in a Byzantine Fault
 Tolerant (BFT) system like NestBFT. It ensures that even if some replicas are
 faulty or malicious, the system can still reach a reliable consensus. The
 super-majority threshold is used in various phases of the consensus process,
 such as PROPOSE-VOTE, PRECOMMIT, and COMMIT, to validate and finalize blocks.
-
-In these phases, the leader collects votes from the replicas, and if the votes
-meet or exceed the super-majority threshold, the proposal is considered valid
-and can proceed to the next phase. This mechanism helps maintain the integrity
-and security of the blockchain by requiring a significant level of agreement
-among the nodes before any changes are committed.
 
 Additionally, the concept of a super-majority is important in the recovery
 phases like ROUND INTERRUPT and PACEMAKER, where it helps in resolving
@@ -110,17 +104,13 @@ effectively.
 ### Proposal Locking
 
 Once a super-majority of replicas validate a proposal, each replica "locks" the
-proposal. This locking mechanism ensures that the proposal is recognized as
-valid and agreed upon by a significant portion of the network, specifically +2/3
-of the replicas.
+proposal.
 
 If consensus cannot be reached in a particular round, the locked proposal is
 retained for subsequent rounds. This means that even if the current round fails
 to achieve consensus, the proposal is not discarded. Instead, it remains a valid
-proposal for future rounds. The leader in a new round can propose this locked
-block because it has already received a quorum certificate. A quorum certificate
-is a form of proof that the proposal was previously agreed upon by the network,
-as it includes signatures from +2/3 of the replicas.
+proposal for future rounds. The leader in a new round can propose this proposal
+because it has already received a majority vote.
 
 This mechanism helps maintain continuity and efficiency in the consensus
 process, as it allows the network to build upon previously validated proposals
