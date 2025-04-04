@@ -8,7 +8,7 @@ The `bft` type is a comprehensive structure that encapsulates the state and oper
 
 - **Consensus and View Management**:
   - Manages the current consensus phase for each replica. Tracks the current view from the perspective of the replica.
-  - Through p2p communication it coordinates parallel phase progression between all participating replicas.
+  - Through p2p communication it coordinates parallel phase progression between other participating replicas.
 
 - **Block and Result Management**:
   - Manages the current blockchain block and its related data.
@@ -33,6 +33,12 @@ Each phase represents the smallest unit of the concensus process. Each round
 consists of multiple phases, and each height may consist of multiple rounds.
 These phases are executed sequentially and upon successful completion achieve
 consensus on the next block.
+
+At the beginning of each new block height the round is reset to 0 and restarts
+consensus at the Election phase. If the a round of consensus does not succeed,
+recovery phases are initiated in order to continue consensus.
+
+### Phase Summaries
 
 - **Election:**
   - Each replica runs a Verifiable Random Function (VRF); if selected as a candidate, the replica sends its VRF output to the other replicas.
