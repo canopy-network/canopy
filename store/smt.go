@@ -443,9 +443,10 @@ func (s *SMT) GetMerkleProof(k []byte) ([]*lib.Node, lib.ErrorI) {
 		Key:   s.current.Key.bytes(),
 		Value: s.current.Value,
 	})
-	// Add current to the list of traversed nodes until the actual node
-	// in case of proof of membership. for proof of non membembershio, the
-	// possible location of the node is added instead
+	// Add current to the list of traversed nodes. For membership proofs, traversed nodes include the
+	// path to the target node. For non-membership proofs, the potential insertion location is
+	// included instead, this is used for proof verification as the binary key (required for parent
+	// hash calculation) is not externally known.
 	s.traversed.Nodes = append(s.traversed.Nodes, s.current.copy())
 	// traverse the nodes back up to the root to generate the proof
 	for i := len(s.traversed.Nodes) - 1; i > 0; i-- {
@@ -857,13 +858,13 @@ func (x *node) replaceChild(oldKey, newKey []byte) {
 func (x *node) copy() *node {
 	return &node{
 		Key: &key{
-			mostSigBytes: append([]byte(nil), x.Key.mostSigBytes...),
-			leastSigBits: append([]int(nil), x.Key.leastSigBits...),
+			mostSigBytes: slices.Clone(x.Key.mostSigBytes),
+			leastSigBits: slices.Clone(x.Key.leastSigBits),
 		},
 		Node: lib.Node{
-			Value:         append([]byte(nil), x.Value...),
-			LeftChildKey:  append([]byte(nil), x.LeftChildKey...),
-			RightChildKey: append([]byte(nil), x.RightChildKey...),
+			Value:         slices.Clone(x.Value),
+			LeftChildKey:  slices.Clone(x.LeftChildKey),
+			RightChildKey: slices.Clone(x.RightChildKey),
 		},
 	}
 }
