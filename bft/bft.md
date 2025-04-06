@@ -140,7 +140,7 @@ replicas that is greater than a simple majority. Specifically, it requires more
 than two-thirds (+2/3) of the voting power or votes from the replicas to agree
 on a proposal or vote to be considered in consensus.
 
-The super-majority threshold is applied in various phases of the consensus
+The `super-majority` threshold is applied in various phases of the consensus
 process, such as during the ELECTION, PROPOSE, PRECOMMIT, and COMMIT phases,
 where the leader collects votes from +2/3 of the replicas to justify consensus
 on an election or proposal. This mechanism ensures that the system can function
