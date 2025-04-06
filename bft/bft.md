@@ -7,7 +7,7 @@
 The `BFT` struct is a critical component in the Canopy project, designed to
 implement the NestBFT consensus algorithm and manage the consensus process among
 the nodes. This structure is responsible for driving the consensus forward and
-ensuring secure and efficient operation of the Canopy blockchain. Here is a
+ensuring secure and efficient operation of NestBFT-based blockchains. Here is a
 detailed breakdown of its purpose and components:
 
 1. **Consensus State and Management**:
@@ -15,7 +15,7 @@ detailed breakdown of its purpose and components:
      including the height, round, and phase of the consensus. This information
      helps track the progress of consensus rounds and synchronize nodes. It also
      manages the current consensus phase for each replica and coordinates
-     parallel phase progression through p2p communication.
+     parallel phase progression.
 
 2. **Voting and Proposal Handling**:
    - It records votes received from replica validators and proposals originating
@@ -35,8 +35,7 @@ detailed breakdown of its purpose and components:
 5. **Block and Result Management**:
    - It tracks the current blockchain block and its hash, along with any
      associated data like rewards and slashing decisions, ensuring consistency
-     and agreement on the processed data. The struct also guarantees proper
-     proposal crafting and verification as per consensus rules.
+     and agreement on the processed data.
 
 6. **Leader Election and Security**:
    - The `SortitionData` and `VRF` fields facilitate unbiased and fair leader
@@ -63,12 +62,6 @@ detailed breakdown of its purpose and components:
     - The `PhaseTimer` and its associated methods manage the timing for each phase
       of the consensus, ensuring nodes move forward appropriately after waiting
       the necessary time for messages.
-
-11. **Security Assurance**:
-   - The BFT employs strategies to mitigate attacks, enforce slashing and
-     rewarding mechanisms, and validate all proposals and votes, thereby
-     ensuring the consensus process is secure against grid locks and long-chain
-     attacks.
 
 In summary, the `BFT` struct encapsulates the entire state and core logic required
 by the NestBFT consensus algorithm. It ensures a secure, efficient, and
@@ -142,7 +135,7 @@ highest round seen by the super-majority of nodes.
 
 #### Super-Majority
 
-A super-majority refers to a threshold of agreement among the participating
+A `super-majority` refers to a threshold of agreement among the participating
 replicas that is greater than a simple majority. Specifically, it requires more
 than two-thirds (+2/3) of the voting power or votes from the replicas to agree
 on a proposal or vote to be considered in consensus.
