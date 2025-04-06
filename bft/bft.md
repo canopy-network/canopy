@@ -7,20 +7,18 @@
 The `BFT` struct is a critical component in the Canopy project, designed to
 implement the NestBFT consensus algorithm and manage the consensus process among
 the nodes. This structure is responsible for driving the consensus forward and
-ensuring secure and efficient operation of NestBFT-based blockchains. Here is a
-detailed breakdown of its purpose and components:
+ensuring trustless and efficient operation of NestBFT-based blockchains. Here is
+a detailed breakdown of its purpose and components:
 
 1. **Consensus State and Management**:
-   - The `BFT` struct maintains the current view of the consensus process,
-     including the height, round, and phase of the consensus. This information
-     helps track the progress of consensus rounds and synchronize nodes. It also
-     manages the current consensus phase for each replica and coordinates
-     parallel phase progression.
+   - The `BFT` struct maintains a `View` of the consensus process, which
+     includes key fields such as `Height`, `Round`, and `Phase`. These fields
+     track the current period of the consensus, enabling nodes to stay
+     synchronized and coordinate the progression through the phases.
 
 2. **Voting and Proposal Handling**:
-   - It records votes received from replica validators and proposals originating
-     from leader validators. This ensures the node can manage, validate, and
-     respond to consensus messages effectively.
+   - Recording votes received from replica validators and proposals originating
+     from leader validators.
 
 3. **Validator and Proposer Information**:
    - The struct contains the public keys of the current proposer and the set of
@@ -33,35 +31,24 @@ detailed breakdown of its purpose and components:
      node can lock on a proposal to prevent conflicting decisions.
 
 5. **Block and Result Management**:
-   - It tracks the current blockchain block and its hash, along with any
-     associated data like rewards and slashing decisions, ensuring consistency
-     and agreement on the processed data.
+   - It tracks the current block and its hash, along like rewards and slash
+     recipients.
 
 6. **Leader Election and Security**:
-   - The `SortitionData` and `VRF` fields facilitate unbiased and fair leader
-     election. Additionally, the `VDFService` contributes to security by
-     introducing computational delays that safeguard against manipulation
-     attempts such as long-range attacks.
+   - Coordinates leader elections using sortition seed data and VRF to mitigate
+     grinding and DDoS attacks. Additionally, the `VDFService` contributes to
+     security by introducing computational delays that safeguard against
+     manipulation attempts such as long-range attacks.
 
 7. **Byzantine Fault Tolerance**:
    - Evidence of faulty or malicious validator behavior is collected to
      potentially penalize or exclude them from the consensus process, ensuring
      robustness against Byzantine faults.
 
-8. **Synchronization and Control**:
-   - The `PacemakerMessages` and `Controller` fields help manage synchronization and
-     control flow, enabling nodes to recover from failures and maintain progress
-     in the consensus process.
-
-9. **Configuration and Logging**:
-   - The `Config` and `log` fields provide necessary configuration settings and
-     logging capabilities, which are essential for debugging, monitoring, and
-     optimizing the consensus process.
-
-10. **Phase Management**:
-    - The `PhaseTimer` and its associated methods manage the timing for each phase
-      of the consensus, ensuring nodes move forward appropriately after waiting
-      the necessary time for messages.
+8. **Phase Management**:
+   - The `PhaseTimer` and its associated methods manage the timing for each
+     phase of the consensus, ensuring nodes move forward appropriately after
+     waiting the necessary time for messages.
 
 In summary, the `BFT` struct encapsulates the entire state and core logic required
 by the NestBFT consensus algorithm. It ensures a secure, efficient, and
