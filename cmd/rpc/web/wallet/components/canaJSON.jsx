@@ -16,7 +16,8 @@ function CanaJSON({ state, setState, JsonViewVariant }) {
   //   formattedJson = { result: formattedJson}
   // }
 
-  const handleCopyClick = () => {
+  const handleCopyClick = (event) => {
+    event.preventDefault();
     if (jsonRef.current) {
       const jsonString = jsonRef.current.innerText;
       navigator.clipboard

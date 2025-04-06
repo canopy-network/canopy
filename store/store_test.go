@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -140,6 +141,21 @@ func TestUnsafeRollback(t *testing.T) {
 	k, err := store.Get([]byte("key"))
 	require.NoError(t, err)
 	require.Equal(t, "1", string(k))
+}
+
+func TestRollback(t *testing.T) { // TODO fix this functionality
+	logger := lib.NewDefaultLogger()
+	s, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(filepath.Join(s, ".canopy/canopy"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollbackStore := store.(*Store)
+	rollbackStore.UnsafeRollback(14)
+	rollbackStore.Close()
 }
 
 func TestPrune(t *testing.T) {

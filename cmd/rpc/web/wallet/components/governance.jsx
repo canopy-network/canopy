@@ -401,7 +401,7 @@ export default function Governance({ keygroup, account: accountWithTxs, validato
               onFieldChange={onFormChange}
             />
             {!objEmpty(state.txResult) && (
-              <CanaJSON state={{ txResult: state.txResult }} setState={setState} JsonViewVariant={JsonViewVariant} />
+              <CanaJSON state={state} setState={setState} JsonViewVariant={JsonViewVariant} />
             )}
           </Modal.Body>
           <Modal.Footer>

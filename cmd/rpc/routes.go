@@ -232,10 +232,10 @@ var routePaths = routes{
 	ValidatorSetRouteName:          {Method: http.MethodPost, Path: ValidatorSetRoutePath},
 	CheckpointRouteName:            {Method: http.MethodPost, Path: CheckpointRoutePath},
 	// debug
-	DebugBlockedRouteName: {Method: http.MethodPost, Path: DebugBlockedRoutePath},
-	DebugHeapRouteName:    {Method: http.MethodPost, Path: DebugHeapRoutePath},
-	DebugCPURouteName:     {Method: http.MethodPost, Path: DebugCPURoutePath},
-	DebugRoutineRouteName: {Method: http.MethodPost, Path: DebugRoutineRoutePath},
+	DebugBlockedRouteName: {Method: http.MethodGet, Path: DebugBlockedRoutePath},
+	DebugHeapRouteName:    {Method: http.MethodGet, Path: DebugHeapRoutePath},
+	DebugCPURouteName:     {Method: http.MethodGet, Path: DebugCPURoutePath},
+	DebugRoutineRouteName: {Method: http.MethodGet, Path: DebugRoutineRoutePath},
 	// admin
 	KeystoreRouteName:          {Method: http.MethodGet, Path: KeystoreRoutePath},
 	KeystoreNewKeyRouteName:    {Method: http.MethodPost, Path: KeystoreNewKeyRoutePath},
@@ -373,7 +373,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		// debug
 		DebugBlockedRouteName: debugHandler(DebugBlockedRouteName),
 		DebugHeapRouteName:    debugHandler(DebugHeapRouteName),
-		DebugCPURouteName:     debugHandler(DebugHeapRouteName),
+		DebugCPURouteName:     debugHandler(DebugCPURouteName),
 		DebugRoutineRouteName: debugHandler(DebugRoutineRouteName),
 	}
 

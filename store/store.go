@@ -304,6 +304,7 @@ func (s *Store) Close() lib.ErrorI {
 // Since blockchains are immutable, this should only be used in testing or
 // crisis situations
 func (s *Store) UnsafeRollback(rollbackToHeight uint64) {
+	// TODO test and fix this functionality
 	for i := s.Version(); i > rollbackToHeight; i-- {
 		s.deleteAllKeysAtVersion(i)
 	}
@@ -351,6 +352,12 @@ func (s *Store) deleteAllKeysAtVersion(version uint64) {
 	}
 	// commit at the specific version
 	if err := tx.CommitAt(version, nil); err != nil {
+		panic(err)
+	}
+	// get the root from the sparse merkle tree at the current state
+	s.root = s.sc.Root()
+	// set the new CommitID (to the Transaction not the actual DB)
+	if err := s.setCommitID(s.version, s.root); err != nil {
 		panic(err)
 	}
 }

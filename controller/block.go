@@ -364,6 +364,7 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 			}
 		}
 	} else {
+		// TODO improve logging for LoadCommittee
 		// load the committee from the root chain using the root height embedded in the certificate message
 		v, err := c.Consensus.LoadCommittee(c.LoadRootChainId(qc.Header.Height), qc.Header.RootHeight)
 		if err != nil {

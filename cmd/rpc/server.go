@@ -191,6 +191,7 @@ func (s *Server) updateRootChainHeight(state *fsm.StateMachine, rootChainHeight 
 	s.logger.Infof("New RootChain height %d detected!", *rootChainHeight)
 	// execute the requests to get the base chain information
 	for retry := lib.NewRetry(s.config.RootChainPollMS, 3); retry.WaitAndDoRetry(); {
+		s.logger.Infof("Retrieved root height info for %d!", *rootChainHeight)
 		// retrieve the root-Chain info
 		rootChainInfo, e := s.remoteCallbacks.RootChainInfo(*rootChainHeight, s.config.ChainId)
 		if e == nil {

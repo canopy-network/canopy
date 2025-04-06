@@ -134,6 +134,7 @@ func (c *Controller) Stop() {
 
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
+	c.log.Debugf("Updating root chain info")
 	// lock the controller for thread safety
 	c.Lock()
 	// unlock when the function completes

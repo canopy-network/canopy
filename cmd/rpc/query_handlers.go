@@ -717,7 +717,7 @@ func (s *Server) setupStore(w http.ResponseWriter) (lib.StoreI, bool) {
 
 // debugHandler is the http handler for debugging endpoints
 func debugHandler(routeName string) httprouter.Handle {
-	f := func(w http.ResponseWriter, r *http.Request) {}
+	var f http.HandlerFunc
 	switch routeName {
 	case DebugHeapRouteName, DebugRoutineRouteName, DebugBlockedRouteName:
 		f = func(w http.ResponseWriter, r *http.Request) {
@@ -725,6 +725,10 @@ func debugHandler(routeName string) httprouter.Handle {
 		}
 	case DebugCPURouteName:
 		f = pprof.Profile
+	default:
+		f = func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}
 	}
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		f(w, r)

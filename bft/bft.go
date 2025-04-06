@@ -70,7 +70,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64,
 		Config:            c,
 		log:               l,
 		Controller:        con,
-		ResetBFT:          make(chan ResetBFT, 1),
+		ResetBFT:          make(chan ResetBFT, 100),
 		syncing:           con.Syncing(),
 		PhaseTimer:        lib.NewTimer(),
 		VDFService:        vdf,
@@ -118,13 +118,10 @@ func (b *BFT) Start() {
 					b.SetWaitTimers(b.WaitTime(CommitProcess, 0), resetBFT.ProcessTime)
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
-					// if this chain is not its own root
-					if !b.Controller.LoadIsOwnRoot() {
-						// start BFT over after sleeping CommitProcessMS
-						// add poll ms wait here to ensure ample time for all nested chains to be updated
-						// if not the new committee messages will overwrite any candidacy proposals that were received prior to the 'reset'
-						b.SetWaitTimers(time.Duration(b.Config.RootChainPollMS)*time.Millisecond, resetBFT.ProcessTime)
-					}
+					// start BFT over after sleeping RootChainPollMS
+					// add poll ms wait here to ensure ample time for all nested chains to be updated
+					// if not the new committee messages will overwrite any candidacy proposals that were received prior to the 'reset'
+					b.SetWaitTimers(time.Duration(b.Config.RootChainPollMS)*time.Millisecond, resetBFT.ProcessTime)
 				}
 			}()
 		}

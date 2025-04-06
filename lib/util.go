@@ -658,14 +658,17 @@ func NewRetry(waitTimeMS, maxLoops uint64) *Retry {
 // WaitAndDoRetry() sleeps the appropriate time and returns false if maxed out retry
 func (r *Retry) WaitAndDoRetry() bool {
 	// if GTE max loops
-	if r.maxLoops <= r.loopCount {
+	if r.maxLoops < r.loopCount {
 		// exit with 'try again'
 		return false
 	}
-	// sleep the allotted time
-	time.Sleep(time.Duration(r.waitTimeMS) * time.Millisecond)
-	// double the timeout
-	r.waitTimeMS += r.waitTimeMS
+	// don't sleep or increment on the first iteration
+	if r.loopCount != 0 {
+		// sleep the allotted time
+		time.Sleep(time.Duration(r.waitTimeMS) * time.Millisecond)
+		// double the timeout
+		r.waitTimeMS += r.waitTimeMS
+	}
 	// increment the loop count
 	r.loopCount++
 	// exit with 'try again'

@@ -24,7 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Build Services
-        run: make build
+        run: make build/canopy-full
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -45,4 +45,4 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Run Unit tests
-        run: make build && go test ./...
+        run: make build/canopy-full && go test ./...
