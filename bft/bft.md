@@ -50,8 +50,8 @@ a detailed breakdown of its purpose and components:
      phase of the consensus, ensuring nodes move forward appropriately after
      waiting the necessary time for messages.
 
-In summary, the `BFT` struct encapsulates the entire state and core logic required
-by the NestBFT consensus algorithm. It ensures a secure, efficient, and
+In summary, the `BFT` struct encapsulates the entire state and core logic
+required by the NestBFT consensus algorithm. It ensures a secure, efficient, and
 fault-tolerant operation of the Canopy blockchain through a comprehensive
 approach to consensus management, leader election, fault tolerance, and
 security.
@@ -71,13 +71,22 @@ the core sequence will exit and execution will jump to the recovery phases.
 ### Phase Summaries
 
 - **Election:**
-  - Each replica runs a Verifiable Random Function (VRF); if selected as a candidate, the replica sends its VRF output to the other replicas.
+  - Each replica runs a Verifiable Random Function (VRF); if selected as a
+    candidate, the replica broadcasts an ELECTION messsage accouncing it's
+    candidacy.
 
 - **ElectionVote:**
-  - Each replica sends ELECTION votes (signature) for the leader based on the lowest VRF value. If no candidates exist, the process falls back to a stake-weighted-pseudorandom selection.
+   -After receiving and verifying ELECTION messages, each replica selects a
+    leader by sending ELECTION VOTE messages to a candidate. If no candidates exist,
+    a stake-weighted pseudorandom selection is used.
 
 - **Propose:**
-  - The leader collects ELECTION.VOTES from +2/3 of the replicas, each including the lock, evidence, and signature from the sender. If a valid lock exists for the current height, the leader uses that block as the proposal block. If no valid lock is found, the leader creates a new block to extend the blockchain.
+  - Should a replica collect at least a super-majority of ELECTION VOTE
+    messages, it will The leader collects ELECTION VOTES from +2/3 of the
+    replicas, each including the lock, evidence, and signature from the sender.
+    If a valid lock exists for the current height, the leader uses that block as
+    the proposal block. If no valid lock is found, the leader creates a new
+    block to extend the blockchain.
 
 - **ProposeVote:**
   - Each replica validates the PROPOSE message by verifying the aggregate signature, applying the proposal block against their state machine, and checking the header and results against what they produced. If valid, the replica sends a vote (signature) to the leader.
