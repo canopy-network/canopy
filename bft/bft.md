@@ -7,19 +7,24 @@
 The `bft` type is a comprehensive structure that encapsulates the current state and core logic of the NestBFT consensus algorithm. It is responsible for driving the consensus process forward through the core consensus phases, ensuring the trusted and timely operation of the Canopy blockchain.
 
 - **Consensus and View Management**:
-  - Manages the current consensus phase for each replica and tracks the current `View` from the perspective of the replica.
-  - Through p2p communication it coordinates parallel phase progression between participating replicas.
+  - Manages the current consensus phase for each replica and tracks the current
+    `View` from the perspective of the replica.
+  - Through p2p communication it coordinates parallel phase progression between
+    participating replicas.
 
 - **Leader Election**:
-  - Employs Verifiable Random Functions (VRF) and a Sortition proces to ensure fair and unbiased leader selection.
   - The leader is elected based on a combination of randomness and voting power.
+  - A Verifiable Random Function (`VRF`) and a `Sortition` process is employed
+    to ensure fair, uniform and unbiased leader selection.
 
 - **Block and Result Management**:
   - Manages the current blockchain block and its related data.
-  - Guarantees proper proposal crafting and verification per consensus rules whilst documenting consensus results and slashing conditions.
+  - Guarantees proper proposal crafting and verification per consensus rules
+    whilst documenting consensus results and slashing conditions.
 
 - **Vote and Proposal Management**:
-  - Records the votes received from the validators and the proposals originating from the leader.
+  - Records the votes received from the validators and the proposals originating
+    from the leader.
 
 - **Security Assurance**:
   - Employs security mitigations for griding and long chain attacks.
@@ -34,9 +39,9 @@ consists of multiple phases, and each height may consist of multiple rounds.
 These phases are executed sequentially and upon successful completion achieve
 consensus on the next block.
 
-At the beginning of each new block height the round is reset to 0 and restarts
-consensus at the Election phase. If the a round of consensus does not succeed,
-recovery phases are initiated in order to continue consensus.
+At the beginning of each new block height the process starts again at the
+Election phase and the round is reset to 0. If the a round of consensus fails
+the core sequence will exit and execution will jump to the recovery phases.
 
 ### Phase Summaries
 
@@ -149,25 +154,23 @@ the security and integrity of the blockchain.
 
 The integrity of the sortition seed data is paramount, as any manipulation could
 lead to predictable and biased leader selection. By ensuring that the seed data
-remains secure and non-manipulatable, NestBFT fosters an environment where
-leadership is assigned fairly, maintaining unpredictability and fairness in the
-network.
+cannot be manipulated by the previous round's leader, the protocol maintains
+fairness and unpredictability in leader selection.
 
-Two seed data fields in particular provide essential reliability and security:
+Two seed data fields in particular provide reliability and security, `round` and
+`LastProposerAddresses`.
 
-- **Round**: The inclusion of the round field in the sortition data helps ensure
-  that the same leader is not selected in consecutive rounds. This is achieved
-  because the Verifiable Random Function (VRF) output signature changes with
-  each round, reducing the probability of repeated leader selection. This
-  mechanism helps mitigate risks associated with a potentially malicious or
-  faulty leader.
+The inclusion of the round field in the sortition data helps ensure that the
+same leader is not selected in consecutive rounds. This is achieved because the
+Verifiable Random Function (VRF) output signature changes with each round,
+reducing the probability of repeated leader selection. This mechanism helps
+mitigate risks associated with a potentially malicious or faulty leader.
 
-- **Last Proposer Addresses**: NestBFT distinguishes itself from other
-  protocols by utilizing the LastProposerAddresses field within its sortition
-  seed data. This approach avoids reliance on manipulable inputs, such as the
-  last block hash, which are susceptible to bias and grinding attacks. By
-  eliminating these vulnerabilities, NestBFT ensures a fairer and less
-  predictable leader selection process.
+NestBFT distinguishes itself from other protocols by utilizing the
+LastProposerAddresses field within its sortition seed data. This approach avoids
+reliance on manipulable inputs, such as the last block hash, which are
+susceptible to bias and grinding attacks. By eliminating these vulnerabilities,
+NestBFT ensures a fairer and less predictable leader selection process.
 
 ## Election Vote Phase
 
