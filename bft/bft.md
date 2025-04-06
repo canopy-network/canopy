@@ -157,18 +157,18 @@ lead to predictable and biased leader selection. By ensuring that the seed data
 cannot be manipulated by the previous round's leader, the protocol maintains
 fairness and unpredictability in leader selection.
 
-Two seed data fields in particular provide reliability and security, `round` and
+Two seed data fields in particular ensure this integrity, `round` and
 `LastProposerAddresses`.
 
-The inclusion of the round field in the sortition data helps ensure that the
+The inclusion of the `round` field in the sortition data helps ensure that the
 same leader is not selected in consecutive rounds. This is achieved because the
 Verifiable Random Function (VRF) output signature changes with each round,
 reducing the probability of repeated leader selection. This mechanism helps
-mitigate risks associated with a potentially malicious or faulty leader.
+mitigate risks associated with potentially malicious or faulty leaders.
 
 NestBFT distinguishes itself from other protocols by utilizing the
-LastProposerAddresses field within its sortition seed data. This approach avoids
-reliance on manipulable inputs, such as the last block hash, which are
+`LastProposerAddresses` field within its sortition seed data. This approach
+avoids reliance on manipulable inputs, such as the last block hash, which are
 susceptible to bias and grinding attacks. By eliminating these vulnerabilities,
 NestBFT ensures a fairer and less predictable leader selection process.
 
