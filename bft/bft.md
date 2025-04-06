@@ -76,40 +76,51 @@ the core sequence will exit and execution will jump to the recovery phases.
     candidacy.
 
 - **ElectionVote:**
-   -After receiving and verifying ELECTION messages, each replica selects a
+  - After receiving and verifying ELECTION messages, each replica selects a
     leader by sending ELECTION VOTE messages to a candidate. If no candidates exist,
     a stake-weighted pseudorandom selection is used.
 
 - **Propose:**
   - Should a replica collect at least a super-majority of ELECTION VOTE
-    messages, it will The leader collects ELECTION VOTES from +2/3 of the
-    replicas, each including the lock, evidence, and signature from the sender.
-    If a valid lock exists for the current height, the leader uses that block as
-    the proposal block. If no valid lock is found, the leader creates a new
-    block to extend the blockchain.
+    messages, it will act as the leader and propose a new block with a PROPOSE
+    message to the replicas.
 
 - **ProposeVote:**
-  - Each replica validates the PROPOSE message by verifying the aggregate signature, applying the proposal block against their state machine, and checking the header and results against what they produced. If valid, the replica sends a vote (signature) to the leader.
+  - Each replica validates the PROPOSE message by verifying the aggregate
+    signature. If valid, the replica sends a PROPOSE VOTE message, endorsing
+    this proposal.
 
 - **Precommit:**
-  - The leader collects PROPOSE VOTES from +2/3 of the replicas, each including a signature from the sender. The leader sends a PRECOMMIT message attaching +2/3 signatures from the PROPOSE VOTE messages.
+  - After collecting PROPOSE VOTE messages from majority of replicas, the
+    leader sends a PRECOMMIT message including the quorum support for this
+    proposal.
 
 - **PrecommitVote:**
-  - Each replica validates the PRECOMMIT message by verifying the aggregate signature. If valid, the replica sends a vote to the leader.
+  - Each replica validates the PRECOMMIT message by verifying the aggregate
+    signature. If valid, the replica sends PRECOMMIT VOTE message to the leader,
+    endorsing the aggregate signature.
 
 - **Commit:**
-  - The leader collects PRECOMMIT VOTES from +2/3 of the replicas, each including a signature from the sender. The leader sends a COMMIT message attaching +2/3 signatures from the PRECOMMIT VOTE messages.
+  - The leader collects PRECOMMIT VOTES from +2/3 of the replicas, each
+    including a signature from the sender. The leader sends a COMMIT message
+    attaching +2/3 signatures from the PRECOMMIT VOTE messages.
 
 - **CommitProcess:**
-  - Each replica validates the COMMIT message by verifying the aggregate signature. If valid, the replica commits the block to finality and resets the BFT for the next height.
+  - Each replica validates the COMMIT message by verifying the aggregate
+    signature. If valid, the replica commits the block to finality and resets
+    the BFT for the next height.
 
 The two recovery phases address situations where errors cause a premature exit from a round:
 
 - **Round Interrupt**:
-  - In this phase concensus is halted and reset. Each replica shares its current View with all other replicas. This allows replicas to synchronize in the Pacemaker phase.
+  - In this phase concensus is halted and reset. Each replica shares its current
+    View with all other replicas. This allows replicas to synchronize in the
+    Pacemaker phase.
 
 - **Pacemaker**:
-  - This phase synchronizes each replica to the highest round that a super-majority has observed, allowing the consensus process to restart with the Election phase.
+  - This phase synchronizes each replica to the highest round that a
+    super-majority has observed, allowing the consensus process to restart with
+    the Election phase.
 
 # Key Concepts
 
