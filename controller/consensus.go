@@ -27,43 +27,44 @@ func (c *Controller) requestBlocks(ch chan<- *lib.MessageAndMetadata) {
 	requests := map[uint64]blockRequest{}
 	queue := map[uint64]*lib.MessageAndMetadata{}
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	limiters := map[string]*lib.SimpleLimiter{}
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	limitResetTicker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	maxHeight, minVDFIterations, syncingPeers := c.syncPeers()
 
-	c.log.Infof("Next height %d, starting sync. %d peers", nextHeight,
-		len(syncingPeers))
+	// Create rate limiters so remote nodes won't disconnect and lower reputation
+	for _, peer := range syncingPeers {
+		limiters[peer] = lib.NewLimiterDuration(
+			1,
+			c.P2P.MaxPossiblePeers()*p2p.MaxBlockReqPerWindow,
+			100*time.Millisecond)
+	}
+
+	c.log.Infof("Next height %d, starting sync. %d peers", nextHeight, len(syncingPeers))
 
 	for !c.syncingDone(maxHeight, minVDFIterations) {
 		select {
+		// Reset the limiters every second
+		case <-limitResetTicker.C:
+			for _, limiter := range limiters {
+				limiter.Reset()
+			}
+
 		case <-ticker.C:
-			expired := c.expireOldRequests(requests)
-			if len(expired) > 0 {
-				c.log.Warnf("%d expired requests", len(expired))
-			}
+			// Remove requests that haven't been responded to in time
+			// This will cause them to be requested again
+			c.expireOldRequests(requests)
 
-			for _, ex := range expired {
-				// Send a new request
-				c.log.Warnf("Re-request for height %d", ex.height)
-				req, err := c.requestBlock(ex.height, syncingPeers)
-				if err != nil {
-					c.log.Error(err.Error())
-					c.log.Warnf("New peer count: %d", len(syncingPeers))
-					continue
-				}
-				// Update the map, replacing original request
-				requests[req.height] = req
-			}
+			// Ensure the next 20 heights are either in flight or queued
+			toSend := 40
 
-			// Enough items waiting for now
-			if len(queue) >= 5 || len(requests) >= 5 {
-				continue
-			}
-
-			toSend := 10
-			// Start at the next height
+			// Start at the next desired height and send any missing requests
 			for i := nextHeight; i < maxHeight && toSend > 0; i++ {
+				toSend--
+
 				// Request for this height already in flight
 				if _, ok := requests[i]; ok {
 					continue
@@ -72,15 +73,48 @@ func (c *Controller) requestBlocks(ch chan<- *lib.MessageAndMetadata) {
 				if _, ok := queue[i]; ok {
 					continue
 				}
-				req, err := c.requestBlock(i, syncingPeers)
+
+				// Extract keys from the map
+				keys := make([]string, 0, len(limiters))
+				for key := range limiters {
+					keys = append(keys, key)
+				}
+
+				// Shuffle the keys
+				rand.Shuffle(len(keys), func(i, j int) {
+					keys[i], keys[j] = keys[j], keys[i]
+				})
+
+				// Range over the randomized keys. This is to randomize node selection but
+				// still try them all looking for one that is not limited
+				var allowed string
+				for _, peer := range keys {
+					limiter := limiters[peer]
+					blocked, allBlocked := limiter.NewRequest(peer)
+					if blocked || allBlocked {
+						// c.log.Warnf("Peer %s rate limited", peer)
+						continue
+					}
+
+					// Use this peer for the request
+					allowed = peer
+					break
+				}
+
+				// No peers were available, break the loop and try again next interval
+				if allowed == "" {
+					// c.log.Warnf("All peers rate limited")
+					break
+				}
+
+				// Request the block from the allowed peer
+				req, err := c.requestBlock(i, allowed)
 				if err != nil {
 					c.log.Error(err.Error())
-					c.log.Warnf("New peer count: %d", len(syncingPeers))
 					break
 				}
 				requests[req.height] = req
 
-				toSend--
 			}
 		case msg := <-c.P2P.Inbox(Block):
 			c.processBlockMessage(msg, requests, queue, ch, &nextHeight, maxHeight)
@@ -91,6 +125,8 @@ func (c *Controller) requestBlocks(ch chan<- *lib.MessageAndMetadata) {
 
 // syncPeers polls for required information and waits for 2 peers
 func (c *Controller) syncPeers() (uint64, uint64, []string) {
+	// maxHeight, minVDFIterations, syncingPeers := c.pollMaxHeight(1)
+	// return maxHeight, minVDFIterations, syncingPeers
 	for {
 		maxHeight, minVDFIterations, syncingPeers := c.pollMaxHeight(1)
 
@@ -113,11 +149,15 @@ func (c *Controller) expireOldRequests(requests map[uint64]blockRequest) []block
 		}
 	}
 
+	for _, req := range expired {
+		delete(requests, req.height)
+	}
+
 	return expired
 }
 
-func (c *Controller) requestBlock(height uint64, syncingPeers []string) (blockRequest, lib.ErrorI) {
-	requested, _ := lib.StringToBytes(syncingPeers[rand.Intn(len(syncingPeers))])
+func (c *Controller) requestBlock(height uint64, peer string) (blockRequest, lib.ErrorI) {
+	requested, _ := lib.StringToBytes(peer)
 
 	c.log.Infof("Request block for height %d 🔄 from %s", height,
 		lib.BytesToTruncatedString(requested))
@@ -128,17 +168,14 @@ func (c *Controller) requestBlock(height uint64, syncingPeers []string) (blockRe
 		HeightOnly: false,
 	})
 	if err != nil {
-		if err.Code() == 14 {
-			syncingPeers = removePeer(syncingPeers, string(requested))
-		}
 		return blockRequest{}, err
-	} else {
-		return blockRequest{
-			timestamp: time.Now(),
-			height:    height,
-			address:   requested,
-		}, nil
 	}
+
+	return blockRequest{
+		timestamp: time.Now(),
+		height:    height,
+		address:   requested,
+	}, nil
 }
 
 func removePeer(peers []string, addr string) []string {
@@ -181,19 +218,27 @@ func (c *Controller) processBlockMessage(msg *lib.MessageAndMetadata, requests m
 		return
 	}
 
+	// Delete from request tracker
 	delete(requests, h)
+
+	// Add to queue
 	queue[h] = msg
 
+	// Process available messages starting with the next desired height
 	for i := *nextHeight; i < maxHeight; i++ {
+		// Check if queue contains next expected block
 		if message, ok := queue[*nextHeight]; ok {
-			c.log.Infof("Sending %d though", *nextHeight)
+			c.log.Infof("Found next block message in queue, sending %d through", *nextHeight)
+			// Send to be processed
 			ch <- message
+			// Remove message from queue
 			delete(queue, *nextHeight)
 		} else {
-			c.log.Infof("nextHeight %d not found in queue %v", *nextHeight,
-				queue)
+			// A block response for the desired height hasn't been received yet
+			c.log.Infof("nextHeight %d not found in queue %v", *nextHeight, queue)
 			break
 		}
+		// Increment the next height to look for
 		*nextHeight = i + 1
 	}
 }

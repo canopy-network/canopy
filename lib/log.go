@@ -3,13 +3,14 @@ package lib
 import (
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -170,7 +171,7 @@ func NewLogger(config LoggerConfig, dataDirPath ...string) LoggerI {
 		}
 		logFile := &lumberjack.Logger{
 			Filename:   logPath,
-			MaxSize:    1, // megabyte
+			MaxSize:    30, // megabyte
 			MaxBackups: 1500,
 			MaxAge:     14, // days
 			Compress:   true,
