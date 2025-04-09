@@ -10,10 +10,14 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
   let output = validator && validator.address ? validator.output : "";
   let defaultNick = account != null ? account.nickname : "";
   let defaultNickSigner = account != null ? account.nickname : "";
-  let committeeList =
+  let stakedCommitteeList =
     validator && validator.address && validator.committees && validator.committees.length !== 0
       ? validator.committees.join(",")
       : "";
+  let knownCommittees =
+    validator && validator.address && validator.knownCommittees && validator.knownCommittees.length !== 0
+      ? generateCommitteeList(validator.knownCommittees, validator.committees)
+      : [];
   defaultNick = type !== "send" && validator && validator.nickname ? validator.nickname : defaultNick;
   defaultNick = type === "stake" && validator && validator.nickname ? "WARNING: validator already staked" : defaultNick;
   if (type === "edit-stake" || type === "stake") {
@@ -42,7 +46,7 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
     },
     committees: {
       placeholder: "1, 22, 50",
-      defaultValue: committeeList,
+      defaultValue: stakedCommitteeList,
       tooltip: "comma separated list of committee chain IDs to stake for",
       label: "committees",
       inputText: "committees",
@@ -51,6 +55,7 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
       type: "multiselect",
       minLength: 1,
       maxLength: 200,
+      options: knownCommittees,
     },
     netAddr: {
       placeholder: "url of the node",
@@ -685,4 +690,30 @@ export function getActionFee(action, params) {
     default:
       return 0;
   }
+}
+
+// generateCommitteeList() compares staked vs known committees and then generates a list to for display
+function generateCommitteeList(knownCommittees, stakedCommittees) {
+  if (
+    !Array.isArray(knownCommittees) ||
+    !Array.isArray(stakedCommittees) ||
+    knownCommittees.length === 0 ||
+    stakedCommittees.length === 0
+  ) {
+    return [];
+  }
+
+  let j = 0;
+  const n = stakedCommittees.length;
+
+  return knownCommittees.map((chainID) => {
+    while (j < n && stakedCommittees[j] < chainID) {
+      j++;
+    }
+
+    return {
+      value: chainID,
+      context: j < n && stakedCommittees[j] === chainID ? "(staked)" : "",
+    };
+  });
 }
