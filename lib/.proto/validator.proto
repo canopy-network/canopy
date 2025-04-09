@@ -53,10 +53,35 @@ message Validator {
   bool compound = 10;
 }
 
+// ValidatorsList is stored as a single blob (instead of using prefixed keys) for the following reasons:
+//
+// - Nearly all validators are expected to receive updates each block (e.g., due to auto-compounding),
+//   which makes prefix-based key storage inefficient for write-heavy patterns.
+//
+// - Filesystem database iterators (e.g., in LevelDB/BadgerDB) introduce significant overhead and are often slow,
+//   especially when reading or updating large sets of keys every block.
+//
+// - The total number of validators is expected to remain below 100,000, and each entry is relatively small (~200 bytes),
+//   making a full in-memory deserialization manageable and performant.
+//
+// - Validators are expected to participate in most committees, so the majority of the list is relevant to each context,
+//   and filtering from a single list is faster than multiple disk reads.
+//
+// - Storing separate, per-committee lists (especially if sorted and updated every block) would create substantial
+//   additional write and storage overhead compared to maintaining a single, compact list.
+message ValidatorsList {
+  repeated Validator List = 1;
+}
+
 // NonSignerInfo is information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window
 message NonSigner {
   // address: shorter version of the operator public key of the non signer
   bytes address = 1;
   // counter: increments when a Validator doesn't sign a block and resets every non-sign-window
   uint64 counter = 2;
+}
+
+// NonSignerList is a list of information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window
+message NonSignerList {
+  repeated NonSigner List = 1;
 }

@@ -4,17 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
+	"runtime/debug"
+	"slices"
+	"sync"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/phuslu/iploc"
 	"golang.org/x/net/netutil"
 	"google.golang.org/protobuf/proto"
-	"net"
-	"runtime/debug"
-	"slices"
-	"sync"
-	"time"
 )
 
 /*
@@ -52,7 +53,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, c lib.Config, l li
 	// Make inbound multiplexed channels
 	channels := make(lib.Channels)
 	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
-		channels[i] = make(chan *lib.MessageAndMetadata, maxChanSize)
+		channels[i] = make(chan *lib.MessageAndMetadata, maxInboxQueueSize)
 	}
 	// Load banned IPs
 	var bannedIPs []net.IPAddr
@@ -221,6 +222,12 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect bool) (err l
 	if err != nil {
 		return err
 	}
+	// replace the peer's port with the resolved port
+	if err = lib.ResolveAndReplacePort(&info.Address.NetAddress, p.config.ChainId); err != nil {
+		p.log.Error(err.Error())
+		return
+	}
+	// log the peer add attempt
 	p.log.Debugf("Try Add peer: %s@%s", lib.BytesToString(connection.Address.PublicKey), info.Address.NetAddress)
 	// if peer is outbound, ensure the public key matches who we expected to dial
 	if info.IsOutbound {
@@ -311,7 +318,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 		streams[i] = &Stream{
 			topic:        i,
 			msgAssembler: make([]byte, 0, maxMessageSize),
-			sendQueue:    make(chan []byte, maxQueueSize),
+			sendQueue:    make(chan *Packet, maxStreamSendQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}

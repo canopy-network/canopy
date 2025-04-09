@@ -545,7 +545,7 @@ func TestGetCommitteeMembers(t *testing.T) {
 				// set validator in the state
 				require.NoError(t, sm.SetValidator(v))
 				// set committees
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
 			}
 			// validate the function
 			for id, expected := range test.expected {
@@ -652,7 +652,7 @@ func TestGetCommitteePaginated(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
 			}
 			// run the function call
 			page, err := sm.GetCommitteePaginated(test.pageParams, lib.CanopyChainId)
@@ -784,7 +784,7 @@ func TestSetGetCommittees(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -914,7 +914,7 @@ func TestUpdateCommittees(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
 			}
 			// for each update
 			for _, v := range test.updates {
@@ -924,7 +924,9 @@ func TestUpdateCommittees(t *testing.T) {
 				val, err := sm.GetValidator(addr)
 				require.NoError(t, err)
 				// run the function
-				require.NoError(t, sm.UpdateCommittees(addr, val, v.StakedAmount, v.Committees))
+				require.NoError(t, sm.UpdateCommittees(val, v.StakedAmount, v.Committees))
+				// update the validator
+				require.NoError(t, sm.SetValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -948,7 +950,7 @@ func TestUpdateCommittees(t *testing.T) {
 	}
 }
 
-func TestDeleteCommittees(t *testing.T) {
+func TestRemoveStakeFromCommittees(t *testing.T) {
 	tests := []struct {
 		name               string
 		detail             string
@@ -996,12 +998,16 @@ func TestDeleteCommittees(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
 			}
 			// for each update
 			for _, v := range test.delete {
 				// run the function
-				require.NoError(t, sm.DeleteCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.RemoveStakeFromCommittees(v.StakedAmount, v.Committees))
+				// update the validator committees
+				v.Committees = []uint64{}
+				// set the validator in state
+				require.NoError(t, sm.SetValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -1042,12 +1048,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1065,12 +1073,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1088,12 +1098,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1112,7 +1124,7 @@ func TestGetDelegatesPaginated(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddDelegationsToCommittees(v.StakedAmount, v.Committees))
 			}
 			// run the function call
 			page, err := sm.GetDelegatesPaginated(test.pageParams, lib.CanopyChainId)
@@ -1239,7 +1251,7 @@ func TestUpdateDelegates(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddDelegationsToCommittees(v.StakedAmount, v.Committees))
 			}
 			// for each update
 			for _, v := range test.updates {
@@ -1249,7 +1261,9 @@ func TestUpdateDelegates(t *testing.T) {
 				val, err := sm.GetValidator(addr)
 				require.NoError(t, err)
 				// run the function
-				require.NoError(t, sm.UpdateDelegations(addr, val, v.StakedAmount, v.Committees))
+				require.NoError(t, sm.UpdateDelegations(val, v.StakedAmount, v.Committees))
+				// set the validator in state
+				require.NoError(t, sm.SetValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -1279,7 +1293,7 @@ func TestUpdateDelegates(t *testing.T) {
 	}
 }
 
-func TestDeleteDelegates(t *testing.T) {
+func RemoveDelegationsFromCommittees(t *testing.T) {
 	tests := []struct {
 		name               string
 		detail             string
@@ -1330,12 +1344,16 @@ func TestDeleteDelegates(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set the validator committees in state
-				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.AddDelegationsToCommittees(v.StakedAmount, v.Committees))
 			}
 			// for each update
 			for _, v := range test.delete {
 				// run the function
-				require.NoError(t, sm.DeleteDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				require.NoError(t, sm.RemoveDelegationsFromCommittees(v.StakedAmount, v.Committees))
+				// update the validator committees
+				v.Committees = []uint64{}
+				// set the validator in state
+				require.NoError(t, sm.SetValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {

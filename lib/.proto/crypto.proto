@@ -23,6 +23,12 @@ message ProtoAddress {
   bytes address = 1;
 }
 
+// A repeated list of addresses in proto format
+message ProtoAddresses {
+  // addresses: a list of shorter versions of a public key
+  repeated bytes addresses = 1;
+}
+
 // ProtoPubKey is a wrapper around public key bytes enabling protobuf encoding and decoding
 message ProtoPubKey {
   // pub_key: the public cryptographic code that allows signature verification from a private key

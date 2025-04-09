@@ -3,17 +3,23 @@ package p2p
 import (
 	"crypto/cipher"
 	"encoding/binary"
+	"io"
+	"math"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	pool "github.com/libp2p/go-buffer-pool"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
-	"io"
-	"math"
-	"net"
-	"sync"
-	"time"
+)
+
+var (
+	// isTest is a bool to turn on and off unsafe mode for testing
+	isTest = false
 )
 
 /*
@@ -31,9 +37,10 @@ import (
 // EncryptedConn is made of the underlying tcp connection, send and receive AEAD ciphers, and the peer address
 // NOTE: receiving and sending have two distinct AEAD state objects for key / nonce management and simultaneous send/receive
 type EncryptedConn struct {
-	conn    net.Conn  // underlying connection
-	receive aeadState // encryption state for receiving messages
-	send    aeadState // encryption state for sending messages
+	conn    net.Conn   // underlying connection
+	receive aeadState  // encryption state for receiving messages
+	send    aeadState  // encryption state for sending messages
+	mu      sync.Mutex // mutex to prevent unsafe use of net conn
 
 	Address *lib.PeerAddress // authenticated remote peer information
 }
@@ -47,12 +54,15 @@ type aeadState struct {
 }
 
 // NewHandshake() executes the authentication protocol between two tcp connections to result in an encryption connection
-func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKeyI) (c *EncryptedConn, e lib.ErrorI) {
+func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKeyI) (encryptedConn *EncryptedConn, e lib.ErrorI) {
 	// create a temporary keypair to establish a shared secret
 	tempPrivateKey, _ := crypto.NewEd25519PrivateKey()
 	tempPublicKey := tempPrivateKey.PublicKey().Bytes()
+	encryptedConn = &EncryptedConn{
+		conn: conn,
+	}
 	// swap temporary keys
-	peerTempPublicKey, e := keySwap(conn, tempPublicKey)
+	peerTempPublicKey, e := keySwap(encryptedConn, tempPublicKey)
 	if e != nil {
 		return
 	}
@@ -70,14 +80,11 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 	if err != nil {
 		return nil, ErrFailedHKDF(err)
 	}
-	c = &EncryptedConn{
-		conn:    conn,
-		receive: newInternalState(receiveAEAD),
-		send:    newInternalState(sendAEAD),
-	}
+	encryptedConn.receive = newInternalState(receiveAEAD)
+	encryptedConn.send = newInternalState(sendAEAD)
 	// using the newly created encrypted connection, discard the temporary keys and
 	// swap signatures with the peer to establish the true public key identity
-	peerSig, err := signatureSwap(c, &lib.Signature{
+	peerSig, err := signatureSwap(encryptedConn, &lib.Signature{
 		PublicKey: privateKey.PublicKey().Bytes(),
 		Signature: privateKey.Sign(challenge[:]),
 	})
@@ -93,7 +100,7 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 		return nil, ErrFailedChallenge()
 	}
 	// swap peer metadata using the encrypted channel
-	peerMeta, err := peerMetaSwap(c, meta.Sign(privateKey))
+	peerMeta, err := peerMetaSwap(encryptedConn, meta.Sign(privateKey))
 	if err != nil {
 		return nil, ErrFailedMetaSwap(err)
 	}
@@ -110,7 +117,7 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 		return nil, ErrIncompatiblePeer()
 	}
 	// finalize the encrypted connection by setting the exchanged information
-	c.Address = &lib.PeerAddress{
+	encryptedConn.Address = &lib.PeerAddress{
 		PublicKey:  peerSig.PublicKey,
 		NetAddress: conn.RemoteAddr().String(),
 		PeerMeta:   peerMeta,
@@ -120,6 +127,12 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 
 // Write() writes the data bytes to the encrypted connection
 func (c *EncryptedConn) Write(data []byte) (n int, err error) {
+	// fallback to regular conn in case encrypted conn is not yet set
+	if c.send.aead == nil {
+		// c.mu.Lock()
+		// defer c.mu.Unlock()
+		return c.conn.Write(data)
+	}
 	// thread safety sends
 	c.send.Lock()
 	defer c.send.Unlock()
@@ -162,6 +175,15 @@ func (c *EncryptedConn) Write(data []byte) (n int, err error) {
 // Read() checks the connection for cipher data bytes, if found,
 // the func decrypts and loads them into the 'data' buffer
 func (c *EncryptedConn) Read(data []byte) (n int, err error) {
+	// fallback to regular conn in case encrypted conn is not yet set
+	if c.receive.aead == nil {
+		// flag to allow unit test to pass (without this a deadlock would happen because of using same instances of conn in read and write)
+		// if !isTest {
+		// 	c.mu.Lock()
+		// 	defer c.mu.Unlock()
+		// }
+		return c.conn.Read(data)
+	}
 	// read thread safety
 	c.receive.Lock()
 	defer c.receive.Unlock()
@@ -221,12 +243,36 @@ func (c *EncryptedConn) holdUnread(bytesRead int, chunk []byte) {
 }
 
 // EncryptedConn satisfies the net.conn interface
-func (c *EncryptedConn) Close() error                       { return c.conn.Close() }
-func (c *EncryptedConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
-func (c *EncryptedConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
-func (c *EncryptedConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
-func (c *EncryptedConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
-func (c *EncryptedConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
+func (c *EncryptedConn) Close() error {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.Close()
+}
+func (c *EncryptedConn) LocalAddr() net.Addr {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.LocalAddr()
+}
+func (c *EncryptedConn) RemoteAddr() net.Addr {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.RemoteAddr()
+}
+func (c *EncryptedConn) SetDeadline(t time.Time) error {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.SetDeadline(t)
+}
+func (c *EncryptedConn) SetReadDeadline(t time.Time) error {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.SetReadDeadline(t)
+}
+func (c *EncryptedConn) SetWriteDeadline(t time.Time) error {
+	// c.mu.Lock()
+	// defer c.mu.Unlock()
+	return c.conn.SetWriteDeadline(t)
+}
 
 // keySwap() exchanges temporary public keys between peers
 func keySwap(conn net.Conn, tempPublicKey []byte) (peerTempPublicKey []byte, err lib.ErrorI) {

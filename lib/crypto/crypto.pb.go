@@ -84,6 +84,55 @@ func (x *ProtoAddress) GetAddress() []byte {
 	return nil
 }
 
+// A repeated list of addresses in proto format
+type ProtoAddresses struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// addresses: a list of shorter versions of a public key
+	Addresses [][]byte `protobuf:"bytes,1,rep,name=addresses,proto3" json:"addresses,omitempty"`
+}
+
+func (x *ProtoAddresses) Reset() {
+	*x = ProtoAddresses{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_crypto_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ProtoAddresses) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProtoAddresses) ProtoMessage() {}
+
+func (x *ProtoAddresses) ProtoReflect() protoreflect.Message {
+	mi := &file_crypto_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProtoAddresses.ProtoReflect.Descriptor instead.
+func (*ProtoAddresses) Descriptor() ([]byte, []int) {
+	return file_crypto_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProtoAddresses) GetAddresses() [][]byte {
+	if x != nil {
+		return x.Addresses
+	}
+	return nil
+}
+
 // ProtoPubKey is a wrapper around public key bytes enabling protobuf encoding and decoding
 type ProtoPubKey struct {
 	state         protoimpl.MessageState
@@ -97,7 +146,7 @@ type ProtoPubKey struct {
 func (x *ProtoPubKey) Reset() {
 	*x = ProtoPubKey{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_crypto_proto_msgTypes[1]
+		mi := &file_crypto_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -110,7 +159,7 @@ func (x *ProtoPubKey) String() string {
 func (*ProtoPubKey) ProtoMessage() {}
 
 func (x *ProtoPubKey) ProtoReflect() protoreflect.Message {
-	mi := &file_crypto_proto_msgTypes[1]
+	mi := &file_crypto_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +172,7 @@ func (x *ProtoPubKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoPubKey.ProtoReflect.Descriptor instead.
 func (*ProtoPubKey) Descriptor() ([]byte, []int) {
-	return file_crypto_proto_rawDescGZIP(), []int{1}
+	return file_crypto_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ProtoPubKey) GetPubkey() []byte {
@@ -147,7 +196,7 @@ type ProtoPrivKey struct {
 func (x *ProtoPrivKey) Reset() {
 	*x = ProtoPrivKey{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_crypto_proto_msgTypes[2]
+		mi := &file_crypto_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -160,7 +209,7 @@ func (x *ProtoPrivKey) String() string {
 func (*ProtoPrivKey) ProtoMessage() {}
 
 func (x *ProtoPrivKey) ProtoReflect() protoreflect.Message {
-	mi := &file_crypto_proto_msgTypes[2]
+	mi := &file_crypto_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -173,7 +222,7 @@ func (x *ProtoPrivKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoPrivKey.ProtoReflect.Descriptor instead.
 func (*ProtoPrivKey) Descriptor() ([]byte, []int) {
-	return file_crypto_proto_rawDescGZIP(), []int{2}
+	return file_crypto_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ProtoPrivKey) GetPrivkey() []byte {
@@ -196,7 +245,7 @@ type ProtoClassGroup struct {
 func (x *ProtoClassGroup) Reset() {
 	*x = ProtoClassGroup{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_crypto_proto_msgTypes[3]
+		mi := &file_crypto_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -209,7 +258,7 @@ func (x *ProtoClassGroup) String() string {
 func (*ProtoClassGroup) ProtoMessage() {}
 
 func (x *ProtoClassGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_crypto_proto_msgTypes[3]
+	mi := &file_crypto_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -222,7 +271,7 @@ func (x *ProtoClassGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoClassGroup.ProtoReflect.Descriptor instead.
 func (*ProtoClassGroup) Descriptor() ([]byte, []int) {
-	return file_crypto_proto_rawDescGZIP(), []int{3}
+	return file_crypto_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ProtoClassGroup) GetA() []byte {
@@ -258,7 +307,7 @@ type VDF struct {
 func (x *VDF) Reset() {
 	*x = VDF{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_crypto_proto_msgTypes[4]
+		mi := &file_crypto_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -271,7 +320,7 @@ func (x *VDF) String() string {
 func (*VDF) ProtoMessage() {}
 
 func (x *VDF) ProtoReflect() protoreflect.Message {
-	mi := &file_crypto_proto_msgTypes[4]
+	mi := &file_crypto_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -284,7 +333,7 @@ func (x *VDF) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDF.ProtoReflect.Descriptor instead.
 func (*VDF) Descriptor() ([]byte, []int) {
-	return file_crypto_proto_rawDescGZIP(), []int{4}
+	return file_crypto_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *VDF) GetProof() []byte {
@@ -315,6 +364,9 @@ var file_crypto_proto_rawDesc = []byte{
 	0x74, 0x79, 0x70, 0x65, 0x73, 0x22, 0x28, 0x0a, 0x0c, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x41, 0x64,
 	0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x22,
+	0x2e, 0x0a, 0x0e, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x65,
+	0x73, 0x12, 0x1c, 0x0a, 0x09, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x65, 0x73, 0x18, 0x01,
+	0x20, 0x03, 0x28, 0x0c, 0x52, 0x09, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x65, 0x73, 0x22,
 	0x25, 0x0a, 0x0b, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x12, 0x16,
 	0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06,
 	0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x28, 0x0a, 0x0c, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50,
@@ -346,13 +398,14 @@ func file_crypto_proto_rawDescGZIP() []byte {
 	return file_crypto_proto_rawDescData
 }
 
-var file_crypto_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_crypto_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_crypto_proto_goTypes = []interface{}{
 	(*ProtoAddress)(nil),    // 0: types.ProtoAddress
-	(*ProtoPubKey)(nil),     // 1: types.ProtoPubKey
-	(*ProtoPrivKey)(nil),    // 2: types.ProtoPrivKey
-	(*ProtoClassGroup)(nil), // 3: types.ProtoClassGroup
-	(*VDF)(nil),             // 4: types.VDF
+	(*ProtoAddresses)(nil),  // 1: types.ProtoAddresses
+	(*ProtoPubKey)(nil),     // 2: types.ProtoPubKey
+	(*ProtoPrivKey)(nil),    // 3: types.ProtoPrivKey
+	(*ProtoClassGroup)(nil), // 4: types.ProtoClassGroup
+	(*VDF)(nil),             // 5: types.VDF
 }
 var file_crypto_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -381,7 +434,7 @@ func file_crypto_proto_init() {
 			}
 		}
 		file_crypto_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ProtoPubKey); i {
+			switch v := v.(*ProtoAddresses); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -393,7 +446,7 @@ func file_crypto_proto_init() {
 			}
 		}
 		file_crypto_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ProtoPrivKey); i {
+			switch v := v.(*ProtoPubKey); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -405,7 +458,7 @@ func file_crypto_proto_init() {
 			}
 		}
 		file_crypto_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ProtoClassGroup); i {
+			switch v := v.(*ProtoPrivKey); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -417,6 +470,18 @@ func file_crypto_proto_init() {
 			}
 		}
 		file_crypto_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ProtoClassGroup); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_crypto_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*VDF); i {
 			case 0:
 				return &v.state
@@ -435,7 +500,7 @@ func file_crypto_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_crypto_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

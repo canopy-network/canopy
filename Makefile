@@ -17,7 +17,7 @@ help:
 
 # Targets, this is a list of all available commands which can be executed using the make command.
 .PHONY: build/canopy build/canopy-full build/wallet build/explorer test/all dev/deps docker/up \
-	docker/down docker/up-fast docker/down docker/logs
+	docker/down docker/build docker/up-fast docker/down docker/logs
 
 # ==================================================================================== #
 # BUILDING
@@ -68,6 +68,10 @@ ifeq ($(shell uname -s),Darwin)
 else
     DOCKER_COMPOSE_CMD = docker compose
 endif
+
+## docker/build: build the compose containers
+docker/build:
+	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_DIR) build
 
 ## docker/up: build and start the compose containers in detached mode
 docker/up:

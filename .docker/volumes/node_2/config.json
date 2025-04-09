@@ -24,7 +24,7 @@
   "networkID": 1,
   "listenAddress": "0.0.0.0:9001",
   "externalAddress": "node-2",
-  "chainID": 1,
+  "chainID": 2,
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,

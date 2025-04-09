@@ -38,12 +38,6 @@ message Packet {
   bytes bytes = 3;
 }
 
-// Ping is a message sent by a node to check the availability or responsiveness of another peer
-message Ping {}
-
-// Pong is a response message sent back to acknowledge receipt of a Ping message, confirming the peer is active
-message Pong {}
-
 // PeerBookRequest is a peer exchange request message that enables new peer discovery via swapping
 message PeerBookRequestMessage{}
 

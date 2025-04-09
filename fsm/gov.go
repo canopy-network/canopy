@@ -131,17 +131,17 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 	maxCommitteeSize := int(params.Validator.MaxCommittees)
 	// maintain a counter for pseudorandom removal of the 'chain ids'
 	var idx int
+	// get the list of validators
+	validators, err := s.GetValidators()
+	if err != nil {
+		return err
+	}
 	// for each validator, remove the excess ids in a pseudorandom fashion
-	return s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) lib.ErrorI {
-		// convert bytes into a validator object
-		v, e := s.unmarshalValidator(value)
-		if e != nil {
-			return e
-		}
+	for _, v := range validators {
 		// check the number of committees for this validator and see if it's above the maximum
 		numCommittees := len(v.Committees)
 		if numCommittees <= maxCommitteeSize {
-			return nil
+			continue
 		}
 		// create a variable to hold a copy of the new committees
 		newCommittees := make([]uint64, maxCommitteeSize)
@@ -157,20 +157,23 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		// update the committees or delegations
 		if !v.Delegate {
 			// update the new committees
-			if err = s.UpdateCommittees(crypto.NewAddress(v.Address), v, v.StakedAmount, newCommittees); err != nil {
+			if err = s.UpdateCommittees(v, v.StakedAmount, newCommittees); err != nil {
 				return err
 			}
 		} else {
 			// update the delegations
-			if err = s.UpdateDelegations(crypto.NewAddress(v.Address), v, v.StakedAmount, newCommittees); err != nil {
+			if err = s.UpdateDelegations(v, v.StakedAmount, newCommittees); err != nil {
 				return err
 			}
 		}
 		// update the validator and its committees
 		v.Committees = newCommittees
 		// set the validator back into state
-		return s.SetValidator(v)
-	})
+		if err = s.SetValidator(v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetParams() writes an entire Params object into state

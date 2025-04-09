@@ -122,6 +122,8 @@ func (c *Controller) ListenForConsensus() {
 		}
 		// execute in a sub-function to unify error handling and enable 'defer' functionality
 		if err := func() (err lib.ErrorI) {
+			c.log.Debugf("Handling consensus message")
+			defer lib.TimeTrack("ListenForConsensus", time.Now())
 			// lock the controller for thread safety
 			c.Lock()
 			// once the handler completes, unlock
@@ -168,6 +170,8 @@ func (c *Controller) ListenForBlockRequests() {
 		case msg := <-c.P2P.Inbox(BlockRequest):
 			// wrap in a sub-function to enable 'defer' functionality
 			func() {
+				c.log.Debug("Handing block request message")
+				defer lib.TimeTrack("ListenForBlockRequest", time.Now())
 				// lock the controller for thread safety
 				c.Lock()
 				// unlock once the message handling completes
@@ -475,10 +479,13 @@ func (c *Controller) syncingDone(maxHeight, minVDFIterations uint64) bool {
 
 // finishSyncing() is called when the syncing loop is completed for a specific chainId
 func (c *Controller) finishSyncing() {
+	c.log.Debug("Finish syncing")
+	defer lib.TimeTrack("FinishSyncing", time.Now())
 	// lock the controller for thread safety
 	c.Lock()
 	// when function completes, unlock
 	defer c.Unlock()
+	c.log.Debugf("FinishSyncing -> Reset BFT: %d", len(c.Consensus.ResetBFT))
 	// signal a reset of bft for the chain
 	c.Consensus.ResetBFT <- bft.ResetBFT{ProcessTime: time.Since(c.LoadLastCommitTime(c.FSM.Height()))}
 	// set syncing to false

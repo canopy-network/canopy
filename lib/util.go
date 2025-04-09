@@ -88,6 +88,7 @@ func (p *Page) Load(storePrefix []byte, reverse bool, results Pageable, db RStor
 		p.TotalCount++
 		// while count is below the start page index (LTE because we pre-increment)
 		if p.TotalCount <= pageStartIndex || countOnly {
+			// TODO investigate how to optimize skips (turn pre-fetching off etc.)
 			continue
 		}
 		// if reached end of the desired page (+1 because we pre-increment)
@@ -113,7 +114,7 @@ func (p *Page) Load(storePrefix []byte, reverse bool, results Pageable, db RStor
 }
 
 // LoadArray() fills a page from a slice
-func (p *Page) LoadArray(slice any, results Pageable, callback func(i any) ErrorI) (err ErrorI) {
+func (p *Page) LoadArray(slice any, results Pageable, callback func(item any) ErrorI) (err ErrorI) {
 	// if the slice is not type of reflect
 	arr := reflect.ValueOf(slice)
 	// if the type is not a slice
@@ -136,17 +137,17 @@ func (p *Page) LoadArray(slice any, results Pageable, callback func(i any) Error
 		}
 		// convert the element at the index to an 'any'
 		a := arr.Index(p.TotalCount - 1).Interface()
-		// pass the 'any' to the callback
-		if err = callback(a); err != nil {
-			// exit with error
-			return
-		}
 		// if reached end of the desired page (+1 because we pre-increment)
 		if p.TotalCount-1 == pageStartIndex+p.PerPage {
 			// switch to only counts
 			countOnly = true
 			// continue with next iteration
 			continue
+		}
+		// pass the 'any' to the callback
+		if err = callback(a); err != nil {
+			// exit with error
+			return
 		}
 		// set the results and increment the count
 		p.Results = results
@@ -721,16 +722,16 @@ func (d *DeDuplicator[T]) Delete(k T) { delete(d.m, k) }
 func (d *DeDuplicator[T]) Map() map[T]struct{} { return d.m }
 
 // TimeTrack() a utility function to benchmark the time of caller function
-func TimeTrack(start time.Time) {
+func TimeTrack(functionName string, start time.Time) {
 	elapsed := time.Since(start)
 	// Skip this function, and fetch the PC and file for its parent
-	pc, _, _, _ := runtime.Caller(1)
+	//pc, _, _, _ := runtime.Caller(1)
 	// Retrieve a function object this functions parent
-	funcObj := runtime.FuncForPC(pc)
-	// Regex to extract just the function name (and not the module path)
-	runtimeFunc := regexp.MustCompile(`^.*\.(.*)$`)
-	name := runtimeFunc.ReplaceAllString(funcObj.Name(), "$1")
-	log.Println(fmt.Sprintf("%s took %s", name, elapsed))
+	//funcObj := runtime.FuncForPC(pc)
+	//// Regex to extract just the function name (and not the module path)
+	//runtimeFunc := regexp.MustCompile(`^.*\.(.*)$`)
+	//name := runtimeFunc.ReplaceAllString(funcObj.Name(), "$1")
+	log.Println(fmt.Sprintf("%s took %s", functionName, elapsed))
 }
 
 func PrintStackTrace() {

@@ -25,6 +25,7 @@ type StateMachine struct {
 	totalVDFIterations uint64                // the number of 'verifiable delay iterations' in the blockchain up to this version
 	slashTracker       *SlashTracker         // tracks total slashes across multiple blocks
 	proposeVoteConfig  GovProposalVoteConfig // the configuration of how the state machine behaves with governance proposals
+	valsCache          map[string]*Validator // cache the validator structure
 	Config             lib.Config            // the main configuration as defined by the 'config.json' file
 	log                lib.LoggerI           // the logger for standard output and debugging
 }
@@ -38,6 +39,7 @@ func New(c lib.Config, store lib.StoreI, log lib.LoggerI) (*StateMachine, lib.Er
 		NetworkID:         uint32(c.P2PConfig.NetworkID),
 		slashTracker:      NewSlashTracker(),
 		proposeVoteConfig: AcceptAllProposals,
+		valsCache:         make(map[string]*Validator),
 		Config:            c,
 		log:               log,
 	}
@@ -448,6 +450,8 @@ func (s *StateMachine) catchPanic() {
 func (s *StateMachine) Reset() {
 	// reset the slash tracker
 	s.slashTracker = NewSlashTracker()
+	// reset the slash tracker
+	s.valsCache = make(map[string]*Validator)
 	// reset the state store
 	s.store.(lib.StoreI).Reset()
 }

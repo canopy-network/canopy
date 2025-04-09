@@ -240,6 +240,7 @@ func (p *PeerBook) Add(peer *BookPeer) {
 	if bytes.Equal(p.publicKey, peer.Address.PublicKey) {
 		return
 	}
+	// lock for thread safety
 	p.l.Lock()
 	defer p.l.Unlock()
 	// get the index where the peer should be located in the slice

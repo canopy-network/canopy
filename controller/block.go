@@ -26,6 +26,8 @@ func (c *Controller) ListenForBlock() {
 		var quit bool
 		// wrap in a function call to use 'defer' functionality
 		func() {
+			c.log.Debug("Handling block message")
+			defer lib.TimeTrack("ListenForBlock", time.Now())
 			// lock the controller to prevent multi-thread conflicts
 			c.Lock()
 			// when iteration completes, unlock
@@ -76,6 +78,7 @@ func (c *Controller) ListenForBlock() {
 			}
 			// gossip the block to our peers
 			c.GossipBlock(qc, sender)
+			c.log.Debugf("ListenForBlock -> Reset BFT: %d", len(c.Consensus.ResetBFT))
 			// signal a reset to the bft module
 			c.Consensus.ResetBFT <- bft.ResetBFT{ProcessTime: time.Since(startTime)}
 		}()
@@ -460,14 +463,17 @@ func (c *Controller) SetFSMInConsensusModeForProposals() (reset func()) {
 	if c.Consensus.GetRound() < 3 {
 		// if the node is not having 'consensus issues' refer to the approve list
 		c.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)
+		c.Mempool.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)
 	} else {
 		// if the node is exhibiting 'chain halt' like behavior, reject all proposals
 		c.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_REJECT_ALL)
+		c.Mempool.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_REJECT_ALL)
 	}
 	// a callback that resets the configuration back to default
 	reset = func() {
 		// the default is to accept all except in 'Consensus mode'
 		c.FSM.SetProposalVoteConfig(fsm.AcceptAllProposals)
+		c.Mempool.FSM.SetProposalVoteConfig(fsm.AcceptAllProposals)
 	}
 	return
 }

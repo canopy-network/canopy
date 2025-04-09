@@ -7,6 +7,7 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
 	"math"
+	"time"
 )
 
 /* This file implements logic for transaction sending and handling as well as memory pooling */
@@ -31,6 +32,8 @@ func (c *Controller) ListenForTx() {
 			continue
 		}
 		func() {
+			c.log.Debug("Handling transaction")
+			defer lib.TimeTrack("ListenForTx", time.Now())
 			// lock the controller for thread safety
 			c.Lock()
 			// unlock when this iteration completes

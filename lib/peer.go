@@ -104,10 +104,34 @@ func (x *PeerAddress) FromString(stringFromConfig string) (e ErrorI) {
 }
 
 // ResolvePort() executes a network wide protocol for determining what the p2p port of the peer is
-// This is useful to allow 1 URL in state to expand to many different routing paths for nested-chains
+// This is useful to allow 1 URL in state to expand to many routing paths for nested-chains
 // Example: ResolvePort(CHAIN-ID = 2) returns 9002
 func ResolvePort(chainId uint64) (string, ErrorI) {
 	return AddToPort(":9000", chainId)
+}
+
+// ResolveAndReplacePort() resolves the appropriate port and replaces the port in the net address
+func ResolveAndReplacePort(netAddress *string, chainId uint64) ErrorI {
+	// resolve the port using the network wide protocol
+	newPort, err := ResolvePort(chainId)
+	if err != nil {
+		return err
+	}
+	// remove the colon
+	newPort = strings.Replace(newPort, ":", "", 1)
+	// find the index of the final colon in the address
+	i := strings.LastIndex(*netAddress, ":")
+	// if no colon found
+	if i == -1 {
+		// return the original address with the new port appended
+		*netAddress = *netAddress + ":" + newPort
+		// exit with no error
+		return nil
+	}
+	// return the address up to and including the colon, then the new port
+	*netAddress = (*netAddress)[:i+1] + newPort
+	// exit with no error
+	return nil
 }
 
 // HasChain() returns if the PeerAddress's PeerMeta has this chain

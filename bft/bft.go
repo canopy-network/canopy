@@ -3,11 +3,12 @@ package bft
 import (
 	"bytes"
 	"fmt"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"sort"
 	"sync/atomic"
 	"time"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 // BFT is a structure that holds data for a Hotstuff BFT instance
@@ -106,6 +107,7 @@ func (b *BFT) Start() {
 		// - This triggers when receiving a new Commit Block (QC) from either root-chainId (a) or the Target-ChainId (b)
 		case resetBFT := <-b.ResetBFT:
 			func() {
+				defer lib.TimeTrack(fmt.Sprintf("BFT.Start.Reset(), %d", len(b.ResetBFT)), time.Now())
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
 				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
@@ -622,7 +624,7 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 		return ErrNoSafeNodeJustification()
 	}
 	// ensure the messages' HighQC justifies its proposal (should have the same hashes)
-	if !bytes.Equal(b.GetBlockHash(), msg.HighQc.BlockHash) && !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
+	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) && !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
 		return ErrMismatchedProposals()
 	}
 	// if the hashes of the Locked proposal is the same as the Leader's message

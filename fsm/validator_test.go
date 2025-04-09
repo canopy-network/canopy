@@ -113,10 +113,9 @@ func TestGetValidatorExists(t *testing.T) {
 				require.NoError(t, sm.SetValidator(test.preset))
 			}
 			// execute the function call
-			got, err := sm.GetValidatorExists(test.tryGet)
-			require.NoError(t, err)
+			val, _ := sm.GetValidator(test.tryGet)
 			// compare got vs expected
-			require.Equal(t, test.exists, got)
+			require.Equal(t, test.exists, val != nil)
 		})
 	}
 }
@@ -309,9 +308,9 @@ func TestGetValidatorsPaginated(t *testing.T) {
 				},
 			},
 			expectedAddress: [][]byte{
-				newTestAddressBytes(t),
-				newTestAddressBytes(t, 2),
 				newTestAddressBytes(t, 1),
+				newTestAddressBytes(t, 2),
+				newTestAddressBytes(t),
 			},
 			pageParams: lib.PageParams{
 				PageNumber: 1,
@@ -338,8 +337,8 @@ func TestGetValidatorsPaginated(t *testing.T) {
 				},
 			},
 			expectedAddress: [][]byte{
-				newTestAddressBytes(t),
 				newTestAddressBytes(t, 2),
+				newTestAddressBytes(t),
 			},
 			pageParams: lib.PageParams{
 				PageNumber: 1,
@@ -750,9 +749,9 @@ func TestSetValidatorUnstaking(t *testing.T) {
 			// ensure validator unstaking height is expected
 			require.Equal(t, test.finishUnstakingHeight, validator.UnstakingHeight)
 			// ensure unstaking key exists
-			got, err := sm.Get(KeyForUnstaking(test.finishUnstakingHeight, address))
-			require.NoError(t, err)
-			require.Len(t, got, 1)
+			list, e := sm.GetAddressList(UnstakingPrefix(test.finishUnstakingHeight))
+			require.NoError(t, e)
+			require.Contains(t, list.Addresses, address.Bytes())
 		})
 	}
 }
@@ -831,10 +830,10 @@ func TestDeleteFinishedUnstaking(t *testing.T) {
 			require.NoError(t, err)
 			// validate the addition to the account
 			require.Equal(t, test.preset.StakedAmount, balance)
-			// ensure unstaking key doesn't exist
-			got, err := sm.Get(KeyForUnstaking(sm.height, address))
-			require.NoError(t, err)
-			require.Len(t, got, 0)
+			// validate unstaking key exists
+			list, e := sm.GetAddressList(UnstakingPrefix(sm.height))
+			require.NoError(t, e)
+			require.NotContains(t, list.Addresses, address.Bytes())
 		})
 	}
 }
@@ -919,9 +918,9 @@ func TestSetValidatorsPaused(t *testing.T) {
 				// compare got vs expected
 				require.Equal(t, maxPauseBlocks, val.MaxPausedHeight)
 				// check for the paused key
-				bz, e := sm.Get(KeyForPaused(maxPauseBlocks, paused))
+				list, e := sm.GetAddressList(PausedPrefix(maxPauseBlocks))
 				require.NoError(t, e)
-				require.Len(t, bz, 1)
+				require.Contains(t, list.Addresses, paused.Bytes())
 			}
 		})
 	}
@@ -966,9 +965,9 @@ func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 			// compare got vs expected
 			require.Equal(t, test.maxPauseHeight, val.MaxPausedHeight)
 			// check for the paused key
-			bz, e := sm.Get(KeyForPaused(test.maxPauseHeight, address))
+			list, e := sm.GetAddressList(PausedPrefix(test.maxPauseHeight))
 			require.NoError(t, e)
-			require.Len(t, bz, 1)
+			require.Contains(t, list.Addresses, address.Bytes())
 			// execute the function 2
 			require.NoError(t, sm.SetValidatorUnpaused(address, test.validator))
 			// validate the un-pause of the validator object
@@ -977,9 +976,9 @@ func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 			// compare got vs expected
 			require.Zero(t, val.MaxPausedHeight)
 			// validate no paused key
-			bz, e = sm.Get(KeyForPaused(test.maxPauseHeight, address))
+			list, e = sm.GetAddressList(PausedPrefix(test.maxPauseHeight))
 			require.NoError(t, e)
-			require.Len(t, bz, 0)
+			require.NotContains(t, list.Addresses, address.Bytes())
 		})
 	}
 }

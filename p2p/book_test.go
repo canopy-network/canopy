@@ -2,13 +2,16 @@ package p2p
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStartPeerBookService(t *testing.T) {
+	isTest = true
+	defer func() { isTest = false }()
 	n1, n2, cleanup := newTestP2PPair(t)
 	defer cleanup()
 	n3, n4 := newTestP2PNode(t), newTestP2PNode(t)
@@ -68,11 +71,17 @@ func TestGetRandom(t *testing.T) {
 func TestGetAll(t *testing.T) {
 	n1, n2, n3 := newTestP2PNode(t), newTestP2PNode(t), newTestP2PNode(t)
 	require.Len(t, n1.book.GetAll(), 0)
-	n1.book.Add(&BookPeer{Address: &lib.PeerAddress{PublicKey: n2.pub}})
+	n1.book.Add(&BookPeer{
+		Address: &lib.PeerAddress{
+			PublicKey:  n2.pub,
+			NetAddress: "localhost:90001",
+			PeerMeta:   &lib.PeerMeta{ChainId: 1},
+		},
+	})
 	got := n1.book.GetAll()
 	require.Len(t, got, 1)
 	require.Equal(t, got[0].Address.PublicKey, n2.pub)
-	n1.book.Add(&BookPeer{Address: &lib.PeerAddress{PublicKey: n3.pub}})
+	n1.book.Add(&BookPeer{Address: &lib.PeerAddress{PublicKey: n3.pub, NetAddress: "localhost:90001"}})
 	got = n1.book.GetAll()
 	require.Len(t, got, 2)
 	require.True(t, n1.book.Has(n3.pub))
@@ -82,7 +91,7 @@ func TestGetAll(t *testing.T) {
 func TestAddRemoveHas(t *testing.T) {
 	n1, n2 := newTestP2PNode(t), newTestP2PNode(t)
 	require.Len(t, n1.book.GetAll(), 0)
-	n1.book.Add(&BookPeer{Address: &lib.PeerAddress{PublicKey: n2.pub}})
+	n1.book.Add(&BookPeer{Address: &lib.PeerAddress{PublicKey: n2.pub, NetAddress: "localhost:90001"}})
 	require.True(t, n1.book.Has(n2.pub))
 	n1.book.Remove(n2.pub)
 	require.False(t, n1.book.Has(n2.pub))
@@ -93,7 +102,7 @@ func TestAddFailedDialAttempt(t *testing.T) {
 	n1, n2, n3 := newTestP2PNode(t), newTestP2PNode(t), newTestP2PNode(t)
 	require.Len(t, n1.book.GetAll(), 0)
 	n1.book.Add(&BookPeer{
-		Address:               &lib.PeerAddress{PublicKey: n2.pub, PeerMeta: &lib.PeerMeta{ChainId: 1}},
+		Address:               &lib.PeerAddress{PublicKey: n2.pub, PeerMeta: &lib.PeerMeta{ChainId: 1}, NetAddress: "localhost:90001"},
 		ConsecutiveFailedDial: startConsecutiveFailedDialAttempt,
 	})
 	peer := n1.book.GetRandom()
@@ -116,7 +125,7 @@ func TestResetFailedDialAttempt(t *testing.T) {
 	n1, n2 := newTestP2PNode(t), newTestP2PNode(t)
 	require.Len(t, n1.book.GetAll(), 0)
 	n1.book.Add(&BookPeer{
-		Address:               &lib.PeerAddress{PublicKey: n2.pub, PeerMeta: &lib.PeerMeta{ChainId: 1}},
+		Address:               &lib.PeerAddress{PublicKey: n2.pub, PeerMeta: &lib.PeerMeta{ChainId: 1}, NetAddress: "localhost:90001"},
 		ConsecutiveFailedDial: startConsecutiveFailedDialAttempt,
 	})
 	peer := n1.book.GetRandom()
