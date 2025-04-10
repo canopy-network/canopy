@@ -76,7 +76,7 @@ func (s *StateMachine) ApplyBlock(b *lib.Block) (header *lib.BlockHeader, txResu
 	// catch in case there's a panic
 	defer func() {
 		if r := recover(); r != nil {
-			s.log.Errorf(string(debug.Stack()))
+			s.log.Errorf("panic recovered, err: %s, stack: %s", r, string(debug.Stack()))
 			// handle the panic and set the error
 			err = lib.ErrPanic()
 		}

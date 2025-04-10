@@ -122,7 +122,11 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 		// create a thread to prevent front-of-the-line blocking
 		go func(c net.Conn) {
 			// ephemeral connections are basic, inbound tcp connections
-			defer p.catchPanic()
+			defer func() {
+				if r := recover(); r != nil {
+					p.log.Errorf("panic recovered, err: %s, stack: %s", r, string(debug.Stack()))
+				}
+			}()
 			p.log.Debugf("Received ephemeral connection %s", c.RemoteAddr().String())
 			// begin to create a peer address using the inbound tcp conn while filtering any bad ips
 			netAddress, e := p.filterBadIPs(c)
