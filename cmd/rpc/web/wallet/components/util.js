@@ -694,12 +694,7 @@ export function getActionFee(action, params) {
 
 // generateCommitteeList() compares staked vs known committees and then generates a list to for display
 function generateCommitteeList(knownCommittees, stakedCommittees) {
-  if (
-    !Array.isArray(knownCommittees) ||
-    !Array.isArray(stakedCommittees) ||
-    knownCommittees.length === 0 ||
-    stakedCommittees.length === 0
-  ) {
+  if (!Array.isArray(knownCommittees) || !Array.isArray(stakedCommittees) || knownCommittees.length === 0) {
     return [];
   }
 

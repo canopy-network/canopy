@@ -61,7 +61,7 @@ export default function FormInputs({ keygroup, account, validator, fields, show,
         />
       );
     }
-    if (input.type === "multiselect") {
+    if (input.type === "multiselect" && input.options.length > 0) {
       return (
         <FormMultiSelect
           input={input}
@@ -233,6 +233,7 @@ const MultiSelectMenu = forwardRef(({ children, style, className, label, "aria-l
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pe-5"
+          aria-label="multisearchfield"
         />
         {search && (
           <span
