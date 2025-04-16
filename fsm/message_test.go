@@ -73,9 +73,9 @@ func TestHandleMessage(t *testing.T) {
 				require.NoError(t, e)
 				require.Zero(t, got)
 				// ensure the validator was created
-				val, _ := sm.GetValidator(newTestAddress(t))
+				exists, e := sm.GetValidatorExists(newTestAddress(t))
 				require.NoError(t, e)
-				require.True(t, val != nil)
+				require.True(t, exists)
 			},
 		},
 		{
@@ -98,7 +98,7 @@ func TestHandleMessage(t *testing.T) {
 				// set the validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set validator committees
-				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
+				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
 			},
 			msg: &MessageEditStake{
 				Address:       newTestAddressBytes(t),
@@ -592,6 +592,8 @@ func TestGetAuthorizedSignersFor(t *testing.T) {
 				StakedAmount: 100,
 				Output:       newTestAddressBytes(t, 1),
 			}))
+			// preset a committee member
+			require.NoError(t, sm.SetCommitteeMember(newTestAddress(t), lib.CanopyChainId, 100))
 			// preset an order
 			_, err := sm.CreateOrder(&lib.SellOrder{
 				Committee:          lib.CanopyChainId,
@@ -1472,10 +1474,10 @@ func TestMessageUnstake(t *testing.T) {
 			finishUnstakingHeight := unstakingBlocks + sm.Height()
 			// compare got vs expected
 			require.Equal(t, finishUnstakingHeight, val.UnstakingHeight)
-			// ensure unstaking key exists
-			list, e := sm.GetAddressList(UnstakingPrefix(finishUnstakingHeight))
-			require.NoError(t, e)
-			require.Contains(t, list.Addresses, sender.Bytes())
+			// check for the unstaking key
+			bz, err := sm.Get(KeyForUnstaking(finishUnstakingHeight, sender))
+			require.NoError(t, err)
+			require.Len(t, bz, 1)
 		})
 	}
 }
@@ -1562,10 +1564,10 @@ func TestMessagePause(t *testing.T) {
 			maxPauseBlocks := valParams.MaxPauseBlocks + sm.Height()
 			// compare got vs expected
 			require.Equal(t, maxPauseBlocks, val.MaxPausedHeight)
-			// ensure paused key exists
-			list, e := sm.GetAddressList(PausedPrefix(maxPauseBlocks))
-			require.NoError(t, e)
-			require.Contains(t, list.Addresses, sender.Bytes())
+			// check for the paused key
+			bz, err := sm.Get(KeyForPaused(maxPauseBlocks, sender))
+			require.NoError(t, err)
+			require.Len(t, bz, 1)
 		})
 	}
 }
@@ -1614,7 +1616,7 @@ func TestMessageUnpause(t *testing.T) {
 				require.NoError(t, sm.SetValidators([]*Validator{test.preset}, supply))
 				require.NoError(t, sm.SetSupply(supply))
 				// preset the validator as paused
-				require.NoError(t, sm.SetValidatorPaused(sender, test.preset, test.preset.MaxPausedHeight))
+				require.NoError(t, sm.Set(KeyForPaused(test.preset.MaxPausedHeight, sender), []byte{0x0}))
 			}
 			// execute the function call
 			err := sm.HandleMessageUnpause(test.msg)
@@ -1633,9 +1635,9 @@ func TestMessageUnpause(t *testing.T) {
 			valParams, err := sm.GetParamsVal()
 			require.NoError(t, err)
 			// check for the paused key
-			list, e := sm.GetAddressList(PausedPrefix(valParams.MaxPauseBlocks + sm.Height()))
-			require.NoError(t, e)
-			require.NotContains(t, list.Addresses, sender.Bytes())
+			bz, err := sm.Get(KeyForPaused(valParams.MaxPauseBlocks+sm.Height(), sender))
+			require.NoError(t, err)
+			require.Nil(t, bz)
 		})
 	}
 }
@@ -2010,6 +2012,8 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 						StakedAmount: 100,
 						Committees:   []uint64{lib.CanopyChainId + 1},
 					}}, supply))
+					// set the committee member
+					require.NoError(t, sm.SetCommitteeMember(newTestAddress(t, i), lib.CanopyChainId+1, 100))
 				}
 				// set the supply in state
 				require.NoError(t, sm.SetSupply(supply))

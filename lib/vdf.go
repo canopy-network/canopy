@@ -126,7 +126,7 @@ func (vdf *VDFService) Finish() (results *crypto.VDF) {
 		return
 	}
 	// exit the last (run) iterations
-	return &vdf.Results
+	return vdf.Results.Copy()
 }
 
 // VerifyVDF() verifies the VDF using the seed, the proof, and the number of iterations

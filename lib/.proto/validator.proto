@@ -55,9 +55,6 @@ message Validator {
 
 // ValidatorsList is stored as a single blob (instead of using prefixed keys) for the following reasons:
 //
-// - Nearly all validators are expected to receive updates each block (e.g., due to auto-compounding),
-//   which makes prefix-based key storage inefficient for write-heavy patterns.
-//
 // - Filesystem database iterators (e.g., in LevelDB/BadgerDB) introduce significant overhead and are often slow,
 //   especially when reading or updating large sets of keys every block.
 //

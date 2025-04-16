@@ -43,7 +43,7 @@ func (c *Controller) Sync() {
 		// log the initialization of the block request
 		c.log.Infof("Syncing height %d 🔄 from %s", c.FSM.Height(), lib.BytesToTruncatedString(requested))
 		// send the request to the
-		c.RequestBlock(false, requested)
+		go c.RequestBlock(false, requested)
 		// block until one of the two cases happens
 		select {
 		// a) got a block in the inbox
@@ -399,7 +399,7 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 	// initialize the syncing peers list
 	syncingPeerList = make([]string, 0)
 	// ask only for 'max height' from all peers
-	c.RequestBlock(true)
+	go c.RequestBlock(true)
 	// debug log the current status
 	c.log.Debug("Waiting for peer max heights")
 	// loop until timeout case

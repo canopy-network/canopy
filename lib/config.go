@@ -152,7 +152,6 @@ type ConsensusConfig struct {
 	PrecommitTimeoutMS      int `json:"precommitTimeoutMS"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
 	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
 	CommitTimeoutMS         int `json:"commitTimeoutMS"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
-	CommitProcessMS         int `json:"commitProcessMS"`         // minus Commit Proposal time, how long (in milliseconds) the replica sleeps before 'NewHeight' (NOTE: this is the majority of the block time)
 	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
 }
 
@@ -165,9 +164,19 @@ func DefaultConsensusConfig() ConsensusConfig {
 		ProposeVoteTimeoutMS:   3000, // 3 seconds
 		PrecommitTimeoutMS:     2000, // 2 seconds
 		PrecommitVoteTimeoutMS: 2000, // 2 seconds
-		CommitTimeoutMS:        2000, // 2 seconds
-		CommitProcessMS:        3000, // 3 seconds
+		CommitTimeoutMS:        6000, // 6 seconds
 	}
+}
+
+// BlockTimeMS() returns the expected block time in milliseconds
+func (c *ConsensusConfig) BlockTimeMS() int {
+	return c.ElectionTimeoutMS +
+		c.ElectionVoteTimeoutMS +
+		c.ProposeTimeoutMS +
+		c.ProposeVoteTimeoutMS +
+		c.PrecommitTimeoutMS +
+		c.PrecommitVoteTimeoutMS +
+		c.CommitTimeoutMS
 }
 
 // P2P CONFIG BELOW

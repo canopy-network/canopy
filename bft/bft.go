@@ -49,7 +49,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64,
 	var vdf *lib.VDFService
 	// calculate the targetTime from commitProcess and set the VDF
 	if vdfEnabled {
-		vdfTargetTime := time.Duration(float64(c.CommitProcessMS)*CommitProcessToVDFTargetCoefficient) * time.Millisecond
+		vdfTargetTime := time.Duration(float64(c.BlockTimeMS())*BlockTimeToVDFTargetCoefficient) * time.Millisecond
 		vdf = lib.NewVDFService(vdfTargetTime, l)
 	}
 	return &BFT{
@@ -116,15 +116,13 @@ func (b *BFT) Start() {
 				// if not a base chain update, reset the timers
 				if !resetBFT.IsRootChainUpdate {
 					b.log.Info("Reset BFT (NEW_HEIGHT)")
-					// start BFT over after sleeping CommitProcessMS
-					b.SetWaitTimers(b.WaitTime(CommitProcess, 0), resetBFT.ProcessTime)
+					// start BFT over
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
 					// start BFT over after sleeping RootChainPollMS
 					// add poll ms wait here to ensure ample time for all nested chains to be updated
-					// if not the new committee messages will overwrite any candidacy proposals that were received prior to the 'reset'
-					b.SetWaitTimers(time.Duration(b.Config.RootChainPollMS)*time.Millisecond, resetBFT.ProcessTime)
 				}
+				b.SetWaitTimers(time.Duration(b.Config.RootChainPollMS)*time.Millisecond, resetBFT.ProcessTime)
 			}()
 		}
 	}
@@ -334,6 +332,10 @@ func (b *BFT) StartProposeVotePhase() {
 	// Note: This is not the same as a `lock`, since a `lock` would keep the data even after the round changes
 	b.Block, b.Results = msg.Qc.Block, msg.Qc.Results
 	b.ByzantineEvidence = byzantineEvidence // BE stored in case of round interrupt and replicas locked on a proposal with BE
+	// start the VDF service on this block hash
+	if err := b.RunVDF(b.GetBlockHash()); err != nil {
+		b.log.Errorf("RunVDF() failed with error, %s", err.Error())
+	}
 	// send vote to the proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
@@ -475,6 +477,7 @@ func (b *BFT) StartCommitProcessPhase() {
 // ROUND-INTERRUPT:
 // - Replica sends current View message to other replicas (Pacemaker vote)
 func (b *BFT) RoundInterrupt() {
+	_ = b.VDFService.Finish() // stop VDF service because the block hash that was being used as a seed will change
 	b.Config.RoundInterruptTimeoutMS = b.msLeftInRound()
 	b.log.Warnf("Starting next round in %.2f secs", (time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond).Seconds())
 	b.Phase = RoundInterrupt
@@ -605,12 +608,6 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 		// reset PartialQCs
 		b.PartialQCs = make(PartialQCs)
 		b.HighQC = nil
-		if b.SelfIsValidator() {
-			// begin the verifiable delay function for the next height
-			if err = b.RunVDF(); err != nil {
-				b.log.Errorf("RunVDF() failed with error, %s", err.Error())
-			}
-		}
 	}
 }
 
@@ -672,7 +669,8 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 	case Commit:
 		waitTime = b.waitTime(b.Config.CommitTimeoutMS, round)
 	case CommitProcess:
-		waitTime = b.waitTime(b.Config.CommitProcessMS, round)
+		// arbitrarily sleep for 1 minute -- the BFT should be reset by an inbound block
+		waitTime = b.waitTime(60000, round)
 	case RoundInterrupt:
 		// don't pass again through 'wait time' as it's already calculated at the msLeftInRound()
 		waitTime = time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond
@@ -752,18 +750,21 @@ func (b *BFT) SelfIsValidator() bool {
 }
 
 // RunVDF() runs the verifiable delay service
-func (b *BFT) RunVDF() lib.ErrorI {
+func (b *BFT) RunVDF(seed []byte) (err lib.ErrorI) {
 	if !b.Config.RunVDF {
-		return nil
+		return
 	}
-	// generate the VDF seed
-	seed, err := b.VDFSeed()
-	if err != nil {
-		return err
+	// if the vdf seed is nil
+	if seed == nil {
+		// get the vdf seed from disk
+		seed, err = b.VDFSeed()
+		if err != nil {
+			return
+		}
 	}
 	// run the VDF generation
 	go b.VDFService.Run(seed)
-	return nil
+	return
 }
 
 // VDFSeed() generates the seed for the verifiable delay service
@@ -880,5 +881,5 @@ const (
 	RoundInterrupt = lib.Phase_ROUND_INTERRUPT
 	Pacemaker      = lib.Phase_PACEMAKER
 
-	CommitProcessToVDFTargetCoefficient = .80 // how much the commit process time is reduced for VDF processing
+	BlockTimeToVDFTargetCoefficient = .65 // how much the commit process time is reduced for VDF processing
 )

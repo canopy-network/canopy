@@ -70,30 +70,35 @@ func (s *StateMachine) HandleMessageStake(msg *MessageStake) lib.ErrorI {
 	// extract the address from the BLS public key
 	address := publicKey.Address()
 	// check if validator exists in state
-	if val, _ := s.GetValidator(address); val != nil {
+	exists, err := s.GetValidatorExists(address)
+	if err != nil {
+		return err
+	}
+	// fail if validator already exists
+	if exists {
 		return ErrValidatorExists()
 	}
 	// subtract the tokens being locked from the signer account
-	if err := s.AccountSub(crypto.NewAddress(msg.Signer), msg.Amount); err != nil {
+	if err = s.AccountSub(crypto.NewAddress(msg.Signer), msg.Amount); err != nil {
 		return err
 	}
 	// add to the 'total staked' tokens count in the state's supply tracker
-	if err := s.AddToStakedSupply(msg.Amount); err != nil {
+	if err = s.AddToStakedSupply(msg.Amount); err != nil {
 		return err
 	}
 	// if the validator is not 'actively participating' it is a delegate
 	if msg.Delegate {
 		// add to the 'delegate only' staked tokens count in the state's supply tracker
-		if err := s.AddToDelegateSupply(msg.Amount); err != nil {
+		if err = s.AddToDelegateSupply(msg.Amount); err != nil {
 			return err
 		}
 		// set delegated validator in each committee in state
-		if err := s.AddDelegationsToCommittees(msg.Amount, msg.Committees); err != nil {
+		if err = s.SetDelegations(address, msg.Amount, msg.Committees); err != nil {
 			return err
 		}
 	} else {
 		// set validator in each committee in state
-		if err := s.AddStakeToCommittees(msg.Amount, msg.Committees); err != nil {
+		if err = s.SetCommittees(address, msg.Amount, msg.Committees); err != nil {
 			return err
 		}
 	}
@@ -168,12 +173,12 @@ func (s *StateMachine) HandleMessageUnstake(msg *MessageUnstake) lib.ErrorI {
 	// extract an address object from the address bytes in the message
 	address := crypto.NewAddressFromBytes(msg.Address)
 	// get validator object from state
-	val, err := s.GetValidator(address)
+	validator, err := s.GetValidator(address)
 	if err != nil {
 		return err
 	}
 	// check if the validator is already unstaking
-	if val.UnstakingHeight != 0 {
+	if validator.UnstakingHeight != 0 {
 		return ErrValidatorUnstaking()
 	}
 	// get the governance parameters for 'unstaking blocks'
@@ -184,7 +189,7 @@ func (s *StateMachine) HandleMessageUnstake(msg *MessageUnstake) lib.ErrorI {
 	// get unstaking blocks parameter
 	var unstakingBlocks uint64
 	// if the validator isn't a delegator
-	if !val.Delegate {
+	if !validator.Delegate {
 		// use UnstakingBlocks for validators
 		unstakingBlocks = p.UnstakingBlocks
 	} else {
@@ -194,7 +199,7 @@ func (s *StateMachine) HandleMessageUnstake(msg *MessageUnstake) lib.ErrorI {
 	// calculate the unstaking height for the validator
 	unstakingHeight := s.Height() + unstakingBlocks
 	// set the validator as 'unstaking' in the state
-	return s.SetValidatorUnstaking(address, val, unstakingHeight)
+	return s.SetValidatorUnstaking(address, validator, unstakingHeight)
 }
 
 // HandleMessagePause() is the proper handler for an `Pause` message
@@ -202,20 +207,20 @@ func (s *StateMachine) HandleMessagePause(msg *MessagePause) lib.ErrorI {
 	// extract the address object from the address bytes from the pause message
 	address := crypto.NewAddressFromBytes(msg.Address)
 	// get the validator from the state
-	val, err := s.GetValidator(address)
+	validator, err := s.GetValidator(address)
 	if err != nil {
 		return err
 	}
 	// ensure the validator is not already paused
-	if val.MaxPausedHeight != 0 {
+	if validator.MaxPausedHeight != 0 {
 		return ErrValidatorPaused()
 	}
 	// ensure the validator is not unstaking
-	if val.UnstakingHeight != 0 {
+	if validator.UnstakingHeight != 0 {
 		return ErrValidatorUnstaking()
 	}
 	// ensure the validator is not a delegate
-	if val.Delegate {
+	if validator.Delegate {
 		return ErrValidatorIsADelegate()
 	}
 	// get validator the parameters from state
@@ -226,7 +231,7 @@ func (s *StateMachine) HandleMessagePause(msg *MessagePause) lib.ErrorI {
 	// calculate the max paused height by adding MaxPauseBlocks to current height
 	maxPausedHeight := s.Height() + params.MaxPauseBlocks
 	// set the validator as paused in the state
-	return s.SetValidatorPaused(address, val, maxPausedHeight)
+	return s.SetValidatorPaused(address, validator, maxPausedHeight)
 }
 
 // HandleMessageUnpause() is the proper handler for an `Unpause` message
@@ -234,26 +239,26 @@ func (s *StateMachine) HandleMessageUnpause(msg *MessageUnpause) lib.ErrorI {
 	// extract an address object from the message address bytes
 	address := crypto.NewAddressFromBytes(msg.Address)
 	// get the validator from the state
-	val, err := s.GetValidator(address)
+	validator, err := s.GetValidator(address)
 	if err != nil {
 		return err
 	}
 	// ensure the validator is already paused
-	if val.MaxPausedHeight == 0 {
+	if validator.MaxPausedHeight == 0 {
 		return ErrValidatorNotPaused()
 	}
 	// ensure the validator is not unstaking
 	// theoretically should not happen as an unstaking validator should never be paused
-	if val.UnstakingHeight != 0 {
+	if validator.UnstakingHeight != 0 {
 		return ErrValidatorUnstaking()
 	}
 	// ensure the validator is not a delegate
 	// theoretically should not happen as a delegate should never be paused
-	if val.Delegate {
+	if validator.Delegate {
 		return ErrValidatorIsADelegate()
 	}
 	// set the validator as unpaused in the state
-	return s.SetValidatorUnpaused(address, val)
+	return s.SetValidatorUnpaused(address, validator)
 }
 
 // HandleMessageChangeParameter() is the proper handler for an `Change-Parameter` message

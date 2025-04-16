@@ -11,8 +11,6 @@ import (
 )
 
 func TestEncryptedConn(t *testing.T) {
-	isTest = true
-	defer func() { isTest = false }()
 	msg1, msg2 := []byte("foo"), []byte("bar")
 	p1, err := crypto.NewBLS12381PrivateKey()
 	require.NoError(t, err)

@@ -172,7 +172,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 			paramUpdate: defaultParams,
 			expectedValidators: []*Validator{
 				{
-					Address:      newTestAddressBytes(t, 1),
+					Address:      newTestAddressBytes(t),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -182,7 +182,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 					Committees:   []uint64{0, 1},
 				},
 				{
-					Address:      newTestAddressBytes(t),
+					Address:      newTestAddressBytes(t, 1),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -212,7 +212,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 			paramUpdate: higherMaxCommittee,
 			expectedValidators: []*Validator{
 				{
-					Address:      newTestAddressBytes(t, 1),
+					Address:      newTestAddressBytes(t),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -222,7 +222,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 					Committees:   []uint64{0, 1},
 				},
 				{
-					Address:      newTestAddressBytes(t),
+					Address:      newTestAddressBytes(t, 1),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -234,7 +234,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 			previousParams: defaultParams,
 			presetValidators: []*Validator{
 				{
-					Address:      newTestAddressBytes(t, 1),
+					Address:      newTestAddressBytes(t),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -244,7 +244,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 					Committees:   []uint64{0, 1},
 				},
 				{
-					Address:      newTestAddressBytes(t),
+					Address:      newTestAddressBytes(t, 1),
 					StakedAmount: amount,
 					Committees:   []uint64{0, 1},
 				},
@@ -252,7 +252,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 			paramUpdate: lowerMaxCommittee,
 			expectedValidators: []*Validator{
 				{
-					Address:      newTestAddressBytes(t, 1),
+					Address:      newTestAddressBytes(t),
 					StakedAmount: amount,
 					Committees:   []uint64{0},
 				},
@@ -262,7 +262,7 @@ func TestConformStateToParamUpdate(t *testing.T) {
 					Committees:   []uint64{1},
 				},
 				{
-					Address:      newTestAddressBytes(t),
+					Address:      newTestAddressBytes(t, 1),
 					StakedAmount: amount,
 					Committees:   []uint64{0},
 				},
@@ -292,19 +292,19 @@ func TestConformStateToParamUpdate(t *testing.T) {
 			paramUpdate: lowerMaxCommittee,
 			expectedValidators: []*Validator{
 				{
-					Address:      newTestAddressBytes(t, 1),
+					Address:      newTestAddressBytes(t),
 					StakedAmount: amount,
 					Committees:   []uint64{0},
 				},
 				{
 					Address:      newTestAddressBytes(t, 2),
 					StakedAmount: amount,
-					Committees:   []uint64{1},
+					Committees:   []uint64{0},
 				},
 				{
-					Address:      newTestAddressBytes(t),
+					Address:      newTestAddressBytes(t, 1),
 					StakedAmount: amount,
-					Committees:   []uint64{0},
+					Committees:   []uint64{1},
 				},
 			},
 		},

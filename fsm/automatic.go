@@ -1,9 +1,7 @@
 package fsm
 
 import (
-	"bytes"
 	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
@@ -176,50 +174,25 @@ func (s *StateMachine) HandleCheckpoint(chainId uint64, results *lib.Certificate
 // EXPLAINER: Addresses under the (max) paused prefix for the latest height indicate the validator has hit their 'max paused height'
 // This key was set at an earlier height when the validators were initially paused
 // Note: These validators remain paused because the key is not deleted unless they are un-paused
-func (s *StateMachine) ForceUnstakeMaxPaused() (err lib.ErrorI) {
-	key := PausedPrefix(s.height)
-	// get the address list from state
-	list, err := s.GetAddressList(key)
-	// if an error occurred
-	if err != nil {
-		// exit with error
-		return
-	}
-	// for each address in the list
-	for _, address := range list.Addresses {
-		// force unstake the validator
-		if err = s.ForceUnstakeValidator(crypto.NewAddress(address)); err != nil {
+func (s *StateMachine) ForceUnstakeMaxPaused() lib.ErrorI {
+	var deleteList [][]byte
+	// force unstake all addresses under the (max) paused prefix for the latest height
+	err := s.IterateAndExecute(PausedPrefix(s.Height()), func(key, _ []byte) lib.ErrorI {
+		// add the key to the 'delete list'
+		deleteList = append(deleteList, key)
+		// extract the address from the key
+		addr, err := AddressFromKey(key)
+		if err != nil {
 			return err
 		}
-	}
-	// remove the list
-	return s.Delete(key)
-}
-
-// ForceUnstakeValidator() automatically begins unstaking the validator
-func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI {
-	// get the validator object from state
-	val, err := s.GetValidator(address)
-	if err != nil {
-		s.log.Warnf("validator %s is not found to be force unstaked", address.String()) // defensive
-		return nil
-	}
-	// check if already unstaking
-	if val.UnstakingHeight != 0 {
-		s.log.Warnf("validator %s is already unstaking can't be forced to begin unstaking", address.String())
-		return nil
-	}
-	// get params for unstaking blocks
-	p, err := s.GetParamsVal()
+		// force unstake the validator
+		return s.ForceUnstakeValidator(addr)
+	})
 	if err != nil {
 		return err
 	}
-	// get the unstaking blocks from the parameters
-	unstakingBlocks := p.GetUnstakingBlocks()
-	// calculate the future unstaking height
-	unstakingHeight := s.Height() + unstakingBlocks
-	// set the validator as unstaking
-	return s.SetValidatorUnstaking(address, val, unstakingHeight)
+	// delete all the 'max paused' keys in the list
+	return s.DeleteAll(deleteList)
 }
 
 // LAST PROPOSERS CODE BELOW
@@ -285,59 +258,4 @@ func (s *StateMachine) SetLastProposers(keys *lib.Proposers) lib.ErrorI {
 	}
 	// set the bytes under the proposers prefix key
 	return s.Set(LastProposersPrefix(), bz)
-}
-
-// ADDRESS LIST CODE BELOW
-
-// GetAddressList() gets a list of addresses from state
-func (s *StateMachine) GetAddressList(key []byte) (list *crypto.ProtoAddresses, err lib.ErrorI) {
-	// initialize the proto addresses
-	list = new(crypto.ProtoAddresses)
-	// get the addresses bytes under the committee prefix
-	protoBytes, err := s.Get(key)
-	// if not found
-	if protoBytes == nil {
-		// exit without error
-		return new(crypto.ProtoAddresses), nil
-	}
-	// if an error occurred
-	if err != nil {
-		// exit with error
-		return
-	}
-	// populate the struct with proto bytes
-	err = lib.Unmarshal(protoBytes, list)
-	// exit
-	return
-}
-
-// SetAddressList() sets a list of addresses to state
-func (s *StateMachine) SetAddressList(key []byte, list *crypto.ProtoAddresses) (err lib.ErrorI) {
-	// convert the object to proto bytes
-	protoBytes, err := lib.Marshal(list)
-	// if an error occurred
-	if err != nil {
-		// exit with error
-		return
-	}
-	return s.Set(key, protoBytes)
-}
-
-// AddToAddressList() appends to the addresses list
-func (s *StateMachine) AddToAddressList(address []byte, list *crypto.ProtoAddresses) {
-	list.Addresses = append(list.Addresses, address)
-}
-
-// DeleteFromAddressList() removes an element from the address lsit
-func (s *StateMachine) DeleteFromAddressList(address []byte, list *crypto.ProtoAddresses) {
-	// remove existing entry if it already exists
-	for i, currentAddr := range list.Addresses {
-		// if the current == the new address
-		if bytes.Equal(currentAddr, address) {
-			// remove it from the list
-			list.Addresses = append(list.Addresses[:i], list.Addresses[i+1:]...)
-			// exit
-			break
-		}
-	}
 }

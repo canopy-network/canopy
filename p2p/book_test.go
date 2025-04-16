@@ -10,8 +10,6 @@ import (
 )
 
 func TestStartPeerBookService(t *testing.T) {
-	isTest = true
-	defer func() { isTest = false }()
 	n1, n2, cleanup := newTestP2PPair(t)
 	defer cleanup()
 	n3, n4 := newTestP2PNode(t), newTestP2PNode(t)

@@ -108,7 +108,7 @@ func TestHandleByzantine(t *testing.T) {
 				// add the validator to state
 				require.NoError(t, sm.SetValidator(val))
 				// add the test validators to the committee structure in the state
-				require.NoError(t, sm.AddStakeToCommittees(val.StakedAmount, val.Committees))
+				require.NoError(t, sm.SetCommittees(crypto.NewAddress(val.Address), val.StakedAmount, val.Committees))
 			}
 			// get committee to have a reference to the validator set handy
 			committee, err := sm.GetCommitteeMembers(lib.CanopyChainId)
@@ -239,13 +239,13 @@ func TestSlashAndResetNonSigners(t *testing.T) {
 					StakedAmount: stakeAmount,
 					Committees:   []uint64{lib.CanopyChainId},
 				}))
-				// pre-get the non-signers-list
-				nonSignersList, e := sm.GetNonSignersList()
+				// convert the non signer to bytes
+				bz, e := lib.Marshal(&NonSigner{
+					Counter: nonSigner.Counter,
+				})
 				require.NoError(t, e)
-				// pre-set the non signers
-				nonSignersList.List = append(nonSignersList.List, nonSigner)
-				// preset the non-signers list in state
-				require.NoError(t, sm.SetNonSignersList(nonSignersList))
+				// set the non signer in state
+				require.NoError(t, sm.Set(KeyForNonSigner(nonSigner.Address), bz))
 			}
 			// retrieve the supply object before the call
 			beforeSupply, err := sm.GetSupply()
@@ -356,17 +356,18 @@ func TestIncrementNonSigners(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
-			// pre-get the non-signers-list
-			nonSignersList, err := sm.GetNonSignersList()
-			require.NoError(t, err)
 			// pre-set the non signers
 			for _, nonSigner := range test.preset {
-				nonSignersList.List = append(nonSignersList.List, nonSigner)
+				// create the non signer info
+				nonSignerInfo := &NonSigner{Counter: nonSigner.Counter}
+				// convert it to bytes
+				bz, err := lib.Marshal(nonSignerInfo)
+				require.NoError(t, err)
+				// set the non-signer
+				require.NoError(t, sm.Set(KeyForNonSigner(nonSigner.Address), bz))
 			}
-			// preset the non-signers list in state
-			require.NoError(t, sm.SetNonSignersList(nonSignersList))
 			// execute the function call and check for expected error
-			err = sm.IncrementNonSigners(test.nonSigners)
+			err := sm.IncrementNonSigners(test.nonSigners)
 			// check for expected error
 			if err != nil {
 				require.NotEmpty(t, test.error)
@@ -952,7 +953,7 @@ func TestSlashTracker(t *testing.T) {
 				// set the bad proposer as a validator in state
 				require.NoError(t, sm.SetValidator(v))
 				// set validator committees
-				require.NoError(t, sm.AddStakeToCommittees(v.StakedAmount, v.Committees))
+				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
 			}
 			// execute the slashes
 			for _, s := range test.slashes {

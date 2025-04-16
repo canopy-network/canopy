@@ -9,17 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	pool "github.com/libp2p/go-buffer-pool"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
-)
-
-var (
-	// isTest is a bool to turn on and off unsafe mode for testing
-	isTest = false
 )
 
 /*
@@ -58,9 +52,7 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 	// create a temporary keypair to establish a shared secret
 	tempPrivateKey, _ := crypto.NewEd25519PrivateKey()
 	tempPublicKey := tempPrivateKey.PublicKey().Bytes()
-	encryptedConn = &EncryptedConn{
-		conn: conn,
-	}
+	encryptedConn = &EncryptedConn{conn: conn}
 	// swap temporary keys
 	peerTempPublicKey, e := keySwap(encryptedConn, tempPublicKey)
 	if e != nil {
@@ -129,8 +121,6 @@ func NewHandshake(conn net.Conn, meta *lib.PeerMeta, privateKey crypto.PrivateKe
 func (c *EncryptedConn) Write(data []byte) (n int, err error) {
 	// fallback to regular conn in case encrypted conn is not yet set
 	if c.send.aead == nil {
-		// c.mu.Lock()
-		// defer c.mu.Unlock()
 		return c.conn.Write(data)
 	}
 	// thread safety sends
@@ -177,11 +167,6 @@ func (c *EncryptedConn) Write(data []byte) (n int, err error) {
 func (c *EncryptedConn) Read(data []byte) (n int, err error) {
 	// fallback to regular conn in case encrypted conn is not yet set
 	if c.receive.aead == nil {
-		// flag to allow unit test to pass (without this a deadlock would happen because of using same instances of conn in read and write)
-		// if !isTest {
-		// 	c.mu.Lock()
-		// 	defer c.mu.Unlock()
-		// }
 		return c.conn.Read(data)
 	}
 	// read thread safety
@@ -243,36 +228,12 @@ func (c *EncryptedConn) holdUnread(bytesRead int, chunk []byte) {
 }
 
 // EncryptedConn satisfies the net.conn interface
-func (c *EncryptedConn) Close() error {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.Close()
-}
-func (c *EncryptedConn) LocalAddr() net.Addr {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.LocalAddr()
-}
-func (c *EncryptedConn) RemoteAddr() net.Addr {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.RemoteAddr()
-}
-func (c *EncryptedConn) SetDeadline(t time.Time) error {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.SetDeadline(t)
-}
-func (c *EncryptedConn) SetReadDeadline(t time.Time) error {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.SetReadDeadline(t)
-}
-func (c *EncryptedConn) SetWriteDeadline(t time.Time) error {
-	// c.mu.Lock()
-	// defer c.mu.Unlock()
-	return c.conn.SetWriteDeadline(t)
-}
+func (c *EncryptedConn) Close() error                       { return c.conn.Close() }
+func (c *EncryptedConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
+func (c *EncryptedConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
+func (c *EncryptedConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
+func (c *EncryptedConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
+func (c *EncryptedConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
 
 // keySwap() exchanges temporary public keys between peers
 func keySwap(conn net.Conn, tempPublicKey []byte) (peerTempPublicKey []byte, err lib.ErrorI) {
@@ -305,39 +266,6 @@ func parallelSendReceive(conn net.Conn, a, b proto.Message) lib.ErrorI {
 	g.Go(func() error { return receiveProtoMsg(conn, b) })
 	if er := g.Wait(); er != nil {
 		return ErrErrorGroup(er)
-	}
-	return nil
-}
-
-// receiveProtoMsg() encodes and sends a proto message to a net.Conn
-// NOTE: this function is only used before establishing the encrypted conn
-func sendProtoMsg(conn net.Conn, ptr proto.Message) lib.ErrorI {
-	bz, err := lib.Marshal(ptr)
-	if err != nil {
-		return err
-	}
-	if e := conn.SetWriteDeadline(time.Now().Add(time.Second)); e != nil {
-		return ErrFailedWrite(e)
-	}
-	if _, er := conn.Write(bz); er != nil {
-		return ErrFailedWrite(er)
-	}
-	return nil
-}
-
-// receiveProtoMsg() receives and decodes a proto message from a net.Conn
-// NOTE: this function is only used before establishing the encrypted conn
-func receiveProtoMsg(conn net.Conn, ptr proto.Message) lib.ErrorI {
-	buffer := make([]byte, units.KB)
-	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		return ErrFailedRead(err)
-	}
-	n, err := conn.Read(buffer)
-	if err != nil {
-		return ErrFailedRead(err)
-	}
-	if e := lib.Unmarshal(buffer[:n], ptr); e != nil {
-		return e
 	}
 	return nil
 }

@@ -177,69 +177,6 @@ func (x *Validator) GetCompound() bool {
 	return false
 }
 
-// ValidatorsList is stored as a single blob (instead of using prefixed keys) for the following reasons:
-//
-//   - Nearly all validators are expected to receive updates each block (e.g., due to auto-compounding),
-//     which makes prefix-based key storage inefficient for write-heavy patterns.
-//
-//   - Filesystem database iterators (e.g., in LevelDB/BadgerDB) introduce significant overhead and are often slow,
-//     especially when reading or updating large sets of keys every block.
-//
-//   - The total number of validators is expected to remain below 100,000, and each entry is relatively small (~200 bytes),
-//     making a full in-memory deserialization manageable and performant.
-//
-//   - Validators are expected to participate in most committees, so the majority of the list is relevant to each context,
-//     and filtering from a single list is faster than multiple disk reads.
-//
-//   - Storing separate, per-committee lists (especially if sorted and updated every block) would create substantial
-//     additional write and storage overhead compared to maintaining a single, compact list.
-type ValidatorsList struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	List []*Validator `protobuf:"bytes,1,rep,name=List,proto3" json:"List,omitempty"`
-}
-
-func (x *ValidatorsList) Reset() {
-	*x = ValidatorsList{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_validator_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ValidatorsList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ValidatorsList) ProtoMessage() {}
-
-func (x *ValidatorsList) ProtoReflect() protoreflect.Message {
-	mi := &file_validator_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ValidatorsList.ProtoReflect.Descriptor instead.
-func (*ValidatorsList) Descriptor() ([]byte, []int) {
-	return file_validator_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ValidatorsList) GetList() []*Validator {
-	if x != nil {
-		return x.List
-	}
-	return nil
-}
-
 // NonSignerInfo is information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window
 type NonSigner struct {
 	state         protoimpl.MessageState
@@ -255,7 +192,7 @@ type NonSigner struct {
 func (x *NonSigner) Reset() {
 	*x = NonSigner{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_validator_proto_msgTypes[2]
+		mi := &file_validator_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -268,7 +205,7 @@ func (x *NonSigner) String() string {
 func (*NonSigner) ProtoMessage() {}
 
 func (x *NonSigner) ProtoReflect() protoreflect.Message {
-	mi := &file_validator_proto_msgTypes[2]
+	mi := &file_validator_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +218,7 @@ func (x *NonSigner) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NonSigner.ProtoReflect.Descriptor instead.
 func (*NonSigner) Descriptor() ([]byte, []int) {
-	return file_validator_proto_rawDescGZIP(), []int{2}
+	return file_validator_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *NonSigner) GetAddress() []byte {
@@ -296,54 +233,6 @@ func (x *NonSigner) GetCounter() uint64 {
 		return x.Counter
 	}
 	return 0
-}
-
-// NonSignerList is a list of information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window
-type NonSignerList struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	List []*NonSigner `protobuf:"bytes,1,rep,name=List,proto3" json:"List,omitempty"`
-}
-
-func (x *NonSignerList) Reset() {
-	*x = NonSignerList{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_validator_proto_msgTypes[3]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *NonSignerList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NonSignerList) ProtoMessage() {}
-
-func (x *NonSignerList) ProtoReflect() protoreflect.Message {
-	mi := &file_validator_proto_msgTypes[3]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NonSignerList.ProtoReflect.Descriptor instead.
-func (*NonSignerList) Descriptor() ([]byte, []int) {
-	return file_validator_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *NonSignerList) GetList() []*NonSigner {
-	if x != nil {
-		return x.List
-	}
-	return nil
 }
 
 var File_validator_proto protoreflect.FileDescriptor
@@ -371,21 +260,14 @@ var file_validator_proto_rawDesc = []byte{
 	0x74, 0x70, 0x75, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x64, 0x65, 0x6c, 0x65, 0x67, 0x61, 0x74, 0x65,
 	0x18, 0x09, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x64, 0x65, 0x6c, 0x65, 0x67, 0x61, 0x74, 0x65,
 	0x12, 0x1a, 0x0a, 0x08, 0x63, 0x6f, 0x6d, 0x70, 0x6f, 0x75, 0x6e, 0x64, 0x18, 0x0a, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x08, 0x63, 0x6f, 0x6d, 0x70, 0x6f, 0x75, 0x6e, 0x64, 0x22, 0x36, 0x0a, 0x0e,
-	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x24,
-	0x0a, 0x04, 0x4c, 0x69, 0x73, 0x74, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x74,
-	0x79, 0x70, 0x65, 0x73, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x52, 0x04,
-	0x4c, 0x69, 0x73, 0x74, 0x22, 0x3f, 0x0a, 0x09, 0x4e, 0x6f, 0x6e, 0x53, 0x69, 0x67, 0x6e, 0x65,
-	0x72, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0c, 0x52, 0x07, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x63,
-	0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x07, 0x63, 0x6f,
-	0x75, 0x6e, 0x74, 0x65, 0x72, 0x22, 0x35, 0x0a, 0x0d, 0x4e, 0x6f, 0x6e, 0x53, 0x69, 0x67, 0x6e,
-	0x65, 0x72, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x24, 0x0a, 0x04, 0x4c, 0x69, 0x73, 0x74, 0x18, 0x01,
-	0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x74, 0x79, 0x70, 0x65, 0x73, 0x2e, 0x4e, 0x6f, 0x6e,
-	0x53, 0x69, 0x67, 0x6e, 0x65, 0x72, 0x52, 0x04, 0x4c, 0x69, 0x73, 0x74, 0x42, 0x26, 0x5a, 0x24,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x61, 0x6e, 0x6f, 0x70,
-	0x79, 0x2d, 0x6e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x2f, 0x63, 0x61, 0x6e, 0x6f, 0x70, 0x79,
-	0x2f, 0x66, 0x73, 0x6d, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x28, 0x08, 0x52, 0x08, 0x63, 0x6f, 0x6d, 0x70, 0x6f, 0x75, 0x6e, 0x64, 0x22, 0x3f, 0x0a, 0x09,
+	0x4e, 0x6f, 0x6e, 0x53, 0x69, 0x67, 0x6e, 0x65, 0x72, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x64, 0x64,
+	0x72, 0x65, 0x73, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x07, 0x61, 0x64, 0x64, 0x72,
+	0x65, 0x73, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x07, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72, 0x42, 0x26, 0x5a,
+	0x24, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x61, 0x6e, 0x6f,
+	0x70, 0x79, 0x2d, 0x6e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x2f, 0x63, 0x61, 0x6e, 0x6f, 0x70,
+	0x79, 0x2f, 0x66, 0x73, 0x6d, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -400,21 +282,17 @@ func file_validator_proto_rawDescGZIP() []byte {
 	return file_validator_proto_rawDescData
 }
 
-var file_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_validator_proto_goTypes = []interface{}{
-	(*Validator)(nil),      // 0: types.Validator
-	(*ValidatorsList)(nil), // 1: types.ValidatorsList
-	(*NonSigner)(nil),      // 2: types.NonSigner
-	(*NonSignerList)(nil),  // 3: types.NonSignerList
+	(*Validator)(nil), // 0: types.Validator
+	(*NonSigner)(nil), // 1: types.NonSigner
 }
 var file_validator_proto_depIdxs = []int32{
-	0, // 0: types.ValidatorsList.List:type_name -> types.Validator
-	2, // 1: types.NonSignerList.List:type_name -> types.NonSigner
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // [0:0] is the sub-list for method output_type
+	0, // [0:0] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_validator_proto_init() }
@@ -436,31 +314,7 @@ func file_validator_proto_init() {
 			}
 		}
 		file_validator_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidatorsList); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_validator_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NonSigner); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_validator_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NonSignerList); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -478,7 +332,7 @@ func file_validator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_validator_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

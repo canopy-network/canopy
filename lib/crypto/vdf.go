@@ -327,3 +327,17 @@ func (x *VDF) UnmarshalJSON(b []byte) (err error) {
 	}
 	return
 }
+
+// Copy() creates a deep copy of the VDF object
+func (x *VDF) Copy() (vdfCopy *VDF) {
+	proofCopy := make([]byte, len(x.Proof))
+	copy(proofCopy, x.Proof)
+	outputCopy := make([]byte, len(x.Output))
+	copy(outputCopy, x.Output)
+	vdfCopy = &VDF{
+		Proof:      proofCopy,
+		Output:     outputCopy,
+		Iterations: x.Iterations,
+	}
+	return
+}

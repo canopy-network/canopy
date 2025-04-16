@@ -48,14 +48,14 @@ type P2P struct {
 
 // New() creates an initialized pointer instance of a P2P object
 func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, c lib.Config, l lib.LoggerI) *P2P {
-	// Initialize the peer book
+	// initialize the peer book
 	peerBook := NewPeerBook(p.PublicKey().Bytes(), c, l)
-	// Make inbound multiplexed channels
+	// make inbound multiplexed channels
 	channels := make(lib.Channels)
 	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
 		channels[i] = make(chan *lib.MessageAndMetadata, maxInboxQueueSize)
 	}
-	// Load banned IPs
+	// load banned IPs
 	var bannedIPs []net.IPAddr
 	for _, ip := range c.BannedIPs {
 		i, err := net.ResolveIPAddr("", ip)
@@ -64,7 +64,11 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, c lib.Config, l li
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
+	// set the read/write timeout to be 2 x the block time
+	ReadWriteTimeout = time.Duration(2*c.BlockTimeMS()) * time.Millisecond
+	// set the peer meta
 	meta := &lib.PeerMeta{ChainId: c.ChainId}
+	// return the p2p structure
 	return &P2P{
 		privateKey:             p,
 		channels:               channels,
@@ -122,7 +126,11 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 		// create a thread to prevent front-of-the-line blocking
 		go func(c net.Conn) {
 			// ephemeral connections are basic, inbound tcp connections
-			defer p.catchPanic()
+			defer func() {
+				if r := recover(); r != nil {
+					p.log.Errorf("panic recovered, err: %s, stack: %s", r, string(debug.Stack()))
+				}
+			}()
 			p.log.Debugf("Received ephemeral connection %s", c.RemoteAddr().String())
 			// begin to create a peer address using the inbound tcp conn while filtering any bad ips
 			netAddress, e := p.filterBadIPs(c)
@@ -215,8 +223,6 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect bool) lib.ErrorI {
 // create a E2E encrypted channel with a fully authenticated peer and save it to
 // the peer set and the peer book
 func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect bool) (err lib.ErrorI) {
-	p.Lock()
-	defer p.Unlock()
 	// create the e2e encrypted connection while establishing a full peer info object
 	connection, err := p.NewConnection(conn)
 	if err != nil {
@@ -246,6 +252,8 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect bool) (err l
 		connection.Stop()
 		return nil
 	}
+	p.Lock()
+	defer p.Unlock()
 	// check if is must connect
 	for _, item := range p.mustConnect {
 		if bytes.Equal(item.PublicKey, info.Address.PublicKey) {
@@ -304,10 +312,6 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string) {
 	peer, _ := p.PeerSet.Remove(publicKey)
 	if peer != nil {
 		peer.stop.Do(peer.conn.Stop)
-		// if peer is a 'must connect' try to connect back
-		if peer.IsMustConnect {
-			go p.DialWithBackoff(peer.Address)
-		}
 	}
 }
 

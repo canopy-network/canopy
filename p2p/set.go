@@ -166,6 +166,19 @@ func (ps *PeerSet) PeerCount() int {
 	return len(ps.m)
 }
 
+// IsMustConnect() checks if a peer is on the must-connect list
+func (ps *PeerSet) IsMustConnect(publicKey []byte) bool {
+	ps.RLock()
+	defer ps.RUnlock()
+	// check if is must connect
+	for _, item := range ps.mustConnect {
+		if bytes.Equal(item.PublicKey, publicKey) {
+			return true
+		}
+	}
+	return false
+}
+
 // GetAllInfos() returns the information on connected peers and the total inbound / outbound counts
 func (ps *PeerSet) GetAllInfos() (res []*lib.PeerInfo, numInbound, numOutbound int) {
 	ps.RLock()
