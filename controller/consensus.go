@@ -231,7 +231,7 @@ func (c *Controller) verifyResponse(msg *lib.MessageAndMetadata, queue map[uint6
 	msgHeight := blockMessage.BlockAndCertificate.GetHeader().GetHeight()
 	// Check for height in queue
 	if _, ok := queue[msgHeight]; !ok {
-		c.log.Errorf("Request not found for height %d. Sent from %s", msgHeight, lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+		c.log.Warnf("Request not found for height %d, sent from %s", msgHeight, lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 		return nil, 0
 	}
 	// Get responder and verify proper sender
