@@ -313,15 +313,6 @@ func NewLimiter(maxPerRequester, maxRequests, resetWindowS int) *SimpleLimiter {
 	}
 }
 
-func NewLimiterDuration(maxPerRequester, maxRequests int, resetWindowD time.Duration) *SimpleLimiter {
-	return &SimpleLimiter{
-		requests:        map[string]int{},
-		maxPerRequester: maxPerRequester,
-		maxRequests:     maxRequests,
-		reset:           time.NewTicker(resetWindowD),
-	}
-}
-
 // NewRequest() processes a new request and checks if the requester or total requests should be blocked
 func (l *SimpleLimiter) NewRequest(requester string) (requesterBlock, totalBlock bool) {
 	// if the total requests exceed the max requests
