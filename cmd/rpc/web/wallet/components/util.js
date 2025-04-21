@@ -708,7 +708,7 @@ function generateCommitteeList(knownCommittees, stakedCommittees) {
 
     return {
       value: chainID,
-      context: j < n && stakedCommittees[j] === chainID ? "(staked)" : "",
+      context: j < n && stakedCommittees[j] === chainID ? "(staked)" : "(not staked)",
     };
   });
 }
