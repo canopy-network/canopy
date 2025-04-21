@@ -748,3 +748,11 @@ func PrintStackTrace() {
 		}
 	}
 }
+
+// Append() is a 'safe append' when the caller wants to re-use the 'a' slice
+func Append(a, b []byte) []byte {
+	out := make([]byte, len(a)+len(b))
+	copy(out, a)
+	copy(out[len(a):], b)
+	return out
+}

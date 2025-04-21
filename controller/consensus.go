@@ -3,13 +3,14 @@ package controller
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 /* This file contains the high level functionality of the continued agreement on the blocks of the chain */

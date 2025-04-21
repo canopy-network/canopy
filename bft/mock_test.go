@@ -38,7 +38,7 @@ func newTestConsensus(t *testing.T, phase Phase, numValidators int) (tc *testCon
 	config := lib.DefaultConfig()
 	config.RunVDF = false
 	// create the bft object using the mocks
-	tc.bft, err = New(config, tc.valKeys[0], 1, 1, tc.cont, config.RunVDF, lib.NewDefaultLogger())
+	tc.bft, err = New(config, tc.valKeys[0], 1, 1, tc.cont, config.RunVDF, nil, lib.NewDefaultLogger())
 	tc.bft.ValidatorSet = tc.valSet
 	require.NoError(t, err)
 	// set the bft phase

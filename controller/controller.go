@@ -1,14 +1,15 @@
 package controller
 
 import (
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 /* This file contains the 'Controller' implementation which acts as a bus between the bft, p2p, fsm, and store modules to create the node */
@@ -21,6 +22,7 @@ type Controller struct {
 	PublicKey  []byte             // self public key
 	PrivateKey crypto.PrivateKeyI // self private key
 	Config     lib.Config         // node configuration
+	Metrics    *lib.Metrics       // telemetry
 
 	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
 	Mempool   *Mempool          // the in memory list of pending transactions
@@ -34,7 +36,7 @@ type Controller struct {
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
 	// if an error occurred when retrieving the max validators
@@ -51,20 +53,22 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, l lib.L
 	}
 	// create the controller
 	controller = &Controller{
-		FSM:           fsm,
-		Mempool:       mempool,
-		isSyncing:     &atomic.Bool{},
-		P2P:           p2p.New(valKey, maxMembersPerCommittee, c, l),
 		Address:       valKey.PublicKey().Address().Bytes(),
 		PublicKey:     valKey.PublicKey().Bytes(),
 		PrivateKey:    valKey,
 		Config:        c,
-		log:           l,
+		Metrics:       metrics,
+		FSM:           fsm,
+		Mempool:       mempool,
+		Consensus:     nil,
+		P2P:           p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
 		RootChainInfo: lib.RootChainInfo{Log: l},
+		isSyncing:     &atomic.Bool{},
+		log:           l,
 		Mutex:         sync.Mutex{},
 	}
 	// initialize the consensus in the controller, passing a reference to itself
-	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, true, l)
+	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// if an error occurred initializing the bft module
 	if err != nil {
 		// exit with error
@@ -76,12 +80,10 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, l lib.L
 
 // Start() begins the Controller service
 func (c *Controller) Start() {
-	// start the P2P module
-	c.P2P.Start()
-	// start internal Controller listeners for P2P
-	c.StartListeners()
 	// in a non-blocking sub-function
 	go func() {
+		// start the P2P module
+		c.P2P.Start()
 		// log the beginning of the root-chain API connection
 		c.log.Warnf("Attempting to connect to the root-chain")
 		// set a timer to go off once per second

@@ -17,6 +17,8 @@ import (
 )
 
 const (
+	pingInterval           = 30 * time.Second        // how often a ping is to be sent
+	pongTimeoutDuration    = 20 * time.Second        // how long the sender of a ping waits for a pong before throwing an error
 	maxDataChunkSize       = 1024 - packetHeaderSize // maximum size of the chunk of bytes in a packet
 	maxPacketSize          = 1024                    // maximum size of the full packet
 	packetHeaderSize       = 47                      // the overhead of the protobuf packet header
@@ -66,6 +68,8 @@ type MultiConn struct {
 	streams       map[lib.Topic]*Stream       // multiple independent bi-directional communication channels
 	quitSending   chan struct{}               // signal to quit
 	quitReceiving chan struct{}               // signal to quit
+	sendPong      chan struct{}               // signal to send keep alive message
+	receivedPong  chan struct{}               // signal that received keep alive message
 	onError       func(error, []byte, string) // callback to call if peer errors
 	error         sync.Once                   // thread safety to ensure MultiConn.onError is only called once
 	p2p           *P2P                        // a pointer reference to the P2P module
@@ -85,6 +89,8 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		streams:       p.NewStreams(),
 		quitSending:   make(chan struct{}, maxChanSize),
 		quitReceiving: make(chan struct{}, maxChanSize),
+		sendPong:      make(chan struct{}, maxChanSize),
+		receivedPong:  make(chan struct{}, maxChanSize),
 		onError:       p.OnPeerError,
 		error:         sync.Once{},
 		p2p:           p,
@@ -148,21 +154,64 @@ func (c *MultiConn) startSendService() {
 		}
 	}()
 	m := limiter.New(0, 0)
+	ping, err := time.NewTicker(pingInterval), lib.ErrorI(nil)
+	pongTimer := time.NewTimer(pongTimeoutDuration)
 	var packet *Packet
-	defer func() { m.Done() }()
+	defer func() { lib.StopTimer(pongTimer); ping.Stop(); m.Done() }()
 	for {
 		// select statement ensures the sequential coordination of the concurrent processes
 		select {
 		case packet = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_BLOCK].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_BLOCK_REQUEST].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_TX].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_PEERS_RESPONSE].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_PEERS_REQUEST].sendQueue:
+			c.sendPacket(packet, m)
+		case <-ping.C: // fires every 'pingInterval'
+			c.log.Debugf("Send Ping to: %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+			// send a ping to the peer
+			if err = c.sendWireBytes(new(Ping), m); err != nil {
+				break
+			}
+			// reset the pong timer
+			lib.StopTimer(pongTimer)
+			// set the pong timer to execute an Error function if the timer expires before receiving a pong
+			pongTimer = time.AfterFunc(pongTimeoutDuration, func() {
+				if e := ErrPongTimeout(); e != nil {
+					c.Error(e, NoPongSlash)
+				}
+			})
+		case _, open := <-c.sendPong: // fires when receive service got a 'ping' message
+			// if the channel was closed
+			if !open {
+				// log the close
+				c.log.Debugf("Pong channel closed, stopping")
+				// exit
+				return
+			}
+			// log the pong sending
+			c.log.Debugf("Send Pong to: %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+			// send a pong
+			c.sendWireBytes(new(Pong), m)
+		case _, open := <-c.receivedPong: // fires when receive service got a 'pong' message
+			// if the channel was closed
+			if !open {
+				// log the close
+				c.log.Debugf("Receive pong channel closed, stopping")
+				// exit
+				return
+			}
+			// reset the pong timer
+			lib.StopTimer(pongTimer)
 		case <-c.quitSending: // fires when Stop() is called
 			return
 		}
-		c.sendPacket(packet, m)
 	}
 }
 
@@ -176,7 +225,7 @@ func (c *MultiConn) startReceiveService() {
 		}
 	}()
 	m := limiter.New(0, 0)
-	defer func() { m.Done() }()
+	defer func() { close(c.sendPong); close(c.receivedPong); m.Done() }()
 	for {
 		select {
 		default: // fires unless quit was signaled
@@ -207,6 +256,12 @@ func (c *MultiConn) startReceiveService() {
 					c.Error(er, slash)
 					return
 				}
+			case *Ping: // receive ping message notifies the "send" service to respond with a 'pong' message
+				c.log.Debugf("Received ping from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+				c.sendPong <- struct{}{}
+			case *Pong: // receive pong message notifies the "send" service to disable the 'pong timer exit'
+				c.log.Debugf("Received pong from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+				c.receivedPong <- struct{}{}
 			default: // unknown type results in slash and exiting the service
 				c.Error(ErrUnknownP2PMsg(x), UnknownMessageSlash)
 				return
@@ -255,8 +310,18 @@ func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) (err lib.Erro
 		packet.Eof,
 		crypto.ShortHashString(packet.Bytes),
 	)
+	// send packet as message over the wire
+	err = c.sendWireBytes(packet, m)
+	return
+}
+
+// sendWireBytes() a rate limited writer of outbound bytes to the wire
+// wraps a proto.Message into a universal Envelope, then converts to bytes and
+// sends them across the wire without violating the data flow rate limits
+// message may be a Packet, a Ping or a Pong
+func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) (err lib.ErrorI) {
 	// convert the proto.Message into a proto.Any
-	a, err := lib.NewAny(packet)
+	a, err := lib.NewAny(message)
 	if err != nil {
 		return err
 	}

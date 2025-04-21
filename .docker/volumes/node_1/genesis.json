@@ -30,7 +30,7 @@
       "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
       "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
       "committees": [
-        2
+        1
       ],
       "netAddress": "tcp://node-2",
       "stakedAmount": 1000000000,

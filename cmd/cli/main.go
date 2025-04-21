@@ -75,17 +75,20 @@ func Start() {
 		l.Infof("Sleeping until %s", untilTime.String())
 		time.Sleep(untilTime)
 	}
+	// initialize and start the metrics server
+	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), config.MetricsConfig)
 	// create a new database object from the config
-	db, err := store.New(config, l)
+	db, err := store.New(config, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
-	sm, err := fsm.New(config, db, l)
+	// initialize the state machine
+	sm, err := fsm.New(config, db, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
 	// create a new instance of the application
-	app, err := controller.New(sm, config, validatorKey, l)
+	app, err := controller.New(sm, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -93,6 +96,8 @@ func Start() {
 	rpcServer := rpc.NewServer(app, config, l)
 	// set the remote callbacks
 	app.RootChainInfo.GetRemoteCallbacks = rpcServer.RemoteCallbacks
+	// start the metrics server
+	metrics.Start()
 	// start the application
 	app.Start()
 	// start the rpc server
@@ -101,9 +106,10 @@ func Start() {
 	waitForKill()
 	// gracefully stop the app
 	app.Stop()
+	// gracefully stop the metrics server
+	metrics.Stop()
 	// exit
 	os.Exit(0)
-
 }
 
 // waitForKill() blocks until a kill signal is received
@@ -268,6 +274,7 @@ func WriteDefaultGenesisFile(validatorPrivateKey crypto.PrivateKeyI, genesisFile
 			NetAddress:   "tcp://localhost",
 			StakedAmount: 1000000000000,
 			Output:       addr.Bytes(),
+			Compound:     true,
 		}},
 		Params: fsm.DefaultParams(),
 	}

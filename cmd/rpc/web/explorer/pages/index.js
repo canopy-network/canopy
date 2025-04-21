@@ -50,9 +50,7 @@ export default function Home() {
           settledValues[2].proposeVoteTimeoutMS +
           settledValues[2].precommitTimeoutMS +
           settledValues[2].precommitVoteTimeoutMS +
-          settledValues[2].commitTimeoutMS +
-          settledValues[2].commitProcessMS +
-          settledValues[2].roundInterruptTimeoutMS;
+          settledValues[2].commitTimeoutMS;
 
         if (setLoading) {
           return setState({

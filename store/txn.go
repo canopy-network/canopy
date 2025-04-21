@@ -52,17 +52,20 @@ func NewTxn(parent lib.StoreI) *Txn {
 
 // Get() retrieves the value for a given key from either the in-memory operations or the parent store
 func (c *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
-	if v, found := c.ops[string(key)]; found {
+	if v, found := c.ops[lib.BytesToString(key)]; found {
 		return v.value, nil
 	}
 	return c.StoreI.Get(key)
 }
 
 // Set() adds or updates the value for a key in the in-memory operations
-func (c *Txn) Set(key, value []byte) lib.ErrorI { c.update(string(key), value, false); return nil }
+func (c *Txn) Set(key, value []byte) lib.ErrorI {
+	c.update(lib.BytesToString(key), value, false);
+	return nil
+}
 
 // Delete() marks a key for deletion in the in-memory operations
-func (c *Txn) Delete(key []byte) lib.ErrorI { c.update(string(key), nil, true); return nil }
+func (c *Txn) Delete(key []byte) lib.ErrorI { c.update(lib.BytesToString(key), nil, true); return nil }
 
 // update() modifies or adds an operation for a key in the in-memory operations and maintains order
 func (c *Txn) update(key string, v []byte, delete bool) {
@@ -105,12 +108,16 @@ func (c *Txn) Discard() { c.ops, c.sorted, c.sortedLen = nil, nil, 0 }
 // Write() flushes the in-memory operations to the parent store and clears in-memory changes
 func (c *Txn) Write() (err lib.ErrorI) {
 	for k, v := range c.ops {
+		sk, er := lib.StringToBytes(k)
+		if er != nil {
+			return er
+		}
 		if v.delete {
-			if err = c.StoreI.Delete([]byte(k)); err != nil {
+			if err = c.StoreI.Delete(sk); err != nil {
 				return
 			}
 		} else {
-			if err = c.StoreI.Set([]byte(k), v.value); err != nil {
+			if err = c.StoreI.Set(sk, v.value); err != nil {
 				return
 			}
 		}
@@ -135,7 +142,7 @@ type TxnIterator struct {
 
 // newTxnIterator() initializes a new merged iterator for traversing both the in-memory operations and parent store
 func newTxnIterator(parent lib.IteratorI, t txn, prefix []byte, reverse bool) *TxnIterator {
-	return (&TxnIterator{parent: parent, txn: t, prefix: string(prefix), reverse: reverse}).First()
+	return (&TxnIterator{parent: parent, txn: t, prefix: lib.BytesToString(prefix), reverse: reverse}).First()
 }
 
 // First() positions the iterator at the first valid entry based on the traversal direction
@@ -261,7 +268,10 @@ func (c *TxnIterator) txnInvalid() bool {
 }
 
 // txnKey() returns the key of the current in-memory operation
-func (c *TxnIterator) txnKey() []byte { return []byte(c.sorted[c.index]) }
+func (c *TxnIterator) txnKey() []byte {
+	bz, _ := lib.StringToBytes(c.sorted[c.index])
+	return bz
+}
 
 // txnValue() returns the value of the current in-memory operation
 func (c *TxnIterator) txnValue() op { return c.ops[c.sorted[c.index]] }
@@ -291,7 +301,8 @@ func (c *TxnIterator) seek() *TxnIterator {
 
 // revSeek() positions the iterator at the last entry that matches the prefix in reverse order.
 func (c *TxnIterator) revSeek() *TxnIterator {
-	endPrefix := string(prefixEnd([]byte(c.prefix)))
+	bz, _ := lib.StringToBytes(c.prefix)
+	endPrefix := lib.BytesToString(prefixEnd(bz))
 	c.index = sort.Search(c.sortedLen, func(i int) bool { return c.sorted[i] >= endPrefix }) - 1
 	return c
 }

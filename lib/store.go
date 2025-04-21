@@ -21,6 +21,8 @@ type StoreI interface {
 	Commit() (root []byte, err ErrorI)           // save the store and increment the height
 	Discard()                                    // discard the underlying writer
 	Reset()                                      // reset the underlying writer
+	ShouldPartition() bool                       // check if should partition or not
+	Partition()                                  // move keys from the latest partition to the historical partition
 	Close() ErrorI                               // gracefully stop the database
 }
 

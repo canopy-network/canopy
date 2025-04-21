@@ -190,26 +190,17 @@ func (s *Server) updateRootChainHeight(state *fsm.StateMachine, rootChainHeight 
 	// if a new height received
 	s.logger.Infof("New RootChain height %d detected!", *rootChainHeight)
 	// execute the requests to get the base chain information
-	for retry := lib.NewRetry(s.config.RootChainPollMS, 3); retry.WaitAndDoRetry(); {
+	for retry := lib.NewRetry(s.config.RootChainPollMS, 10); retry.WaitAndDoRetry(); {
 		s.logger.Infof("Retrieved root height info for %d!", *rootChainHeight)
 		// retrieve the root-Chain info
 		rootChainInfo, e := s.remoteCallbacks.RootChainInfo(*rootChainHeight, s.config.ChainId)
-		if e == nil {
+		if e == nil && rootChainInfo != nil && rootChainInfo.ValidatorSet.NumValidators != 0 {
 			// update the controller with new root-Chain info
 			s.controller.UpdateRootChainInfo(rootChainInfo)
 			s.logger.Info("Updated RootChain information")
 			break
 		}
 		s.logger.Errorf("GetRootChainInfo failed with err %s", e.Error())
-		// update with empty root-chain info to stop consensus
-		s.controller.UpdateRootChainInfo(&lib.RootChainInfo{
-			RootChainId:      consParams.RootChainId,
-			Height:           *rootChainHeight,
-			ValidatorSet:     lib.ValidatorSet{},
-			LastValidatorSet: lib.ValidatorSet{},
-			LotteryWinner:    &lib.LotteryWinner{},
-			Orders:           &lib.OrderBook{},
-		})
 	}
 	return
 }

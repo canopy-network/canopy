@@ -39,12 +39,12 @@ type BFT struct {
 	PublicKey  []byte             // self consensus public key
 	PrivateKey crypto.PrivateKeyI // self consensus private key
 	Config     lib.Config         // self configuration
+	Metrics    *lib.Metrics       // telemetry
 	log        lib.LoggerI        // logging
 }
 
 // New() creates a new instance of HotstuffBFT for a specific Committee
-func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64,
-	con Controller, vdfEnabled bool, l lib.LoggerI) (*BFT, lib.ErrorI) {
+func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con Controller, vdfEnabled bool, m *lib.Metrics, l lib.LoggerI) (*BFT, lib.ErrorI) {
 	// determine if using a Verifiable Delay Function for long-range-attack protection
 	var vdf *lib.VDFService
 	// calculate the targetTime from commitProcess and set the VDF
@@ -75,6 +75,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64,
 		syncing:           con.Syncing(),
 		PhaseTimer:        lib.NewTimer(),
 		VDFService:        vdf,
+		Metrics:           m,
 		HighVDF:           new(crypto.VDF),
 	}, nil
 }
@@ -594,6 +595,8 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 	b.Height = b.Controller.ChainHeight()
 	// update canopy height
 	b.RootHeight = b.Controller.RootChainHeight()
+	// Update BFT metrics
+	b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight)
 	// update the validator set
 	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
 	if err != nil {
@@ -752,6 +755,7 @@ func (b *BFT) SelfIsValidator() bool {
 // RunVDF() runs the verifiable delay service
 func (b *BFT) RunVDF(seed []byte) (err lib.ErrorI) {
 	if !b.Config.RunVDF {
+		b.log.Infof("RunVDF enabled in RunVDF")
 		return
 	}
 	// if the vdf seed is nil

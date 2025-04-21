@@ -30,7 +30,7 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const transport, dialTimeout = "tcp", time.Second
+const transport, dialTimeout, minPeerTick = "tcp", time.Second, 100 * time.Millisecond
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
@@ -43,11 +43,12 @@ type P2P struct {
 	maxMembersPerCommittee int
 	bannedIPs              []net.IPAddr // banned IPs (non-string)
 	config                 lib.Config
+	metrics                *lib.Metrics
 	log                    lib.LoggerI
 }
 
 // New() creates an initialized pointer instance of a P2P object
-func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, c lib.Config, l lib.LoggerI) *P2P {
+func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c lib.Config, l lib.LoggerI) *P2P {
 	// initialize the peer book
 	peerBook := NewPeerBook(p.PublicKey().Bytes(), c, l)
 	// make inbound multiplexed channels
@@ -72,9 +73,10 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, c lib.Config, l li
 	return &P2P{
 		privateKey:             p,
 		channels:               channels,
+		metrics:                m,
 		config:                 c,
 		meta:                   meta.Sign(p),
-		PeerSet:                NewPeerSet(c, p, l),
+		PeerSet:                NewPeerSet(c, p, m, l),
 		book:                   peerBook,
 		MustConnectsReceiver:   make(chan []*lib.PeerAddress, maxChanSize),
 		maxMembersPerCommittee: int(maxMembersPerCommittee),
@@ -94,6 +96,8 @@ func (p *P2P) Start() {
 	go p.ListenForInboundPeers(&lib.PeerAddress{NetAddress: p.config.ListenAddress})
 	// Dials external outbound peers
 	go p.DialForOutboundPeers()
+	// Wait until peers reaches minimum count
+	p.WaitForMinimumPeers()
 }
 
 // Stop() stops the P2P service
@@ -382,6 +386,21 @@ func (p *P2P) ID() *lib.PeerAddress {
 		PublicKey:  p.privateKey.PublicKey().Bytes(),
 		NetAddress: p.config.ExternalAddress,
 		PeerMeta:   p.meta,
+	}
+}
+
+// WaitForMinimumPeers() doesn't return until the minimum peer count is reached
+// This may be useful when coordinating network starts
+func (p *P2P) WaitForMinimumPeers() {
+	ticker := time.NewTicker(minPeerTick)
+	defer ticker.Stop()
+	// every 'tick'
+	for range ticker.C {
+		// if reached the minimum number of peers
+		if p.PeerCount() >= p.config.MinimumPeersToStart {
+			// exit
+			return
+		}
 	}
 }
 

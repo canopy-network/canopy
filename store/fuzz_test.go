@@ -31,7 +31,7 @@ func TestFuzz(t *testing.T) {
 	defer cleanup()
 	defer db.Close()
 	keys := make([]string, 0)
-	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), stateStorePrefix)
+	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), []byte(latestStatePrefix))
 	for i := 0; i < 1000; i++ {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
@@ -43,7 +43,7 @@ func TestFuzzTxn(t *testing.T) {
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
-	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), stateStorePrefix)
+	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), []byte(latestStatePrefix))
 	for i := 0; i < 1000; i++ {
 		doRandomOperation(t, store, compareStore, &keys)
 	}

@@ -501,7 +501,7 @@ func newTestP2PNodeWithConfig(t *testing.T, c lib.Config, noLog ...bool) (n test
 	if len(noLog) == 1 && noLog[0] == true {
 		logger = lib.NewNullLogger()
 	}
-	n.P2P = New(n.priv, 1, c, logger)
+	n.P2P = New(n.priv, 1, nil, c, logger)
 	return
 }
 

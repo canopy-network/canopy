@@ -25,6 +25,7 @@ const txsBySender = "/v1/query/txs-by-sender";
 const txsByRec = "/v1/query/txs-by-rec";
 const txsByHeightPath = "/v1/query/txs-by-height";
 const pendingPath = "/v1/query/pending";
+const ecoParamsPath = "/v1/query/eco-params";
 const validatorsPath = "/v1/query/validators";
 const accountsPath = "/v1/query/accounts";
 const poolPath = "/v1/query/pool";
@@ -71,6 +72,10 @@ export async function GET(url, path) {
 }
 
 // REQUEST OBJECTS BELOW
+
+function chainRequest(chain_id) {
+  return JSON.stringify({ chainId: chain_id });
+}
 
 function heightRequest(height) {
   return JSON.stringify({ height: height });
@@ -174,6 +179,10 @@ export function Pending(page, _) {
   return POST(rpcURL, pageAddrReq(page, ""), pendingPath);
 }
 
+export function EcoParams(chain_id) {
+  return POST(rpcURL, chainRequest(chain_id), ecoParamsPath);
+}
+
 export function Orders(chain_id) {
   return POST(rpcURL, heightAndIDRequest(0, chain_id), ordersPath);
 }
@@ -226,6 +235,7 @@ export async function getCardData() {
   cardData.supply = await Supply(0, 0);
   cardData.pool = await DAO(0, 0);
   cardData.params = await Params(0, 0);
+  cardData.ecoParams = await EcoParams(0, 0);
   return cardData;
 }
 

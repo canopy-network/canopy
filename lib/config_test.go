@@ -16,6 +16,7 @@ func TestDefaultConfig(t *testing.T) {
 		P2PConfig:          DefaultP2PConfig(),
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
+		MetricsConfig:      DefaultMetricsConfig(),
 	}
 	// execute the function call
 	got := DefaultConfig()

@@ -64,17 +64,17 @@ func MerkleTree(items [][]byte) (root []byte, store [][]byte, err error) {
 	// offset index = after the last transaction and adjusted to the next power of two.
 	for i := 0; i < size-1; i += 2 {
 		switch {
-		// normal case, parent = hash(concat(left, right))
+		// normal case, parent = hash(Concat(left, right))
 		default:
-			store[offset] = Hash(append(store[i], store[i+1]...))
+			store[offset] = Hash(concat(store[i], store[i+1]))
 
 		// no left or right child, so the parent is going to be nil
 		case store[i] == nil:
 			store[offset] = nil
 
-		// no right child, parent = hash(concat(left, left))
+		// no right child, parent = hash(Concat(left, left))
 		case store[i+1] == nil:
-			store[offset] = Hash(append(store[i], store[i]...))
+			store[offset] = Hash(concat(store[i], store[i]))
 		}
 		offset++
 	}
@@ -91,4 +91,12 @@ func nextPowerOfTwo(v int) int {
 	v |= v >> 16
 	v++
 	return v
+}
+
+// concat() concatenates two byte slices
+func concat(a, b []byte) []byte {
+	out := make([]byte, len(a)+len(b))
+	copy(out, a)
+	copy(out[len(a):], b)
+	return out
 }

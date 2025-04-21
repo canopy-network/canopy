@@ -2,29 +2,29 @@ package fsm
 
 import (
 	"bytes"
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 /* This file contains logic for 'committees' or validator sets responsible for 'nestedChain' consensus */
 
-// FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
-func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
+func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
 	// get governance params that are needed to complete this operation
 	govParams, err := s.GetParamsGov()
 	if err != nil {
-		return err
+		return
 	}
 	// get the committees that `qualify` for subsidization
 	subsidizedChainIds, err := s.GetSubsidizedCommittees()
 	if err != nil {
-		return err
+		return
 	}
 	// ensure self chain is always a 'paid' chain even if there are no validators
-	if !slices.Contains(subsidizedChainIds, s.Config.ChainId) {
+	if !slices.Contains(subsidizedChainIds, chainId) {
 		// this ensures nested-chains always receive Native Token payment to their pool
-		subsidizedChainIds = append(subsidizedChainIds, s.Config.ChainId)
+		subsidizedChainIds = append(subsidizedChainIds, chainId)
 	}
 	// calculate the number of halvenings
 	halvenings := s.height / uint64(BlocksPerHalvening)
@@ -34,20 +34,40 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	subsidizedCount := uint64(len(subsidizedChainIds))
 	// if there are no subsidized committees or no mint amount
 	if subsidizedCount == 0 || totalMintAmount == 0 {
-		return nil
+		err = lib.ErrNoSubsidizedCommittees(chainId)
+		return
 	}
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
-	daoCut := totalMintAmount - mintAmountAfterDAOCut
+	daoCut = totalMintAmount - mintAmountAfterDAOCut
+
+	// calculate the amount given to each qualifying committee
+	// mintAmountPerCommittee may truncate, but that's expected,
+	// less mint will be created and effectively 'burned'
+	mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
+
+	return daoCut, totalMintAmount, mintAmountPerCommittee, nil
+}
+
+// FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
+func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
+	daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
+	if err != nil {
+		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
+			return nil
+		}
+		return err
+	}
 	// mint to the DAO account
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
 	}
-	// calculate the amount given to each qualifying committee
-	// mintAmountPerCommittee may truncate, but that's expected,
-	// less mint will be created and effectively 'burned'
-	mintAmountPerCommittee := mintAmountAfterDAOCut / subsidizedCount
+	// get the committees that `qualify` for subsidization
+	subsidizedChainIds, err := s.GetSubsidizedCommittees()
+	if err != nil {
+		return err
+	}
 	// issue that amount to each subsidized committee
 	for _, chainId := range subsidizedChainIds {
 		if err = s.MintToPool(chainId, mintAmountPerCommittee); err != nil {

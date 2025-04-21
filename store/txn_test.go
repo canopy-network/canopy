@@ -266,7 +266,7 @@ func TestTxnIterate(t *testing.T) {
 	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
 	require.NoError(t, err)
 	parent, err := NewStoreInMemory(lib.NewDefaultLogger())
-	compare := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), stateStorePrefix)
+	compare := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), []byte(latestStatePrefix))
 	test := NewTxn(parent)
 	defer func() { parent.Close(); compare.Close(); db.Close(); test.Discard() }()
 	require.NoError(t, test.Set([]byte("a"), []byte("a")))

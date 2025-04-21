@@ -155,6 +155,84 @@ func (x *Packet) GetBytes() []byte {
 	return nil
 }
 
+// Ping is a message sent by a node to check the availability or responsiveness of another peer
+type Ping struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *Ping) Reset() {
+	*x = Ping{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_p2p_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Ping) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Ping) ProtoMessage() {}
+
+func (x *Ping) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Ping.ProtoReflect.Descriptor instead.
+func (*Ping) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{2}
+}
+
+// Pong is a response message sent back to acknowledge receipt of a Ping message, confirming the peer is active
+type Pong struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *Pong) Reset() {
+	*x = Pong{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_p2p_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Pong) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pong) ProtoMessage() {}
+
+func (x *Pong) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pong.ProtoReflect.Descriptor instead.
+func (*Pong) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{3}
+}
+
 // PeerBookRequest is a peer exchange request message that enables new peer discovery via swapping
 type PeerBookRequestMessage struct {
 	state         protoimpl.MessageState
@@ -165,7 +243,7 @@ type PeerBookRequestMessage struct {
 func (x *PeerBookRequestMessage) Reset() {
 	*x = PeerBookRequestMessage{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_p2p_proto_msgTypes[2]
+		mi := &file_p2p_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -178,7 +256,7 @@ func (x *PeerBookRequestMessage) String() string {
 func (*PeerBookRequestMessage) ProtoMessage() {}
 
 func (x *PeerBookRequestMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[2]
+	mi := &file_p2p_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +269,7 @@ func (x *PeerBookRequestMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerBookRequestMessage.ProtoReflect.Descriptor instead.
 func (*PeerBookRequestMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{2}
+	return file_p2p_proto_rawDescGZIP(), []int{4}
 }
 
 // PeerBookResponseMessage is a peer exchange response message sent back after receiving a PeerBookRequestMessage
@@ -208,7 +286,7 @@ type PeerBookResponseMessage struct {
 func (x *PeerBookResponseMessage) Reset() {
 	*x = PeerBookResponseMessage{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_p2p_proto_msgTypes[3]
+		mi := &file_p2p_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -221,7 +299,7 @@ func (x *PeerBookResponseMessage) String() string {
 func (*PeerBookResponseMessage) ProtoMessage() {}
 
 func (x *PeerBookResponseMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[3]
+	mi := &file_p2p_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +312,7 @@ func (x *PeerBookResponseMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerBookResponseMessage.ProtoReflect.Descriptor instead.
 func (*PeerBookResponseMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{3}
+	return file_p2p_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PeerBookResponseMessage) GetBook() []*BookPeer {
@@ -262,7 +340,7 @@ type BookPeer struct {
 func (x *BookPeer) Reset() {
 	*x = BookPeer{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_p2p_proto_msgTypes[4]
+		mi := &file_p2p_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -275,7 +353,7 @@ func (x *BookPeer) String() string {
 func (*BookPeer) ProtoMessage() {}
 
 func (x *BookPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[4]
+	mi := &file_p2p_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +366,7 @@ func (x *BookPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BookPeer.ProtoReflect.Descriptor instead.
 func (*BookPeer) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{4}
+	return file_p2p_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BookPeer) GetAddress() *lib.PeerAddress {
@@ -321,7 +399,8 @@ var file_p2p_proto_rawDesc = []byte{
 	0x52, 0x08, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x65, 0x6f,
 	0x66, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x03, 0x65, 0x6f, 0x66, 0x12, 0x14, 0x0a, 0x05,
 	0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x05, 0x62, 0x79, 0x74,
-	0x65, 0x73, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x65, 0x65, 0x72, 0x42, 0x6f, 0x6f, 0x6b, 0x52, 0x65,
+	0x65, 0x73, 0x22, 0x06, 0x0a, 0x04, 0x50, 0x69, 0x6e, 0x67, 0x22, 0x06, 0x0a, 0x04, 0x50, 0x6f,
+	0x6e, 0x67, 0x22, 0x18, 0x0a, 0x16, 0x50, 0x65, 0x65, 0x72, 0x42, 0x6f, 0x6f, 0x6b, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x73, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x3e, 0x0a, 0x17,
 	0x50, 0x65, 0x65, 0x72, 0x42, 0x6f, 0x6f, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
 	0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x23, 0x0a, 0x04, 0x62, 0x6f, 0x6f, 0x6b, 0x18,
@@ -351,22 +430,24 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_p2p_proto_goTypes = []interface{}{
 	(*Envelope)(nil),                // 0: types.Envelope
 	(*Packet)(nil),                  // 1: types.Packet
-	(*PeerBookRequestMessage)(nil),  // 2: types.PeerBookRequestMessage
-	(*PeerBookResponseMessage)(nil), // 3: types.PeerBookResponseMessage
-	(*BookPeer)(nil),                // 4: types.BookPeer
-	(*anypb.Any)(nil),               // 5: google.protobuf.Any
-	(lib.Topic)(0),                  // 6: types.Topic
-	(*lib.PeerAddress)(nil),         // 7: types.PeerAddress
+	(*Ping)(nil),                    // 2: types.Ping
+	(*Pong)(nil),                    // 3: types.Pong
+	(*PeerBookRequestMessage)(nil),  // 4: types.PeerBookRequestMessage
+	(*PeerBookResponseMessage)(nil), // 5: types.PeerBookResponseMessage
+	(*BookPeer)(nil),                // 6: types.BookPeer
+	(*anypb.Any)(nil),               // 7: google.protobuf.Any
+	(lib.Topic)(0),                  // 8: types.Topic
+	(*lib.PeerAddress)(nil),         // 9: types.PeerAddress
 }
 var file_p2p_proto_depIdxs = []int32{
-	5, // 0: types.Envelope.payload:type_name -> google.protobuf.Any
-	6, // 1: types.Packet.stream_id:type_name -> types.Topic
-	4, // 2: types.PeerBookResponseMessage.book:type_name -> types.BookPeer
-	7, // 3: types.BookPeer.Address:type_name -> types.PeerAddress
+	7, // 0: types.Envelope.payload:type_name -> google.protobuf.Any
+	8, // 1: types.Packet.stream_id:type_name -> types.Topic
+	6, // 2: types.PeerBookResponseMessage.book:type_name -> types.BookPeer
+	9, // 3: types.BookPeer.Address:type_name -> types.PeerAddress
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -405,7 +486,7 @@ func file_p2p_proto_init() {
 			}
 		}
 		file_p2p_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeerBookRequestMessage); i {
+			switch v := v.(*Ping); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -417,7 +498,7 @@ func file_p2p_proto_init() {
 			}
 		}
 		file_p2p_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PeerBookResponseMessage); i {
+			switch v := v.(*Pong); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -429,6 +510,30 @@ func file_p2p_proto_init() {
 			}
 		}
 		file_p2p_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PeerBookRequestMessage); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_p2p_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PeerBookResponseMessage); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_p2p_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BookPeer); i {
 			case 0:
 				return &v.state
@@ -447,7 +552,7 @@ func file_p2p_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_p2p_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

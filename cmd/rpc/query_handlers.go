@@ -45,6 +45,52 @@ func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Par
 	})
 }
 
+// Height response with the latest block
+func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Unmarshal the requested chain id
+	post := new(chainRequest)
+	if ok := unmarshal(w, r, post); !ok {
+		return
+	}
+	// Create a read-only state for the latest block and determine economic parameters
+	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
+		// Get the lottery winner
+		delegate, err := s.controller.GetRootChainLotteryWinner(state.Height())
+		// if an error occurred
+		if err != nil {
+			return err
+		}
+
+		// Get the root id
+		rootChainId, err := state.GetRootChainId()
+		if err != nil {
+			return err
+		}
+		// Find proposer cut
+		proposerCut := uint64(100 - delegate.Cut)
+		// Remove sub-validator and sub-delegate cuts if requested chain id is non-root id
+		if post.ChainId != rootChainId {
+			proposerCut -= delegate.Cut // sub-validator
+			proposerCut -= delegate.Cut // sub-delegate
+		}
+
+		daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
+		if err != nil {
+			write(w, err.Error(), http.StatusBadRequest)
+			return nil
+		}
+
+		write(w, economicParameterResponse{
+			DAOCut:           daoCut,
+			MintPerBlock:     totalMint,
+			MintPerCommittee: committeeMint,
+			ProposerCut:      proposerCut,
+			DelegateCut:      delegate.Cut,
+		}, http.StatusOK)
+		return nil
+	})
+}
+
 // BlockByHeight responds with the block data found at a specific height
 func (s *Server) BlockByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
@@ -707,7 +753,7 @@ func (s *Server) pageIndexer(w http.ResponseWriter, r *http.Request, callback fu
 // setupStore creates a new store from the state machine's database. This store must be closed safely with Discard()
 func (s *Server) setupStore(w http.ResponseWriter) (lib.StoreI, bool) {
 	db := s.controller.FSM.Store().(lib.StoreI).DB()
-	st, err := store.NewStoreWithDB(db, s.logger, false)
+	st, err := store.NewStoreWithDB(db, nil, s.logger, false)
 	if err != nil {
 		write(w, lib.ErrNewStore(err), http.StatusInternalServerError)
 		return nil, false

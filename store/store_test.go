@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -128,60 +127,79 @@ func TestIteratorCommitAndPrefixed(t *testing.T) {
 	it4.Close()
 }
 
-func TestUnsafeRollback(t *testing.T) {
-	store, _, cleanup := testStore(t)
-	defer cleanup()
-	for i := 0; i < 100; i++ {
-		require.NoError(t, store.Set([]byte("key"), []byte(fmt.Sprintf("%d", i+1))))
-		_, err := store.Commit()
-		require.NoError(t, err)
+func TestPartitionHeight(t *testing.T) {
+	tests := []struct {
+		name     string
+		height   uint64
+		expected uint64
+	}{
+		{
+			name:     "zero",
+			height:   0,
+			expected: 1,
+		},
+		{
+			name:     "less than partition frequency",
+			height:   9999,
+			expected: 1,
+		},
+		{
+			name:     "greater than partition frequency",
+			height:   10001,
+			expected: 10000,
+		},
+		{
+			name:     "2x partition frequency",
+			height:   27894,
+			expected: 20000,
+		},
 	}
-	require.Equal(t, uint64(100), store.Version())
-	store.UnsafeRollback(1)
-	k, err := store.Get([]byte("key"))
-	require.NoError(t, err)
-	require.Equal(t, "1", string(k))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, partitionHeight(test.height), test.expected)
+		})
+	}
 }
 
-func TestRollback(t *testing.T) { // TODO fix this functionality
-	logger := lib.NewDefaultLogger()
-	s, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
+func TestHistoricalPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		height   uint64
+		expected []byte
+	}{
+		{
+			name:     "zero",
+			height:   0,
+			expected: append([]byte(historicStatePrefix), binary.BigEndian.AppendUint64(nil, 1)...),
+		},
+		{
+			name:     "less than partition frequency",
+			height:   9999,
+			expected: append([]byte(historicStatePrefix), binary.BigEndian.AppendUint64(nil, 1)...),
+		},
+		{
+			name:     "greater than partition frequency",
+			height:   10001,
+			expected: append([]byte(historicStatePrefix), binary.BigEndian.AppendUint64(nil, 10000)...),
+		},
+		{
+			name:     "2x partition frequency",
+			height:   27894,
+			expected: append([]byte(historicStatePrefix), binary.BigEndian.AppendUint64(nil, 20000)...),
+		},
 	}
-	store, err := NewStore(filepath.Join(s, ".canopy/canopy"), logger)
-	if err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, []byte(historicalPrefix(test.height)), test.expected)
+		})
 	}
-	rollbackStore := store.(*Store)
-	rollbackStore.UnsafeRollback(14)
-	rollbackStore.Close()
-}
-
-func TestPrune(t *testing.T) {
-	t.Skip()
-	store, _, cleanup := testStore(t)
-	defer cleanup()
-	for i := 1000000; i < 1000100; i++ {
-		store.version = uint64(i)
-		require.NoError(t, store.Set([]byte("key"), []byte(fmt.Sprintf("%d", i+1))))
-		_, err := store.Commit()
-		require.NoError(t, err)
-	}
-	require.Equal(t, uint64(1000100), store.Version())
-	store.Prune(1000099)
-	readOnly, err := store.NewReadOnly(10000100)
-	require.NoError(t, err)
-	got, err := readOnly.Get([]byte("key"))
-	require.NoError(t, err)
-	fmt.Println(string(got))
 }
 
 func testStore(t *testing.T) (*Store, *badger.DB, func()) {
 	db, err := badger.OpenManaged(badger.DefaultOptions("").
 		WithInMemory(true).WithLoggingLevel(badger.ERROR))
 	require.NoError(t, err)
-	store, err := NewStoreWithDB(db, lib.NewDefaultLogger(), true)
+	store, err := NewStoreWithDB(db, nil, lib.NewDefaultLogger(), true)
 	require.NoError(t, err)
 	return store, db, func() { store.Close() }
 }

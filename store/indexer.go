@@ -265,11 +265,15 @@ func (t *Indexer) GetDoubleSigners() (ds []*lib.DoubleSigner, err lib.ErrorI) {
 		// key split should be dsPrefix / height / address
 		address, height := segments[1], t.decodeBigEndian(segments[2])
 		// add to results
-		results[string(address)] = append(results[string(address)], height)
+		results[lib.BytesToString(address)] = append(results[lib.BytesToString(address)], height)
 	}
 	for address, heights := range results {
+		addr, e := lib.StringToBytes(address)
+		if e != nil {
+			return nil, e
+		}
 		ds = append(ds, &lib.DoubleSigner{
-			Id:      []byte(address),
+			Id:      addr,
 			Heights: heights,
 		})
 	}
