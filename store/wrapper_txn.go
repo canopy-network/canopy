@@ -2,10 +2,11 @@ package store
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
 	"reflect"
 	"unsafe"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/dgraph-io/badger/v4"
 )
 
 const (

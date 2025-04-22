@@ -3,13 +3,15 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"github.com/alecthomas/units"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
 	"math"
 	"path/filepath"
 	"sync/atomic"
+
+	"github.com/alecthomas/units"
+	"github.com/canopy-network/canopy/lib"
+	"github.com/dgraph-io/badger/v4"
 )
 
 const (
@@ -297,8 +299,13 @@ func (s *Store) Partition() {
 			// unset isGarbageCollecting once complete
 			defer s.isGarbageCollecting.Store(false)
 			// trigger garbage collector to prune keys
-			if e := sc.db.RunValueLogGC(badgerGCRatio); e != nil {
-				return ErrGarbageCollectDB(e)
+			if gcErr := sc.db.RunValueLogGC(badgerGCRatio); gcErr != nil {
+				if errors.Is(gcErr, badger.ErrNoRewrite) {
+					sc.log.Debugf("%v - this is normal", gcErr)
+					// don't return an error here - this is an expected condition
+				} else {
+					return ErrGarbageCollectDB(gcErr)
+				}
 			}
 		}
 		// exit
