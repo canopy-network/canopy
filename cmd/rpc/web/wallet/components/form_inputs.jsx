@@ -351,39 +351,49 @@ const FormMultiSelect = ({ placeholder, validate, onInputChange, input }) => {
             />
             <Dropdown.Menu as={MultiSelectMenu} className="position-absolute px-3 w-100" label={input.label}>
               {/* Map dropdown items that are selected */}
-              {selectedOptions.map((opt) => (
-                <Dropdown.Item
-                  key={opt.value}
-                  eventKey={opt.value.toString()}
-                  className="d-flex justify-content-between align-items-center"
-                >
-                  <span>{`${opt.value} ${opt.context}`}</span>
-                  <Form.Check
-                    type="checkbox"
-                    checked={true}
-                    onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="multicheckbox"
-                  />
-                </Dropdown.Item>
-              ))}
+              {selectedOptions.map((opt) => {
+                const isSelected = true;
+                return (
+                  <Dropdown.Item
+                    key={opt.value}
+                    eventKey={opt.value.toString()}
+                    className="d-flex justify-content-between align-items-center"
+                    onClick={(e) => {
+                      handleCheckboxChange(opt, !isSelected, e);
+                    }}
+                  >
+                    <span>{`${opt.value} ${opt.context}`}</span>
+                    <Form.Check
+                      type="checkbox"
+                      checked={isSelected}
+                      onClick={(e) => handleCheckboxChange(opt, !isSelected, e)}
+                      aria-label="multicheckbox"
+                    />
+                  </Dropdown.Item>
+                );
+              })}
               {selectedOptions.length > 0 && unselectedOptions.length > 0 && <Dropdown.Divider key="divider" />}
-              {unselectedOptions.map((opt) => (
-                <Dropdown.Item
-                  key={opt.value}
-                  eventKey={opt.value.toString()}
-                  className="d-flex justify-content-between align-items-center"
-                >
-                  <span>{`${opt.value} ${opt.context}`}</span>
-                  <Form.Check
-                    type="checkbox"
-                    checked={false}
-                    onChange={(e) => handleCheckboxChange(opt, e.target.checked, e)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="multicheckbox"
-                  />
-                </Dropdown.Item>
-              ))}
+              {unselectedOptions.map((opt) => {
+                const isSelected = false;
+                return (
+                  <Dropdown.Item
+                    key={opt.value}
+                    eventKey={opt.value.toString()}
+                    className="d-flex justify-content-between align-items-center"
+                    onClick={(e) => {
+                      handleCheckboxChange(opt, !isSelected, e);
+                    }}
+                  >
+                    <span>{`${opt.value} ${opt.context}`}</span>
+                    <Form.Check
+                      type="checkbox"
+                      checked={isSelected}
+                      onClick={(e) => handleCheckboxChange(opt, !isSelected, e)}
+                      aria-label="multicheckbox"
+                    />
+                  </Dropdown.Item>
+                );
+              })}
             </Dropdown.Menu>
           </div>
         </Dropdown>
