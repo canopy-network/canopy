@@ -1,3 +1,6 @@
+// forwardRef is deprecated and is not available on react 19 onwards
+// TODO: Upgrade to react 19 and replace forwardRef with the recommended alternative
+// https://react.dev/reference/react/forwardRef
 import { useState, useEffect, forwardRef, Children } from "react";
 import { Button, Form, InputGroup, Dropdown } from "react-bootstrap";
 import {
