@@ -697,18 +697,11 @@ function generateCommitteeList(knownCommittees, stakedCommittees) {
   if (!Array.isArray(knownCommittees) || !Array.isArray(stakedCommittees) || knownCommittees.length === 0) {
     return [];
   }
-
-  let j = 0;
-  const n = stakedCommittees.length;
-
-  return knownCommittees.map((chainID) => {
-    while (j < n && stakedCommittees[j] < chainID) {
-      j++;
-    }
-
-    return {
-      value: chainID,
-      context: j < n && stakedCommittees[j] === chainID ? "(staked)" : "(not staked)",
-    };
-  });
+  // convert to set for easier lookups
+  const stakedSet = new Set(stakedCommittees);
+  // verify whether each known committee is actually staked
+  return knownCommittees.map((chainID) => ({
+    value: chainID,
+    context: stakedSet.has(chainID) ? "(staked)" : "(not staked)",
+  }));
 }
