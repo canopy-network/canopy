@@ -5,6 +5,7 @@
 // - Constructor accepts a lib.LoggerI type that it uses for logging
 // - Connects to an ethereum node
 // - Listens for new block headers
+// - Before you do any processing, verify that you haven't processed this block number already.
 // - When receiving a new block header, fetches the latest finalized block number
 // - Fetches that block
 // - Sends block through channel
@@ -34,9 +35,8 @@
 // package name is eth
 
 // START
-// Package eth provides an Ethereum block listener implementation that connects to
-// an Ethereum node, listens for new block headers, and fetches the latest finalized
-// blocks to send through a channel.
+// Package eth provides functionality for interacting with Ethereum blockchain
+// This package contains an ethereum block listener that watches for new finalized blocks
 package eth
 
 import (
@@ -44,165 +44,187 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
-
-	wstypes "github.com/canopy-network/canopy/cmd/rpc/types"
+	
 	"github.com/canopy-network/canopy/lib"
+	wstypes "github.com/canopy-network/canopy/cmd/rpc/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// FinalizedBlock represents the response from eth_getBlockByNumber for the finalized block
+// FinalizedBlock represents the response from the eth_getBlockByNumber RPC call
 type FinalizedBlock struct {
 	Number string `json:"number"`
 }
 
-// EthBlockListener is responsible for listening to new Ethereum blocks and
-// forwarding the finalized blocks through a channel.
+// EthBlockListener listens for new Ethereum blocks and processes them
 type EthBlockListener struct {
-	rpcURL       string
-	wsURL        string
-	blockCh      chan wstypes.BlockI
-	logger       lib.LoggerI
-	rpcClient    *ethclient.Client
-	wsClient     *ethclient.Client
-	rpcRawClient *rpc.Client
-	ctx          context.Context
-	cancel       context.CancelFunc
+	rpcURL       string                 // URL for RPC connections
+	wsURL        string                 // URL for WebSocket connections
+	blockChan    chan wstypes.BlockI    // Channel to send processed blocks
+	logger       lib.LoggerI            // Logger interface for logging messages
+	rpcClient    *rpc.Client            // RPC client for standard HTTP requests
+	wsClient     *rpc.Client            // WebSocket client for subscriptions
+	ethClient    *ethclient.Client      // Ethereum client for blockchain interactions
+	lastProcessedBlock uint64           // Last block number that has been processed
 }
 
-// NewEthBlockListener creates a new instance of EthBlockListener.
-func NewEthBlockListener(rpcURL, wsURL string, blockCh chan wstypes.BlockI, logger lib.LoggerI) *EthBlockListener {
-	ctx, cancel := context.WithCancel(context.Background())
-
+// NewEthBlockListener creates a new ethereum block listener
+func NewEthBlockListener(rpcURL, wsURL string, blockChan chan wstypes.BlockI, logger lib.LoggerI) *EthBlockListener {
+	// Create and return a new listener instance
 	return &EthBlockListener{
-		rpcURL:  rpcURL,
-		wsURL:   wsURL,
-		blockCh: blockCh,
-		logger:  logger,
-		ctx:     ctx,
-		cancel:  cancel,
+		rpcURL:    rpcURL,
+		wsURL:     wsURL,
+		blockChan: blockChan,
+		logger:    logger,
+		lastProcessedBlock: 0,
 	}
 }
 
-// Start initiates the EthBlockListener to connect to Ethereum node and
-// begin listening for new blocks.
-func (e *EthBlockListener) Start() error {
-	e.logger.Info("Starting Ethereum block listener")
-
+// Start initiates the connection to the ethereum node and begins listening for new blocks
+func (l *EthBlockListener) Start(ctx context.Context) error {
+	// Connect to the Ethereum node via RPC
+	l.logger.Info("Connecting to Ethereum node via RPC")
 	var err error
-
-	// Connect to RPC client
-	e.rpcRawClient, err = rpc.Dial(e.rpcURL)
+	l.rpcClient, err = rpc.Dial(l.rpcURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to RPC client: %w", err)
+		return fmt.Errorf("failed to connect to Ethereum RPC: %w", err)
 	}
-	e.rpcClient = ethclient.NewClient(e.rpcRawClient)
-	e.logger.Infof("Connected to RPC endpoint: %s", e.rpcURL)
-
-	// Connect to WebSocket client
-	wsRawClient, err := rpc.Dial(e.wsURL)
+	
+	// Create an ethClient from the rpcClient
+	l.ethClient = ethclient.NewClient(l.rpcClient)
+	
+	// Connect to the Ethereum node via WebSocket
+	l.logger.Info("Connecting to Ethereum node via WebSocket")
+	l.wsClient, err = rpc.Dial(l.wsURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to WebSocket client: %w", err)
+		return fmt.Errorf("failed to connect to Ethereum WebSocket: %w", err)
 	}
-	e.wsClient = ethclient.NewClient(wsRawClient)
-	e.logger.Infof("Connected to WebSocket endpoint: %s", e.wsURL)
-
+	
 	// Subscribe to new block headers
+	l.logger.Info("Subscribing to new block headers")
 	headers := make(chan *types.Header)
-	sub, err := e.wsClient.SubscribeNewHead(e.ctx, headers)
+	sub, err := l.wsClient.EthSubscribe(ctx, headers, "newHeads")
 	if err != nil {
-		return fmt.Errorf("failed to subscribe to new block headers: %w", err)
+		return fmt.Errorf("failed to subscribe to new headers: %w", err)
 	}
-	e.logger.Info("Subscribed to new block headers")
-
-	// Start the listener loop
-	go e.listenForBlocks(headers, sub)
-
+	
+	// Start goroutine to handle new headers
+	go l.handleNewHeaders(ctx, headers, sub)
+	
 	return nil
 }
 
-// listenForBlocks handles incoming block headers and processes them.
-func (e *EthBlockListener) listenForBlocks(headers chan *types.Header, sub ethereum.Subscription) {
+// handleNewHeaders processes incoming block headers from the subscription
+func (l *EthBlockListener) handleNewHeaders(ctx context.Context, headers chan *types.Header, sub ethereum.Subscription) {
+	// Handle received headers and subscription errors
+	l.logger.Debug("Started handling new block headers")
+	
 	for {
 		select {
 		case err := <-sub.Err():
-			e.logger.Errorf("Subscription error: %v", err)
+			// Handle subscription error
+			l.logger.Errorf("Subscription error: %v", err)
 			return
-
+			
 		case header := <-headers:
-			e.logger.Debugf("Received new block header: %d", header.Number.Uint64())
-			e.processFinalizedBlock()
-
-		case <-e.ctx.Done():
-			e.logger.Info("Block listener stopped")
+			// Process new header
+			l.processHeader(ctx, header)
+			
+		case <-ctx.Done():
+			// Context was cancelled, stop processing
+			l.logger.Info("Context cancelled, stopping block listener")
 			return
 		}
 	}
 }
 
-// processFinalizedBlock fetches the latest finalized block and sends it through the channel.
-func (e *EthBlockListener) processFinalizedBlock() {
-	blockNumber, err := e.getLatestFinalizedBlockNumber()
+// processHeader handles a single block header
+func (l *EthBlockListener) processHeader(ctx context.Context, header *types.Header) {
+	// Log the received header
+	l.logger.Debugf("Received new block header: %d", header.Number.Uint64())
+	
+	// Get the latest finalized block number
+	finalizedBlockNum, err := l.getLatestFinalizedBlockNumber()
 	if err != nil {
-		e.logger.Errorf("Failed to get latest finalized block number: %v", err)
+		l.logger.Errorf("Failed to get latest finalized block number: %v", err)
 		return
 	}
-
-	e.logger.Infof("Latest finalized block number: %d", blockNumber)
-
-	block, err := e.fetchBlock(blockNumber)
-	if err != nil {
-		e.logger.Errorf("Failed to fetch block %d: %v", blockNumber, err)
+	
+	// Check if we've already processed this block
+	if finalizedBlockNum <= l.lastProcessedBlock {
+		l.logger.Debugf("Block %d already processed, current last processed: %d", 
+			finalizedBlockNum, l.lastProcessedBlock)
 		return
 	}
-
-	// Send the block through the channel
-	e.blockCh <- NewBlock(block)
-	e.logger.Infof("Sent block %d through channel", blockNumber)
+	
+	// Fetch and process the finalized block
+	l.fetchAndProcessBlock(ctx, finalizedBlockNum)
 }
 
-// getLatestFinalizedBlockNumber retrieves the latest finalized block number from the Ethereum node.
-func (e *EthBlockListener) getLatestFinalizedBlockNumber() (int64, error) {
+// getLatestFinalizedBlockNumber retrieves the latest finalized block number
+func (l *EthBlockListener) getLatestFinalizedBlockNumber() (uint64, error) {
+	// Get the latest finalized block number via RPC
+	l.logger.Debug("Getting latest finalized block number")
 	var b FinalizedBlock
-	err := e.rpcRawClient.Call(&b, "eth_getBlockByNumber", "finalized", true)
+	err := l.rpcClient.Call(&b, "eth_getBlockByNumber", "finalized", true)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get finality status: %w", err)
 	}
-
+	
+	// Parse the block number from hex string
 	number, err := strconv.ParseInt(b.Number, 0, 64)
 	if err != nil {
 		return 0, fmt.Errorf("error converting from hex to int: %w", err)
 	}
-
-	return number, nil
+	
+	l.logger.Debugf("Latest finalized block number: %d", number)
+	return uint64(number), nil
 }
 
-// fetchBlock retrieves a specific block by number from the Ethereum node.
-func (e *EthBlockListener) fetchBlock(blockNumber int64) (*types.Block, error) {
-	e.logger.Debugf("Fetching block %d", blockNumber)
-
-	block, err := e.rpcClient.BlockByNumber(e.ctx, big.NewInt(blockNumber))
+// fetchAndProcessBlock retrieves a block by number and sends it through the block channel
+func (l *EthBlockListener) fetchAndProcessBlock(ctx context.Context, blockNumber uint64) {
+	// Fetch the block by number
+	l.logger.Infof("Fetching block: %d", blockNumber)
+	blockNum := big.NewInt(int64(blockNumber))
+	block, err := l.ethClient.BlockByNumber(ctx, blockNum)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch block %d: %w", blockNumber, err)
+		l.logger.Errorf("Failed to fetch block %d: %v", blockNumber, err)
+		return
 	}
-
-	return block, nil
+	
+	// Convert to our block type and send through channel
+	l.logger.Debugf("Processing block %d with %d transactions", 
+		blockNumber, len(block.Transactions()))
+	
+	// Convert ethereum block to our BlockI interface
+	ourBlock := NewBlock(block)
+	
+	// Send the block through the channel
+	l.logger.Infof("Sending block %d to channel", blockNumber)
+	select {
+	case l.blockChan <- ourBlock:
+		// Block was sent successfully
+		l.logger.Debugf("Block %d sent successfully", blockNumber)
+		// Update the last processed block
+		l.lastProcessedBlock = blockNumber
+	case <-ctx.Done():
+		// Context was cancelled while sending
+		l.logger.Warn("Context cancelled while sending block to channel")
+		return
+	}
 }
 
-// Stop terminates the EthBlockListener.
-func (e *EthBlockListener) Stop() {
-	e.logger.Info("Stopping Ethereum block listener")
-	e.cancel()
-
-	if e.rpcClient != nil {
-		e.rpcClient.Close()
+// Stop closes the connections to the ethereum node
+func (l *EthBlockListener) Stop() {
+	// Clean up resources
+	l.logger.Info("Stopping Ethereum block listener")
+	if l.rpcClient != nil {
+		l.rpcClient.Close()
 	}
-
-	if e.wsClient != nil {
-		e.wsClient.Close()
+	if l.wsClient != nil {
+		l.wsClient.Close()
 	}
-
-	e.logger.Info("Ethereum block listener stopped")
 }
+```
