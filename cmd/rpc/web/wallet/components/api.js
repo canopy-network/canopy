@@ -56,6 +56,7 @@ const paramsPath = "/v1/query/params";
 const orderPath = "/v1/query/order";
 const txPath = "/v1/tx";
 const height = "/v1/query/height";
+const committeesDataPath = "/v1/query/committees-data";
 
 export async function GET(url, path) {
   return fetch(url + path, {
@@ -596,4 +597,8 @@ export async function ConsensusInfo() {
 
 export async function PeerInfo() {
   return GET(adminRPCURL, peerInfoPath);
+}
+
+export async function CommitteesData(height) {
+  return POST(rpcURL, committeesDataPath, JSON.stringify({ height: height }));
 }
