@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -87,15 +88,23 @@ func (s *Server) Start() {
 	if err != nil {
 		panic(err)
 	}
-	// url := "https://eth-mainnet.alchemyapi.io/v2/demo"
-	// wssUrl := "wss://eth-mainnet.alchemyapi.io/v2/demo"
-	url := "https://eth-mainnet-canopy.us.nodefleet.net"
-	wssUrl := "wss://eth-mainnet-canopy.us.nodefleet.net"
+	url := "https://eth-mainnet.alchemyapi.io/v2/demo"
+	wssUrl := "wss://eth-mainnet.alchemyapi.io/v2/demo"
+
+	// url := "https://eth-mainnet-canopy.us.nodefleet.net"
+	// wssUrl := "wss://eth-mainnet-canopy.us.nodefleet.net"
+
 	ch := make(chan wstypes.BlockI)
-	ethListener := eth.NewEthBlockListener(url, wssUrl, ch, s.logger)
-	ethListener.Start()
+	ethListener, err := eth.NewEthBlockListener(url, wssUrl, ch, s.logger)
+	if err != nil {
+		panic(err)
+	}
+	err = ethListener.Start(context.TODO())
+	if err != nil {
+		panic(err)
+	}
 	listener := NewBlockListener(ch, ethStorage, s.logger)
-	listener.Start()
+	go listener.Start()
 
 	go func() { // TODO remove DEBUG ONLY
 		fileName := "heap1.out"
