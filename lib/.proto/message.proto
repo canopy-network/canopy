@@ -164,7 +164,7 @@ message MessageSubsidy {
   // amount: is the amount of funds that are taken from the sender and transferred to the recipient pool
   uint64 amount = 3;
   // opcode: a generic code field to allow fund designation instructions
-  string opcode = 4;
+  bytes opcode = 4;
 }
 
 // MessageCreateOrder creates a new token swap 'sell order', removing tokens from the sender
@@ -172,16 +172,18 @@ message MessageSubsidy {
 message MessageCreateOrder {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   uint64 ChainId = 1; // @gotags: json:"chainID"
+  // data: a generic data field which can allow a committee to execute specific functionality for the swap
+  bytes data = 2; // @gotags: json:"data"
   // amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
-  uint64 AmountForSale = 2; // @gotags: json:"amountForSale"
+  uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
   // requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
-  uint64 RequestedAmount = 3; // @gotags: json:"requestAmount"
+  uint64 RequestedAmount = 4; // @gotags: json:"requestAmount"
   // sellers_receive_address: the address of the seller where the 'counter asset' will be received
-  bytes SellerReceiveAddress = 4; // @gotags: json:"sellerReceiveAddress"
+  bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
   // sellers_send_address: the Canopy address the seller is selling and signing from
-  bytes SellersSendAddress = 5; // @gotags: json:"sellersSendAddress"
+  bytes SellersSendAddress = 6; // @gotags: json:"sellersSendAddress"
   // hash: auto-populated by the state machine to assign the unique bytes to the order
-  bytes hash = 6;
+  bytes hash = 7;
 }
 
 // MessageEditOrder modifies an un-claimed token swap 'sell order', token amount may be increased or decreased as well
@@ -194,13 +196,15 @@ message MessageEditOrder {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   // not modifiable, used for order identification only
   uint64 ChainId = 2; // @gotags: json:"chainID"
+  // data: a generic data field which can allow a committee to execute specific functionality for the swap
+  bytes data = 3; // @gotags: json:"data"
   // amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
   // send address
-  uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
+  uint64 AmountForSale = 4; // @gotags: json:"amountForSale"
   // requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
-  uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
+  uint64 RequestedAmount = 5; // @gotags: json:"requestedAmount"
   // sellers_receive_address: the address of the seller where the 'counter asset' will be received
-  bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
+  bytes SellerReceiveAddress = 6; // @gotags: json:"sellerReceiveAddress"
 }
 
 // MessageDeleteOrder: deletes an un-claimed token swap 'sell order'

@@ -297,7 +297,8 @@ type txRequest struct {
 	PubKey          string          `json:"pubKey"`
 	NetAddress      string          `json:"netAddress"`
 	Output          string          `json:"output"`
-	OpCode          string          `json:"opCode"`
+	OpCode          lib.HexBytes    `json:"opCode"`
+	Data            lib.HexBytes    `json:"data"`
 	Fee             uint64          `json:"fee"`
 	Delegate        bool            `json:"delegate"`
 	EarlyWithdrawal bool            `json:"earlyWithdrawal"`

@@ -286,7 +286,7 @@ export default function Accounts({ keygroup, account, validator, setActiveKey, p
         pause: () => TxPause(r.sender, r.signer, r.memo, fee, r.password, submit),
         unpause: () => TxUnpause(r.sender, r.signer, r.memo, fee, r.password, submit),
         create_order: () =>
-          TxCreateOrder(r.sender, r.chainId, amount, receiveAmount, r.receiveAddress, r.memo, fee, r.password, submit),
+          TxCreateOrder(r.sender, r.chainId, r.data, amount, receiveAmount, r.receiveAddress, r.memo, fee, r.password, submit),
         close_order: () => TxCloseOrder(r.sender, r.orderId, fee, r.password, submit),
         lock_order: () => TxLockOrder(r.sender, r.receiveAddress, r.orderId, fee, r.password, submit),
         edit_order: () =>
@@ -294,6 +294,7 @@ export default function Accounts({ keygroup, account, validator, setActiveKey, p
             r.sender,
             r.chainId,
             r.orderId,
+            r.data,
             amount,
             receiveAmount,
             r.receiveAddress,

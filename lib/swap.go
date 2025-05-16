@@ -33,6 +33,7 @@ func (x *SellOrder) Empty() bool {
 type jsonSellOrder struct {
 	Id                   HexBytes `json:"id,omitempty"`                   // the unique identifier of the order
 	Committee            uint64   `json:"committee,omitempty"`            // the id of the committee that is in-charge of escrow for the swap
+	Data                 HexBytes `json:"data,omitempty"`                 // generic data for the swap to allow additional functionality
 	AmountForSale        uint64   `json:"amountForSale,omitempty"`        // amount of CNPY for sale
 	RequestedAmount      uint64   `json:"requestedAmount,omitempty"`      // amount of 'token' to receive
 	SellerReceiveAddress HexBytes `json:"sellerReceiveAddress,omitempty"` // the external chain address to receive the 'token'
@@ -47,6 +48,7 @@ func (x SellOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonSellOrder{
 		Id:                   x.Id,
 		Committee:            x.Committee,
+		Data:                 x.Data,
 		AmountForSale:        x.AmountForSale,
 		RequestedAmount:      x.RequestedAmount,
 		SellerReceiveAddress: x.SellerReceiveAddress,
@@ -70,6 +72,7 @@ func (x *SellOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	*x = SellOrder{
 		Id:                   j.Id,
 		Committee:            j.Committee,
+		Data:                 j.Data,
 		AmountForSale:        j.AmountForSale,
 		RequestedAmount:      j.RequestedAmount,
 		SellerReceiveAddress: j.SellerReceiveAddress,

@@ -543,7 +543,7 @@ type jsonMessageSubsidy struct {
 	Address lib.HexBytes `json:"address"`
 	ChainId uint64       `json:"chainID"`
 	Amount  uint64       `json:"amount"`
-	Opcode  string       `json:"opcode"`
+	Opcode  lib.HexBytes `json:"opcode"`
 }
 
 var _ lib.MessageI = &MessageCreateOrder{} // interface enforcement
@@ -557,6 +557,9 @@ func (x *MessageCreateOrder) Check() lib.ErrorI {
 	if err := checkChainId(x.ChainId); err != nil {
 		return err
 	}
+	if len(x.Data) > 100 {
+		return ErrInvalidOpcode()
+	}
 	if x.AmountForSale == 0 || x.RequestedAmount == 0 {
 		return ErrInvalidAmount()
 	}
@@ -568,6 +571,7 @@ func (x *MessageCreateOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageCreateOrder{
 		ChainId:              x.ChainId,
 		AmountForSale:        x.AmountForSale,
+		Data:                 x.Data,
 		RequestedAmount:      x.RequestedAmount,
 		SellerReceiveAddress: x.SellerReceiveAddress,
 		SellersSellAddress:   x.SellersSendAddress,
@@ -582,6 +586,7 @@ func (x *MessageCreateOrder) UnmarshalJSON(b []byte) (err error) {
 	}
 	*x = MessageCreateOrder{
 		ChainId:              j.ChainId,
+		Data:                 j.Data,
 		AmountForSale:        j.AmountForSale,
 		RequestedAmount:      j.RequestedAmount,
 		SellerReceiveAddress: j.SellerReceiveAddress,
@@ -593,6 +598,7 @@ func (x *MessageCreateOrder) UnmarshalJSON(b []byte) (err error) {
 type jsonMessageCreateOrder struct {
 	ChainId              uint64       `json:"chainId"`
 	AmountForSale        uint64       `json:"amountForSale"`
+	Data                 lib.HexBytes `json:"data"`
 	RequestedAmount      uint64       `json:"requestedAmount"`
 	SellerReceiveAddress lib.HexBytes `json:"sellerReceiveAddress"`
 	SellersSellAddress   lib.HexBytes `json:"sellersSendAddress"`
@@ -609,6 +615,9 @@ func (x *MessageEditOrder) Check() lib.ErrorI {
 	if err := checkChainId(x.ChainId); err != nil {
 		return err
 	}
+	if len(x.Data) > 100 {
+		return ErrInvalidOpcode()
+	}
 	if x.AmountForSale == 0 || x.RequestedAmount == 0 {
 		return ErrInvalidAmount()
 	}
@@ -620,6 +629,7 @@ func (x *MessageEditOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonMessageEditOrder{
 		OrderId:              x.OrderId,
 		ChainId:              x.ChainId,
+		Data:                 x.Data,
 		AmountForSale:        x.AmountForSale,
 		RequestedAmount:      x.RequestedAmount,
 		SellerReceiveAddress: x.SellerReceiveAddress,
@@ -635,6 +645,7 @@ func (x *MessageEditOrder) UnmarshalJSON(b []byte) (err error) {
 	*x = MessageEditOrder{
 		OrderId:              j.OrderId,
 		ChainId:              j.ChainId,
+		Data:                 j.Data,
 		AmountForSale:        j.AmountForSale,
 		RequestedAmount:      j.RequestedAmount,
 		SellerReceiveAddress: j.SellerReceiveAddress,
@@ -645,6 +656,7 @@ func (x *MessageEditOrder) UnmarshalJSON(b []byte) (err error) {
 type jsonMessageEditOrder struct {
 	OrderId              lib.HexBytes `json:"orderID"`
 	ChainId              uint64       `json:"chainID"`
+	Data                 lib.HexBytes `json:"data"`
 	AmountForSale        uint64       `json:"amountForSale"`
 	RequestedAmount      uint64       `json:"requestedAmount"`
 	SellerReceiveAddress lib.HexBytes `json:"sellerReceiveAddress"`

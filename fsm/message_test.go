@@ -228,7 +228,6 @@ func TestHandleMessage(t *testing.T) {
 				Address: newTestAddressBytes(t),
 				ChainId: lib.CanopyChainId,
 				Amount:  amount,
-				Opcode:  "note",
 			},
 			validate: func(sm StateMachine) {
 				// ensure the account was subtracted from

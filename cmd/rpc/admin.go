@@ -298,7 +298,7 @@ func (s *Server) TransactionCreateOrder(w http.ResponseWriter, r *http.Request, 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewCreateOrderTx(p, ptr.Amount, ptr.ReceiveAmount, chainId, ptr.ReceiveAddress, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+		return fsm.NewCreateOrderTx(p, ptr.Amount, ptr.ReceiveAmount, chainId, ptr.Data, ptr.ReceiveAddress, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
 	})
 }
 
@@ -316,7 +316,7 @@ func (s *Server) TransactionEditOrder(w http.ResponseWriter, r *http.Request, _ 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewEditOrderTx(p, ptr.OrderId, ptr.Amount, ptr.ReceiveAmount, chainId, ptr.ReceiveAddress, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+		return fsm.NewEditOrderTx(p, ptr.OrderId, ptr.Amount, ptr.ReceiveAmount, chainId, ptr.Data, ptr.ReceiveAddress, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
 	})
 }
 
@@ -353,7 +353,7 @@ func (s *Server) TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ 
 			return nil, err
 		}
 		// Create and return the transaction to be sent
-		return fsm.NewLockOrderTx(p, lib.LockOrder{OrderId: oId, BuyerSendAddress: p.PublicKey().Address().Bytes(), BuyerReceiveAddress: ptr.ReceiveAddress}, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight())
+		return fsm.NewLockOrderTx(p, lib.LockOrder{OrderId: oId, ChainId: s.config.ChainId, BuyerSendAddress: p.PublicKey().Address().Bytes(), BuyerReceiveAddress: ptr.ReceiveAddress}, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight())
 	})
 }
 
@@ -393,7 +393,7 @@ func (s *Server) TransactionCloseOrder(w http.ResponseWriter, r *http.Request, _
 			return nil, err
 		}
 		// Create the close order structure
-		co := lib.CloseOrder{OrderId: oId, CloseOrder: true}
+		co := lib.CloseOrder{OrderId: oId, ChainId: s.config.ChainId, CloseOrder: true}
 		// Exit with the new CloseOrderTx
 		return fsm.NewCloseOrderTx(p, co, crypto.NewAddress(order.SellerReceiveAddress), order.RequestedAmount, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight())
 	})

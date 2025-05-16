@@ -379,6 +379,7 @@ func (s *StateMachine) HandleMessageCreateOrder(msg *MessageCreateOrder) (err li
 	return s.SetOrder(&lib.SellOrder{
 		Id:                   msg.Hash,
 		Committee:            msg.ChainId,
+		Data:                 msg.Data,
 		AmountForSale:        msg.AmountForSale,
 		RequestedAmount:      msg.RequestedAmount,
 		SellerReceiveAddress: msg.SellerReceiveAddress,
@@ -432,6 +433,7 @@ func (s *StateMachine) HandleMessageEditOrder(msg *MessageEditOrder) (err lib.Er
 	return s.SetOrder(&lib.SellOrder{
 		Id:                   order.Id,
 		Committee:            msg.ChainId,
+		Data:                 msg.Data,
 		AmountForSale:        msg.AmountForSale,
 		RequestedAmount:      msg.RequestedAmount,
 		SellerReceiveAddress: msg.SellerReceiveAddress,

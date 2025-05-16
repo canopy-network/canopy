@@ -46,20 +46,22 @@ message SellOrder {
   bytes Id = 1; // @gotags: json:"id"
   // committee: the id of the committee that is in-charge of escrow for the swap
   uint64 Committee = 2; // @gotags: json:"committee"
+  // data: a generic data field which can allow a committee to execute specific functionality for the swap
+  bytes Data = 3; // @gotags: json:"data"
   // amount_for_sale: amount of CNPY for sale
-  uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
+  uint64 AmountForSale = 4; // @gotags: json:"amountForSale"
   // requested_amount: amount of 'counter-asset' to receive
-  uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
+  uint64 RequestedAmount = 5; // @gotags: json:"requestedAmount"
   // seller_receive_address: the external chain address to receive the 'counter-asset'
-  bytes SellerReceiveAddress = 5; // @gotags: json:"sellerReceiveAddress"
+  bytes SellerReceiveAddress = 6; // @gotags: json:"sellerReceiveAddress"
   // buyer_send_address: the address the buyer will be transferring the funds from
-  bytes BuyerSendAddress = 6; // @gotags: json:"buyerSendAddress"
+  bytes BuyerSendAddress = 7; // @gotags: json:"buyerSendAddress"
   // buyer_receive_address: the buyer Canopy address to receive the CNPY
-  bytes BuyerReceiveAddress = 7; // @gotags: json:"buyerReceiveAddress"
+  bytes BuyerReceiveAddress = 8; // @gotags: json:"buyerReceiveAddress"
   // buyer_chain_deadline: the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-  uint64 BuyerChainDeadline = 8; // @gotags: json:"buyerChainDeadline"
+  uint64 BuyerChainDeadline = 9; // @gotags: json:"buyerChainDeadline"
   // sellers_send_address: the signing address of seller who is selling the CNPY
-  bytes SellersSendAddress = 9; // @gotags: json:"sellersSendAddress"
+  bytes SellersSendAddress = 10; // @gotags: json:"sellersSendAddress"
 }
 
 // OrderBooks: is a list of order book objects held in the blockchain state

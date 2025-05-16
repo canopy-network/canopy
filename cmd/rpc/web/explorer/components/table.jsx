@@ -15,7 +15,7 @@ import {
 
 // convertValue() converts the value based on its key and handles different types
 function convertValue(k, v, openModal) {
-  if (k === "Id") return v;
+  if (k === "Id" || k === "Data") return v;
   if (k === "publicKey") return <Truncate text={v} />;
   if (isHex(v) || k === "height") {
     const content = isNumber(v) ? v : <Truncate text={v} />;
@@ -125,6 +125,7 @@ function convertOrder(v) {
   return {
     Id: v.id ?? "error",
     Chain: v.committee,
+    Data: v.data,
     AmountForSale: toCNPY(v.amountForSale),
     Rate: exchangeRate.toFixed(2),
     RequestedAmount: toCNPY(v.requestedAmount),

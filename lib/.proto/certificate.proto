@@ -94,21 +94,25 @@ message Orders {
 message LockOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   bytes order_id = 1; // @gotags: json:"orderID"
+  // chain_id: is the id of the committee
+  uint64 chain_id = 2; // @gotags: json:"chainID"
   // buyer_receive_address: the Canopy address where the tokens may be received
-  bytes buyer_receive_address = 2; // @gotags: json:"buyerReceiveAddress"
+  bytes buyer_receive_address = 3; // @gotags: json:"buyerReceiveAddress"
   // buyer_send_address: the 'counter asset' address where the tokens will be sent from
-  bytes buyer_send_address = 3; // @gotags: json:"buyerSendAddress"
+  bytes buyer_send_address = 4; // @gotags: json:"buyerSendAddress"
   // buyer_chain_deadline: the 'counter asset' chain height at which the buyer must send the 'counter asset' by
   // or the 'intent to buy' will be voided
-  uint64 buyer_chain_deadline = 4; // @gotags: json:"buyerChainDeadline"
+  uint64 buyer_chain_deadline = 5; // @gotags: json:"buyerChainDeadline"
 }
 
 // CloseOrder is a buyer completing the purchase of an order, often referred to as 'buying' the order
 message CloseOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   bytes order_id = 1; // @gotags: json:"orderID"
+  // chain_id: is the id of the committee
+  uint64 chain_id = 2; // @gotags: json:"chainID"
   // close_order: is the tag to represent the intent to embed a close order
-  bool close_order = 2; //@gotags: json:"closeOrder"
+  bool close_order = 3; //@gotags: json:"closeOrder"
 }
 
 // Checkpoint is 3rd party chain information that allows Canopy to provide Checkpointing-as-a-Service for the 3rd party

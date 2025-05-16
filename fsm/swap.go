@@ -56,7 +56,7 @@ func (s *StateMachine) ParseLockOrder(tx *lib.Transaction, deadlineBlocks uint64
 	// attempt to unmarshal the transaction memo into a 'lock order'
 	if err := lib.UnmarshalJSON([]byte(tx.Memo), bo); err == nil {
 		// sanity check some critical fields of the 'lock order' to ensure the unmarshal was successful
-		if len(bo.BuyerSendAddress) != 0 && len(bo.BuyerReceiveAddress) != 0 {
+		if len(bo.BuyerSendAddress) != 0 && len(bo.BuyerReceiveAddress) != 0 && bo.ChainId == s.Config.ChainId {
 			ok = true
 		}
 		// set the 'BuyerChainDeadline' in the 'lock order'
@@ -75,7 +75,7 @@ func (s *StateMachine) ParseCloseOrder(tx *lib.Transaction) (co *lib.CloseOrder,
 		return nil, false
 	}
 	// exit
-	return co, co.CloseOrder // signals if this is a 'close order' or not
+	return co, co.ChainId == s.Config.ChainId && co.CloseOrder // signals if this is a 'close order' or not
 }
 
 // ProcessRootChainOrderBook() processes the order book from the root-chain and cross-references blocks on this chain to determine

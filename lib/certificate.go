@@ -247,14 +247,13 @@ func (x *QuorumCertificate) GetNonSigners(vs *ConsensusValidators) (nonSignerPub
 
 // jsonQC represents the json.Marshaller and json.Unmarshaler implementation of QC
 type jsonQC struct {
-	Header       *View               `json:"header,omitempty"`
-	Block        HexBytes            `json:"block,omitempty"`
-	BlockHash    HexBytes            `json:"blockHash,omitempty"`
-	ResultsHash  HexBytes            `json:"resultsHash,omitempty"`
-	Results      *CertificateResult  `json:"results,omitempty"`
-	ProposalHash HexBytes            `json:"proposalHash,omitempty"`
-	ProposerKey  HexBytes            `json:"proposerKey,omitempty"`
-	Signature    *AggregateSignature `json:"signature,omitempty"`
+	Header      *View               `json:"header,omitempty"`
+	Block       HexBytes            `json:"block,omitempty"`
+	BlockHash   HexBytes            `json:"blockHash,omitempty"`
+	ResultsHash HexBytes            `json:"resultsHash,omitempty"`
+	Results     *CertificateResult  `json:"results,omitempty"`
+	ProposerKey HexBytes            `json:"proposerKey,omitempty"`
+	Signature   *AggregateSignature `json:"signature,omitempty"`
 }
 
 // MarshalJSON() implements the json.Marshaller interface
@@ -713,6 +712,11 @@ func (x *LockOrder) Equals(y *LockOrder) bool {
 		// exit with 'unequal'
 		return false
 	}
+	// if the chain ids aren't the same
+	if x.ChainId != y.ChainId {
+		// exit with 'unequal'
+		return false
+	}
 	// if the order ids are not the same
 	if !bytes.Equal(x.OrderId, y.OrderId) {
 		// exit with 'unequal'
@@ -726,6 +730,8 @@ func (x *LockOrder) Equals(y *LockOrder) bool {
 type lockOrderJSON struct {
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId HexBytes `json:"orderId,omitempty"`
+	// chain_id: is the number id of the committee
+	ChainId uint64 `json:"chain_id"`
 	// buyers_send_address: the Canopy address where the tokens may be received
 	BuyersSendAddress HexBytes `json:"buyerSendAddress,omitempty"`
 	// buyer_receive_address: the Canopy address where the tokens may be received
@@ -740,6 +746,7 @@ func (x LockOrder) MarshalJSON() ([]byte, error) {
 	// convert the lock order to json bytes using the json object
 	return json.Marshal(&lockOrderJSON{
 		OrderId:             x.OrderId,
+		ChainId:             x.ChainId,
 		BuyersSendAddress:   x.BuyerSendAddress,
 		BuyerReceiveAddress: x.BuyerReceiveAddress,
 		BuyerChainDeadline:  x.BuyerChainDeadline,
@@ -758,6 +765,7 @@ func (x *LockOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// populate the underlying structure using the json object
 	*x = LockOrder{
 		OrderId:             j.OrderId,
+		ChainId:             j.ChainId,
 		BuyerReceiveAddress: j.BuyerReceiveAddress,
 		BuyerSendAddress:    j.BuyersSendAddress,
 		BuyerChainDeadline:  j.BuyerChainDeadline,
@@ -770,6 +778,8 @@ func (x *LockOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 type closeOrderJSON struct {
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId HexBytes `json:"orderId,omitempty"`
+	// chain_id: is the number id of the committee
+	ChainId uint64 `json:"chain_id"`
 	// close_order: is the tag to represent the intent to embed a close order
 	CloseOrder bool `json:"closeOrder,omitempty"`
 }
@@ -779,6 +789,7 @@ func (x CloseOrder) MarshalJSON() ([]byte, error) {
 	// convert the lock order to json bytes using the json object
 	return json.Marshal(&closeOrderJSON{
 		OrderId:    x.OrderId,
+		ChainId:    x.ChainId,
 		CloseOrder: x.CloseOrder,
 	})
 }
@@ -795,6 +806,7 @@ func (x *CloseOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// populate the underlying structure using the json object
 	*x = CloseOrder{
 		OrderId:    j.OrderId,
+		ChainId:    j.ChainId,
 		CloseOrder: j.CloseOrder,
 	}
 	// exit
