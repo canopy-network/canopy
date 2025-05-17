@@ -61,6 +61,8 @@ const (
 	DebugHeapRoutePath    = "/debug/heap"
 	DebugCPURoutePath     = "/debug/cpu"
 	DebugRoutineRoutePath = "/debug/routine"
+	// eth
+	EthereumRoutePath = "/v1/eth"
 	// admin
 	KeystoreRoutePath          = "/v1/admin/keystore"
 	KeystoreNewKeyRoutePath    = "/v1/admin/keystore-new-key"
@@ -147,6 +149,8 @@ const (
 	DebugHeapRouteName    = "heap"
 	DebugCPURouteName     = "cpu"
 	DebugRoutineRouteName = "routine"
+	// eth
+	EthereumRouteName = "eth"
 	// admin
 	KeystoreRouteName          = "keystore"
 	KeystoreNewKeyRouteName    = "keystore-new-key"
@@ -241,6 +245,8 @@ var routePaths = routes{
 	DebugHeapRouteName:    {Method: http.MethodGet, Path: DebugHeapRoutePath},
 	DebugCPURouteName:     {Method: http.MethodGet, Path: DebugCPURoutePath},
 	DebugRoutineRouteName: {Method: http.MethodGet, Path: DebugRoutineRoutePath},
+	// eth
+	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
 	KeystoreRouteName:          {Method: http.MethodGet, Path: KeystoreRoutePath},
 	KeystoreNewKeyRouteName:    {Method: http.MethodPost, Path: KeystoreNewKeyRoutePath},
@@ -328,6 +334,7 @@ func createRouter(s *Server) *httprouter.Router {
 		RootChainInfoRouteName:         s.RootChainInfo,
 		ValidatorSetRouteName:          s.ValidatorSet,
 		CheckpointRouteName:            s.Checkpoint,
+		EthereumRouteName:              s.EthereumHandler,
 		SubscribeRCInfoName:            s.WebSocket,
 	}
 

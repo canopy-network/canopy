@@ -80,6 +80,7 @@ func (s *Server) Start() {
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
 	go s.rcManager.Start()
+	go s.startEthRPCService()
 	go func() { // TODO remove DEBUG ONLY
 		fileName := "heap1.out"
 		for range time.Tick(time.Second * 10) {
@@ -206,7 +207,7 @@ func (s *Server) getStateMachineWithHeight(height uint64, w http.ResponseWriter)
 }
 
 // getFeeFromState populates txRequest with the fee for the transaction type specified in messageName
-func (s *Server) getFeeFromState(w http.ResponseWriter, ptr *txRequest, messageName string, lockorder ...bool) lib.ErrorI {
+func (s *Server) getFeeFromState(ptr *txRequest, messageName string, lockorder ...bool) lib.ErrorI {
 	return s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
 		// Get fee for transaction
 		minimumFee, err := state.GetFeeForMessageName(messageName)

@@ -78,7 +78,7 @@ func (t *Indexer) DeleteBlockForHeight(height uint64) lib.ErrorI {
 
 // GetBlockByHash() returns the block result object from the hash key
 func (t *Indexer) GetBlockByHash(hash []byte) (*lib.BlockResult, lib.ErrorI) {
-	return t.getBlock(t.blockHashKey(hash))
+	return t.getBlock(t.blockHashKey(hash), true)
 }
 
 // GetBlockByHeight() returns the block result by height key
@@ -89,7 +89,18 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 		return nil, err
 	}
 	// get block from hash key
-	return t.getBlock(hashKey)
+	return t.getBlock(hashKey, true)
+}
+
+// GetBlockHeaderByHeight() returns the block result without transactions
+func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
+	// height key points to hash key
+	hashKey, err := t.db.Get(t.blockHeightKey(height))
+	if err != nil {
+		return nil, err
+	}
+	// get block from hash key
+	return t.getBlock(hashKey, false)
 }
 
 // GetBlocks() returns a page of blocks based on the page parameters
@@ -97,12 +108,7 @@ func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
 	results, count, page := make(lib.BlockResults, 0), 0, lib.NewPage(p, lib.BlockResultsPageName)
 	err = page.Load(lib.JoinLenPrefix(blockHeightPrefix), true, &results, t.db, func(_, b []byte) lib.ErrorI {
 		// get the block from the iterator value
-		block, e := t.getBlock(b)
-		if e != nil {
-			return e
-		}
-		// convert the block to bytes
-		bz, e := lib.Marshal(block)
+		block, e := t.getBlock(b, true)
 		if e != nil {
 			return e
 		}
@@ -110,8 +116,6 @@ func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
 		if count < page.PerPage {
 			results = append(results, block)
 		}
-		// block meta is never stored, just calculated at read time
-		block.Meta = &lib.BlockResultMeta{Size: uint64(len(bz))}
 		// calculate the time took using the N block and the N-1 block (next block aka blockHeight + 1)
 		// this works because we load 1 extra block at the end but don't append it to the results
 		if count != 0 {
@@ -368,7 +372,7 @@ func (t *Indexer) getQC(heightKey []byte) (*lib.QuorumCertificate, lib.ErrorI) {
 }
 
 // getBlock() gets the block bytes from the DB and converts it into a filled BlockResult object including the transactions
-func (t *Indexer) getBlock(hashKey []byte) (*lib.BlockResult, lib.ErrorI) {
+func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult, lib.ErrorI) {
 	bz, err := t.db.Get(hashKey)
 	if err != nil {
 		return nil, err
@@ -377,12 +381,19 @@ func (t *Indexer) getBlock(hashKey []byte) (*lib.BlockResult, lib.ErrorI) {
 	if err = lib.Unmarshal(bz, ptr); err != nil {
 		return nil, err
 	}
+	if !transactions {
+		return &lib.BlockResult{
+			BlockHeader: ptr,
+			Meta:        &lib.BlockResultMeta{Size: uint64(len(bz))},
+		}, nil
+	}
 	txs, err := t.GetTxsByHeightNonPaginated(ptr.Height, false)
 	if err != nil {
 		return nil, err
 	}
 	return &lib.BlockResult{
 		BlockHeader:  ptr,
+		Meta:         &lib.BlockResultMeta{Size: uint64(len(bz))},
 		Transactions: txs,
 	}, nil
 }

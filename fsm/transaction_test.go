@@ -109,14 +109,14 @@ func TestCheckTx(t *testing.T) {
 	require.NoError(t, e)
 	// define a version with a bad height
 	sendTxBadHeight := sendTx.(*lib.Transaction)
-	sendTxBadHeight.CreatedHeight = 123
+	sendTxBadHeight.CreatedHeight = 4320 + 3
 	require.NoError(t, sendTxBadHeight.Sign(kg.PrivateKey))
 	// convert the object to bytes
 	txBadHeight, e := lib.Marshal(sendTxBadHeight)
 	require.NoError(t, e)
 	// define a version with a bad fee (below state limit)
 	sendTxBadFee := sendTx.(*lib.Transaction)
-	sendTxBadHeight.CreatedHeight = 120
+	sendTxBadHeight.CreatedHeight = 4320
 	sendTxBadFee.Fee = 0
 	require.NoError(t, sendTxBadFee.Sign(kg.PrivateKey))
 	// convert the object to bytes
@@ -370,7 +370,7 @@ func TestCheckReplay(t *testing.T) {
 			name:   "above maximum height",
 			detail: "above maximum height should fail",
 			tx: &lib.Transaction{
-				CreatedHeight: 123,
+				CreatedHeight: 4320 + 3,
 				NetworkId:     1,
 				ChainId:       1,
 			},
@@ -385,7 +385,7 @@ func TestCheckReplay(t *testing.T) {
 				NetworkId:     1,
 				ChainId:       1,
 			},
-			height: 122,
+			height: 4320 + 2,
 			error:  "invalid tx height",
 		},
 		{

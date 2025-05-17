@@ -65,6 +65,7 @@ type RIndexerI interface {
 	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Transactions for a recipient
 	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                            // get a block by hash
 	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                        // get a block by height
+	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                  // get a block by height without transactions
 	GetBlocks(p PageParams) (*Page, ErrorI)                                                       // get a page of blocks within the page params
 	GetQCByHeight(height uint64) (*QuorumCertificate, ErrorI)                                     // get certificate for a height
 	GetDoubleSigners() ([]*DoubleSigner, ErrorI)                                                  // all double signers in the indexer

@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"fmt"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -9,6 +8,9 @@ import (
 )
 
 /* This file contains transaction handling logic - for the payload handling check message.go */
+
+// define some safe +/- tx indexer prune height
+const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
 func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string) (*lib.TxResult, lib.ErrorI) {
@@ -98,9 +100,16 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, txH
 	if e != nil {
 		return nil, ErrInvalidPublicKey(e)
 	}
-	// validate the actual signature
-	if !publicKey.VerifyBytes(signBytes, tx.Signature.Signature) {
-		return nil, ErrInvalidSignature()
+	// special case: check for a special RLP transaction
+	if _, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey); hasEthPubKey && tx.Memo == RLPIndicator {
+		if err = s.VerifyRLPBytes(tx); err != nil {
+			return nil, err
+		}
+	} else {
+		// normal case: validate the actual signature
+		if !publicKey.VerifyBytes(signBytes, tx.Signature.Signature) {
+			return nil, ErrInvalidSignature()
+		}
 	}
 	// calculate the corresponding address from the public key
 	address := publicKey.Address()
@@ -133,8 +142,7 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, txH
 				if err != nil {
 					return nil, err
 				}
-				fmt.Println("SETTING ID", lib.BytesToString(hash[:20]))
-				x.Hash = hash[:20] // first 20 bytes of the transaction hash
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
 			}
 			// return the signer address
 			return address, nil
@@ -184,14 +192,12 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 	if txResult != nil && txResult.TxHash == txHash {
 		return lib.ErrDuplicateTx(txHash)
 	}
-	// define some safe +/- tx indexer prune height
-	const blockAcceptancePolicy = 120
 	// this gives the protocol a theoretically safe tx indexer prune height
-	maxHeight, minHeight := s.Height()+blockAcceptancePolicy, uint64(0)
-	// if height is after the blockAcceptancePolicy blocks
-	if s.Height() > blockAcceptancePolicy {
+	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)
+	// if height is after the BlockAcceptanceRange blocks
+	if s.Height() > BlockAcceptanceRange {
 		// update the minimum height
-		minHeight = s.Height() - blockAcceptancePolicy
+		minHeight = s.Height() - BlockAcceptanceRange
 	}
 	// ensure the tx 'created height' is not above or below the acceptable bounds
 	if tx.CreatedHeight > maxHeight || tx.CreatedHeight < minHeight {

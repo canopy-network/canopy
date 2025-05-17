@@ -746,6 +746,16 @@ func (s *Server) setupStore(w http.ResponseWriter) (lib.StoreI, bool) {
 	return st, true
 }
 
+// withStore() executes a read only store function
+func (s *Server) withStore(fn func(st *store.Store) (any, error)) (any, error) {
+	st, err := store.NewStoreWithDB(s.controller.FSM.Store().(lib.StoreI).DB(), nil, s.logger, false)
+	if err != nil {
+		return nil, err
+	}
+	defer st.Discard()
+	return fn(st)
+}
+
 // debugHandler is the http handler for debugging endpoints
 func debugHandler(routeName string) httprouter.Handle {
 	var f http.HandlerFunc

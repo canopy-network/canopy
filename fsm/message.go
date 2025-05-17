@@ -377,7 +377,7 @@ func (s *StateMachine) HandleMessageCreateOrder(msg *MessageCreateOrder) (err li
 	}
 	// save the order in state
 	return s.SetOrder(&lib.SellOrder{
-		Id:                   msg.Hash,
+		Id:                   msg.OrderId,
 		Committee:            msg.ChainId,
 		AmountForSale:        msg.AmountForSale,
 		RequestedAmount:      msg.RequestedAmount,

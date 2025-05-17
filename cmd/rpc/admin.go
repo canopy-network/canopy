@@ -125,7 +125,7 @@ func (s *Server) TransactionSend(w http.ResponseWriter, r *http.Request, _ httpr
 		}
 
 		// Retrieve the fee required for this type of transaction
-		if err = s.getFeeFromState(w, ptr, fsm.MessageSendName); err != nil {
+		if err = s.getFeeFromState(ptr, fsm.MessageSendName); err != nil {
 			return nil, err
 		}
 
@@ -154,7 +154,7 @@ func (s *Server) TransactionStake(w http.ResponseWriter, r *http.Request, _ http
 			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
-		if err = s.getFeeFromState(w, ptr, fsm.MessageStakeName); err != nil {
+		if err = s.getFeeFromState(ptr, fsm.MessageStakeName); err != nil {
 			return nil, err
 		}
 
@@ -178,7 +178,7 @@ func (s *Server) TransactionEditStake(w http.ResponseWriter, r *http.Request, _ 
 			return nil, err
 		}
 		// Retrieve the fee required for this type of transaction
-		if err = s.getFeeFromState(w, ptr, fsm.MessageEditStakeName); err != nil {
+		if err = s.getFeeFromState(ptr, fsm.MessageEditStakeName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -191,7 +191,7 @@ func (s *Server) TransactionUnstake(w http.ResponseWriter, r *http.Request, _ ht
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageUnstakeName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageUnstakeName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -204,7 +204,7 @@ func (s *Server) TransactionPause(w http.ResponseWriter, r *http.Request, _ http
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessagePauseName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessagePauseName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -217,7 +217,7 @@ func (s *Server) TransactionUnpause(w http.ResponseWriter, r *http.Request, _ ht
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageUnpauseName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageUnpauseName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -232,7 +232,7 @@ func (s *Server) TransactionChangeParam(w http.ResponseWriter, r *http.Request, 
 		// Convert ParamSpace string to the proper ParamSpace name
 		ptr.ParamSpace = fsm.FormatParamSpace(ptr.ParamSpace)
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageChangeParameterName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageChangeParameterName); err != nil {
 			return nil, err
 		}
 		// Handle upgrade enforcement
@@ -256,7 +256,7 @@ func (s *Server) TransactionDAOTransfer(w http.ResponseWriter, r *http.Request, 
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageDAOTransferName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageDAOTransferName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -275,7 +275,7 @@ func (s *Server) TransactionSubsidy(w http.ResponseWriter, r *http.Request, _ ht
 			chainId = c[0]
 		}
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageSubsidyName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageSubsidyName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -294,7 +294,7 @@ func (s *Server) TransactionCreateOrder(w http.ResponseWriter, r *http.Request, 
 			chainId = c[0]
 		}
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageCreateOrderName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageCreateOrderName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -312,7 +312,7 @@ func (s *Server) TransactionEditOrder(w http.ResponseWriter, r *http.Request, _ 
 		if c, err := stringToCommittees(ptr.Committees); err == nil {
 			chainId = c[0]
 		}
-		if err := s.getFeeFromState(w, ptr, fsm.MessageEditOrderName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageEditOrderName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -331,7 +331,7 @@ func (s *Server) TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, 
 			chainId = c[0]
 		}
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageDeleteOrderName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageDeleteOrderName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -344,7 +344,7 @@ func (s *Server) TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ 
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageSendName, true); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageSendName, true); err != nil {
 			return nil, err
 		}
 		// convert the order id to bytes
@@ -361,7 +361,7 @@ func (s *Server) TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ 
 func (s *Server) TransactionCloseOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageSendName, true); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageSendName, true); err != nil {
 			return nil, err
 		}
 		// create a variable for the root chain id
@@ -404,7 +404,7 @@ func (s *Server) TransactionStartPoll(w http.ResponseWriter, r *http.Request, _ 
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageSendName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageSendName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent
@@ -417,7 +417,7 @@ func (s *Server) TransactionVotePoll(w http.ResponseWriter, r *http.Request, _ h
 	// Call the transaction handler with a callback that creates the transaction
 	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
 		// Retrieve the fee required for this type of transaction
-		if err := s.getFeeFromState(w, ptr, fsm.MessageSendName); err != nil {
+		if err := s.getFeeFromState(ptr, fsm.MessageSendName); err != nil {
 			return nil, err
 		}
 		// Create and return the transaction to be sent

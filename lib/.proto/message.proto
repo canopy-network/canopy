@@ -180,8 +180,8 @@ message MessageCreateOrder {
   bytes SellerReceiveAddress = 4; // @gotags: json:"sellerReceiveAddress"
   // sellers_send_address: the Canopy address the seller is selling and signing from
   bytes SellersSendAddress = 5; // @gotags: json:"sellersSendAddress"
-  // hash: auto-populated by the state machine to assign the unique bytes to the order
-  bytes hash = 6;
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 6;
 }
 
 // MessageEditOrder modifies an un-claimed token swap 'sell order', token amount may be increased or decreased as well
