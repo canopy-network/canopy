@@ -1,5 +1,5 @@
 import Navigation from "@/components/navbar";
-import { AccountWithTxs, Height, Keystore, Params, Validator } from "@/components/api";
+import { AccountWithTxs, Height, Keystore, Params, Validator, CommitteesData } from "@/components/api";
 import { createContext, use, useEffect, useState } from "react";
 import Accounts from "@/components/account";
 import Dashboard from "@/components/dashboard";
@@ -41,6 +41,7 @@ export default function Home() {
         Validator(0, mergedKS[Object.keys(mergedKS)[i]].keyAddress, Object.keys(mergedKS)[i]),
         Height(),
         Params(0),
+        CommitteesData(0),
       ]).then((results) => {
         let settledResults = [];
         for (const result of results) {
@@ -51,13 +52,17 @@ export default function Home() {
           settledResults.push(result.value);
         }
 
+        let knownCommittees =
+          Object.keys(settledResults[4]).length > 0 ? settledResults[4].list.map((committee) => committee.chainID) : [];
+        let validator = Object.keys(settledResults[1]).length > 0 ? { ...settledResults[1], knownCommittees } : {};
+
         setState({
           ...state,
           keys: Object.keys(mergedKS),
           keyIdx: i,
           keystore: mergedKS,
           account: settledResults[0],
-          validator: settledResults[1],
+          validator: validator,
           height: settledResults[2],
           params: settledResults[3],
         });
