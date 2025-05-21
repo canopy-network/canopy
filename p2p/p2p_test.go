@@ -283,7 +283,7 @@ func TestDialDisconnect(t *testing.T) {
 	require.NoError(t, n1.DialAndDisconnect(&lib.PeerAddress{
 		PublicKey:  n2.pub,
 		NetAddress: n2.listener.Addr().String(),
-	}, true))
+	}, false))
 	_, err := n1.PeerSet.GetPeerInfo(n2.pub)
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "not found"))

@@ -151,7 +151,6 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 			// tries to create a full peer from the ephemeral connection and just the net address
 			if err = p.AddPeer(c, &lib.PeerInfo{Address: &lib.PeerAddress{NetAddress: netAddress}}, false, false); err != nil {
 				p.log.Error(err.Error())
-				_ = c.Close()
 				return
 			}
 		}(c)
@@ -335,7 +334,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
 		streams[i] = &Stream{
 			topic:        i,
-			msgAssembler: make([]byte, 0, maxMessageSize),
+			msgAssembler: make([]byte, 0),
 			sendQueue:    make(chan *Packet, maxStreamSendQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
