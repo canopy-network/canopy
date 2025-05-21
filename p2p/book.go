@@ -181,7 +181,7 @@ func (p *P2P) StartPeerBookService() {
 }
 
 // StartChurnManagement() evicts inactive peers from the PeerBook by periodically attempting to connect with each peer
-func (p *PeerBook) StartChurnManagement(dialAndDisconnect func(a *lib.PeerAddress) lib.ErrorI) {
+func (p *PeerBook) StartChurnManagement(dialAndDisconnect func(a *lib.PeerAddress, strictPublicKey bool) lib.ErrorI) {
 	for {
 		// snapshot the PeerBook
 		p.l.RLock()
@@ -191,7 +191,7 @@ func (p *PeerBook) StartChurnManagement(dialAndDisconnect func(a *lib.PeerAddres
 		// iterate through the copy
 		for _, peer := range bookCopy {
 			// try to dial the peer
-			if err := dialAndDisconnect(peer.Address); err != nil {
+			if err := dialAndDisconnect(peer.Address, true); err != nil {
 				// if failed, add failed attempt
 				p.AddFailedDialAttempt(peer.Address.PublicKey)
 			} else {

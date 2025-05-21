@@ -115,6 +115,10 @@ func (c *MultiConn) Stop() {
 	close(c.quitSending)
 	close(c.quitReceiving)
 	_ = c.conn.Close()
+
+	for _, stream := range c.streams {
+		stream.cleanup()
+	}
 }
 
 // Send() queues the sending of a message to a specific Stream
