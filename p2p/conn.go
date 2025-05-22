@@ -6,6 +6,7 @@ import (
 	"net"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -71,6 +72,7 @@ type MultiConn struct {
 	onError       func(error, []byte, string) // callback to call if peer errors
 	error         sync.Once                   // thread safety to ensure MultiConn.onError is only called once
 	p2p           *P2P                        // a pointer reference to the P2P module
+	isClosed      atomic.Bool                 // flag to identify if MultiConn is closed
 	log           lib.LoggerI                 // logging
 }
 
@@ -109,15 +111,18 @@ func (c *MultiConn) Start() {
 
 // Stop() sends exit signals for send and receive loops and closes the connection
 func (c *MultiConn) Stop() {
-	c.p2p.log.Warnf("Stopping peer %s", lib.BytesToString(c.Address.PublicKey))
-	c.quitReceiving <- struct{}{}
-	c.quitSending <- struct{}{}
-	close(c.quitSending)
-	close(c.quitReceiving)
-	_ = c.conn.Close()
+	if !c.isClosed.Load() {
+		c.p2p.log.Warnf("Stopping peer %s", lib.BytesToString(c.Address.PublicKey))
+		c.isClosed.Store(true)
+		c.quitReceiving <- struct{}{}
+		c.quitSending <- struct{}{}
+		close(c.quitSending)
+		close(c.quitReceiving)
+		_ = c.conn.Close()
 
-	for _, stream := range c.streams {
-		stream.cleanup()
+		for _, stream := range c.streams {
+			stream.cleanup()
+		}
 	}
 }
 
@@ -299,13 +304,15 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // sends them across the wire without violating the data flow rate limits
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
-	c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-		lib.BytesToTruncatedString(c.Address.PublicKey),
-		lib.Topic_name[int32(packet.StreamId)],
-		len(packet.Bytes),
-		packet.Eof,
-		crypto.ShortHashString(packet.Bytes),
-	)
+	if packet != nil {
+		c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+			lib.BytesToTruncatedString(c.Address.PublicKey),
+			lib.Topic_name[int32(packet.StreamId)],
+			len(packet.Bytes),
+			packet.Eof,
+			crypto.ShortHashString(packet.Bytes),
+		)
+	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
 	return
@@ -343,6 +350,7 @@ type Stream struct {
 	msgAssembler []byte                       // collects and adds incoming packets until the entire message is received (EOF signal)
 	inbox        chan *lib.MessageAndMetadata // the channel where fully received messages are held for other parts of the app to read
 	mu           sync.Mutex                   // mutex to prevent race conditions when sending packets (all packets of the same message should be one right after the other)
+	isClosed     atomic.Bool                  // flag to identify if stream is closed
 	logger       lib.LoggerI
 }
 
@@ -362,6 +370,9 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet) bool {
+	if s.isClosed.Load() {
+		return false
+	}
 	select {
 	case s.sendQueue <- p: // enqueue to the back of the line
 		return true
