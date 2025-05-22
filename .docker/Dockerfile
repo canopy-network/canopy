@@ -1,4 +1,4 @@
-FROM golang:1.22.1-alpine AS builder
+FROM golang:1.23.0-alpine AS builder
 
 RUN apk update && apk add --no-cache make bash nodejs npm
 

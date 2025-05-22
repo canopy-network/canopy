@@ -263,7 +263,7 @@ func TestStart(t *testing.T) {
 		PublicKey:  n1.pub,
 		NetAddress: n1.listener.Addr().String(),
 		PeerMeta:   pm,
-	}, false, true))
+	}, false, true, true))
 	for {
 		select {
 		default:
@@ -406,7 +406,7 @@ func connectStartedNodes(t *testing.T, n1, n2 testP2PNode) error {
 	if err := n1.Dial(&lib.PeerAddress{
 		PublicKey:  n2.pub,
 		NetAddress: n2.listener.Addr().String(),
-	}, false, true); err != nil {
+	}, false, true, true); err != nil {
 		return err
 	}
 	peer, err := n1.PeerSet.GetPeerInfo(n2.pub)
@@ -466,7 +466,7 @@ func newTestP2PPair(t *testing.T) (n1, n2 testP2PNode, cleanup func()) {
 			PeerMeta: &lib.PeerMeta{
 				ChainId: 0,
 			},
-		}}, false, true))
+		}}, false, true, true))
 		wg.Done()
 	}()
 	require.NoError(t, n2.AddPeer(c1, &lib.PeerInfo{Address: &lib.PeerAddress{
@@ -474,7 +474,7 @@ func newTestP2PPair(t *testing.T) (n1, n2 testP2PNode, cleanup func()) {
 		NetAddress: c1.RemoteAddr().String(),
 		PeerMeta:   &lib.PeerMeta{ChainId: 0},
 	}},
-		false, true))
+		false, true, true))
 	wg.Wait()
 	require.True(t, n1.PeerSet.Has(n2.pub))
 	require.True(t, n2.PeerSet.Has(n1.pub))

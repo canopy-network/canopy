@@ -149,7 +149,7 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 				return
 			}
 			// tries to create a full peer from the ephemeral connection and just the net address
-			if err = p.AddPeer(c, &lib.PeerInfo{Address: &lib.PeerAddress{NetAddress: netAddress}}, false, false); err != nil {
+			if err = p.AddPeer(c, &lib.PeerInfo{Address: &lib.PeerAddress{NetAddress: netAddress}}, false, false, true); err != nil {
 				p.log.Error(err.Error())
 				return
 			}
@@ -199,7 +199,7 @@ func (p *P2P) DialForOutboundPeers() {
 			// the peer should be added before the next execution of the loop
 			dialing++
 			defer func() { dialing-- }()
-			if err := p.Dial(rand.Address, false, false); err != nil {
+			if err := p.Dial(rand.Address, false, false, true); err != nil {
 				p.log.Debug(err.Error())
 				return
 			}
@@ -208,7 +208,7 @@ func (p *P2P) DialForOutboundPeers() {
 }
 
 // Dial() tries to establish an outbound connection with a peer candidate
-func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) lib.ErrorI {
+func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey, closeOnFail bool) lib.ErrorI {
 	if p.IsSelf(address) || p.PeerSet.Has(address.PublicKey) {
 		return nil
 	}
@@ -219,25 +219,28 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 		return ErrFailedDial(er)
 	}
 	// try to use the basic tcp connection to establish a peer
-	return p.AddPeer(conn, &lib.PeerInfo{Address: address, IsOutbound: true}, disconnect, strictPublicKey)
+	return p.AddPeer(conn, &lib.PeerInfo{Address: address, IsOutbound: true}, disconnect, strictPublicKey, closeOnFail)
 }
 
 // AddPeer() takes an ephemeral tcp connection and an incomplete peerInfo and attempts to
 // create a E2E encrypted channel with a fully authenticated peer and save it to
 // the peer set and the peer book
-func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPublicKey bool) (err lib.ErrorI) {
+func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPublicKey, closeOnFail bool) (err lib.ErrorI) {
 	// create the e2e encrypted connection while establishing a full peer info object
 	connection, err := p.NewConnection(conn)
 	if err != nil {
 		return err
 	}
-	// always in case of error close connection
-	// first we need to check the error on creation to prevent panics
-	defer func() {
-		if err != nil {
-			connection.Stop()
-		}
-	}()
+	// in case of error close connection when flag is on
+	// not use closeOnFail if using retries
+	if closeOnFail {
+		// first we need to check the error on creation to prevent panics
+		defer func() {
+			if err != nil {
+				connection.Stop()
+			}
+		}()
+	}
 	// replace the peer's port with the resolved port
 	if err = lib.ResolveAndReplacePort(&info.Address.NetAddress, p.config.ChainId); err != nil {
 		p.log.Error(err.Error())
@@ -302,7 +305,7 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 // DialWithBackoff() dials the peer with exponential backoff retry
 func (p *P2P) DialWithBackoff(peerInfo *lib.PeerAddress, strictPublicKey bool) {
 	dialAndLog := func() (err error) {
-		if err = p.Dial(peerInfo, false, strictPublicKey); err != nil {
+		if err = p.Dial(peerInfo, false, strictPublicKey, false); err != nil {
 			p.log.Errorf("Dial %s@%s failed: %s", lib.BytesToString(peerInfo.PublicKey), peerInfo.NetAddress, err.Error())
 		}
 		return
@@ -315,7 +318,7 @@ func (p *P2P) DialWithBackoff(peerInfo *lib.PeerAddress, strictPublicKey bool) {
 
 // DialAndDisconnect() dials the peer but disconnects once a fully authenticated connection is established
 func (p *P2P) DialAndDisconnect(a *lib.PeerAddress, strictPublicKey bool) lib.ErrorI {
-	return p.Dial(a, true, strictPublicKey)
+	return p.Dial(a, true, strictPublicKey, true)
 }
 
 // OnPeerError() callback to P2P when a peer errors
