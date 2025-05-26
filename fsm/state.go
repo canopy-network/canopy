@@ -488,7 +488,7 @@ func (s *StateMachine) IterateAndExecute(prefix []byte, callback func(key, value
 }
 
 // TxnWrap() is an atomicity and consistency feature that enables easy rollback of changes by discarding the transaction if an error occurs
-func (s *StateMachine) TxnWrap() (lib.StoreTxnI, lib.ErrorI) {
+func (s *StateMachine) TxnWrap() (lib.StoreI, lib.ErrorI) {
 	// ensure the store may be 'cache wrapped' in a 'database transaction'
 	store, ok := s.store.(lib.StoreI)
 	if !ok {

@@ -3,9 +3,10 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"time"
 )
 
 var _ lib.RWIndexerI = &Indexer{}
@@ -24,7 +25,7 @@ var (
 
 // Indexer: the part of the DB that stores transactions, blocks, and quorum certificates
 type Indexer struct {
-	db *TxnWrapper
+	db *Txn
 }
 
 // BLOCKS CODE BELOW
@@ -564,4 +565,4 @@ func (t *Indexer) decodeBigEndian(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
-func (t *Indexer) setDB(db *TxnWrapper) { t.db = db }
+func (t *Indexer) setDB(db *Txn) { t.db = db }

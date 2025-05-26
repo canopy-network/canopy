@@ -28,7 +28,7 @@ func TestSet(t *testing.T) {
 			detail: `BEFORE    root
                                /   \
 						    0000  1111
-					 
+
 			          AFTER     root
 		                        /  \
 						    0000   111
@@ -517,7 +517,7 @@ func TestDelete(t *testing.T) {
 						 	000    11
 		                          /  \
 		                        110  111
-		
+
 					AFTER:      root
 							   /    \
                              000    111
@@ -556,7 +556,7 @@ func TestDelete(t *testing.T) {
 						     0      1
 		                   /  \    /  \
 		                000 *010* 101  111
-		
+
 					AFTER:      root
 							  /      \
                             000        1
@@ -604,7 +604,7 @@ func TestDelete(t *testing.T) {
 								    1011   111
 										  /   \
 									   *1110* 1111
-	
+
 						AFTER:     root
 								  /     \
 			                      0000       1
@@ -2164,14 +2164,15 @@ func FuzzKeyDecodeEncode(f *testing.F) {
 	})
 }
 
-func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*SMT, *TxnWrapper) {
+func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*SMT, *Txn) {
 	// create a new memory store to work with
 	db, err := badger.OpenManaged(badger.DefaultOptions("").
 		WithInMemory(true).WithLoggingLevel(badger.ERROR))
 	require.NoError(t, err)
-	// make a writable tx that reads from the last height
-	tx := db.NewTransactionAt(1, true)
-	memStore := NewTxnWrapper(tx, lib.NewDefaultLogger(), []byte(stateCommitmentPrefix))
+	// make a writable reader that reads from the last height
+	reader := db.NewTransactionAt(1, true)
+	writer := db.NewWriteBatchAt(1)
+	memStore := NewBadgerTxn(reader, writer, []byte(stateCommitmentPrefix), lib.NewDefaultLogger())
 	// if there's no preset - use the default 3 nodes
 	if preset == nil {
 		if root != nil {
