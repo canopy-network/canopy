@@ -37,104 +37,10 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 
 // Height response with the latest block
 func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-
 	// Create a read-only state for the latest block and write the height
 	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
 		write(w, state.Height(), http.StatusOK)
 		return nil
-	})
-}
-
-// Height response with the latest block
-func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// unmarshal the requested chain id
-	post := new(chainRequest)
-	if ok := unmarshal(w, r, post); !ok {
-		return
-	}
-	// create a read-only state for the latest block and determine economic parameters
-	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
-		// get the root id
-		rootChainId, err := state.GetRootChainId()
-		if err != nil {
-			return err
-		}
-		// get the lottery winner
-		s.rcManager.l.Lock()
-		delegate, err := s.rcManager.GetLotteryWinner(rootChainId, 0, s.config.ChainId)
-		s.rcManager.l.Unlock()
-		// if an error occurred
-		if err != nil {
-			return err
-		}
-		// ensure non-nil delegate
-		if delegate == nil {
-			return lib.ErrEmptyLotteryWinner()
-		}
-		// find proposer cut
-		proposerCut := 100 - delegate.Cut
-		// remove sub-validator and sub-delegate cuts if requested chain id is non-root id
-		if post.ChainId != rootChainId {
-			proposerCut -= delegate.Cut // sub-validator
-			proposerCut -= delegate.Cut // sub-delegate
-		}
-		daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
-		if err != nil {
-			write(w, err.Error(), http.StatusBadRequest)
-			return nil
-		}
-		write(w, economicParameterResponse{
-			DAOCut:           daoCut,
-			MintPerBlock:     totalMint,
-			MintPerCommittee: committeeMint,
-			ProposerCut:      proposerCut,
-			DelegateCut:      delegate.Cut,
-		}, http.StatusOK)
-		return nil
-	})
-}
-
-// BlockByHeight responds with the block data found at a specific height
-func (s *Server) BlockByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, _ lib.PageParams) (any, lib.ErrorI) { return s.GetBlockByHeight(h) })
-}
-
-// CertByHeight response with the quorum certificate at height h
-func (s *Server) CertByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, _ lib.PageParams) (any, lib.ErrorI) { return s.GetQCByHeight(h) })
-}
-
-// BlockByHash responds with block with hash h
-func (s *Server) BlockByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetBlockByHash(h) })
-}
-
-// Blocks responds with a page of blocks based on the page parameters
-func (s *Server) Blocks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightIndexer(w, r, func(s lib.StoreI, _ uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetBlocks(p) })
-}
-
-// TransactionByHash responds with a transaction with the hash h
-func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetTxByHash(h) })
-}
-
-// TransactionsByHeight response with the transactions at block height h
-func (s *Server) TransactionsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetTxsByHeight(h, true, p) })
-}
-
-// Pending responds with a page of unconfirmed mempool transactions
-func (s *Server) Pending(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.pageIndexer(w, r, func(_ lib.StoreI, _ crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
-		return s.controller.GetPendingPage(p)
 	})
 }
 
@@ -372,6 +278,99 @@ func (s *Server) ConParams(w http.ResponseWriter, r *http.Request, _ httprouter.
 func (s *Server) GovParams(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightParams(w, r, func(s *fsm.StateMachine) (any, lib.ErrorI) { return s.GetParamsGov() })
+}
+
+// EcoParameters economic governance parameters
+func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// unmarshal the requested chain id
+	post := new(chainRequest)
+	if ok := unmarshal(w, r, post); !ok {
+		return
+	}
+	// create a read-only state for the latest block and determine economic parameters
+	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
+		// get the root id
+		rootChainId, err := state.GetRootChainId()
+		if err != nil {
+			return err
+		}
+		// get the lottery winner
+		s.rcManager.l.Lock()
+		delegate, err := s.rcManager.GetLotteryWinner(rootChainId, 0, s.config.ChainId)
+		s.rcManager.l.Unlock()
+		// if an error occurred
+		if err != nil {
+			return err
+		}
+		// ensure non-nil delegate
+		if delegate == nil {
+			return lib.ErrEmptyLotteryWinner()
+		}
+		// find proposer cut
+		proposerCut := 100 - delegate.Cut
+		// remove sub-validator and sub-delegate cuts if requested chain id is non-root id
+		if post.ChainId != rootChainId {
+			proposerCut -= delegate.Cut // sub-validator
+			proposerCut -= delegate.Cut // sub-delegate
+		}
+		daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
+		if err != nil {
+			write(w, err.Error(), http.StatusBadRequest)
+			return nil
+		}
+		write(w, economicParameterResponse{
+			DAOCut:           daoCut,
+			MintPerBlock:     totalMint,
+			MintPerCommittee: committeeMint,
+			ProposerCut:      proposerCut,
+			DelegateCut:      delegate.Cut,
+		}, http.StatusOK)
+		return nil
+	})
+}
+
+// BlockByHeight responds with the block data found at a specific height
+func (s *Server) BlockByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, _ lib.PageParams) (any, lib.ErrorI) { return s.GetBlockByHeight(h) })
+}
+
+// CertByHeight response with the quorum certificate at height h
+func (s *Server) CertByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, _ lib.PageParams) (any, lib.ErrorI) { return s.GetQCByHeight(h) })
+}
+
+// BlockByHash responds with block with hash h
+func (s *Server) BlockByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetBlockByHash(h) })
+}
+
+// Blocks responds with a page of blocks based on the page parameters
+func (s *Server) Blocks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, _ uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetBlocks(p) })
+}
+
+// TransactionByHash responds with a transaction with the hash h
+func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetTxByHash(h) })
+}
+
+// TransactionsByHeight response with the transactions at block height h
+func (s *Server) TransactionsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetTxsByHeight(h, true, p) })
+}
+
+// Pending responds with a page of unconfirmed mempool transactions
+func (s *Server) Pending(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.pageIndexer(w, r, func(_ lib.StoreI, _ crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
+		return s.controller.GetPendingPage(p)
+	})
 }
 
 // NonSigners returns all non-quorum-certificate-signers
