@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"encoding/json"
@@ -46,13 +46,9 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-
-	config, validatorKey = InitializeDataDirectory(dataDir, lib.NewDefaultLogger())
-	l = lib.NewLogger(lib.LoggerConfig{Level: config.GetLogLevel()})
-	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 }
 
-func main() {
+func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
@@ -75,6 +71,9 @@ func Start() {
 		l.Infof("Sleeping until %s", untilTime.String())
 		time.Sleep(untilTime)
 	}
+	config, validatorKey = InitializeDataDirectory(dataDir, lib.NewDefaultLogger())
+	l = lib.NewLogger(lib.LoggerConfig{Level: config.GetLogLevel()})
+	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), config.MetricsConfig)
 	// create a new database object from the config

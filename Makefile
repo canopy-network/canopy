@@ -1,6 +1,6 @@
 # Variables
 GO_BIN_DIR := ~/go/bin
-CLI_DIR := ./cmd/cli/...
+CLI_DIR := ./cmd/main/...
 WALLET_DIR := ./cmd/rpc/web/wallet
 EXPLORER_DIR := ./cmd/rpc/web/explorer
 DOCKER_DIR := ./.docker/compose.yaml
