@@ -2,8 +2,11 @@ package controller
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/fsm"
+	"encoding/json"
+	"fmt"
 	"slices"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -187,8 +190,49 @@ func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.Cert
 		// exit without handling
 		return
 	}
+
+	orderBook, err := c.GetOrderBook()
+	if err != nil {
+		c.log.Errorf("Error getting order book: %v", err)
+	}
+	for _, order := range orderBook.Orders {
+		// This order is already locked, do not look for a lock order on disk
+		if order.BuyerSendAddress != nil {
+			continue
+		}
+		orderBytes, err := c.EthStorage.ReadOrder(fmt.Sprintf("%x", order.Id), "lock_order")
+		if err != nil {
+			continue
+		}
+		var order lib.LockOrder
+		err = json.Unmarshal(orderBytes, &order)
+		if err != nil {
+			c.log.Errorf("Error reading order: %v", err)
+			continue
+		}
+		fmt.Println("HandleSwaps found order", fmt.Sprintf("%x", order.OrderId), order.BuyerChainDeadline, "matching order book")
+		lockOrders = append(lockOrders, &order)
+	}
+
 	// process the root chain order book against the state
 	closeOrders, resetOrders := c.FSM.ProcessRootChainOrderBook(orders, blockResult)
+	for _, order := range orderBook.Orders {
+		if order.BuyerReceiveAddress == nil {
+			continue
+		}
+		orderBytes, err := c.EthStorage.ReadOrder(fmt.Sprintf("%x", order.Id), "close_order")
+		if err != nil {
+			continue
+		}
+		var order lib.CloseOrder
+		err = json.Unmarshal(orderBytes, &order)
+		if err != nil {
+			c.log.Errorf("Error reading order: %v", err)
+			continue
+		}
+		fmt.Println("HandleSwaps found close order", fmt.Sprintf("%x", order.OrderId), "matching order book")
+		closeOrders = append(closeOrders, order.OrderId)
+	}
 	// add the orders to the certificate result - truncating the 'lock orders' for defensive spam protection
 	results.Orders = &lib.Orders{
 		LockOrders:  lib.TruncateSlice(lockOrders, 1000),

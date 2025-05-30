@@ -90,3 +90,6 @@ docker/up-fast:
 ## docker/logs: show the latest logs of the compose containers
 docker/logs:
 	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_DIR) logs -f --tail=1000
+
+foundry_up:
+	anvil --fork-url https://eth-mainnet-canopy.us.nodefleet.net --fork-block-number 22518451

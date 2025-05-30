@@ -39,6 +39,7 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
+	EthWSSConfig       // ethereum options
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -52,6 +53,7 @@ func DefaultConfig() Config {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
+		EthWSSConfig:       DefaultEthWSSConfig(),
 	}
 }
 
@@ -271,6 +273,30 @@ func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
 		Enabled:           true,           // enabled by default
 		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
+	}
+}
+
+type EthWSSConfig struct {
+	// Filesystem path to store received transactions
+	TransactionStorePath string
+
+	// The host and path to the node used for ethereum RPC
+	NodeUrl string
+
+	// The host and path to the node used for ethereum websockets
+	NodeWSSUrl string
+}
+
+// DefaultEthWSSConfig() returns the default ethereum node configuration
+func DefaultEthWSSConfig() EthWSSConfig {
+	return EthWSSConfig{
+		TransactionStorePath: "/var/canopy/eth",
+		// NodeUrl:              "https://eth-mainnet.alchemyapi.io/v2/demo",
+		// NodeWSSUrl:           "wss://eth-mainnet.alchemyapi.io/v2/demo",
+		// NodeUrl:    "https://eth-mainnet-canopy.us.nodefleet.net",
+		// NodeWSSUrl: "wss://eth-canopy-ws.us.nodefleet.net",
+		NodeUrl:    "http://localhost:8545",
+		NodeWSSUrl: "ws://localhost:8545",
 	}
 }
 

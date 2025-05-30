@@ -63,7 +63,7 @@ func DefaultParams() *Params {
 			MaxCommitteeSize:                   100,
 			EarlyWithdrawalPenalty:             20,
 			DelegateUnstakingBlocks:            2,
-			MinimumOrderSize:                   1000000000,
+			MinimumOrderSize:                   1,
 			StakePercentForSubsidizedCommittee: 33,
 			MaxSlashPerCommittee:               15,
 			DelegateRewardPercentage:           10,

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canopy-network/canopy/fsm"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/julienschmidt/httprouter"
@@ -477,6 +479,7 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 		return
 	}
 
+	ptr.Submit = true
 	// Initialize a new keystore from the server's configured data directory.
 	keystore, ok := newKeystore(w, s.config.DataDirPath)
 	if !ok {

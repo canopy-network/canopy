@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
+	"github.com/canopy-network/canopy/cmd/rpc/eth"
+	wstypes "github.com/canopy-network/canopy/cmd/rpc/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -40,6 +42,7 @@ var (
 func init() {
 	flag.Parse()
 	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(generatorCmd)
 	rootCmd.AddCommand(queryCmd)
 	rootCmd.AddCommand(adminCmd)
 	rootCmd.AddCommand(autoCompleteCmd)
@@ -87,11 +90,25 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+
 	// create a new instance of the application
 	app, err := controller.New(sm, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+
+	ethStorage, e := eth.NewEthDiskStorage(config.EthWSSConfig.TransactionStorePath, l)
+	if e != nil {
+		panic(err)
+	}
+	ch := make(chan wstypes.BlockI)
+	ethBlockProvider := eth.NewEthBlockProvider(config.EthWSSConfig.NodeUrl, config.EthWSSConfig.NodeWSSUrl, ch, l)
+
+	go ethBlockProvider.Start()
+
+	listener := rpc.NewBlockListener(ethBlockProvider, app, ethStorage, l)
+	go listener.Start()
+
 	// initialize the rpc server
 	rpcServer := rpc.NewServer(app, config, l)
 	// start the metrics server

@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"encoding/hex"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/cmd/rpc/eth"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -24,10 +27,11 @@ type Controller struct {
 	Config     lib.Config         // node configuration
 	Metrics    *lib.Metrics       // telemetry
 
-	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
-	Mempool   *Mempool          // the in memory list of pending transactions
-	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
-	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
+	FSM        *fsm.StateMachine   // the core protocol component responsible for maintaining and updating the state of the blockchain
+	Mempool    *Mempool            // the in memory list of pending transactions
+	EthStorage *eth.EthDiskStorage // ethereum disk storage
+	Consensus  *bft.BFT            // the async consensus process between the committee members for the chain
+	P2P        *p2p.P2P            // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI // the data manager for the 'root chain'
 	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
@@ -51,6 +55,11 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		// exit with error
 		return
 	}
+
+	ethStorage, e := eth.NewEthDiskStorage(c.EthWSSConfig.TransactionStorePath, l)
+	if e != nil {
+		panic(err)
+	}
 	// create the controller
 	controller = &Controller{
 		Address:    valKey.PublicKey().Address().Bytes(),
@@ -59,6 +68,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Config:     c,
 		Metrics:    metrics,
 		FSM:        fsm,
+		EthStorage: ethStorage,
 		Mempool:    mempool,
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
@@ -154,6 +164,38 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
+
+	orderBook, err := c.GetOrderBook()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	storedOrders := c.EthStorage.GetAllOrderIds("lock_order")
+	c.log.Infof("UpdateRootChainInfo %d stored orders", len(storedOrders))
+	for _, id := range storedOrders {
+		o, err := orderBook.GetOrder(id)
+		if err != nil {
+			fmt.Println(err)
+		}
+		if o == nil {
+			c.log.Infof("Removing order %s from store", hex.EncodeToString(id))
+			c.EthStorage.RemoveOrder(fmt.Sprintf("%s", id), "lock_order")
+		}
+	}
+
+	storedOrders = c.EthStorage.GetAllOrderIds("close_order")
+	c.log.Infof("UpdateRootChainInfo %d stored orders", len(storedOrders))
+	for _, id := range storedOrders {
+		o, err := orderBook.GetOrder(id)
+		if err != nil {
+			fmt.Println(err)
+		}
+		if o == nil {
+			c.log.Infof("Removing order %s from store", hex.EncodeToString(id))
+			c.EthStorage.RemoveOrder(fmt.Sprintf("%s", id), "close_order")
+		}
+	}
+
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
@@ -174,6 +216,11 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), rootHeight, c.Config.ChainId)
+}
+
+// GetOrderBook fetches the root chain order book at the latest height
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut

@@ -3,9 +3,10 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -282,6 +283,17 @@ func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.Erro
 
 // GetOrder() gets the sell order from state
 func (s *StateMachine) GetOrder(orderId []byte, chainId uint64) (order *lib.SellOrder, err lib.ErrorI) {
+	// ob, err := s.GetOrderBook(chainId)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("getting order", len(orderId), string(orderId), chainId, len(ob.Orders))
+	// for i, order := range ob.Orders {
+	// 	fmt.Println("order", i, len(order.Id), len(orderId))
+	// 	if bytes.Equal(order.Id, orderId) {
+	// 		fmt.Println("found")
+	// 	}
+	// }
 	// get the order proto bytes from the state
 	protoBytes, err := s.Get(KeyForOrder(chainId, orderId))
 	if err != nil {

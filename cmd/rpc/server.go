@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"bytes"
-	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -21,8 +20,6 @@ import (
 	pprof2 "runtime/pprof"
 
 	"github.com/alecthomas/units"
-	"github.com/canopy-network/canopy/cmd/rpc/eth"
-	wstypes "github.com/canopy-network/canopy/cmd/rpc/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -83,28 +80,6 @@ func (s *Server) Start() {
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
 	go s.rcManager.Start()
-
-	ethStorage, err := eth.NewStorage("/tmp/eth")
-	if err != nil {
-		panic(err)
-	}
-	url := "https://eth-mainnet.alchemyapi.io/v2/demo"
-	wssUrl := "wss://eth-mainnet.alchemyapi.io/v2/demo"
-
-	// url := "https://eth-mainnet-canopy.us.nodefleet.net"
-	// wssUrl := "wss://eth-mainnet-canopy.us.nodefleet.net"
-
-	ch := make(chan wstypes.BlockI)
-	ethListener, err := eth.NewEthBlockListener(url, wssUrl, ch, s.logger)
-	if err != nil {
-		panic(err)
-	}
-	err = ethListener.Start(context.TODO())
-	if err != nil {
-		panic(err)
-	}
-	listener := NewBlockListener(ch, ethStorage, s.logger)
-	go listener.Start()
 
 	go func() { // TODO remove DEBUG ONLY
 		fileName := "heap1.out"

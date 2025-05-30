@@ -2,6 +2,9 @@ package controller
 
 import (
 	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -206,6 +209,18 @@ func (c *Controller) ValidateProposal(qc *lib.QuorumCertificate, evidence *bft.B
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(block, blockResult, evidence)
+
+	// validate orders from off chain
+	err = c.ValidateOffchainOrders(qc.Results.Orders)
+	if err != nil {
+		return err
+	}
+
+	// Swapchains that are witnessing orders need to verify all orders in the proposed
+	// block are present
+	// TODO Verify all orders in qc.Results.Orders are present locally
+	// If they are, set compareResults.Orders to qc.results.Orders so the below check passes
+
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error
@@ -213,6 +228,76 @@ func (c *Controller) ValidateProposal(qc *lib.QuorumCertificate, evidence *bft.B
 	}
 	// exit
 	return
+}
+
+// ValidateOffchainOrders verifies that the passed orders are all present in the local store
+func (c *Controller) ValidateOffchainOrders(orders *lib.Orders) lib.ErrorI {
+	// if the orders are empty
+	if orders == nil {
+		return lib.ErrEmptyOrderBook()
+	}
+
+	c.log.Errorf("Validating %d lock orders", len(orders.LockOrders))
+	// for each lock order
+	for _, lock := range orders.LockOrders {
+		// if the lock order is empty
+		if lock == nil {
+			// exit with empty error
+			return lib.ErrNilLockOrder()
+		}
+		// ensure the sending address actually has some bytes
+		if len(lock.BuyerSendAddress) == 0 {
+			// exit with address error
+			return lib.ErrInvalidBuyerSendAddress()
+		}
+		// ensure the receive address is exactly 20 bytes
+		if len(lock.BuyerReceiveAddress) != crypto.AddressSize {
+			// exit with address error
+			return lib.ErrInvalidBuyerReceiveAddress()
+		}
+
+		order, err := c.EthStorage.ReadOrder(hex.EncodeToString(lock.OrderId), "lock_order")
+		if err != nil {
+			fmt.Println(err)
+			return lib.ErrNilLockOrder()
+		}
+
+		var orderData lib.LockOrder
+		if err := json.Unmarshal([]byte(order), &orderData); err != nil {
+			fmt.Println(err)
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+
+		if !bytes.Equal(orderData.OrderId, lock.OrderId) {
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+		if !bytes.Equal(orderData.BuyerReceiveAddress, lock.BuyerReceiveAddress) {
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+		if !bytes.Equal(orderData.BuyerSendAddress, lock.BuyerSendAddress) {
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+		if orderData.BuyerChainDeadline != lock.BuyerChainDeadline {
+			fmt.Println(err)
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+	}
+
+	c.log.Infof("Validating %d close orders", len(orders.CloseOrders))
+	for _, orderId := range orders.CloseOrders {
+		order, err := c.EthStorage.ReadOrder(hex.EncodeToString(orderId), "close_order")
+		if err != nil {
+			return lib.ErrNilLockOrder()
+		}
+
+		var orderData lib.CloseOrder
+		if err := json.Unmarshal([]byte(order), &orderData); err != nil {
+			return lib.ErrNilLockOrder() // Handle unmarshalling error
+		}
+
+	}
+	// exit
+	return nil
 }
 
 // CommitCertificate() is executed after the quorum agrees on a block
