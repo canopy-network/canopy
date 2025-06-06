@@ -22,8 +22,8 @@ operations.
 1. **LSM Tree-based**: Uses a
    [Log-Structured Merge-Tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree)
    architecture, optimized for SSDs
-2. **[ACID](https://en.wikipedia.org/wiki/ACID) Compliant**: Ensures data consistency through Atomicity, Consistency, Isolation, and
-   Durability
+2. **[ACID](https://en.wikipedia.org/wiki/ACID) Compliant**: Ensures data consistency through
+   Atomicity, Consistency, Isolation, and Durability
 3. **Concurrent Access**: Supports multiple readers and a single writer simultaneously
 4. **Key-Value Separation**: Stores keys and values separately to improve performance
 5. **Transactions**: Native support for both read-only and read-write transactions. Every action in
@@ -48,11 +48,14 @@ create a complete storage system. It could be represented like a well-organized 
 where each component has a specific job in managing and storing data. Each compoent from the
 simplest to the most complex is described as follows:
 
-1. *`TxnWrapper`*: It is a Wrapper around BadgerDB operations:
+1. **`Txn`**: Database transaction manager and BadgerDB bridge
     - Makes sure all database operations follow the [`RWStoreI`](../lib/store.go) interface
     - Handles basic operations like storing and retrieving data
     - Allows iteration between ranges of data
-    - Works like one of the translators between BadgerDB and the rest of Canopy
+    - Ensures that a group of operations happen together or not at all (transactions)
+    - Enhances BadgerDB by implementing in-memory nested transactions, allowing to write or discard
+      groups of operations within a single BadgerDB transaction
+    - Works as the primary translator between BadgerDB and the rest of Canopy
 
 2. **`Txn`**: The transaction manager
     - Ensures that a group of operations happen together or not all (transactions)
@@ -64,12 +67,12 @@ simplest to the most complex is described as follows:
    - Organizes data in a tree-like structure
    - Makes it easy to prove whether data exists or doesn't exist
    - Uses smart optimizations to save space and work faster
-   - Just like `TxnWrapper` it also follows the [`RWStoreI`](../lib/store.go) interface and
-     leverages `TxnWrapper` itself in order to interact with the database
+   - Follows the [`RWStoreI`](../lib/store.go) interface and leverages `Txn` to interact with the
+     database
 
 4. **`Indexer`**: The filing system
    - Organizes blockchain data (like blocks and transactions) in an easy-to-find way
-   - Uses `TxnWrapper` under the hood to save the data in BadgerDB
+   - Uses `Txn` under the hood to save the data in BadgerDB
    - Uses prefixes (like labels on filing cabinets) to group related data
    - Makes searching through data fast and efficient
 
@@ -77,7 +80,7 @@ simplest to the most complex is described as follows:
    - Brings all other components together
    - Contains three main parts:
      - `Indexer`: Organizes and indexes blockchain data
-     - `StateStore`: Stores the actual blockchain data using `TxnWrapper` under the hood
+     - `StateStore`: Stores the actual blockchain data using `Txn` under the hood
      - `StateCommitStore`: Stores hashes of the data using `SMT` under the hood
    - Is the only component that commits to the database directly
 
@@ -89,13 +92,13 @@ graph TD
     Store --> StateStore[StateStore<br/><i>Raw Data</i>]
     Store --> StateCommitStore[StateCommitStore<br/><i>Hash Data</i>]
 
-    StateStore --> TxnWrapper[TxnWrapper]
+    StateStore --> Txn[Txn]
     StateCommitStore --> SMT[SMT<br/><i>Sparse Merkle Tree</i>]
-    Indexer --> TxnWrapper
+    Indexer --> Txn
 
-    SMT --> TxnWrapper
+    SMT --> Txn
 
-    TxnWrapper --> BadgerDB[BadgerDB]
+    Txn --> BadgerDB[BadgerDB]
     Store --> BadgerDB
 ```
 
@@ -105,37 +108,38 @@ graph TD
    - `StateCommitStore` (for hash data)
    - Commits directly to the database the data on all the components
 
-2. `TxnWrapper` acts as a bridge to BadgerDB:
-   - Both `StateStore` and `Indexer` use it directly
-   - `SMT` also uses it for data storage
-   - Provides consistent way to interact with the database
+2. Txn acts as a bridge to BadgerDB:
+   - All components of the store (`StateStore`, `Indexer`, `SMT`) use it directly
+   - Provides a consistent way to interact with the database
 
 3. `BadgerDB` serves as the foundation:
    - All data ultimately gets stored here
-   - Everything flows through `TxnWrapper` to reach BadgerDB
+   - Everything flows through `Txn` to reach BadgerDB
 
-This architecture ensures each component handles its specific tasks while maintaining consistent data storage and access patterns.
+This architecture ensures each component handles its specific tasks while maintaining consistent
+data storage and access patterns.
 
-### TxnWrapper
+### Txn: Transaction Implementation and BadgerDB Abstraction
 
-BadgerDB's native transaction system provides atomic operations through its `Txn` type, supporting
-both read-only and read-write transactions. Each transaction works with a consistent snapshot of the
-database, ensuring data integrity during concurrent operations.
+The `Txn` type serves as both a bridge to BadgerDB and a transaction manager, providing an
+abstraction layer over BadgerDB's native transaction system. It implements the `RWStoreI` interface,
+enabling atomic operations, rollbacks, and nested transactions.
 
-The `TxnWrapper` in Canopy builds upon this foundation by providing a clean abstraction layer over
-BadgerDB's transaction system. It serves two main purposes:
+#### BadgerDB Abstraction
+
+`Txn` builds upon BadgerDB's foundation by:
 
 1. **Interface Compliance**: Implements the `RWStoreI` interface, establishing a consistent contract
-   for all storage operations within Canopy. This standardization ensures that different components
-   can interact with the storage layer uniformly.
+   for all storage operations within Canopy. This standardization enables different components to
+   interact with the storage layer uniformly.
 
 2. **Transaction Management**: Encapsulates BadgerDB's transaction handling, supporting both
-   read-only and read-write operations. This wrapper simplifies transaction management by:
-   - Providing a cleaner API for common database operations
-   - Extending support of BadgerDB's iterator functionality
-   - Returning errors in a consistent manner based on the project's error handling conventions
+   read-only and read-write operations through:
+   - A cleaner API for common database operations
+   - Extended support for BadgerDB's iterator functionality
+   - Consistent error handling based on project conventions
 
-The main operations `TxnWrapper` is set to support according to the `RWStoreI` interface are:
+The main operations supported by `Txn` according to the `RWStoreI` interface are:
 
 - `Get(key []byte) ([]byte, ErrorI)`: Retrieves the value associated with the given key.
 - `Set(key, value []byte) ErrorI`: Sets the value for the given key.
@@ -145,13 +149,9 @@ The main operations `TxnWrapper` is set to support according to the `RWStoreI` i
 - `RevIterator(prefix []byte) (IteratorI, ErrorI)`: Creates a reverse iterator over byte-wise
   lexicographically sorted key-value pairs that start with the given prefix.
 
-Note that all operations within `TxnWrapper` are neither committed nor rolled back directly, as
-`TxnWrapper` operates within the broader transaction scope managed by the `Store` struct, which
-handles the final commit or rollback decisions.
-
 #### Key prefixing
 
-All keys in `TxnWrapper` are automatically prefixed with a unique identifier (e.g., "s/" for state
+All keys in `Txn` are automatically prefixed with a unique identifier (e.g., "s/" for state
 store, "c/" for commitment store) to achieve two main purposes:
 
 1. **Data Isolation**: Each component (`StateStore`, `StateCommitStore`, `Indexer`) maintains its own
@@ -163,56 +163,46 @@ store, "c/" for commitment store) to achieve two main purposes:
 
 These prefixes are only used internally and never exposed to the user.
 
-## Txn: Ad Hoc Nested Transactions Implementation
+#### Ad Hoc Nested Transactions Implementation
 
-The `Txn` type provides a transaction-like interface for the store, allowing for atomic operations and rollbacks. This is particularly useful for testing block proposals and managing ephemeral states. 
-One of its features is the ability to create nested transactions, enabling complex multi-level state modifications while maintaining atomicity.
+The `Txn` type provides a transaction-like interface for the store, enabling atomic operations and
+rollbacks. All writes are first stored in an internal in-memory cache before being flushed to the
+database, leveraging either the in-memory cache for current state keys or a badgerDB reader for
+committed keys. This design is particularly useful for testing block proposals and managing
+ephemeral states.
 
-### Nested Transactions
+A key feature of this implementation is its support for nested transactions, which offer a
+code-level abstraction for managing hierarchical state modifications. Unlike database-level nested
+transactions, these are implemented entirely in memory, allowing operations to be grouped and
+independently committed or rolled back. This creates an abstraction for managing complex state
+changes that need to be atomic at different levels, while maintaining compatibility with BadgerDB's
+single-level transaction model.
 
-Nested transactions in Canopy's `Txn` implementation provide a code-level abstraction for managing hierarchical state modifications. 
-Unlike database-level nested transactions, these are implemented entirely in memory and provide a way to group operations that can be independently committed or rolled back. 
-This creates an abstraction for managing complex state changes that need to be atomic at different levels, while maintaining the simplicity of BadgerDB's single-level transaction model.
+Some of the key Features of the nested transactions are:
 
-#### Key Features of Nested Transactions
+1. **Hierarchical Structure** Transactions form a hierarchy where child transactions inherit parent
+   state but keep their own changes isolated until committed. Parents can roll back child changes
+   atomically.
 
-1. **Hierarchical Structure**
-   Transactions form a hierarchy where child transactions inherit parent state but keep their own changes isolated until committed. Parents can roll back child changes atomically.
+2. **Independent Commit/Rollback** Each transaction level can be committed or rolled back
+   independently. Child changes affect the parent only when committed, and parent rollbacks undo all
+   nested changes.
 
-2. **Independent Commit/Rollback**
-   Each transaction level can be committed or rolled back independently. Child changes affect the parent only when committed, and parent rollbacks undo all nested changes.
+3. **State Isolation** Changes are confined to the transaction level where they occur. Parents don't
+   see uncommitted child changes; children can access committed parent state.
 
-3. **State Isolation**
-   Changes are confined to the transaction level where they occur. Parents don't see uncommitted child changes; children can access committed parent state.
+4. **Atomic Operations** All changes within a transaction level are atomic. Commits and rollbacks
+   affect only that level and its children, preserving integrity and consistency.
 
-4. **Atomic Operations**
-   All changes within a transaction level are atomic. Commits and rollbacks affect only that level and its children, preserving integrity and consistency.
+#### What `Txn`actually Does
 
-### What `Txn` Does
-
-1. **Wraps a Parent Store**: Acts as a temporary overlay on top of an existing store, enabling nested transaction hierarchies
+1. **Wraps a reader and writer**: Acts as a temporary overlay on top of a new or an existing
+   reader/writer, as long as they comply with the `TxnReader` and `TxnxWriter` interface enabling
+   nested transaction hierarchies
 2. **Stores Changes in Memory**: All operations (set/delete) are kept in memory until explicitly written, allowing child transactions to maintain isolated state
 3. **Supports Atomic Writes**: All in-memory changes can be committed at once or discarded, maintaining atomicity at each transaction level
 4. **Enables Rollbacks**: Discarding reverts all uncommitted operations, including those from child transactions
 5. **Supports Iteration**: Provides forward and reverse iteration with in-memory and base-store merging, respecting transaction hierarchy
-
-### How It Works
-
-The `Txn` system has three key internal parts that work together to support nested transactions:
-
-- **`Txn`**: The main transaction object exposed to users, capable of creating child transactions
-- **`txn`**: A struct that holds:
-  - A map of pending operations, maintaining isolation between transaction levels
-  - A sorted list of keys for fast iteration across the transaction hierarchy
-- **`op`**: Represents an individual operation (Set or Delete) that can be committed or rolled back at any transaction level
-
-### Key Features
-
-- **In-Memory Speed**: Fast reads/writes with no disk access, enabling efficient nested transaction operations
-- **Efficient Iteration**: Maintains sorted keys for quick scanning and merging across transaction levels
-- **Read Precedence**: Reads prioritize in-memory updates over the underlying store, respecting transaction hierarchy
-- **Atomic Commit**: `Write()` commits all changes at once to the parent store, maintaining atomicity at each level
-- **Safe Rollback**: `Discard()` wipes all uncommitted changes, including those from child transactions
 
 ## Canopy's Optimized Sparse Merkle Tree
 
