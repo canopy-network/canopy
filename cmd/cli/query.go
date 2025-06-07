@@ -1,10 +1,11 @@
-package main
+package cli
 
 import (
-	"github.com/canopy-network/canopy/lib"
-	"github.com/spf13/cobra"
 	"strconv"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/spf13/cobra"
 )
 
 var queryCmd = &cobra.Command{
