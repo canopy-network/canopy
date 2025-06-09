@@ -1,5 +1,7 @@
 # JSON-RPC API Methods
+
 <hr/>
+
 ## RPC Routes Reference
 - /v1/
 - /v1/tx
@@ -45,7 +47,7 @@
 - /v1/query/failed-txs
 - /v1/gov/proposals
 - /v1/gov/poll
-- /v1/query/root-Chain-info
+- /v1/query/root-chain-info
 - /v1/query/validator-set
 - /v1/query/checkpoint
 - /v1/subscribe-rc-info
@@ -84,6 +86,8 @@
 - /v1/admin/log
 - /v1/gov/add-vote
 - /v1/gov/del-vote
+
+# Standard
 
 ## version
 
@@ -2121,6 +2125,109 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 }
 ```
 
+
+## Order
+
+**Route:** `/v1/query/order`
+
+**Description**: view a sell order by its unique idnetifier
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **chainId**: `uint64` – the unique identifier of the committee
+- **orderId**: `hex-string` – the unique identifier of the order
+
+**Response**:
+- **id**: `hex-string` - the unique identifier of the order
+- **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
+- **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
+- **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale  in smallest unit
+- **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
+- **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset' in smallest unit
+- **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
+- **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+- **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+
+
+```
+$ curl -X POST localhost:50002/v1/query/order \
+  -H "Content-Type: application/json" \
+  -d '{
+        "chainId": 1,
+        "orderId": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+        "height": 1000
+      }'
+
+>{
+  "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+  "committee": "1",
+  "data": "",
+  "amountForSale": 1000000000000,
+  "requestedAmount": 2000000000000,
+  "sellersReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+  "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
+  "buyerChainDeadline": 17585,
+  "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+}
+```
+
+## Orders
+
+**Route:** `/v1/query/orders`
+
+**Description**: view all sell orders for a counter-asset pair
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+
+**Response**:
+- **orders**: `object` - the swap order book from the 'root chain' for the 'nested chain'
+  - **chainId**: `uint64` - the unique identifier of the committee
+  - **orders**: `sell order array` - the actual list of sell orders
+    - **id**: `hex string` - the 20 byte identifier of the order
+    - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
+    - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
+    - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
+    - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
+    - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
+    - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
+    - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+    - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+
+
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "chainId": 1,
+        "height": 1000
+      }'
+
+> {
+    "chainID": 1,
+    "orders": [
+        {
+        "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+        "committee": "1",
+        "data": "",
+        "amountForSale": 1000000000000,
+        "requestedAmount": 2000000000000,
+        "sellersReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
+        "buyerChainDeadline": 17585,
+        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+      }
+    ]
+}
+```
+
 ## Pending Transactions (Mempool)
 
 **Route:** `/v1/query/pending`
@@ -2384,3 +2491,954 @@ $ curl -X POST localhost:50002/v1/query/failed-txs \
   "totalCount": 1
 }
 ```
+
+
+## Governance Proposals
+
+**Route:** `/v1/gov/proposals`
+
+**Description**: view how your validator is voting for governance parameters changes and token distributions from the DAO Treasury Fund
+
+**HTTP Method**: `GET`
+
+**Request**: None
+
+**Response**:
+- `map[proposalHashHex] -> object`
+  - **proposal**: `object` - the governance proposal structure in the form of a Transaction with a payload that is `oneOf`: `MessageChangeParameter` or `MessageDAOTransfer` see (see tx-by-hash)
+  - **approve**: `bool` - is the local Validator voting yes or no on the proposal
+
+
+```
+$ curl -X GET localhost:50002/v1/gov/proposals
+
+>{
+  "93ba7a69f9be05257822c61be59bd80c1d5c5c9f56d6320f94a36d84c4c781f9": {
+    "proposal": {
+      "type": "changeParameter",
+      "msg": {
+        "parameterSpace": "cons|fee|val|gov",
+        "parameterKey": "protocolVersion",
+        "parameterValue": "example",
+        "startHeight": 1,
+        "endHeight": 1000,
+        "signer": "4646464646464646464646464646464646464646"
+      },
+      "signature": {
+        "publicKey": "a10665940f6dd5f8c5ca858b562afee13794a5055ffc289596b4fe9230aae83bd7e8b4dc1c9611793936d6dfd725e592",
+        "signature": "8c586257852296498c056d9ea8090f69207d938d67375ea34fbc2af4fa06e97404588d3f67237c3bf847fe8c6d7a670d03680622aba6b3b7e72d3bc93f871bf98ba8a2e94d1ab6e52437746a0449bc2fbd9ccf42e8256f5ab541b95435f6c202"
+      },
+      "time": 1744837549307074,
+      "createdHeight": 1,
+      "fee": 10000,
+      "memo": "example",
+      "networkID": 1,
+      "chainID": 1
+    },
+    "approve": true
+  }
+}
+```
+
+## Governance Poll
+
+**Route:** `/v1/gov/poll`
+
+**Description**: view community sentiment by on-chain votes of Accounts and Validators. This data is recalculated and updated periodically
+
+**HTTP Method**: `GET`
+
+**Request**: None
+
+**Response**:
+- `map[proposalHashHex] -> object`
+  - **proposalHash**: `hex-string` - the SHA256 hash of the proposal that is voted on
+  - **proposalURL**: `url-string` - the URL of the proposal information
+  - **accounts**: `object` - the accounts voting data
+    - **approveTokens**: `uint64` - approve count represented by liquid token balance
+    - **rejectTokens**: `uint64` - reject count reprented by liquid token balance
+    - **totalTokens**: `uint64` - total liquid tokens that voted
+    - **approvePercent**: `uint64` - the percent of voters in this category who approve
+    - **rejectPercent**: `uint64` - the percent of voters in this category who disapprove
+    - **votedPercent**: `uint64` - the percent of voters in this category who voted
+  - **validators**: `object` - the validators voting data
+    - **approveTokens**: `uint64` - approve count represented by liquid token balance
+    - **rejectTokens**: `uint64` - reject count reprented by liquid token balance
+    - **totalTokens**: `uint64` - total liquid tokens that voted
+    - **approvePercent**: `uint64` - the percent of voters in this category who approve
+    - **rejectPercent**: `uint64` - the percent of voters in this category who disapprove
+    - **votedPercent**: `uint64` - the percent of voters in this category who voted
+  - **approve**: `bool` - is the local Validator voting yes or no on the proposal
+
+
+```
+$ curl -X GET localhost:50002/v1/gov/poll
+
+>{
+  "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c": {
+    "proposalHash": "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
+    "proposalURL": "https://forum.cnpy.network/something",
+    "accounts": {
+      "approveTokens": 0,
+      "rejectTokens": 0,
+      "totalVotedTokens": 0,
+      "totalTokens": 12556191411824,
+      "approvedPercent": 0,
+      "rejectPercent": 0,
+      "votedPercent": 0
+    },
+    "validators": {
+      "approveTokens": 0,
+      "rejectTokens": 0,
+      "totalVotedTokens": 0,
+      "totalTokens": 2223557946105,
+      "approvedPercent": 0,
+      "rejectPercent": 0,
+      "votedPercent": 0
+    }
+  }
+}
+```
+
+## Root Chain Info
+
+**Route:** `/v1/gov/root-chain-info`
+
+**Description**: responds with root-chain data needed for nested-chain consensus
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee
+
+**Response**:
+- **rootChainid**: `uint64` - the unique identifier of the chain responsible for the validator set
+- **height**: `uint64` - the height of the query
+- **validatorSet**: `object` - the consensus validators currently active according to the root-chain
+  - **validatorSet**: `object array` - the list of consensus validators
+    - **publicKey**: `hex-string` - the BLS public key of the validator
+    - **votingPower**: `uint64` - the voting power of the validator (typically amount of staked tokens)
+    - **netAddress**: `url string` - the TCP peer-to-peer address of the validator
+- **lastValidatorSet**: `object` - the consensus validators active for the last root-chain height (see validatorSet)
+- **lotteryWinner**: `object` - the selected delegate/pseudo-validator who receives rewards
+  - **winner**: `hex-string` - the 20 byte address of the selected actor
+  - **cut**: `uint64` - the percent cut of the rewards before normalization
+- **orders**: `object` - the swap order book from the 'root chain' for the 'nested chain'
+  - **chainId**: `uint64` - the unique identifier of the committee
+  - **orders**: `sell order array` - the actual list of sell orders
+    - **id**: `hex string` - the 20 byte identifier of the order
+    - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
+    - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
+    - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
+    - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
+    - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
+    - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
+    - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+    - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+
+
+```
+$ curl -X POST localhost:50002/v1/query/root-chain-info \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585,
+        "id": 1
+      }'
+
+>{
+  "rootChainId": 1,
+  "height": 17585,
+  "validatorSet": {
+    "validatorSet": [
+      {
+        "publicKey": "b17d4eb3938957e710bacc9f09d2a9aa79a568fcdf1f8fc565bdb5de3f334295e929e4b086b9c8e9610654155fb0452b",
+        "votingPower": 1,
+        "netAddress": "tcp://canopyrocks.xyz"
+      }
+    ]
+  },
+  "lastValidatorSet": {
+    "validatorSet": [
+      {
+        "publicKey": "b17d4eb3938957e710bacc9f09d2a9aa79a568fcdf1f8fc565bdb5de3f334295e929e4b086b9c8e9610654155fb0452b",
+        "votingPower": 1,
+        "netAddress": "tcp://canopyrocks.xyz"
+      }
+    ]
+  },
+  "lotteryWinner": {
+    "winner": "",
+    "cut": 0
+  },
+  "orders": {
+    "chainID": 1
+  }
+}
+```
+
+## Last Proposers
+
+**Route:** `/v1/query/last-proposers`
+
+**Description**: responds with the last Proposer addresses saved in the state
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**:
+- **addresses**: `hex-string array` - a list of addresses of the most recent previous proposers in fixed modulo order
+
+```
+$ curl -X POST localhost:50002/v1/query/last-proposers \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585
+      }'
+
+>{
+  "addresses": [
+    "fc5cdb5c0b6a6df41b92976bbdf2b6832855446f",
+    "ac2c2eb9aa04b99ec9a523b09ca844a77826c291",
+    "b9c6c2dfa9d049e480c8cec9c29463abf078a594",
+    "b9c6c2dfa9d049e480c8cec9c29463abf078a594",
+    "33e14ef6b87fb688b829c5e29618bb549dc7b4cd"
+  ]
+}
+```
+
+## Is Valid Double Signer
+
+**Route:** `/v1/query/valid-double-signer`
+
+**Description**: responds if the DoubleSigner is NOT already set for a height - this is useful to determine if byzantine evidence is stale.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **address**: `hex-string` - the address of the potential double signer
+
+**Response**: `bool` - may be set as a double signer
+
+```
+$ curl -X POST localhost:50002/v1/query/valid-double-signer \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585,
+        "address": "b9c6c2dfa9d049e480c8cec9c29463abf078a594"
+      }'
+
+>true
+```
+
+## Double Signer
+
+**Route:** `/v1/query/double-signers`
+
+**Description**: responds with all double signers in the indexer
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**:
+- `array` - list of all double signers as of the query height
+  - **id**: `uint64` - the address identifier of the malicious actor
+  - **heights**: `array`
+
+```
+$ curl -X POST localhost:50002/v1/query/double-signers \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585
+      }'
+
+>[{
+  "id": "b9c6c2dfa9d049e480c8cec9c29463abf078a594",
+  "heights": [1000, 17585]
+}]
+```
+
+## Minimum Evidence Height
+
+**Route:** `/v1/query/minimum-evidence-height`
+
+**Description**: responds with the minimum height the evidence must be to still be usable
+
+**HTTP Method**: `POST`
+
+**Request**: `None`
+
+**Response**: `uint64` - the minimum evidence height
+
+```
+$ curl -X POST localhost:50002/v1/query/minimum-evidence-height \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+> 165453
+```
+
+## Lottery
+
+**Route:** `/v1/query/lottery`
+
+**Description**: responds with the selected winner (nested-validator/nested-delegate/delegate) chosen pseudo-randomly based on their stake weight within a committee
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` - the unique identifier of the committee
+
+**Response**:
+- **winner**: `hex-string` - the 20 byte address of the selected actor
+- **cut**: `uint64` - the percent cut of the rewards before normalization
+
+```
+$ curl -X POST localhost:50002/v1/query/lottery \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585,
+        "id" : 1
+      }'
+
+>{
+  "winner": "b9c6c2dfa9d049e480c8cec9c29463abf078a594",
+  "cut": 10
+}
+```
+
+## Checkpoint
+
+**Route:** `/v1/query/checkpoint`
+
+**Description**: responds with the checkpoint block hash for a certain committee and height combination
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` - the unique identifier of the committee / chain
+
+**Response**: `hex-string` - the block hash of the committee / chain
+
+```
+$ curl -X POST localhost:50002/v1/query/checkpoint \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id" : 1
+      }'
+
+> "cd9d3e487bce2918e306364fca286f473bd8cc92f150b3d97f9063b570a2b801"
+```
+
+
+## Subscribe Root Chain Info
+
+**Route:** `/v1/query/subscribe-rc-info`
+
+**Description**: ws: upgrades a http request to a websockets connection. Subscribes to the root chain info for when the root-chain publishes it.
+
+**HTTP Method**: `WS`
+
+**Request**:
+- **chainId**: `uint64` - the unique identifier of the committee / chain
+
+**Response**: Periodic updates with Root-Chain-Info sent over the WebSocket
+
+```
+$ websocat "ws://localhost:50002/v1/subscribe-rc-info?chainId=123"
+```
+
+## Ethereum
+
+**Route:** `/v1/eth`
+
+**Description**: implements [Ethereum JSON-RPC interface](https://ethereum.org/en/developers/docs/apis/json-rpc). For more details see the `Canopy Ethereum Wrapper` specification.
+
+**HTTP Method**: `POST`
+
+**Request**: (See Ethereum Specification)
+
+**Response**: (See Ethereum Specification)
+
+```
+$ curl -X POST http://localhost:50002/v1/eth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0",
+    "method":"eth_blockNumber",
+    "params":[],
+    "id":1
+  }'
+
+> {
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": "0x2fc6c"
+}
+```
+
+# Admin
+
+🚨**Important: All admin commands assume secure https connection**
+
+## Keystore
+
+**Route:** `/v1/admin/keystore`
+
+**Description**: responds with the local keystore
+
+**HTTP Method**: `GET`
+
+**Request**: `None`
+
+**Response**:
+- **addressMap**: `object` - the map of addresses to keystore entry `[hex-address] -> keystoreEntry`
+  - **publicKey**: `hex-string` -  the public code that can cryptographically verify signatures from the private key
+  - **salt**: `hex-string` - random 16 bytes salt
+  - **encrypted**: `hex-string` - the private key encrypted with AES-GCM
+  - **keyAddress**: `hex-string` - the address of the key
+  - **keyNickname**: `string` - the nickname of the key
+- **nicknameMap**: `object` the map of nicknames to address `[nickname] -> hex-address`
+
+
+```
+$ curl -X GET http://localhost:50003/v1/admin/keystore \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+> {
+  "addressMap": {
+    "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
+      "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
+      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292",
+      "keyAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+      "keyNickname": "my_key"
+    }
+  },
+  "nicknameMap": {
+    "my_key": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+  }
+}
+```
+
+## Keystore New Key
+
+**Route:** `/v1/admin/keystore-new-key`
+
+**Description**: create a new BLS key in the keystore
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **password**: `string` - the plaintext password used to encrypt the key
+
+**Response**: `hex-string` - the 20 byte address of the newly created key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-new-key \
+  -H "Content-Type: application/json" \
+  -d '{"nickname":"my_key_", "password":"plain-text"}'
+
+> "7cd2a86894f4a23ea956dee1722c6776230bf552"
+```
+
+
+## Keystore Import
+
+**Route:** `/v1/admin/keystore-import`
+
+**Description**: import an encrypted private key to the node's keystore
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **address**: `hex-string` - the address associated with the encrypted key
+- **publicKey**: `hex-string` -  the public code that can cryptographically verify signatures from the private key
+- **salt**: `hex-string` - random 16 bytes salt
+- **encrypted**: `hex-string` - the private key encrypted with AES-GCM
+
+**Response**: `hex-string` - the 20 byte address of the newly imported key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-import \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key_", 
+    "addresss":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
+      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292"
+    }'
+
+> "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+```
+
+## Keystore Import Raw
+
+**Route:** `/v1/admin/keystore-import-raw`
+
+**Description**: import a raw private key to the node's keystore
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **password**: `string` - the plain-text password to encrypt the private key with
+- **privateKey**: `hex-string` -  the secret code that is capable of producing digital signatures
+
+**Response**: `hex-string` - the 20 byte address of the newly imported key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-import-raw \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key_2", 
+    "password":"plain-text",
+    "privateKey": "ee62bbab22a26e34e5489bdb3a751533c34084975fadac4b5b23e15dbd0cff70"
+    }'
+
+> "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+```
+
+## Keystore Delete
+
+**Route:** `/v1/admin/keystore-delete`
+
+**Description**: removes a key from the keystore using either the address or nickname
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **address**: `string` - the address associated with the key
+
+**Response**: `hex-string` - the 20 byte address of the newly imported key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-delete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key_2"
+    }'
+
+> "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+```
+
+## Keystore Get
+
+**Route:** `/v1/admin/keystore-get`
+
+**Description**: responds with the key group associated with an address or nickname
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **address**: `hex-string` - address associated with the key
+- **password**: `hex-string` - the plain-text password to get the private key with
+
+**Response**:
+- **address**: `hex-string` - the 20 byte address of the newly imported key
+- **publicKey**: `hex-string` - a cryptographic code shared openly, used to verify digital signatures of its paired private key
+- **privateKey**: `hex-string` -  a secret cryptographic code that is used to produce digital signatures
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-get \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key",
+    "password":"test"
+    }'
+
+> {
+  "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "publicKey": "acb57b23c0f90c16aea48a6edbb31996400af55f623f676a3c64c04b826454aea227f14d1b70c151d5fa9fe536790f6d",
+  "privateKey": "ed3c9acd8fffa374756ba1c175af5228f9e4e96c0ecdfda0a9fd9afa09472e12"
+}
+```
+
+## Txn Send
+
+**Route:** `/v1/admin/tx-send`
+
+**Description**: generates/submits a send transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the from address
+- **output**: `hex-string` - the recipient address
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageSend)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "output":"271e0120ac7f11a6f60ba124b2b187eaf1e2e6f5",
+    "amount": 1000000,
+    "memo": "hello world",
+    "submit": false,
+    "password": "test"
+    }'
+
+> {
+  "type": "send",
+  "msg": {
+  "fromAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "toAddress": "271e0120ac7f11a6f60ba124b2b187eaf1e2e6f5",
+  "amount": 1000000
+  },
+  "signature": {
+  "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+  "signature": "8b33f205f3cfeae277ac9b363a442114117d67dfa2722c9396bd1f67f289a977b0495c252db9a693c8e4c659667461ea0e9928533f69376622572808b10a17bd9c005ccea3f798a138719f896b1d27e981d88ef0cb025a761f6e37a5a6fd6e49"
+  },
+  "time": 1749415924948935,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Stake
+
+**Route:** `/v1/admin/tx-stake`
+
+**Description**: generates/submits a stake transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the operator address associated with the validator
+- **amount**: `uint64` - the amount of tokens to stake in smallest (micro) denomination
+- **pubKey**: `hex-string` - the operator public key (must be BLS if non-delegate)
+- **netAddress**: `url string` - the p2p url of the validator (n/a for delegate)
+- **committees**: `string` - a comma separated list of committee ids
+- **delegate**: `bool` - is this validator active (false) or delegating (true)
+- **earlyWithdrawal**: `bool` - is this validator withdrawing its rewards early for a penalty (true) or auto-compounding (false)
+- **output**: `hex-string` - the address where rewards and returned bonded tokens outputs to
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+
+**Response**: (See tx-by-hash and MessageStake)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-stake \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "netAddress": "tcp://cnpyrocks.com",
+    "committees": "1,2,3",
+    "amount": 1000000,
+    "delegate": false,
+    "earlyWithdrawal": false,
+    "output": "ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "signer": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "memo": "hello world",
+    "fee": 10000,
+    "submit": false,
+    "password": "test"
+  }'
+
+> {
+  "type": "stake",
+  "msg": {
+    "publickey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "amount": 1000000,
+    "committees": [
+      1,2,3
+    ],
+    "netAddress": "tcp://cnpyrocks.com",
+    "outputAddress": "ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "delegate": false,
+    "compound": true
+  },
+  "signature": {
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "signature": "a0473e839b23abc7d8448de5c58141827d86157263deaa79db0d9a1d1f0ffa9f7503c9ff52be7645b3ca0de50482651c1857d2af39c6953a68e386ca0901f668ef61dd706e4ed753548b5cb6737aceb06307e5894fbe49668fa2a1ff9036e971"
+  },
+  "time": 1749416582662716,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Edit Stake
+
+**Route:** `/v1/admin/tx-edit-stake`
+
+**Description**: generates/submits an edit stake transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the operator address associated with the validator
+- **amount**: `uint64` - the amount of tokens to stake in smallest (micro) denomination - (cannot decrease amount, lower defaults to current stake amount)
+- **netAddress**: `url string` - the p2p url of the validator (n/a for delegate)
+- **committees**: `string` - a comma separated list of committee ids
+- **earlyWithdrawal**: `bool` - is this validator withdrawing its rewards early for a penalty (true) or auto-compounding (false)
+- **output**: `hex-string` - the address where rewards and returned bonded tokens outputs to (only the output address can change this)
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+
+**Response**: (See tx-by-hash and MessageEditStake)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-edit-stake \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "netAddress": "tcp://cnpyrocks.com",
+    "committees": "1,2,3",
+    "amount": 1000000,
+    "earlyWithdrawal": false,
+    "output": "ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "signer": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "memo": "hello world",
+    "fee": 10000,
+    "submit": false,
+    "password": "test"
+  }'
+
+> {
+  "type": "edit-stake",
+  "msg": {
+    "addresss": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "committees": [
+      1,2,3
+    ],
+    "netAddress": "tcp://cnpyrocks.com",
+    "outputAddress": "ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "compound": true
+  },
+  "signature": {
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "signature": "a0473e839b23abc7d8448de5c58141827d86157263deaa79db0d9a1d1f0ffa9f7503c9ff52be7645b3ca0de50482651c1857d2af39c6953a68e386ca0901f668ef61dd706e4ed753548b5cb6737aceb06307e5894fbe49668fa2a1ff9036e971"
+  },
+  "time": 1749416582662716,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Pause
+
+**Route:** `/v1/admin/tx-pause`
+
+**Description**: generates/submits a pause transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the operator address associated with the validator
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+
+**Response**: (See tx-by-hash and MessagePause)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-pause \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "signer": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "memo": "hello world",
+    "fee": 10000,
+    "submit": false,
+    "password": "test"
+  }'
+
+> {
+  "type": "pause",
+  "msg": {
+    "addresss": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "signature": {
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "signature": "a0473e839b23abc7d8448de5c58141827d86157263deaa79db0d9a1d1f0ffa9f7503c9ff52be7645b3ca0de50482651c1857d2af39c6953a68e386ca0901f668ef61dd706e4ed753548b5cb6737aceb06307e5894fbe49668fa2a1ff9036e971"
+  },
+  "time": 1749416582662716,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+
+## Txn Unpause
+
+**Route:** `/v1/admin/tx-unpause`
+
+**Description**: generates/submits an unpause transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the operator address associated with the validator
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+
+**Response**: (See tx-by-hash and MessageUnpause)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-unpause \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "signer": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "memo": "hello world",
+    "fee": 10000,
+    "submit": false,
+    "password": "test"
+  }'
+
+> {
+  "type": "unpause",
+  "msg": {
+    "addresss": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "signature": {
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "signature": "a0473e839b23abc7d8448de5c58141827d86157263deaa79db0d9a1d1f0ffa9f7503c9ff52be7645b3ca0de50482651c1857d2af39c6953a68e386ca0901f668ef61dd706e4ed753548b5cb6737aceb06307e5894fbe49668fa2a1ff9036e971"
+  },
+  "time": 1749416582662716,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Unstake
+
+**Route:** `/v1/admin/tx-unstake`
+
+**Description**: generates/submits an unstake transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `string` - the operator address associated with the validator
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+
+**Response**: (See tx-by-hash and MessageUnstake)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-unstake \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "signer": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "memo": "hello world",
+    "fee": 10000,
+    "submit": false,
+    "password": "test"
+  }'
+
+> {
+  "type": "unstake",
+  "msg": {
+    "addresss": "abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "signature": {
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+    "signature": "a0473e839b23abc7d8448de5c58141827d86157263deaa79db0d9a1d1f0ffa9f7503c9ff52be7645b3ca0de50482651c1857d2af39c6953a68e386ca0901f668ef61dd706e4ed753548b5cb6737aceb06307e5894fbe49668fa2a1ff9036e971"
+  },
+  "time": 1749416582662716,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "memo": "hello world",
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+
+
+<hr />
+
+TODO
+
+- **address**: `string` - the main address associated with the transaction
+- **amount**: `uint64` - the amount of tokens associated with the transaction in smallest (micro) denomination
+- **pubKey**: `hex-string` - a cryptographic code shared openly, used to verify digital signatures of its paired private key
+- **netAddress**: `url string` - the p2p url of the validator
+- **committees**: `string` - a comma separated list of committee ids
+- **delegate**: `bool` - is this validator active (false) or delegating (true)
+- **earlyWithdrawal**: `bool` - is this validator withdrawing its rewards early for a penalty (true) or auto-compounding (false)
+- **output**: `hex-string` - the address where rewards and returned bonded tokens outputs to
+- **receiveAmount**: `uint64` - the amount of 'counter-asset' to receive in smallest denomination
+- **receiveAddress**: `hex-string` - the address where the 'counter-asset' is received
+- **orderId**: `hex-string` - the unique id of the sell-order
+- **pollJSON**: `json string` - the poll json object
+- **pollApprove**: `bool` - approve or reject the poll
+- **signer**: `hex-string` - the address associated with the key that is signing the transaction
+- **signerNickname**: `string` - the nickname of the key that is signing the transaction
+- **data**: `hex-string` - an arbitrary string code associated with the order
+- **opCode**: `hex-string` - an arbitrary string code associated with the command
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+## Golang Profiling Debug
+
+**Route:**
+- DebugBlockedRoutePath = "/debug/blocked"
+- DebugHeapRoutePath    = "/debug/heap"
+- DebugCPURoutePath     = "/debug/cpu"
+- DebugRoutineRoutePath = "/debug/routine"
+
+**Description**: returns an HTTP handler that serves the named profile. Available profiles can be found in [runtime/pprof.Profile]. See https://pkg.go.dev/net/http/pprof
+
+**HTTP Method**: `GET`
+
+
+
+

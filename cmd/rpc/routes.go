@@ -52,7 +52,7 @@ const (
 	FailedTxRoutePath              = "/v1/query/failed-txs"
 	ProposalsRoutePath             = "/v1/gov/proposals"
 	PollRoutePath                  = "/v1/gov/poll"
-	RootChainInfoRoutePath         = "/v1/query/root-Chain-info"
+	RootChainInfoRoutePath         = "/v1/query/root-chain-info"
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
