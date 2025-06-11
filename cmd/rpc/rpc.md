@@ -89,7 +89,7 @@
 
 # Standard
 
-## version
+## Version
 
 **Route**: `/v1/`
 
@@ -109,7 +109,7 @@ $ curl -H "Content-Type: application/json" -X GET --data '{}' localhost:50002/v1
 > "0.0.0-alpha"
 ```
 
-## tx
+## Tx
 
 **Route**: `/v1/tx`
 
@@ -158,7 +158,7 @@ $ curl -X POST localhost:50002/v1/tx \
 > "25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"
 ```
 
-## height
+## Height
 
 **Route:** `/v1/query/height`
 
@@ -211,7 +211,7 @@ $ curl -X POST localhost:50002/v1/query/account \
   }
 ```
 
-## accounts
+## Accounts
 
 **Route:** `/v1/query/accounts`
 
