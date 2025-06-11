@@ -178,7 +178,7 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 > 9157
 ```
 
-## account
+## Account
 
 **Route:** `/v1/query/account`
 
