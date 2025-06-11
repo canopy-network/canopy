@@ -83,7 +83,7 @@ const (
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
 	TxLockOrderRoutePath       = "/v1/admin/tx-lock-order"
 	TxCloseOrderRoutePath      = "/v1/admin/tx-close-order"
-	TxSubsidyRoutePath         = "/v1/admin/subsidy"
+	TxSubsidyRoutePath         = "/v1/admin/tx-subsidy"
 	TxStartPollRoutePath       = "/v1/admin/tx-start-poll"
 	TxVotePollRoutePath        = "/v1/admin/tx-vote-poll"
 	ResourceUsageRoutePath     = "/v1/admin/resource-usage"
