@@ -103,7 +103,7 @@
 
 **Example**:
 
-```json
+```
 $ curl -H "Content-Type: application/json" -X GET --data '{}' localhost:50002/v1/
 
 > "0.0.0-alpha"
