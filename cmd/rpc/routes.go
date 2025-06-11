@@ -52,7 +52,7 @@ const (
 	FailedTxRoutePath              = "/v1/query/failed-txs"
 	ProposalsRoutePath             = "/v1/gov/proposals"
 	PollRoutePath                  = "/v1/gov/poll"
-	RootChainInfoRoutePath         = "/v1/query/root-Chain-info"
+	RootChainInfoRoutePath         = "/v1/query/root-chain-info"
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
@@ -83,7 +83,7 @@ const (
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
 	TxLockOrderRoutePath       = "/v1/admin/tx-lock-order"
 	TxCloseOrderRoutePath      = "/v1/admin/tx-close-order"
-	TxSubsidyRoutePath         = "/v1/admin/subsidy"
+	TxSubsidyRoutePath         = "/v1/admin/tx-subsidy"
 	TxStartPollRoutePath       = "/v1/admin/tx-start-poll"
 	TxVotePollRoutePath        = "/v1/admin/tx-vote-poll"
 	ResourceUsageRoutePath     = "/v1/admin/resource-usage"
@@ -106,6 +106,12 @@ const (
 	PoolsRouteName                 = "pools"
 	ValidatorRouteName             = "validator"
 	ValidatorsRouteName            = "validators"
+	ValidatorSetRouteName          = "validator-set"
+	CommitteeRouteName             = "committee"
+	CommitteeDataRouteName         = "committee-data"
+	CommitteesDataRouteName        = "committees-data"
+	SubsidizedCommitteesRouteName  = "subsidized-committees"
+	RetiredCommitteesRouteName     = "retired-committees"
 	NonSignersRouteName            = "non-signers"
 	SupplyRouteName                = "supply"
 	ParamRouteName                 = "params"
@@ -129,11 +135,6 @@ const (
 	FailedTxRouteName              = "failed-txs"
 	ProposalsRouteName             = "proposals"
 	PollRouteName                  = "poll"
-	CommitteeRouteName             = "committee"
-	CommitteeDataRouteName         = "committee-data"
-	CommitteesDataRouteName        = "committees-data"
-	SubsidizedCommitteesRouteName  = "subsidized-committees"
-	RetiredCommitteesRouteName     = "retired-committees"
 	OrderRouteName                 = "order"
 	OrdersRouteName                = "orders"
 	LastProposersRouteName         = "last-proposers"
@@ -141,8 +142,7 @@ const (
 	DoubleSignersRouteName         = "double-signers"
 	MinimumEvidenceHeightRouteName = "minimum-evidence-height"
 	LotteryRouteName               = "lottery"
-	RootChainInfoRouteName         = "root-Chain-info"
-	ValidatorSetRouteName          = "validator-set"
+	RootChainInfoRouteName         = "root-chain-info"
 	CheckpointRouteName            = "checkpoint"
 	// debug
 	DebugBlockedRouteName = "blocked"
@@ -297,18 +297,19 @@ func createRouter(s *Server) *httprouter.Router {
 		ValidatorRouteName:             s.Validator,
 		ValidatorsRouteName:            s.Validators,
 		CommitteeRouteName:             s.Committee,
+		ValidatorSetRouteName:          s.ValidatorSet,
 		CommitteeDataRouteName:         s.CommitteeData,
 		CommitteesDataRouteName:        s.CommitteesData,
 		SubsidizedCommitteesRouteName:  s.SubsidizedCommittees,
 		RetiredCommitteesRouteName:     s.RetiredCommittees,
 		NonSignersRouteName:            s.NonSigners,
 		ParamRouteName:                 s.Params,
-		SupplyRouteName:                s.Supply,
 		FeeParamRouteName:              s.FeeParams,
 		GovParamRouteName:              s.GovParams,
 		ConParamsRouteName:             s.ConParams,
 		ValParamRouteName:              s.ValParams,
 		EcoParamRouteName:              s.EcoParameters,
+		SupplyRouteName:                s.Supply,
 		StateRouteName:                 s.State,
 		StateDiffRouteName:             s.StateDiff,
 		StateDiffGetRouteName:          s.StateDiff,
@@ -332,7 +333,6 @@ func createRouter(s *Server) *httprouter.Router {
 		ProposalsRouteName:             s.Proposals,
 		PollRouteName:                  s.Poll,
 		RootChainInfoRouteName:         s.RootChainInfo,
-		ValidatorSetRouteName:          s.ValidatorSet,
 		CheckpointRouteName:            s.Checkpoint,
 		EthereumRouteName:              s.EthereumHandler,
 		SubscribeRCInfoName:            s.WebSocket,

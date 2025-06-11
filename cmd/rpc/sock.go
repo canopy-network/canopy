@@ -109,7 +109,7 @@ func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
 	return 0
 }
 
-// GetRootChainInfo() retrieves the root chain info from the root chain 'on-demain'
+// GetRootChainInfo() retrieves the root chain info from the root chain 'on-demand'
 func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.RootChainInfo, err lib.ErrorI) {
 	// lock for thread safety
 	r.l.Lock()

@@ -163,7 +163,7 @@ message RootChainInfo {
   // last_validator_set: the validator set of the previous height
   ConsensusValidators last_validator_set = 4; // @gotags: json:"lastValidatorSet"
   // lottery_winner: the selected delegate/pseudo-validator who receives rewards
-  LotteryWinner lottery_winner = 5;
+  LotteryWinner lottery_winner = 5; // @gotags: json:"lotteryWinner"
   // orders: the swap order book from the 'root chain' for the 'nested chain'
   OrderBook orders = 6; // @gotags: json:"orders"
 }

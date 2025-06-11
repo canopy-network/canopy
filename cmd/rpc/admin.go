@@ -73,7 +73,7 @@ func (s *Server) KeystoreImport(w http.ResponseWriter, r *http.Request, _ httpro
 	})
 }
 
-// KeystoreImport adds a new key to the keystore using a raw private key
+// KeystoreImportRaw adds a new key to the keystore using a raw private key
 func (s *Server) KeystoreImportRaw(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the keystore handler with a callback to import a raw private key
 	s.keystoreHandler(w, r, func(k *crypto.Keystore, ptr *keystoreRequest) (any, error) {

@@ -564,7 +564,7 @@ type RootChainInfo struct {
 	// last_validator_set: the validator set of the previous height
 	LastValidatorSet *ConsensusValidators `protobuf:"bytes,4,opt,name=last_validator_set,json=lastValidatorSet,proto3" json:"lastValidatorSet"` // @gotags: json:"lastValidatorSet"
 	// lottery_winner: the selected delegate/pseudo-validator who receives rewards
-	LotteryWinner *LotteryWinner `protobuf:"bytes,5,opt,name=lottery_winner,json=lotteryWinner,proto3" json:"lottery_winner,omitempty"`
+	LotteryWinner *LotteryWinner `protobuf:"bytes,5,opt,name=lottery_winner,json=lotteryWinner,proto3" json:"lottery_winner,omitempty"`  // @gotags: json:"lotteryWinner"
 	// orders: the swap order book from the 'root chain' for the 'nested chain'
 	Orders *OrderBook `protobuf:"bytes,6,opt,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
 }
