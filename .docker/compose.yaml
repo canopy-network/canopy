@@ -5,7 +5,6 @@ services:
       context: ..
       dockerfile: .docker/Dockerfile
       args:
-        BUILD_PATH: cmd/cli
         EXPLORER_BASE_PATH: ""
         WALLET_BASE_PATH: ""
     ports:
@@ -31,7 +30,6 @@ services:
       context: ..
       dockerfile: .docker/Dockerfile
       args:
-        BUILD_PATH: cmd/cli
         EXPLORER_BASE_PATH: ""
         WALLET_BASE_PATH: ""
     ports:

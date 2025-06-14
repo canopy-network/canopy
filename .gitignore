@@ -29,6 +29,7 @@ vendor
 # Environment
 .docker/.env
 .docker/volumes/
+.env
 
 .docs/TIMELOG.md
 .docs/WISHLIST.md
