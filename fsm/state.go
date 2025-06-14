@@ -29,6 +29,13 @@ type StateMachine struct {
 	Config             lib.Config            // the main configuration as defined by the 'config.json' file
 	Metrics            *lib.Metrics          // the telemetry module
 	log                lib.LoggerI           // the logger for standard output and debugging
+	cache              *cache                // the state machine cache
+}
+
+// cache is the set of items to be cached used by the state machine
+type cache struct {
+	validators map[string]*Validator                   // address->validator
+	delegates  map[uint64]map[crypto.AddressI]struct{} // chainID->delegates
 }
 
 // New() creates a new instance of a StateMachine
@@ -43,6 +50,10 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) 
 		Config:            c,
 		Metrics:           metrics,
 		log:               log,
+		cache: &cache{
+			validators: make(map[string]*Validator),
+			delegates:  make(map[uint64]map[crypto.AddressI]struct{}),
+		},
 	}
 	// initialize the state machine and exit
 	return sm, sm.Initialize(store)
@@ -359,6 +370,10 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 	if err != nil {
 		return nil, err
 	}
+	// if height is equal to latest height, provide the validator cache to the FSM
+	if height == s.height {
+		sm.cache = s.cache
+	}
 	// get the previous state machine height
 	lastSM, err := s.TimeMachine(lastHeight)
 	if err != nil {
@@ -417,6 +432,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		proposeVoteConfig:  s.proposeVoteConfig,
 		Config:             s.Config,
 		log:                s.log,
+		cache:              s.cache,
 	}, nil
 }
 
@@ -488,7 +504,7 @@ func (s *StateMachine) IterateAndExecute(prefix []byte, callback func(key, value
 }
 
 // TxnWrap() is an atomicity and consistency feature that enables easy rollback of changes by discarding the transaction if an error occurs
-func (s *StateMachine) TxnWrap() (lib.StoreTxnI, lib.ErrorI) {
+func (s *StateMachine) TxnWrap() (lib.StoreI, lib.ErrorI) {
 	// ensure the store may be 'cache wrapped' in a 'database transaction'
 	store, ok := s.store.(lib.StoreI)
 	if !ok {
@@ -500,6 +516,48 @@ func (s *StateMachine) TxnWrap() (lib.StoreTxnI, lib.ErrorI) {
 	s.SetStore(txn)
 	// return the transaction to be cleaned up by the caller
 	return txn, nil
+}
+
+// Cache() caches the validators from the current block into the validator cache
+func (s *StateMachine) Cache() error {
+	// retrieve current validator set
+	validators, err := s.GetValidators()
+	if err != nil {
+		return err
+	}
+	// fill the validator cache
+	for _, val := range validators {
+		s.cache.validators[crypto.NewAddressFromBytes(val.Address).String()] = val
+	}
+	// retrieve the current list of committees
+	committees, err := s.GetCommitteesData()
+	if err != nil {
+		return err
+	}
+	// iterate over the committees
+	for _, committee := range committees.List {
+		chainID := committee.ChainId
+		// initialize the delegates cache for this chainID
+		vs, err := s.GetAllDelegates(chainID)
+		s.cache.delegates[chainID] = make(map[crypto.AddressI]struct{}, 0)
+		if err != nil {
+			return err
+		}
+		for _, val := range vs.ValidatorSet.ValidatorSet {
+			// get the address from the public key
+			address := crypto.NewAddressFromBytes(crypto.Hash(val.PublicKey)[:crypto.AddressSize])
+			// add the address to the delegates cache for this chainID
+			s.cache.delegates[chainID][address] = struct{}{}
+		}
+	}
+	// exit
+	return nil
+}
+
+// SetCacheFromFSM() sets the cache of the current state machine from another state machine
+func (s *StateMachine) SetCacheFromFSM(fsm *StateMachine) {
+	// set the cache from the FSM
+	s.cache = fsm.cache
 }
 
 // catchPanic() acts as a failsafe, recovering from a panic and logging the error with the stack trace

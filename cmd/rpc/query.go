@@ -760,7 +760,7 @@ func (s *Server) withStore(fn func(st *store.Store) (any, error)) (any, error) {
 func debugHandler(routeName string) httprouter.Handle {
 	var f http.HandlerFunc
 	switch routeName {
-	case DebugHeapRouteName, DebugRoutineRouteName, DebugBlockedRouteName:
+	case DebugHeapRouteName, DebugGoroutineRouteName, DebugBlockedRouteName:
 		f = func(w http.ResponseWriter, r *http.Request) {
 			pprof.Handler(routeName).ServeHTTP(w, r)
 		}

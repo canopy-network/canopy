@@ -57,10 +57,10 @@ const (
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
 	// debug
-	DebugBlockedRoutePath = "/debug/blocked"
-	DebugHeapRoutePath    = "/debug/heap"
-	DebugCPURoutePath     = "/debug/cpu"
-	DebugRoutineRoutePath = "/debug/routine"
+	DebugBlockedRoutePath   = "/debug/blocked"
+	DebugHeapRoutePath      = "/debug/heap"
+	DebugCPURoutePath       = "/debug/cpu"
+	DebugGoroutineRoutePath = "/debug/goroutine"
 	// eth
 	EthereumRoutePath = "/v1/eth"
 	// admin
@@ -145,10 +145,10 @@ const (
 	ValidatorSetRouteName          = "validator-set"
 	CheckpointRouteName            = "checkpoint"
 	// debug
-	DebugBlockedRouteName = "blocked"
-	DebugHeapRouteName    = "heap"
-	DebugCPURouteName     = "cpu"
-	DebugRoutineRouteName = "routine"
+	DebugBlockedRouteName   = "blocked"
+	DebugHeapRouteName      = "heap"
+	DebugCPURouteName       = "cpu"
+	DebugGoroutineRouteName = "goroutine"
 	// eth
 	EthereumRouteName = "eth"
 	// admin
@@ -241,10 +241,10 @@ var routePaths = routes{
 	ValidatorSetRouteName:          {Method: http.MethodPost, Path: ValidatorSetRoutePath},
 	CheckpointRouteName:            {Method: http.MethodPost, Path: CheckpointRoutePath},
 	// debug
-	DebugBlockedRouteName: {Method: http.MethodGet, Path: DebugBlockedRoutePath},
-	DebugHeapRouteName:    {Method: http.MethodGet, Path: DebugHeapRoutePath},
-	DebugCPURouteName:     {Method: http.MethodGet, Path: DebugCPURoutePath},
-	DebugRoutineRouteName: {Method: http.MethodGet, Path: DebugRoutineRoutePath},
+	DebugBlockedRouteName:   {Method: http.MethodGet, Path: DebugBlockedRoutePath},
+	DebugHeapRouteName:      {Method: http.MethodGet, Path: DebugHeapRoutePath},
+	DebugCPURouteName:       {Method: http.MethodGet, Path: DebugCPURoutePath},
+	DebugGoroutineRouteName: {Method: http.MethodGet, Path: DebugGoroutineRoutePath},
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
@@ -386,10 +386,10 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		AddVoteRouteName:           s.AddVote,
 		DelVoteRouteName:           s.DelVote,
 		// debug
-		DebugBlockedRouteName: debugHandler(DebugBlockedRouteName),
-		DebugHeapRouteName:    debugHandler(DebugHeapRouteName),
-		DebugCPURouteName:     debugHandler(DebugCPURouteName),
-		DebugRoutineRouteName: debugHandler(DebugRoutineRouteName),
+		DebugBlockedRouteName:   debugHandler(DebugBlockedRouteName),
+		DebugHeapRouteName:      debugHandler(DebugHeapRouteName),
+		DebugCPURouteName:       debugHandler(DebugCPURouteName),
+		DebugGoroutineRouteName: debugHandler(DebugGoroutineRouteName),
 	}
 
 	// Initialize a new router using the httprouter package.

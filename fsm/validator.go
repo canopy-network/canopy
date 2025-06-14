@@ -3,9 +3,10 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 /* This file implements state actions on Validators and Delegators*/
@@ -184,9 +185,12 @@ func (s *StateMachine) SetValidator(validator *Validator) (err lib.ErrorI) {
 		return
 	}
 	// set the bytes under a key for validator using a specific 'validator address'
-	if err = s.Set(KeyForValidator(crypto.NewAddressFromBytes(validator.Address)), bz); err != nil {
+	address := crypto.NewAddressFromBytes(validator.Address)
+	if err = s.Set(KeyForValidator(address), bz); err != nil {
 		return
 	}
+	// set the validator in the cache
+	s.cache.validators[address.String()] = validator
 	// exit
 	return
 }
@@ -250,7 +254,13 @@ func (s *StateMachine) DeleteValidator(validator *Validator) lib.ErrorI {
 		}
 	}
 	// delete the validator from state
-	return s.Delete(KeyForValidator(addr))
+	if err := s.Delete(KeyForValidator(addr)); err != nil {
+		return err
+	}
+	// delete the validator from the cache
+	delete(s.cache.validators, addr.String())
+	// exit
+	return nil
 }
 
 // UNSTAKING VALIDATORS BELOW

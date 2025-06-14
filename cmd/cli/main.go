@@ -87,6 +87,10 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+	// precache the state machine data
+	if err := sm.Cache(); err != nil {
+		l.Fatal(err.Error())
+	}
 	// create a new instance of the application
 	app, err := controller.New(sm, config, validatorKey, metrics, l)
 	if err != nil {
