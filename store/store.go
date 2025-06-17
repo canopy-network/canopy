@@ -142,7 +142,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 	var useHistorical bool
 	// if the query version is older than the partition frequency
 	if queryVersion < partitionHeight(s.version) {
-		useHistorical = true
+		//useHistorical = true
 	}
 	// make a reader for the specified version
 	reader := s.db.NewTransactionAt(queryVersion, false)
