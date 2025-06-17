@@ -155,6 +155,7 @@ type txSend struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
 	Output   string `json:"output"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
 }
@@ -162,6 +163,7 @@ type txSend struct {
 type txAddress struct {
 	Fee uint64 `json:"fee"`
 	fromFields
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	signerFields
 }
@@ -170,10 +172,11 @@ type txStake struct {
 	Fee             uint64 `json:"fee"`
 	Amount          uint64 `json:"amount"`
 	Output          string `json:"output"`
-	Password        string `json:"password"`
 	Delegate        bool   `json:"delegate"`
 	EarlyWithdrawal bool   `json:"earlyWithdrawal"`
 	NetAddress      string `json:"netAddress"`
+	Submit          bool   `json:"submit"`
+	Password        string `json:"password"`
 	fromFields
 	signerFields
 	txChangeParamRequest
@@ -182,6 +185,7 @@ type txStake struct {
 
 type txChangeParam struct {
 	Fee      uint64 `json:"fee"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
 	txChangeParamRequest
@@ -190,6 +194,7 @@ type txChangeParam struct {
 type txDaoTransfer struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
 	txChangeParamRequest
@@ -198,6 +203,7 @@ type txDaoTransfer struct {
 type txSubsidy struct {
 	Fee      uint64 `json:"fee"`
 	Amount   uint64 `json:"amount"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	OpCode   string `json:"opCode"`
 	fromFields
@@ -233,6 +239,7 @@ type txEditOrder struct {
 type txDeleteOrder struct {
 	Fee      uint64 `json:"fee"`
 	OrderId  string `json:"orderId"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
 	txChangeParamRequest
@@ -242,8 +249,9 @@ type txDeleteOrder struct {
 type txLockOrder struct {
 	Fee            uint64       `json:"fee"`
 	OrderId        string       `json:"orderId"`
-	Password       string       `json:"password"`
 	ReceiveAddress lib.HexBytes `json:"receiveAddress"`
+	Submit         bool         `json:"submit"`
+	Password       string       `json:"password"`
 	fromFields
 	txChangeParamRequest
 	committeesRequest
@@ -252,6 +260,7 @@ type txLockOrder struct {
 type txCloseOrder struct {
 	Fee      uint64 `json:"fee"`
 	OrderId  string `json:"orderId"`
+	Submit   bool   `json:"submit"`
 	Password string `json:"password"`
 	fromFields
 }
@@ -259,14 +268,16 @@ type txCloseOrder struct {
 type txStartPoll struct {
 	Fee      uint64          `json:"fee"`
 	PollJSON json.RawMessage `json:"pollJSON"`
+	Submit   bool            `json:"submit"`
 	Password string          `json:"password"`
 	fromFields
 }
 
-type txVolePoll struct {
+type txVotePoll struct {
 	Fee         uint64          `json:"fee"`
 	PollJSON    json.RawMessage `json:"pollJSON"`
 	PollApprove bool            `json:"pollApprove"`
+	Submit      bool            `json:"submit"`
 	Password    string          `json:"password"`
 	fromFields
 }

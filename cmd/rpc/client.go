@@ -464,6 +464,7 @@ func (c *Client) TxSend(from AddrOrNickname, rec string, amt uint64, pwd string,
 		Fee:      optFee,
 		Amount:   amt,
 		Output:   rec,
+		Submit:   submit,
 		Password: pwd,
 	}
 
@@ -500,6 +501,7 @@ func (c *Client) TxChangeParam(from AddrOrNickname, pSpace, pKey, pValue string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txChangeParam{
 		Fee:      optFee,
+		Submit:   submit,
 		Password: pwd,
 		txChangeParamRequest: txChangeParamRequest{
 			ParamSpace: pSpace,
@@ -521,6 +523,7 @@ func (c *Client) TxDaoTransfer(from AddrOrNickname, amt, startBlk, endBlk uint64
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txDaoTransfer{
 		Fee:      optFee,
+		Submit:   submit,
 		Password: pwd,
 		Amount:   amt,
 		txChangeParamRequest: txChangeParamRequest{
@@ -540,6 +543,7 @@ func (c *Client) TxSubsidy(from AddrOrNickname, amt, chainId uint64, opCode stri
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txSubsidy{
 		Fee:               optFee,
+		Submit:            submit,
 		Password:          pwd,
 		Amount:            amt,
 		OpCode:            opCode,
@@ -590,6 +594,7 @@ func (c *Client) TxEditOrder(from AddrOrNickname, sellAmount, receiveAmount uint
 		ReceiveAmount:        receiveAmount,
 		ReceiveAddress:       receiveAddr,
 		OrderId:              orderId,
+		Submit:               submit,
 		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{fmt.Sprintf("%d", chainId)},
@@ -608,6 +613,7 @@ func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId string, chainId uint
 	txReq := txDeleteOrder{
 		Fee:               optFee,
 		OrderId:           orderId,
+		Submit:            submit,
 		Password:          pwd,
 		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
 	}
@@ -630,6 +636,7 @@ func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId
 		Fee:            optFee,
 		OrderId:        orderId,
 		ReceiveAddress: receiveHex,
+		Submit:         submit,
 		Password:       pwd,
 	}
 	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
@@ -644,6 +651,7 @@ func (c *Client) TxCloseOrder(from AddrOrNickname, orderId string, pwd string, s
 	txReq := txCloseOrder{
 		Fee:      optFee,
 		OrderId:  orderId,
+		Submit:   submit,
 		Password: pwd,
 	}
 
@@ -661,6 +669,7 @@ func (c *Client) TxStartPoll(from AddrOrNickname, pollJSON json.RawMessage,
 	txReq := txStartPoll{
 		Fee:      optFee,
 		PollJSON: pollJSON,
+		Submit:   submit,
 		Password: pwd,
 	}
 
@@ -675,10 +684,11 @@ func (c *Client) TxStartPoll(from AddrOrNickname, pollJSON json.RawMessage,
 
 func (c *Client) TxVotePoll(from AddrOrNickname, pollJSON json.RawMessage, pollApprove bool,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
-	txReq := txVolePoll{
+	txReq := txVotePoll{
 		Fee:         optFee,
 		PollJSON:    pollJSON,
 		PollApprove: pollApprove,
+		Submit:      submit,
 		Password:    pwd,
 	}
 
@@ -736,6 +746,7 @@ func (c *Client) Logs() (logs string, err lib.ErrorI) {
 func (c *Client) txAddress(route string, from, signer AddrOrNickname, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	txReq := txAddress{
 		Fee:      optFee,
+		Submit:   submit,
 		Password: pwd,
 	}
 
@@ -761,6 +772,7 @@ func (c *Client) txStake(from AddrOrNickname, netAddr string, amt uint64, commit
 		Output:               output,
 		Delegate:             delegate,
 		EarlyWithdrawal:      earlyWithdrawal,
+		Submit:               submit,
 		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{Committees: committees},
