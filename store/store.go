@@ -209,6 +209,7 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 
 // ShouldPartition() determines if it is time to partition
 func (s *Store) ShouldPartition() (timeToPartition bool) {
+	return false
 	// check if it's time to partition (1001, 2001, 3001...)
 	if (s.version-partitionHeight(s.version))%(partitionFrequency/10) != 1 {
 		return false
