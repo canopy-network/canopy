@@ -21,7 +21,7 @@ func (x *OrderBook) GetOrder(orderId []byte) (order *SellOrder, err ErrorI) {
 			return
 		}
 	}
-	return
+	return nil, nil
 }
 
 // Empty() indicates whether the sell order is null
