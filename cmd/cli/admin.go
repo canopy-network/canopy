@@ -8,6 +8,7 @@ import (
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -20,6 +21,7 @@ var adminCmd = &cobra.Command{
 var (
 	pwd             string
 	nick            string
+	data            string
 	fee             uint64
 	delegate        bool
 	earlyWithdrawal bool
@@ -35,6 +37,7 @@ func init() {
 	txEditStakeCmd.PersistentFlags().BoolVar(&delegate, "delegate", false, "delegate tokens to committee(s) only without actual validator operation")
 	txStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txEditStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
+	txCreateOrderCmd.PersistentFlags().StringVar(&data, "data", "", "data for create order")
 	adminCmd.AddCommand(ksCmd)
 	adminCmd.AddCommand(ksNewKeyCmd)
 	adminCmd.AddCommand(ksImportCmd)
@@ -215,11 +218,11 @@ var (
 	}
 
 	txCreateOrderCmd = &cobra.Command{
-		Use:   "tx-create-order <address or nickname> <sell-amount> <receive-amount> <chain-id> <receive-address> --fee=10000 --simulate=true",
+		Use:   "tx-create-order <address or nickname> <sell-amount> <receive-amount> <chain-id> <receive-address> --fee=10000 --data=<hex-data> --simulate=true",
 		Short: "create a sell order - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(5),
 		Run: func(cmd *cobra.Command, args []string) {
-			writeTxResultToConsole(client.TxCreateOrder(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), args[4], getPassword(), !sim, fee))
+			writeTxResultToConsole(client.TxCreateOrder(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), args[4], getPassword(), argStringToBytes(data), !sim, fee))
 		},
 	}
 
@@ -372,6 +375,11 @@ func writeTxResultToConsole(hash *string, tx json.RawMessage, e lib.ErrorI) {
 		}
 		writeToConsole(hashString, e)
 	}
+}
+
+func argStringToBytes(data string) []byte {
+	bz := common.FromHex(data)
+	return bz
 }
 
 func argGetAddr(arg string) string {

@@ -559,7 +559,7 @@ func (c *Client) TxSubsidy(from AddrOrNickname, amt, chainId uint64, opCode stri
 }
 
 func (c *Client) TxCreateOrder(from AddrOrNickname, sellAmount, receiveAmount, chainId uint64, receiveAddress string,
-	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	pwd string, data lib.HexBytes, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	receiveAddr, err := lib.NewHexBytesFromString(receiveAddress)
 	if err != nil {
 		return nil, nil, err
@@ -570,6 +570,7 @@ func (c *Client) TxCreateOrder(from AddrOrNickname, sellAmount, receiveAmount, c
 		Submit:               submit,
 		ReceiveAmount:        receiveAmount,
 		ReceiveAddress:       receiveAddr,
+		Data:                 data,
 		Password:             pwd,
 		txChangeParamRequest: txChangeParamRequest{},
 		committeesRequest:    committeesRequest{fmt.Sprintf("%d", chainId)},

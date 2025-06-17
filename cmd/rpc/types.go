@@ -215,6 +215,7 @@ type txCreateOrder struct {
 	Fee            uint64       `json:"fee"`
 	Amount         uint64       `json:"amount"`
 	Password       string       `json:"password"`
+	Data           lib.HexBytes `json:"data"`
 	Submit         bool         `json:"submit"`
 	ReceiveAmount  uint64       `json:"receiveAmount"`
 	ReceiveAddress lib.HexBytes `json:"receiveAddress"`
