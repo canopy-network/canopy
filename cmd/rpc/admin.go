@@ -499,12 +499,7 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 		return
 	}
 	// Set the public key in transaction request for reference.
-	operatorKey, e := keystore.GetKey(ptr.Address, ptr.Password)
-	if e != nil {
-		write(w, e, http.StatusBadRequest)
-		return
-	}
-	ptr.PubKey = operatorKey.PublicKey().String()
+	ptr.PubKey = privateKey.PublicKey().String()
 
 	// Call the provided callback function with the private key and transaction request.
 	p, err := callback(privateKey, ptr)
