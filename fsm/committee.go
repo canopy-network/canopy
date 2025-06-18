@@ -361,31 +361,26 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // DELEGATIONS BELOW
 
 // GetAllDelegates() returns all delegates for a certain chainId
+// It is heavily cached to improve performance as the delegates are used for each block commit
 func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// iterate from highest stake to lowest
-	it, err := s.RevIterator(DelegatePrefix(chainId))
-	if err != nil {
-		return vs, err
-	}
-	defer it.Close()
-	// create a variable to hold the committee members
+	// create a variable to hold the committee members and total power
 	members := make([]*lib.ConsensusValidator, 0)
 	var totalPower uint64
-	// loop through the iterator
-	for ; it.Valid(); it.Next() {
-		// get the address from the iterator key
-		address, e := AddressFromKey(it.Key())
-		if e != nil {
-			return vs, e
-		}
-		// get the validator from the address
-		val, e := s.GetValidator(address)
-		if e != nil {
-			return vs, e
+	// create a function to process the delegates
+	addToValidatorSet := func(address crypto.AddressI) lib.ErrorI {
+		// attempt to get validator from the cache
+		val, ok := s.cache.validators[address.String()]
+		if !ok {
+			// if not in cache, get validator from the state
+			var e lib.ErrorI
+			val, e = s.GetValidator(address)
+			if e != nil {
+				return e
+			}
 		}
 		// ensure the validator is not included in the committee if it's paused or unstaking
 		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
-			continue
+			return nil
 		}
 		// increment the total power
 		totalPower += val.StakedAmount
@@ -395,7 +390,37 @@ func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err
 			VotingPower: val.StakedAmount,
 			NetAddress:  val.NetAddress,
 		})
+		// exit
+		return nil
 	}
+	// attempt to get the delegates from the cache, otherwise iterate through the state
+	if delegates, ok := s.cache.delegates[chainId]; ok {
+		// loop through the cached delegates
+		for address := range delegates {
+			if e := addToValidatorSet(address); e != nil {
+				return vs, e
+			}
+		}
+	} else {
+		// iterate from highest stake to lowest
+		it, err := s.RevIterator(DelegatePrefix(chainId))
+		if err != nil {
+			return vs, err
+		}
+		defer it.Close()
+		// loop through the iterator
+		for ; it.Valid(); it.Next() {
+			// get the address from the iterator key
+			address, e := AddressFromKey(it.Key())
+			if e != nil {
+				return vs, e
+			}
+			if e := addToValidatorSet(address); e != nil {
+				return vs, e
+			}
+		}
+	}
+
 	return lib.ValidatorSet{
 		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
 		TotalPower:    totalPower,
@@ -481,12 +506,30 @@ func (s *StateMachine) DeleteDelegations(address crypto.AddressI, totalStake uin
 
 // SetDelegate() sets a delegate in state using the delegate prefix
 func (s *StateMachine) SetDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
-	return s.Set(KeyForDelegate(chainId, address, stakeForCommittee), nil)
+	// set the delegate in the state
+	err := s.Set(KeyForDelegate(chainId, address, stakeForCommittee), nil)
+	if err != nil {
+		return err
+	}
+	// ensure the cache exists for the chainId
+	if _, ok := s.cache.delegates[chainId]; !ok {
+		s.cache.delegates[chainId] = make(map[crypto.AddressI]struct{})
+	}
+	// set the delegator in the cache
+	s.cache.delegates[chainId][address] = struct{}{}
+	return nil
 }
 
 // DeleteDelegate() removes a delegate from the state using the delegate prefix
 func (s *StateMachine) DeleteDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
-	return s.Delete(KeyForDelegate(chainId, address, stakeForCommittee))
+	// remove the delegate from the state
+	err := s.Delete(KeyForDelegate(chainId, address, stakeForCommittee))
+	if err != nil {
+		return err
+	}
+	// remove the delegator from the cache
+	delete(s.cache.delegates[chainId], address)
+	return nil
 }
 
 // COMMITTEE DATA CODE BELOW

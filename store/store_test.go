@@ -5,16 +5,19 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime/debug"
+	"slices"
+	"testing"
+	"unsafe"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
-	"math"
-	"os"
-	"path/filepath"
-	"runtime/debug"
-	"slices"
-	"testing"
 )
 
 func TestMaxTransaction(t *testing.T) {
@@ -24,7 +27,6 @@ func TestMaxTransaction(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { db.Close() }()
 	tx := db.NewTransactionAt(1, true)
-	require.NoError(t, setBatchOptions(db, maxTransactionSize))
 	i := 0
 	totalBytes := 0
 	defer func() {
@@ -258,8 +260,9 @@ func TestPartition(t *testing.T) {
 	// verify partition exists key is set in the correct partition
 	reader := store.db.NewTransactionAt(snapshotHeight, false)
 	defer reader.Discard()
+	writer := store.db.NewWriteBatchAt(0)
 	partitionPrefix := historicalPrefix(partitionHeight(store.Version()))
-	hss := NewTxnWrapper(reader, store.log, []byte(partitionPrefix))
+	hss := NewBadgerTxn(reader, writer, []byte(partitionPrefix), false, store.log)
 	value, err := hss.Get([]byte(partitionExistsKey))
 	require.NoError(t, err)
 	require.Equal(t, []byte(partitionExistsKey), value)
@@ -340,8 +343,11 @@ func TestPartitionIntegration(t *testing.T) {
 	// verify partition exists key is set in the correct partition
 	reader := store.db.NewTransactionAt(snapshotHeight, false)
 	defer reader.Discard()
+	// set up a writer for the partition
+	writer := store.db.NewWriteBatchAt(0)
+	defer writer.Cancel()
 	partitionPrefix := historicalPrefix(partitionHeight(store.Version()))
-	hss := NewTxnWrapper(reader, store.log, []byte(partitionPrefix))
+	hss := NewBadgerTxn(reader, writer, []byte(partitionPrefix), false, store.log)
 	value, err := hss.Get([]byte(partitionExistsKey))
 	require.NoError(t, err)
 	require.Equal(t, []byte(partitionExistsKey), value)
@@ -371,7 +377,7 @@ func TestPartitionIntegration(t *testing.T) {
 	finalSnapshotHeight := partitionHeight(store.Version())
 
 	tx := db.NewTransactionAt(finalSnapshotHeight, true)
-	archiveStore := NewTxnWrapper(tx, lib.NewDefaultLogger(), []byte(latestStatePrefix))
+	archiveStore := NewBadgerTxn(tx, writer, []byte(latestStatePrefix), false, lib.NewDefaultLogger())
 	defer archiveStore.Close()
 
 	// use an archive iterator to iterate through the deleted keys
@@ -383,7 +389,7 @@ func TestPartitionIntegration(t *testing.T) {
 	for ; it.Valid() || len(deletedKeys) > 0; it.Next() {
 		// check the deleted items are still in the db and are marked as expected
 		if idx := slices.Index(deletedKeys, string(it.Key())); idx >= 0 {
-			require.True(t, getMeta(it.parent.Item())&badgerDeleteBit != 0)
+			require.True(t, getMeta(it.reader.Item())&badgerDeleteBit != 0)
 			deletedKeys = slices.Delete(deletedKeys, idx, idx+1)
 		}
 	}
@@ -595,4 +601,11 @@ func bulkSetKV(t *testing.T, store lib.WStoreI, prefix string, keyValue ...strin
 	for _, kv := range keyValue {
 		require.NoError(t, store.Set([]byte(prefix+kv), []byte(kv)))
 	}
+}
+
+func getMeta(e *badger.Item) (value byte) {
+	v := reflect.ValueOf(e).Elem()
+	f := v.FieldByName(badgerMetaFieldName)
+	ptr := unsafe.Pointer(f.UnsafeAddr())
+	return *(*byte)(ptr)
 }

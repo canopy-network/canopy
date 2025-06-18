@@ -5,9 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"math"
 	"math/big"
 	"os"
@@ -19,6 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 /* This file implements shared general utility functions that are used throughout the app */
@@ -241,7 +242,7 @@ type jsonPage struct {
 func Marshal(message any) ([]byte, ErrorI) {
 	// convert the message into proto bytes using the proto marshaller
 	protoBytes, err := proto.Marshal(message.(proto.Message))
-	// if an error occurred during hte conversion process
+	// if an error occurred during the conversion process
 	if err != nil {
 		// exit with a wrapped error
 		return nil, ErrMarshal(err)
