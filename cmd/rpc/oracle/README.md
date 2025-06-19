@@ -1,0 +1,153 @@
+# Oracle Package
+
+The Oracle package provides cross-chain transaction witnessing and validation capabilities for the Canopy blockchain system. It implements a chain-agnostic oracle that coordinates between external blockchains (like Ethereum) and the Canopy nested chain to facilitate cross-chain order execution and validation.
+
+## Overview
+
+The Oracle package is designed to handle:
+- Witnessing transactions on external blockchains containing Canopy lock & close orders
+- Validating and storing witnessed orders in a local order store
+- Participating in the BFT consensus process by providing witnessed orders for block proposals
+- Synchronizing with the root chain order book to maintain consistency
+- Managing persistent state for reliable order processing
+
+## Core Components
+
+### Oracle
+
+The main entry point for the Transaction Oracle system. It manages the overall cross-chain witnessing process, including:
+- Receiving blocks from block providers
+- Validating witnessed orders against the root chain order book
+- Persisting witnessed orders to local storage
+- Coordinating with the BFT consensus mechanism
+- Maintaining synchronization with root chain order book state
+
+### BlockProvider Integration
+
+The Oracle integrates with external block providers through the `BlockProvider` interface. It provides:
+- Real-time block monitoring from external chains
+- Transaction parsing and order extraction
+
+### Order Store Management
+
+The Oracle manages witnessed orders through a persistent store that:
+- Stores validated lock and close orders separately
+- Provides atomic read/write operations for order data
+- Maintains submission history for resubmission logic
+- Supports cleanup operations based on root chain updates
+
+## Sequence Diagram
+
+The following sequence diagram illustrates the core interactions in the Oracle package:
+
+```mermaid
+sequenceDiagram
+    participant EXT as External Chain
+    participant BP as BlockProvider
+    participant O as Oracle
+    participant OS as OrderStore
+    participant BFT as BFT Consensus
+    participant RC as Root Chain
+
+    %% Block Processing Flow
+    Note over EXT,BP: Transaction Monitoring
+    EXT->>BP: New Block with Transactions
+    BP->>O: Safe Block sent to Oracle
+    O->>O: Process Block
+    O->>OS: Validate & Store Orders
+    O->>O: Save Block Height
+
+    %% BFT Integration Flow
+    Note over BFT,O: Consensus Participation
+    BFT->>O: WitnessedOrders(orderBook, height)
+    O->>OS: Read Witnessed Orders
+    O->>BFT: Return Lock/Close Orders
+    BFT->>O: ValidateProposedOrders(orders)
+    O->>OS: Verify Orders Exist
+    O->>BFT: Validation Result
+
+    %% Root Chain Sync Flow
+    Note over RC,O: State Synchronization
+    RC->>O: UpdateRootChainInfo(info)
+    O->>O: Update Local OrderBook
+    O->>OS: Cleanup Stale Orders
+```
+
+## Technical Details
+
+### Cross-Chain Transaction Witnessing
+
+The Oracle system uses a block-based monitoring approach to witness transactions on external chains. This is achieved by:
+
+- **Block Provider Integration**: Connects to external blockchain nodes through configurable providers
+- **Transaction Parsing**: Extracts Canopy-specific order data from external chain transactions
+- **Order Validation**: Performs comprehensive validation against root chain order book data
+- **State Persistence**: Maintains reliable state storage for witnessed orders and processing height
+
+The system works like a specialized blockchain monitor that specifically looks for transactions containing Canopy order data, validates them against known orders, and stores them for later use in the consensus process.
+
+State persistence ensures that the Oracle can recover from interruptions without losing witnessed orders or reprocessing previously seen blocks.
+
+### BFT Consensus Integration
+
+The Oracle system uses a dual-phase approach to participate in Byzantine Fault Tolerant consensus:
+
+1. **Proposal Phase**: When acting as a proposer, the Oracle queries its witnessed order store to find orders that should be included in the next block proposal
+2. **Validation Phase**: When validating block proposals from other nodes, the Oracle verifies that all proposed orders exist in its local witnessed order store
+
+This ensures that only orders witnessed by a majority of validator nodes are included in the blockchain, providing strong guarantees about cross-chain transaction validity.
+
+### Order Book Synchronization
+
+The Oracle system implements several synchronization mechanisms to maintain consistency with the root chain:
+
+- **Order Book Updates**: Receives periodic updates of the complete root chain order book state
+- **Stale Order Cleanup**: Automatically removes witnessed orders that are no longer relevant (locked orders, completed orders)
+- **State Validation**: Ensures witnessed orders match current order book entries before including them in block proposals
+
+This synchronization acts like a cache invalidation system, where the Oracle maintains local copies of relevant data but periodically synchronizes with the authoritative root chain state.
+
+## Component Interactions
+
+### 1. Block Processing: External Chain Monitoring
+
+When a new block arrives from an external blockchain, the Oracle performs the following:
+
+- **Block Reception**: Receives blocks through a channel-based interface from the configured BlockProvider
+- **Height Persistence**: Saves the current block height to disk before processing to enable recovery
+- **Transaction Analysis**: Examines each transaction in the block for Canopy-specific order data
+- **Order Validation**: Validates witnessed orders against the current root chain order book
+- **Storage Operations**: Persists valid orders to the local order store with appropriate metadata
+
+This process is similar to how a blockchain indexer works, but with specific focus on cross-chain order validation and storage.
+
+### 2. Consensus Participation: BFT Integration
+
+The Oracle participates in the BFT consensus process through two key interfaces:
+
+- **WitnessedOrders**: Called during block proposal to provide witnessed orders that should be included in the next block
+- **ValidateProposedOrders**: Called during block validation to verify that proposed orders were actually witnessed by this node
+
+This is analogous to how a validator node participates in consensus, but with specialized logic for cross-chain order validation.
+
+### 3. Root Chain Synchronization: State Management
+
+- **Order Book Updates**: Receives and processes complete order book state from the root chain
+- **Cleanup Operations**: Removes witnessed orders that are no longer needed based on root chain state
+- **Consistency Validation**: Ensures witnessed orders still match their corresponding root chain entries
+
+## Cross-Chain Security Features
+
+The Oracle system implements several security mechanisms to ensure reliable cross-chain operation:
+
+- **Comprehensive Validation**: Performs strict validation of all witnessed order fields against root chain data
+
+## Configuration
+
+The Oracle accepts configuration through `lib.OracleConfig` with the following parameters:
+
+- `OrderStorePath`: Filesystem path to store witnessed orders (default: `$HOME/.canopy/oracle/orders`)
+- `StateSaveFile`: File path for persisting the last processed block height (default: `$HOME/.canopy/oracle/last_block_height.txt`)
+- `LogPath`: Path to store oracle logs (default: `$HOME/.canopy/oracle/log`)
+- `OrderResubmitDelay`: Number of root blocks to wait before resubmitting an order to consensus (default: `2`)
+
