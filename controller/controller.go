@@ -29,10 +29,11 @@ type Controller struct {
 	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
-	RCManager   lib.RCManagerI // the data manager for the 'root chain'
-	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
-	log         lib.LoggerI    // object for logging
-	*sync.Mutex                // mutex for thread safety
+	RCManager     lib.RCManagerI  // the data manager for the 'root chain'
+	isSyncing     *atomic.Bool    // is the chain currently being downloaded from peers
+	log           lib.LoggerI     // object for logging
+	newBlockPeers map[string]bool // map of peers that notified a new block
+	*sync.Mutex                   // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -53,18 +54,19 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// create the controller
 	controller = &Controller{
-		Address:    valKey.PublicKey().Address().Bytes(),
-		PublicKey:  valKey.PublicKey().Bytes(),
-		PrivateKey: valKey,
-		Config:     c,
-		Metrics:    metrics,
-		FSM:        fsm,
-		Mempool:    mempool,
-		Consensus:  nil,
-		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:  &atomic.Bool{},
-		log:        l,
-		Mutex:      &sync.Mutex{},
+		Address:       valKey.PublicKey().Address().Bytes(),
+		PublicKey:     valKey.PublicKey().Bytes(),
+		PrivateKey:    valKey,
+		Config:        c,
+		Metrics:       metrics,
+		FSM:           fsm,
+		Mempool:       mempool,
+		Consensus:     nil,
+		P2P:           p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:     &atomic.Bool{},
+		log:           l,
+		newBlockPeers: make(map[string]bool),
+		Mutex:         &sync.Mutex{},
 	}
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)

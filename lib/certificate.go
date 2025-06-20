@@ -143,13 +143,17 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 	if err = block.Check(networkId, chainId); err != nil {
 		return
 	}
-	// enforce the target height
-	if x.Header.Height != height || x.Header.Height != block.BlockHeader.Height {
+	// ensure header and block have the same height
+	if x.Header.Height != block.BlockHeader.Height {
 		return nil, ErrWrongHeight()
 	}
 	// don't accept any blocks below the local height
 	if height > block.BlockHeader.Height {
 		return nil, ErrWrongHeight()
+	}
+	// new height notified error
+	if height < block.BlockHeader.Height {
+		return nil, ErrNewHeight()
 	}
 	// ensure the Proposal.BlockHash corresponds to the actual hash of the block
 	blockHash, err := block.Hash()

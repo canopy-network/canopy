@@ -65,8 +65,10 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
-	// set the read/write timeout to be 2 x the block time
-	ReadWriteTimeout = time.Duration(2*c.BlockTimeMS()) * time.Millisecond
+	// set the write timeout to be 2 x the block time
+	WriteTimeout = time.Duration(2*c.BlockTimeMS()) * time.Millisecond
+	// set the read timeout to double of write
+	ReadTimeout = WriteTimeout * 2
 	// set the peer meta
 	meta := &lib.PeerMeta{NetworkId: c.NetworkID, ChainId: c.ChainId}
 	// return the p2p structure

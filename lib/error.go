@@ -441,6 +441,10 @@ func ErrWrongHeight() ErrorI {
 	return NewError(CodeWrongHeight, ConsensusModule, "wrong height")
 }
 
+func ErrNewHeight() ErrorI {
+	return NewError(CodeWrongHeight, ConsensusModule, "new height")
+}
+
 func ErrWrongRootHeight() ErrorI {
 	return NewError(CodeRootHeight, ConsensusModule, "wrong root height")
 }

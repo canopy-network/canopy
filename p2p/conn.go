@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	pingInterval           = 30 * time.Second        // how often a ping is to be sent
-	pongTimeoutDuration    = 20 * time.Second        // how long the sender of a ping waits for a pong before throwing an error
+	pingInterval           = 10 * time.Second        // how often a ping is to be sent
+	pongTimeoutDuration    = 10 * time.Second        // how long the sender of a ping waits for a pong before throwing an error
 	maxDataChunkSize       = 1024 - packetHeaderSize // maximum size of the chunk of bytes in a packet
 	maxPacketSize          = 1024                    // maximum size of the full packet
 	packetHeaderSize       = 47                      // the overhead of the protobuf packet header
@@ -57,7 +57,8 @@ const (
 )
 
 var (
-	ReadWriteTimeout = 40 * time.Second // this is just the default; it gets set by config upon initialization
+	ReadTimeout  = 40 * time.Second // this is just the default; it gets set by config upon initialization
+	WriteTimeout = 80 * time.Second // this is just the default; it gets set by config upon initialization
 )
 
 // MultiConn: A rate-limited, multiplexed connection that utilizes a series streams with varying priority for sending and receiving
@@ -185,6 +186,7 @@ func (c *MultiConn) startSendService() {
 			c.sendWireBytes(new(Ping), m)
 			// reset the pong timer
 			lib.StopTimer(pongTimer)
+			c.log.Debugf("Ping sent to  %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 			// set the pong timer to execute an Error function if the timer expires before receiving a pong
 			pongTimer = time.AfterFunc(pongTimeoutDuration, func() {
 				if e := ErrPongTimeout(); e != nil {
@@ -201,6 +203,7 @@ func (c *MultiConn) startSendService() {
 			}
 			// send a pong
 			c.sendWireBytes(new(Pong), m)
+			c.log.Debugf("Pong sent to  %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 		case _, open := <-c.receivedPong: // fires when receive service got a 'pong' message
 			// if the channel was closed
 			if !open {
@@ -259,9 +262,10 @@ func (c *MultiConn) startReceiveService() {
 					return
 				}
 			case *Ping: // receive ping message notifies the "send" service to respond with a 'pong' message
-
+				c.log.Debugf("Ping received from  %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 				c.sendPong <- struct{}{}
 			case *Pong: // receive pong message notifies the "send" service to disable the 'pong timer exit'
+				c.log.Debugf("Pong received from  %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 				c.receivedPong <- struct{}{}
 			default: // unknown type results in slash and exiting the service
 				c.Error(ErrUnknownP2PMsg(x), UnknownMessageSlash)
@@ -457,7 +461,7 @@ func sendLengthPrefixed(conn net.Conn, bz []byte) lib.ErrorI {
 	lengthPrefix := make([]byte, 2)
 	binary.BigEndian.PutUint16(lengthPrefix, uint16(len(bz)))
 	//// set the write deadline to 20 second
-	if e := conn.SetWriteDeadline(time.Now().Add(ReadWriteTimeout)); e != nil {
+	if e := conn.SetWriteDeadline(time.Now().Add(WriteTimeout)); e != nil {
 		return ErrFailedWrite(e)
 	}
 	// write the message (length prefixed)
@@ -472,7 +476,7 @@ func sendLengthPrefixed(conn net.Conn, bz []byte) lib.ErrorI {
 // receiveLengthPrefixed() reads a length prefixed message from a tcp connection
 func receiveLengthPrefixed(conn net.Conn) ([]byte, lib.ErrorI) {
 	// set the read conn deadline
-	if err := conn.SetReadDeadline(time.Now().Add(ReadWriteTimeout)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(ReadTimeout)); err != nil {
 		return nil, ErrFailedRead(err)
 	}
 	// read the 2-byte length prefix
