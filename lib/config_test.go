@@ -1,9 +1,10 @@
 package lib
 
 import (
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -17,6 +18,7 @@ func TestDefaultConfig(t *testing.T) {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
+		EthOracleConfig:    DefaultEthOracleConfig(),
 	}
 	// execute the function call
 	got := DefaultConfig()

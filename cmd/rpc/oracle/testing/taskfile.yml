@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  # Start the anvil node, deploy USDC contract and mint USDC to test accounts
+  anvil:
+    cmds:
+      - scripts/anvil.sh
+  canopy:
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - rm -rf ~/.canopy/eth_last_height.txt
+      - ./socket.sh
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start
+  e2e:
+    cmds:
+      - source env/testing.env && go run .
+  monitor:
+    cmds:
+      - scripts/monitor.sh
+  balances:
+    cmds:
+      - scripts/monitor.sh balances
+  orders:
+    cmds:
+      - scripts/monitor.sh orders
+  store:
+    cmds:
+      - scripts/monitor.sh store

@@ -15,11 +15,15 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/eth"
+	oracletypes "github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/store"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"golang.org/x/text/language"
@@ -87,8 +91,32 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+	// create a seperate logger for the oracle
+	oracleLogger := lib.NewLogger(lib.LoggerConfig{Level: config.GetLogLevel()}, "/tmp/oracle")
+	// create a new ethereum disk storage instance for the ethereum order store
+	ethStorage, e := eth.NewEthDiskStorage(config.EthOracleConfig.OrderStorePath, oracleLogger)
+	if e != nil {
+		oracleLogger.Fatal(err.Error())
+	}
+	// create an ethereum client for the token cache
+	ethClient, ethErr := ethclient.Dial(config.EthOracleConfig.NodeUrl)
+	if ethErr != nil {
+		oracleLogger.Fatal(ethErr.Error())
+	}
+	// create a new erc20 token cache
+	erc20 := eth.NewERC20TokenCache(ethClient)
+	// create channel for the provider to send new blocks to the oracle
+	ch := make(chan oracletypes.BlockI)
+	// create the ethereum block provider
+	ethBlockProvider := eth.NewEthBlockProvider(config.EthOracleConfig.NodeUrl, config.EthOracleConfig.NodeWSUrl, ch, erc20, oracleLogger)
+	// start ethereum block provider
+	ethBlockProvider.Start()
+	// create a new oracle instance and pass the ethereum block provider
+	oracle := oracle.NewOracle(ethBlockProvider, ethStorage, oracleLogger)
+	// start the oracle
+	oracle.Start()
 	// create a new instance of the application
-	app, err := controller.New(sm, config, validatorKey, metrics, l)
+	app, err := controller.New(sm, oracle, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
