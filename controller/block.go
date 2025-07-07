@@ -206,6 +206,13 @@ func (c *Controller) ValidateProposal(qc *lib.QuorumCertificate, evidence *bft.B
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(block, blockResult, evidence)
+
+	// validate the proposed orders were witnessed by the oracle
+	err = c.oracle.ValidateProposedOrders(qc.Results.Orders)
+	if err != nil {
+		return err
+	}
+
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error

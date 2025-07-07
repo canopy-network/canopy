@@ -1,0 +1,527 @@
+package oracle
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
+	"github.com/canopy-network/canopy/lib"
+)
+
+// Terminology
+// 1. *Observer Chain* - The Canopy nested chain recording the witnessed transactions
+// 2. *External Chain* - The external chain, such as Ethereum, where this Oracle witnesses transactions
+// 2. *Witness Node* - An individual validator monitoring external chain transactions, running in the observer chain
+// 4. *Transaction Oracle* - The overall system connecting Ethereum to Canopy
+
+// Oracle is a chain-agnostic type implementing validation and storage logic for a cross-chain Oracle
+// It coordinates between three components:
+// - The external chain where transactions containing Canopy lock & close orders are witnessed
+// - The witness nodes order store where Canopy lock & close orders are persisted
+// - The witness nodes participation in the observer chain BFT process.
+// - The root chain by submitting certificate results containing majority witnessed orders, and receiving order book updates which represent root chain order book activity
+
+// The oracle integrates with the BFT consensus process through two key methods:
+// - ValidateProposedOrders
+// - WitnessedOrders
+// It also receives root chain updates through:
+// - UpdateRootChainInfo
+type Oracle struct {
+	// blockProvider is where the oracle will receive new blocks from
+	blockProvider types.BlockProvider
+	// the store with which the oracle can persist witnessed orders
+	orderStore types.OrderStoreI
+	// copy of the latest root chain order book
+	orderBook *lib.OrderBook
+	// mutex to protect order book
+	orderBookMu sync.RWMutex
+	// file path for last processed witness chain height will be saved
+	stateSaveFile string
+	// how many root chain blocks to wait until resubmitting an order
+	orderResubmitDelay uint64
+	// context to allow graceful shutdown
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	// logger
+	log lib.LoggerI
+}
+
+// NewOracle creates a new Oracle instance
+func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStoreI, logger lib.LoggerI) (*Oracle, error) {
+	// create context cancel function for the passed context
+	ctx, cancel := context.WithCancel(ctx)
+
+	// Ensure the state save file location exists
+	if err := os.MkdirAll(filepath.Dir(config.StateSaveFile), 0755); err != nil {
+		logger.Errorf("failed to create directories for %s: %w", config.StateSaveFile, err)
+	}
+	// create new oracle instance
+	o := &Oracle{
+		blockProvider:      blockProvider,
+		orderStore:         transactionStore,
+		log:                logger,
+		stateSaveFile:      config.StateSaveFile,
+		orderResubmitDelay: config.OrderResubmitDelay,
+		ctx:                ctx,
+		ctxCancel:          cancel,
+	}
+	// read last seen block height from disk
+	height, err := o.readLastSeenHeight()
+	if err != nil {
+		logger.Errorf("Failed to read last seen height: %v", err)
+		// return and allow default behaviour from provider
+		return o, err
+	}
+	// set the starting height for the block provider
+	blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
+	// start block provider with shared context
+	blockProvider.Start(ctx)
+	// return new oracle instance
+	return o, nil
+}
+
+// Start begins listening for blocks from the configured block provider
+func (o *Oracle) Start(ctx context.Context) {
+	// log that we're starting the oracle
+	o.log.Info("Starting oracle")
+	// get the block channel from provider
+	blockCh := o.blockProvider.BlockCh()
+	// listen for blocks
+	go o.run(ctx, blockCh)
+}
+
+// run runs the main Oracle loop
+// - receive new block from provider
+// - persist that block height to disk
+// - process new block
+func (o *Oracle) run(ctx context.Context, blockCh chan types.BlockI) {
+	for {
+		select {
+		case block, ok := <-blockCh:
+			if !ok {
+				// channel closed
+				o.log.Warn("Block channel closed, stopping oracle")
+				return
+			}
+			if block == nil {
+				o.log.Warn("Received nil block, skipping")
+				continue
+			}
+			// store the current block height to persistent storage
+			if err := o.saveBlockHeight(block.Number()); err != nil {
+				o.log.Errorf("Failed to persist block height %d: %v", block.Number(), err)
+				continue
+			}
+			// process the received block
+			// NOTE should processing this block fail it will not attempted again unless
+			// height storage file is cleared or manually updated
+			err := o.processBlock(block)
+			if err != nil {
+				o.log.Errorf("Failed to process block at height %d: %v", block.Number(), err)
+			}
+		case <-ctx.Done():
+			// context cancelled, stop the goroutine
+			o.log.Info("Oracle context cancelled, stopping block processing")
+			return
+		}
+	}
+}
+
+// Stop gracefully shuts down the oracle and all oracle components
+func (o *Oracle) Stop() {
+	o.log.Info("Stopping Oracle")
+	// Cancel the context, stopping oracle and oracle components
+	o.ctxCancel()
+}
+
+// validateOrder ensures the witnessed order passes basic sanity checks, then validates any lock or close orders with more specific functions
+func (o *Oracle) validateOrder(tx types.TransactionI, sellOrder *lib.SellOrder) lib.ErrorI {
+	// get witnessed order from transaction
+	order := tx.Order()
+	if order == nil {
+		return ErrOrderValidation("witnessed order cannot be nil")
+	}
+	// convenience variables
+	hasLock := order.LockOrder != nil
+	hasClose := order.CloseOrder != nil
+
+	// witnessed order must contain either a lock or close order
+	if !hasLock && !hasClose {
+		return ErrOrderValidation("witnessed order must contain either lock or close order")
+	}
+	// witnessed order cannot contain both a lock or close order
+	if hasLock && hasClose {
+		return ErrOrderValidation("witnessed order cannot contain both lock and close orders")
+	}
+	// validate the lock order
+	if hasLock {
+		return o.validateLockOrder(order.LockOrder, sellOrder)
+	}
+	// validate the close order
+	return o.validateCloseOrder(order.CloseOrder, sellOrder, tx)
+}
+
+// validateLockOrder ensures a lock order matches a sell order
+func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.SellOrder) lib.ErrorI {
+	if !bytes.Equal(lockOrder.OrderId, sellOrder.Id) {
+		return ErrOrderValidation("lock order ID does not match sell order ID")
+	}
+	if lockOrder.ChainId != sellOrder.Committee {
+		return ErrOrderValidation("lock order chain ID does not match sell order committee")
+	}
+	return nil
+}
+
+// validateLockOrder ensures a close order matches a sell order
+// as each field is user-supplied arbitrary data coming from off chain, strict validation
+// is required to protect against costly erroneous behavior or malicious activity
+func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.SellOrder, tx types.TransactionI) lib.ErrorI {
+	// Order data being equal to transaction To address is Ethereum-specific validation
+	// TODO move this logic into the block provider
+	sellOrderDataHex := fmt.Sprintf("%x", sellOrder.Data)
+	txToAddress := strings.ToLower(strings.TrimPrefix(tx.To(), "0x"))
+
+	if sellOrderDataHex != txToAddress {
+		return ErrOrderValidation("sell order data field does not match transaction recipient")
+	}
+	// ensure the order ids are a match
+	if !bytes.Equal(closeOrder.OrderId, sellOrder.Id) {
+		return ErrOrderValidation("close order ID does not match sell order ID")
+	}
+	// ensure the chain and committee are a match
+	if closeOrder.ChainId != sellOrder.Committee {
+		return ErrOrderValidation("close order chain ID does not match sell order committee")
+	}
+	// convenience variable
+	tokenTransfer := tx.TokenTransfer()
+	// ensure transfer amount is not nil
+	// TODO validate further fields here?
+	if tokenTransfer.TokenBaseAmount == nil {
+		return ErrOrderValidation("token transfer amount cannot be nil")
+	}
+	// ensure the correct amount was transferred
+	if tokenTransfer.TokenBaseAmount.Uint64() != sellOrder.RequestedAmount {
+		return ErrOrderValidation(fmt.Sprintf("transfer amount %d does not match requested amount %d",
+			tokenTransfer.TokenBaseAmount.Uint64(), sellOrder.RequestedAmount))
+	}
+	return nil
+}
+
+// processBlock processes a block received from the witness chain lb
+// processBlock examines any witnessed orders in the block, validates them, and writes them to the order store
+// any orders that are not present in the order book, or fail validation, are dropped and not saved to the order store
+func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
+	// lock order book for reading
+	o.orderBookMu.RLock()
+	defer o.orderBookMu.RUnlock()
+	// log that we received a new block
+	o.log.Infof("Received block %d with hash %s", block.Number(), block.Hash())
+	// iterate through each transaction
+	for _, tx := range block.Transactions() {
+		// get order in this transaction
+		order := tx.Order()
+		if order == nil {
+			// no order in this transaction
+			continue
+		}
+		// find the order in the order book
+		if o.orderBook == nil {
+			o.log.Warn("Order book is nil, skipping order validation")
+			continue
+		}
+		canopyOrder, orderErr := o.orderBook.GetOrder(order.OrderId)
+		if orderErr != nil {
+			o.log.Errorf("Error getting order from order book: %s", orderErr.Error())
+			return orderErr
+		}
+		// the order book returns a nil order if no order was found
+		// this should not happen under normal circumstances but is not an error
+		if canopyOrder == nil {
+			// log a warning and continue processing transactions
+			o.log.Warnf("Order %x not found in order book", order.OrderId)
+			continue
+		}
+		// validate the order that was witnessed
+		if err := o.validateOrder(tx, canopyOrder); err != nil {
+			// log a warning and continue processing transactions
+			o.log.Warnf(err.Error())
+			continue
+		}
+		// determine order type
+		orderType := types.LockOrderType
+		if order.CloseOrder != nil {
+			orderType = types.CloseOrderType
+		}
+		// check if the witnessed order already exists in store
+		_, err := o.orderStore.ReadOrder(order.OrderId, orderType)
+		if err == nil {
+			// order exists, skip writing
+			// this prevents newer orders from overwriting older orders
+			// TODO should there be any more logic here?
+			continue
+		}
+		// write order to disk.
+		err = o.orderStore.WriteOrder(order, orderType)
+		if err != nil {
+			o.log.Errorf("Failed to write order %x: %v", order.OrderId, err)
+			return err
+		}
+	}
+	return nil
+}
+
+// readLastSeenHeight reads the last seen block height from disk
+func (o *Oracle) readLastSeenHeight() (uint64, lib.ErrorI) {
+	// read file contents
+	data, err := os.ReadFile(o.stateSaveFile)
+	if err != nil {
+		// log that file doesn't exist and return 0 with no error (this is expected)
+		o.log.Infof("Last height file not found, starting from 0: %v", err)
+		return 0, nil
+	}
+	// parse height from file contents
+	heightStr := strings.TrimSpace(string(data))
+	height, err := strconv.ParseUint(heightStr, 10, 64)
+	if err != nil {
+		return 0, ErrParseHeight(err)
+	}
+	return height, nil
+}
+
+// saveBlockHeight saves the block height to disk
+func (o *Oracle) saveBlockHeight(height uint64) lib.ErrorI {
+	// convert height to string
+	heightStr := strconv.FormatUint(height, 10)
+	// write height to file
+	err := os.WriteFile(o.stateSaveFile, []byte(heightStr), 0644)
+	if err != nil {
+		// log error writing file and return error
+		o.log.Errorf("Failed to write height to file: %v", err)
+		return ErrWriteHeightFile(err)
+	}
+	return nil
+}
+
+// ValidateProposedOrders verifies that the passed orders are all present in the local order store.
+// This is called when the BFT module validates a block proposal to ensure that each order
+// in the proposed block is an exact match for an order in the witnessed order store.
+func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
+	// handle nil orders case
+	if orders == nil {
+		return nil
+	}
+	// skip validation when no orders are present
+	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
+		return nil
+	}
+	// validate each lock order against the witnessed order store
+	for _, lock := range orders.LockOrders {
+		// get order from order store
+		witnessedOrder, err := o.orderStore.ReadOrder(lock.OrderId, types.LockOrderType)
+		if err != nil {
+			return err
+		}
+		// compare orderbook order and witnessed order
+		if !lock.Equals(witnessedOrder.LockOrder) {
+			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), errors.New("lock order unequal"))
+		}
+	}
+	// validate each close order against the witnessed order store
+	for _, orderId := range orders.CloseOrders {
+		o.log.Infof("Verifying close order %s", lib.BytesToString(orderId))
+		// get the witnessd order
+		wOrder, err := o.orderStore.ReadOrder(orderId, types.CloseOrderType)
+		if err != nil {
+			return ErrReadOrder(err)
+		}
+		// construct close order for comparison
+		order := lib.CloseOrder{
+			OrderId:    orderId,
+			ChainId:    1,
+			CloseOrder: true,
+		}
+		// compare orderbook order and witnessed order
+		if !order.Equals(wOrder.CloseOrder) {
+			return ErrOrderNotVerified(lib.BytesToString(orderId), errors.New("close order unequal"))
+		}
+	}
+	o.log.Info("Validated off chain orders successfully")
+	return nil
+}
+
+// UpdateRootChainInfo examines the new root chain order book and updates the local order store.
+// The method performs the following operations:
+//   - saves the order book for later use
+//   - removes lock orders from the store when corresponding sell orders are locked on the root chain
+//   - removes lock/close orders when their corresponding sell orders are no longer present
+func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
+	// lock order book while updating it and updating order store
+	o.orderBookMu.Lock()
+	defer o.orderBookMu.Unlock()
+	// retain updated order book for future oracle operations
+	o.orderBook = info.Orders
+	// get all lock orders from the order store
+	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
+	if err != nil {
+		o.log.Errorf("Error getting all order ids: %s", err.Error())
+		return
+	}
+	o.log.Debugf("UpdateRootChainInfo checking %d stored lock orders", len(storedOrders))
+	// examine stored lock orders and remove any not present in the order book
+	for _, id := range storedOrders {
+		// attempt to get stored lock order from order book
+		if o.orderBook == nil {
+			o.log.Warn("Order book is nil, skipping lock order check")
+			continue
+		}
+		order, err := o.orderBook.GetOrder(id)
+		if err != nil {
+			o.log.Errorf("Error getting order from order book: %s", err.Error())
+			continue
+		}
+		// remove lock order from store if one of the following conditions is met:
+		//   - corresponding sell order was not found in the root chain order book
+		//   - root chain sell order is locked (lock order in store no longer needed)
+		switch {
+		case order == nil:
+			o.log.Infof("Order %x no longer in order book, removing lock order from store", id)
+		case order.BuyerSendAddress != nil:
+			o.log.Infof("Order %x is locked in order book, removing lock order from store", id)
+		default:
+			// neither condition was met, do not remove this order
+			// continue processing remaining stored orders
+			continue
+		}
+		// remove lock order from the store
+		err = o.orderStore.RemoveOrder(id, types.LockOrderType)
+		if err != nil {
+			o.log.Errorf("Error removing order from order store: %s", err.Error())
+		}
+	}
+	// get all close orders from the order store
+	storedOrders, err = o.orderStore.GetAllOrderIds(types.CloseOrderType)
+	if err != nil {
+		o.log.Errorf("Error getting all order ids: %s", err.Error())
+		return
+	}
+	o.log.Debugf("UpdateRootChainInfo checking %d stored close orders", len(storedOrders))
+	// examine every stored close order and remove it if is no long present in the order book
+	for _, id := range storedOrders {
+		// attempt to get stored close order from order book
+		if o.orderBook == nil {
+			o.log.Warn("Order book is nil, skipping close order check")
+			continue
+		}
+		order, err := o.orderBook.GetOrder(id)
+		if err != nil {
+			o.log.Errorf("Error getting order from order book: %s", err.Error())
+			continue
+		}
+		// remove close order from store if it was not found in the order book
+		if order == nil {
+			o.log.Infof("Removing close order %x from store", id)
+			err := o.orderStore.RemoveOrder(id, types.CloseOrderType)
+			if err != nil {
+				o.log.Errorf("Error removing order from order store: %s", err.Error())
+			}
+		}
+	}
+}
+
+// shouldSubmit determines whether a witnessed order should be submitted based on
+// the current root height and submission history. Returns true if:
+//   - this is the first submission (LastSubmitHeight is 0)
+//   - the same node is handling both proposal and validation at the same height
+//   - the resubmit delay period has elapsed since the last submission
+func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bool {
+	// first submission
+	if order.LastSubmitHeight == 0 {
+		return true
+	}
+	// the same node can both propose and validate a witnessed order
+	// in this scencario this method will be called a second time with the same root height
+	// handle this
+	if order.LastSubmitHeight == rootHeight {
+		return true
+	}
+	// resubmit block has been reached
+	if rootHeight >= order.LastSubmitHeight+o.orderResubmitDelay {
+		return true
+	}
+	// do not submit
+	return false
+}
+
+// WitnessedOrders returns witnessed orders that match orders in the order book
+// WitnessedOrders is called from two different stages in the BFT process:
+// - when the proposer produces a block proposal it uses the orders returned here to build the block
+// - when a validator (a witness node) validates a block proposal it uses the orders returned here to validate all proposed orders were witnessed by this node
+func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
+	lockOrders := []*lib.LockOrder{}
+	closeOrders := [][]byte{}
+	// iterate over the order book looking in the order store for lock/close orders this node has witnessed
+	for _, order := range orderBook.Orders {
+		// buyer receive address indicates if this is a locked sell order
+		// TODO: revisit this, add method to lock order type?
+		if order.BuyerReceiveAddress == nil {
+			// process unlocked sell orders - look for witnessed lock orderskjkjkjkjjjjkjk
+			wOrder, err := o.orderStore.ReadOrder(order.Id, types.LockOrderType)
+			if err != nil {
+				if err.Code() != CodeReadOrder {
+					o.log.Errorf("Failed to read order %x: %v", order.Id, err)
+				}
+				continue
+			}
+			// check whether this witnessed lock order should be submitted in the next proposed block
+			if !o.shouldSubmit(wOrder, rootHeight) {
+				continue
+			}
+			// update the last height this order was submitted
+			wOrder.LastSubmitHeight = rootHeight
+			// save this update to disk
+			err = o.orderStore.WriteOrder(wOrder, types.LockOrderType)
+			if err != nil {
+				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
+				continue
+			}
+			o.log.Debugf("Witnessed lock order %x", wOrder.LockOrder.OrderId)
+			// submit this witnessed lock order by returning it in the lockOrders slice
+			lockOrders = append(lockOrders, wOrder.LockOrder)
+		} else {
+			// process wOrder book locked orders - look for witnessed close orders
+			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
+			if err != nil {
+				// No witnessed order is a normal condition, do not log
+				continue
+			}
+			// check whether this witnessed close order should be submitted in the next proposed block
+			if !o.shouldSubmit(wOrder, rootHeight) {
+				continue
+			}
+			// update the last height this order was submitted
+			wOrder.LastSubmitHeight = rootHeight
+			// update the witnessed order in the store
+			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
+			if err != nil {
+				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
+				continue
+			}
+			o.log.Debugf("Witnessed close order %x", wOrder.OrderId)
+			// submit this witnessed close order by returning it in the closeOrders slice
+			closeOrders = append(closeOrders, wOrder.OrderId)
+		}
+	}
+
+	if len(lockOrders) > 0 || len(closeOrders) > 0 {
+		o.log.Infof("Witnessed %d lock orders and %d close orders, root height %d", len(lockOrders), len(closeOrders), rootHeight)
+	}
+	return lockOrders, closeOrders
+}
