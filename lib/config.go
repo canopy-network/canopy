@@ -58,12 +58,14 @@ func DefaultConfig() Config {
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel   string      `json:"logLevel"`   // any level includes the levels above it: debug < info < warning < error
-	ChainId    uint64      `json:"chainId"`    // the identifier of this particular chain within a single 'network id'
-	SleepUntil uint64      `json:"sleepUntil"` // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain  []RootChain `json:"rootChain"`  // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless   bool        `json:"headless"`   // turn off the web wallet and block explorer 'web' front ends
+	LogLevel          string      `json:"logLevel"`          // any level includes the levels above it: debug < info < warning < error
+	ChainId           uint64      `json:"chainId"`           // the identifier of this particular chain within a single 'network id'
+	SleepUntil        uint64      `json:"sleepUntil"`        // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain         []RootChain `json:"rootChain"`         // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF            bool        `json:"runVDF"`            // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless          bool        `json:"headless"`          // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate        bool        `json:"autoUpdate"`        // check for new versions of software each X time
+	RunningAutoUpdate bool        `json:"runningAutoUpdate"` // flag to identify if the auto update software is running
 }
 
 // DefaultMainConfig() sets log level to 'info'
@@ -76,9 +78,10 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:   true,          // run the VDF by default
-		ChainId:  CanopyChainId, // default chain url is 1
-		Headless: false,         // serve the web wallet and block explorer by default
+		RunVDF:     true,          // run the VDF by default
+		ChainId:    CanopyChainId, // default chain url is 1
+		Headless:   false,         // serve the web wallet and block explorer by default
+		AutoUpdate: true,          // set it as default while in inmature state
 	}
 }
 

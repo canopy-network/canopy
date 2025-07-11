@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"encoding/json"
@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 
 var (
 	client, config, l     = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	dataDir, validatorKey = "", crypto.PrivateKeyI(nil)
+	DataDir, validatorKey = "", crypto.PrivateKeyI(nil)
 )
 
 func init() {
@@ -45,14 +45,13 @@ func init() {
 	rootCmd.AddCommand(autoCompleteCmd)
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
-	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-
-	config, validatorKey = InitializeDataDirectory(dataDir, lib.NewDefaultLogger())
+	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
+	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
 	l = lib.NewLogger(lib.LoggerConfig{Level: config.GetLogLevel()})
 	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 }
 
-func main() {
+func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

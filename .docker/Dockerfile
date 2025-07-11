@@ -2,7 +2,6 @@ FROM golang:1.23.9-alpine AS builder
 
 RUN apk update && apk add --no-cache make bash nodejs npm
 
-ARG BUILD_PATH
 ARG EXPLORER_BASE_PATH
 ARG WALLET_BASE_PATH
 
@@ -14,7 +13,7 @@ ENV WALLET_BASE_PATH=${WALLET_BASE_PATH}
 
 RUN make build/wallet
 RUN make build/explorer
-RUN go build -a -o bin ./${BUILD_PATH}/*.go
+RUN go build -a -o bin ./cmd/main/...
 
 FROM alpine:3.19
 WORKDIR /app
