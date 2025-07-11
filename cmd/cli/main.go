@@ -17,6 +17,7 @@ import (
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
+	"github.com/canopy-network/canopy/fsm/vm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/store"
@@ -82,13 +83,19 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+
+	vmConfig := vm.DefaultConfig()
+	vmInstance, err := vm.NewVM(vmConfig, lib.NewDefaultLogger())
+	if err != nil {
+		l.Fatal(err.Error())
+	}
 	// initialize the state machine
-	sm, err := fsm.New(config, db, metrics, l)
+	sm, err := fsm.New(config, vmInstance, db, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
 	// create a new instance of the application
-	app, err := controller.New(sm, config, validatorKey, metrics, l)
+	app, err := controller.New(sm, vmInstance, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}

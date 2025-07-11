@@ -25,6 +25,7 @@ const (
 	NonSignersRoutePath            = "/v1/query/non-signers"
 	ParamRoutePath                 = "/v1/query/params"
 	SupplyRoutePath                = "/v1/query/supply"
+	ContractsRoutePath             = "/v1/query/contracts"
 	FeeParamRoutePath              = "/v1/query/fee-params"
 	GovParamRoutePath              = "/v1/query/gov-params"
 	ConParamsRoutePath             = "/v1/query/con-params"
@@ -86,6 +87,15 @@ const (
 	TxSubsidyRoutePath         = "/v1/admin/tx-subsidy"
 	TxStartPollRoutePath       = "/v1/admin/tx-start-poll"
 	TxVotePollRoutePath        = "/v1/admin/tx-vote-poll"
+	
+	// Contract transaction paths
+	TxStoreCodeRoutePath        = "/v1/admin/tx-store-code"
+	TxInstantiateContractRoutePath = "/v1/admin/tx-instantiate-contract"
+	TxExecuteContractRoutePath  = "/v1/admin/tx-execute-contract"
+	TxMigrateContractRoutePath  = "/v1/admin/tx-migrate-contract"
+	TxUpdateAdminRoutePath      = "/v1/admin/tx-update-admin"
+	TxClearAdminRoutePath       = "/v1/admin/tx-clear-admin"
+	
 	ResourceUsageRoutePath     = "/v1/admin/resource-usage"
 	PeerInfoRoutePath          = "/v1/admin/peer-info"
 	ConsensusInfoRoutePath     = "/v1/admin/consensus-info"
@@ -114,6 +124,7 @@ const (
 	RetiredCommitteesRouteName     = "retired-committees"
 	NonSignersRouteName            = "non-signers"
 	SupplyRouteName                = "supply"
+	ContractsRouteName             = "contracts"
 	ParamRouteName                 = "params"
 	FeeParamRouteName              = "fee-params"
 	GovParamRouteName              = "gov-params"
@@ -174,6 +185,15 @@ const (
 	TxCloseOrderRouteName      = "tx-close-order"
 	TxStartPollRouteName       = "tx-start-poll"
 	TxVotePollRouteName        = "tx-vote-poll"
+	
+	// Contract transaction route names
+	TxStoreCodeRouteName        = "tx-store-code"
+	TxInstantiateContractRouteName = "tx-instantiate-contract"
+	TxExecuteContractRouteName  = "tx-execute-contract"
+	TxMigrateContractRouteName  = "tx-migrate-contract"
+	TxUpdateAdminRouteName      = "tx-update-admin"
+	TxClearAdminRouteName       = "tx-clear-admin"
+	
 	ResourceUsageRouteName     = "resource-usage"
 	PeerInfoRouteName          = "peer-info"
 	ConsensusInfoRouteName     = "consensus-info"
@@ -210,6 +230,7 @@ var routePaths = routes{
 	NonSignersRouteName:            {Method: http.MethodPost, Path: NonSignersRoutePath},
 	ParamRouteName:                 {Method: http.MethodPost, Path: ParamRoutePath},
 	SupplyRouteName:                {Method: http.MethodPost, Path: SupplyRoutePath},
+	ContractsRouteName:             {Method: http.MethodPost, Path: ContractsRoutePath},
 	FeeParamRouteName:              {Method: http.MethodPost, Path: FeeParamRoutePath},
 	GovParamRouteName:              {Method: http.MethodPost, Path: GovParamRoutePath},
 	ConParamsRouteName:             {Method: http.MethodPost, Path: ConParamsRoutePath},
@@ -270,6 +291,15 @@ var routePaths = routes{
 	TxSubsidyRouteName:         {Method: http.MethodPost, Path: TxSubsidyRoutePath},
 	TxStartPollRouteName:       {Method: http.MethodPost, Path: TxStartPollRoutePath},
 	TxVotePollRouteName:        {Method: http.MethodPost, Path: TxVotePollRoutePath},
+	
+	// Contract transaction route mappings
+	TxStoreCodeRouteName:        {Method: http.MethodPost, Path: TxStoreCodeRoutePath},
+	TxInstantiateContractRouteName: {Method: http.MethodPost, Path: TxInstantiateContractRoutePath},
+	TxExecuteContractRouteName:  {Method: http.MethodPost, Path: TxExecuteContractRoutePath},
+	TxMigrateContractRouteName:  {Method: http.MethodPost, Path: TxMigrateContractRoutePath},
+	TxUpdateAdminRouteName:      {Method: http.MethodPost, Path: TxUpdateAdminRoutePath},
+	TxClearAdminRouteName:       {Method: http.MethodPost, Path: TxClearAdminRoutePath},
+	
 	ResourceUsageRouteName:     {Method: http.MethodGet, Path: ResourceUsageRoutePath},
 	PeerInfoRouteName:          {Method: http.MethodGet, Path: PeerInfoRoutePath},
 	ConsensusInfoRouteName:     {Method: http.MethodGet, Path: ConsensusInfoRoutePath},
@@ -310,6 +340,7 @@ func createRouter(s *Server) *httprouter.Router {
 		ValParamRouteName:              s.ValParams,
 		EcoParamRouteName:              s.EcoParameters,
 		SupplyRouteName:                s.Supply,
+		ContractsRouteName:             s.Contracts,
 		StateRouteName:                 s.State,
 		StateDiffRouteName:             s.StateDiff,
 		StateDiffGetRouteName:          s.StateDiff,
@@ -377,6 +408,15 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		TxSubsidyRouteName:         s.TransactionSubsidy,
 		TxStartPollRouteName:       s.TransactionStartPoll,
 		TxVotePollRouteName:        s.TransactionVotePoll,
+		
+		// Contract transaction handler mappings
+		TxStoreCodeRouteName:        s.TransactionStoreCode,
+		TxInstantiateContractRouteName: s.TransactionInstantiateContract,
+		TxExecuteContractRouteName:  s.TransactionExecuteContract,
+		TxMigrateContractRouteName:  s.TransactionMigrateContract,
+		TxUpdateAdminRouteName:      s.TransactionUpdateAdmin,
+		TxClearAdminRouteName:       s.TransactionClearAdmin,
+		
 		ResourceUsageRouteName:     s.ResourceUsage,
 		PeerInfoRouteName:          s.PeerInfo,
 		ConsensusInfoRouteName:     s.ConsensusInfo,

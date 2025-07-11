@@ -7,6 +7,7 @@ import (
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/fsm"
+	"github.com/canopy-network/canopy/fsm/vm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
@@ -25,6 +26,7 @@ type Controller struct {
 	Metrics    *lib.Metrics       // telemetry
 
 	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
+	VM        *vm.VM            // the WASM smart contract VM
 	Mempool   *Mempool          // the in memory list of pending transactions
 	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
@@ -36,7 +38,7 @@ type Controller struct {
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, vm *vm.VM, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
 	// if an error occurred when retrieving the max validators
@@ -59,6 +61,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Config:     c,
 		Metrics:    metrics,
 		FSM:        fsm,
+		VM:         vm,
 		Mempool:    mempool,
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),

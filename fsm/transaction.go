@@ -430,3 +430,68 @@ func NewTransaction(pk crypto.PrivateKeyI, msg lib.MessageI, networkId, chainId,
 	}
 	return tx, tx.Sign(pk)
 }
+
+// CONTRACT TRANSACTION BUILDERS
+
+// NewStoreCodeTransaction creates a transaction to store WASM bytecode
+func NewStoreCodeTransaction(from crypto.PrivateKeyI, wasmByteCode []byte, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	msg := &MessageStoreCode{
+		Sender:       from.PublicKey().Address().Bytes(),
+		WasmByteCode: wasmByteCode,
+	}
+	return NewTransaction(from, msg, networkId, chainId, fee, height, memo)
+}
+
+// NewInstantiateContractTransaction creates a transaction to instantiate a smart contract
+func NewInstantiateContractTransaction(from crypto.PrivateKeyI, codeId uint64, label string, msg []byte, admin []byte, funds []*Coin, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	message := &MessageInstantiateContract{
+		Sender: from.PublicKey().Address().Bytes(),
+		Admin:  admin,
+		CodeId: codeId,
+		Label:  label,
+		Msg:    msg,
+		Funds:  funds,
+	}
+	return NewTransaction(from, message, networkId, chainId, fee, height, memo)
+}
+
+// NewExecuteContractTransaction creates a transaction to execute a smart contract function
+func NewExecuteContractTransaction(from crypto.PrivateKeyI, contractAddr []byte, msg []byte, funds []*Coin, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	message := &MessageExecuteContract{
+		Sender:   from.PublicKey().Address().Bytes(),
+		Contract: contractAddr,
+		Msg:      msg,
+		Funds:    funds,
+	}
+	return NewTransaction(from, message, networkId, chainId, fee, height, memo)
+}
+
+// NewMigrateContractTransaction creates a transaction to migrate a contract to new code
+func NewMigrateContractTransaction(from crypto.PrivateKeyI, contractAddr []byte, codeId uint64, msg []byte, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	message := &MessageMigrateContract{
+		Sender:   from.PublicKey().Address().Bytes(),
+		Contract: contractAddr,
+		CodeId:   codeId,
+		Msg:      msg,
+	}
+	return NewTransaction(from, message, networkId, chainId, fee, height, memo)
+}
+
+// NewUpdateAdminTransaction creates a transaction to update a contract's admin
+func NewUpdateAdminTransaction(from crypto.PrivateKeyI, contractAddr []byte, newAdmin []byte, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	message := &MessageUpdateAdmin{
+		Sender:   from.PublicKey().Address().Bytes(),
+		NewAdmin: newAdmin,
+		Contract: contractAddr,
+	}
+	return NewTransaction(from, message, networkId, chainId, fee, height, memo)
+}
+
+// NewClearAdminTransaction creates a transaction to clear a contract's admin
+func NewClearAdminTransaction(from crypto.PrivateKeyI, contractAddr []byte, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	message := &MessageClearAdmin{
+		Sender:   from.PublicKey().Address().Bytes(),
+		Contract: contractAddr,
+	}
+	return NewTransaction(from, message, networkId, chainId, fee, height, memo)
+}

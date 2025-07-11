@@ -47,10 +47,14 @@ type ParamSpace interface {
 func DefaultParams() *Params {
 	return &Params{
 		Consensus: &ConsensusParams{
-			BlockSize:       uint64(units.MB),
-			ProtocolVersion: NewProtocolVersion(0, 1),
-			RootChainId:     1,
-			Retired:         0,
+			BlockSize:              uint64(units.MB),
+			ProtocolVersion:        NewProtocolVersion(0, 1),
+			RootChainId:            1,
+			Retired:                0,
+			GasPerStorageRead:      100,    // Default gas cost for storage reads
+			GasPerStorageWrite:     500,    // Default gas cost for storage writes  
+			GasPerStorageDelete:    300,    // Default gas cost for storage deletes
+			MaxGasPerTransaction:   50000000, // 50M gas maximum per transaction
 		},
 		Validator: &ValidatorParams{
 			UnstakingBlocks:                    2,
@@ -71,19 +75,25 @@ func DefaultParams() *Params {
 			LockOrderFeeMultiplier:             2,
 		},
 		Fee: &FeeParams{
-			SendFee:               10000,
-			StakeFee:              10000,
-			EditStakeFee:          10000,
-			UnstakeFee:            10000,
-			PauseFee:              10000,
-			UnpauseFee:            10000,
-			ChangeParameterFee:    10000,
-			DaoTransferFee:        10000,
-			CertificateResultsFee: 0,
-			SubsidyFee:            10000,
-			CreateOrderFee:        10000,
-			EditOrderFee:          10000,
-			DeleteOrderFee:        10000,
+			SendFee:                 10000,
+			StakeFee:                10000,
+			EditStakeFee:            10000,
+			UnstakeFee:              10000,
+			PauseFee:                10000,
+			UnpauseFee:              10000,
+			ChangeParameterFee:      10000,
+			DaoTransferFee:          10000,
+			CertificateResultsFee:   0,
+			SubsidyFee:              10000,
+			CreateOrderFee:          10000,
+			EditOrderFee:            10000,
+			DeleteOrderFee:          10000,
+			StoreCodeFee:            50000,  // Higher fee for storing WASM code
+			InstantiateContractFee:  30000,  // Fee for instantiating contracts
+			ExecuteContractFee:      20000,  // Fee for executing contracts
+			MigrateContractFee:      25000,  // Fee for migrating contracts
+			UpdateAdminFee:          15000,  // Fee for updating admin
+			ClearAdminFee:           10000,  // Fee for clearing admin
 		},
 		Governance: &GovernanceParams{DaoRewardPercentage: 5},
 	}
@@ -106,10 +116,14 @@ func (x *Params) Check() lib.ErrorI {
 // consensus param space
 
 const (
-	ParamBlockSize       = "blockSize"       // size of the block - header
-	ParamProtocolVersion = "protocolVersion" // current protocol version (upgrade enforcement)
-	ParamRetired         = "retired"         // if the chain is marking itself as 'retired' to the root-chain making it forever un-subsidized
-	ParamRootChainId     = "rootChainID"     // the chain id of the root chain (source of the validator set)
+	ParamBlockSize              = "blockSize"              // size of the block - header
+	ParamProtocolVersion        = "protocolVersion"        // current protocol version (upgrade enforcement)
+	ParamRetired                = "retired"                // if the chain is marking itself as 'retired' to the root-chain making it forever un-subsidized
+	ParamRootChainId            = "rootChainID"            // the chain id of the root chain (source of the validator set)
+	ParamGasPerStorageRead      = "gasPerStorageRead"      // gas cost for contract storage read operations
+	ParamGasPerStorageWrite     = "gasPerStorageWrite"     // gas cost for contract storage write operations
+	ParamGasPerStorageDelete    = "gasPerStorageDelete"    // gas cost for contract storage delete operations
+	ParamMaxGasPerTransaction   = "maxGasPerTransaction"   // maximum gas allowed per transaction
 )
 
 var _ ParamSpace = &ConsensusParams{}
@@ -131,6 +145,14 @@ func (x *ConsensusParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.Retired = value
 	case ParamRootChainId:
 		x.RootChainId = value
+	case ParamGasPerStorageRead:
+		x.GasPerStorageRead = value
+	case ParamGasPerStorageWrite:
+		x.GasPerStorageWrite = value
+	case ParamGasPerStorageDelete:
+		x.GasPerStorageDelete = value
+	case ParamMaxGasPerTransaction:
+		x.MaxGasPerTransaction = value
 	default:
 		return ErrUnknownParam()
 	}
@@ -344,6 +366,12 @@ const (
 	ParamCreateOrderFee        = "createOrderFee"        // transaction fee for MessageCreateOrder
 	ParamEditOrderFee          = "editOrderFee"          // transaction fee for MessageEditOrder
 	ParamDeleteOrderFee        = "deleteOrderFee"        // transaction fee for MessageDeleteOrder
+	ParamStoreCodeFee          = "storeCodeFee"          // transaction fee for MessageStoreCode
+	ParamInstantiateContractFee = "instantiateContractFee" // transaction fee for MessageInstantiateContract
+	ParamExecuteContractFee    = "executeContractFee"    // transaction fee for MessageExecuteContract
+	ParamMigrateContractFee    = "migrateContractFee"    // transaction fee for MessageMigrateContract
+	ParamUpdateAdminFee        = "updateAdminFee"        // transaction fee for MessageUpdateAdmin
+	ParamClearAdminFee         = "clearAdminFee"         // transaction fee for MessageClearAdmin
 )
 
 // Check() validates the Fee params
@@ -384,6 +412,24 @@ func (x *FeeParams) Check() lib.ErrorI {
 	if x.DeleteOrderFee == 0 {
 		return ErrInvalidParam(ParamDeleteOrderFee)
 	}
+	if x.StoreCodeFee == 0 {
+		return ErrInvalidParam(ParamStoreCodeFee)
+	}
+	if x.InstantiateContractFee == 0 {
+		return ErrInvalidParam(ParamInstantiateContractFee)
+	}
+	if x.ExecuteContractFee == 0 {
+		return ErrInvalidParam(ParamExecuteContractFee)
+	}
+	if x.MigrateContractFee == 0 {
+		return ErrInvalidParam(ParamMigrateContractFee)
+	}
+	if x.UpdateAdminFee == 0 {
+		return ErrInvalidParam(ParamUpdateAdminFee)
+	}
+	if x.ClearAdminFee == 0 {
+		return ErrInvalidParam(ParamClearAdminFee)
+	}
 	return nil
 }
 
@@ -421,6 +467,18 @@ func (x *FeeParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.DeleteOrderFee = value
 	case ParamEditOrderFee:
 		x.EditOrderFee = value
+	case ParamStoreCodeFee:
+		x.StoreCodeFee = value
+	case ParamInstantiateContractFee:
+		x.InstantiateContractFee = value
+	case ParamExecuteContractFee:
+		x.ExecuteContractFee = value
+	case ParamMigrateContractFee:
+		x.MigrateContractFee = value
+	case ParamUpdateAdminFee:
+		x.UpdateAdminFee = value
+	case ParamClearAdminFee:
+		x.ClearAdminFee = value
 	default:
 		return ErrUnknownParam()
 	}

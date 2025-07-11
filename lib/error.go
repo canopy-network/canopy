@@ -49,8 +49,8 @@ func (p *Error) Error() string {
 	for f, again := frames.Next(); again; f, again = frames.Next() {
 		stack += fmt.Sprintf("\n%s L%d", f.File, f.Line)
 	}
-	//return fmt.Sprintf("\nModule:  %s\nCode:    %d\nMessage: %s\nStack: %s", p.EModule, p.ECode, p.Msg, stack)
-	return fmt.Sprintf("\nModule:  %s\nCode:    %d\nMessage: %s", p.EModule, p.ECode, p.Msg)
+	return fmt.Sprintf("\nModule:  %s\nCode:    %d\nMessage: %s\nStack: %s", p.EModule, p.ECode, p.Msg, stack)
+	// return fmt.Sprintf("\nModule:  %s\nCode:    %d\nMessage: %s", p.EModule, p.ECode, p.Msg)
 }
 
 const (

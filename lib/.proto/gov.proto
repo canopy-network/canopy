@@ -69,6 +69,14 @@ message ConsensusParams {
   uint64 root_chain_id = 3; // @gotags: json:"rootChainID"
   // retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
   uint64 retired = 4;
+  // gas_per_storage_read: gas cost for contract storage read operations
+  uint64 gas_per_storage_read = 5; // @gotags: json:"gasPerStorageRead"
+  // gas_per_storage_write: gas cost for contract storage write operations
+  uint64 gas_per_storage_write = 6; // @gotags: json:"gasPerStorageWrite"
+  // gas_per_storage_delete: gas cost for contract storage delete operations
+  uint64 gas_per_storage_delete = 7; // @gotags: json:"gasPerStorageDelete"
+  // max_gas_per_transaction: maximum gas allowed per transaction
+  uint64 max_gas_per_transaction = 8; // @gotags: json:"maxGasPerTransaction"
 }
 
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain
@@ -150,6 +158,18 @@ message FeeParams {
   uint64 edit_order_fee = 12; // @gotags: json:"editOrderFee"
   // delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
   uint64 delete_order_fee = 13; // @gotags: json:"deleteOrderFee"
+  // store_code_fee: is the fee amount (in uCNPY) for Message Store Code
+  uint64 store_code_fee = 14; // @gotags: json:"storeCodeFee"
+  // instantiate_contract_fee: is the fee amount (in uCNPY) for Message Instantiate Contract
+  uint64 instantiate_contract_fee = 15; // @gotags: json:"instantiateContractFee"
+  // execute_contract_fee: is the fee amount (in uCNPY) for Message Execute Contract
+  uint64 execute_contract_fee = 16; // @gotags: json:"executeContractFee"
+  // migrate_contract_fee: is the fee amount (in uCNPY) for Message Migrate Contract
+  uint64 migrate_contract_fee = 17; // @gotags: json:"migrateContractFee"
+  // update_admin_fee: is the fee amount (in uCNPY) for Message Update Admin
+  uint64 update_admin_fee = 18; // @gotags: json:"updateAdminFee"
+  // clear_admin_fee: is the fee amount (in uCNPY) for Message Clear Admin
+  uint64 clear_admin_fee = 19; // @gotags: json:"clearAdminFee"
 }
 
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous

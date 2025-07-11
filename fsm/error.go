@@ -270,3 +270,72 @@ func ErrInvalidERC20Tx(err error) lib.ErrorI {
 func ErrNotEmpty() lib.ErrorI {
 	return lib.NewError(lib.CodeErrNotEmpty, lib.StateMachineModule, "a field that should be empty isn't")
 }
+
+// Contract-related error functions
+func ErrWasmCodeEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "WASM bytecode cannot be empty")
+}
+
+func ErrWasmCodeTooLarge() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "WASM bytecode too large")
+}
+
+func ErrCodeIdZero() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "code ID cannot be zero")
+}
+
+func ErrLabelEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "contract label cannot be empty")
+}
+
+func ErrContractMsgEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "contract message cannot be empty")
+}
+
+func ErrContractNotFound() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "contract not found")
+}
+
+func ErrCodeNotFound() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "code not found")
+}
+
+func ErrContractAddressInvalid() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid contract address")
+}
+
+func ErrCodeIdNotFound() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "code ID not found")
+}
+
+func ErrUnauthorized(msg string) lib.ErrorI {
+	return lib.NewError(lib.CodeUnauthorizedTx, lib.StateMachineModule, msg)
+}
+
+func ErrNotImplemented(msg string) lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, msg)
+}
+
+func ErrEmptyWasmCode() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "WASM bytecode cannot be empty")
+}
+
+func ErrInvalidCodeId() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid code ID")
+}
+
+func ErrEmptyContractMsg() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "contract message cannot be empty")
+}
+
+func ErrEmptyContractLabel() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "contract label cannot be empty")
+}
+
+func ErrInvalidAdminAddress() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid admin address")
+}
+
+func ErrInvalidContractAddress() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid contract address")
+}

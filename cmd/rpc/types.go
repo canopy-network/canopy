@@ -303,6 +303,65 @@ type signerFields struct {
 	SignerNickname string       `json:"signerNickname"`
 }
 
+// CONTRACT TRANSACTION TYPES
+
+type txStoreCode struct {
+	Fee          uint64       `json:"fee"`
+	WasmByteCode lib.HexBytes `json:"wasmByteCode"`
+	Submit       bool         `json:"submit"`
+	Password     string       `json:"password"`
+	fromFields
+}
+
+type txInstantiateContract struct {
+	Fee      uint64          `json:"fee"`
+	CodeId   uint64          `json:"codeId"`
+	Label    string          `json:"label"`
+	Msg      string          `json:"msg"`
+	Admin    string          `json:"admin,omitempty"`
+	Funds    json.RawMessage `json:"funds,omitempty"`
+	Submit   bool            `json:"submit"`
+	Password string          `json:"password"`
+	fromFields
+}
+
+type txExecuteContract struct {
+	Fee          uint64          `json:"fee"`
+	ContractAddr string          `json:"contractAddr"`
+	Msg          string          `json:"msg"`
+	Funds        json.RawMessage `json:"funds,omitempty"`
+	Submit       bool            `json:"submit"`
+	Password     string          `json:"password"`
+	fromFields
+}
+
+type txMigrateContract struct {
+	Fee          uint64 `json:"fee"`
+	ContractAddr string `json:"contractAddr"`
+	CodeId       uint64 `json:"codeId"`
+	Msg          string `json:"msg"`
+	Submit       bool   `json:"submit"`
+	Password     string `json:"password"`
+	fromFields
+}
+
+type txUpdateAdmin struct {
+	Fee          uint64 `json:"fee"`
+	ContractAddr string `json:"contractAddr"`
+	NewAdmin     string `json:"newAdmin"`
+	Submit       bool   `json:"submit"`
+	Password     string `json:"password"`
+	fromFields
+}
+
+type txClearAdmin struct {
+	Fee          uint64 `json:"fee"`
+	ContractAddr string `json:"contractAddr"`
+	Submit       bool   `json:"submit"`
+	Password     string `json:"password"`
+	fromFields
+}
+
 // txRequest is used server side to unmarshall all transaction requests
 type txRequest struct {
 	Amount          uint64          `json:"amount"`
@@ -323,6 +382,17 @@ type txRequest struct {
 	PollApprove     bool            `json:"pollApprove"`
 	Signer          lib.HexBytes    `json:"signer"`
 	SignerNickname  string          `json:"signerNickname"`
+	
+	// CosmWasm contract fields
+	WasmByteCode    lib.HexBytes    `json:"wasmByteCode"`    // For storing WASM code
+	CodeId          uint64          `json:"codeId"`          // For contract instantiation/execution
+	ContractAddr    string          `json:"contractAddr"`    // Contract address
+	Label           string          `json:"label"`           // Contract label
+	Admin           string          `json:"admin"`           // Contract admin address
+	NewAdmin        string          `json:"newAdmin"`        // For admin updates
+	Msg             string          `json:"msg"`             // Contract message (JSON)
+	Funds           json.RawMessage `json:"funds"`           // Funds to send with contract calls (array of Coin)
+	
 	addressRequest
 	nicknameRequest
 	passwordRequest

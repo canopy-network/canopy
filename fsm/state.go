@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canopy-network/canopy/fsm/vm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
@@ -18,8 +19,8 @@ const (
 // StateMachine the core protocol component responsible for maintaining and updating the state of the blockchain as it progresses
 // it represents the collective state of all accounts, validators, and other relevant data stored on the blockchain
 type StateMachine struct {
-	store lib.RWStoreI
-
+	store              lib.RWStoreI
+	vm                 *vm.VM                // the wasm VM
 	ProtocolVersion    uint64                // the version of the protocol this node is running
 	NetworkID          uint32                // the id of the network this node is configured to be on
 	height             uint64                // the 'version' of the state based on number of blocks currently on
@@ -32,10 +33,11 @@ type StateMachine struct {
 }
 
 // New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+func New(c lib.Config, vm *vm.VM, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
+		vm:                vm,
 		ProtocolVersion:   CurrentProtocolVersion,
 		NetworkID:         uint32(c.P2PConfig.NetworkID),
 		slashTracker:      NewSlashTracker(),
@@ -234,7 +236,7 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Metrics, s.log)
+	return New(s.Config, s.vm, heightStore, s.Metrics, s.log)
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
@@ -409,6 +411,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 	// return the clone state machine object reference
 	return &StateMachine{
 		store:              storeCopy,
+		vm:                 s.vm,
 		ProtocolVersion:    s.ProtocolVersion,
 		NetworkID:          s.NetworkID,
 		height:             s.height,

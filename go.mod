@@ -4,9 +4,13 @@ go 1.23.0
 
 toolchain go1.24.2
 
+replace github.com/CosmWasm/wasmvm/v2 => ../wasmvm
+
 require (
 	filippo.io/edwards25519 v1.1.0
+	github.com/CosmWasm/wasmvm/v2 v2.2.2
 	github.com/alecthomas/units v0.0.0-20231202071711-9a357b53e9c9
+	github.com/btcsuite/btcutil v1.0.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/dgraph-io/badger/v4 v4.2.0
@@ -54,6 +58,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
+	github.com/google/btree v1.0.0 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -68,6 +73,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/shamaton/msgpack/v2 v2.2.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/supranational/blst v0.3.14 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect

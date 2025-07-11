@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/canopy-network/canopy/fsm"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -422,6 +423,192 @@ func (s *Server) TransactionVotePoll(w http.ResponseWriter, r *http.Request, _ h
 		}
 		// Create and return the transaction to be sent
 		return fsm.NewVotePollTransaction(p, ptr.PollJSON, ptr.PollApprove, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight())
+	})
+}
+
+// CONTRACT TRANSACTION ENDPOINTS
+
+// TransactionStoreCode stores WASM bytecode on the blockchain
+func (s *Server) TransactionStoreCode(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate WASM bytecode is provided
+		if len(ptr.WasmByteCode) == 0 {
+			return nil, fmt.Errorf("wasm bytecode is required")
+		}
+
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageStoreCodeName); err != nil {
+			return nil, err
+		}
+
+		// Create and return the transaction to be sent
+		return fsm.NewStoreCodeTransaction(p, ptr.WasmByteCode, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionInstantiateContract creates a new contract instance
+func (s *Server) TransactionInstantiateContract(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate required fields
+		if ptr.CodeId == 0 {
+			return nil, fmt.Errorf("code ID is required")
+		}
+		if ptr.Label == "" {
+			return nil, fmt.Errorf("contract label is required")
+		}
+		if ptr.Msg == "" {
+			return nil, fmt.Errorf("contract message is required")
+		}
+		// parse admin address if provided
+		var adminBytes []byte
+		if ptr.Admin != "" {
+			admin, err := crypto.NewAddressFromString(ptr.Admin)
+			if err != nil {
+				return nil, fmt.Errorf("invalid admin address: %w", err)
+			}
+			adminBytes = admin.Bytes()
+		}
+		// parse funds if provided
+		var funds []*fsm.Coin
+		if len(ptr.Funds) > 0 {
+			if err := lib.UnmarshalJSON(ptr.Funds, &funds); err != nil {
+				return nil, fmt.Errorf("invalid funds format: %w", err)
+			}
+		}
+		// retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageInstantiateContractName); err != nil {
+			return nil, err
+		}
+		// Create and return the transaction to be sent
+		return fsm.NewInstantiateContractTransaction(p, ptr.CodeId, ptr.Label, []byte(ptr.Msg), adminBytes, funds, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionExecuteContract executes a function on an existing contract
+func (s *Server) TransactionExecuteContract(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate required fields
+		if ptr.ContractAddr == "" {
+			return nil, fmt.Errorf("contract address is required")
+		}
+		if ptr.Msg == "" {
+			return nil, fmt.Errorf("contract message is required")
+		}
+
+		// Parse contract address
+		contractAddr, err := crypto.NewAddressFromString(ptr.ContractAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid contract address: %w", err)
+		}
+
+		// Parse funds if provided
+		var funds []*fsm.Coin
+		if len(ptr.Funds) > 0 {
+			if err := lib.UnmarshalJSON(ptr.Funds, &funds); err != nil {
+				return nil, fmt.Errorf("invalid funds format: %w", err)
+			}
+		}
+
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageExecuteContractName); err != nil {
+			return nil, err
+		}
+
+		// Create and return the transaction to be sent
+		return fsm.NewExecuteContractTransaction(p, contractAddr.Bytes(), []byte(ptr.Msg), funds, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionMigrateContract migrates a contract to new code
+func (s *Server) TransactionMigrateContract(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate required fields
+		if ptr.ContractAddr == "" {
+			return nil, fmt.Errorf("contract address is required")
+		}
+		if ptr.CodeId == 0 {
+			return nil, fmt.Errorf("code ID is required")
+		}
+		if ptr.Msg == "" {
+			return nil, fmt.Errorf("migrate message is required")
+		}
+
+		// Parse contract address
+		contractAddr, err := crypto.NewAddressFromString(ptr.ContractAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid contract address: %w", err)
+		}
+
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageMigrateContractName); err != nil {
+			return nil, err
+		}
+
+		// Create and return the transaction to be sent
+		return fsm.NewMigrateContractTransaction(p, contractAddr.Bytes(), ptr.CodeId, []byte(ptr.Msg), s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionUpdateAdmin updates the admin of a contract
+func (s *Server) TransactionUpdateAdmin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate required fields
+		if ptr.ContractAddr == "" {
+			return nil, fmt.Errorf("contract address is required")
+		}
+		if ptr.NewAdmin == "" {
+			return nil, fmt.Errorf("new admin address is required")
+		}
+
+		// Parse contract address
+		contractAddr, err := crypto.NewAddressFromString(ptr.ContractAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid contract address: %w", err)
+		}
+
+		// Parse new admin address
+		newAdmin, err := crypto.NewAddressFromString(ptr.NewAdmin)
+		if err != nil {
+			return nil, fmt.Errorf("invalid new admin address: %w", err)
+		}
+
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageUpdateAdminName); err != nil {
+			return nil, err
+		}
+
+		// Create and return the transaction to be sent
+		return fsm.NewUpdateAdminTransaction(p, contractAddr.Bytes(), newAdmin.Bytes(), s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionClearAdmin clears the admin of a contract
+func (s *Server) TransactionClearAdmin(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Validate required fields
+		if ptr.ContractAddr == "" {
+			return nil, fmt.Errorf("contract address is required")
+		}
+
+		// Parse contract address
+		contractAddr, err := crypto.NewAddressFromString(ptr.ContractAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid contract address: %w", err)
+		}
+
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageClearAdminName); err != nil {
+			return nil, err
+		}
+
+		// Create and return the transaction to be sent
+		return fsm.NewClearAdminTransaction(p, contractAddr.Bytes(), s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
 	})
 }
 

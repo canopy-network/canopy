@@ -257,6 +257,12 @@ func (c *Client) Supply(height uint64) (p *fsm.Supply, err lib.ErrorI) {
 	return
 }
 
+func (c *Client) Contracts(height uint64) (p *map[string]lib.HexBytes, err lib.ErrorI) {
+	p = new(map[string]lib.HexBytes)
+	err = c.heightRequest(ContractsRouteName, height, p)
+	return
+}
+
 func (c *Client) NonSigners(height uint64) (p *fsm.NonSigners, err lib.ErrorI) {
 	p = new(fsm.NonSigners)
 	err = c.heightRequest(NonSignersRouteName, height, p)
@@ -700,6 +706,125 @@ func (c *Client) TxVotePoll(from AddrOrNickname, pollJSON json.RawMessage, pollA
 	}
 
 	return c.transactionRequest(TxVotePollRouteName, txReq, submit)
+}
+
+// CONTRACT TRANSACTION FUNCTIONS
+
+// TxStoreCode stores WASM bytecode on the blockchain
+func (c *Client) TxStoreCode(from AddrOrNickname, wasmByteCode lib.HexBytes, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txStoreCode{
+		Fee:          optFee,
+		WasmByteCode: wasmByteCode,
+		Submit:       submit,
+		Password:     pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxStoreCodeRouteName, txReq, submit)
+}
+
+// TxInstantiateContract creates a new contract instance
+func (c *Client) TxInstantiateContract(from AddrOrNickname, codeId uint64, label, msg, admin string, funds json.RawMessage, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txInstantiateContract{
+		Fee:      optFee,
+		CodeId:   codeId,
+		Label:    label,
+		Msg:      msg,
+		Admin:    admin,
+		Funds:    funds,
+		Submit:   submit,
+		Password: pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxInstantiateContractRouteName, txReq, submit)
+}
+
+// TxExecuteContract executes a function on an existing contract
+func (c *Client) TxExecuteContract(from AddrOrNickname, contractAddr, msg string, funds json.RawMessage, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txExecuteContract{
+		Fee:          optFee,
+		ContractAddr: contractAddr,
+		Msg:          msg,
+		Funds:        funds,
+		Submit:       submit,
+		Password:     pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxExecuteContractRouteName, txReq, submit)
+}
+
+// TxMigrateContract migrates a contract to new code
+func (c *Client) TxMigrateContract(from AddrOrNickname, contractAddr string, codeId uint64, msg, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txMigrateContract{
+		Fee:          optFee,
+		ContractAddr: contractAddr,
+		CodeId:       codeId,
+		Msg:          msg,
+		Submit:       submit,
+		Password:     pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxMigrateContractRouteName, txReq, submit)
+}
+
+// TxUpdateAdmin updates the admin of a contract
+func (c *Client) TxUpdateAdmin(from AddrOrNickname, contractAddr, newAdmin, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txUpdateAdmin{
+		Fee:          optFee,
+		ContractAddr: contractAddr,
+		NewAdmin:     newAdmin,
+		Submit:       submit,
+		Password:     pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxUpdateAdminRouteName, txReq, submit)
+}
+
+// TxClearAdmin clears the admin of a contract
+func (c *Client) TxClearAdmin(from AddrOrNickname, contractAddr, pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txClearAdmin{
+		Fee:          optFee,
+		ContractAddr: contractAddr,
+		Submit:       submit,
+		Password:     pwd,
+	}
+
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxClearAdminRouteName, txReq, submit)
 }
 
 func (c *Client) ResourceUsage() (returned *resourceUsageResponse, err lib.ErrorI) {

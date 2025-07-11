@@ -253,10 +253,10 @@ type MempoolConfig struct {
 // DefaultMempoolConfig() returns the developer created Mempool options
 func DefaultMempoolConfig() MempoolConfig {
 	return MempoolConfig{
-		MaxTotalBytes:       uint64(10 * units.MB),      // 10 MB max size
-		IndividualMaxTxSize: uint32(4 * units.Kilobyte), // 4 KB max individual tx size
-		MaxTransactionCount: 5000,                       // 5000 max transactions
-		DropPercentage:      35,                         // drop 35% if limits are reached
+		MaxTotalBytes:       uint64(10 * units.MB),         // 10 MB max size
+		IndividualMaxTxSize: uint32(1000 * units.Kilobyte), // 4 KB max individual tx size
+		MaxTransactionCount: 5000,                          // 5000 max transactions
+		DropPercentage:      35,                            // drop 35% if limits are reached
 	}
 }
 

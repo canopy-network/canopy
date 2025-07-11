@@ -23,6 +23,13 @@ const (
 	MessageCreateOrderName        = "createOrder"
 	MessageEditOrderName          = "editOrder"
 	MessageDeleteOrderName        = "deleteOrder"
+	// Smart contract message types
+	MessageStoreCodeName            = "storeCode"
+	MessageInstantiateContractName  = "instantiateContract"
+	MessageExecuteContractName      = "executeContract"
+	MessageMigrateContractName      = "migrateContract"
+	MessageUpdateAdminName          = "updateAdmin"
+	MessageClearAdminName           = "clearAdmin"
 )
 
 func init() {
@@ -40,6 +47,13 @@ func init() {
 	lib.RegisteredMessages[MessageCreateOrderName] = new(MessageCreateOrder)
 	lib.RegisteredMessages[MessageEditOrderName] = new(MessageEditOrder)
 	lib.RegisteredMessages[MessageDeleteOrderName] = new(MessageDeleteOrder)
+	// Smart contract message types
+	lib.RegisteredMessages[MessageStoreCodeName] = new(MessageStoreCode)
+	lib.RegisteredMessages[MessageInstantiateContractName] = new(MessageInstantiateContract)
+	lib.RegisteredMessages[MessageExecuteContractName] = new(MessageExecuteContract)
+	lib.RegisteredMessages[MessageMigrateContractName] = new(MessageMigrateContract)
+	lib.RegisteredMessages[MessageUpdateAdminName] = new(MessageUpdateAdmin)
+	lib.RegisteredMessages[MessageClearAdminName] = new(MessageClearAdmin)
 }
 
 var _ lib.MessageI = &MessageSend{} // interface enforcement
@@ -914,4 +928,312 @@ func TxHashFromJSON(transactionJSON json.RawMessage) (txHash string, err lib.Err
 	}
 	// exit with hash
 	return crypto.HashString(protoBytes), nil
+}
+
+// CONTRACT MESSAGE IMPLEMENTATIONS
+
+var _ lib.MessageI = &MessageStoreCode{} // interface enforcement
+
+// Check() validates the MessageStoreCode structure
+func (x *MessageStoreCode) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if len(x.WasmByteCode) == 0 {
+		return ErrEmptyWasmCode()
+	}
+	return nil
+}
+
+func (x *MessageStoreCode) Name() string        { return MessageStoreCodeName }
+func (x *MessageStoreCode) New() lib.MessageI   { return new(MessageStoreCode) }
+func (x *MessageStoreCode) Recipient() []byte   { return nil } // No specific recipient for code storage
+
+// MarshalJSON() is the json.Marshaller implementation for MessageStoreCode
+func (x MessageStoreCode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageStoreCode{
+		Sender:       x.Sender,
+		WasmByteCode: x.WasmByteCode,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageStoreCode
+func (x *MessageStoreCode) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageStoreCode
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageStoreCode{
+		Sender:       j.Sender,
+		WasmByteCode: j.WasmByteCode,
+	}
+	return
+}
+
+type jsonMessageStoreCode struct {
+	Sender       lib.HexBytes `json:"sender"`
+	WasmByteCode lib.HexBytes `json:"wasmByteCode"`
+}
+
+var _ lib.MessageI = &MessageInstantiateContract{} // interface enforcement
+
+// Check() validates the MessageInstantiateContract structure
+func (x *MessageInstantiateContract) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if x.CodeId == 0 {
+		return ErrInvalidCodeId()
+	}
+	if len(x.Msg) == 0 {
+		return ErrEmptyContractMsg()
+	}
+	if len(x.Label) == 0 {
+		return ErrEmptyContractLabel()
+	}
+	if x.Admin != nil && len(x.Admin) != crypto.AddressSize {
+		return ErrInvalidAdminAddress()
+	}
+	return nil
+}
+
+func (x *MessageInstantiateContract) Name() string        { return MessageInstantiateContractName }
+func (x *MessageInstantiateContract) New() lib.MessageI   { return new(MessageInstantiateContract) }
+func (x *MessageInstantiateContract) Recipient() []byte   { return nil } // Contract address is generated
+
+// MarshalJSON() is the json.Marshaller implementation for MessageInstantiateContract
+func (x MessageInstantiateContract) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageInstantiateContract{
+		Sender: x.Sender,
+		CodeId: x.CodeId,
+		Msg:    x.Msg,
+		Label:  x.Label,
+		Admin:  x.Admin,
+		Funds:  x.Funds,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageInstantiateContract
+func (x *MessageInstantiateContract) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageInstantiateContract
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageInstantiateContract{
+		Sender: j.Sender,
+		CodeId: j.CodeId,
+		Msg:    j.Msg,
+		Label:  j.Label,
+		Admin:  j.Admin,
+		Funds:  j.Funds,
+	}
+	return
+}
+
+type jsonMessageInstantiateContract struct {
+	Sender lib.HexBytes `json:"sender"`
+	CodeId uint64       `json:"codeId"`
+	Msg    lib.HexBytes `json:"msg"`
+	Label  string       `json:"label"`
+	Admin  lib.HexBytes `json:"admin,omitempty"`
+	Funds  []*Coin      `json:"funds,omitempty"`
+}
+
+var _ lib.MessageI = &MessageExecuteContract{} // interface enforcement
+
+// Check() validates the MessageExecuteContract structure
+func (x *MessageExecuteContract) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if err := checkAddress(x.Contract); err != nil {
+		return ErrInvalidContractAddress()
+	}
+	if len(x.Msg) == 0 {
+		return ErrEmptyContractMsg()
+	}
+	return nil
+}
+
+func (x *MessageExecuteContract) Name() string        { return MessageExecuteContractName }
+func (x *MessageExecuteContract) New() lib.MessageI   { return new(MessageExecuteContract) }
+func (x *MessageExecuteContract) Recipient() []byte   { return crypto.NewAddressFromBytes(x.Contract).Bytes() }
+
+// MarshalJSON() is the json.Marshaller implementation for MessageExecuteContract
+func (x MessageExecuteContract) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageExecuteContract{
+		Sender:   x.Sender,
+		Contract: x.Contract,
+		Msg:      x.Msg,
+		Funds:    x.Funds,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageExecuteContract
+func (x *MessageExecuteContract) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageExecuteContract
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageExecuteContract{
+		Sender:   j.Sender,
+		Contract: j.Contract,
+		Msg:      j.Msg,
+		Funds:    j.Funds,
+	}
+	return
+}
+
+type jsonMessageExecuteContract struct {
+	Sender   lib.HexBytes `json:"sender"`
+	Contract lib.HexBytes `json:"contract"`
+	Msg      lib.HexBytes `json:"msg"`
+	Funds    []*Coin      `json:"funds,omitempty"`
+}
+
+var _ lib.MessageI = &MessageMigrateContract{} // interface enforcement
+
+// Check() validates the MessageMigrateContract structure
+func (x *MessageMigrateContract) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if err := checkAddress(x.Contract); err != nil {
+		return ErrInvalidContractAddress()
+	}
+	if x.CodeId == 0 {
+		return ErrInvalidCodeId()
+	}
+	if len(x.Msg) == 0 {
+		return ErrEmptyContractMsg()
+	}
+	return nil
+}
+
+func (x *MessageMigrateContract) Name() string        { return MessageMigrateContractName }
+func (x *MessageMigrateContract) New() lib.MessageI   { return new(MessageMigrateContract) }
+func (x *MessageMigrateContract) Recipient() []byte   { return crypto.NewAddressFromBytes(x.Contract).Bytes() }
+
+// MarshalJSON() is the json.Marshaller implementation for MessageMigrateContract
+func (x MessageMigrateContract) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageMigrateContract{
+		Sender:   x.Sender,
+		Contract: x.Contract,
+		CodeId:   x.CodeId,
+		Msg:      x.Msg,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageMigrateContract
+func (x *MessageMigrateContract) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageMigrateContract
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageMigrateContract{
+		Sender:   j.Sender,
+		Contract: j.Contract,
+		CodeId:   j.CodeId,
+		Msg:      j.Msg,
+	}
+	return
+}
+
+type jsonMessageMigrateContract struct {
+	Sender   lib.HexBytes `json:"sender"`
+	Contract lib.HexBytes `json:"contract"`
+	CodeId   uint64       `json:"codeId"`
+	Msg      lib.HexBytes `json:"msg"`
+}
+
+var _ lib.MessageI = &MessageUpdateAdmin{} // interface enforcement
+
+// Check() validates the MessageUpdateAdmin structure
+func (x *MessageUpdateAdmin) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if err := checkAddress(x.Contract); err != nil {
+		return ErrInvalidContractAddress()
+	}
+	if err := checkAddress(x.NewAdmin); err != nil {
+		return ErrInvalidAdminAddress()
+	}
+	return nil
+}
+
+func (x *MessageUpdateAdmin) Name() string        { return MessageUpdateAdminName }
+func (x *MessageUpdateAdmin) New() lib.MessageI   { return new(MessageUpdateAdmin) }
+func (x *MessageUpdateAdmin) Recipient() []byte   { return crypto.NewAddressFromBytes(x.Contract).Bytes() }
+
+// MarshalJSON() is the json.Marshaller implementation for MessageUpdateAdmin
+func (x MessageUpdateAdmin) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageUpdateAdmin{
+		Sender:   x.Sender,
+		Contract: x.Contract,
+		NewAdmin: x.NewAdmin,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageUpdateAdmin
+func (x *MessageUpdateAdmin) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageUpdateAdmin
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageUpdateAdmin{
+		Sender:   j.Sender,
+		Contract: j.Contract,
+		NewAdmin: j.NewAdmin,
+	}
+	return
+}
+
+type jsonMessageUpdateAdmin struct {
+	Sender   lib.HexBytes `json:"sender"`
+	Contract lib.HexBytes `json:"contract"`
+	NewAdmin lib.HexBytes `json:"newAdmin"`
+}
+
+var _ lib.MessageI = &MessageClearAdmin{} // interface enforcement
+
+// Check() validates the MessageClearAdmin structure
+func (x *MessageClearAdmin) Check() lib.ErrorI {
+	if err := checkAddress(x.Sender); err != nil {
+		return err
+	}
+	if err := checkAddress(x.Contract); err != nil {
+		return ErrInvalidContractAddress()
+	}
+	return nil
+}
+
+func (x *MessageClearAdmin) Name() string        { return MessageClearAdminName }
+func (x *MessageClearAdmin) New() lib.MessageI   { return new(MessageClearAdmin) }
+func (x *MessageClearAdmin) Recipient() []byte   { return crypto.NewAddressFromBytes(x.Contract).Bytes() }
+
+// MarshalJSON() is the json.Marshaller implementation for MessageClearAdmin
+func (x MessageClearAdmin) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageClearAdmin{
+		Sender:   x.Sender,
+		Contract: x.Contract,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageClearAdmin
+func (x *MessageClearAdmin) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageClearAdmin
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageClearAdmin{
+		Sender:   j.Sender,
+		Contract: j.Contract,
+	}
+	return
+}
+
+type jsonMessageClearAdmin struct {
+	Sender   lib.HexBytes `json:"sender"`
+	Contract lib.HexBytes `json:"contract"`
 }

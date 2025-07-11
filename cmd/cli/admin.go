@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -57,6 +58,15 @@ func init() {
 	adminCmd.AddCommand(txEditOrderCmd)
 	adminCmd.AddCommand(txDeleteOrderCmd)
 	adminCmd.AddCommand(txLockOrderCmd)
+
+	// Contract transaction commands
+	adminCmd.AddCommand(txStoreCodeCmd)
+	adminCmd.AddCommand(txInstantiateContractCmd)
+	adminCmd.AddCommand(txExecuteContractCmd)
+	adminCmd.AddCommand(txMigrateContractCmd)
+	adminCmd.AddCommand(txUpdateAdminCmd)
+	adminCmd.AddCommand(txClearAdminCmd)
+
 	adminCmd.AddCommand(txStartPollCmd)
 	adminCmd.AddCommand(approveTxVotePoll)
 	adminCmd.AddCommand(rejectTxVotePoll)
@@ -361,6 +371,90 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.DelVote(args[0]))
+		},
+	}
+
+	// CONTRACT TRANSACTION COMMANDS
+
+	txStoreCodeCmd = &cobra.Command{
+		Use:     "tx-store-code <address or nickname> <wasm-bytecode-file> --fee=10000 --simulate=true",
+		Short:   "store WASM bytecode on the blockchain",
+		Example: "tx-store-code myaddress contract.wasm",
+		Args:    cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			// Read the WASM bytecode from file
+			wasmBytes, err := os.ReadFile(args[1])
+			if err != nil {
+				l.Fatal("failed to read wasm file: " + err.Error())
+			}
+			writeTxResultToConsole(client.TxStoreCode(argGetAddrOrNickname(args[0]), wasmBytes, getPassword(), !sim, fee))
+		},
+	}
+
+	txInstantiateContractCmd = &cobra.Command{
+		Use:     "tx-instantiate-contract <address or nickname> <code-id> <label> <init-msg-json> [admin-address] [funds-json] --fee=10000 --simulate=true",
+		Short:   "instantiate a smart contract from stored code",
+		Example: `tx-instantiate-contract myaddress 1 "MyContract" '{"count":0}' admin_addr '[{"denom":"cnpy","amount":"1000"}]'`,
+		Args:    cobra.MinimumNArgs(4),
+		Run: func(cmd *cobra.Command, args []string) {
+			codeId, err := lib.StringToBytes(args[1])
+			if err != nil {
+				l.Fatal("invalid code id bytecode hex: " + err.Error())
+			}
+			var admin string
+			var funds json.RawMessage
+			if len(args) > 4 {
+				admin = args[4]
+			}
+			if len(args) > 5 {
+				funds = json.RawMessage(args[5])
+			}
+			writeTxResultToConsole(client.TxInstantiateContract(argGetAddrOrNickname(args[0]), binary.BigEndian.Uint64(codeId), args[2], args[3], admin, funds, getPassword(), !sim, fee))
+		},
+	}
+
+	txExecuteContractCmd = &cobra.Command{
+		Use:     "tx-execute-contract <address or nickname> <contract-address> <execute-msg-json> [funds-json] --fee=10000 --simulate=true",
+		Short:   "execute a function on a smart contract",
+		Example: `tx-execute-contract myaddress cnpy1abc... '{"increment":{}}' '[{"denom":"cnpy","amount":"100"}]'`,
+		Args:    cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			var funds json.RawMessage
+			if len(args) > 3 {
+				funds = json.RawMessage(args[3])
+			}
+			writeTxResultToConsole(client.TxExecuteContract(argGetAddrOrNickname(args[0]), args[1], args[2], funds, getPassword(), !sim, fee))
+		},
+	}
+
+	txMigrateContractCmd = &cobra.Command{
+		Use:     "tx-migrate-contract <address or nickname> <contract-address> <new-code-id> <migrate-msg-json> --fee=10000 --simulate=true",
+		Short:   "migrate a smart contract to new code",
+		Example: `tx-migrate-contract myaddress cnpy1abc... 2 '{"migrate_data":"value"}'`,
+		Args:    cobra.MinimumNArgs(4),
+		Run: func(cmd *cobra.Command, args []string) {
+			codeId := uint64(argToInt(args[2]))
+			writeTxResultToConsole(client.TxMigrateContract(argGetAddrOrNickname(args[0]), args[1], codeId, args[3], getPassword(), !sim, fee))
+		},
+	}
+
+	txUpdateAdminCmd = &cobra.Command{
+		Use:     "tx-update-admin <address or nickname> <contract-address> <new-admin-address> --fee=10000 --simulate=true",
+		Short:   "update the admin of a smart contract",
+		Example: "tx-update-admin myaddress cnpy1abc... cnpy1def...",
+		Args:    cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxUpdateAdmin(argGetAddrOrNickname(args[0]), args[1], args[2], getPassword(), !sim, fee))
+		},
+	}
+
+	txClearAdminCmd = &cobra.Command{
+		Use:     "tx-clear-admin <address or nickname> <contract-address> --fee=10000 --simulate=true",
+		Short:   "clear the admin of a smart contract (making it immutable)",
+		Example: "tx-clear-admin myaddress cnpy1abc...",
+		Args:    cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxClearAdmin(argGetAddrOrNickname(args[0]), args[1], getPassword(), !sim, fee))
 		},
 	}
 )

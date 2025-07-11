@@ -389,6 +389,14 @@ func (s *Server) Supply(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	})
 }
 
+// Contracts returns all contracts from the store
+func (s *Server) Contracts(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightParams(w, r, func(s *fsm.StateMachine) (interface{}, lib.ErrorI) {
+		return s.GetContractCode()
+	})
+}
+
 // State exports the blockchain state at the requested height
 func (s *Server) State(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	request := new(heightsRequest)

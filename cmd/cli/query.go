@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/canopy-network/canopy/lib"
-	"github.com/spf13/cobra"
 	"strconv"
 	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/spf13/cobra"
 )
 
 var queryCmd = &cobra.Command{
@@ -42,6 +43,7 @@ func init() {
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
+	queryCmd.AddCommand(contractsCmd)
 	queryCmd.AddCommand(stateCmd)
 	queryCmd.AddCommand(stateDiffCmd)
 	queryCmd.AddCommand(certCmd)
@@ -206,6 +208,14 @@ var (
 		Short: "query the blockchain token supply",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Supply(height))
+		},
+	}
+
+	contractsCmd = &cobra.Command{
+		Use:   "contracts --height=1",
+		Short: "query all contracts from the store",
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.Contracts(height))
 		},
 	}
 

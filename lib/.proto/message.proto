@@ -215,3 +215,79 @@ message MessageDeleteOrder {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   uint64 ChainId = 2; // @gotags: json:"chainID"
 }
+
+// Smart Contract Messages
+
+// Coin represents a token amount with denomination
+message Coin {
+  // denom: the denomination of the token
+  string denom = 1;
+  // amount: the amount of tokens
+  uint64 amount = 2;
+}
+
+// MessageStoreCode uploads and compiles WASM bytecode
+message MessageStoreCode {
+  // sender: the address uploading the code
+  bytes sender = 1;
+  // wasm_byte_code: the WASM bytecode to store
+  bytes wasm_byte_code = 2; // @gotags: json:"wasmByteCode"
+}
+
+// MessageInstantiateContract creates a new contract instance
+message MessageInstantiateContract {
+  // sender: the address creating the contract instance
+  bytes sender = 1;
+  // admin: optional admin address for the contract
+  bytes admin = 2;
+  // code_id: the ID of the stored WASM code
+  uint64 code_id = 3; // @gotags: json:"codeId"
+  // label: human-readable label for this contract
+  string label = 4;
+  // msg: JSON-encoded instantiation message
+  bytes msg = 5;
+  // funds: coins sent to the contract during instantiation
+  repeated Coin funds = 6;
+}
+
+// MessageExecuteContract executes a message on an existing contract
+message MessageExecuteContract {
+  // sender: the address executing the contract
+  bytes sender = 1;
+  // contract: the address of the contract to execute
+  bytes contract = 2;
+  // msg: JSON-encoded execution message
+  bytes msg = 3;
+  // funds: coins sent to the contract during execution
+  repeated Coin funds = 4;
+}
+
+// MessageMigrateContract updates a contract to a new code version
+message MessageMigrateContract {
+  // sender: the address performing the migration (must be admin)
+  bytes sender = 1;
+  // contract: the address of the contract to migrate
+  bytes contract = 2;
+  // code_id: the new code ID to migrate to
+  uint64 code_id = 3; // @gotags: json:"codeId"
+  // msg: JSON-encoded migration message
+  bytes msg = 4;
+}
+
+// MessageUpdateAdmin updates the admin of a contract
+message MessageUpdateAdmin {
+  // sender: the current admin address
+  bytes sender = 1;
+  // new_admin: the new admin address
+  bytes new_admin = 2; // @gotags: json:"newAdmin"
+  // contract: the address of the contract
+  bytes contract = 3;
+}
+
+// MessageClearAdmin removes the admin from a contract
+message MessageClearAdmin {
+  // sender: the current admin address
+  bytes sender = 1;
+  // contract: the address of the contract
+  bytes contract = 2;
+}

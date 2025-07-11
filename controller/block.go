@@ -293,7 +293,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+	c.FSM, err = fsm.New(c.Config, c.VM, storeI, c.Metrics, c.log)
 	if err != nil {
 		// exit with error
 		return
