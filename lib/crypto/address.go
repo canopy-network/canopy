@@ -13,7 +13,7 @@ import (
 type Address []byte
 
 // Address must conform to the AddressI interface
-var _ AddressI = &Address{}
+var _ AddressI = Address{}
 
 const (
 	// the number of bytes in an address
@@ -25,8 +25,7 @@ func NewAddressFromBytes(bz []byte) AddressI {
 	if bz == nil {
 		return nil
 	}
-	a := Address(bz)
-	return &a
+	return Address(bz)
 }
 
 // NewAddressFromString() returns the hex string implementation of an AddressI interface
@@ -39,7 +38,7 @@ func NewAddressFromString(hexString string) (AddressI, error) {
 }
 
 // MarshalJSON() is the address implementation of json.Marshaller interface
-func (a *Address) MarshalJSON() ([]byte, error) { return json.Marshal(a.String()) }
+func (a Address) MarshalJSON() ([]byte, error) { return json.Marshal(a.String()) }
 
 // UnmarshalJSON() is the address implementation of json.Marshaller interface
 func (a *Address) UnmarshalJSON(b []byte) (err error) {
@@ -59,18 +58,18 @@ func (a *Address) UnmarshalJSON(b []byte) (err error) {
 }
 
 // Bytes() casts the address value back to a byte slice
-func (a *Address) Bytes() []byte { return (*a)[:] }
+func (a Address) Bytes() []byte { return (a)[:] }
 
 // String() returns the hex string representation of an address
-func (a *Address) String() string { return hex.EncodeToString(a.Bytes()) }
+func (a Address) String() string { return hex.EncodeToString(a.Bytes()) }
 
 // Equals() compares two address objects and returns true if they're equal
-func (a *Address) Equals(e AddressI) bool { return bytes.Equal(a.Bytes(), e.Bytes()) }
+func (a Address) Equals(e AddressI) bool { return bytes.Equal(a.Bytes(), e.Bytes()) }
 
 var cdc = codec.Protobuf{}
 
 // Marshal() implements the proto.Marshaller interface
-func (a *Address) Marshal() ([]byte, error) {
+func (a Address) Marshal() ([]byte, error) {
 	return cdc.Marshal(ProtoAddress{Address: a.Bytes()})
 }
 

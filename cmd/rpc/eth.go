@@ -906,7 +906,10 @@ func (s *Server) ethGetLogs(filter *ethFilter, lastReadHeight uint64) (any, erro
 		var strResults []string
 		// handle pending txs filter
 		if filter.PendingTxs {
-			for _, tx := range s.controller.Mempool.GetTransactions(math.MaxUint64) {
+			s.controller.Mempool.L.Lock()
+			transactions := s.controller.Mempool.GetTransactions(math.MaxUint64)
+			s.controller.Mempool.L.Unlock()
+			for _, tx := range transactions {
 				strResults = append(strResults, "0x"+crypto.HashString(tx))
 			}
 			return strResults, nil

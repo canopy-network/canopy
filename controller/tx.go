@@ -1,12 +1,19 @@
 package controller
 
 import (
+	"context"
 	"fmt"
+	"github.com/canopy-network/canopy/bft"
+	"math"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
-	"math"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 /* This file implements logic for transaction sending and handling as well as memory pooling */
@@ -14,7 +21,7 @@ import (
 // SendTxMsg() routes a locally generated transaction message to the listener for processing + gossiping
 func (c *Controller) SendTxMsg(tx []byte) lib.ErrorI {
 	// create a transaction message object using the tx bytes and the chain id
-	msg := &lib.TxMessage{ChainId: c.Config.ChainId, Tx: tx}
+	msg := &lib.TxMessage{ChainId: c.Config.ChainId, Txs: [][]byte{tx}}
 	// send the transaction message to the listener using internal routing
 	return c.P2P.SelfSend(c.PublicKey, Tx, msg)
 }
@@ -32,11 +39,6 @@ func (c *Controller) ListenForTx() {
 		}
 		func() {
 			c.log.Debug("Handling transaction")
-			//defer lib.TimeTrack(c.log, time.Now())
-			// lock the controller for thread safety
-			c.Lock()
-			// unlock when this iteration completes
-			defer c.Unlock()
 			// check and add the message to the cache to prevent duplicates
 			if ok := cache.Add(msg); !ok {
 				// if duplicate, exit
@@ -44,10 +46,9 @@ func (c *Controller) ListenForTx() {
 			}
 			// create a convenience variable for the identity of the sender
 			senderID := msg.Sender.Address.PublicKey
-			// try to cast the p2p message as a tx message
-			txMsg, ok := msg.Message.(*lib.TxMessage)
-			// if the cast failed
-			if !ok {
+			// try to unmarshal the p2p message as a tx message
+			txMsg := new(lib.TxMessage)
+			if err := lib.Unmarshal(msg.Message, txMsg); err != nil {
 				// log the unexpected behavior
 				c.log.Warnf("Non-Tx message from %s", lib.BytesToTruncatedString(senderID))
 				// slash the peer's reputation score
@@ -64,13 +65,8 @@ func (c *Controller) ListenForTx() {
 				// exit
 				return
 			}
-			// route the transaction to the mempool handler
-			if err := c.HandleTransaction(txMsg.Tx); err != nil {
-				// if the error is 'mempool already has it'
-				if err.Error() == lib.ErrTxFoundInMempool(crypto.HashString(txMsg.Tx)).Error() {
-					// exit
-					return
-				}
+			// route the transactions to the mempool handler
+			if err := c.Mempool.HandleTransactions(txMsg.Txs...); err != nil {
 				// else - warn of the error
 				c.log.Warnf("Handle tx from %s failed with err: %s", lib.BytesToTruncatedString(senderID), err.Error())
 				// slash the peers reputation score
@@ -78,46 +74,71 @@ func (c *Controller) ListenForTx() {
 				// exit
 				return
 			}
-			// log the receipt of the valid transaction
-			c.log.Infof("Received valid transaction %s from %s for chain %d", crypto.ShortHashString(txMsg.Tx), lib.BytesToTruncatedString(senderID), txMsg.ChainId)
-			// bump peer reputation positively
-			c.P2P.ChangeReputation(senderID, p2p.GoodTxRep)
-			// gossip the transaction to peers
-			if err := c.P2P.SendToPeers(Tx, msg.Message, lib.BytesToString(senderID)); err != nil {
-				// log the gossip error
-				c.log.Error(fmt.Sprintf("unable to gossip tx with err: %s", err.Error()))
-			}
 			// onto the next message
 		}()
 	}
 }
 
-// HandleTransaction() accepts or rejects inbound txs based on the mempool state
-// - pass through call checking indexer and mempool for duplicate
-func (c *Controller) HandleTransaction(tx []byte) lib.ErrorI {
-	// generate hash bytes for the transaction
-	hash := crypto.Hash(tx)
-	// generate a hex encoded hash string for the transaction
-	hashString := lib.BytesToString(hash)
-	// get the transaction from the indexer using the hash bytes
-	txResult, err := c.FSM.Store().(lib.StoreI).GetTxByHash(hash)
-	// if an error occurred attempting to retrieve the tx
-	if err != nil {
-		// exit with the error
-		return err
+// GetProposalBlockFromMempool() returns the cached proposal block
+func (c *Controller) GetProposalBlockFromMempool() *CachedProposal {
+	return c.Mempool.cachedProposal.Load().(*CachedProposal)
+}
+
+// CheckMempool() periodically checks the mempool:
+// - Validates all transactions in the mempool
+// - Caches a proposal block based on the current state and the mempool transactions
+// - P2P Gossip out any transactions that weren't previously gossiped
+func (c *Controller) CheckMempool() {
+	deDupe, _ := lru.New[string, struct{}](100_000)
+	// if configured to not check mempool besides right after CommitBlock
+	if c.Config.LazyMempoolCheckFrequencyS == 0 {
+		return
 	}
-	// if the transaction already exists
-	if txResult.TxHash != "" {
-		// exit with duplicate transaction error
-		return lib.ErrDuplicateTx(hashString)
+	for {
+		// keep a list of transaction needing to be gossipped
+		var toGossip [][]byte
+		// if recheck is necessary
+		if c.Mempool.recheck.Load() {
+			// execute in a function call to allow defer
+			func() {
+				c.Mempool.L.Lock()
+				defer c.Mempool.L.Unlock()
+				// be mempool strict on proposals
+				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+				// once done proposing, 'reset' the proposal mode back to default to 'accept all'
+				defer func() { resetProposalConfig() }()
+				// reset the mempool
+				c.Mempool.FSM.Reset()
+				// check the mempool to cache a proposal block and validate the mempool itself
+				c.Mempool.CheckMempool()
+				// get the transactions to gossip
+				toGossip = c.Mempool.GetTransactions(math.MaxUint64)
+				// set recheck to false
+				c.Mempool.recheck.Store(false)
+			}()
+		}
+		// for each transaction to gossip
+		var dedupedTxs [][]byte
+		for _, tx := range toGossip {
+			// get the key for the transaction
+			key := crypto.HashString(tx)
+			// if not already gossiped
+			if _, found := deDupe.Get(key); !found {
+				// add to the de-dupe list
+				deDupe.Add(key, struct{}{})
+				dedupedTxs = append(dedupedTxs, tx)
+			}
+		}
+		if len(dedupedTxs) != 0 {
+			// gossip the transactions to peers
+			if err := c.P2P.SendToPeers(Tx, &lib.TxMessage{ChainId: c.Config.ChainId, Txs: dedupedTxs}); err != nil {
+				// log the gossip error
+				c.log.Error(fmt.Sprintf("unable to gossip tx with err: %s", err.Error()))
+			}
+		}
+		// sleep for the recheck time
+		time.Sleep(time.Duration(c.Config.LazyMempoolCheckFrequencyS) * time.Second)
 	}
-	// ensure the mempool doesn't already contain the transaction
-	if c.Mempool.Contains(hashString) {
-		// if it does, exit with already found in the mempool
-		return lib.ErrTxFoundInMempool(hashString)
-	}
-	// route the transaction to the mempool for handling
-	return c.Mempool.HandleTransaction(tx)
 }
 
 // Mempool accepts or rejects incoming txs based on the mempool (ephemeral copy) state
@@ -128,21 +149,38 @@ func (c *Controller) HandleTransaction(tx []byte) lib.ErrorI {
 // - notes:
 //   - new tx added may also be evicted, this is expected behavior
 type Mempool struct {
+	controller      *Controller
 	lib.Mempool                        // the memory pool itself defined as an interface
+	L               *sync.Mutex        // thread safety at the mempool level
 	FSM             *fsm.StateMachine  // the ephemeral finite state machine used to validate inbound transactions
-	cachedResults   lib.TxResults      // a memory cache of transaction results for efficient verification
+	cachedResults   lib.TxResults      // a memory cache of transaction results for the json rpc
 	cachedFailedTxs *lib.FailedTxCache // a memory cache of failed transactions for tracking
 	metrics         *lib.Metrics       // telemetry
+	address         crypto.AddressI    // validator identity
+	cachedProposal  atomic.Value       // the cached block proposal set when mempool is 'checked'
+	recheck         atomic.Bool        // a signal to recheck the mempool
+	stop            context.CancelFunc // the cancellable context of the mempool
 	log             lib.LoggerI        // the logger
 }
 
+type CachedProposal struct {
+	Block         *lib.Block
+	BlockResult   *lib.BlockResult
+	CertResults   *lib.CertificateResult
+	rcBuildHeight uint64
+}
+
 // NewMempool() creates a new instance of a Mempool structure
-func NewMempool(fsm *fsm.StateMachine, config lib.MempoolConfig, metrics *lib.Metrics, log lib.LoggerI) (m *Mempool, err lib.ErrorI) {
+func NewMempool(fsm *fsm.StateMachine, address crypto.AddressI, config lib.MempoolConfig, metrics *lib.Metrics, log lib.LoggerI) (m *Mempool, err lib.ErrorI) {
 	// initialize the structure
 	m = &Mempool{
 		Mempool:         lib.NewMempool(config),
+		L:               &sync.Mutex{},
+		cachedProposal:  atomic.Value{},
+		recheck:         atomic.Bool{},
 		cachedFailedTxs: lib.NewFailedTxCache(),
 		metrics:         metrics,
+		address:         address,
 		log:             log,
 	}
 	// make an 'mempool (ephemeral copy) state' so the mempool can maintain only 'valid' transactions despite dependencies and conflicts
@@ -151,126 +189,99 @@ func NewMempool(fsm *fsm.StateMachine, config lib.MempoolConfig, metrics *lib.Me
 	if err != nil {
 		return nil, err
 	}
-	// initialize the mempool at the 'begin block' phase because it's the proper lifecycle phase for transaction handling
-	m.FSM.ResetToBeginBlock()
 	// exit
 	return m, err
 }
 
-// HandleTransaction() attempts to add a transaction to the mempool by validating, adding, and evicting overfull or newly invalid txs
-func (m *Mempool) HandleTransaction(tx []byte) (err lib.ErrorI) {
-	// upon completing this function
-	defer func() {
-		// in an error occurred while handling this transaction
-		if err != nil {
-			// cache failed txs for RPC display
-			m.cachedFailedTxs.Add(tx, crypto.HashString(tx), err)
-		}
-	}()
-	// validate the transaction against the mempool (ephemeral copy) state
-	result, err := m.applyAndWriteTx(tx)
-	// if an error occurred while applying this transaction against the ephemeral copy
-	if err != nil {
-		// exit with the error
-		return
-	}
-	// extract the fee from the transaction result
-	fee := result.Transaction.Fee
-	// if the transaction is a special type: 'certificate result'
-	if result.MessageType == fsm.MessageCertificateResultsName {
-		// prioritize certificate result transactions by artificially raising the fee 'stored fee'
-		fee = math.MaxUint32
-	}
+// HandleTransactions() attempts to add a transaction to the mempool by validating, adding, and evicting overfull or newly invalid txs
+func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
+	// lock the mempool
+	m.L.Lock()
+	defer m.L.Unlock()
+	// signal a recheck
+	m.recheck.Store(true)
 	// add a transaction to the mempool
-	recheck, err := m.AddTransaction(tx, fee)
-	// if an error occurred adding the transaction to the memory pool
-	if err != nil {
+	if err = m.AddTransactions(tx...); err != nil {
 		// exit with the error
 		return
-	}
-	// cache the results for RPC display
-	m.log.Infof("Added tx %s to mempool for checking", crypto.HashString(tx))
-	// add the result to the cache
-	m.cachedResults = append(m.cachedResults, result)
-	// recheck the mempool if necessary
-	if recheck {
-		// recheck the mempool
-		m.checkMempool()
 	}
 	// exit
 	return
 }
 
-// checkMempool() validates all transactions the mempool using the mempool (ephemeral copy) state and evicts any that are invalid
-func (m *Mempool) checkMempool() {
-	// reset the mempool (ephemeral copy) state to just after the automatic 'begin block' phase
-	m.FSM.ResetToBeginBlock()
+// CheckMempool() Checks each transaction in the mempool and caches a block proposal
+func (m *Mempool) CheckMempool() {
+	m.log.Info("Validating mempool and caching a new proposal block")
+	var err lib.ErrorI
+	// check if a validator
+	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
+	block := &lib.Block{
+		BlockHeader:  &lib.BlockHeader{Time: uint64(time.Now().UnixMicro()), ProposerAddress: m.address.Bytes()},
+		Transactions: m.GetTransactions(math.MaxUint64), // get all transactions in mempool - but apply block will only keep 'max-block' amount
+	}
+	// capture the tentative block result using a new object reference
+	blockResult, oversized, failed := new(lib.BlockResult), make([]*lib.TxResult, 0), make([]*lib.FailedTx, 0)
+	// setup a context with cancel
+	ctx, stop := context.WithCancel(context.Background())
+	// set the cancel function
+	m.stop = stop
+	// apply the block against the state machine and populate the resulting merkle `roots` in the block header
+	block.BlockHeader, blockResult.Transactions, oversized, failed, err = m.FSM.ApplyBlock(ctx, block, true)
+	if err != nil {
+		m.log.Warnf("Check Mempool error: %s", err.Error())
+		return
+	}
+	// set the block result block header
+	blockResult.BlockHeader = block.BlockHeader
+	// get RC build height
+	rcBuildHeight := m.controller.RootChainHeight()
+	// calculate rc build height
+	ownRoot, err := m.FSM.LoadIsOwnRoot()
+	if err != nil {
+		m.log.Error(err.Error())
+	}
+	// if ownRoot
+	if ownRoot {
+		rcBuildHeight = m.FSM.Height()
+	}
+	// cache the proposal
+	m.cachedProposal.Store(&CachedProposal{
+		Block:         block,
+		BlockResult:   blockResult,
+		CertResults:   m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
+		rcBuildHeight: rcBuildHeight,
+	})
+	// create a cache of failed tx bytes to evict from the mempool
+	var failedTxBz [][]byte
+	// mark as failed in the cache
+	for _, tx := range failed {
+		// cache failed txs for RPC display
+		m.cachedFailedTxs.Add(tx)
+		// save the bytes
+		failedTxBz = append(failedTxBz, tx.GetBytes())
+	}
+	// evict all invalid transactions from the mempool
+	m.DeleteTransaction(failedTxBz...)
+	// log a warning
+	if len(failed) != 0 {
+		m.log.Warnf("Removed failed %d txs from mempool", len(failed))
+	}
 	// reset the RPC cached results
 	m.cachedResults = nil
-	// create a list of the transactions to delete
-	var toDelete [][]byte
-	// create an iterator for the mempool
-	it := m.Iterator()
-	// at the end of the function, close the iterator
-	defer it.Close()
-	// for each mempool transaction
-	for ; it.Valid(); it.Next() {
-		// get the transaction itself from the iterator
-		tx := it.Key()
-		// write the transaction to the state machine
-		result, err := m.applyAndWriteTx(tx)
-		// if an error occurred during the application
-		if err != nil {
-			// log the error
-			m.log.Error(err.Error())
-			// add to the remove list
-			toDelete = append(toDelete, tx)
-			// and cache it
-			m.cachedFailedTxs.Add(tx, crypto.HashString(tx), err)
-			// continue with the next iteration
-			continue
-		}
+	// add results to cache
+	for _, result := range blockResult.Transactions {
 		// cache the results
 		m.cachedResults = append(m.cachedResults, result)
 	}
-	// evict all 'newly' invalid transactions from the mempool
-	for _, tx := range toDelete {
-		// log the eviction
-		m.log.Infof("Removed tx %s from mempool", crypto.HashString(tx))
-		// delete the transaction
-		m.DeleteTransaction(tx)
+	// add results to cache
+	for _, result := range oversized {
+		// cache the results
+		result.Index = uint64(len(m.cachedResults))
+		m.cachedResults = append(m.cachedResults, result)
 	}
+	m.log.Info("Done checking mempool")
 	// update the mempool metrics
 	m.metrics.UpdateMempoolMetrics(m.Mempool.TxCount(), m.Mempool.TxsBytes())
-}
-
-// applyAndWriteTx() checks the validity of a transaction by playing it against the mempool (ephemeral copy) state machine
-func (m *Mempool) applyAndWriteTx(tx []byte) (result *lib.TxResult, err lib.ErrorI) {
-	// get the ephemeral store from the mempool state machine
-	store := m.FSM.Store()
-	// wrap the store in a 'database transaction' in case a rollback to the previous valid transaction is needed
-	txn, err := m.FSM.TxnWrap()
-	// if an error occurred during the wrapping
-	if err != nil {
-		// exit with error
-		return
-	}
-	// at the end of this code, set the state machine store back to the 'ephemeral store' and discard the 'database transaction'
-	defer func() { m.FSM.SetStore(store); txn.Discard() }()
-	// apply the transaction to the mempool (ephemeral copy) state machine
-	result, err = m.FSM.ApplyTransaction(uint64(m.TxCount()), tx, crypto.HashString(tx))
-	// if an error occurred when applying the transaction
-	if err != nil {
-		// exit with error
-		return
-	}
-	// write the transaction to the mempool store
-	if err = txn.Write(); err != nil {
-		// exit with error
-		return
-	}
-	// exit with the result
-	return
 }
 
 // GetPendingPage() returns a page of unconfirmed mempool transactions

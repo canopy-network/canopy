@@ -10,6 +10,9 @@ import (
 )
 
 func TestStartPeerBookService(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
 	n1, n2, cleanup := newTestP2PPair(t)
 	defer cleanup()
 	n3, n4 := newTestP2PNode(t), newTestP2PNode(t)

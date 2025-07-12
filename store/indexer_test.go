@@ -31,6 +31,8 @@ func TestGetTxByHeight(t *testing.T) {
 	defer cleanup()
 	txRes, _, _, _, _ := newTestTxResult(t)
 	require.NoError(t, store.IndexTx(txRes))
+	_, err := store.Commit()
+	require.NoError(t, err)
 	txResults, err := store.GetTxsByHeightNonPaginated(testHeight, true)
 	require.NoError(t, err)
 	require.Len(t, txResults, 1)

@@ -62,6 +62,6 @@ func ErrReadBytes(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeReadBytes, lib.StorageModule, fmt.Sprintf("random read bytes failed with err: %s", err.Error()))
 }
 
-func ErrFlushMemTable(err error) lib.ErrorI {
-	return lib.NewError(lib.CodeFlushMemTable, lib.StorageModule, fmt.Sprintf("flush memtable failed with err: %s", err.Error()))
+func ErrIndexBlock(err error) lib.ErrorI {
+	return lib.NewError(lib.CodeIndexBlock, lib.StorageModule, fmt.Sprintf("index block failed with err: %s", err.Error()))
 }

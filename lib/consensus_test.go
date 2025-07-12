@@ -727,7 +727,7 @@ func TestViewCheck(t *testing.T) {
 			view:           &View{Height: 1},
 			checkView:      &View{Height: 2},
 			enforceHeights: true,
-			error:          "wrong height",
+			error:          "wrong view height",
 		},
 		{
 			name:           "the canopy height is incorrect",

@@ -219,8 +219,15 @@ func (b *BLS12381PublicKey) UnmarshalJSON(bz []byte) (err error) {
 }
 
 // VerifyBytes() verifies an individual BLS signature given a message and the signature out
-func (b *BLS12381PublicKey) VerifyBytes(msg []byte, sig []byte) bool {
-	return b.scheme.Verify(b.Point, msg, sig) == nil
+func (b *BLS12381PublicKey) VerifyBytes(msg []byte, sig []byte) (valid bool) {
+	cached, addToCache := CheckCache(b, msg, sig)
+	if cached {
+		return true
+	}
+	if valid = b.scheme.Verify(b.Point, msg, sig) == nil; valid {
+		addToCache()
+	}
+	return
 }
 
 // Equals() compares two public key objects and returns true if they are equal

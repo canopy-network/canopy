@@ -37,7 +37,7 @@ The Mempool is a temporary storage area for valid but unconfirmed transactions. 
 - Evicts invalid transactions when state changes
 - Prioritizes transactions with higher fees
 - Handles special transaction types (like certificate results)
-- Maintains a cache of transaction results for efficient verification
+- Maintains a txn of transaction results for efficient verification
 - Tracks failed transactions for reporting purposes
 
 ### Transaction Validation

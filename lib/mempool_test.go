@@ -1,11 +1,9 @@
 package lib
 
 import (
-	"errors"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 	"math"
-	"sync"
 	"testing"
 	"time"
 )
@@ -13,71 +11,105 @@ import (
 func TestAddTransactionFeeOrdering(t *testing.T) {
 	// pre-define a mempool with the default config
 	mempool := NewMempool(DefaultMempoolConfig())
+	// pre-define a test message
+	sig := &Signature{
+		PublicKey: newTestPublicKeyBytes(t),
+		Signature: newTestPublicKeyBytes(t),
+	}
+	// pre-define an any for testing
+	a, e := NewAny(sig)
+	require.NoError(t, e)
 	// add a transaction
-	recheck, err := mempool.AddTransaction([]byte("b"), 1000)
+	err := mempool.AddTransactions(func() []byte {
+		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 2})
+		require.NoError(t, err)
+		return bz
+	}())
 	require.NoError(t, err)
-	require.False(t, recheck)
 	// add another transaction with the same fee
-	recheck, err = mempool.AddTransaction([]byte("c"), 1000)
+	err = mempool.AddTransactions(func() []byte {
+		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 3})
+		require.NoError(t, err)
+		return bz
+	}())
 	require.NoError(t, err)
-	require.False(t, recheck)
 	// add another transaction with a higher fee
-	recheck, err = mempool.AddTransaction([]byte("a"), 1001)
+	err = mempool.AddTransactions(func() []byte {
+		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+			Time: uint64(time.Now().UnixMicro()), Fee: 1001, NetworkId: 1, ChainId: 1})
+		require.NoError(t, err)
+		return bz
+	}())
 	require.NoError(t, err)
-	// ensure recheck on non-append insert
-	require.True(t, recheck)
 	// add another transaction with the lowest fee
-	recheck, err = mempool.AddTransaction([]byte("e"), 1)
+	err = mempool.AddTransactions(func() []byte {
+		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+			Time: uint64(time.Now().UnixMicro()), Fee: 1, NetworkId: 1, ChainId: 5})
+		require.NoError(t, err)
+		return bz
+	}())
 	require.NoError(t, err)
-	require.False(t, recheck)
 	// add another transaction with the same fee
-	recheck, err = mempool.AddTransaction([]byte("d"), 1000)
+	err = mempool.AddTransactions(func() []byte {
+		bz, err := Marshal(&Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+			Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 4})
+		require.NoError(t, err)
+		return bz
+	}())
 	require.NoError(t, err)
-	// ensure recheck on non-append insert
-	require.True(t, recheck)
 	it := mempool.Iterator()
 	defer it.Close()
 	// iterate through each
-	result := ""
-	for ; it.Valid(); it.Next() {
-		result += string(it.Key())
+	for expected := 1; it.Valid(); it.Next() {
+		tx := new(Transaction)
+		require.NoError(t, Unmarshal(it.Key(), tx))
+		// compare got vs expected
+		require.Equal(t, expected, int(tx.ChainId))
+		expected++
 	}
-	// compare got vs expected
-	require.Equal(t, "abcde", result)
 }
 
 func TestAddTransaction(t *testing.T) {
-	// pre-define a transaction to add
-	transaction := MempoolTx{
-		Tx:  []byte("bytes"),
-		Fee: 1000,
+	// pre-define a test message
+	sig := &Signature{
+		PublicKey: newTestPublicKeyBytes(t),
+		Signature: newTestPublicKeyBytes(t),
 	}
+	// pre-define an any for testing
+	a, e := NewAny(sig)
+	require.NoError(t, e)
+	// pre-define a transaction to add
+	tx := &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 2}
+	// marshal to bytes
+	transaction, err := Marshal(tx)
+	require.NoError(t, err)
 	tests := []struct {
 		name    string
 		detail  string
 		mempool FeeMempool
-		toAdd   MempoolTx
+		toAdd   []byte
 		// expected
 		transactions [][]byte
-		recheck      bool
 		count        int
 		error        string
 	}{
 		{
-			name:   "max tx size",
-			detail: "the tx size exceeds max (config)",
-			mempool: FeeMempool{
-				l: sync.RWMutex{},
-			},
-			toAdd: transaction,
-			error: "max tx size",
+			name:    "max tx size",
+			detail:  "the tx size exceeds max (config)",
+			mempool: FeeMempool{},
+			toAdd:   transaction,
+			error:   "max tx size",
 		},
 		{
 			name:   "already exists",
 			detail: "transaction not added because it already exists",
 			mempool: FeeMempool{
-				l:       sync.RWMutex{},
-				hashMap: map[string]struct{}{crypto.HashString(transaction.Tx): {}},
+				pool: MempoolTxs{
+					m: map[string]struct{}{crypto.HashString(transaction): {}},
+				},
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
 					MaxTransactionCount: 0,
@@ -86,35 +118,33 @@ func TestAddTransaction(t *testing.T) {
 				},
 			},
 			toAdd: transaction,
-			error: "already found in mempool",
 		},
 		{
 			name:   "recheck max tx count",
 			detail: "max tx count causes a recheck",
 			mempool: FeeMempool{
-				l:        sync.RWMutex{},
-				hashMap:  make(map[string]struct{}),
-				pool:     MempoolTxs{},
-				count:    0,
+				pool: MempoolTxs{
+					m: make(map[string]struct{}),
+					s: make([]MempoolTx, 0),
+				},
 				txsBytes: 0,
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
-					MaxTransactionCount: 0,
+					MaxTransactionCount: 1,
 					IndividualMaxTxSize: math.MaxUint32,
 					DropPercentage:      10,
 				},
 			},
-			recheck: true,
-			toAdd:   transaction,
+			toAdd: transaction,
 		},
 		{
 			name:   "recheck max total bytes",
 			detail: "max total bytes",
 			mempool: FeeMempool{
-				l:        sync.RWMutex{},
-				hashMap:  make(map[string]struct{}),
-				pool:     MempoolTxs{},
-				count:    0,
+				pool: MempoolTxs{
+					m: make(map[string]struct{}),
+					s: make([]MempoolTx, 0),
+				},
 				txsBytes: 0,
 				config: MempoolConfig{
 					MaxTotalBytes:       0,
@@ -123,17 +153,16 @@ func TestAddTransaction(t *testing.T) {
 					DropPercentage:      10,
 				},
 			},
-			recheck: true,
-			toAdd:   transaction,
+			toAdd: transaction,
 		},
 		{
 			name:   "no recheck",
 			detail: "there's no recheck as the transaction is added without exceeding limits",
 			mempool: FeeMempool{
-				l:       sync.RWMutex{},
-				hashMap: make(map[string]struct{}),
-				pool:    MempoolTxs{},
-				count:   0,
+				pool: MempoolTxs{
+					m: make(map[string]struct{}),
+					s: make([]MempoolTx, 0),
+				},
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
 					MaxTransactionCount: math.MaxUint32,
@@ -144,17 +173,17 @@ func TestAddTransaction(t *testing.T) {
 			count: 1,
 			toAdd: transaction,
 			transactions: [][]byte{
-				transaction.Tx,
+				transaction,
 			},
 		},
 		{
 			name:   "multi-transaction",
 			detail: "test transaction ordering with multi-transaction",
 			mempool: FeeMempool{
-				l:       sync.RWMutex{},
-				hashMap: make(map[string]struct{}),
-				pool:    MempoolTxs{},
-				count:   0,
+				pool: MempoolTxs{
+					m: make(map[string]struct{}),
+					s: make([]MempoolTx, 0),
+				},
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
 					MaxTransactionCount: math.MaxUint32,
@@ -165,14 +194,14 @@ func TestAddTransaction(t *testing.T) {
 			count: 1,
 			toAdd: transaction,
 			transactions: [][]byte{
-				transaction.Tx,
+				transaction,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// execute function call
-			gotRecheck, err := test.mempool.AddTransaction(test.toAdd.Tx, test.toAdd.Fee)
+			err = test.mempool.AddTransactions(test.toAdd)
 			// validate if an error is expected
 			require.Equal(t, err != nil, test.error != "", err)
 			// validate actual error if any
@@ -180,9 +209,7 @@ func TestAddTransaction(t *testing.T) {
 				require.ErrorContains(t, err, test.error, err)
 				return
 			}
-			// compare got vs expected
-			require.Equal(t, test.recheck, gotRecheck)
-			require.Equal(t, test.count, test.mempool.count)
+			require.Equal(t, test.count, test.mempool.TxCount())
 			// call get transaction
 			gotTxs := test.mempool.GetTransactions(math.MaxUint64)
 			require.Equal(t, test.transactions, gotTxs)
@@ -195,40 +222,56 @@ func TestAddTransaction(t *testing.T) {
 }
 
 func TestGetAndContainsTransaction(t *testing.T) {
+	// pre-define a test message
+	sig := &Signature{
+		PublicKey: newTestPublicKeyBytes(t),
+		Signature: newTestPublicKeyBytes(t),
+	}
+	// pre-define an any for testing
+	a, e := NewAny(sig)
+	require.NoError(t, e)
+	// pre-define a transaction to add
+	tx := &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 1000, NetworkId: 1, ChainId: 1}
+	// marshal to bytes
+	transactionA, err := Marshal(tx)
+	require.NoError(t, err)
+	// pre-define a transaction to add
+	tx = &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 1001, NetworkId: 1, ChainId: 1}
+	// marshal to bytes
+	transactionB, err := Marshal(tx)
+	// pre-define a transaction to add
+	tx = &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 999, NetworkId: 1, ChainId: 1}
+	// marshal to bytes
+	transactionC, err := Marshal(tx)
+	// pre-define a transaction to add
+	tx = &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 1, NetworkId: 1, ChainId: 1}
+	// marshal to bytes
+	transactionD, err := Marshal(tx)
+	require.NoError(t, err)
 	// define test cases
 	tests := []struct {
 		name          string
 		detail        string
-		txs           []MempoolTx
+		txs           [][]byte
 		mempool       Mempool
 		expectedCount uint64
-		expectedTxs   []MempoolTx
+		expectedTxs   [][]byte
 		maxBytes      uint64
 	}{
 		{
 			name:   "reap top 3 transactions",
 			detail: "get the top 3 transactions only based on the max bytes ",
-			txs: []MempoolTx{
-				{
-					Tx:  []byte("a"),
-					Fee: 1000,
-				},
-				{
-					Tx:  []byte("b"),
-					Fee: 1001,
-				},
-				{
-					Tx:  []byte("c"),
-					Fee: 999,
-				},
-				{
-					Tx:  []byte("d"),
-					Fee: 1,
-				},
+			txs: [][]byte{
+				transactionA,
+				transactionB,
+				transactionC,
+				transactionD,
 			},
 			mempool: &FeeMempool{
-				l:       sync.RWMutex{},
-				hashMap: make(map[string]struct{}),
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
 					MaxTransactionCount: math.MaxUint32,
@@ -237,46 +280,23 @@ func TestGetAndContainsTransaction(t *testing.T) {
 				},
 			},
 			expectedCount: 3,
-			expectedTxs: []MempoolTx{
-				{
-					Tx:  []byte("b"),
-					Fee: 1001,
-				},
-				{
-					Tx:  []byte("a"),
-					Fee: 1000,
-				},
-				{
-					Tx:  []byte("c"),
-					Fee: 999,
-				},
+			expectedTxs: [][]byte{
+				transactionB,
+				transactionA,
+				transactionC,
 			},
-			maxBytes: 3,
+			maxBytes: uint64(len(transactionA) + len(transactionB) + len(transactionC)),
 		},
 		{
 			name:   "reap top 2 transactions",
 			detail: "get the top 2 transactions only based on the max bytes",
-			txs: []MempoolTx{
-				{
-					Tx:  []byte("a"),
-					Fee: 1000,
-				},
-				{
-					Tx:  []byte("b"),
-					Fee: 1001,
-				},
-				{
-					Tx:  []byte("c"),
-					Fee: 999,
-				},
-				{
-					Tx:  []byte("d"),
-					Fee: 1,
-				},
+			txs: [][]byte{
+				transactionA,
+				transactionB,
+				transactionC,
+				transactionD,
 			},
 			mempool: &FeeMempool{
-				l:       sync.RWMutex{},
-				hashMap: make(map[string]struct{}),
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
 					MaxTransactionCount: math.MaxUint32,
@@ -285,24 +305,18 @@ func TestGetAndContainsTransaction(t *testing.T) {
 				},
 			},
 			expectedCount: 2,
-			expectedTxs: []MempoolTx{
-				{
-					Tx:  []byte("b"),
-					Fee: 1001,
-				},
-				{
-					Tx:  []byte("a"),
-					Fee: 1000,
-				},
+			expectedTxs: [][]byte{
+				transactionB,
+				transactionA,
 			},
-			maxBytes: 2,
+			maxBytes: uint64(len(transactionA) + len(transactionB)),
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// pre-add the transactions
 			for _, txn := range test.txs {
-				_, err := test.mempool.AddTransaction(txn.Tx, txn.Fee)
+				err := test.mempool.AddTransactions(txn)
 				require.NoError(t, err)
 			}
 			// get the transactions
@@ -312,8 +326,8 @@ func TestGetAndContainsTransaction(t *testing.T) {
 			require.Equal(t, len(test.expectedTxs), len(got))
 			// compare got vs expected
 			for i := 0; i < len(got); i++ {
-				require.Equal(t, test.expectedTxs[i].Tx, got[i])
-				require.True(t, test.mempool.Contains(crypto.HashString(test.txs[i].Tx)))
+				require.Equal(t, test.expectedTxs[i], got[i])
+				require.True(t, test.mempool.Contains(crypto.HashString(test.txs[i])))
 			}
 		})
 	}
@@ -333,9 +347,12 @@ func TestDeleteTransaction(t *testing.T) {
 			name:   "delete the first transaction",
 			detail: "delete the transaction with the highest fee",
 			mempool: &FeeMempool{
-				l: sync.RWMutex{},
 				pool: MempoolTxs{
-					count: 3,
+					m: map[string]struct{}{
+						crypto.HashString([]byte("b")): {},
+						crypto.HashString([]byte("a")): {},
+						crypto.HashString([]byte("c")): {},
+					},
 					s: []MempoolTx{
 						{
 							Tx:  []byte("b"),
@@ -350,11 +367,6 @@ func TestDeleteTransaction(t *testing.T) {
 							Fee: 999,
 						},
 					},
-				},
-				hashMap: map[string]struct{}{
-					crypto.HashString([]byte("a")): {},
-					crypto.HashString([]byte("b")): {},
-					crypto.HashString([]byte("c")): {},
 				},
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
@@ -382,9 +394,12 @@ func TestDeleteTransaction(t *testing.T) {
 			name:   "delete the second two transactions",
 			detail: "delete the 2 transactions with the lowest fees",
 			mempool: &FeeMempool{
-				l: sync.RWMutex{},
 				pool: MempoolTxs{
-					count: 3,
+					m: map[string]struct{}{
+						crypto.HashString([]byte("b")): {},
+						crypto.HashString([]byte("a")): {},
+						crypto.HashString([]byte("c")): {},
+					},
 					s: []MempoolTx{
 						{
 							Tx:  []byte("b"),
@@ -399,11 +414,6 @@ func TestDeleteTransaction(t *testing.T) {
 							Fee: 999,
 						},
 					},
-				},
-				hashMap: map[string]struct{}{
-					crypto.HashString([]byte("a")): {},
-					crypto.HashString([]byte("b")): {},
-					crypto.HashString([]byte("c")): {},
 				},
 				config: MempoolConfig{
 					MaxTotalBytes:       math.MaxUint64,
@@ -485,27 +495,9 @@ func TestFailedTxCache(t *testing.T) {
 			name:                    "valid transaction",
 			dissallowedMessageTypes: []string{},
 			txBytes:                 txBytes,
-			hash:                    "validHash",
+			hash:                    crypto.HashString(txBytes),
 			err:                     nil,
 			expectedResult:          true,
-			address:                 pubKey.Address().String(),
-		},
-		{
-			name:                    "invalid message type",
-			dissallowedMessageTypes: []string{testMessageName},
-			txBytes:                 txBytes,
-			hash:                    "invalidHash",
-			err:                     nil,
-			expectedResult:          false,
-			address:                 pubKey.Address().String(),
-		},
-		{
-			name:                    "unmarshal error",
-			dissallowedMessageTypes: []string{},
-			txBytes:                 []byte("invalidBytes"),
-			hash:                    "unmarshalErrorHash",
-			err:                     ErrUnmarshal(errors.New("unmarshal error")),
-			expectedResult:          false,
 			address:                 pubKey.Address().String(),
 		},
 	}
@@ -514,8 +506,10 @@ func TestFailedTxCache(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a new failed tx cache
 			cache := NewFailedTxCache(test.dissallowedMessageTypes...)
+			// create a new failed tx
+			failedTx := NewFailedTx(test.txBytes, test.err)
 			// add transaction to cache
-			result := cache.Add(test.txBytes, test.hash, test.err)
+			result := cache.Add(failedTx)
 			// validate result
 			require.Equal(t, test.expectedResult, result)
 			if test.expectedResult {

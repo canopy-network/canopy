@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -67,11 +68,15 @@ func TestInitialize(t *testing.T) {
 				height: test.height,
 				Config: lib.Config{},
 				log:    log,
+				cache: &cache{
+					accounts: make(map[uint64]*Account),
+				},
 			}
 			// set the data dir path
 			sm.Config.DataDirPath = dataDirPath
 			// execute the function call
-			require.NoError(t, sm.Initialize(db))
+			_, err = sm.Initialize(db)
+			require.NoError(t, err)
 			// validate the initialization path
 			if test.height == 0 {
 				// if genesis, validate the state
@@ -259,9 +264,12 @@ func TestApplyBlock(t *testing.T) {
 				sm.ProtocolVersion = 1
 			}
 			// execute the function call
-			header, txResults, e := sm.ApplyBlock(test.block)
+			header, txResults, _, failed, e := sm.ApplyBlock(context.Background(), test.block, false)
 			// validate the expected error
-			require.Equal(t, test.error != "", e != nil, e)
+			require.Equal(t, test.error != "", e != nil || len(failed) != 0, e)
+			if len(failed) != 0 {
+				return
+			}
 			if e != nil {
 				require.ErrorContains(t, e, test.error)
 				return
@@ -312,6 +320,9 @@ func newTestStateMachine(t *testing.T) StateMachine {
 			MainConfig: lib.DefaultMainConfig(),
 		},
 		log: log,
+		cache: &cache{
+			accounts: make(map[uint64]*Account),
+		},
 	}
 	require.NoError(t, sm.SetParams(DefaultParams()))
 	db.Commit()

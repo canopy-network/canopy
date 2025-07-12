@@ -161,6 +161,9 @@ func TestHandleByzantine(t *testing.T) {
 			// STEP 3) validate 'double signer' logic
 			func() {
 				if test.qc.Results.SlashRecipients != nil && test.qc.Results.SlashRecipients.DoubleSigners != nil {
+					// commit because GetDoubleSigners() doesn't work for same block
+					_, e := sm.store.(lib.StoreI).Commit()
+					require.NoError(t, e)
 					// retrieve the double signers
 					doubleSigners, e := sm.GetDoubleSigners()
 					require.NoError(t, e)

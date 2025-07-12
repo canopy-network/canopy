@@ -328,7 +328,10 @@ func (p *P2P) DialAndDisconnect(a *lib.PeerAddress, strictPublicKey bool) lib.Er
 func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string) {
 	p.log.Warn(PeerError(publicKey, remoteAddr, err))
 	// ignore error: peer may have disconnected before added
-	peer, _ := p.PeerSet.Remove(publicKey)
+	peer, err := p.PeerSet.Remove(publicKey)
+	if err != nil {
+		p.log.Errorf("Remove error: %s", err.Error())
+	}
 	if peer != nil {
 		peer.stop.Do(peer.conn.Stop)
 	}
@@ -368,10 +371,11 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 	p.log.Debugf("Self sending %s message", topic)
 	// non blocking
 	go func() {
-		p.Inbox(topic) <- (&lib.MessageAndMetadata{
-			Message: proto.Clone(payload),
+		bz, _ := lib.Marshal(payload)
+		p.Inbox(topic) <- &lib.MessageAndMetadata{
+			Message: bz,
 			Sender:  &lib.PeerInfo{Address: &lib.PeerAddress{PublicKey: fromPublicKey}},
-		}).WithHash()
+		}
 	}()
 	return nil
 }

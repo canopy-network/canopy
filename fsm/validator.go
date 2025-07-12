@@ -3,9 +3,10 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 /* This file implements state actions on Validators and Delegators*/
@@ -412,29 +413,29 @@ func (s *StateMachine) unmarshalValidator(bz []byte) (*Validator, lib.ErrorI) {
 
 // validator is the json.Marshaller and json.Unmarshaler implementation for the Validator object
 type validator struct {
-	Address         *crypto.Address `json:"address"`
-	PublicKey       string          `json:"publicKey"`
-	Committees      []uint64        `json:"committees"`
-	NetAddress      string          `json:"netAddress"`
-	StakedAmount    uint64          `json:"stakedAmount"`
-	MaxPausedHeight uint64          `json:"maxPausedHeight"`
-	UnstakingHeight uint64          `json:"unstakingHeight"`
-	Output          *crypto.Address `json:"output"`
-	Delegate        bool            `json:"delegate"`
-	Compound        bool            `json:"compound"`
+	Address         crypto.Address `json:"address"`
+	PublicKey       string         `json:"publicKey"`
+	Committees      []uint64       `json:"committees"`
+	NetAddress      string         `json:"netAddress"`
+	StakedAmount    uint64         `json:"stakedAmount"`
+	MaxPausedHeight uint64         `json:"maxPausedHeight"`
+	UnstakingHeight uint64         `json:"unstakingHeight"`
+	Output          crypto.Address `json:"output"`
+	Delegate        bool           `json:"delegate"`
+	Compound        bool           `json:"compound"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Validator object
 func (x *Validator) MarshalJSON() ([]byte, error) {
 	return json.Marshal(validator{
-		Address:         crypto.NewAddressFromBytes(x.Address).(*crypto.Address),
+		Address:         crypto.NewAddressFromBytes(x.Address).(crypto.Address),
 		PublicKey:       lib.BytesToString(x.PublicKey),
 		Committees:      x.Committees,
 		NetAddress:      x.NetAddress,
 		StakedAmount:    x.StakedAmount,
 		MaxPausedHeight: x.MaxPausedHeight,
 		UnstakingHeight: x.UnstakingHeight,
-		Output:          crypto.NewAddressFromBytes(x.Output).(*crypto.Address),
+		Output:          crypto.NewAddressFromBytes(x.Output).(crypto.Address),
 		Delegate:        x.Delegate,
 		Compound:        x.Compound,
 	})

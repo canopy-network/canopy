@@ -1,25 +1,4 @@
 {
-  "book": [
-    {
-      "address": {
-        "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
-        "netAddress": "node-2:9001",
-        "peerMeta": {
-          "chainID": 1,
-          "signature": "r2Ak7hLDBnF0pttfdvfXObie3ywUGWY5xpXnE9GnmW4TmN6yFaQtYrXF5iw8dXMSCFWDdP9qOZ+9NEQHa3D8KhFdoWQpL6b6dYBCe5ad/TEFmgBzqf0RmS4KR336qL8A"
-        }
-      }
-    },
-    {
-      "address": {
-        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-        "netAddress": "192.168.48.3:54198",
-        "peerMeta": {
-          "chainID": 1,
-          "signature": "j4ODmoV2b851hSwoWzw/zgYQOztTUDZlL9TopoWbYiJOstT0c6IFwvfYq3ClW2woBXY9+xo+iCwpRR/uoXMsqWox4EitLmoHPF6OhLd6oM0L9APawR0qdQ+qgvIq35Ye"
-        }
-      }
-    }
-  ],
-  "bookSize": 2
+  "book": [],
+  "bookSize": 0
 }

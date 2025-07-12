@@ -2,7 +2,9 @@ package store
 
 import (
 	"bytes"
-	"slices"
+	"math/bits"
+	"sort"
+	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -76,7 +78,16 @@ import (
 //
 // =====================================================
 
-const MaxKeyBitLength = 160 // the maximum leaf key bits (20 bytes)
+const (
+	MaxKeyBitLength = 160 // the maximum leaf key bits (20 bytes)
+	MaxCacheSize    = 1_000_000
+	// Child position constants
+	LeftChild  = 0
+	RightChild = 1
+	// parallelization parameters
+	NumSubtrees       = 8
+	SubtreePrefixBits = 3 // log2(NumSubtrees)
+)
 
 type SMT struct {
 	// store: an abstraction of the database where the tree is being stored
@@ -85,9 +96,17 @@ type SMT struct {
 	root *node
 	// keyBitLength: the depth of the tree, once set it cannot be changed for a protocol
 	keyBitLength int
-
+	// nodeCache: an efficient in-memory cache to avoid marshalling and unmarshalling recent nodes
+	nodeCache map[string]*node
+	// operations: a list of deferred operations to execute
+	operations []*node
+	// unsorted_ops: a list of operations that aren't yet sorted
+	unsortedOps map[string]*node
 	// OpData: data for each operation
 	OpData
+	// define reserved keys
+	minKey *key
+	maxKey *key
 }
 
 // node wraps protobuf Node with a key
@@ -96,6 +115,8 @@ type node struct {
 	Key *key
 	// Node: is the structure persisted on disk under the above key bytes
 	lib.Node
+	// delete: indicates if the deferred operation for the node is 'set or delete'
+	delete bool
 }
 
 // OpData: data for each operation (set, delete)
@@ -114,13 +135,6 @@ type OpData struct {
 	traversed *NodeList
 }
 
-const (
-	// leftChild: enum identifier of left child (0)
-	leftChild = iota
-	// leftChild: enum identifier of right child (1)
-	rightChild
-)
-
 // NewDefaultSMT() creates a new abstraction fo the SMT object using default parameters
 func NewDefaultSMT(store lib.RWStoreI) (smt *SMT) {
 	return NewSMT(RootKey, MaxKeyBitLength, store)
@@ -133,6 +147,9 @@ func NewSMT(rootKey []byte, keyBitLen int, store lib.RWStoreI) (smt *SMT) {
 	smt = &SMT{
 		store:        store,
 		keyBitLength: keyBitLen,
+		nodeCache:    make(map[string]*node),
+		minKey:       newNodeKey(bytes.Repeat([]byte{0}, 20), keyBitLen),
+		maxKey:       newNodeKey(bytes.Repeat([]byte{255}, 20), keyBitLen),
 	}
 	// ensure the root key is the proper length based on the bit count
 	rKey := newNodeKey(bytes.Clone(rootKey), keyBitLen)
@@ -145,25 +162,119 @@ func NewSMT(rootKey []byte, keyBitLen int, store lib.RWStoreI) (smt *SMT) {
 	if smt.root.LeftChildKey == nil {
 		smt.initializeTree(rKey)
 	}
+	// initialize the operations list
+	smt.unsortedOps = make(map[string]*node)
+	// prepare for traversal
+	smt.reset()
 	return
 }
 
 // Root() returns the root value of the smt
 func (s *SMT) Root() []byte { return bytes.Clone(s.root.Value) }
 
-// Set: insert or update a target
-func (s *SMT) Set(k, v []byte) lib.ErrorI {
-	// calculate the key and value to upsert
-	s.target = &node{Key: newNodeKey(crypto.Hash(k), s.keyBitLength), Node: lib.Node{Value: crypto.Hash(v)}}
-	// check to make sure the target is valid
-	if err := s.validateTarget(); err != nil {
+// Commit() DEPRECATED: executes deferred operations in order (left-to-right),
+// minimizing the amount of traversals, IOPS, and hash operations over the master tree
+// this is the sequential alternative to 'commit parallel'
+func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
+	s.operations = make([]*node, 0, len(unsortedOps))
+	// insert all unsorted operations into the slice
+	for _, operation := range unsortedOps {
+		s.operations = append(s.operations, s.valueOpToSMTNode(operation))
+	}
+	// sort the operations
+	sort.Slice(s.operations, func(i, j int) bool {
+		return s.operations[i].Key.cmp(s.operations[j].Key) < 0
+	})
+	// execute in a single tree
+	return s.commit(false)
+}
+
+// CommitParallel(): sorts the operations in 8 subtree threads, executes those threads in parallel and combines them into the master tree
+func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
+	var wg sync.WaitGroup
+	errChan := make(chan lib.ErrorI, NumSubtrees)
+	// add 16 synthetic borders to the tree
+	cleanup, err := s.addSyntheticBorders()
+	if err != nil {
 		return err
 	}
-	// navigates the tree downward
-	if err := s.traverse(); err != nil {
+	// collect the roots for each group (000, 001, 010, 011...)
+	roots, err := s.getSubtreeRoots()
+	if err != nil {
 		return err
 	}
-	// if gcp != target key then it is an insert not an update
+	// sort operations grouping by prefix
+	groupedByPrefix, err := s.sortOperationsByPrefix(unsortedOps)
+	if err != nil {
+		return
+	}
+	// commit each group in parallel
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			// create subtree
+			subtree := s.createSubtree(roots[index], groupedByPrefix[index])
+			subtree.reset()
+			// commit the subtree
+			if e := subtree.commit(true); e != nil {
+				errChan <- e
+			}
+		}(i)
+	}
+	// wait for all goroutines to finish
+	wg.Wait()
+	close(errChan)
+	// check if any errors occurred
+	for err = range errChan {
+		if err != nil {
+			return
+		}
+	}
+	return cleanup()
+}
+
+// commit(): executes the deferred operations in order (left-to-right),
+// minimizing the amount of traversals, IOPS, and hash operations
+func (s *SMT) commit(subTree bool) (err lib.ErrorI) {
+	for {
+		// if no operations and at root - exit
+		if len(s.operations) == 0 && len(s.traversed.Nodes) == 0 {
+			return
+		}
+		// pop head into target
+		s.target, s.operations = s.operations[0], s.operations[1:]
+		// reset path variables
+		s.resetGCP()
+		// if not at main tree root
+		if subTree || len(s.traversed.Nodes) != 0 {
+			// update the greatest common prefix and the bit position based on the new current key
+			s.target.Key.greatestCommonPrefix(&s.bitPos, s.gcp, s.current.Key)
+		}
+		// traverse to target
+		if err = s.traverse(); err != nil {
+			return
+		}
+		// execute operation
+		if !s.target.delete {
+			if err = s.set(); err != nil {
+				return
+			}
+		} else {
+			if err = s.delete(); err != nil {
+				return
+			}
+		}
+		// rehash
+		if err = s.rehash(); err != nil {
+			return
+		}
+	}
+}
+
+// set() executes the 'set' logic after traversal
+func (s *SMT) set() lib.ErrorI {
+	// if current != target key then it is an insert not an update
 	if !s.target.Key.equals(s.gcp) {
 		// create a new node (new parent of current and target)
 		newParent := newNode()
@@ -177,9 +288,9 @@ func (s *SMT) Set(k, v []byte) lib.ErrorI {
 		// set current and target as children of new parent
 		// NOTE: the old parent is now the grandparent of target and current
 		switch s.pathBit = s.target.Key.bitAt(s.bitPos); s.pathBit {
-		case 0:
+		case LeftChild:
 			newParent.setChildren(targetBytes, currentBytes)
-		case 1:
+		case RightChild:
 			newParent.setChildren(currentBytes, targetBytes)
 		}
 		// add new node to traversed list, as it's the new parent for current and target
@@ -187,25 +298,11 @@ func (s *SMT) Set(k, v []byte) lib.ErrorI {
 		s.traversed.Nodes = append(s.traversed.Nodes, newParent.copy())
 	}
 	// set the node in the database
-	if err := s.setNode(s.target); err != nil {
-		return err
-	}
-	// finish with a rehashing of the tree
-	return s.rehash()
+	return s.setNode(s.target)
 }
 
-// Delete: removes a target node if exists in the tree
-func (s *SMT) Delete(k []byte) lib.ErrorI {
-	// calculate the key and value to upsert
-	s.target = &node{Key: newNodeKey(crypto.Hash(k), s.keyBitLength)}
-	// check to make sure the target is valid
-	if err := s.validateTarget(); err != nil {
-		return err
-	}
-	// navigates the tree downward
-	if err := s.traverse(); err != nil {
-		return err
-	}
+// delete() executes the 'delete' logic after traversal
+func (s *SMT) delete() lib.ErrorI {
 	// if gcp != target key then there is no delete because the node does not exist
 	if !s.target.Key.equals(s.gcp) {
 		return nil
@@ -225,16 +322,11 @@ func (s *SMT) Delete(k []byte) lib.ErrorI {
 	// remove the parent from the traversed list
 	s.traversed.Pop()
 	// delete the target from the database
-	if err := s.delNode(targetBytes); err != nil {
-		return err
-	}
-	// finish with a rehashing of the tree
-	return s.rehash()
+	return s.delNode(targetBytes)
 }
 
 // traverse: navigates the tree downward to locate the target or its closest position
 func (s *SMT) traverse() (err lib.ErrorI) {
-	s.reset()
 	// execute main loop
 	for {
 		var currentKey []byte
@@ -242,9 +334,9 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		s.traversed.Nodes = append(s.traversed.Nodes, s.current.copy())
 		// decide to move left or right based on the bit-value of the key
 		switch s.pathBit = s.target.Key.bitAt(s.bitPos); s.pathBit {
-		case 0: // move down to the left
+		case LeftChild: // move down to the left
 			currentKey = s.current.LeftChildKey
-		case 1: // move down to the right
+		case RightChild: // move down to the right
 			currentKey = s.current.RightChildKey
 		}
 		// load current node from the store
@@ -252,6 +344,7 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		if err != nil {
 			return
 		}
+		// defensive nil check
 		if s.current == nil {
 			return ErrInvalidMerkleTree()
 		}
@@ -259,38 +352,45 @@ func (s *SMT) traverse() (err lib.ErrorI) {
 		s.current.Key.fromBytes(currentKey)
 		// update the greatest common prefix and the bit position based on the new current key
 		s.target.Key.greatestCommonPrefix(&s.bitPos, s.gcp, s.current.Key)
-		// exit conditions
+		// exit conditions, current != gcp || current == target
 		if !s.current.Key.equals(s.gcp) || s.target.Key.equals(s.gcp) {
 			return // exit loop
 		}
 	}
 }
 
-// rehash() recalculate hashes from the current node upwards
-func (s *SMT) rehash() lib.ErrorI {
-	// create a convenience variable for the max index of the array
-	maxIdx := len(s.traversed.Nodes) - 1
+// rehash() recalculate hashes from the current node upwards until
+// a) the next operation key is LTE the right sibling's key, after truncating it to the right sibling's key length
+// b) traversed list is empty
+func (s *SMT) rehash() (err lib.ErrorI) {
 	// iterate the traversed list from end to start
-	for i := maxIdx; i >= 0; i-- {
-		// child stores the cached from the parent that was traversed
-		var child *node
+	for {
+		if len(s.traversed.Nodes) == 0 {
+			return
+		}
 		// select the parent
-		parent := s.traversed.Nodes[i]
-		// get a child from the traversed list if possible
-		if i != maxIdx {
-			child = s.traversed.Nodes[i+1]
+		parent := s.traversed.Nodes[len(s.traversed.Nodes)-1]
+		// set current = parent
+		s.current = parent
+		// remove the parent from the traverse list
+		s.traversed.Pop()
+		// exit if next operation is LTE the right sibling
+		if len(s.operations) != 0 && s.operations[0].Key.cmp(&key{key: parent.RightChildKey}) <= 0 {
+			return
 		}
 		// calculate its new value
-		if err := s.updateParentValue(parent, child); err != nil {
-			return err
+		if err = s.updateParentValue(parent); err != nil {
+			return
 		}
 		// set node in the database
-		if err := s.setNode(parent); err != nil {
-			return err
+		if err = s.setNode(parent); err != nil {
+			return
 		}
 	}
-	return nil
 }
+
+// addOperation() adds a deferred operation to the sorted list
+func (s *SMT) addOperation(n *node) { s.unsortedOps[string(n.Key.bytes())] = n }
 
 // initializeTree() ensures the tree always has a root with two children
 // this allows the logic to be without root edge cases for insert and delete
@@ -314,7 +414,7 @@ func (s *SMT) initializeTree(rootKey *key) {
 		},
 	}
 	// update the root's value
-	if err := s.updateParentValue(s.root, minNode); err != nil {
+	if err := s.updateParentValue(s.root); err != nil {
 		panic(err)
 	}
 	// set the root in store
@@ -324,29 +424,32 @@ func (s *SMT) initializeTree(rootKey *key) {
 }
 
 // updateParentValue() updates the value of parent based on its children
-func (s *SMT) updateParentValue(parent, child *node) (err lib.ErrorI) {
-	var rightChild, leftChild *node
-	// if there's a child from the traversed list
-	if child != nil {
-		// determine if it's the right or left child for the parent
-		if bytes.Equal(parent.RightChildKey, child.Key.bytes()) {
-			rightChild = child
-		} else {
-			leftChild = child
-		}
+func (s *SMT) updateParentValue(parent *node) (err lib.ErrorI) {
+	var rChild, lChild *node
+	// get the left child
+	if lChild, err = s.getNode(parent.LeftChildKey); err != nil {
+		return
 	}
-	// calculate the left child input
-	leftChildInput, err := s.childInput(parent.LeftChildKey, leftChild)
-	if err != nil {
-		return err
+	// get the left child
+	if rChild, err = s.getNode(parent.RightChildKey); err != nil {
+		return
 	}
-	// calculate the right child input
-	rightChildInput, err := s.childInput(parent.RightChildKey, rightChild)
-	if err != nil {
-		return err
-	}
+	// create a buffer for the input
+	input := make([]byte, lChild.Key.size()+len(lChild.Value)+rChild.Key.size()+len(rChild.Value))
+	offset := 0
+	// copy leftChild key
+	n := copy(input[offset:], lChild.Key.bytes())
+	offset += n
+	// copy leftChild value
+	n = copy(input[offset:], lChild.Value)
+	offset += n
+	// copy rightChild key
+	n = copy(input[offset:], rChild.Key.bytes())
+	offset += n
+	// copy rightChild value
+	copy(input[offset:], rChild.Value)
 	// concatenate the left and right children values; update the parents value
-	parent.Value = crypto.Hash(append(leftChildInput, rightChildInput...))
+	parent.Value = crypto.Hash(input)
 	// save the updated root value to the structure
 	if bytes.Equal(parent.Key.bytes(), s.root.Key.bytes()) {
 		s.root = parent.copy()
@@ -354,29 +457,136 @@ func (s *SMT) updateParentValue(parent, child *node) (err lib.ErrorI) {
 	return
 }
 
-// childInput() returns key + value of the child, retrieving the node from the db if needed
-func (s *SMT) childInput(childKey []byte, child *node) (input []byte, err lib.ErrorI) {
-	// if the child is not populated
-	if child == nil {
-		// get the child from the database
-		child, err = s.getNode(childKey)
-		if err != nil {
+// addSyntheticBorders() injects 16 'synthetic' border nodes into the tree to allow safe recursion of the commit function
+// the 16 nodes are removed by calling 'cleanup' at the end of the function. This is useful for parallelization
+func (s *SMT) addSyntheticBorders() (cleanup func() lib.ErrorI, err lib.ErrorI) {
+	saved := []*node(nil)
+	// generate borders
+	borders := make([]*node, 0, 16)
+	for i := 0; i < 8; i++ {
+		// add synthetic borders: low and high of each prefix range
+		low, high := s.generatePrefixRange(uint8(i), s.keyBitLength)
+		// don't add low range at 0 (already there during tree initialization)
+		if i != 0 {
+			borders = append(borders, &node{Key: low, Node: lib.Node{Value: []byte{0}}})
+		}
+		// don't add high range at end border (already there during tree initialization)
+		if i != 7 {
+			borders = append(borders, &node{Key: high, Node: lib.Node{Value: []byte{0}}})
+		}
+	}
+	// save actual operations
+	saved, s.operations = s.operations, borders
+	// commit the borders
+	if err = s.commit(false); err != nil {
+		return
+	}
+	// reset the operations
+	s.operations = saved
+	// define a cleanup function to remove the borders
+	cleanup = func() lib.ErrorI {
+		// reset the SMT
+		s.reset()
+		// execute over the borders and create 'delete' operations
+		s.operations, s.nodeCache = make([]*node, len(borders)), make(map[string]*node)
+		for i, n := range borders {
+			s.operations[i] = &node{Key: n.Key, delete: true}
+		}
+		// remove synthetic borders
+		return s.commit(false)
+	}
+	return
+}
+
+// getSubtreeRoots() prepares synthetic roots for the subtrees
+func (s *SMT) getSubtreeRoots() (roots []*node, err lib.ErrorI) {
+	roots = make([]*node, NumSubtrees)
+	for i := uint8(0); i < NumSubtrees; i++ {
+		k := newNodeKey([]byte{i << 5}, SubtreePrefixBits)
+		if roots[i], err = s.getNode(k.bytes()); err != nil {
 			return
 		}
 	}
-	// return key + value
-	return append(childKey, child.Value...), nil
+	return
+}
+
+// createSubtree() initializes the subtree structure
+func (s *SMT) createSubtree(root *node, operations []*node) *SMT {
+	return &SMT{
+		store:        s.store,
+		root:         root,
+		keyBitLength: s.keyBitLength,
+		nodeCache:    make(map[string]*node),
+		operations:   operations,
+		minKey:       s.minKey,
+		maxKey:       s.maxKey,
+	}
+}
+
+// sortOperationsByPrefix returns 8 sorted slices grouped by 3-bit prefix: 000 to 111
+func (s *SMT) sortOperationsByPrefix(unsortedOps map[uint64]valueOp) (groups [8][]*node, err lib.ErrorI) {
+	// for each unsorted operation
+	for _, operation := range unsortedOps {
+		// set up the new node as a 'delete'
+		n := s.valueOpToSMTNode(operation)
+		// check to make sure the target is valid
+		if err = s.validateTarget(n); err != nil {
+			return
+		}
+		prefix := n.Key.key[0] >> 5 // extract top 3 bits
+		groups[prefix] = append(groups[prefix], n)
+	}
+	// sort each group
+	for i := range groups {
+		sort.Slice(groups[i], func(a, b int) bool {
+			return groups[i][a].Key.cmp(groups[i][b].Key) < 0
+		})
+	}
+	return
+}
+
+// generatePrefixRange() generates a 20 byte key that acts as the 'borders' for a 3 bit prefix
+// example: prefix 0 bitCount 4 returns 0000 and 0111
+func (s *SMT) generatePrefixRange(prefix uint8, bitCount int) (*key, *key) {
+	// 3-bit prefix shifted into top bits of first byte
+	base := (prefix & 0x07) << 5
+	low := append([]byte{base}, make([]byte, 19)...)
+	high := append([]byte{base | 0x1F}, bytes.Repeat([]byte{0xFF}, 19)...)
+	return newNodeKey(low, bitCount), newNodeKey(high, bitCount)
+}
+
+// valueOpToSMTNode() converts a txn value operation into an SMT node
+func (s *SMT) valueOpToSMTNode(operation valueOp) *node {
+	// set up the new node as a 'delete'
+	n := &node{Key: newNodeKey(crypto.Hash(operation.key), s.keyBitLength), Node: lib.Node{}, delete: true}
+	// if the operation is not a 'delete'
+	if operation.op != opDelete && !entryIsDelete(operation.entry) {
+		// set the value as the hash of the op.value and set 'delete' to false
+		n.Node.Value, n.delete = crypto.Hash(operation.value), false
+	}
+	return n
 }
 
 // reset() resets data for each operation
 func (s *SMT) reset() {
-	s.current, s.gcp = s.root.copy(), &key{}
+	s.current, s.traversed = s.root.copy(), &NodeList{Nodes: make([]*node, 0)}
+	s.resetGCP()
+}
+
+// resetGCP() resets the greatest common prefix and path variables
+func (s *SMT) resetGCP() {
+	s.gcp = &key{}
 	s.pathBit, s.bitPos = 0, 0
-	s.traversed = &NodeList{Nodes: make([]*node, 0)}
 }
 
 // setNode() set a node object in a key value database
 func (s *SMT) setNode(n *node) lib.ErrorI {
+	// check cache max size
+	if len(s.nodeCache) >= MaxCacheSize {
+		s.nodeCache = make(map[string]*node, MaxCacheSize)
+	}
+	// set in cache
+	s.nodeCache[string(n.Key.bytes())] = n
 	// convert the node object to bytes
 	nodeBytes, err := n.bytes()
 	if err != nil {
@@ -388,11 +598,17 @@ func (s *SMT) setNode(n *node) lib.ErrorI {
 
 // delNode() remove a node from the database given its unique identifier
 func (s *SMT) delNode(key []byte) lib.ErrorI {
+	delete(s.nodeCache, string(key))
 	return s.store.Delete(key)
 }
 
 // getNode() retrieves a node object from the database
 func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
+	// check cache
+	n, found := s.nodeCache[string(key)]
+	if found {
+		return n, nil
+	}
 	// initialize a reference to a node object
 	n = newNode()
 	// get the bytes of the node from the kv store
@@ -410,14 +626,14 @@ func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 }
 
 // validateTarget() checks the target to ensure it's not a reserved key like root, minimum or maximum
-func (s *SMT) validateTarget() lib.ErrorI {
-	if bytes.Equal(s.root.Key.bytes(), s.target.Key.bytes()) {
+func (s *SMT) validateTarget(n *node) lib.ErrorI {
+	if bytes.Equal(s.root.Key.bytes(), n.Key.bytes()) {
 		return ErrReserveKeyWrite("root")
 	}
-	if bytes.Equal(newNodeKey(bytes.Repeat([]byte{0}, 20), s.keyBitLength).bytes(), s.target.Key.bytes()) {
+	if bytes.Equal(s.minKey.bytes(), n.Key.bytes()) {
 		return ErrReserveKeyWrite("minimum")
 	}
-	if bytes.Equal(newNodeKey(bytes.Repeat([]byte{255}, 20), s.keyBitLength).bytes(), s.target.Key.bytes()) {
+	if bytes.Equal(s.maxKey.bytes(), n.Key.bytes()) {
 		return ErrReserveKeyWrite("maximum")
 	}
 	return nil
@@ -429,11 +645,13 @@ func (s *SMT) GetMerkleProof(k []byte) ([]*lib.Node, lib.ErrorI) {
 	// calculate the key and value to traverse
 	s.target = &node{Key: newNodeKey(crypto.Hash(k), s.keyBitLength)}
 	// check to make sure the target is valid
-	if err := s.validateTarget(); err != nil {
+	if err := s.validateTarget(s.target); err != nil {
 		return nil, err
 	}
 	// make the slice to store the leaf nodes and the intermediate sibling nodes
 	proof := make([]*lib.Node, 0)
+	// reset the traversal variables
+	s.reset()
 	// navigates the tree downward
 	if err := s.traverse(); err != nil {
 		return nil, err
@@ -514,7 +732,7 @@ func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []by
 		// parentNode will be calculated based on the current node and its sibling
 		var parentNode *node
 		// calculate the hash of the parent node based on the bitmask of the sibling
-		if proof[i].Bitmask == leftChild {
+		if proof[i].Bitmask == LeftChild {
 			// build the parent node hash based on the left sibling of the given node
 			hash = crypto.Hash(
 				append(append(proof[i].Key, proof[i].Value...),
@@ -547,7 +765,7 @@ func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []by
 		gcp := new(key)
 		// calculate the GCP between the node and the sibling based on the length of
 		// the least significant bits to avoid out of bounds errors
-		if len(nodeKey.leastSigBits) < len(currentKey.leastSigBits) {
+		if currentKey.totalBits() < currentKey.totalBits() {
 			currentKey.greatestCommonPrefix(new(int), gcp, nodeKey)
 		} else {
 			nodeKey.greatestCommonPrefix(new(int), gcp, currentKey)
@@ -575,9 +793,11 @@ func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []by
 	// calculate the key to traverse the tree
 	smt.target = &node{Key: newNodeKey(crypto.Hash(k), smt.keyBitLength)}
 	// make sure the target is valid
-	if err := smt.validateTarget(); err != nil {
+	if err := smt.validateTarget(smt.target); err != nil {
 		return false, err
 	}
+	// reset the traversal variables
+	smt.reset()
 	// navigates the tree downward
 	if err := smt.traverse(); err != nil {
 		return false, err
@@ -605,67 +825,70 @@ func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []by
 
 /*
 Understanding Node Keys:
-	Node keys are compact representations of key bit sequences, truncated to fit the specified `KeyBitLength`
-	KV databases typically store keys as sequences of bytes, but the specified key length for prefix nodes
-    might not align with a whole number of bytes. Without the extra byte, there is no way to differentiate
-    between keys that share the same initial bytes but differ in bit-length. The extra byte encodes the number
-    of leading zero bits in the last byte of the key. This ensures that the database can reconstruct the
-    original bit-level representation of the key.
+- Node keys are []byte representation of 'left-to-right' bit-strings where the last byte is metadata
+that stores the number of left padding zeroes in the final data byte.
 
-	Example:
-	KeyBitLength = 24
-	Input:  []byte{255, 255, 255}
-	Input Bits:  []int{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-	Output: []byte{255, 255, 255, 0}
-	Explanation: 0 leading zero bits in the last byte (255 is 0b11111111)
+The padding byte is needed in order to support varying length bit-strings:
 
-	KeyBitLength = 9
-	Input:  []byte{255, 255}
-	Input Bits:  []int{1, 1, 1, 1, 1, 1, 1, 1, 1}
-	Output: []byte{255, 1, 0}
-	Explanation: The last byte (255) has 0 leading zero bits.
-				 However, the key is truncated to 9 bits: 11111111 1,
-				 and the last byte (1) has 0 leading zero bits
+Examples:
+  - []byte{255, 0}       = 11111111           where bit-length = 8
+  - []byte{0, 0b1011, 2} = 00000000 001011    where bit-length = 14
+  - []byte{0, 0b1, 4}    = 00000000 00001     where bit-length = 13
+  - []byte{0, 1}         = 00                 where bit-length = 2
+  - []byte{0, 0}         = 0                  where bit-length = 1
 
-	KeyBitLength = 10
-	Input:  []byte{1, 0}
-	Input Bits:  []int{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
-	Output: []byte{1, 0, 1}
-	Explanation: The last byte (0) has 1 leading zero bit (00)
-
+An alternative structure to this design would've been storing the bit-length in the final byte
+however storing the bit length might require two bytes for keys > length of 255
 */
 
-// key is the structure used to interpret node keys, it splits the byte array into most significant bytes
-// and a final least significant byte represented as a bit array
-// Example: []byte{3, 3, 1} = key{mostSigBytes=[]byte{3, 3}, leastSigBits=[]int{0,0,0,0,0,0,0,1}
+// key is the structure used to cache data about node keys for optimal performance
 type key struct {
-	// mostSigBytes: is the full most significant bytes of the key (left to right) without the LSB
-	mostSigBytes []byte
-	// leastSigBits: is the bits of the least significant byte
-	leastSigBits []int
-	// TODO cache bytes
+	key      []byte // the actual node key bytes
+	bitCount int    // cached bit count
+	length   int    // cached num of bytes in the node key
 }
 
-// newNodeKey() creates a brand-new key from a hash value
-// NOTE: This is not used to covert key bytes into a key object
+// newNodeKey() given data and a bitCount, this function treats bytes like a continuous bit string
+// a) it truncates the bits beyond bitcount
+// b) it stores the left padding of the final byte in an appended meta byte at the end
+//
+// Examples:
+//
+//   - data = []byte{0b00001000, 0b00100010}, bitCount = 11
+//     => []byte{0b00001000, 0b00000001, 2}
+//     Final 3 bits are meaningful ('001'), compacted to 0b00000001 with 2 leading zeros.
+//
+//   - data = []byte{0b00001000}, bitCount = 4
+//     => []byte{0b00000000, 3}
+//     Final 4 bits are all 0s, compacted to 0b00000000 with 3 leading zeros.
+//
+//   - data = []byte{0b11110000, 0b10101001}, bitCount = 13
+//     => []byte{0b11110000, 0b00010101, 0}
+//     Final 5 bits are '10101', compacted to 0b00010101 with 0 leading zeros.
 func newNodeKey(data []byte, bitCount int) (k *key) {
+	// count the number of bytes
+	numBytes := (bitCount + 7) / 8
 	// create a new key object
-	k = new(key)
-	// determine the number of full bytes and remaining bits to extract
-	fullBytes, remainingBits := bitCount/8, bitCount%8
-	// if no remaining bits, adjust to always include last bits (even if full byte is complete)
-	if remainingBits == 0 {
-		fullBytes, remainingBits = fullBytes-1, 8
+	k = &key{key: make([]byte, numBytes)}
+	// copy the data into that key object without extra bytes
+	copy(k.key, data)
+	// calculate the bits in the final byte
+	lastByteBits := bitCount % 8
+	if lastByteBits == 0 && bitCount > 0 {
+		lastByteBits = 8
 	}
-	// extract the most significant full bytes from the data
-	k.mostSigBytes = data[:fullBytes]
-	// extract the last bits from the next byte, if it exists
-	if fullBytes < len(data) {
-		lastByte := data[fullBytes]
-		for i := 7; i >= 8-remainingBits; i-- {
-			k.leastSigBits = append(k.leastSigBits, k.bitAtIndex(lastByte, i))
-		}
+	// zero out junk bits
+	k.key[numBytes-1] >>= 8 - lastByteBits
+	// calculate left padding (number of leading zeroes)
+	leftPadding := bits.LeadingZeros8(k.key[numBytes-1]) - (8 - lastByteBits)
+	if k.key[numBytes-1] == 0 {
+		leftPadding--
 	}
+	// append meta byte
+	k.key = append(k.key, byte(leftPadding))
+	// set bit count
+	k.bitCount = bitCount
+	// exit with key
 	return k
 }
 
@@ -693,119 +916,140 @@ func (k *key) greatestCommonPrefix(bitPos *int, gcp *key, current *key) {
 func (k *key) bitAt(bitPos int) int {
 	// calculate the byte index
 	byteIndex := bitPos / 8
-	// if within most significant bytes
-	if byteIndex < len(k.mostSigBytes) {
+	// get the byte at byte index
+	byt := k.key[byteIndex]
+	// get the length of the key
+	size, pos := k.size(), bitPos%8
+	// if in the bit is NOT in the last data byte
+	if byteIndex != size-2 {
 		// calculate the new bit index using MSB logic
-		bitIndex := 7 - (bitPos % 8)
-		// get the byte at byte index
-		byt := k.mostSigBytes[byteIndex]
+		bitIndex := 7 - pos
 		// use bitwise to retrieve the bit value
 		return k.bitAtIndex(byt, bitIndex)
 	}
-	// if within the least significant bits
-	return k.leastSigBits[bitPos%8]
+	// if the byte is fully zero or the bit is within the left-padding region, return 0
+	leftPadding := int(k.key[size-1])
+	if (leftPadding == 0 && byt == 0) || pos < leftPadding {
+		return 0
+	}
+	// compute how many bits are meaningful in the final byte (1-based count)
+	lastByteBitsCount := ((k.totalBits() - 1) % 8) + 1
+	// calculate how far to right-shift to align the target bit to the least significant bit
+	shift := lastByteBitsCount - pos - 1
+	// shift the byte and mask to isolate and return the desired bit (0 or 1)
+	return int((byt >> shift) & 1)
 }
 
-// addBit() adds a bit to the key
+// addBit() appends a single bit (0 or 1) to the key and returns a new key
 func (k *key) addBit(bit int) {
-	// if least significant bits is full
-	if len(k.leastSigBits) == 8 {
-		// convert it to a byte and add it to the most sig bytes
-		k.mostSigBytes = append(k.mostSigBytes, k.bitsToByte(k.leastSigBits))
-		// reset the least sig bits
-		k.leastSigBits = nil
+	// total byte length, including metaByte
+	bitPos, size := k.totalBits()%8, k.size()
+	if bitPos == 0 && k.bitCount != 0 {
+		bitPos = 8
 	}
-	// prepend the bit to the least sig bits
-	k.leastSigBits = append(k.leastSigBits, bit)
+	// get the last data byte, get the zero bit count
+	lastByte, leftPadding := k.key[size-2], int(k.key[size-1])
+	// inc leading zeroes if bit is zero and the last byte is all zeroes
+	if k.bitCount != 0 && lastByte == 0 {
+		leftPadding++
+	}
+	// if the current lastByte is full, append a new byte
+	if bitPos == 8 {
+		// add byte to the end
+		k.key = append(k.key, 0)
+		// reset last byte, bit position and left padding, increment size
+		lastByte, bitPos, leftPadding, k.length, size = 0, 0, 0, k.length+1, size+1
+	}
+	// increment the bit count
+	k.bitCount++
+	// append the new bit to the end of the last byte and update key
+	k.key[size-2], k.key[size-1] = (lastByte<<1)|byte(bit), byte(leftPadding)
 }
 
-// bytes() encodes a key object to bytes preserving the leading zero
-// information needed for prefix keys ex. (0010, 001, 00)
-func (k *key) bytes() []byte {
-	var leadingZeroes int
-	// iterate through all the bits
-	for _, bit := range k.leastSigBits {
-		// exit loop if bit is 1
-		if bit == 1 {
-			break
-		}
-		// increment leading zeroes if bit is 0
-		leadingZeroes++
-	}
-	// if all bits are zero, decrement the leadingZeroes count
-	// because the lastByte will inherently count for 1 zero
-	if leadingZeroes == len(k.leastSigBits) {
-		leadingZeroes--
-	}
-	// convert the last bits back to byte
-	lastByte := k.bitsToByte(k.leastSigBits)
-	// encoding = most_significant_bytes + least_significant_byte + leading_zeroes_in_LSB
-	return append(append(k.mostSigBytes, lastByte), byte(leadingZeroes))
-}
+// bytes() encodes a key object to bytes
+func (k *key) bytes() []byte { return k.key }
 
 // fromBytes() creates a new key object from existing encoded key bytes
 func (k *key) fromBytes(data []byte) *key {
-	keyLength := len(data)
-	// mostSigBytes: full bit bytes going left to right excluding the last byte
-	k.mostSigBytes = data[:keyLength-2]
-	// lastByte: last value byte of the key
-	lastByte := data[keyLength-2]
-	// leadingZeroes: the actual last byte contains the number of leading zeroes (if any)
-	leadingZeroes := data[keyLength-1]
-	// convert the final byte to bits
-	k.leastSigBits = k.byteToBits(lastByte, int(leadingZeroes))
-
+	k.key = data
 	return k
 }
 
-// bitsToBytes() converts an array of bits to a byte
-// example: []int{1 0 1 1} --> Byte: byte(0b00001011)
-func (k *key) bitsToByte(bits []int) (b byte) {
-	maxIdx := len(bits) - 1
-	// iterate through the bits array from LSB to MSB
-	for i, bit := range bits {
-		// shift the bit to its correct position and set it in the byte using a bitwise OR operation.
-		b |= byte(bit) << (maxIdx - i)
+// totalBits() returns the number of meaningful bits in the key
+func (k *key) totalBits() int {
+	if k.bitCount == 0 {
+		// total byte length, including metaByte
+		size := k.size()
+		// initialize if necessary
+		if size == 0 {
+			k.key, k.length = []byte{0, 0}, 2
+			return 0
+		}
+		// metaByte = number of leading 0s which is encoded in the *final* byte
+		leadingZeroes := int(k.key[size-1])
+		// slice without the metaByte
+		dataBytes := k.key[:size-1]
+		// bits from all full data bytes except the last
+		fullBits := (size - 2) * 8
+		// number of significant bits in the last byte
+		bitLen := bits.Len8(dataBytes[size-2])
+		// ensure only '0' still counts as 1 bit
+		if bitLen == 0 {
+			bitLen = 1
+		}
+		// finally set the bit count
+		k.bitCount = fullBits + leadingZeroes + bitLen
 	}
-	return
+	return k.bitCount
 }
 
-// byteToBits() converts a byte to a bit array given some leading zeroes
-// Example: b=byte(1), leadingZeroes=3 --> []int{0, 0, 0, 1}
-func (k *key) byteToBits(b byte, leadingZeroes int) (bits []int) {
-	// handle leading zero count
-	bits = make([]int, leadingZeroes)
-	// if b == 0, it inherently has 1 zero in the bit array
-	// it may have more if leading zeroes is != 0 ex. 000
-	if b == 0 {
-		leadingZeroes++
-		bits = append(bits, 0)
+func (k *key) size() int {
+	if k.length == 0 {
+		k.length = len(k.key)
 	}
-	// convert the final byte to bits
-	for i := 7 - leadingZeroes; i >= 0; i-- {
-		// get bit at index
-		bit := k.bitAtIndex(b, i)
-		// ensure no other leading zeroes are added
-		// example: byte(1) and leadingZeroes=2 = []int{0,0,1}
-		if bit == 0 && len(bits) == leadingZeroes {
-			continue // ignore any other leading zeroes
-		}
-		// add to the bit array
-		bits = append(bits, int(bit))
-	}
-	return
+	return k.length
 }
 
 // bitAtIndex() returns a bit at an index (0 indexed and left to right) within a byte
 func (k *key) bitAtIndex(b byte, index int) int { return int(b>>index) & 1 }
 
-// totalBits() returns the total number of bits in a key
-func (k *key) totalBits() int { return len(k.mostSigBytes)*8 + len(k.leastSigBits) }
-
 // equals() returns true if two key objects are equivalent
-func (k *key) equals(k2 *key) bool {
-	return bytes.Equal(k.mostSigBytes, k2.mostSigBytes) &&
-		slices.Equal(k.leastSigBits, k2.leastSigBits)
+func (k *key) equals(k2 *key) bool { return bytes.Equal(k.key, k2.key) }
+
+// cmp() compares two node keys, returning -1 for less, 0 for equal, and 1 for greater than
+// - contract: `k2`'s size is always less than or equal to (`k`)
+func (k *key) cmp(k2 *key) int {
+	var startBit int
+	// get the totalBits of k2
+	k2TotalBits := k2.totalBits()
+	// calculate the number of full bytes
+	fullBytes := k2TotalBits / 8
+	// if k2 has full bytes
+	if fullBytes > 0 {
+		// calculate start bit
+		startBit = fullBytes * 8
+		// compare the full bytes
+		fullBytesCmp := bytes.Compare(k.key[:fullBytes], k2.key[:fullBytes])
+		// if full bytes aren't equal
+		if fullBytesCmp != 0 {
+			return fullBytesCmp
+		}
+	}
+	// do bitwise comparison for the remaining bits
+	for i := startBit; i < k2TotalBits; i++ {
+		// compare bit by bit in the final data byte
+		b1, b2 := k.bitAt(i), k2.bitAt(i)
+		switch {
+		// less
+		case b1 < b2:
+			return -1
+		// greater
+		case b1 > b2:
+			return 1
+		}
+	}
+	// exit
+	return 0
 }
 
 // NODE CODE BELOW
@@ -834,9 +1078,9 @@ func (x *node) setChildren(leftKey, rightKey []byte) {
 func (x *node) getOtherChild(childKey []byte) ([]byte, byte) {
 	switch {
 	case bytes.Equal(x.LeftChildKey, childKey):
-		return x.RightChildKey, rightChild
+		return x.RightChildKey, RightChild
 	case bytes.Equal(x.RightChildKey, childKey):
-		return x.LeftChildKey, leftChild
+		return x.LeftChildKey, LeftChild
 	}
 	panic("no child node was a match for getOtherChild")
 }
@@ -854,20 +1098,8 @@ func (x *node) replaceChild(oldKey, newKey []byte) {
 	panic("no child node was replaced")
 }
 
-// copy() returns a deep copy of the node
-func (x *node) copy() *node {
-	return &node{
-		Key: &key{
-			mostSigBytes: slices.Clone(x.Key.mostSigBytes),
-			leastSigBits: slices.Clone(x.Key.leastSigBits),
-		},
-		Node: lib.Node{
-			Value:         slices.Clone(x.Value),
-			LeftChildKey:  slices.Clone(x.LeftChildKey),
-			RightChildKey: slices.Clone(x.RightChildKey),
-		},
-	}
-}
+// copy() returns a shallow copy of the node
+func (x *node) copy() *node { return &(*x) }
 
 // NODE LIST CODE BELOW
 

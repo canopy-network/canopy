@@ -401,15 +401,18 @@ func unmarshal(w http.ResponseWriter, r *http.Request, ptr interface{}) bool {
 }
 
 // write marshaled payload to w
-func write(w http.ResponseWriter, payload interface{}, code int) {
+func write(w http.ResponseWriter, payload any, code int) {
 	w.Header().Set(ContentType, ApplicationJSON)
 	w.WriteHeader(code)
-
+	logger := lib.NewDefaultLogger()
 	// Marshal and indent the payload
-	bz, _ := json.MarshalIndent(payload, "", "  ")
+	bz, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		logger.Errorf("[server write()] JSON marshall failed: %v", err)
+		return
+	}
 	if _, err := w.Write(bz); err != nil {
-		l := lib.LoggerI(nil) // TODO temporary fix
-		l.Error(err.Error())
+		logger.Errorf("[server write()] write response failed: %v", err)
 	}
 }
 

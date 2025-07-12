@@ -40,6 +40,7 @@ func newTestConsensus(t *testing.T, phase Phase, numValidators int) (tc *testCon
 	// create the bft object using the mocks
 	tc.bft, err = New(config, tc.valKeys[0], 1, 1, tc.cont, config.RunVDF, nil, lib.NewDefaultLogger())
 	tc.bft.ValidatorSet = tc.valSet
+	tc.bft.CommitteeData = &lib.CommitteeData{}
 	require.NoError(t, err)
 	// set the bft phase
 	tc.bft.Phase = phase
@@ -477,7 +478,7 @@ func (tc *testConsensus) view(phase Phase, round ...uint64) *lib.View {
 
 // proposal() generates a mock block and result objects using the mock controller and their corresponding hashes
 func (tc *testConsensus) proposal(t *testing.T) (blk, blkHash []byte, results *lib.CertificateResult, resultsHash []byte) {
-	blk, results, err := tc.cont.ProduceProposal(nil, nil)
+	_, blk, results, err := tc.cont.ProduceProposal(nil, nil)
 	require.NoError(t, err)
 	blkHash, resultsHash = tc.cont.NewTestBlockHash(), results.Hash()
 	return
@@ -496,6 +497,10 @@ type testController struct {
 	sendToReplicasChan chan lib.Signable
 }
 
+func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
+	return nil
+}
+
 func (t *testController) LoadRootChainId(height uint64) (rootChainId uint64) {
 	return lib.CanopyChainId
 }
@@ -504,15 +509,15 @@ func (t *testController) LoadIsOwnRoot() bool {
 	return true
 }
 
-func (t *testController) SelfSendBlock(qc *lib.QuorumCertificate) {
-	t.GossipBlock(qc, nil)
+func (t *testController) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64) {
+	t.GossipBlock(qc, nil, 0)
 }
 
 func (t *testController) ChainHeight() uint64 {
 	return t.RootChainHeight()
 }
 
-func (t *testController) ProduceProposal(_ *ByzantineEvidence, _ *crypto.VDF) (block []byte, results *lib.CertificateResult, err lib.ErrorI) {
+func (t *testController) ProduceProposal(_ *ByzantineEvidence, _ *crypto.VDF) (rcBuildHeight uint64, block []byte, results *lib.CertificateResult, err lib.ErrorI) {
 	block = t.NewTestBlock()
 	results = &lib.CertificateResult{
 		RewardRecipients: &lib.RewardRecipients{
@@ -526,15 +531,16 @@ func (t *testController) ProduceProposal(_ *ByzantineEvidence, _ *crypto.VDF) (b
 	return
 }
 
-func (t *testController) ValidateProposal(qc *lib.QuorumCertificate, _ *ByzantineEvidence) lib.ErrorI {
+func (t *testController) ValidateProposal(_ uint64, qc *lib.QuorumCertificate, _ *ByzantineEvidence) (*lib.BlockResult, lib.ErrorI) {
 	if len(qc.Block) == expectedCandidateLen {
-		return nil
+		return nil, nil
 	}
-	return ErrEmptyMessage()
+	return &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{}, Transactions: nil, Meta: nil}, ErrEmptyMessage()
 }
 
 func (t *testController) LoadCommittee(rootChainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
-	return t.valSet[rootHeight], nil
+	return t.valSet[rootChainId], nil
 }
 func (t *testController) LoadCertificate(_ uint64) (*lib.QuorumCertificate, lib.ErrorI) {
 	return nil, nil
@@ -552,9 +558,12 @@ func (t *testController) SendToProposer(msg lib.Signable) {
 	t.sendToProposerChan <- msg
 }
 
-func (t *testController) LoadMinimumEvidenceHeight() (uint64, lib.ErrorI) { return 0, nil }
-func (t *testController) IsValidDoubleSigner(_ uint64, _ []byte) bool     { return true }
-func (t *testController) Syncing() *atomic.Bool                           { return &atomic.Bool{} }
+func (t *testController) LoadMinimumEvidenceHeight(_, _ uint64) (*uint64, lib.ErrorI) {
+	h := uint64(0)
+	return &h, nil
+}
+func (t *testController) IsValidDoubleSigner(_, _ uint64, _ []byte) bool { return true }
+func (t *testController) Syncing() *atomic.Bool                          { return &atomic.Bool{} }
 func (t *testController) LoadCommitteeData() (*lib.CommitteeData, lib.ErrorI) {
 	return &lib.CommitteeData{}, nil
 }
@@ -562,8 +571,9 @@ func (t *testController) RootChainHeight() uint64 { return 0 }
 func (t *testController) LoadLastProposers(_ uint64) (*lib.Proposers, lib.ErrorI) {
 	return t.proposers, nil
 }
-func (t *testController) GossipBlock(cert *lib.QuorumCertificate, _ []byte) {
-	t.gossipCertChan <- cert
+func (t *testController) ResetFSM() {}
+func (t *testController) GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64) {
+	t.gossipCertChan <- certificate
 }
 
 func (t *testController) NewTestBlock() []byte {

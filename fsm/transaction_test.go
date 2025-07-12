@@ -84,7 +84,7 @@ func TestApplyTransaction(t *testing.T) {
 				},
 			}))
 			// execute the function call
-			got, err := sm.ApplyTransaction(0, tx, test.expected.TxHash)
+			got, err := sm.ApplyTransaction(0, tx, test.expected.TxHash, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -190,7 +190,7 @@ func TestCheckTx(t *testing.T) {
 			// preset tokens to the sender account (for the fee)
 			require.NoError(t, sm.AccountAdd(newTestAddress(t), test.presetSender))
 			// execute the function call
-			got, err := sm.CheckTx(test.tx, crypto.HashString(test.tx))
+			got, err := sm.CheckTx(test.tx, crypto.HashString(test.tx), nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -315,11 +315,8 @@ func TestCheckSignature(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
-			// get the hash for the transaction
-			hash, err := test.transaction.GetHash()
-			require.NoError(t, err)
 			// execute the function call
-			signer, err := sm.CheckSignature(test.msg, test.transaction, lib.BytesToString(hash))
+			signer, err := sm.CheckSignature(test.msg, test.transaction, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

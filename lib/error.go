@@ -91,13 +91,14 @@ const (
 	CodeNoValidators                ErrorCode = 29
 	CodeInvalidResultsHash          ErrorCode = 30
 	CodeNonNilBlock                 ErrorCode = 31
+	CodeProtoParse                  ErrorCode = 32
 
 	// Consensus Module
 	ConsensusModule ErrorModule = "consensus"
 
 	// Consensus Module Error Codes
 	CodeDuplicateTransaction            ErrorCode = 1
-	CodeTxFoundInMempool                ErrorCode = 2
+	CodeWrongHighQCHeight               ErrorCode = 2
 	CodeMismatchResultsHash             ErrorCode = 3
 	CodeDuplicateProposerMessage        ErrorCode = 4
 	CodeDuplicateVote                   ErrorCode = 5
@@ -107,7 +108,7 @@ const (
 	CodeUnknownConsensusMessage         ErrorCode = 9
 	CodeValidatorNotInSet               ErrorCode = 10
 	CodeWrongHeight                     ErrorCode = 11
-	CodeOutOfSync                       ErrorCode = 12
+	CodeWrongBlockHeight                ErrorCode = 12
 	CodeWrongPhase                      ErrorCode = 13
 	CodePartialSignatureEmpty           ErrorCode = 14
 	CodeInvalidPartialSignature         ErrorCode = 15
@@ -133,7 +134,7 @@ const (
 	CodeInvalidEvidence                 ErrorCode = 35
 	CodeMismatchEvidenceAndHeader       ErrorCode = 36
 	CodeInvalidTxTime                   ErrorCode = 37
-	CodeWrongMaxHeight                  ErrorCode = 38
+	CodeInvalidRCBuildHeight            ErrorCode = 38
 	CodeExpectedBlockSizeLimit          ErrorCode = 39
 	CodeNonNilCertResults               ErrorCode = 40
 	CodeInvalidMemo                     ErrorCode = 41
@@ -158,6 +159,9 @@ const (
 	CodeInvalidBuyerSendAddress         ErrorCode = 60
 	CodeDuplicateCloseOrder             ErrorCode = 61
 	CodeDuplicateResetOrder             ErrorCode = 62
+	CodeMismatchCertHeight              ErrorCode = 63
+	CodeNewHeight                       ErrorCode = 64
+	CodeWrongViewHeight                 ErrorCode = 65
 
 	// State Machine Module
 	StateMachineModule ErrorModule = "state_machine"
@@ -213,14 +217,14 @@ const (
 	CodeInvalidPercentAllocation  ErrorCode = 48
 	CodeErrNotEmpty               ErrorCode = 49
 	CodeInvalidParam              ErrorCode = 50
-
-	CodeInvalidProtocolVersion ErrorCode = 52
-	CodeInvalidDBKey           ErrorCode = 53
-	CodeWrongStoreType         ErrorCode = 54
-	CodeUnmarshalGenesis       ErrorCode = 55
-	CodeInsufficientSupply     ErrorCode = 56
-	CodeUnknownMsgName         ErrorCode = 57
-	CodeUnknownPageable        ErrorCode = 58
+	CodeErrFailedTransactions     ErrorCode = 51
+	CodeInvalidProtocolVersion    ErrorCode = 52
+	CodeInvalidDBKey              ErrorCode = 53
+	CodeWrongStoreType            ErrorCode = 54
+	CodeUnmarshalGenesis          ErrorCode = 55
+	CodeInsufficientSupply        ErrorCode = 56
+	CodeUnknownMsgName            ErrorCode = 57
+	CodeUnknownPageable           ErrorCode = 58
 
 	CodeInvalidBlockRange        ErrorCode = 60
 	CodeInvalidPublicKey         ErrorCode = 61
@@ -310,10 +314,10 @@ const (
 	CodeGarbageCollectDB       ErrorCode   = 12
 	CodeSetEntry               ErrorCode   = 13
 	CodeReadBytes              ErrorCode   = 14
-	CodeFlushMemTable          ErrorCode   = 15
+	CodeIndexBlock             ErrorCode   = 15
 
 	RPCModule             ErrorModule = "rpc"
-	CodeRPCTimeout        ErrorCode   = 1
+	CodeMempoolStopSignal ErrorCode   = 1
 	CodeInvalidParams     ErrorCode   = 2
 	CodeNewFSM            ErrorCode   = 3
 	CodeTimeMachine       ErrorCode   = 4
@@ -437,12 +441,24 @@ func ErrNoValidators() ErrorI {
 	return NewError(CodeNoValidators, MainModule, fmt.Sprintf("there are no validators in the set"))
 }
 
-func ErrWrongHeight() ErrorI {
-	return NewError(CodeWrongHeight, ConsensusModule, "wrong height")
+func ErrWrongCertHeight(got, wanted uint64) ErrorI {
+	return NewError(CodeWrongHeight, ConsensusModule, fmt.Sprintf("wrong certificate height, got=%d | wanted=%d", got, wanted))
+}
+
+func ErrWrongViewHeight(got, wanted uint64) ErrorI {
+	return NewError(CodeWrongViewHeight, ConsensusModule, fmt.Sprintf("wrong view height, got=%d | wanted=%d", got, wanted))
+}
+
+func ErrMismatchCertBlockHeight(got, wanted uint64) ErrorI {
+	return NewError(CodeMismatchCertHeight, ConsensusModule, fmt.Sprintf("mismatch certificate height, got=%d | wanted=%d", got, wanted))
+}
+
+func ErrWrongBlockHeight(got, wanted uint64) ErrorI {
+	return NewError(CodeWrongBlockHeight, ConsensusModule, fmt.Sprintf("wrong block height, got=%d | wanted=%d", got, wanted))
 }
 
 func ErrNewHeight() ErrorI {
-	return NewError(CodeWrongHeight, ConsensusModule, "new height")
+	return NewError(CodeNewHeight, ConsensusModule, "new height")
 }
 
 func ErrWrongRootHeight() ErrorI {
@@ -457,16 +473,12 @@ func ErrInvalidQCRootChainHeight() ErrorI {
 	return NewError(CodeInvalidQCRootChainHeight, ConsensusModule, "invalid certificate root-chain height")
 }
 
-func ErrWrongMaxHeight() ErrorI {
-	return NewError(CodeWrongMaxHeight, ConsensusModule, "wrong max height")
+func ErrInvalidRCBuildHeight() ErrorI {
+	return NewError(CodeInvalidRCBuildHeight, ConsensusModule, "invalid root chain build height")
 }
 
 func ErrEmptyView() ErrorI {
 	return NewError(CodeEmptyView, ConsensusModule, "empty view")
-}
-
-func ErrOutOfSync() ErrorI {
-	return NewError(CodeOutOfSync, ConsensusModule, "out of sync")
 }
 
 func ErrWrongPhase() ErrorI {
@@ -585,8 +597,8 @@ func ErrInvalidNetAddress(s string) ErrorI {
 	return NewError(CodeInvalidNetAddress, P2PModule, fmt.Sprintf("invalid net address host and port: %s", s))
 }
 
-func ErrTxFoundInMempool(hash string) ErrorI {
-	return NewError(CodeTxFoundInMempool, ConsensusModule, fmt.Sprintf("tx %s already found in mempool", hash))
+func ErrWrongHighQCHeight() ErrorI {
+	return NewError(CodeWrongHighQCHeight, ConsensusModule, fmt.Sprintf("wrong high qc hegiht"))
 }
 
 func ErrWriteFile(err error) ErrorI {
@@ -728,6 +740,9 @@ func ErrHashSize() ErrorI {
 func ErrMaxPort() ErrorI {
 	return NewError(CodeMaxPort, MainModule, "max port exceeded")
 }
+func ErrProtoParse(err error) ErrorI {
+	return NewError(CodeProtoParse, MainModule, fmt.Sprintf("proto parse failed with error: %s", err.Error()))
+}
 
 func ErrOrderLocked() ErrorI {
 	return NewError(CodeOrderLocked, StateMachineModule, "order locked")
@@ -741,8 +756,8 @@ func ErrPanic() ErrorI {
 	return NewError(CodePanic, StateMachineModule, "panic")
 }
 
-func ErrServerTimeout() ErrorI {
-	return NewError(CodeRPCTimeout, RPCModule, "server timeout")
+func ErrMempoolStopSignal() ErrorI {
+	return NewError(CodeMempoolStopSignal, RPCModule, "mempool stop signal")
 }
 
 func ErrInvalidParams(err error) ErrorI {
@@ -750,8 +765,8 @@ func ErrInvalidParams(err error) ErrorI {
 	return NewError(CodeInvalidParams, RPCModule, fmt.Sprintf("invalid params: %s", string(bz)))
 }
 
-func ErrNewFSM(err error) ErrorI {
-	return NewError(CodeNewFSM, RPCModule, fmt.Sprintf("new fsm failed with err: %s", err.Error()))
+func ErrWrongHighQCRootHeight() ErrorI {
+	return NewError(CodeNewFSM, RPCModule, fmt.Sprintf("wrong high qc root height"))
 }
 
 func ErrNewStore(err error) ErrorI {
@@ -788,4 +803,8 @@ func ErrNoSubsidizedCommittees(chainId uint64) ErrorI {
 
 func ErrEmptyLotteryWinner() ErrorI {
 	return NewError(CodeEmptyLotteryWinner, StateMachineModule, "Lottery winner is empty")
+}
+
+func ErrFailedTransactions() ErrorI {
+	return NewError(CodeErrFailedTransactions, StateMachineModule, "a block contained failed transactions")
 }

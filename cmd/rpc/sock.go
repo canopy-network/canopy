@@ -150,7 +150,7 @@ func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.Val
 		return lib.NewValidatorSet(sub.Info.LastValidatorSet)
 	}
 	// warn of the remote RPC call to the root chain API
-	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d", rootHeight, rootChainId)
+	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote RPC call to the root chain API
 	return sub.ValidatorSet(rootHeight, id)
 }
@@ -169,7 +169,7 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 		return sub.Info.Orders, nil
 	}
 	// warn of the remote RPC call to the root chain API
-	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d", rootHeight, rootChainId)
+	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote call
 	books, err := sub.Orders(rootHeight, id)
 	// if an error occurred during the remote call
@@ -207,6 +207,18 @@ func (r *RCManager) IsValidDoubleSigner(rootChainId, height uint64, address stri
 	}
 	// exit with the results of the remote RPC call to the API of the 'root chain'
 	return sub.IsValidDoubleSigner(height, address)
+}
+
+// GetMinimumEvidenceHeight() returns the minimum height double sign evidence must have to be 'valid'
+func (r *RCManager) GetMinimumEvidenceHeight(rootChainId, height uint64) (*uint64, lib.ErrorI) {
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
+	if !found {
+		// exit with 'not subscribed' error
+		return nil, lib.ErrNotSubscribed()
+	}
+	// exit with the results of the remote RPC call to the API of the 'root chain'
+	return sub.MinimumEvidenceHeight(height)
 }
 
 // GetCheckpoint() returns the checkpoint if any for a specific chain height

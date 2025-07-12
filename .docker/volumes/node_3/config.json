@@ -1,46 +1,52 @@
 {
   "logLevel": "debug",
+  "chainId": 2,
+  "sleepUntil": 0,
+  "rootChain": [
+    {
+      "chainId": 1,
+      "url": "http://node-1:50002"
+    },
+    {
+      "chainId": 2,
+      "url": "http://node-3:30002"
+    }
+  ],
+  "runVDF": false,
+  "headless": false,
   "walletPort": "30000",
   "explorerPort": "30001",
   "rpcPort": "30002",
   "adminPort": "30003",
-  "rpcUrl": "http://localhost",
-  "rootChainRPCURL": "http://node-1:50002",
-  "rootChain": [
-    {
-      "chainID": 1,
-      "url": "http://node-1:50002"
-    },
-    {
-      "chainID": 2,
-      "url": "http://localhost:40002"
-    }
-  ],
-  "rootChainPollMS": 333,
+  "rpcURL": "http://localhost:30002",
+  "adminRPCUrl": "http://localhost:30003",
   "timeoutS": 3,
   "dataDirPath": "/root/.canopy",
   "dbName": "canopy",
   "inMemory": false,
   "networkID": 1,
   "listenAddress": "0.0.0.0:9002",
-  "externalAddress": "node-2",
-  "chainId": 2,
+  "externalAddress": "node-3",
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": ["98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b@tcp://node-2"],
+  "dialPeers": ["b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2@tcp://node-2"],
   "bannedPeerIDs": null,
   "bannedIPs": null,
-  "electionTimeoutMS": 2000,
-  "electionVoteTimeoutMS": 3000,
-  "proposeTimeoutMS": 3000,
-  "proposeVoteTimeoutMS": 2000,
+  "minimumPeersToStart": 0,
+  "newHeightTimeoutMS": 4500,
+  "electionTimeoutMS": 1500,
+  "electionVoteTimeoutMS": 1500,
+  "proposeTimeoutMS": 2500,
+  "proposeVoteTimeoutMS": 4000,
   "precommitTimeoutMS": 2000,
   "precommitVoteTimeoutMS": 2000,
-  "commitTimeoutMS": 6000,
+  "commitTimeoutMS": 2000,
   "roundInterruptTimeoutMS": 2000,
   "maxTotalBytes": 1000000,
   "maxTransactionCount": 5000,
   "individualMaxTxSize": 4000,
-  "dropPercentage": 35
+  "dropPercentage": 35,
+  "metricsEnabled": true,
+  "prometheusAddress": "0.0.0.0:9090"
 }

@@ -71,7 +71,7 @@ func TestChangeReputation(t *testing.T) {
 	require.True(t, peerInfo.Reputation == -11)
 	_, err = n1.GetPeerInfo(n2.pub)
 	require.NoError(t, err)
-	n1.PeerSet.m[lib.BytesToString(peerInfo.Address.PublicKey)].IsMustConnect = false
+	n1.PeerSet.m[string(peerInfo.Address.PublicKey)].IsMustConnect = false
 	n1.ChangeReputation(n2.pub, 0)
 	_, err = n1.GetPeerInfo(n2.pub)
 	require.Error(t, err)

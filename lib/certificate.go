@@ -15,7 +15,7 @@ import (
 
 const (
 	// the max possible block size without checking the governance parameter in state
-	GlobalMaxBlockSize = int(32 * units.MB)
+	GlobalMaxBlockSize = int(256 * units.MB)
 	// ensures developers are aware of a change to the header size (which is a consensus breaking change)
 	ExpectedMaxBlockHeaderSize = 1652
 )
@@ -145,11 +145,11 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 	}
 	// ensure header and block have the same height
 	if x.Header.Height != block.BlockHeader.Height {
-		return nil, ErrWrongHeight()
+		return nil, ErrMismatchCertBlockHeight(x.Header.Height, block.BlockHeader.Height)
 	}
 	// don't accept any blocks below the local height
 	if height > block.BlockHeader.Height {
-		return nil, ErrWrongHeight()
+		return nil, ErrWrongBlockHeight(block.BlockHeader.Height, height+1)
 	}
 	// new height notified error
 	if height < block.BlockHeader.Height {
@@ -189,12 +189,12 @@ func (x *QuorumCertificate) CheckHighQC(maxBlockSize int, view *View, lastRootHe
 	// invalid 'historical committee', if the root height of the committee is before that saved in state
 	if lastRootHeightUpdated > x.Header.RootHeight {
 		// exit with wrong root height error
-		return ErrWrongRootHeight()
+		return ErrWrongHighQCRootHeight()
 	}
 	// enforce same target height
 	if x.Header.Height != view.Height {
 		// exit with wrong height error
-		return ErrWrongHeight()
+		return ErrWrongHighQCHeight()
 	}
 	// a valid HighQC has the phase PRECOMMIT_VOTE as that's the phase where replicas 'Lock'
 	if x.Header.Phase != Phase_PROPOSE_VOTE {

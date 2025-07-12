@@ -37,6 +37,7 @@ type Controller struct {
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
 func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
 	// if an error occurred when retrieving the max validators
@@ -45,7 +46,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		return
 	}
 	// initialize the mempool using the FSM copy and the mempool config
-	mempool, err := NewMempool(fsm, c.MempoolConfig, metrics, l)
+	mempool, err := NewMempool(fsm, address, c.MempoolConfig, metrics, l)
 	// if an error occurred when creating a new mempool
 	if err != nil {
 		// exit with error
@@ -53,7 +54,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// create the controller
 	controller = &Controller{
-		Address:    valKey.PublicKey().Address().Bytes(),
+		Address:    address.Bytes(),
 		PublicKey:  valKey.PublicKey().Bytes(),
 		PrivateKey: valKey,
 		Config:     c,
@@ -68,6 +69,8 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
+	// initialize the mempool controller
+	mempool.controller = controller
 	// if an error occurred initializing the bft module
 	if err != nil {
 		// exit with error
@@ -100,12 +103,16 @@ func (c *Controller) Start() {
 			if e != nil {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil {
+				// call mempool check
+				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// exit the loop
 				break
 			}
 		}
+		// start mempool service
+		go c.CheckMempool()
 		// start internal Controller listeners for P2P
 		c.StartListeners()
 		// start the syncing process (if not synced to top)
@@ -172,14 +179,14 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 }
 
 // LoadRootChainOrderBook() gets the order book from the root-chain
-func (c *Controller) LoadRootChainOrderBook(rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
-	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), rootHeight, c.Config.ChainId)
+func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
-func (c *Controller) GetRootChainLotteryWinner(rootHeight uint64) (winner *lib.LotteryWinner, err lib.ErrorI) {
+func (c *Controller) GetRootChainLotteryWinner(fsm *fsm.StateMachine, rootHeight uint64) (winner *lib.LotteryWinner, err lib.ErrorI) {
 	// get the root chain id from the state machine
-	rootChainId, err := c.FSM.LoadRootChainId(c.ChainHeight())
+	rootChainId, err := fsm.LoadRootChainId(c.ChainHeight())
 	// if an error occurred retrieving the id
 	if err != nil {
 		// exit with error
@@ -190,9 +197,9 @@ func (c *Controller) GetRootChainLotteryWinner(rootHeight uint64) (winner *lib.L
 }
 
 // IsValidDoubleSigner() checks if the double signer is valid at a certain double sign height
-func (c *Controller) IsValidDoubleSigner(rootHeight uint64, address []byte) bool {
+func (c *Controller) IsValidDoubleSigner(rootChainId, rootHeight uint64, address []byte) bool {
 	// do a remote call to the root chain to see if the double signer is valid
-	isValidDoubleSigner, err := c.RCManager.IsValidDoubleSigner(c.LoadRootChainId(c.ChainHeight()), rootHeight, lib.BytesToString(address))
+	isValidDoubleSigner, err := c.RCManager.IsValidDoubleSigner(rootChainId, rootHeight, lib.BytesToString(address))
 	// if an error occurred during the remote call
 	if err != nil {
 		// log the error
@@ -238,8 +245,8 @@ func (c *Controller) LoadCertificate(height uint64) (*lib.QuorumCertificate, lib
 }
 
 // LoadMinimumEvidenceHeight() gets the minimum evidence height from the finite state machine
-func (c *Controller) LoadMinimumEvidenceHeight() (uint64, lib.ErrorI) {
-	return c.FSM.LoadMinimumEvidenceHeight()
+func (c *Controller) LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (*uint64, lib.ErrorI) {
+	return c.RCManager.GetMinimumEvidenceHeight(rootChainId, rootHeight)
 }
 
 // LoadMaxBlockSize() gets the max block size from the state
@@ -292,11 +299,14 @@ func (c *Controller) LoadLastProposers(height uint64) (*lib.Proposers, lib.Error
 // LoadCommitteeData() returns the state metadata for the 'self chain'
 func (c *Controller) LoadCommitteeData() (data *lib.CommitteeData, err lib.ErrorI) {
 	// get the committee data from the FSM
-	return c.FSM.LoadCommitteeData(c.ChainHeight(), c.Config.ChainId)
+	return c.FSM.GetCommitteeData(c.Config.ChainId)
 }
 
 // Syncing() returns if any of the supported chains are currently syncing
 func (c *Controller) Syncing() *atomic.Bool { return c.isSyncing }
+
+// ResetFSM() resets the underlying state machine to last valid state
+func (c *Controller) ResetFSM() { c.FSM.Reset() }
 
 // RootChainHeight() returns the height of the canopy root-chain
 func (c *Controller) RootChainHeight() uint64 {

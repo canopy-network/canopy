@@ -18,10 +18,13 @@ type BFT struct {
 	Proposals     ProposalsForHeight     // 'proposals' received from the Leader Validator(s)
 	ProposerKey   []byte                 // the public key of the proposer
 	ValidatorSet  ValSet                 // the current set of Validators
+	CommitteeData *lib.CommitteeData     // the data for the committee for this height
 	HighQC        *QC                    // the highest PRECOMMIT quorum certificate the node is aware of for this Height
+	RCBuildHeight uint64                 // the build height of the locked proposal
 	Block         []byte                 // the current Block being voted on (the foundational unit of the blockchain)
 	BlockHash     []byte                 // the current hash of the block being voted on
 	Results       *lib.CertificateResult // the current Result being voted on (reward and slash recipients)
+	BlockResult   *lib.BlockResult       // the cached result of the block - allowing a validator to validate the block only once and directly commit
 	SortitionData *lib.SortitionData     // the current data being used for VRF+CDF Leader Election
 	VDFService    *lib.VDFService        // the verifiable delay service, run once per block as a deterrent against long-range-attacks
 	HighVDF       *crypto.VDF            // the highest VDF among replicas - if the chain is using VDF for long-range-attack protection
@@ -93,6 +96,11 @@ func (b *BFT) Start() {
 	if err != nil {
 		b.log.Warn(err.Error())
 	}
+	// load the committee data
+	b.CommitteeData, err = b.Controller.LoadCommitteeData()
+	if err != nil {
+		b.log.Warn(err.Error())
+	}
 	for {
 		select {
 		// EXECUTE PHASE
@@ -110,20 +118,32 @@ func (b *BFT) Start() {
 		// RESET BFT
 		// - This triggers when receiving a new Commit Block (QC) from either root-chainId (a) or the Target-ChainId (b)
 		case resetBFT := <-b.ResetBFT:
+			var processTime time.Duration
 			func() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
+				// calculate time since
+				since := time.Since(resetBFT.StartTime)
+				// allow if 'since' is less than 1 block old
+				if int(since.Milliseconds()) < b.Config.BlockTimeMS() {
+					processTime = since
+				}
 				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
 				// else increment the height and don't maintain locks
 				if !resetBFT.IsRootChainUpdate {
 					b.log.Info("Reset BFT (NEW_HEIGHT)")
 					b.NewHeight(false)
+					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
-					b.NewHeight(true)
+					if b.LoadIsOwnRoot() {
+						b.NewHeight(true)
+					} else if b.Round != 0 {
+						b.NewHeight(true)
+						// set the wait timers to start consensus
+						b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					}
 				}
-				// set the wait timers to start consensus
-				b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, resetBFT.ProcessTime)
 			}()
 		}
 	}
@@ -245,6 +265,7 @@ func (b *BFT) StartElectionVotePhase() {
 		HighQc:                 b.HighQC,                         // forward highest known 'Lock' for this Height, so the new Proposer may satisfy SAFE-NODE-PREDICATE
 		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence, // forward any evidence of DoubleSigning
 		Vdf:                    b.HighVDF,                        // forward local VDF to the candidate
+		RcBuildHeight:          b.RCBuildHeight,                  // forward the highQC build height (if applicable)
 	})
 }
 
@@ -266,7 +287,7 @@ func (b *BFT) StartProposePhase() {
 	b.log.Info("Self is the proposer")
 	// produce new proposal or use highQC as the proposal
 	if b.HighQC == nil {
-		b.Block, b.Results, err = b.ProduceProposal(b.ByzantineEvidence, b.HighVDF)
+		b.RCBuildHeight, b.Block, b.Results, err = b.ProduceProposal(b.ByzantineEvidence, b.HighVDF)
 		if err != nil {
 			b.log.Error(err.Error())
 			return
@@ -288,6 +309,7 @@ func (b *BFT) StartProposePhase() {
 		},
 		HighQc:                 b.HighQC,                         // nil or justifies the proposal
 		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence, // evidence is attached (if any) to validate the Proposal
+		RcBuildHeight:          b.RCBuildHeight,                  // the root chain height when the block was built
 	})
 }
 
@@ -298,6 +320,7 @@ func (b *BFT) StartProposePhase() {
 // - Replica Validates the proposal using the byzantine evidence and the specific plugin
 // - Replicas send a signed (aggregable) PROPOSE vote to the Leader
 func (b *BFT) StartProposeVotePhase() {
+	var err lib.ErrorI
 	b.log.Info(b.View.ToString())
 	msg := b.GetProposal()
 	if msg == nil {
@@ -319,12 +342,18 @@ func (b *BFT) StartProposeVotePhase() {
 			return
 		}
 	}
+	// ensure the build height isn't too old
+	if msg.RcBuildHeight < b.CommitteeData.LastRootHeightUpdated {
+		b.log.Error(lib.ErrInvalidRCBuildHeight().Error())
+		b.RoundInterrupt()
+		return
+	}
 	// aggregate any evidence submitted from the replicas
 	byzantineEvidence := &ByzantineEvidence{
 		DSE: NewDSE(msg.LastDoubleSignEvidence),
 	}
 	// check candidate block against FSM
-	if err := b.ValidateProposal(msg.Qc, byzantineEvidence); err != nil {
+	if b.BlockResult, err = b.ValidateProposal(msg.RcBuildHeight, msg.Qc, byzantineEvidence); err != nil {
 		b.log.Error(err.Error())
 		b.RoundInterrupt()
 		return
@@ -376,6 +405,7 @@ func (b *BFT) StartPrecommitPhase() {
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
+		RcBuildHeight: b.RCBuildHeight,
 	})
 }
 
@@ -399,6 +429,7 @@ func (b *BFT) StartPrecommitVotePhase() {
 	}
 	// `lock` on the proposal (only by satisfying the SAFE-NODE-PREDICATE or COMMIT can this node unlock)
 	b.HighQC = msg.Qc
+	b.RCBuildHeight = msg.RcBuildHeight
 	b.HighQC.Block = b.Block
 	b.HighQC.Results = b.Results
 	b.log.Infof("🔒 Locked on proposal %s", lib.BytesToTruncatedString(b.HighQC.BlockHash))
@@ -441,6 +472,7 @@ func (b *BFT) StartCommitPhase() {
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
+		Timestamp: uint64(time.Now().UnixMicro()),
 	})
 }
 
@@ -468,10 +500,15 @@ func (b *BFT) StartCommitProcessPhase() {
 	b.ByzantineEvidence = &ByzantineEvidence{
 		DSE: b.GetLocalDSE(),
 	}
-	// send the block to self for committing
-	b.SelfSendBlock(msg.Qc)
-	// gossip committed block message to peers
-	b.GossipBlock(msg.Qc, b.PublicKey)
+	// non-blocking
+	go func() {
+		// send the block to self for committing
+		b.SelfSendBlock(msg.Qc, msg.Timestamp)
+		// wait to allow for CommitProcess to finish
+		<-time.After(time.Duration(b.Config.CommitTimeoutMS) * time.Millisecond)
+		// gossip committed block message to peers
+		b.GossipBlock(msg.Qc, b.PublicKey, msg.Timestamp)
+	}()
 }
 
 // RoundInterrupt() begins the ROUND-INTERRUPT phase after any phase errors
@@ -482,6 +519,7 @@ func (b *BFT) RoundInterrupt() {
 	b.Config.RoundInterruptTimeoutMS = b.msLeftInRound()
 	b.log.Warnf("Starting next round in %.2f secs", (time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond).Seconds())
 	b.Phase = RoundInterrupt
+	b.ResetFSM()
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{
@@ -531,6 +569,8 @@ type PacemakerMessages map[string]*Message // [ public_key_string ] -> View mess
 
 // AddPacemakerMessage() adds the 'View' message to the list (keyed by public key string)
 func (b *BFT) AddPacemakerMessage(msg *Message) (err lib.ErrorI) {
+	b.Controller.Lock()
+	defer b.Controller.Unlock()
 	b.PacemakerMessages[lib.BytesToString(msg.Signature.PublicKey)] = msg
 	return
 }
@@ -570,16 +610,36 @@ func (b *BFT) NewRound(newHeight bool) {
 		b.Round = 0
 	} else {
 		b.Round++
+		// defensive: clear byzantine evidence
+		b.ByzantineEvidence = &ByzantineEvidence{DSE: DoubleSignEvidences{}}
 	}
+	b.RefreshRootChainInfo()
 	// reset ProposerKey, Proposal, and Sortition data
 	b.ProposerKey = nil
 	b.Block, b.BlockHash, b.Results = nil, nil, nil
 	b.SortitionData = nil
 }
 
+// RefreshRootChainInfo() updates the cached root chain info with the latest known
+func (b *BFT) RefreshRootChainInfo() {
+	var err lib.ErrorI
+	// update heights
+	b.Height = b.Controller.ChainHeight()
+	b.RootHeight = b.Controller.RootChainHeight()
+	// update the validator set
+	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
+	if err != nil {
+		b.log.Errorf("LoadCommittee() failed with err: %s", err.Error())
+	}
+	// update the committee data
+	b.CommitteeData, err = b.Controller.LoadCommitteeData()
+	if err != nil {
+		b.log.Errorf("LoadCommitteeData() failed with err: %s", err.Error())
+	}
+}
+
 // NewHeight() initializes / resets consensus variables preparing for the NewHeight
 func (b *BFT) NewHeight(keepLocks ...bool) {
-	var err lib.ErrorI
 	// reset VotesForHeight
 	b.Votes = make(VotesForHeight)
 	// reset ProposalsForHeight
@@ -590,15 +650,6 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 	b.NewRound(true)
 	// set phase to Election
 	b.Phase = Election
-	// update height
-	b.Height = b.Controller.ChainHeight()
-	// update canopy height
-	b.RootHeight = b.Controller.RootChainHeight()
-	// update the validator set
-	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
-	if err != nil {
-		b.log.Errorf("LoadCommittee() failed with err: %s", err.Error())
-	}
 	// if resetting due to new Canopy Block and Validator Set then KeepLocks
 	// - protecting any who may have committed against attacks like malicious proposers from withholding
 	// COMMIT_MSG and sending it after the next block is produces
@@ -608,6 +659,7 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 		// reset PartialQCs
 		b.PartialQCs = make(PartialQCs)
 		b.HighQC = nil
+		b.RCBuildHeight = 0
 	}
 }
 
@@ -720,7 +772,7 @@ func (b *BFT) msLeftInRound() int {
 // - Phase Timeout ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 // This design balances synchronization speed during adverse conditions with maximizing voter participation under normal conditions
 func (b *BFT) SetWaitTimers(phaseWaitTime, processTime time.Duration) {
-	//b.log.Debugf("Process time: %.2fs, Wait time: %.2fs", processTime.Seconds(), phaseWaitTime.Seconds())
+	b.log.Debugf("Process time: %.2fs, Wait time: %.2fs", processTime.Seconds(), phaseWaitTime.Seconds())
 	subtract := func(wt, pt time.Duration) (t time.Duration) {
 		if pt > 24*time.Hour {
 			return wt
@@ -732,7 +784,7 @@ func (b *BFT) SetWaitTimers(phaseWaitTime, processTime time.Duration) {
 	}
 	// calculate the phase timer by subtracting the process time
 	phaseWaitTime = subtract(phaseWaitTime, processTime)
-	//b.log.Debugf("Setting consensus timer: %.2f sec", phaseWaitTime.Seconds())
+	b.log.Debugf("Setting consensus timer: %.2f sec", phaseWaitTime.Seconds())
 	// set Phase timers to go off in their respective timeouts
 	lib.ResetTimer(b.PhaseTimer, phaseWaitTime)
 }
@@ -746,6 +798,16 @@ func (b *BFT) IsProposer(id []byte) bool { return bytes.Equal(id, b.ProposerKey)
 // SelfIsValidator() returns true if this node is part of the ValSet
 func (b *BFT) SelfIsValidator() bool {
 	selfValidator, _ := b.ValidatorSet.GetValidator(b.PublicKey)
+	// if not a validator
+	if selfValidator == nil {
+		// defensively check to make sure there wasn't a race between
+		// NEW_HEIGHT and NEW_COMMITTEE, worst case is extra consensus
+		// participation
+		b.RefreshRootChainInfo()
+		// double check
+		selfValidator, _ = b.ValidatorSet.GetValidator(b.PublicKey)
+	}
+	// return 'self is validator'
 	return selfValidator != nil
 }
 
@@ -828,15 +890,17 @@ type (
 		// RootChainHeight returns the height of the root-chain
 		RootChainHeight() uint64
 		// ProduceProposal() as a Leader, create a Proposal in the form of a block and certificate results
-		ProduceProposal(be *ByzantineEvidence, vdf *crypto.VDF) (block []byte, results *lib.CertificateResult, err lib.ErrorI)
+		ProduceProposal(be *ByzantineEvidence, vdf *crypto.VDF) (rcBuildHeight uint64, block []byte, results *lib.CertificateResult, err lib.ErrorI)
 		// ValidateCertificate() as a Replica, validates the leader proposal
-		ValidateProposal(qc *lib.QuorumCertificate, evidence *ByzantineEvidence) lib.ErrorI
+		ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertificate, evidence *ByzantineEvidence) (*lib.BlockResult, lib.ErrorI)
 		// LoadCertificate() gets the Quorum Certificate from the chainId-> plugin at a certain height
 		LoadCertificate(height uint64) (*lib.QuorumCertificate, lib.ErrorI)
+		// CommitCertificate() commits a block to persistence
+		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI)
 		// GossipBlock() is a P2P call to gossip a completed Quorum Certificate with a Proposal
-		GossipBlock(certificate *lib.QuorumCertificate, sender []byte)
+		GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64)
 		// SendToSelf() is a P2P call to directly send  a completed Quorum Certificate to self
-		SelfSendBlock(qc *lib.QuorumCertificate)
+		SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64)
 		// SendToReplicas() is a P2P call to directly send a Consensus message to all Replicas
 		SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable)
 		// SendToProposer() is a P2P call to directly send a Consensus message to the Leader
@@ -847,6 +911,8 @@ type (
 		LoadIsOwnRoot() bool
 		// Syncing() returns true if the plugin is currently syncing
 		Syncing() *atomic.Bool
+		// ResetFSM() resets the finite state machine
+		ResetFSM()
 
 		/* root-chain Functionality Below*/
 
@@ -859,15 +925,15 @@ type (
 		// LoadLastProposers() loads the last Canopy committee proposers for sortition data
 		LoadLastProposers(rootHeight uint64) (*lib.Proposers, lib.ErrorI)
 		// LoadMinimumEvidenceHeight() loads the Canopy enforced minimum height for valid Byzantine Evidence
-		LoadMinimumEvidenceHeight() (uint64, lib.ErrorI)
+		LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (*uint64, lib.ErrorI)
 		// IsValidDoubleSigner() checks to see if the double signer is valid for this specific height
-		IsValidDoubleSigner(height uint64, address []byte) bool
+		IsValidDoubleSigner(rootChainId, rootHeight uint64, address []byte) bool
 	}
 )
 
 type ResetBFT struct {
 	IsRootChainUpdate bool
-	ProcessTime       time.Duration
+	StartTime         time.Time
 }
 
 const (

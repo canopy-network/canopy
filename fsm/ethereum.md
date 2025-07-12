@@ -319,7 +319,7 @@ Also, Canopy combines the Ethereum transaction and receipt structures. In practi
 
 ##### Ethereum-Compatible Pending Transaction Simulation
 
-Canopy only includes valid transactions in blocks, so to maintain compatibility with Ethereum tooling (e.g., MetaMask, Hardhat, ethers.js), a pseudo-pending transaction cache is used to simulate mempool behavior.
+Canopy only includes valid transactions in blocks, so to maintain compatibility with Ethereum tooling (e.g., MetaMask, Hardhat, ethers.js), a pseudo-pending transaction txn is used to simulate mempool behavior.
 
 #### Design Goals
 

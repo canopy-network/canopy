@@ -361,6 +361,7 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // DELEGATIONS BELOW
 
 // GetAllDelegates() returns all delegates for a certain chainId
+// It is heavily cached to improve performance as the delegates are used for each block commit
 func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
 	// iterate from highest stake to lowest
 	it, err := s.RevIterator(DelegatePrefix(chainId))

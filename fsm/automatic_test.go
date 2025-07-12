@@ -242,6 +242,12 @@ func TestEndBlock(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			var unstakingHeight, maxPauseHeight uint64
+			// save the original validator
+			if len(test.validators) > 0 {
+				unstakingHeight = test.validators[0].UnstakingHeight
+				maxPauseHeight = test.validators[0].MaxPausedHeight
+			}
 			// create a test proposer address
 			proposerAddress := newTestAddress(t).Bytes()
 			// create a state machine instance with default parameters
@@ -308,7 +314,7 @@ func TestEndBlock(t *testing.T) {
 			// STEP 4) validate the force unstaking of validators who have been paused for MaxPauseBlocks
 			func() {
 				// if testing with validators with a max pause height
-				if len(test.validators) == 0 || test.validators[0].MaxPausedHeight == 0 {
+				if len(test.validators) == 0 || maxPauseHeight == 0 {
 					return
 				}
 				// ensure validator no longer exists in state
@@ -321,7 +327,7 @@ func TestEndBlock(t *testing.T) {
 			// STEP 5) delete validators who are finishing unstaking
 			func() {
 				// if testing with validators with a max pause height
-				if len(test.validators) == 0 || test.validators[0].UnstakingHeight == 0 {
+				if len(test.validators) == 0 || unstakingHeight == 0 {
 					return
 				}
 				// ensure validator no longer exists in state

@@ -1,34 +1,26 @@
 package store
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"path/filepath"
-	"sync/atomic"
+	"runtime"
 	"time"
 
-	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
 )
 
 const (
-	latestStatePrefix     = "s/"         // prefix designated for the LatestStateStore where the most recent blobs of state data are held
-	historicStatePrefix   = "h/"         // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
-	stateCommitmentPrefix = "c/"         // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
-	indexerPrefix         = "i/"         // prefix designated for indexer (transactions, blocks, and quorum certificates)
-	stateCommitIDPrefix   = "x/"         // prefix designated for the commit ID (height and state merkle root)
-	lastCommitIDPrefix    = "a/"         // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
-	partitionExistsKey    = "e/"         // to check if partition exists
-	partitionFrequency    = uint64(1000) // blocks
-	maxKeyBytes           = 256          // maximum size of a key
-)
-
-// maximum size of the database (batch) transaction
-var maxTransactionSize = int64(
-	math.Ceil(float64(128*units.MB) / badgerDBMaxBatchScalingFactor),
+	latestStatePrefix     = "s/"           // prefix designated for the LatestStateStore where the most recent blobs of state data are held
+	historicStatePrefix   = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
+	stateCommitmentPrefix = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
+	indexerPrefix         = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
+	stateCommitIDPrefix   = "x/"           // prefix designated for the commit ID (height and state merkle root)
+	lastCommitIDPrefix    = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
+	maxKeyBytes           = 256            // maximum size of a key
+	lssVersion            = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
 )
 
 var _ lib.StoreI = &Store{} // enforce the Store interface
@@ -39,8 +31,8 @@ providing four main components for managing blockchain-related data.
 
 1. StateStore: This component is responsible for storing the actual blobs of data that represent
    the state. It acts as the primary data storage layer. This store is divided into 'historical'
-   partitions and 'latest' data. This separation allows efficient iteration, fast snapshot access,
-   and safe pruning of older state without impacting current performance.
+   partitions and 'latest' data. This separation allows efficient block processing time while
+   minimizing storage de-duplication.
 
 2. StateCommitStore: This component maintains a Sparse Merkle Tree structure, mapping keys
    (hashes) to their corresponding data hashes. It is optimized for blockchain operations,
@@ -66,18 +58,15 @@ lexicographically ordered prefix keys to facilitate easy and efficient iteration
 */
 
 type Store struct {
-	version             uint64       // version of the store
-	root                []byte       // root associated with the CommitID at this version
-	db                  *badger.DB   // underlying database
-	writer              *badger.Txn  // the batch writer that allows committing it all at once
-	lss                 *TxnWrapper  // reference to the 'latest' state store
-	hss                 *TxnWrapper  // references the 'historical' state store
-	sc                  *SMT         // reference to the state commitment store
-	*Indexer                         // reference to the indexer store
-	useHistorical       bool         // signals to use the historical state store for query
-	isGarbageCollecting atomic.Bool  // protect garbage collector (only 1 at a time)
-	metrics             *lib.Metrics // telemetry
-	log                 lib.LoggerI  // logger
+	version  uint64             // version of the store
+	db       *badger.DB         // underlying database
+	writer   *badger.WriteBatch // the shared batch writer that allows committing it all at once
+	ss       *Txn               // reference to the state store
+	sc       *SMT               // reference to the state commitment store
+	*Indexer                    // reference to the indexer store
+	metrics  *lib.Metrics       // telemetry
+	log      lib.LoggerI        // logger
+	config   lib.Config         // config
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -85,80 +74,80 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 	if config.StoreConfig.InMemory {
 		return NewStoreInMemory(l)
 	}
-	return NewStore(filepath.Join(config.DataDirPath, config.DBName), metrics, l)
+	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
 }
 
 // NewStore() creates a new instance of a disk DB
-func NewStore(path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	// use badger DB in managed mode to allow easy versioning
-	// memTableSize is set to 1.28GB (max) to allow 128MB (10%) of writes in a
-	// single batch. It is seemingly unknown why the 10% limit is set
-	// https://discuss.dgraph.io/t/discussion-badgerdb-should-offer-arbitrarily-sized-atomic-transactions/8736
-	db, err := badger.OpenManaged(badger.DefaultOptions(path).WithNumVersionsToKeep(math.MaxInt64).
-		WithLoggingLevel(badger.ERROR).WithMemTableSize(maxTransactionSize))
+func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
+	// use badger DB in managed mode to allow efficient versioning
+	db, err := badger.OpenManaged(badger.DefaultOptions(path).WithNumVersionsToKeep(math.MaxInt64).WithLoggingLevel(badger.ERROR).
+		WithValueThreshold(1024).WithCompression(options.None).WithNumMemtables(16).WithMemTableSize(256 << 20).
+		WithNumLevelZeroTables(10).WithNumLevelZeroTablesStall(20).WithBaseTableSize(128 << 20).WithBaseLevelSize(512 << 20).
+		WithNumCompactors(runtime.NumCPU()).WithCompactL0OnClose(true).WithBypassLockGuard(true).WithDetectConflicts(false).WithSyncWrites(true),
+	)
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
-	if e := setBatchOptions(db, 128*int64(units.MB)); e != nil {
-		return nil, ErrOpenDB(e)
-	}
-	return NewStoreWithDB(db, metrics, log, true)
+	return NewStoreWithDB(config, db, metrics, log)
 }
 
 // NewStoreInMemory() creates a new instance of a mem DB
 func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR))
+	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
-	return NewStoreWithDB(db, nil, log, true)
+	return NewStoreWithDB(lib.DefaultConfig(), db, nil, log)
 }
 
 // NewStoreWithDB() returns a Store object given a DB and a logger
-func NewStoreWithDB(db *badger.DB, metrics *lib.Metrics, log lib.LoggerI, write bool) (*Store, lib.ErrorI) {
+// NOTE: to read the state commit store i.e. for merkle proofs, use NewReadOnly()
+func NewStoreWithDB(config lib.Config, db *badger.DB, metrics *lib.Metrics, log lib.LoggerI) (*Store, lib.ErrorI) {
 	// get the latest CommitID (height and hash)
 	id := getLatestCommitID(db, log)
-	// make a writable tx that reads from the last height
-	writer := db.NewTransactionAt(id.Height, write)
+	// set the version
+	nextVersion, version := id.Height+1, id.Height
+	// make a reader from the current height and the latest height
+	hssReader := db.NewTransactionAt(version, false)
+	lssReader := db.NewTransactionAt(lssVersion, false)
+	// create a new batch writer for the next version
+	// note: version for WriteBatch may be overridden by the setEntryAt(version) code
+	writer := db.NewWriteBatchAt(nextVersion)
 	// return the store object
 	return &Store{
-		version: id.Height,
+		version: version,
 		log:     log,
 		db:      db,
 		writer:  writer,
-		lss:     NewTxnWrapper(writer, log, []byte(latestStatePrefix)),
-		hss:     NewTxnWrapper(writer, log, historicalPrefix(id.Height)),
-		sc:      NewDefaultSMT(NewTxnWrapper(writer, log, []byte(stateCommitmentPrefix))),
-		Indexer: &Indexer{NewTxnWrapper(writer, log, []byte(indexerPrefix))},
+		ss:      NewBadgerTxn(lssReader, writer, []byte(latestStatePrefix), true, true, nextVersion),
+		Indexer: &Indexer{NewBadgerTxn(hssReader, writer, []byte(indexerPrefix), false, false, nextVersion), config},
 		metrics: metrics,
-		root:    id.Root,
+		config:  config,
 	}, nil
 }
 
 // NewReadOnly() returns a store without a writer - meant for historical read only queries
+// CONTRACT: Read only stores cannot be copied or written to
 func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
-	// create a variable to signal if the historical state store should be utilized
-	var useHistorical bool
-	// if the query version is older than the partition frequency
-	if queryVersion < partitionHeight(s.version) {
-		useHistorical = true
-	}
+	var stateReader *Txn
 	// make a reader for the specified version
-	reader := s.db.NewTransactionAt(queryVersion, false)
+	hssReader := s.db.NewTransactionAt(queryVersion, false)
+	// if the query is for the latest version use the HSS over the LSS
+	if s.version == queryVersion {
+		lssReader := s.db.NewTransactionAt(lssVersion, false)
+		stateReader = NewBadgerTxn(lssReader, nil, []byte(latestStatePrefix), false, false)
+	} else {
+		stateReader = NewBadgerTxn(hssReader, nil, []byte(historicStatePrefix), false, false)
+	}
 	// return the store object
 	return &Store{
-		version:       queryVersion,
-		log:           s.log,
-		db:            s.db,
-		writer:        reader,
-		lss:           NewTxnWrapper(reader, s.log, []byte(latestStatePrefix)),
-		hss:           NewTxnWrapper(reader, s.log, historicalPrefix(queryVersion)),
-		sc:            NewDefaultSMT(NewTxnWrapper(reader, s.log, []byte(stateCommitmentPrefix))),
-		Indexer:       &Indexer{NewTxnWrapper(reader, s.log, []byte(indexerPrefix))},
-		useHistorical: useHistorical,
-		metrics:       s.metrics,
-		root:          bytes.Clone(s.root),
+		version: queryVersion,
+		log:     s.log,
+		db:      s.db,
+		ss:      stateReader,
+		sc:      NewDefaultSMT(NewBadgerTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
+		Indexer: &Indexer{NewBadgerTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
+		metrics: s.metrics,
 	}, nil
 }
 
@@ -166,228 +155,89 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
-	writer := s.db.NewTransactionAt(s.version, true)
+	nextVersion := s.version + 1
+	// create a comparable writer and reader
+	writer, reader, lssReader := s.db.NewWriteBatchAt(nextVersion), s.db.NewTransactionAt(s.version, false), s.db.NewTransactionAt(lssVersion, false)
+	// return the store object
 	return &Store{
 		version: s.version,
 		log:     s.log,
 		db:      s.db,
 		writer:  writer,
-		lss:     NewTxnWrapper(writer, s.log, []byte(latestStatePrefix)),
-		hss:     NewTxnWrapper(writer, s.log, historicalPrefix(s.version)),
-		sc:      NewDefaultSMT(NewTxnWrapper(writer, s.log, []byte(stateCommitmentPrefix))),
-		Indexer: &Indexer{NewTxnWrapper(writer, s.log, []byte(indexerPrefix))},
+		ss:      s.ss.Copy(BadgerTxnReader{lssReader, s.ss.prefix}, writer),
+		Indexer: &Indexer{s.Indexer.db.Copy(BadgerTxnReader{reader, s.Indexer.db.prefix}, writer), s.config},
 		metrics: s.metrics,
-		root:    bytes.Clone(s.root),
 	}, nil
 }
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
+	startTime := time.Now()
+	// get the root from the sparse merkle tree at the current state
+	root, err = s.Root()
+	if err != nil {
+		return nil, err
+	}
 	// update the version (height) number
 	s.version++
-	// get the root from the sparse merkle tree at the current state
-	s.root = s.sc.Root()
 	// set the new CommitID (to the Transaction not the actual DB)
-	if err = s.setCommitID(s.version, s.root); err != nil {
+	if err = s.setCommitID(s.version, root); err != nil {
 		return nil, err
 	}
 	// extract the internal metrics from the badger Txn
-	size, entries := getSizeAndCount(s.writer)
-	// update the metrics once complete
-	defer s.metrics.UpdateStoreMetrics(size, entries, time.Time{}, time.Now())
+	size, entries := getSizeAndCountFromBatch(s.writer)
+	// commit the in-memory txn to the badger writer
+	if e := s.Flush(); e != nil {
+		return nil, e
+	}
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
-	if e := s.writer.CommitAt(s.version, nil); e != nil {
+	if e := s.writer.Flush(); e != nil {
 		return nil, ErrCommitDB(e)
 	}
+	// update the metrics once complete
+	s.metrics.UpdateStoreMetrics(size, entries, time.Time{}, startTime)
 	// reset the writer for the next height
-	s.resetWriter()
+	s.Reset()
 	// return the root
-	return bytes.Clone(s.root), nil
-}
-
-// PARTITIONING CODE BELOW
-
-// ShouldPartition() determines if it is time to partition
-func (s *Store) ShouldPartition() (timeToPartition bool) {
-	// check if it's time to partition (1001, 2001, 3001...)
-	if (s.version-partitionHeight(s.version))%(partitionFrequency/10) != 1 {
-		return false
-	}
-	// get the partition exists value from the store at a particular historical partition prefix
-	value, err := s.hss.Get([]byte(partitionExistsKey))
-	if err != nil {
-		s.log.Errorf("ShouldPartition() failed with err: %s", err.Error())
-		return false
-	}
-	// check if the value is set <key is the value>
-	timeToPartition = !bytes.Equal(value, []byte(partitionExistsKey))
-	// log the result
-	if !timeToPartition {
-		s.log.Debug("Not partitioning, partition key already exists")
-	} else {
-		s.log.Debug("Should partition! No partition key exists")
-	}
 	return
 }
 
-// Partition()
-//  1. SNAPSHOT: for each key in the state store, copy them in the new historical partition to ensure
-//     each partition has a complete version of the state at the border -- allowing older partitions to
-//     safely be pruned
-//  2. PRUNE: Drop all versions in the LSS older than the latest keys @ partition height
-func (s *Store) Partition() {
-	start := time.Now()
-	// create a copy of the store for multi-thread safety
-	sCopy, err := s.Copy()
-	if err != nil {
-		s.log.Errorf(err.Error())
-		return
+// Flush() writes the current state to the batch writer without committing it.
+func (s *Store) Flush() lib.ErrorI {
+	if s.sc != nil {
+		if e := s.sc.store.(TxnWriterI).Flush(); e != nil {
+			return ErrCommitDB(e)
+		}
 	}
-	// cast to a type Store reference for lower level functionality
-	sc := sCopy.(*Store)
-	// log the beginning of the process
-	sc.log.Info("Started partition process ✂️")
-	if err = func() lib.ErrorI {
-		// calculate the partition height
-		snapshotHeight := partitionHeight(sc.Version())
-		// create a reader at the partition height
-		reader := sc.db.NewTransactionAt(snapshotHeight, false)
-		defer reader.Discard()
-		// create a managed batch to do the 'writing'
-		writer := sc.db.NewWriteBatchAt(snapshotHeight)
-		defer writer.Cancel()
-		// generate the historical partition prefix
-		partitionPrefix := historicalPrefix(snapshotHeight)
-		// get the latest store in a transaction wrapper
-		lss := NewTxnWrapper(reader, sc.log, []byte(latestStatePrefix))
-		// create an iterator that traverses the entire latest state store at the partition height
-		iterator, er := lss.ArchiveIterator(nil)
-		if er != nil {
-			return er
-		}
-		// convert the iterator to a type Iterator for lower level functionality
-		it := iterator.(*Iterator)
-		defer it.Close()
-		// set a signal the partition was successfully created <only written if batch succeeds>
-		if e := writer.SetEntryAt(&badger.Entry{Key: lib.Append(partitionPrefix, []byte(partitionExistsKey)), Value: []byte(partitionExistsKey)}, snapshotHeight); e != nil {
-			return ErrSetEntry(e)
-		}
-		// create a variable to de-duplicate the calls
-		deDuplicator := lib.NewDeDuplicator[string]()
-		// for each key in the state at the partition height
-		for ; it.Valid(); it.Next() {
-			// get the key from the iterator item
-			k, v := it.Key(), it.Value()
-			// skip items that are already marked for Garbage Collection
-			if deDuplicator.Found(lib.BytesToString(k)) {
-				continue
-			}
-			// if the item is 'deleted'
-			if it.Deleted() {
-				// set the item as deleted at the partition height and discard earlier versions
-				if e := writer.SetEntryAt(newEntry(lib.Append([]byte(latestStatePrefix), k), nil, badgerDeleteBit|badgerDiscardEarlierVersions), snapshotHeight); e != nil {
-					return ErrSetEntry(e)
-				}
-			} else {
-				// set item in the historical partition
-				if e := writer.SetEntryAt(newEntry(lib.Append(partitionPrefix, k), v, badgerNoDiscardBit), snapshotHeight); e != nil {
-					return ErrSetEntry(e)
-				}
-				// re-write the latest version with the 'discard' flag set
-				if e := writer.SetEntryAt(newEntry(lib.Append([]byte(latestStatePrefix), k), v, badgerDiscardEarlierVersions), snapshotHeight); e != nil {
-					return ErrSetEntry(e)
-				}
-			}
-		}
-		// extract the internal metrics from the badger Txn
-		size, entries := getSizeAndCountFromBatch(writer)
-		// update the metrics once complete
-		defer s.metrics.UpdateStoreMetrics(size, entries, start, time.Now())
-		// commit the batch
-		if e := writer.Flush(); e != nil {
-			return ErrFlushBatch(e)
-		}
-		// if the partition height is past the partition frequency, set the discardTs at the partition height-1
-		if snapshotHeight > partitionFrequency {
-			sc.db.SetDiscardTs(snapshotHeight - 2)
-		}
-		// if the GC isn't already running
-		if !s.isGarbageCollecting.Swap(true) {
-			sc.log.Info("Started partition GC process")
-			// force the mem table to flush to the LSM
-			sc.log.Debug("Partition: Flushing MemTable")
-			if err = FlushMemTable(sc.db); err != nil {
-				return err
-			}
-			// run LSM compaction
-			sc.log.Debug("Partition: Flattening...")
-			if fe := sc.db.Flatten(1); fe != nil {
-				return ErrGarbageCollectDB(fe)
-			}
-			// unset isGarbageCollecting once complete
-			defer s.isGarbageCollecting.Store(false)
-			// trigger garbage collector to prune keys
-			sc.log.Debug("Partition: Garbage collecting...")
-			if gcErr := sc.db.RunValueLogGC(badgerGCRatio); gcErr != nil {
-				if err != badger.ErrNoRewrite {
-					sc.log.Debugf("%v - this is normal", gcErr)
-					// don't return an error here - this is an expected condition
-				} else {
-					return ErrGarbageCollectDB(gcErr)
-				}
-			}
-		}
-		// exit
-		return nil
-	}(); err != nil {
-		sc.log.Errorf("Partitioning failed with error: %s", err.Error())
+	if e := s.ss.Flush(); e != nil {
+		return ErrCommitDB(e)
 	}
-	sc.log.Info("Partitioning complete ✅")
-}
-
-// Get() returns the value bytes blob from the State Store
-func (s *Store) Get(key []byte) ([]byte, lib.ErrorI) {
-	// if reading from a historical partition
-	if s.useHistorical {
-		return s.hss.Get(key)
+	if e := s.Indexer.db.Flush(); e != nil {
+		return ErrCommitDB(e)
 	}
-	// if reading from the latest
-	return s.lss.Get(key)
+	return nil
 }
 
 // Set() sets the value bytes blob in the LatestStateStore and the HistoricalStateStore
 // as well as the value hash in the StateCommitStore referenced by the 'key' and hash('key') respectively
-func (s *Store) Set(k, v []byte) lib.ErrorI {
-	// set in the state store @ latest
-	if err := s.lss.Set(k, v); err != nil {
-		return err
-	}
-	// set in the state store @ historical partition
-	if err := s.hss.Set(k, v); err != nil {
-		return err
-	}
-	// set in the state commit store
-	return s.sc.Set(k, v)
-}
+func (s *Store) Set(k, v []byte) lib.ErrorI { return s.ss.Set(k, v) }
 
 // Delete() removes the key-value pair from both the LatestStateStore, HistoricalStateStore, and CommitStore
-func (s *Store) Delete(k []byte) lib.ErrorI {
-	// delete from the state store @ latest
-	if err := s.lss.Delete(k); err != nil {
-		return err
-	}
-	// delete from the state store @ historical partition
-	if err := s.hss.Tombstone(k); err != nil {
-		return err
-	}
-	// delete from the state commit store
-	return s.sc.Delete(k)
-}
+func (s *Store) Delete(k []byte) lib.ErrorI { return s.ss.Delete(k) }
+
+// Get() returns the value bytes blob from the State Store
+func (s *Store) Get(key []byte) ([]byte, lib.ErrorI) { return s.ss.Get(key) }
+
+// Iterator() returns an object for scanning the StateStore starting from the provided prefix.
+// The iterator allows forward traversal of key-value pairs that match the prefix.
+func (s *Store) Iterator(p []byte) (lib.IteratorI, lib.ErrorI) { return s.ss.Iterator(p) }
+
+// RevIterator() returns an object for scanning the StateStore starting from the provided prefix.
+// The iterator allows backward traversal of key-value pairs that match the prefix.
+func (s *Store) RevIterator(p []byte) (lib.IteratorI, lib.ErrorI) { return s.ss.RevIterator(p) }
 
 // GetProof() uses the StateCommitStore to prove membership and non-membership
-func (s *Store) GetProof(key []byte) ([]*lib.Node, lib.ErrorI) {
-	return s.sc.GetMerkleProof(key)
-}
+func (s *Store) GetProof(key []byte) ([]*lib.Node, lib.ErrorI) { return s.sc.GetMerkleProof(key) }
 
 // VerifyProof() checks the validity of a member or non-member proof from the StateCommitStore
 // by verifying the proof against the provided key, value, and proof data.
@@ -395,27 +245,8 @@ func (s *Store) VerifyProof(key, value []byte, validateMembership bool, root []b
 	return s.sc.VerifyProof(key, value, validateMembership, root, proof)
 }
 
-// Iterator() returns an object for scanning the StateStore starting from the provided prefix.
-// The iterator allows forward traversal of key-value pairs that match the prefix.
-func (s *Store) Iterator(p []byte) (lib.IteratorI, lib.ErrorI) {
-	// if reading from a historical partition
-	if s.useHistorical {
-		return s.hss.Iterator(p)
-	}
-	// if reading from latest
-	return s.lss.Iterator(p)
-}
-
-// RevIterator() returns an object for scanning the StateStore starting from the provided prefix.
-// The iterator allows backward traversal of key-value pairs that match the prefix.
-func (s *Store) RevIterator(p []byte) (lib.IteratorI, lib.ErrorI) {
-	// if reading from a historical partition
-	if s.useHistorical {
-		return s.hss.RevIterator(p)
-	}
-	// if reading from latest
-	return s.lss.RevIterator(p)
-}
+// IncreaseVersion increases the version number of the store without committing any data
+func (s *Store) IncreaseVersion() { func() { s.version++; s.sc = nil }() }
 
 // Version() returns the current version number of the Store, representing the height or version
 // number of the state. This is used to track the versioning of the state data.
@@ -423,7 +254,18 @@ func (s *Store) Version() uint64 { return s.version }
 
 // NewTxn() creates and returns a new transaction for the Store, allowing atomic operations
 // on the StateStore, StateCommitStore, Indexer, and CommitIDStore.
-func (s *Store) NewTxn() lib.StoreTxnI { return NewTxn(s) }
+func (s *Store) NewTxn() lib.StoreI {
+	nextVersion := s.version + 1
+	return &Store{
+		version: s.version,
+		log:     s.log,
+		db:      s.db,
+		writer:  s.writer,
+		ss:      NewTxn(s.ss, s.ss, nil, false, true, nextVersion),
+		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, nextVersion), s.config},
+		metrics: s.metrics,
+	}
+}
 
 // DB() returns the underlying BadgerDB instance associated with the Store, providing access
 // to the database for direct operations and management.
@@ -431,16 +273,49 @@ func (s *Store) DB() *badger.DB { return s.db }
 
 // Root() retrieves the root hash of the StateCommitStore, representing the current root of the
 // Sparse Merkle Tree. This hash is used for verifying the integrity and consistency of the state.
-func (s *Store) Root() (root []byte, err lib.ErrorI) { return s.sc.Root(), nil }
+func (s *Store) Root() (root []byte, err lib.ErrorI) {
+	// if smt not cached
+	if s.sc == nil {
+		nextVersion := s.version + 1
+		// set up the state commit store
+		s.sc = NewDefaultSMT(NewTxn(s.ss.reader.(BadgerTxnReader), s.writer, []byte(stateCommitIDPrefix), false, false, nextVersion))
+		// commit the SMT directly using the txn ops
+		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
+			return nil, err
+		}
+	}
+	// return the root
+	return s.sc.Root(), nil
+}
 
 // Reset() discard and re-sets the stores writer
 func (s *Store) Reset() {
-	s.resetWriter()
+	// create new transactions first before discarding old ones
+	newReader := s.db.NewTransactionAt(s.version, false)
+	newLSSReader := s.db.NewTransactionAt(lssVersion, false)
+	// create a new batch writer for the next version as the version cannot
+	// be set at the commit time
+	nextVersion := s.version + 1
+	newWriter := s.db.NewWriteBatchAt(nextVersion)
+	// create all new transaction-dependent objects
+	newLSS := NewBadgerTxn(newLSSReader, newWriter, []byte(latestStatePrefix), true, true, nextVersion)
+	newIndexer := NewBadgerTxn(newReader, newWriter, []byte(indexerPrefix), false, false, nextVersion)
+	// only after creating all new objects, discard old transactions
+	s.Discard()
+	// update all references
+	s.writer = newWriter
+	s.ss = newLSS
+	s.Indexer.setDB(newIndexer)
 }
 
-// Discard() closes the writer
+// Discard() closes the reader and writer
 func (s *Store) Discard() {
-	s.writer.Discard()
+	s.ss.reader.Discard()
+	s.sc = nil
+	s.Indexer.db.reader.Discard()
+	if s.writer != nil {
+		s.writer.Cancel()
+	}
 }
 
 // Close() discards the writer and closes the database connection
@@ -452,25 +327,15 @@ func (s *Store) Close() lib.ErrorI {
 	return nil
 }
 
-// resetWriter() closes the writer, and creates a new writer, and sets the writer to the 3 main abstractions
-func (s *Store) resetWriter() {
-	s.writer.Discard()
-	s.writer = s.db.NewTransactionAt(s.version, true)
-	s.lss = NewTxnWrapper(s.writer, s.log, []byte(latestStatePrefix))
-	s.hss = NewTxnWrapper(s.writer, s.log, historicalPrefix(s.version))
-	s.sc = NewDefaultSMT(NewTxnWrapper(s.writer, s.log, []byte(stateCommitmentPrefix)))
-	s.Indexer.setDB(NewTxnWrapper(s.writer, s.log, []byte(indexerPrefix)))
-}
-
 // commitIDKey() returns the key for the commitID at a specific version
 func (s *Store) commitIDKey(version uint64) []byte {
-	return []byte(fmt.Sprintf("%s/%d", stateCommitIDPrefix, version))
+	return fmt.Appendf(nil, "%s/%d", stateCommitIDPrefix, version)
 }
 
 // getCommitID() retrieves the CommitID value for the specified version from the database
 func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 	var bz []byte
-	bz, err = NewTxnWrapper(s.writer, s.log, nil).Get(s.commitIDKey(version))
+	bz, err = NewTxn(s.Indexer.db.reader, nil, nil, false, false).Get(s.commitIDKey(version))
 	if err != nil {
 		return
 	}
@@ -482,44 +347,33 @@ func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 
 // setCommitID() stores the CommitID for the specified version and root in the database
 func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
-	w := NewTxnWrapper(s.writer, s.log, nil)
-	value, err := lib.Marshal(&lib.CommitID{
-		Height: version,
-		Root:   root,
-	})
+	w := NewTxn(s.Indexer.db.reader, s.writer, nil, false, false, version)
+	value, err := lib.Marshal(&lib.CommitID{Height: version, Root: root})
 	if err != nil {
 		return err
 	}
 	if err = w.Set([]byte(lastCommitIDPrefix), value); err != nil {
 		return err
 	}
-	k := s.commitIDKey(version)
-	return w.Set(k, value)
-}
-
-// historicalPrefix() calculates the prefix for a particular historical partition given the block height
-func historicalPrefix(height uint64) []byte {
-	return append([]byte(historicStatePrefix), binary.BigEndian.AppendUint64(nil, partitionHeight(height))...)
-}
-
-// partitionHeight() returns the height of the partition given some height
-// (ex. 45000 -> 40000 and 57550 -> 50000)
-func partitionHeight(height uint64) uint64 {
-	if height < partitionFrequency {
-		return 1 // not 0
+	if err = w.Set(s.commitIDKey(version), value); err != nil {
+		return err
 	}
-	return (height / partitionFrequency) * partitionFrequency
+	if e := w.Flush(); e != nil {
+		return ErrCommitDB(e)
+	}
+	return nil
 }
 
 // getLatestCommitID() retrieves the latest CommitID from the database
 func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *lib.CommitID) {
-	tx := NewTxnWrapper(db.NewTransactionAt(math.MaxUint64, false), log, nil)
-	defer tx.Close()
-	id = new(lib.CommitID)
+	reader := db.NewTransactionAt(math.MaxUint64, false)
+	tx := NewBadgerTxn(reader, nil, nil, false, false, 0)
+	defer reader.Discard()
 	bz, err := tx.Get([]byte(lastCommitIDPrefix))
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())
 	}
+	id = new(lib.CommitID)
 	if err = lib.Unmarshal(bz, id); err != nil {
 		log.Fatalf("unmarshalCommitID() failed with err: %s", err.Error())
 	}

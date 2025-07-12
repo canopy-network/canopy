@@ -3,9 +3,12 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"golang.org/x/sync/errgroup"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"time"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 var _ lib.RWIndexerI = &Indexer{}
@@ -20,11 +23,15 @@ var (
 	qcHeightPrefix     = []byte{7} // store key prefix for quorum certificate by height
 	doubleSignerPrefix = []byte{8} // store key prefix for double signers by height
 	checkPointPrefix   = []byte{9} // store key prefix for checkpoints for committee chains
+	// create indexer cache
+	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
+	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
 )
 
 // Indexer: the part of the DB that stores transactions, blocks, and quorum certificates
 type Indexer struct {
-	db *TxnWrapper
+	db     *Txn
+	config lib.Config
 }
 
 // BLOCKS CODE BELOW
@@ -32,31 +39,38 @@ type Indexer struct {
 // IndexBlock() turns the block into bytes, indexes the block by hash and height
 // and then indexes the transactions
 func (t *Indexer) IndexBlock(b *lib.BlockResult) lib.ErrorI {
-	// convert the header to bytes
-	bz, err := lib.Marshal(b.BlockHeader)
-	if err != nil {
-		return err
-	}
-	// index the header by hash key
-	hashKey, err := t.indexBlockByHash(b.BlockHeader.Hash, bz)
-	if err != nil {
-		return err
-	}
-	// index the hash key by height key
-	if err = t.indexBlockByHeight(b.BlockHeader.Height, hashKey); err != nil {
-		return err
-	}
-	// index each transaction individually
-	for _, tx := range b.Transactions {
-		if err = t.IndexTx(tx); err != nil {
+	blockCache.Add(b.BlockHeader.Height, b)
+	var eg errgroup.Group
+	// index block header in its own goroutine
+	eg.Go(func() error {
+		bz, err := lib.Marshal(b.BlockHeader)
+		if err != nil {
 			return err
 		}
+		hashKey, err := t.indexBlockByHash(b.BlockHeader.Hash, bz)
+		if err != nil {
+			return err
+		}
+		return t.indexBlockByHeight(b.BlockHeader.Height, hashKey)
+	})
+	// index transactions in parallel
+	for _, transaction := range b.Transactions {
+		tx := transaction // capture range variable
+		eg.Go(func() error {
+			return t.IndexTx(tx)
+		})
+	}
+	// wait for all goroutines to finish
+	if err := eg.Wait(); err != nil {
+		return ErrIndexBlock(err)
 	}
 	return nil
 }
 
 // DeleteBlockForHeight() deletes the block & transaction data for a certain height
 func (t *Indexer) DeleteBlockForHeight(height uint64) lib.ErrorI {
+	// remove from cache
+	blockCache.Remove(height)
 	// get the height key
 	heightKey := t.blockHeightKey(height)
 	// get the hash key (was indexed by height key)
@@ -83,6 +97,10 @@ func (t *Indexer) GetBlockByHash(hash []byte) (*lib.BlockResult, lib.ErrorI) {
 
 // GetBlockByHeight() returns the block result by height key
 func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
+	// check cache
+	if got, found := blockCache.Get(height); found {
+		return got, nil
+	}
 	// height key points to hash key
 	hashKey, err := t.db.Get(t.blockHeightKey(height))
 	if err != nil {
@@ -94,6 +112,10 @@ func (t *Indexer) GetBlockByHeight(height uint64) (*lib.BlockResult, lib.ErrorI)
 
 // GetBlockHeaderByHeight() returns the block result without transactions
 func (t *Indexer) GetBlockHeaderByHeight(height uint64) (*lib.BlockResult, lib.ErrorI) {
+	// check cache
+	if got, found := blockCache.Get(height); found {
+		return got, nil
+	}
 	// height key points to hash key
 	hashKey, err := t.db.Get(t.blockHeightKey(height))
 	if err != nil {
@@ -137,6 +159,9 @@ func (t *Indexer) GetBlocks(p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
 
 // IndexQC() indexes the quorum certificate by height
 func (t *Indexer) IndexQC(qc *lib.QuorumCertificate) lib.ErrorI {
+	// add to cache
+	//t.qcCache.Add(qc.Header.Height, qc)
+	// convert to bytes
 	bz, err := lib.Marshal(&lib.QuorumCertificate{
 		Header:      qc.Header,
 		Results:     qc.Results,
@@ -153,6 +178,10 @@ func (t *Indexer) IndexQC(qc *lib.QuorumCertificate) lib.ErrorI {
 
 // GetQCByHeight() returns the quorum certificate by height key
 func (t *Indexer) GetQCByHeight(height uint64) (*lib.QuorumCertificate, lib.ErrorI) {
+	// check cache
+	//if qc, found := t.qcCache.Get(height); found && qc.Block != nil {
+	//	return qc, nil
+	//}
 	// unlike blocks, QCs are stored by hash key
 	qc, err := t.getQC(t.qcHeightKey(height))
 	if err != nil {
@@ -178,6 +207,7 @@ func (t *Indexer) GetQCByHeight(height uint64) (*lib.QuorumCertificate, lib.Erro
 
 // DeleteQCForHeight() deletes the Quorum Certificate by height
 func (t *Indexer) DeleteQCForHeight(height uint64) lib.ErrorI {
+	//t.qcCache.Remove(height)
 	return t.db.Delete(t.qcHeightKey(height))
 }
 
@@ -205,12 +235,20 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 	if err = t.indexTxByHeightAndIndex(heightAndIndexKey, hashKey); err != nil {
 		return err
 	}
-	// store the hash key by sender
-	if err = t.indexTxBySender(result.GetSender(), heightAndIndexKey, hashKey); err != nil {
-		return err
+	// index by accounts indicates if the indexer should index by sender/receiver
+	if t.config.IndexByAccount {
+		// store the hash key by sender
+		if err = t.indexTxBySender(result.GetSender(), heightAndIndexKey, hashKey); err != nil {
+			return err
+		}
+
+		// store the hash key by recipient
+		if err = t.indexTxByRecipient(result.GetRecipient(), heightAndIndexKey, hashKey); err != nil {
+			return err
+		}
 	}
-	// store the hash key by recipient
-	return t.indexTxByRecipient(result.GetRecipient(), heightAndIndexKey, hashKey)
+
+	return nil
 }
 
 // GetTxByHash() returns the tx by hash
@@ -564,4 +602,4 @@ func (t *Indexer) decodeBigEndian(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
-func (t *Indexer) setDB(db *TxnWrapper) { t.db = db }
+func (t *Indexer) setDB(db *Txn) { t.db = db }

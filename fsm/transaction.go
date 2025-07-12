@@ -13,9 +13,9 @@ import (
 const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
-func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string) (*lib.TxResult, lib.ErrorI) {
+func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, lib.ErrorI) {
 	// validate the transaction and get the check result
-	result, err := s.CheckTx(transaction, txHash)
+	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 }
 
 // CheckTx() validates the transaction object
-func (s *StateMachine) CheckTx(transaction []byte, txHash string) (result *CheckTxResult, err lib.ErrorI) {
+func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (result *CheckTxResult, err lib.ErrorI) {
 	// create a new transaction object reference to ensure a non-nil transaction
 	tx := new(lib.Transaction)
 	// populate the object ref with the bytes of the transaction
@@ -61,7 +61,7 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string) (result *Check
 		return
 	}
 	// validate the signature of the transaction
-	sender, err := s.CheckSignature(msg, tx, txHash)
+	sender, err := s.CheckSignature(msg, tx, batchVerifier)
 	if err != nil {
 		return
 	}
@@ -85,7 +85,7 @@ type CheckTxResult struct {
 }
 
 // CheckSignature() validates the signer and the digital signature associated with the transaction object
-func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, txHash string) (crypto.AddressI, lib.ErrorI) {
+func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, batchSignatureVerifier *crypto.BatchVerifier) (crypto.AddressI, lib.ErrorI) {
 	// validate the actual signature bytes
 	if tx.Signature == nil || len(tx.Signature.Signature) == 0 {
 		return nil, ErrEmptySignature()
@@ -106,9 +106,16 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, txH
 			return nil, err
 		}
 	} else {
-		// normal case: validate the actual signature
-		if !publicKey.VerifyBytes(signBytes, tx.Signature.Signature) {
-			return nil, ErrInvalidSignature()
+		// if using a batch verifier
+		if batchSignatureVerifier != nil {
+			if e = batchSignatureVerifier.Add(publicKey, tx.Signature.PublicKey, signBytes, tx.Signature.Signature); e != nil {
+				return nil, ErrInvalidPublicKey(e)
+			}
+		} else {
+			// if verifying 1 by 1
+			if !publicKey.VerifyBytes(signBytes, tx.Signature.Signature) {
+				return nil, ErrInvalidSignature()
+			}
 		}
 	}
 	// calculate the corresponding address from the public key
@@ -132,16 +139,15 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, txH
 				x.Signer = authorized
 			case *MessageChangeParameter:
 				// populate the proposal hash for change parameter
-				x.ProposalHash = txHash
+				hash, _ := tx.GetHash()
+				x.ProposalHash = lib.BytesToString(hash)
 			case *MessageDAOTransfer:
 				// populate the proposal hash for dao transfer
-				x.ProposalHash = txHash
+				hash, _ := tx.GetHash()
+				x.ProposalHash = lib.BytesToString(hash)
 			case *MessageCreateOrder:
 				// populate the order id for the create order
-				hash, err := lib.StringToBytes(txHash)
-				if err != nil {
-					return nil, err
-				}
+				hash, _ := tx.GetHash()
 				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
 			}
 			// return the signer address
@@ -171,26 +177,29 @@ func (s *StateMachine) CheckReplay(tx *lib.Transaction, txHash string) lib.Error
 	if s.Height() < 2 {
 		return nil
 	}
-	// ensure the store can 'read the indexer'
-	store, ok := s.store.(lib.RIndexerI)
-	// if it can't then exit
-	if !ok {
-		return ErrWrongStoreType()
-	}
-	// convert the transaction hash string into bytes
-	hashBz, err := lib.StringToBytes(txHash)
-	if err != nil {
-		return err
-	}
-	// ensure the tx doesn't already exist in the indexer
-	// same block replays are protected at a higher level
-	txResult, err := store.GetTxByHash(hashBz)
-	if err != nil {
-		return err
-	}
-	// if the tx transaction result isn't nil, and it has a hash
-	if txResult != nil && txResult.TxHash == txHash {
-		return lib.ErrDuplicateTx(txHash)
+	// if checking the transaction hash
+	if txHash != "" {
+		// ensure the store can 'read the indexer'
+		store, ok := s.store.(lib.RIndexerI)
+		// if it can't then exit
+		if !ok {
+			return ErrWrongStoreType()
+		}
+		// convert the transaction hash string into bytes
+		hashBz, err := lib.StringToBytes(txHash)
+		if err != nil {
+			return err
+		}
+		// ensure the tx doesn't already exist in the indexer
+		// same block replays are protected at a higher level
+		txResult, err := store.GetTxByHash(hashBz)
+		if err != nil {
+			return err
+		}
+		// if the tx transaction result isn't nil, and it has a hash
+		if txResult != nil && txResult.TxHash == txHash {
+			return lib.ErrDuplicateTx(txHash)
+		}
 	}
 	// this gives the protocol a theoretically safe tx indexer prune height
 	maxHeight, minHeight := s.Height()+BlockAcceptanceRange, uint64(0)

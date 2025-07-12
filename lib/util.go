@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 /* This file implements shared general utility functions that are used throughout the app */
@@ -237,11 +238,13 @@ type jsonPage struct {
 	TotalCount int             `json:"totalCount"`
 }
 
+var marshaller = proto.MarshalOptions{Deterministic: true}
+
 // Marshal() serializes a proto.Message into a byte slice
 func Marshal(message any) ([]byte, ErrorI) {
 	// convert the message into proto bytes using the proto marshaller
-	protoBytes, err := proto.Marshal(message.(proto.Message))
-	// if an error occurred during hte conversion process
+	protoBytes, err := marshaller.Marshal(message.(proto.Message))
+	// if an error occurred during the conversion process
 	if err != nil {
 		// exit with a wrapped error
 		return nil, ErrMarshal(err)
@@ -604,21 +607,31 @@ func CatchPanic(l LoggerI) {
 }
 
 // JoinLenPrefix() appends the items together separated by a single byte to represent the length of the segment
-func JoinLenPrefix(toAppend ...[]byte) (res []byte) {
-	// for each item to append
+func JoinLenPrefix(toAppend ...[]byte) []byte {
+	// calculate total length first
+	totalLen := 0
 	for _, item := range toAppend {
-		// if the item is empty
+		// if the item isn't empty, calculate the size
+		if item != nil {
+			// 1 byte for length + item length
+			totalLen += 1 + len(item)
+		}
+	}
+	// make the proper size buffer
+	res := make([]byte, 0, totalLen)
+	// iterate through each 'segment' and append it
+	for _, item := range toAppend {
+		// if item is empty, skip
 		if item == nil {
-			// next iteration
 			continue
 		}
-		// store the length of the segment in a single byte
-		length := []byte{byte(len(item))}
-		// append to the reset of the segment
-		res = append(append(res, length...), item...)
+		// length
+		res = append(res, byte(len(item)))
+		// item
+		res = append(res, item...)
 	}
-	// exit
-	return
+	// return the result
+	return res
 }
 
 // DecodeLengthPrefixed() decodes a key that is delimited by the length of the segment in a single byte
@@ -737,7 +750,7 @@ func TimeTrack(l LoggerI, start time.Time) {
 			break
 		}
 	}
-	l.Debugf("%s took %s", functionName, elapsed)
+	l.Warnf("%s took %s", functionName, elapsed)
 }
 
 func PrintStackTrace() {
@@ -763,6 +776,19 @@ func Append(a, b []byte) []byte {
 	return out
 }
 
+// AppendWithBuffer() appends a and b into a fresh []byte using a buffer to reduce allocations.
+// The result is safe to retain and use independently of a/b/buffer.
+func AppendWithBuffer(buf *[]byte, a, b []byte) []byte {
+	totalLen := len(a) + len(b)
+	if cap(*buf) < totalLen {
+		*buf = make([]byte, totalLen)
+	}
+	*buf = (*buf)[:totalLen]
+	copy(*buf, a)
+	copy((*buf)[len(a):], b)
+	return *buf
+}
+
 // EqualByteSlices() performs equality check on two byte slices
 func EqualByteSlices(a, b [][]byte) bool {
 	if len(a) != len(b) {
@@ -784,4 +810,21 @@ func ContainsByteSlice(list [][]byte, target []byte) (found bool) {
 		}
 	}
 	return
+}
+
+type stringStruct struct {
+	str unsafe.Pointer
+	len int
+}
+
+//go:noescape
+//go:linkname memhash runtime.memhash
+func memhash(p unsafe.Pointer, h, s uintptr) uintptr
+
+// MemHash is the hash function used by go map, it utilizes available hardware instructions(behaves
+// as aeshash if aes instruction is available).
+// NOTE: The hash seed changes for every process. So, this cannot be used as a persistent hash.
+func MemHash(data []byte) uint64 {
+	ss := (*stringStruct)(unsafe.Pointer(&data))
+	return uint64(memhash(ss.str, 0, uintptr(ss.len)))
 }

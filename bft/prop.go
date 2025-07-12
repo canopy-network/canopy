@@ -21,6 +21,8 @@ type ProposalsForHeight map[uint64]map[string][]*Message // [ROUND][PHASE] -> PR
 
 // AddProposal() saves a validated proposal from the Leader in memory
 func (b *BFT) AddProposal(m *Message) lib.ErrorI {
+	b.Controller.Lock()
+	defer b.Controller.Unlock()
 	// load the list of Proposals for the round
 	// initialize if not yet created
 	roundProposal, found := b.Proposals[m.Header.Round]

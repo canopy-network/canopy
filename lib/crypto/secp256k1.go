@@ -11,6 +11,8 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+/* This file implements logic for SECP256K1 when the public key is compressed (33 bytes) - this affects the 'addressing' and 'verify bytes' logic */
+
 const (
 	SECP256K1PrivKeySize   = 32
 	SECP256K1PubKeySize    = 33
@@ -165,8 +167,15 @@ func (s *SECP256K1PublicKey) Address() AddressI {
 }
 
 // VerifyBytes() returns true if the digital signature is valid for this public key and the given message
-func (s *SECP256K1PublicKey) VerifyBytes(msg []byte, sig []byte) bool {
-	return ethCrypto.VerifySignature(s.Bytes(), Hash(msg), sig)
+func (s *SECP256K1PublicKey) VerifyBytes(msg []byte, sig []byte) (valid bool) {
+	cached, addToCache := CheckCache(s, msg, sig)
+	if cached {
+		return true
+	}
+	if valid = ethCrypto.VerifySignature(s.Bytes(), Hash(msg), sig); valid {
+		addToCache()
+	}
+	return
 }
 
 // Bytes() returns the byte representation of the Public Key

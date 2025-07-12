@@ -126,6 +126,7 @@ func (s *StateMachine) GetNonSigners() (results NonSigners, e lib.ErrorI) {
 
 // GetDoubleSigners() returns all double signers save in the state
 // IMPORTANT NOTE: this returns <address> -> <heights> NOT <pubic_key> -> <heights>
+// CONTRACT: Querying uncommitted double signers is not supported
 func (s *StateMachine) GetDoubleSigners() (results []*lib.DoubleSigner, e lib.ErrorI) {
 	return s.Store().(lib.StoreI).GetDoubleSigners()
 }

@@ -328,7 +328,7 @@ func (m *Metrics) Start() {
 		return
 	}
 	// if the metrics server is enabled
-	if m.config.Enabled {
+	if m.config.MetricsEnabled {
 		go func() {
 			m.log.Infof("Starting metrics server on %s", m.config.PrometheusAddress)
 			// run the server
@@ -348,7 +348,7 @@ func (m *Metrics) Stop() {
 		return
 	}
 	// if the metrics server isn't enabled
-	if m.config.Enabled {
+	if m.config.MetricsEnabled {
 		// shutdown the server
 		if err := m.server.Shutdown(context.Background()); err != nil {
 			m.log.Error(err.Error())

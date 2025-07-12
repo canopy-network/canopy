@@ -134,8 +134,15 @@ func (p *ED25519PublicKey) Bytes() []byte { return p.PublicKey }
 func (p *ED25519PublicKey) String() string { return hex.EncodeToString(p.Bytes()) }
 
 // VerifyBytes() validates a digital signature was signed by the paired private key given the message signed
-func (p *ED25519PublicKey) VerifyBytes(msg []byte, sig []byte) bool {
-	return ed25519.Verify(p.PublicKey, msg, sig)
+func (p *ED25519PublicKey) VerifyBytes(msg []byte, sig []byte) (valid bool) {
+	cached, addToCache := CheckCache(p, msg, sig)
+	if cached {
+		return true
+	}
+	if valid = ed25519.Verify(p.PublicKey, msg, sig); valid {
+		addToCache()
+	}
+	return
 }
 
 // Equals() compares two public key objects and returns if the two are equal

@@ -12,17 +12,19 @@ import (
 /* This file implements the 'Certificate Result' logic which ensures the */
 
 // NewCertificateResults() creates a structure to hold the results of the certificate produced by a quorum in consensus
-func (c *Controller) NewCertificateResults(block *lib.Block, blockResult *lib.BlockResult, evidence *bft.ByzantineEvidence) (results *lib.CertificateResult) {
+func (c *Controller) NewCertificateResults(
+	fsm *fsm.StateMachine, block *lib.Block, blockResult *lib.BlockResult,
+	evidence *bft.ByzantineEvidence, rcBuildHeight uint64) (results *lib.CertificateResult) {
 	// calculate reward recipients, creating a 'certificate results' object reference in the process
-	results = c.CalculateRewardRecipients(block.BlockHeader.ProposerAddress, c.RootChainHeight())
+	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
 	// handle swaps
-	c.HandleSwaps(blockResult, results, c.RootChainHeight())
+	c.HandleSwaps(fsm, blockResult, results, rcBuildHeight)
 	// set slash recipients
 	c.CalculateSlashRecipients(results, evidence)
 	// set checkpoint
 	c.CalculateCheckpoint(blockResult, results)
 	// handle retired status
-	c.HandleRetired(results)
+	c.HandleRetired(fsm, results)
 	// exit
 	return
 }
@@ -65,14 +67,14 @@ func (c *Controller) SendCertificateResultsTx(qc *lib.QuorumCertificate) {
 }
 
 // CalculateRewardRecipients() calculates the block reward recipients of the proposal
-func (c *Controller) CalculateRewardRecipients(proposerAddress []byte, rootChainHeight uint64) (results *lib.CertificateResult) {
+func (c *Controller) CalculateRewardRecipients(fsm *fsm.StateMachine, proposerAddress []byte, rootChainHeight uint64) (results *lib.CertificateResult) {
 	// set block reward recipients
 	results = &lib.CertificateResult{
 		RewardRecipients: &lib.RewardRecipients{},
 		SlashRecipients:  new(lib.SlashRecipients),
 	}
 	// get the root chain id from the governance params in the state machine
-	rootChainId, err := c.FSM.GetRootChainId()
+	rootChainId, err := fsm.GetRootChainId()
 	// if an error occurred
 	if err != nil {
 		// log the error
@@ -85,7 +87,7 @@ func (c *Controller) CalculateRewardRecipients(proposerAddress []byte, rootChain
 	// start the proposer with a 100% allocation
 	proposer := &lib.LotteryWinner{Winner: proposerAddress, Cut: 100}
 	// get the delegate and their cut from the state machine
-	delegate, err = c.GetRootChainLotteryWinner(rootChainHeight)
+	delegate, err = c.GetRootChainLotteryWinner(fsm, rootChainHeight)
 	// if an error occurred
 	if err != nil {
 		// log the error and continue
@@ -98,7 +100,7 @@ func (c *Controller) CalculateRewardRecipients(proposerAddress []byte, rootChain
 	// if this chain isn't its own root chain, add the nested participants to the 'reward recipients
 	if !isOwnRoot {
 		// get the nested-validator lottery winner for the 'self chain' (if self is not root)
-		nValidator, err = c.FSM.LotteryWinner(c.Config.ChainId, true)
+		nValidator, err = fsm.LotteryWinner(c.Config.ChainId, true)
 		// if an error occurred
 		if err != nil {
 			// log the error and continue
@@ -107,7 +109,7 @@ func (c *Controller) CalculateRewardRecipients(proposerAddress []byte, rootChain
 		// add the nested validator as a reward recipient, subtracting share away from the proposer
 		c.AddRewardRecipient(proposer, nValidator, results, isOwnRoot, rootChainId)
 		// get the nested-delegate lottery winner for the 'self chain' (if self is not root)
-		nDelegate, err = c.FSM.LotteryWinner(c.Config.ChainId)
+		nDelegate, err = fsm.LotteryWinner(c.Config.ChainId)
 		// if an error occurred
 		if err != nil {
 			// log the error and continue
@@ -177,18 +179,37 @@ func (c *Controller) addPaymentPercent(toAdd *lib.LotteryWinner, results *lib.Ce
 }
 
 // HandleSwaps() handles the 'buy' side of the sell orders
-func (c *Controller) HandleSwaps(blockResult *lib.BlockResult, results *lib.CertificateResult, rootChainHeight uint64) {
-	// parse the last block for 'lock orders'
-	lockOrders := c.FSM.ParseLockOrders(blockResult)
-	// get orders from the root-chain
-	orders, err := c.LoadRootChainOrderBook(rootChainHeight)
+func (c *Controller) HandleSwaps(fsm *fsm.StateMachine, blockResult *lib.BlockResult, results *lib.CertificateResult, rootChainHeight uint64) {
+	var orders *lib.OrderBook
+	// load the root chain id
+	rootChainId, err := fsm.GetRootChainId()
+	if err != nil {
+		c.log.Error(err.Error())
+		// exit without handling
+		return
+	}
+	// check if own root
+	ownRoot, err := fsm.LoadIsOwnRoot()
+	if err != nil {
+		c.log.Error(err.Error())
+		// exit without handling
+		return
+	}
+	// execute a remote call to get the root chains order book to enact the 'buyer side'
+	if !ownRoot {
+		// get orders from the root-chain
+		orders, err = c.LoadRootChainOrderBook(rootChainId, rootChainHeight)
+	} else {
+		orders, err = fsm.GetOrderBook(c.Config.ChainId)
+	}
 	// if an error occurred while loading the orders
 	if err != nil {
+		c.log.Error(err.Error())
 		// exit without handling
 		return
 	}
 	// process the root chain order book against the state
-	closeOrders, resetOrders := c.FSM.ProcessRootChainOrderBook(orders, blockResult)
+	lockOrders, closeOrders, resetOrders := fsm.ProcessRootChainOrderBook(orders, blockResult)
 	// add the orders to the certificate result - truncating the 'lock orders' for defensive spam protection
 	results.Orders = &lib.Orders{
 		LockOrders:  lib.TruncateSlice(lockOrders, 1000),
@@ -235,9 +256,9 @@ func (c *Controller) CalculateCheckpoint(blockResult *lib.BlockResult, results *
 }
 
 // HandleRetired() checks if the committee is retiring and sets in the results accordingly
-func (c *Controller) HandleRetired(results *lib.CertificateResult) {
+func (c *Controller) HandleRetired(fsm *fsm.StateMachine, results *lib.CertificateResult) {
 	// get the governance params from the 'nested chain' FSM
-	cons, err := c.FSM.GetParamsCons()
+	cons, err := fsm.GetParamsCons()
 	// if an error occurred
 	if err != nil {
 		// log the error

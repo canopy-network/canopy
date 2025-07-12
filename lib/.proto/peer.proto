@@ -77,14 +77,6 @@ message PeerMeta {
   bytes signature = 3;
 }
 
-// ConsensusMessage is a p2p message payload that is handled by the BFT module
-message ConsensusMessage {
-  // chain_id: is the unique identifier of the committee associated with this message
-  uint64 chain_id = 1; // @gotags: json:"chainID"
-  // message: the bytes of the consensus message that may be unmarshalled into a consensus.Message object
-  bytes message = 2;
-}
-
 // BlockRequestMessage is a p2p message payload that is requesting a block and/or max_height of the peer
 message BlockRequestMessage {
   // chain_id: is the unique identifier of the committee associated with this message
@@ -107,6 +99,8 @@ message BlockMessage {
   uint64 total_vdf_iterations = 3; // @gotags: json:"totalVDFIterations"
   // block_and_certificate: is the actual block and the super-majority signed quorum certificate that justifies it
   QuorumCertificate BlockAndCertificate = 4; // @gotags: json:"blockAndCertificate"
+  // timestamp: optional timestamp to help coordinate new height
+  uint64 time = 5;
 }
 
 // TxMessage is a p2p message payload that is an inbound transaction to be processed by the blockchain's FSM and saved
@@ -114,6 +108,6 @@ message BlockMessage {
 message TxMessage {
   // chain_id: is the unique identifier of the committee associated with this message
   uint64 chain_id = 1; // @gotags: json:"chainID"
-  // tx: is the bytes of the transaction that may be unmarshalled into a Transaction object
-  bytes tx = 2;
+  // txs: is the bytes of the transactions that may be unmarshalled into a Transaction object
+  repeated bytes txs = 2;
 }

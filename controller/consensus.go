@@ -265,8 +265,9 @@ func (c *Controller) applyTimeouts(queue map[uint64]blockSyncRequest) []blockSyn
 // - A request for it exists in the queue
 // - Response is from the expected peer
 func (c *Controller) verifyResponse(msg *lib.MessageAndMetadata, queue map[uint64]blockSyncRequest) (blockMessage *lib.BlockMessage, height uint64) {
-	blockMessage, ok := msg.Message.(*lib.BlockMessage)
-	if !ok {
+	// Get the block message from the message bytes
+	blockMessage = new(lib.BlockMessage)
+	if err := lib.Unmarshal(msg.Message, blockMessage); err != nil {
 		c.log.Warn("Not a block response msg")
 		c.P2P.ChangeReputation(msg.Sender.Address.PublicKey, p2p.InvalidBlockRep)
 		return nil, 0
@@ -302,22 +303,10 @@ func (c *Controller) ListenForConsensus() {
 		// execute in a sub-function to unify error handling and enable 'defer' functionality
 		if err := func() (err lib.ErrorI) {
 			c.log.Debugf("Handling consensus message")
-			//defer lib.TimeTrack(c.log, time.Now())
-			// lock the controller for thread safety
-			c.Lock()
-			// once the handler completes, unlock
-			defer c.Unlock()
-			// try to cast the message to a 'consensus message'
-			consensusMessage, ok := msg.Message.(*lib.ConsensusMessage)
-			// if cast unsuccessful
-			if !ok {
-				// exit with error
-				return
-			}
-			// create a new bft message object reference to ensure non nil results
+			// create a new 'consensus message' to unmarshal the bytes to
 			bftMsg := new(bft.Message)
-			// populate the object reference with the payload bytes of the message
-			if err = lib.Unmarshal(consensusMessage.Message, bftMsg); err != nil {
+			// try to unmarshal into a consensus message
+			if err = lib.Unmarshal(msg.Message, bftMsg); err != nil {
 				// exit with error
 				return
 			}
@@ -371,11 +360,10 @@ func (c *Controller) ListenForBlockRequests() {
 					// exit this iteration
 					return
 				}
-				// try to cast the p2p msg to a block request message
-				request, ok := msg.Message.(*lib.BlockRequestMessage)
-				// if the cast fails
-				if !ok {
-					// log a warning about the failed cast
+				// try to unmarshal the p2p msg to a block request message
+				request := new(lib.BlockRequestMessage)
+				if err := lib.Unmarshal(msg.Message, request); err != nil {
+					// log a warning about the failed unmarshal
 					c.log.Warnf("Invalid block-request msg from peer %s", lib.BytesToTruncatedString(senderID))
 					// slash the peer's reputation
 					c.P2P.ChangeReputation(senderID, p2p.InvalidMsgRep)
@@ -421,8 +409,7 @@ func (c *Controller) SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable)
 	// log the initialization of the send process
 	c.log.Debugf("Sending to %d replicas", replicas.NumValidators)
 	// sign the consensus message
-	signedMessage, err := c.signConsensusMessage(msg)
-	if err != nil {
+	if err := msg.Sign(c.PrivateKey); err != nil {
 		// log the error
 		c.log.Error(err.Error())
 		// exit
@@ -433,13 +420,13 @@ func (c *Controller) SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable)
 		// check if replica is self
 		if bytes.Equal(replica.PublicKey, c.PublicKey) {
 			// send the message to self using internal routing
-			if err = c.P2P.SelfSend(c.PublicKey, Cons, signedMessage); err != nil {
+			if err := c.P2P.SelfSend(c.PublicKey, Cons, msg); err != nil {
 				// log the error
 				c.log.Error(err.Error())
 			}
 		} else {
 			// if not self, send directly to peer using P2P
-			if err = c.P2P.SendTo(replica.PublicKey, Cons, signedMessage); err != nil {
+			if err := c.P2P.SendTo(replica.PublicKey, Cons, msg); err != nil {
 				// log the error (warning is used in case 'some' replicas are not reachable)
 				c.log.Warn(err.Error())
 			}
@@ -449,9 +436,8 @@ func (c *Controller) SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable)
 
 // SendToProposer() sends a bft message to the leader of the Consensus round
 func (c *Controller) SendToProposer(msg lib.Signable) {
-	// sign the consensus message
-	signedMessage, err := c.signConsensusMessage(msg)
-	if err != nil {
+	// sign the message
+	if err := msg.Sign(c.PrivateKey); err != nil {
 		// log the error
 		c.log.Error(err.Error())
 		// exit
@@ -460,13 +446,13 @@ func (c *Controller) SendToProposer(msg lib.Signable) {
 	// check if sending to 'self' or peer
 	if c.Consensus.SelfIsProposer() {
 		// send using internal routing
-		if err = c.P2P.SelfSend(c.PublicKey, Cons, signedMessage); err != nil {
+		if err := c.P2P.SelfSend(c.PublicKey, Cons, msg); err != nil {
 			// log the error
 			c.log.Error(err.Error())
 		}
 	} else {
 		// handle peer send
-		if err = c.P2P.SendTo(c.Consensus.ProposerKey, Cons, signedMessage); err != nil {
+		if err := c.P2P.SendTo(c.Consensus.ProposerKey, Cons, msg); err != nil {
 			// log the error
 			c.log.Error(err.Error())
 		}
@@ -587,10 +573,9 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 		select {
 		// handle the inbound message
 		case m := <-c.P2P.Inbox(Block):
-			// cast the inbound message payload as a block message
-			blockMessage, ok := m.Message.(*lib.BlockMessage)
-			// if the cast fails
-			if !ok {
+			// unmarshal the inbound message payload as a block message
+			blockMessage := new(lib.BlockMessage)
+			if err := lib.Unmarshal(m.Message, blockMessage); err != nil {
 				// log the unexpected behavior
 				c.log.Warnf("Invalid block message response from %s", lib.BytesToTruncatedString(m.Sender.Address.PublicKey))
 				// slash the peer reputation
@@ -676,29 +661,11 @@ func (c *Controller) finishSyncing() {
 	// when function completes, unlock
 	defer c.Unlock()
 	// signal a reset of bft for the chain
-	c.Consensus.ResetBFT <- bft.ResetBFT{ProcessTime: time.Since(c.LoadLastCommitTime(c.FSM.Height()))}
+	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
 	// set syncing to false
 	c.isSyncing.Store(false)
 	// enable listening for a block
 	go c.ListenForBlock()
-}
-
-// signConsensusMessage() signs, encodes, and wraps a consensus message in preparation for sending
-func (c *Controller) signConsensusMessage(msg lib.Signable) (*lib.ConsensusMessage, lib.ErrorI) {
-	// sign the message
-	if err := msg.Sign(c.PrivateKey); err != nil {
-		return nil, err
-	}
-	// convert the message to bytes
-	messageBytes, err := lib.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	// wrap the message in consensus
-	return &lib.ConsensusMessage{
-		ChainId: c.Config.ChainId,
-		Message: messageBytes,
-	}, nil
 }
 
 // ConsensusSummary() for the RPC - returns the summary json object of the bft for a specific chainID

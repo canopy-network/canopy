@@ -48,10 +48,6 @@ type AddressI interface {
 	// String() returns the hex string representation
 	String() string
 	Equals(AddressI) bool
-	// models the json.Marshaller encoding interface
-	json.Marshaler
-	// models the json.Unmarshaler decoding interface
-	json.Unmarshaler
 }
 
 // MultiPublicKeyI is an interface model for a multi-signature public key, representing multiple signers in a single structure

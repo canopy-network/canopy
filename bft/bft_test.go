@@ -246,7 +246,7 @@ func TestStartProposePhase(t *testing.T) {
 				require.Equal(t, expectedView, *msg.Header)
 				require.NotNil(t, msg.Qc)
 				require.Equal(t, expectedQCView.Phase, msg.Qc.Header.Phase)
-				block, results, e := c.cont.ProduceProposal(nil, nil)
+				_, block, results, e := c.cont.ProduceProposal(nil, nil)
 				require.NoError(t, e)
 				require.Equal(t, block, msg.Qc.Block)
 				require.Equal(t, results.Hash(), msg.Qc.Results.Hash())
@@ -556,7 +556,7 @@ func TestStartCommitPhase(t *testing.T) {
 			}
 			if test.has23MajPropVote {
 				multiKey, blockHash, resultsHash = c.simPrecommitVotePhase(t, 0)
-				c.bft.Block, c.bft.Results, _ = c.cont.ProduceProposal(nil, nil)
+				_, c.bft.Block, c.bft.Results, _ = c.cont.ProduceProposal(nil, nil)
 			}
 			go c.bft.StartCommitPhase()
 			// receive the commit message
@@ -748,7 +748,6 @@ func TestPacemaker(t *testing.T) {
 				c.simPacemakerPhase(t)
 			}
 			c.bft.Pacemaker()
-			require.Equal(t, uint64(1), c.bft.Height)
 			require.Equal(t, test.expectedPacemakerRound, c.bft.Round)
 		})
 	}

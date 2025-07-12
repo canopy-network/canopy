@@ -18,7 +18,7 @@ func (b *BFT) ValidateByzantineEvidence(slashRecipients *lib.SlashRecipients, be
 	if slashRecipients == nil {
 		return nil
 	}
-	if slashRecipients.DoubleSigners != nil {
+	if len(slashRecipients.DoubleSigners) != 0 {
 		// locally generate a Double Signers list from the provided evidence
 		doubleSigners, err := b.ProcessDSE(be.DSE.Evidence...)
 		if err != nil {
@@ -73,18 +73,21 @@ func (b *BFT) ProcessDSE(dse ...*DoubleSignEvidence) (results []*lib.DoubleSigne
 		}
 		// load the Validator set for this Committee at that height
 		committeeHeight := x.VoteA.Header.RootHeight
+		// load the root chain id for the committeeHeight - 1; this ensures we are never using the latest
+		// height which would require logic to handle 'switch root' in the currently played block
+		rootChainId := b.Controller.LoadRootChainId(committeeHeight - 1)
 		// load the committee from the root chain id using the n-1 height because state machine heights are 'end state' once committed
-		vs, err := b.LoadCommittee(b.LoadRootChainId(x.VoteA.Header.Height), committeeHeight)
+		vs, err := b.LoadCommittee(rootChainId, committeeHeight)
 		if err != nil {
 			return nil, err
 		}
 		// ensure the evidence isn't expired
-		minEvidenceHeight, err := b.LoadMinimumEvidenceHeight()
+		minEvidenceHeight, err := b.LoadMinimumEvidenceHeight(rootChainId, committeeHeight)
 		if err != nil {
 			return nil, err
 		}
 		// validate the piece of evidence
-		if err = x.Check(vs, b.View, minEvidenceHeight); err != nil {
+		if err = x.Check(vs, b.View, *minEvidenceHeight); err != nil {
 			return nil, err
 		}
 		// if the votes are identical - it's not a double sign...
@@ -106,7 +109,7 @@ func (b *BFT) ProcessDSE(dse ...*DoubleSignEvidence) (results []*lib.DoubleSigne
 			if er != nil {
 				return nil, lib.ErrPubKeyFromBytes(er)
 			}
-			if b.IsValidDoubleSigner(committeeHeight, pk.Address().Bytes()) {
+			if b.IsValidDoubleSigner(rootChainId, committeeHeight, pk.Address().Bytes()) {
 				b.log.Infof("DoubleSigner %s is valid", lib.BytesToTruncatedString(pubKey))
 				// check to see if double signer included in the results already
 				for i, doubleSigner := range results {
@@ -243,6 +246,8 @@ type PartialQCs map[string]*QC // [ PayloadHash ] -> Partial QC
 
 // AddPartialQC() saves a non-majority Quorum Certificate which is a big hint of faulty behavior
 func (b *BFT) AddPartialQC(m *Message) (err lib.ErrorI) {
+	b.Controller.Lock()
+	defer b.Controller.Unlock()
 	bz, err := lib.Marshal(m.Qc)
 	if err != nil {
 		return

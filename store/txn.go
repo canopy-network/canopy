@@ -2,129 +2,314 @@ package store
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/lib"
-	"sort"
-	"strings"
-)
+	"reflect"
+	"sync"
+	"unsafe"
 
-// enforce the StoreTxnI interface
-var _ lib.StoreTxnI = &Txn{}
+	"github.com/canopy-network/canopy/lib"
+	"github.com/dgraph-io/badger/v4"
+
+	"github.com/google/btree"
+)
 
 /*
 	Txn acts like a database transaction
-	It saves set/del operations in memory and allows the caller to Write() to the parent or Discard()
-	When read from, it merges with the parent as if Write() had already been called
+	It saves set/del operations in memory and allows the caller to Flush() to the parent or Discard()
+	When read from, it merges with the parent as if Flush() had already been called
 
 	Txn abstraction is necessary due to the inability of BadgerDB to have nested transactions.
 	Txns allow an easy rollback of write operations within a single Transaction object, which is necessary
 	for ephemeral states and testing the validity of a proposal block / transactions.
 
 	CONTRACT:
-	- only safe when writing to another memory store like a badger.Txn() as Write() is not atomic.
+	- only safe when writing to another memory store like a badger.Txn() as Flush() is not atomic.
 	- not thread safe (can't use 1 txn across multiple threads)
 	- nil values are supported; deleted values are also set to nil
 	- keys must be smaller than 128 bytes
-	- Nested txns are theoretically supported, but iteration becomes increasingly inefficient
+	- Nested txns are supported, but iteration becomes increasingly inefficient
 */
 
+const (
+	opDelete op = iota // delete the key
+	opSet              // set the key
+	opEntry            // custom badger entry
+)
+
+// Txn is an in memory database transaction
 type Txn struct {
-	lib.StoreI // memory store to Write() to
-	txn
+	reader       TxnReaderI // memory store to Read() from
+	writer       TxnWriterI // memory store to Flush() to
+	prefix       []byte     // prefix for keys in this txn
+	state        bool       // whether the flush should go to the HSS and LSS
+	sort         bool       // whether to sort the keys in the txn; used for iteration
+	writeVersion uint64     // the version to commit the data to
+	txn          *txn       // the internal structure maintaining the write operations
 }
 
-// internal txn structure maintains the write operations sorted lexicographically by keys
+// txn internal structure maintains the write operations sorted lexicographically by keys
 type txn struct {
-	ops       map[string]op // [string(key)] -> set/del operations saved in memory
-	sorted    []string      // ops keys sorted lexicographically; needed for iteration
-	sortedLen int           // len(sorted)
+	ops    map[uint64]valueOp        // [string(key)] -> set/del operations saved in memory
+	sorted *btree.BTreeG[*CacheItem] // sorted btree of keys for fast iteration
+	rbuf   []byte                    // a buffer to re-use for reads
+
+	l sync.Mutex // thread safety
 }
 
-// op or Operation has the value portion of the operation and if it's a *delete* or a *set*
-type op struct {
-	value  []byte // value of key value pair
-	delete bool   // is operation delete
+// valueOp has the value portion of the operation and the corresponding operation to perform
+type valueOp struct {
+	key   []byte        // the key of the key value pair
+	value []byte        // value of key value pair
+	entry *badger.Entry // value of key value pair in case of a custom entry
+	op    op            // is operation delete
 }
 
-// NewTxn() creates a new instance of a Txn with the specified parent store
-func NewTxn(parent lib.StoreI) *Txn {
-	return &Txn{StoreI: parent, txn: txn{ops: make(map[string]op), sorted: make([]string, 0)}}
+// op is the type of operation to be performed on the key
+type op uint8
+
+// TxReaderI() defines the interface to read a TxnTransaction
+// Txn implements this itself to allow for nested transactions
+type TxnReaderI interface {
+	Get(key []byte) ([]byte, lib.ErrorI)
+	NewIterator(prefix []byte, reverse bool, allVersions bool) lib.IteratorI
+	Discard()
 }
 
-// Get() retrieves the value for a given key from either the in-memory operations or the parent store
-func (c *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
-	if v, found := c.ops[lib.BytesToString(key)]; found {
+// TxnWriterI() defines the interface to write a TxnTransaction
+// Txn implements this itself to allow for nested transactions
+type TxnWriterI interface {
+	SetEntryAt(entry *badger.Entry, version uint64) error
+	Flush() error
+	Cancel()
+}
+
+// NewBadgerTxn() creates a new instance of Txn from badger Txn and WriteBatch correspondingly
+func NewBadgerTxn(reader *badger.Txn, writer *badger.WriteBatch, prefix []byte, state, sort bool, writeVersion ...uint64) *Txn {
+	var writerI TxnWriterI
+	// prevent nil interface containing nil value
+	if writer != nil {
+		writerI = writer
+	}
+	// exit with the new transaction
+	return NewTxn(BadgerTxnReader{reader, prefix}, writerI, prefix, state, sort, writeVersion...)
+}
+
+// NewTxn() creates a new instance of Txn with the specified reader and writer
+func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort bool, version ...uint64) *Txn {
+	var v uint64
+	if len(version) != 0 {
+		v = version[0]
+	}
+	return &Txn{
+		reader:       reader,
+		writer:       writer,
+		prefix:       prefix,
+		state:        state,
+		sort:         sort,
+		writeVersion: v,
+		txn: &txn{
+			ops:    make(map[uint64]valueOp),
+			sorted: btree.NewG(32, func(a, b *CacheItem) bool { return a.Less(b) }), // need to benchmark this value
+			l:      sync.Mutex{},
+		},
+	}
+}
+
+// Get() retrieves the value for a given key from either the txn operations or the reader store
+func (t *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
+	t.txn.l.Lock()
+	defer t.txn.l.Unlock()
+	// first retrieve from the in-memory txn
+	if v, found := t.txn.ops[lib.MemHash(key)]; found {
 		return v.value, nil
 	}
-	return c.StoreI.Get(key)
+	// if not found, retrieve from the parent reader
+	return t.reader.Get(lib.AppendWithBuffer(&t.txn.rbuf, t.prefix, key))
 }
 
-// Set() adds or updates the value for a key in the in-memory operations
-func (c *Txn) Set(key, value []byte) lib.ErrorI {
-	c.update(lib.BytesToString(key), value, false);
-	return nil
+// Set() adds or updates the value for a key in the txn operations
+func (t *Txn) Set(key, value []byte) lib.ErrorI {
+	return t.update(key, value, nil, opSet)
 }
 
-// Delete() marks a key for deletion in the in-memory operations
-func (c *Txn) Delete(key []byte) lib.ErrorI { c.update(lib.BytesToString(key), nil, true); return nil }
+// Delete() marks a key for deletion in the txn operations
+func (t *Txn) Delete(key []byte) lib.ErrorI {
+	return t.update(key, nil, nil, opDelete)
+}
 
-// update() modifies or adds an operation for a key in the in-memory operations and maintains order
-func (c *Txn) update(key string, v []byte, delete bool) {
-	if _, found := c.ops[key]; !found {
-		c.addToSorted(key)
+// SetEntry() adds or updates a custom badger entry in the txn operations
+func (t *Txn) SetEntryAt(e *badger.Entry, _ uint64) (err error) {
+	return t.update(e.Key, e.Value, e, opEntry)
+}
+
+// update() modifies or adds an operation to the txn
+func (t *Txn) update(key []byte, val []byte, entry *badger.Entry, opAction op) (e lib.ErrorI) {
+	hashedKey := lib.MemHash(key)
+	t.txn.l.Lock()
+	defer t.txn.l.Unlock()
+	if _, found := t.txn.ops[hashedKey]; !found && t.sort {
+		t.addToSorted(key, hashedKey)
 	}
-	c.ops[key] = op{value: v, delete: delete}
+	t.txn.ops[hashedKey] = valueOp{key: key, value: val, entry: entry, op: opAction}
+	return
 }
 
 // addToSorted() inserts a key into the sorted list of operations maintaining lexicographical order
-func (c *Txn) addToSorted(key string) {
-	i := sort.Search(c.sortedLen, func(i int) bool { return c.sorted[i] >= key })
-	c.sorted = append(c.sorted, "")
-	copy(c.sorted[i+1:], c.sorted[i:])
-	c.sorted[i] = key
-	c.sortedLen++
+func (t *Txn) addToSorted(key []byte, hashedKey uint64) {
+	t.txn.sorted.ReplaceOrInsert(&CacheItem{Key: key, HashedKey: hashedKey, Exists: true})
 }
 
 // Iterator() returns a new iterator for merged iteration of both the in-memory operations and parent store with the given prefix
-func (c *Txn) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	parent, err := c.StoreI.Iterator(prefix)
-	if err != nil {
-		return nil, err
-	}
-	return newTxnIterator(parent, c.txn, prefix, false), nil
+func (t *Txn) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
+	it := t.reader.NewIterator(prefix, false, false)
+	return newTxnIterator(it, t.txn.copy(), prefix, false), nil
 }
 
 // RevIterator() returns a new reverse iterator for merged iteration of both the in-memory operations and parent store with the given prefix
-func (c *Txn) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	parent, err := c.StoreI.RevIterator(prefix)
-	if err != nil {
-		return nil, err
-	}
-	return newTxnIterator(parent, c.txn, prefix, true), nil
+func (t *Txn) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
+	it := t.reader.NewIterator(prefix, true, false)
+	return newTxnIterator(it, t.txn.copy(), prefix, true), nil
+}
+
+// ArchiveIterator() creates a new iterator for all versions under the given prefix in the BadgerDB transaction
+func (t *Txn) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
+	return t.reader.NewIterator(prefix, false, true), nil
 }
 
 // Discard() clears all in-memory operations and resets the sorted key list
-func (c *Txn) Discard() { c.ops, c.sorted, c.sortedLen = nil, nil, 0 }
+func (t *Txn) Discard() {
+	t.txn.sorted.Clear(false)
+	t.txn.ops = make(map[uint64]valueOp)
+}
 
-// Write() flushes the in-memory operations to the parent store and clears in-memory changes
-func (c *Txn) Write() (err lib.ErrorI) {
-	for k, v := range c.ops {
-		sk, er := lib.StringToBytes(k)
-		if er != nil {
-			return er
-		}
-		if v.delete {
-			if err = c.StoreI.Delete(sk); err != nil {
-				return
-			}
-		} else {
-			if err = c.StoreI.Set(sk, v.value); err != nil {
-				return
-			}
+// Cancel() cancels the current transaction and clears the live writer queue if enabled.
+// Any new writes won't be committed
+func (t *Txn) Cancel() {
+	if t.writer != nil {
+		t.writer.Cancel()
+	}
+}
+
+// Close() cancels the current transaction. Any new writes will result in an error and a new
+// WriteBatch() must be created to write new entries.
+func (t *Txn) Close() {
+	t.reader.Discard()
+	t.Cancel()
+}
+
+// Flush() flushes the in-memory operations to the batch writer and clears in-memory changes
+func (t *Txn) Flush() (err error) {
+	t.txn.l.Lock()
+	defer func() { t.txn.l.Unlock(); t.Discard() }()
+	for version, prefix := range t.flushTo() {
+		if err = t.flush(prefix, version); err != nil {
+			return err
 		}
 	}
-	c.ops, c.sorted, c.sortedLen = make(map[string]op), make([]string, 0), 0
+	// exit
+	return nil
+}
+
+// flushTo() returns the prefixes to flush to; state uses special logic to flush
+func (t *Txn) flushTo() map[uint64][]byte {
+	if t.state {
+		return map[uint64][]byte{lssVersion: []byte(latestStatePrefix), t.writeVersion: []byte(historicStatePrefix)}
+	}
+	return map[uint64][]byte{t.writeVersion: t.prefix}
+}
+
+// flush() flushes all operations to the underlying writer with a prefix if given
+func (t *Txn) flush(prefix []byte, writeVersion uint64) (err error) {
+	for _, v := range t.txn.ops {
+		if err = t.write(prefix, writeVersion, v); err != nil {
+			return err
+		}
+	}
 	return
 }
+
+// write() writes a value operation to the underlying writer
+func (t *Txn) write(prefix []byte, writeVersion uint64, op valueOp) lib.ErrorI {
+	k := op.key
+	if prefix != nil {
+		k = lib.Append(prefix, k)
+	}
+	switch op.op {
+	case opSet:
+		// set an entry with a bit that marks it as deleted and prevents it from being discarded
+		if err := t.writer.SetEntryAt(&badger.Entry{Key: k, Value: op.value}, writeVersion); err != nil {
+			return ErrStoreSet(err)
+		}
+	case opDelete:
+		// set an entry with a bit that marks it as deleted and prevents it from being discarded
+		if err := t.writer.SetEntryAt(newEntry(k, nil, badgerDeleteBit|badgerNoDiscardBit), writeVersion); err != nil {
+			return ErrStoreDelete(err)
+		}
+	case opEntry:
+		// set the entry in the batch
+		entry := &badger.Entry{
+			Key:       k,
+			Value:     op.value,
+			ExpiresAt: op.entry.ExpiresAt,
+			UserMeta:  op.entry.UserMeta,
+		}
+		// set the entry meta
+		setMeta(entry, getMeta(op.entry))
+		// setEntry to the underlying writer
+		if err := t.writer.SetEntryAt(entry, writeVersion); err != nil {
+			return ErrStoreSet(err)
+		}
+	}
+	return nil
+}
+
+// NewIterator() creates a merged iterator with the reader and writer
+func (t *Txn) NewIterator(prefix []byte, reverse bool, allVersions bool) lib.IteratorI {
+	// create an iterator for the parent
+	parentIterator := t.reader.NewIterator(lib.Append(t.prefix, prefix), reverse, allVersions)
+	// create a merged iterator for the parent and in-memory txn
+	return newTxnIterator(parentIterator, t.txn, prefix, reverse)
+}
+
+// Copy creates a new Txn with the same configuration and txn as the original
+func (t *Txn) Copy(reader TxnReaderI, writer TxnWriterI) *Txn {
+	return &Txn{
+		reader:       reader,
+		writer:       writer,
+		prefix:       t.prefix,
+		state:        t.state,
+		sort:         t.sort,
+		writeVersion: t.writeVersion,
+		txn:          t.txn.copy(),
+	}
+}
+
+// txn() returns a copy of the current transaction txn
+func (t *txn) copy() *txn {
+	t.l.Lock()
+	defer t.l.Unlock()
+	ops := make(map[uint64]valueOp, len(t.ops))
+	for k, o := range t.ops {
+		ops[k] = o.copy()
+	}
+	return &txn{
+		ops:    ops,
+		sorted: t.sorted.Clone(),
+		l:      sync.Mutex{},
+	}
+}
+
+// copy() deep copies a value operation
+func (o valueOp) copy() valueOp {
+	k, v := bytes.Clone(o.key), bytes.Clone(o.value)
+	return valueOp{
+		key:   k,
+		value: v,
+		entry: newEntry(k, v, getMeta(o.entry)),
+		op:    o.op,
+	}
+}
+
+// TXN ITERATOR CODE BELOW
 
 // enforce the Iterator interface
 var _ lib.IteratorI = &TxnIterator{}
@@ -132,8 +317,10 @@ var _ lib.IteratorI = &TxnIterator{}
 // TxnIterator is a reversible, merged iterator of the parent and the in-memory operations
 type TxnIterator struct {
 	parent lib.IteratorI
-	txn
-	prefix  string
+	tree   *BTreeIterator
+	*txn
+	hasNext bool
+	prefix  []byte
 	index   int
 	reverse bool
 	invalid bool
@@ -141,168 +328,523 @@ type TxnIterator struct {
 }
 
 // newTxnIterator() initializes a new merged iterator for traversing both the in-memory operations and parent store
-func newTxnIterator(parent lib.IteratorI, t txn, prefix []byte, reverse bool) *TxnIterator {
-	return (&TxnIterator{parent: parent, txn: t, prefix: lib.BytesToString(prefix), reverse: reverse}).First()
+func newTxnIterator(parent lib.IteratorI, t *txn, prefix []byte, reverse bool) *TxnIterator {
+	tree := NewBTreeIterator(t.sorted.Clone(),
+		&CacheItem{
+			Key: prefix,
+		},
+		reverse)
+
+	return (&TxnIterator{
+		parent:  parent,
+		tree:    tree,
+		txn:     t,
+		prefix:  prefix,
+		reverse: reverse,
+	}).First()
 }
 
 // First() positions the iterator at the first valid entry based on the traversal direction
-func (c *TxnIterator) First() *TxnIterator {
-	if c.reverse {
-		return c.revSeek() // seek to the end
+func (ti *TxnIterator) First() *TxnIterator {
+	if ti.reverse {
+		return ti.revSeek() // seek to the end
 	}
-	return c.seek() // seek to the beginning
+	return ti.seek() // seek to the beginning
 }
 
-// Close() closes the merged iterator
-func (c *TxnIterator) Close() { c.parent.Close() }
-
 // Next() advances the iterator to the next entry, choosing between in-memory and parent store entries
-func (c *TxnIterator) Next() {
+func (ti *TxnIterator) Next() {
 	// if parent is not usable any more then txn.Next()
 	// if txn is not usable any more then parent.Next()
-	if !c.parent.Valid() {
-		c.txnNext()
+	if !ti.parent.Valid() {
+		ti.txnNext()
 		return
 	}
-	if c.txnInvalid() {
-		c.parent.Next()
+	if ti.txnInvalid() {
+		ti.parent.Next()
 		return
 	}
 	// compare the keys of the in memory option and the parent option
-	switch c.compare(c.txnKey(), c.parent.Key()) {
+	switch ti.compare(ti.txnKey(), ti.parent.Key()) {
 	case 1: // use parent
-		c.parent.Next()
+		ti.parent.Next()
 	case 0: // use both
-		c.parent.Next()
-		c.txnNext()
+		ti.parent.Next()
+		ti.txnNext()
 	case -1: // use txn
-		c.txnNext()
+		ti.txnNext()
 	}
 }
 
 // Key() returns the current key from either the in-memory operations or the parent store
-func (c *TxnIterator) Key() []byte {
-	if c.useTxn {
-		return c.txnKey()
+func (ti *TxnIterator) Key() []byte {
+	if ti.useTxn {
+		return ti.txnKey()
 	}
-	return c.parent.Key()
+	return ti.parent.Key()
 }
 
 // Value() returns the current value from either the in-memory operations or the parent store
-func (c *TxnIterator) Value() []byte {
-	if c.useTxn {
-		return c.txnValue().value
+func (ti *TxnIterator) Value() []byte {
+	if ti.useTxn {
+		return ti.txnValue().value
 	}
-	return c.parent.Value()
+	return ti.parent.Value()
 }
 
 // Valid() checks if the current position of the iterator is valid, considering both the parent and in-memory entries
-func (c *TxnIterator) Valid() bool {
+func (ti *TxnIterator) Valid() bool {
 	for {
-		if !c.parent.Valid() {
-			// only using cache; call txn.next until invalid or !deleted
-			c.txnFastForward()
-			c.useTxn = true
+		if !ti.parent.Valid() {
+			// only using txn; call txn.next until invalid or !deleted
+			ti.txnFastForward()
+			ti.useTxn = true
 			break
 		}
-		if c.txnInvalid() {
+		if ti.txnInvalid() {
 			// parent is valid; txn is not
-			c.useTxn = false
+			ti.useTxn = false
 			break
 		}
 		// both are valid; key comparison matters
-		cKey, pKey := c.txnKey(), c.parent.Key()
-		switch c.compare(cKey, pKey) {
+		cKey, pKey := ti.txnKey(), ti.parent.Key()
+		switch ti.compare(cKey, pKey) {
 		case 1: // use parent
-			c.useTxn = false
+			ti.useTxn = false
 		case 0: // when equal txn shadows parent
-			if c.txnValue().delete {
-				c.parent.Next()
-				c.txnNext()
+			if ti.txnValue().op == opDelete {
+				ti.parent.Next()
+				ti.txnNext()
 				continue
 			}
-			c.useTxn = true
+			ti.useTxn = true
 		case -1: // use txn
-			if c.txnValue().delete {
-				c.txnNext()
+			if ti.txnValue().op == opDelete {
+				ti.txnNext()
 				continue
 			}
-			c.useTxn = true
+			ti.useTxn = true
 		}
 		break
 	}
-	return !c.txnInvalid() || c.parent.Valid()
+	return !ti.txnInvalid() || ti.parent.Valid()
 }
+
+// Close() closes the merged iterator
+func (ti *TxnIterator) Close() { ti.parent.Close() }
 
 // txnFastForward() skips over deleted entries in the in-memory operations
 // return when invalid or !deleted
-func (c *TxnIterator) txnFastForward() {
+func (ti *TxnIterator) txnFastForward() {
 	for {
-		if c.txnInvalid() || !c.txnValue().delete {
+		if ti.txnInvalid() || !(ti.txnValue().op == opDelete) {
 			return
 		}
-		c.txnNext()
+		ti.txnNext()
 	}
 }
 
 // txnInvalid() determines if the current in-memory entry is invalid
-func (c *TxnIterator) txnInvalid() bool {
-	if c.invalid {
-		return c.invalid
+func (ti *TxnIterator) txnInvalid() bool {
+	if ti.invalid {
+		return ti.invalid
 	}
-	c.invalid = true
-	if c.reverse {
-		if c.index < 0 {
-			return c.invalid
-		}
-	} else {
-		if c.index >= c.sortedLen {
-			return c.invalid
-		}
+	ti.invalid = true
+	current := ti.tree.Current()
+	if current == nil || len(current.Key) == 0 {
+		ti.invalid = true
+		return ti.invalid
 	}
-	if !strings.HasPrefix(c.sorted[c.index], c.prefix) {
-		return c.invalid
+	if !bytes.HasPrefix(current.Key, ti.prefix) {
+		return ti.invalid
 	}
-	c.invalid = false
-	return c.invalid
+	ti.invalid = false
+	return ti.invalid
 }
 
 // txnKey() returns the key of the current in-memory operation
-func (c *TxnIterator) txnKey() []byte {
-	bz, _ := lib.StringToBytes(c.sorted[c.index])
-	return bz
+func (ti *TxnIterator) txnKey() []byte {
+	return ti.tree.Current().Key
 }
 
 // txnValue() returns the value of the current in-memory operation
-func (c *TxnIterator) txnValue() op { return c.ops[c.sorted[c.index]] }
+func (ti *TxnIterator) txnValue() valueOp {
+	ti.l.Lock()
+	defer ti.l.Unlock()
+	return ti.ops[ti.tree.Current().HashedKey]
+}
 
 // compare() compares two byte slices, adjusting for reverse iteration if needed
-func (c *TxnIterator) compare(a, b []byte) int {
-	if c.reverse {
+func (ti *TxnIterator) compare(a, b []byte) int {
+	if ti.reverse {
 		return bytes.Compare(a, b) * -1
 	}
 	return bytes.Compare(a, b)
 }
 
 // txnNext() advances the index of the in-memory operations based on the iteration direction
-func (c *TxnIterator) txnNext() {
-	if c.reverse {
-		c.index--
-	} else {
-		c.index++
-	}
+func (ti *TxnIterator) txnNext() {
+	ti.hasNext = ti.tree.HasNext()
+	ti.tree.Next()
 }
 
 // seek() positions the iterator at the first entry that matches or exceeds the prefix.
-func (c *TxnIterator) seek() *TxnIterator {
-	c.index = sort.Search(c.sortedLen, func(i int) bool { return c.sorted[i] >= c.prefix })
-	return c
+func (ti *TxnIterator) seek() *TxnIterator {
+	ti.tree.Move(&CacheItem{Key: ti.prefix})
+	return ti
 }
 
 // revSeek() positions the iterator at the last entry that matches the prefix in reverse order.
-func (c *TxnIterator) revSeek() *TxnIterator {
-	bz, _ := lib.StringToBytes(c.prefix)
-	endPrefix := lib.BytesToString(prefixEnd(bz))
-	c.index = sort.Search(c.sortedLen, func(i int) bool { return c.sorted[i] >= endPrefix }) - 1
-	return c
+func (ti *TxnIterator) revSeek() *TxnIterator {
+	ti.tree.Move(&CacheItem{Key: prefixEnd(ti.prefix)})
+	return ti
+}
+
+// Iterator implements a wrapper around BadgerDB's iterator with the in-memory store but satisfies the IteratorI interface
+type Iterator struct {
+	reader *badger.Iterator
+	prefix []byte
+	err    error
+}
+
+func (i *Iterator) Valid() bool     { return i.reader.Valid() }
+func (i *Iterator) Next()           { i.reader.Next() }
+func (i *Iterator) Close()          { i.reader.Close() }
+func (i *Iterator) Version() uint64 { return i.reader.Item().Version() }
+func (i *Iterator) Deleted() bool   { return i.reader.Item().IsDeletedOrExpired() }
+func (i *Iterator) Key() (key []byte) {
+	// get the key from the parent
+	key = i.reader.Item().Key()
+	// make a copy of the key
+	c := make([]byte, len(key))
+	copy(c, key)
+	// remove the prefix and return
+	return removePrefix(c, []byte(i.prefix))
+}
+
+// Value() retrieves the current value from the iterator
+func (i *Iterator) Value() (value []byte) {
+	value, err := i.reader.Item().ValueCopy(nil)
+	if err != nil {
+		i.err = err
+	}
+	return
+}
+
+const (
+	// ----------------------------------------------------------------------------------------------------------------
+	// BadgerDB garbage collector behavior is not well documented leading to many open issues in their repository
+	// However, here is our current understanding based on experimentation
+	// ----------------------------------------------------------------------------------------------------------------
+	// 1. Manual Keep (Protection)
+	//    - `badgerNoDiscardBit` prevents automatic GC of a key version.
+	//    - However, it can be manually superseded by a manual removal
+	//
+	// 2. Manual Remove (Explicit Deletion or Pruning)
+	//    - Deleting a key at a higher ts removes earlier versions once `discardTs >= ts`.
+	//    - Setting `badgerDiscardEarlierVersions` is similar, except it retains the current version.
+	//
+	// 3. Auto Remove – Tombstones
+	//    - Deleted keys (tombstoned) <= `discardTs` are automatically purged unless protected by `badgerNoDiscardBit`
+	//
+	// 4. Auto Remove – Set Entries
+	//    - For non-deleted (live) keys, Badger retains the number of versions to retain is defined by `KeepNumVersions`.
+	//    - Older versions exceeding this count are automatically eligible for GC.
+	//
+	//   Note:
+	// - The first GC pass after updating `discardTs` and flushing memtable is deterministic
+	// - Subsequent GC runs are probabilistic, depending on reclaimable space and value log thresholds
+	// ----------------------------------------------------------------------------------------------------------------
+	// Bits source: https://github.com/hypermodeinc/badger/blob/85389e88bf308c1dc271383b77b67f4ef4a85194/value.go#L37
+	badgerMetaFieldName       = "meta"  // badgerDB Entry 'meta' field name
+	badgerDeleteBit      byte = 1 << 0  // badgerDB 'tombstoned' flag
+	badgerNoDiscardBit   byte = 1 << 3  // badgerDB 'never discard'  bit
+	badgerSizeFieldName       = "size"  // badgerDB Txn 'size' field name
+	badgerCountFieldName      = "count" // badgerDB Txn 'count' field name
+	badgerTxnFieldName        = "txn"   // badgerDB WriteBatch 'txn' field name
+)
+
+// Enforce interface implementations
+var _ TxnReaderI = &BadgerTxnReader{}
+
+type BadgerTxnReader struct {
+	*badger.Txn
+	prefix []byte
+}
+
+func (r BadgerTxnReader) Get(key []byte) ([]byte, lib.ErrorI) {
+	item, err := r.Txn.Get(key)
+	if err != nil {
+		if err == badger.ErrKeyNotFound {
+			return nil, nil
+		}
+		return nil, ErrStoreGet(err)
+	}
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return nil, ErrStoreGet(err)
+	}
+	return val, nil
+}
+
+func (r BadgerTxnReader) NewIterator(prefix []byte, reverse bool, allVersions bool) lib.IteratorI {
+	newPrefix := lib.Append(r.prefix, prefix)
+	it := r.Txn.NewIterator(badger.IteratorOptions{
+		Prefix:      newPrefix,
+		Reverse:     reverse,
+		AllVersions: allVersions,
+	})
+	if !reverse {
+		it.Rewind()
+	} else {
+		seekLast(it, newPrefix)
+	}
+	return &Iterator{
+		reader: it,
+		prefix: r.prefix,
+	}
+}
+
+func (r BadgerTxnReader) Discard() { r.Txn.Discard() }
+
+// setMeta() accesses the private field 'meta' of badgerDB's `Entry`
+// badger doesn't yet allow users to explicitly set keys as *do not discard*
+// https://github.com/hypermodeinc/badger/issues/2192
+func setMeta(e *badger.Entry, value byte) {
+	if e == nil {
+		return
+	}
+	v := reflect.ValueOf(e).Elem()
+	f := v.FieldByName(badgerMetaFieldName)
+	ptr := unsafe.Pointer(f.UnsafeAddr())
+	*(*byte)(ptr) = value
+}
+
+// getMeta() accesses the private field 'meta' of badgerDB's 'Entry'
+func getMeta(e *badger.Entry) byte {
+	if e == nil {
+		return 0
+	}
+	v := reflect.ValueOf(e).Elem()
+	f := v.FieldByName("meta")
+	return *(*byte)(unsafe.Pointer(f.UnsafeAddr()))
+}
+
+// getTxnFromBatch() accesses the private field 'size/count' of badgerDB's `Txn` inside a 'WriteBatch'
+// badger doesn't yet allow users to access this info - though it allows users to avoid
+// TxnTooBig errors
+func getSizeAndCountFromBatch(batch *badger.WriteBatch) (size, count int64) {
+	v := reflect.ValueOf(batch).Elem()
+	f := v.FieldByName(badgerTxnFieldName)
+	if f.Kind() != reflect.Ptr || f.IsNil() {
+		return 0, 0
+	}
+	// f.Pointer() is the uintptr of the actual *Txn
+	txPtr := (*badger.Txn)(unsafe.Pointer(f.Pointer()))
+	return getSizeAndCount(txPtr)
+}
+
+// getSizeAndCount() accesses the private field 'size/count' of badgerDB's `Txn`
+// badger doesn't yet allow users to access this info - though it allows users to avoid
+// TxnTooBig errors
+func getSizeAndCount(txn *badger.Txn) (size, count int64) {
+	v := reflect.ValueOf(txn).Elem()
+	sizeF, countF := v.FieldByName(badgerSizeFieldName), v.FieldByName(badgerCountFieldName)
+	if !sizeF.IsValid() || !countF.IsValid() {
+		return 0, 0
+	}
+	sizePtr, countPtr := unsafe.Pointer(sizeF.UnsafeAddr()), unsafe.Pointer(countF.UnsafeAddr())
+	size, count = *(*int64)(sizePtr), *(*int64)(countPtr)
+	return
+}
+
+// seekLast() positions the iterator at the last key for the given prefix
+func seekLast(it *badger.Iterator, prefix []byte) { it.Seek(prefixEnd(prefix)) }
+
+// removePrefix() removes the prefix from the key
+func removePrefix(b, prefix []byte) []byte { return b[len(prefix):] }
+
+// prefixEnd() returns the end key for a given prefix by appending max possible bytes
+func prefixEnd(prefix []byte) []byte { return lib.Append(prefix, endBytes) }
+
+// newEntry() creates a new badgerDB entry
+func newEntry(key, value []byte, meta byte) (e *badger.Entry) {
+	e = &badger.Entry{Key: key, Value: value}
+	setMeta(e, meta)
+	return
+}
+
+// entryIsDelete() checks if entry is 'delete' operation
+func entryIsDelete(e *badger.Entry) bool {
+	if e == nil {
+		return false
+	}
+	return (getMeta(e) & badgerDeleteBit) != 0
+}
+
+var endBytes = bytes.Repeat([]byte{0xFF}, maxKeyBytes+1)
+
+// BTREE ITERATOR CODE BELOW
+
+type CacheItem struct {
+	HashedKey uint64
+	Key       []byte
+	Exists    bool
+}
+
+// Less() compares the keys lexicographically
+func (ti CacheItem) Less(than *CacheItem) bool { return bytes.Compare(ti.Key, than.Key) < 0 }
+
+// BTreeIterator provides external iteration over a btree
+type BTreeIterator struct {
+	tree    *btree.BTreeG[*CacheItem] // the btree to iterate over
+	current *CacheItem                // current item in the iteration
+	reverse bool                      // whether the iteration is in reverse order
+}
+
+// NewBTreeIterator() creates a new iterator starting at the closest item to the given key
+func NewBTreeIterator(tree *btree.BTreeG[*CacheItem], start *CacheItem, reverse bool) (bt *BTreeIterator) {
+	// create a new BTreeIterator
+	bt = &BTreeIterator{
+		tree:    tree,
+		reverse: reverse,
+	}
+	// if no start item is provided, set the iterator to the first or last item based on the direction
+	if start == nil || len(start.Key) == 0 {
+		if reverse {
+			bt.current, _ = tree.Max()
+		} else {
+			bt.current, _ = tree.Min()
+		}
+		return
+	}
+	// otherwise, move the iterator to that item
+	bt.Move(start)
+	return
+}
+
+// Move() moves the iterator to the given key or the closest item if the key is not found
+func (bi *BTreeIterator) Move(item *CacheItem) {
+	// reset the current item
+	bi.current = nil
+	// try to get an exact match
+	if exactMatch, ok := bi.tree.Get(item); ok {
+		bi.current = exactMatch
+		return
+	}
+	// if no exact match, find the closest item based on the direction of iteration
+	if bi.reverse {
+		bi.current = &CacheItem{Key: append(item.Key, endBytes...)}
+		bi.current = bi.prev()
+	} else {
+		bi.current = &CacheItem{Key: item.Key}
+		bi.current = bi.next()
+	}
+}
+
+// Current() returns the current item in the iteration
+func (bi *BTreeIterator) Current() *CacheItem {
+	// if current is nil, return an empty Item to avoid nil pointer dereference
+	if bi.current == nil {
+		return &CacheItem{Key: []byte{}, Exists: false}
+	}
+	return bi.current
+}
+
+// Next() advances to the next item in the tree
+func (bi *BTreeIterator) Next() *CacheItem {
+	// check if current exist, otherwise the iterator is invalid
+	if bi.current == nil {
+		return nil
+	}
+	// go to the next item based on the direction of iteration
+	if bi.reverse {
+		bi.current = bi.prev()
+	} else {
+		bi.current = bi.next()
+	}
+	// return the current item which is the possible next item in the iteration
+	return bi.Current()
+}
+
+// next() finds the next item in the tree based on the current item
+func (bi *BTreeIterator) next() *CacheItem {
+	var nextItem *CacheItem
+	var found bool
+	// find the next item
+	bi.tree.AscendGreaterOrEqual(bi.current, func(item *CacheItem) bool {
+		nextItem = item
+		if !bytes.Equal(nextItem.Key, bi.current.Key) {
+			found = true
+			return false
+		}
+		return true
+	})
+	// if the item found, return it
+	if found {
+		return nextItem
+	}
+	// no next item
+	return nil
+}
+
+// Prev() back towards the previous item in the tree
+func (bi *BTreeIterator) Prev() *CacheItem {
+	// check if current exist, otherwise the iterator is invalid
+	if bi.current == nil {
+		return nil
+	}
+	// go to the previous item based on the direction of iteration
+	if bi.reverse {
+		bi.current = bi.next()
+	} else {
+		bi.current = bi.prev()
+	}
+	// return the current item which is the possible previous item in the iteration
+	return bi.Current()
+}
+
+// prev() finds the previous item in the tree based on the current item
+func (bi *BTreeIterator) prev() *CacheItem {
+	var prev *CacheItem
+	bi.tree.DescendLessOrEqual(bi.current, func(item *CacheItem) bool {
+		if item.Less(bi.current) {
+			prev = item
+			return false // stop iteration
+		}
+		return true // continue iteration
+	})
+	return prev
+}
+
+// HasNext() returns true if there are more items after current
+func (bi *BTreeIterator) HasNext() bool {
+	if bi.reverse {
+		return bi.hasPrev()
+	}
+	return bi.hasNext()
+}
+
+// hasNext() checks if there is a next item in the iteration
+func (bi *BTreeIterator) hasNext() bool {
+	if bi.current == nil {
+		return false
+	}
+	return bi.next() != nil
+}
+
+// HasPrev() returns true if there are items before current
+func (bi *BTreeIterator) HasPrev() bool {
+	if bi.reverse {
+		return bi.hasNext()
+	}
+	return bi.hasPrev()
+}
+
+// hasPrev() checks if there is a previous item in the iteration
+func (bi *BTreeIterator) hasPrev() bool {
+	if bi.current == nil {
+		return false
+	}
+	return bi.prev() != nil
 }

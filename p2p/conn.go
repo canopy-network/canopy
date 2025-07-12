@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/canopy-network/canopy/lib/crypto"
-
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	limiter "github.com/mxk/go-flowrate/flowrate"
@@ -18,15 +16,16 @@ import (
 )
 
 const (
-	maxDataChunkSize       = 1024 - packetHeaderSize // maximum size of the chunk of bytes in a packet
-	maxPacketSize          = 1024                    // maximum size of the full packet
-	packetHeaderSize       = 47                      // the overhead of the protobuf packet header
-	queueSendTimeout       = 10 * time.Second        // how long a message waits to be queued before throwing an error
-	maxMessageSize         = 10 * units.Megabyte     // the maximum total size of a message once all the packets are added up
-	dataFlowRatePerS       = maxMessageSize          // the maximum number of bytes that may be sent or received per second per MultiConn
-	maxChanSize            = 1                       // maximum number of items in a channel before blocking
-	maxInboxQueueSize      = 100                     // maximum number of items in inbox queue before blocking
-	maxStreamSendQueueSize = 100                     // maximum number of items in a stream send queue before blocking
+	maxChunksPerPacket     = 256                                 // maximum number of chunks per packet - *1* means chunking disabled
+	maxDataChunkSize       = maxPacketSize - packetHeaderSize    // maximum size of the chunk of bytes in a packet
+	maxPacketSize          = maxMessageSize / maxChunksPerPacket // maximum size of the full packet
+	packetHeaderSize       = 50                                  // the overhead of the protobuf packet header
+	queueSendTimeout       = 10 * time.Second                    // how long a message waits to be queued before throwing an error
+	maxMessageSize         = uint32(256 * units.MB)              // the maximum total size of a message once all the packets are added up
+	dataFlowRatePerS       = maxMessageSize                      // the maximum number of bytes that may be sent or received per second per MultiConn
+	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
+	maxInboxQueueSize      = 500_000                             // maximum number of items in inbox queue before blocking
+	maxStreamSendQueueSize = 100_000                             // maximum number of items in a stream send queue before blocking
 
 	// "Peer Reputation Points" are actively maintained for each peer the node is connected to
 	// These points allow a node to track peer behavior over its lifetime, allowing it to disconnect from faulty peers
@@ -77,6 +76,14 @@ type MultiConn struct {
 
 // NewConnection() creates and starts a new instance of a MultiConn
 func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		if err := tcpConn.SetWriteBuffer(32 * 1024 * 1024); err != nil {
+			p.log.Warnf("Failed to set write buffer: %v", err)
+		}
+		if err := tcpConn.SetReadBuffer(32 * 1024 * 1024); err != nil {
+			p.log.Warnf("Failed to set write buffer: %v", err)
+		}
+	}
 	// establish an encrypted connection using the handshake
 	eConn, err := NewHandshake(conn, p.meta, p.privateKey)
 	if err != nil {
@@ -126,18 +133,13 @@ func (c *MultiConn) Stop() {
 }
 
 // Send() queues the sending of a message to a specific Stream
-func (c *MultiConn) Send(topic lib.Topic, msg *Envelope) (ok bool) {
+func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
 	stream, ok := c.streams[topic]
 	if !ok {
 		c.log.Errorf("Stream %s does not exist", topic)
 		return
 	}
-	bz, err := lib.Marshal(msg)
-	if err != nil {
-		c.log.Errorf("Marshaling failed of payload: %s", msg.String())
-		return false
-	}
-	chunks := split(bz, maxDataChunkSize)
+	chunks := split(bz, int(maxDataChunkSize))
 	var packets []*Packet
 	for i, chunk := range chunks {
 		packets = append(packets, &Packet{
@@ -251,7 +253,7 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
 	// will block the execution until at or below the desired rate of flow
-	m.Limit(maxPacketSize, int64(dataFlowRatePerS), true)
+	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
 	if err := receiveProtoMsg(c.conn, msg); err != nil {
 		return nil, err
@@ -266,13 +268,14 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 	if packet != nil {
-		c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-			lib.BytesToTruncatedString(c.Address.PublicKey),
-			lib.Topic_name[int32(packet.StreamId)],
-			len(packet.Bytes),
-			packet.Eof,
-			crypto.ShortHashString(packet.Bytes),
-		)
+		//c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+		//	lib.BytesToTruncatedString(c.Address.PublicKey),
+		//	lib.Topic_name[int32(packet.StreamId)],
+		//	len(packet.Bytes),
+		//	packet.Eof,
+		//	crypto.ShortHashString(packet.Bytes),
+		//)
+		//defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -292,7 +295,7 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
 	// will block the execution until at or below the desired rate of flow
-	m.Limit(maxPacketSize, int64(dataFlowRatePerS), true)
+	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	//defer lib.TimeTrack(c.log, time.Now())
 	// send the proto message wrapped in an Envelope over the wire
 	if err = sendProtoMsg(c.conn, &Envelope{Payload: a}); err != nil {
@@ -345,13 +348,14 @@ func (s *Stream) queueSend(p *Packet) bool {
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
 func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, lib.ErrorI) {
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
-	s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
-		lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
-		lib.Topic_name[int32(packet.StreamId)],
-		len(packet.Bytes),
-		packet.Eof,
-		crypto.ShortHashString(packet.Bytes),
-	)
+	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
+	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
+	//	lib.Topic_name[int32(packet.StreamId)],
+	//	len(packet.Bytes),
+	//	packet.Eof,
+	//	crypto.ShortHashString(packet.Bytes),
+	//)
+	//defer s.logger.Debugf("Done receiving: %s", crypto.ShortHashString(packet.Bytes))
 	// if the addition of this new packet pushes the total message size above max
 	if int(maxMessageSize) < msgAssemblerLen+packetLen {
 		s.msgAssembler = s.msgAssembler[:0]
@@ -361,23 +365,17 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 	s.msgAssembler = append(s.msgAssembler, packet.Bytes...)
 	// if the packet is signalling message end
 	if packet.Eof {
-		// unmarshall all the bytes into the universal wrapper
-		var msg Envelope
-		if err := lib.Unmarshal(s.msgAssembler, &msg); err != nil {
-			return BadPacketSlash, err
-		}
-		// read the payload into a proto.Message
-		payload, err := lib.FromAny(msg.Payload)
-		if err != nil {
-			return BadPacketSlash, err
-		}
+		// create a buffer to retain the message assembler bytes
+		msg := make([]byte, len(s.msgAssembler))
+		// copy the message assembler bytes into a buffer
+		copy(msg, s.msgAssembler)
 		// wrap with metadata
-		m := (&lib.MessageAndMetadata{
-			Message: payload,
+		m := &lib.MessageAndMetadata{
+			Message: msg,
 			Sender:  peerInfo,
-		}).WithHash()
+		}
+		// s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
-		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		s.inbox <- m
 		// reset receiving buffer
 		s.msgAssembler = s.msgAssembler[:0]
@@ -415,8 +413,8 @@ func receiveProtoMsg(conn net.Conn, ptr proto.Message) lib.ErrorI {
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
 func sendLengthPrefixed(conn net.Conn, bz []byte) lib.ErrorI {
 	// create the length prefix (2 bytes, big endian)
-	lengthPrefix := make([]byte, 2)
-	binary.BigEndian.PutUint16(lengthPrefix, uint16(len(bz)))
+	lengthPrefix := make([]byte, 4)
+	binary.BigEndian.PutUint32(lengthPrefix, uint32(len(bz)))
 	//// set the write deadline to 20 second
 	if e := conn.SetWriteDeadline(time.Now().Add(WriteTimeout)); e != nil {
 		return ErrFailedWrite(e)
@@ -436,13 +434,13 @@ func receiveLengthPrefixed(conn net.Conn) ([]byte, lib.ErrorI) {
 	if err := conn.SetReadDeadline(time.Now().Add(ReadTimeout)); err != nil {
 		return nil, ErrFailedRead(err)
 	}
-	// read the 2-byte length prefix
-	lengthBuffer := make([]byte, 2)
+	// read the 4-byte length prefix
+	lengthBuffer := make([]byte, 4)
 	if _, err := io.ReadFull(conn, lengthBuffer); err != nil {
 		return nil, ErrFailedRead(err)
 	}
 	// determine the length of the message
-	messageLength := binary.BigEndian.Uint16(lengthBuffer)
+	messageLength := binary.BigEndian.Uint32(lengthBuffer)
 	// ensure the message size isn't larger than the allowed max packet size
 	if messageLength > maxPacketSize {
 		return nil, ErrMaxMessageSize()
@@ -460,6 +458,9 @@ func receiveLengthPrefixed(conn net.Conn) ([]byte, lib.ErrorI) {
 
 // split returns bytes split to size up to the lim param
 func split(buf []byte, lim int) [][]byte {
+	if len(buf) == 0 {
+		return [][]byte{buf}
+	}
 	var chunk []byte
 	chunks := make([][]byte, 0, len(buf)/lim+1)
 	for len(buf) >= lim {

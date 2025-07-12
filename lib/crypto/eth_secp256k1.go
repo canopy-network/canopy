@@ -9,8 +9,10 @@ import (
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
+/* This file implements logic for SECP256K1 when the public key is not compressed (64 bytes) - this affects the 'addressing' and 'verify bytes' logic */
+
 const (
-	ETHSECP256K1PubKeySize = 64
+	ETHSECP256K1PubKeySize = 64 // represents the uncompressed SECP256K1 public key size
 )
 
 // ensure ETHSECP256K1PublicKey conforms to the PublicKeyI interface
@@ -91,8 +93,15 @@ func (s *ETHSECP256K1PublicKey) Address() AddressI {
 }
 
 // VerifyBytes() returns true if the digital signature is valid for this public key and the given message
-func (s *ETHSECP256K1PublicKey) VerifyBytes(msg []byte, sig []byte) bool {
-	return ethCrypto.VerifySignature(s.BytesWithPrefix(), Hash(msg), sig)
+func (s *ETHSECP256K1PublicKey) VerifyBytes(msg []byte, sig []byte) (valid bool) {
+	cached, addToCache := CheckCache(s, msg, sig)
+	if cached {
+		return true
+	}
+	if valid = ethCrypto.VerifySignature(s.BytesWithPrefix(), Hash(msg), sig); valid {
+		addToCache()
+	}
+	return
 }
 
 // String() returns the hex string representation of the public key

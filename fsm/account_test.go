@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -266,6 +267,7 @@ func TestAccountDeductFees(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fee := uint64(10000)
+			expectedAmount := test.account.Amount - fee
 			// create a test state machine
 			sm := newTestStateMachine(t)
 			// setup account address object
@@ -283,7 +285,8 @@ func TestAccountDeductFees(t *testing.T) {
 			// check account balance
 			balance, err := sm.GetAccountBalance(address)
 			require.NoError(t, err)
-			require.Equal(t, test.account.Amount-fee, balance)
+			fmt.Println("EXPECTED", expectedAmount, balance)
+			require.Equal(t, expectedAmount, balance)
 			// check pool balance
 			balance, err = sm.GetPoolBalance(lib.CanopyChainId)
 			require.NoError(t, err)
@@ -325,7 +328,7 @@ func TestAccountAdd(t *testing.T) {
 				require.NoError(t, sm.SetAccount(test.account))
 			}
 			// retrieve the account to be added to
-			acc, err := sm.GetAccount(testAddr)
+			origBalance, err := sm.GetAccountBalance(testAddr)
 			require.NoError(t, err)
 			// ensure no error on function call
 			require.NoError(t, sm.AccountAdd(testAddr, test.amount))
@@ -333,7 +336,7 @@ func TestAccountAdd(t *testing.T) {
 			accAfter, err := sm.GetAccount(testAddr)
 			require.NoError(t, err)
 			// ensure the difference of the account is expected
-			require.Equal(t, test.amount, accAfter.Amount-acc.Amount)
+			require.Equal(t, test.amount, accAfter.Amount-origBalance)
 		})
 	}
 }
@@ -383,7 +386,7 @@ func TestAccountSub(t *testing.T) {
 				require.NoError(t, sm.SetAccount(test.account))
 			}
 			// retrieve the account to be added to
-			acc, err := sm.GetAccount(testAddr)
+			balance, err := sm.GetAccountBalance(testAddr)
 			require.NoError(t, err)
 			// ensure no error on function call
 			err = sm.AccountSub(testAddr, test.amount)
@@ -395,7 +398,7 @@ func TestAccountSub(t *testing.T) {
 			accAfter, err := sm.GetAccount(testAddr)
 			require.NoError(t, err)
 			// ensure the difference of the account is expected
-			require.Equal(t, acc.Amount, accAfter.Amount+test.amount)
+			require.Equal(t, balance, accAfter.Amount+test.amount)
 		})
 	}
 }

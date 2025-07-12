@@ -11,6 +11,10 @@ import (
 
 // GetAccount() returns an Account structure for a specific address
 func (s *StateMachine) GetAccount(address crypto.AddressI) (*Account, lib.ErrorI) {
+	// check cache
+	if acc, found := s.cache.accounts[lib.MemHash(address.Bytes())]; found {
+		return acc, nil
+	}
 	// retrieve the account from the state store
 	bz, err := s.Get(KeyForAccount(address))
 	if err != nil {
@@ -75,6 +79,8 @@ func (s *StateMachine) GetAccountBalance(address crypto.AddressI) (uint64, lib.E
 
 // SetAccount() upserts an account into the state
 func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
+	// add to cache
+	s.cache.accounts[lib.MemHash(account.Address)] = account
 	// convert bytes to the address object
 	address := crypto.NewAddressFromBytes(account.Address)
 	// if the amount is 0, delete the account from state to prevent unnecessary bloat

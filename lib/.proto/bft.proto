@@ -46,6 +46,10 @@ message Message {
   VDF vdf = 6;
   // signature: the digital signature of the sender of the consensus message
   Signature signature = 7;
+  // timestamp: allow the leader to coordinate the new height (within reason)
+  uint64 timestamp = 8;
+  // rcBuildHeight: the root height when the block was built
+  uint64 rcBuildHeight = 9;
 }
 
 // double_sign_evidence is proof that a validator has signed two conflicting proposals at the same block height and round

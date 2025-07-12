@@ -265,12 +265,15 @@ func (s *StateMachine) GetParamsCons() (ptr *ConsensusParams, err lib.ErrorI) {
 
 // GetParamsVal() returns the current state of the governance params in the Validator space
 func (s *StateMachine) GetParamsVal() (ptr *ValidatorParams, err lib.ErrorI) {
-	// create a new object ref for the validator params to ensure a non-nil result
-	ptr = new(ValidatorParams)
-	// get the validator parameters from state
-	err = s.getParams(ParamSpaceVal, ptr, ErrEmptyValParams)
+	// check cache
+	if s.cache.valParams == nil {
+		// create a new object ref for the validator params to ensure a non-nil result
+		s.cache.valParams = new(ValidatorParams)
+		// get the validator parameters from state
+		err = s.getParams(ParamSpaceVal, s.cache.valParams, ErrEmptyValParams)
+	}
 	// exit
-	return
+	return s.cache.valParams, err
 }
 
 // GetParamsGov() returns the current state of the governance params in the Governance space
@@ -285,12 +288,15 @@ func (s *StateMachine) GetParamsGov() (ptr *GovernanceParams, err lib.ErrorI) {
 
 // GetParamsFee() returns the current state of the governance params in the Fee space
 func (s *StateMachine) GetParamsFee() (ptr *FeeParams, err lib.ErrorI) {
-	// create a new object ref for the fee params to ensure a non-nil result
-	ptr = new(FeeParams)
-	// get the fee parameters from state
-	err = s.getParams(ParamSpaceFee, ptr, ErrEmptyFeeParams)
+	// check cache
+	if s.cache.feeParams == nil {
+		// create a new object ref for the fee params to ensure a non-nil result
+		s.cache.feeParams = new(FeeParams)
+		// get the fee parameters from state
+		err = s.getParams(ParamSpaceFee, s.cache.feeParams, ErrEmptyFeeParams)
+	}
 	// exit
-	return
+	return s.cache.feeParams, err
 }
 
 // getParams() is a generic helper function loads the params for a specific ParamSpace into a ptr object

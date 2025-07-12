@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
-	"github.com/stretchr/testify/require"
 	math "math/rand"
 	"sort"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/stretchr/testify/require"
 )
 
 type TestingOp int
@@ -31,8 +32,8 @@ func TestFuzz(t *testing.T) {
 	defer cleanup()
 	defer db.Close()
 	keys := make([]string, 0)
-	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), []byte(latestStatePrefix))
-	for i := 0; i < 1000; i++ {
+	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
 }
@@ -43,15 +44,15 @@ func TestFuzzTxn(t *testing.T) {
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
-	compareStore := NewTxnWrapper(db.NewTransactionAt(1, true), lib.NewDefaultLogger(), []byte(latestStatePrefix))
-	for i := 0; i < 1000; i++ {
+	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
 	db.Close()
 }
 
 func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys *[]string) {
-	k, v := getRandomBytes(t, math.Intn(4)), getRandomBytes(t, 3)
+	k, v := getRandomBytes(t, math.Intn(4)+1), getRandomBytes(t, 3)
 	switch getRandomOperation(t) {
 	case SetTesting:
 		testDBSet(t, db, k, v)
@@ -73,10 +74,10 @@ func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys
 	case IterateTesting:
 		testCompareIterators(t, db, compare, *keys)
 	case WriteTesting:
-		if x, ok := db.(lib.StoreTxnI); ok {
+		if x, ok := db.(TxnWriterI); ok {
 			switch math.Intn(10) {
 			case 0:
-				require.NoError(t, x.Write())
+				require.NoError(t, x.Flush())
 			}
 		}
 	case CommitTesting:

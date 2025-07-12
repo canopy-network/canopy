@@ -3,7 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/json"
-
+	"github.com/canopy-network/canopy/lib/codec"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
 
@@ -206,25 +206,18 @@ func (x *Block) BytesToBlockHash(blockBytes []byte) (hash []byte, err ErrorI) {
 		// exit with error
 		return nil, ErrNilBlock()
 	}
-	// convert the block bytes to the object reference
-	if err = Unmarshal(blockBytes, x); err != nil {
-		// exit with error
-		return
+	// get the block header field
+	blockHeaderWithHash, e := codec.GetRawProtoField(blockBytes, 1)
+	if e != nil {
+		return nil, ErrProtoParse(e)
 	}
-	// ensure header isn't nil
-	if x.BlockHeader == nil {
-		// exit with error
-		return nil, ErrNilBlockHeader()
-	}
-	// set the block header hash
-	hash, err = x.BlockHeader.SetHash()
-	// if an error occurred setting the block header hash
-	if err != nil {
-		// exit with error
-		return
+	// nullify the hash included in the block header
+	blockHeaderWithoutHash, e := codec.NullifyProtoField(blockHeaderWithHash, 2)
+	if e != nil {
+		return nil, ErrProtoParse(e)
 	}
 	// exit
-	return
+	return crypto.Hash(blockHeaderWithoutHash), nil
 }
 
 // jsonBlock is the Block implementation of json.Marshaller and json.Unmarshaler

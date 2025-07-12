@@ -12,7 +12,7 @@ type StoreI interface {
 	RWStoreI                                     // reading and writing
 	ProveStoreI                                  // proving membership / non-membership
 	RWIndexerI                                   // reading and writing indexer
-	NewTxn() StoreTxnI                           // wrap the store in a discardable txn
+	NewTxn() StoreI                              // wrap the store in a discardable nested store
 	Root() ([]byte, ErrorI)                      // get the merkle root from the store
 	DB() *badger.DB                              // retrieve the underlying badger db
 	Version() uint64                             // access the height of the store
@@ -21,9 +21,9 @@ type StoreI interface {
 	Commit() (root []byte, err ErrorI)           // save the store and increment the height
 	Discard()                                    // discard the underlying writer
 	Reset()                                      // reset the underlying writer
-	ShouldPartition() bool                       // check if should partition or not
-	Partition()                                  // move keys from the latest partition to the historical partition
 	Close() ErrorI                               // gracefully stop the database
+	Flush() ErrorI                               // flush all operations to the underlying 'writer' without committing
+	IncreaseVersion()                            // increment the version of the store
 }
 
 // ReadOnlyStoreI defines a Read-Only interface for accessing the blockchain storage including membership and non-membership proofs
@@ -73,16 +73,6 @@ type RIndexerI interface {
 	GetCheckpoint(chainId, height uint64) (blockHash HexBytes, err ErrorI)                        // get the checkpoint block hash for a certain committee and height combination
 	GetMostRecentCheckpoint(chainId uint64) (checkpoint *Checkpoint, err ErrorI)                  // get the most recent checkpoint for a committee
 	GetAllCheckpoints(chainId uint64) (checkpoints []*Checkpoint, err ErrorI)                     // export all checkpoints for a committee
-}
-
-// StoreTxnI defines an interface for discardable
-type StoreTxnI interface {
-	WStoreI
-	RStoreI
-	RIndexerI
-	WIndexerI
-	Write() ErrorI
-	Discard()
 }
 
 // WStoreI defines an interface for basic write operations

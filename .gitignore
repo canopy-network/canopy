@@ -34,3 +34,4 @@ vendor
 .docs/WISHLIST.md
 cmd/web/explorer/.idea
 **/.DS_Store
+/cmd/tps/data

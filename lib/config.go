@@ -143,7 +143,7 @@ func DefaultStateMachineConfig() StateMachineConfig { return StateMachineConfig{
 // NOTES:
 // - BlockTime = ElectionTimeout + ElectionVoteTimeout + ProposeTimeout + ProposeVoteTimeout + PrecommitTimeout + PrecommitVoteTimeout + CommitTimeout + CommitProcess
 // - async faults may lead to extended block time
-// - social consensus dictates BlockTime for the protocol - being too fast or too slow can lead to Non-Signing and Consensus failures
+// - social consensus dictates BlockTime for the protocol - being oo fast or too slow can lead to Non-Signing and Consensus failures
 type ConsensusConfig struct {
 	NewHeightTimeoutMs      int `json:"newHeightTimeoutMS"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
 	ElectionTimeoutMS       int `json:"electionTimeoutMS"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
@@ -159,10 +159,10 @@ type ConsensusConfig struct {
 // DefaultConsensusConfig() configures the block time
 func DefaultConsensusConfig() ConsensusConfig {
 	return ConsensusConfig{
-		NewHeightTimeoutMs:     2000, // 2 seconds
-		ElectionTimeoutMS:      2000, // 2 seconds
-		ElectionVoteTimeoutMS:  2000, // 2 seconds
-		ProposeTimeoutMS:       4000, // 4 seconds
+		NewHeightTimeoutMs:     4500, // 4.5 seconds
+		ElectionTimeoutMS:      1500, // 1.5 seconds
+		ElectionVoteTimeoutMS:  1500, // 1.5 seconds
+		ProposeTimeoutMS:       2500, // 2.5 seconds
 		ProposeVoteTimeoutMS:   4000, // 4 seconds
 		PrecommitTimeoutMS:     2000, // 2 seconds
 		PrecommitVoteTimeoutMS: 2000, // 2 seconds
@@ -213,9 +213,10 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath string `json:"dataDirPath"` // path of the designated folder where the application stores its data
-	DBName      string `json:"dbName"`      // name of the database
-	InMemory    bool   `json:"inMemory"`    // non-disk database, only for testing
+	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
+	DBName         string `json:"dbName"`         // name of the database
+	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
+	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -234,9 +235,10 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath: DefaultDataDirPath(), // use the default data dir path
-		DBName:      "canopy",             // 'canopy' database name
-		InMemory:    false,                // persist to disk, not memory
+		DataDirPath:    DefaultDataDirPath(), // use the default data dir path
+		DBName:         "canopy",             // 'canopy' database name
+		IndexByAccount: true,                 // index transactions by account
+		InMemory:       false,                // persist to disk, not memory
 	}
 }
 
@@ -244,32 +246,34 @@ func DefaultStoreConfig() StoreConfig {
 
 // MempoolConfig is the user configuration of the unconfirmed transaction pool
 type MempoolConfig struct {
-	MaxTotalBytes       uint64 `json:"maxTotalBytes"`       // maximum collective bytes in the pool
-	MaxTransactionCount uint32 `json:"maxTransactionCount"` // max number of Transactions
-	IndividualMaxTxSize uint32 `json:"individualMaxTxSize"` // max bytes of a single Transaction
-	DropPercentage      int    `json:"dropPercentage"`      // percentage that is dropped from the bottom of the queue if limits are reached
+	MaxTotalBytes              uint64 `json:"maxTotalBytes"`              // maximum collective bytes in the pool
+	MaxTransactionCount        uint32 `json:"maxTransactionCount"`        // max number of Transactions
+	IndividualMaxTxSize        uint32 `json:"individualMaxTxSize"`        // max bytes of a single Transaction
+	DropPercentage             int    `json:"dropPercentage"`             // percentage that is dropped from the bottom of the queue if limits are reached
+	LazyMempoolCheckFrequencyS int    `json:"lazyMempoolCheckFrequencyS"` // how often the mempool is checked for new transactions besides the mandatory (after Commit) (0) for none
 }
 
 // DefaultMempoolConfig() returns the developer created Mempool options
 func DefaultMempoolConfig() MempoolConfig {
 	return MempoolConfig{
-		MaxTotalBytes:       uint64(10 * units.MB),      // 10 MB max size
-		IndividualMaxTxSize: uint32(4 * units.Kilobyte), // 4 KB max individual tx size
-		MaxTransactionCount: 5000,                       // 5000 max transactions
-		DropPercentage:      35,                         // drop 35% if limits are reached
+		MaxTotalBytes:              uint64(10 * units.MB),      // 10 MB max size
+		MaxTransactionCount:        5000,                       // 5000 max transactions
+		IndividualMaxTxSize:        uint32(4 * units.Kilobyte), // 4 KB max individual tx size
+		DropPercentage:             35,                         // drop 35% if limits are reached
+		LazyMempoolCheckFrequencyS: 1,                          // check every 1 second
 	}
 }
 
 // MetricsConfig represents the configuration for the metrics server
 type MetricsConfig struct {
-	Enabled           bool   `json:"enabled"`           // if the metrics are enabled
+	MetricsEnabled    bool   `json:"metricsEnabled"`    // if the metrics are enabled
 	PrometheusAddress string `json:"prometheusAddress"` // the address of the server
 }
 
 // DefaultMetricsConfig() returns the default metrics configuration
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		Enabled:           true,           // enabled by default
+		MetricsEnabled:    true,           // enabled by default
 		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
 	}
 }

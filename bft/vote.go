@@ -49,6 +49,8 @@ func (b *BFT) GetLeadingVote() (m *Message, maxVotePercent uint64, maxVotes uint
 
 // AddVote() adds a Replica's vote to the VoteSet
 func (b *BFT) AddVote(vote *Message) lib.ErrorI {
+	b.Controller.Lock()
+	defer b.Controller.Unlock()
 	voteSet := b.getVoteSet(vote)
 	// handle high qc and byzantine evidence (only applicable if ELECTION-VOTE)
 	if err := b.handleHighQCVDFAndEvidence(vote); err != nil {
@@ -128,11 +130,7 @@ func (b *BFT) handleHighQCVDFAndEvidence(vote *Message) lib.ErrorI {
 			}
 			// ensure the height of the HighQC isn't older than the stateCommitteeHeight of the committee
 			// as anything older is invalid and at risk of a 'long range attack'
-			data, err := b.Controller.LoadCommitteeData()
-			if err != nil {
-				return err
-			}
-			if err = vote.HighQc.CheckHighQC(lib.GlobalMaxBlockSize, b.View, data.LastRootHeightUpdated, vs); err != nil {
+			if err = vote.HighQc.CheckHighQC(lib.GlobalMaxBlockSize, b.View, b.CommitteeData.LastRootHeightUpdated, vs); err != nil {
 				return err
 			}
 			// save the highQC if it's higher than any the Leader currently is aware of
@@ -140,6 +138,7 @@ func (b *BFT) handleHighQCVDFAndEvidence(vote *Message) lib.ErrorI {
 				b.log.Infof("Replica %s submitted a highQC", lib.BytesToTruncatedString(vote.Signature.PublicKey))
 				b.HighQC = vote.HighQc
 				b.Block, b.Results = vote.Qc.Block, vote.Qc.Results
+				b.RCBuildHeight = vote.RcBuildHeight
 			}
 		}
 		// handle VDF
