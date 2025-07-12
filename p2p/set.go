@@ -202,39 +202,27 @@ func (ps *PeerSet) GetAllInfos() (res []*lib.PeerInfo, numInbound, numOutbound i
 
 // SendToRandPeer() sends a message to any random peer on the list
 func (ps *PeerSet) SendToRandPeer(topic lib.Topic, msg proto.Message) (*lib.PeerInfo, lib.ErrorI) {
-	bz, err := lib.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
 	ps.RLock()
 	defer ps.RUnlock()
 	for _, p := range ps.m {
-		return p.PeerInfo, ps.send(p, topic, bz)
+		return p.Copy(), ps.send(p, topic, msg)
 	}
 	return nil, nil
 }
 
 // SendTo() sends a message to a specific peer based on their public key
 func (ps *PeerSet) SendTo(publicKey []byte, topic lib.Topic, msg proto.Message) lib.ErrorI {
-	bz, err := lib.Marshal(msg)
-	if err != nil {
-		return err
-	}
 	ps.RLock()
 	defer ps.RUnlock()
 	peer, err := ps.get(publicKey)
 	if err != nil {
 		return err
 	}
-	return ps.send(peer, topic, bz)
+	return ps.send(peer, topic, msg)
 }
 
 // SendToPeers() sends a message to all peers
 func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys ...string) lib.ErrorI {
-	bz, err := lib.Marshal(msg)
-	if err != nil {
-		return err
-	}
 	ps.RLock()
 	defer ps.RUnlock()
 	for _, p := range ps.m {
@@ -243,7 +231,7 @@ func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys .
 			continue
 		}
 		// send to peer
-		if err = ps.send(p, topic, bz); err != nil {
+		if err := ps.send(p, topic, msg); err != nil {
 			return err
 		}
 	}
@@ -269,9 +257,13 @@ func (ps *PeerSet) Stop() {
 }
 
 // send() sends a message to a specific peer object
-func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
+func (ps *PeerSet) send(peer *Peer, topic lib.Topic, msg proto.Message) lib.ErrorI {
+	a, err := lib.NewAny(msg)
+	if err != nil {
+		return err
+	}
 	ps.logger.Debugf("Sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
-	peer.conn.Send(topic, bz)
+	peer.conn.Send(topic, &Envelope{Payload: a})
 	return nil
 }
 

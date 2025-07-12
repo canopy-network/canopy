@@ -320,6 +320,61 @@ func (x *PeerMeta) GetSignature() []byte {
 	return nil
 }
 
+// ConsensusMessage is a p2p message payload that is handled by the BFT module
+type ConsensusMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// chain_id: is the unique identifier of the committee associated with this message
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	// message: the bytes of the consensus message that may be unmarshalled into a consensus.Message object
+	Message       []byte `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConsensusMessage) Reset() {
+	*x = ConsensusMessage{}
+	mi := &file_peer_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConsensusMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConsensusMessage) ProtoMessage() {}
+
+func (x *ConsensusMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_peer_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConsensusMessage.ProtoReflect.Descriptor instead.
+func (*ConsensusMessage) Descriptor() ([]byte, []int) {
+	return file_peer_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ConsensusMessage) GetChainId() uint64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *ConsensusMessage) GetMessage() []byte {
+	if x != nil {
+		return x.Message
+	}
+	return nil
+}
+
 // BlockRequestMessage is a p2p message payload that is requesting a block and/or max_height of the peer
 type BlockRequestMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -336,7 +391,7 @@ type BlockRequestMessage struct {
 
 func (x *BlockRequestMessage) Reset() {
 	*x = BlockRequestMessage{}
-	mi := &file_peer_proto_msgTypes[3]
+	mi := &file_peer_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +403,7 @@ func (x *BlockRequestMessage) String() string {
 func (*BlockRequestMessage) ProtoMessage() {}
 
 func (x *BlockRequestMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_peer_proto_msgTypes[3]
+	mi := &file_peer_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +416,7 @@ func (x *BlockRequestMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockRequestMessage.ProtoReflect.Descriptor instead.
 func (*BlockRequestMessage) Descriptor() ([]byte, []int) {
-	return file_peer_proto_rawDescGZIP(), []int{3}
+	return file_peer_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *BlockRequestMessage) GetChainId() uint64 {
@@ -405,7 +460,7 @@ type BlockMessage struct {
 
 func (x *BlockMessage) Reset() {
 	*x = BlockMessage{}
-	mi := &file_peer_proto_msgTypes[4]
+	mi := &file_peer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -417,7 +472,7 @@ func (x *BlockMessage) String() string {
 func (*BlockMessage) ProtoMessage() {}
 
 func (x *BlockMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_peer_proto_msgTypes[4]
+	mi := &file_peer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -430,7 +485,7 @@ func (x *BlockMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockMessage.ProtoReflect.Descriptor instead.
 func (*BlockMessage) Descriptor() ([]byte, []int) {
-	return file_peer_proto_rawDescGZIP(), []int{4}
+	return file_peer_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BlockMessage) GetChainId() uint64 {
@@ -482,7 +537,7 @@ type TxMessage struct {
 
 func (x *TxMessage) Reset() {
 	*x = TxMessage{}
-	mi := &file_peer_proto_msgTypes[5]
+	mi := &file_peer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -494,7 +549,7 @@ func (x *TxMessage) String() string {
 func (*TxMessage) ProtoMessage() {}
 
 func (x *TxMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_peer_proto_msgTypes[5]
+	mi := &file_peer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +562,7 @@ func (x *TxMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TxMessage.ProtoReflect.Descriptor instead.
 func (*TxMessage) Descriptor() ([]byte, []int) {
-	return file_peer_proto_rawDescGZIP(), []int{5}
+	return file_peer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TxMessage) GetChainId() uint64 {
@@ -550,7 +605,10 @@ const file_peer_proto_rawDesc = "" +
 	"\n" +
 	"network_id\x18\x01 \x01(\x04R\tnetworkId\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\x04R\achainId\x12\x1c\n" +
-	"\tsignature\x18\x03 \x01(\fR\tsignature\"i\n" +
+	"\tsignature\x18\x03 \x01(\fR\tsignature\"G\n" +
+	"\x10ConsensusMessage\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\fR\amessage\"i\n" +
 	"\x13BlockRequestMessage\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12\x1f\n" +
@@ -588,21 +646,22 @@ func file_peer_proto_rawDescGZIP() []byte {
 }
 
 var file_peer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_peer_proto_goTypes = []any{
 	(Topic)(0),                  // 0: types.Topic
 	(*PeerInfo)(nil),            // 1: types.PeerInfo
 	(*PeerAddress)(nil),         // 2: types.PeerAddress
 	(*PeerMeta)(nil),            // 3: types.PeerMeta
-	(*BlockRequestMessage)(nil), // 4: types.BlockRequestMessage
-	(*BlockMessage)(nil),        // 5: types.BlockMessage
-	(*TxMessage)(nil),           // 6: types.TxMessage
-	(*QuorumCertificate)(nil),   // 7: types.QuorumCertificate
+	(*ConsensusMessage)(nil),    // 4: types.ConsensusMessage
+	(*BlockRequestMessage)(nil), // 5: types.BlockRequestMessage
+	(*BlockMessage)(nil),        // 6: types.BlockMessage
+	(*TxMessage)(nil),           // 7: types.TxMessage
+	(*QuorumCertificate)(nil),   // 8: types.QuorumCertificate
 }
 var file_peer_proto_depIdxs = []int32{
 	2, // 0: types.PeerInfo.Address:type_name -> types.PeerAddress
 	3, // 1: types.PeerAddress.peer_meta:type_name -> types.PeerMeta
-	7, // 2: types.BlockMessage.BlockAndCertificate:type_name -> types.QuorumCertificate
+	8, // 2: types.BlockMessage.BlockAndCertificate:type_name -> types.QuorumCertificate
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -622,7 +681,7 @@ func file_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_peer_proto_rawDesc), len(file_peer_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -43,9 +43,10 @@ func (c *Controller) ListenForBlock() {
 			sender := msg.Sender.Address.PublicKey
 			// log the receipt of the block message
 			c.log.Infof("Received new block from %s ✉️", lib.BytesToTruncatedString(sender))
-			// try to unmarshal the message to a block message
-			blockMessage := new(lib.BlockMessage)
-			if err := lib.Unmarshal(msg.Message, blockMessage); err != nil {
+			// try to cast the message to a block message
+			blockMessage, ok := msg.Message.(*lib.BlockMessage)
+			// if cast fails (not a block message)
+			if !ok {
 				// log the error
 				c.log.Debug("Invalid Peer Block Message")
 				// slash the peer's reputation

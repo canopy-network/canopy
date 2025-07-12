@@ -46,9 +46,10 @@ func (c *Controller) ListenForTx() {
 			}
 			// create a convenience variable for the identity of the sender
 			senderID := msg.Sender.Address.PublicKey
-			// try to unmarshal the p2p message as a tx message
-			txMsg := new(lib.TxMessage)
-			if err := lib.Unmarshal(msg.Message, txMsg); err != nil {
+			// try to cast the p2p message as a tx message
+			txMsg, ok := msg.Message.(*lib.TxMessage)
+			// if the cast failed
+			if !ok {
 				// log the unexpected behavior
 				c.log.Warnf("Non-Tx message from %s", lib.BytesToTruncatedString(senderID))
 				// slash the peer's reputation score

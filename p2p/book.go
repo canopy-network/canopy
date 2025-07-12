@@ -85,8 +85,8 @@ func (p *P2P) SendPeerBookRequests() {
 			p.log.Debugf("Received peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 			senderID := msg.Sender.Address.PublicKey
 			// ensure PeerBookResponse message type
-			peerBookResponseMsg := new(PeerBookResponseMessage)
-			if err := lib.Unmarshal(msg.Message, peerBookResponseMsg); err != nil {
+			peerBookResponseMsg, ok := msg.Message.(*PeerBookResponseMessage)
+			if !ok {
 				p.log.Warnf("Invalid peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 				p.ChangeReputation(senderID, InvalidMsgRep)
 				continue
@@ -132,7 +132,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 				continue // dos defensive
 			}
 			// only should be PeerBookMessage in this channel
-			if err := lib.Unmarshal(msg.Message, new(PeerBookRequestMessage)); err != nil {
+			if _, ok := msg.Message.(*PeerBookRequestMessage); !ok {
 				p.log.Warnf("Received invalid peer book request from %s", lib.BytesToString(msg.Sender.Address.PublicKey))
 				p.ChangeReputation(requesterID, InvalidMsgRep)
 				continue

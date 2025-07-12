@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"google.golang.org/protobuf/proto"
 )
 
 /* This file contains shared code for peers and messages that are routed by the controller throughout the app */
@@ -18,10 +19,22 @@ import (
 // Channels are logical communication paths or streams that operate over a single 'multiplexed' network connection
 type Channels map[Topic]chan *MessageAndMetadata
 
-// MessageAndMetadata is a wrapper over a P2P message with information about the sender
+// MessageAndMetadata is a wrapper over a P2P message with information about the sender and the hash of the message
+// for easy de-duplication at the module level
 type MessageAndMetadata struct {
-	Message []byte    // the (proto) payload of the message
-	Sender  *PeerInfo // the sender information
+	Message proto.Message // the (proto) payload of the message
+	Hash    []byte        // the hash of the payload
+	Sender  *PeerInfo     // the sender information
+}
+
+// WithHash() fills the hash field with the cryptographic hash of the message (used for de-duplication)
+func (x *MessageAndMetadata) WithHash() *MessageAndMetadata {
+	// convert the payload into proto bytes
+	payloadBytes, _ := Marshal(x.Message)
+	// hash the payload bytes and set the hash
+	x.Hash = crypto.Hash(payloadBytes)
+	// exit with the message
+	return x
 }
 
 // PEER ADDRESS CODE BELOW
@@ -235,7 +248,7 @@ type peerInfoJSON struct {
 // MessageCache is a simple p2p message de-duplicator that protects redundancy in the p2p network
 type MessageCache struct {
 	queue   *list.List            // a FIFO list of MessageAndMetadata
-	deDupe  *DeDuplicator[uint64] // the O(1) de-duplicator
+	deDupe  *DeDuplicator[string] // the O(1) de-duplicator
 	maxSize int                   // the max size before evicting the oldest
 }
 
@@ -243,7 +256,7 @@ type MessageCache struct {
 func NewMessageCache() *MessageCache {
 	return &MessageCache{
 		queue:   list.New(),
-		deDupe:  NewDeDuplicator[uint64](),
+		deDupe:  NewDeDuplicator[string](),
 		maxSize: 10000,
 	}
 }
@@ -251,8 +264,8 @@ func NewMessageCache() *MessageCache {
 // Add inserts a new message into the cache if it doesn't already exist
 // It removes the oldest message if the cache is full
 func (c *MessageCache) Add(msg *MessageAndMetadata) (ok bool) {
-	// create a key for the message
-	key := MemHash(msg.Message)
+	// convert the hash into a hex string
+	key := BytesToString(msg.Hash)
 	// check / add to the de-duplicator to ensure no duplicates
 	if c.deDupe.Found(key) {
 		// exit with 'already found'
@@ -266,10 +279,8 @@ func (c *MessageCache) Add(msg *MessageAndMetadata) (ok bool) {
 		e := c.queue.Back()
 		// cast it to a MessageAndMetadata
 		message := e.Value.(*MessageAndMetadata)
-		// create a key for the message
-		toDeleteKey := MemHash(message.Message)
 		// delete it from the underlying de-duplicator
-		c.deDupe.Delete(toDeleteKey)
+		c.deDupe.Delete(BytesToString(message.Hash))
 		// remove it from the queue
 		c.queue.Remove(e)
 	}

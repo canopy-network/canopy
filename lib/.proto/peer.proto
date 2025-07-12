@@ -77,6 +77,14 @@ message PeerMeta {
   bytes signature = 3;
 }
 
+// ConsensusMessage is a p2p message payload that is handled by the BFT module
+message ConsensusMessage {
+  // chain_id: is the unique identifier of the committee associated with this message
+  uint64 chain_id = 1; // @gotags: json:"chainID"
+  // message: the bytes of the consensus message that may be unmarshalled into a consensus.Message object
+  bytes message = 2;
+}
+
 // BlockRequestMessage is a p2p message payload that is requesting a block and/or max_height of the peer
 message BlockRequestMessage {
   // chain_id: is the unique identifier of the committee associated with this message
