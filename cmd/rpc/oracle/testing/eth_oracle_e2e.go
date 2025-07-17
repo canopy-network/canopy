@@ -659,7 +659,7 @@ func (e *EthOracleE2E) deleteAllExistingOrders() error {
 
 			e.logger.Infof("Deleting order %s created by %s", orderId, from)
 
-			_, _, err := e.client.TxDeleteOrder(from, orderId, 2, pass, true, 100000)
+			_, _, err := e.client.TxDeleteOrder(from, orderId, chainId, pass, true, 100000)
 			if err != nil {
 				e.logger.Errorf("Failed to delete order %s: %v", orderId, err)
 				continue

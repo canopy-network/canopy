@@ -386,6 +386,8 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
+	// log this event
+	o.log.Infof("%v OrderBook from root chain updated, %d orders", o, len(info.Orders.Orders))
 	if o == nil {
 		return
 	}
@@ -399,7 +401,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// retain updated order book for future oracle operations
 	o.orderBook = info.Orders
 	// log this event
-	o.log.Infof("OrderBook from root chain updated, %d orders", len(info.Orders.Orders))
+	o.log.Infof("Oracle updated root chain chain order book, %d orders", len(info.Orders.Orders))
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
