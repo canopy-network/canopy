@@ -16,6 +16,12 @@ import (
 
 var _ bft.Controller = new(Controller)
 
+type Oracle interface {
+	UpdateRootChainInfo(info *lib.RootChainInfo)
+	WitnessedOrders(orderBook *lib.OrderBook, rootChainHeight uint64) ([]*lib.LockOrder, [][]byte)
+	ValidateProposedOrders(orders *lib.Orders) lib.ErrorI
+}
+
 // Controller acts as the 'manager' of the modules of the application
 type Controller struct {
 	Address    []byte             // self address
@@ -23,20 +29,20 @@ type Controller struct {
 	PrivateKey crypto.PrivateKeyI // self private key
 	Config     lib.Config         // node configuration
 	Metrics    *lib.Metrics       // telemetry
-
-	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
-	Mempool   *Mempool          // the in memory list of pending transactions
-	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
-	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
+	FSM        *fsm.StateMachine  // the core protocol component responsible for maintaining and updating the state of the blockchain
+	Mempool    *Mempool           // the in memory list of pending transactions
+	Consensus  *bft.BFT           // the async consensus process between the committee members for the chain
+	P2P        *p2p.P2P           // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI // the data manager for the 'root chain'
+	oracle      Oracle         // witness oracle
 	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
 	log         lib.LoggerI    // object for logging
 	*sync.Mutex                // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, oracle Oracle, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
@@ -52,6 +58,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		// exit with error
 		return
 	}
+
 	// create the controller
 	controller = &Controller{
 		Address:    address.Bytes(),
@@ -60,6 +67,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Config:     c,
 		Metrics:    metrics,
 		FSM:        fsm,
+		oracle:     oracle,
 		Mempool:    mempool,
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
@@ -166,6 +174,8 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
 	}
+	// update the oracle with the new order book
+	c.oracle.UpdateRootChainInfo(info)
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
@@ -186,6 +196,11 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
+}
+
+// GetOrderBook fetches the root chain order book at the latest height
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut

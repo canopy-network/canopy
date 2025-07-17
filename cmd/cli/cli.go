@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/eth"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -74,6 +77,10 @@ func Start() {
 		l.Infof("Sleeping until %s", untilTime.String())
 		time.Sleep(untilTime)
 	}
+	// create a shared context for oracle and ethereum block provider
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), config.MetricsConfig)
 	// create a new database object from the config
@@ -86,8 +93,42 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+	var o *oracle.Oracle
+	// only enable oracle if configuration is present
+	if config.EthBlockProviderConfig.NodeUrl != "" {
+		// handle ~/
+		if strings.HasPrefix(config.OracleConfig.LogPath, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			config.OracleConfig.LogPath = filepath.Join(home, config.OracleConfig.LogPath[2:])
+		}
+		// create a seperate logger for the oracle and all oracle components
+		oracleLogger := lib.NewOracleLogger(
+			lib.LoggerConfig{Level: config.GetLogLevel()},
+			config.OracleConfig.LogPath,
+		)
+		// create a new ethereum disk storage instance for the oracle order store
+		oracleStorage, e := oracle.NewOracleDiskStorage(config.OracleConfig.OrderStorePath, oracleLogger)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+		// create a new order validator
+		orderValidator := oracle.NewOrderValidator()
+		// create the ethereum block provider
+		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
+		// create a new oracle instance and pass the ethereum block provider with shared context
+		o, e := oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+		// start the oracle with shared context
+		o.Start(ctx)
+	}
+
 	// create a new instance of the application
-	app, err := controller.New(sm, config, validatorKey, metrics, l)
+	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -101,6 +142,10 @@ func Start() {
 	rpcServer.Start()
 	// block until a kill signal is received
 	waitForKill()
+	// cancel the shared context to stop oracle components
+	cancel()
+	// gracefuly stop oracle
+	o.Stop()
 	// gracefully stop the app
 	app.Stop()
 	// gracefully stop the metrics server
