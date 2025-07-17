@@ -392,12 +392,14 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// lock order book while updating it and updating order store
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
-	// retain updated order book for future oracle operations
-	o.orderBook = info.Orders
 	// log a warning for a nil order book
 	if info.Orders == nil {
 		o.log.Warn("OrderBook from root chain was nil")
 	}
+	// retain updated order book for future oracle operations
+	o.orderBook = info.Orders
+	// log this event
+	o.log.Infof("OrderBook from root chain updated, %d orders", len(info.Orders.Orders))
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
