@@ -71,8 +71,8 @@ var ethPrivateKeys = [10]string{
 
 // Canopy accounts for receiving funds
 var canopyAccounts = [2]string{
-	"851e90eaef1fa27debaee2c2591503bdeec1d123", // Canopy Account 1
-	"6f600fd94290f5604e735a21074667dcfecef39c", // Canopy Account 2
+	"334253d564e03c3397e11cdbc588b692bf8e31e8",
+	"334253d564e03c3397e11cdbc588b692bf8e31e8",
 }
 
 func main() {
@@ -327,7 +327,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 
 	sellAmount := testCase.OrderAmount
 	receiveAmount := testCase.ExpectedUSDCTransfer
-	chainId := uint64(1)
+	chainId := uint64(2)
 	receiveAddress := strings.TrimPrefix(testCase.SellerAddress, "0x")
 	submit := true
 	optFee := uint64(100000)
@@ -352,7 +352,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 	// Wait for order to appear in order book
 	var targetOrder *lib.SellOrder
-	timeout := time.After(300 * time.Second)
+	timeout := time.After(30 * time.Second)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -394,7 +394,7 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 		BuyerSendAddress:    common.FromHex(testCase.BuyerAddress),
 		BuyerReceiveAddress: common.Hex2Bytes(testCase.CanopyReceiveAddress),
 		BuyerChainDeadline:  height,
-		ChainId:             1,
+		ChainId:             2,
 	}
 
 	data, rr := json.Marshal(lockOrder)
@@ -627,7 +627,7 @@ func (e *EthOracleE2E) formatUSDCBalance(balance *big.Int) string {
 }
 
 func (e *EthOracleE2E) Orders() (*lib.OrderBooks, error) {
-	orders, err := e.client.Orders(0, 1)
+	orders, err := e.client.Orders(0, 2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query orders: %w", err)
 	}
@@ -655,7 +655,7 @@ func (e *EthOracleE2E) deleteAllExistingOrders() error {
 
 			e.logger.Infof("Deleting order %s created by %s", orderId, from)
 
-			_, _, err := e.client.TxDeleteOrder(from, orderId, 1, pass, true, 100000)
+			_, _, err := e.client.TxDeleteOrder(from, orderId, 2, pass, true, 100000)
 			if err != nil {
 				e.logger.Errorf("Failed to delete order %s: %v", orderId, err)
 				continue
