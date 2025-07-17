@@ -57,7 +57,7 @@ type Oracle struct {
 // NewOracle creates a new Oracle instance
 func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI) (*Oracle, error) {
 	// ensure state save file location exists
-	filePath := ""
+	filePath := config.StateSaveFile
 	if strings.HasPrefix(config.StateSaveFile, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -76,7 +76,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider:      blockProvider,
 		orderStore:         transactionStore,
 		log:                logger,
-		stateSaveFile:      config.StateSaveFile,
+		stateSaveFile:      filePath,
 		orderResubmitDelay: config.OrderResubmitDelay,
 		ctx:                ctx,
 		ctxCancel:          cancel,
