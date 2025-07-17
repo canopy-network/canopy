@@ -222,10 +222,9 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	// validate the proposed orders were witnessed by the oracle
 	err = c.oracle.ValidateProposedOrders(qc.Results.Orders)
 	if err != nil {
-		return err
+		return
 	}
 
->>>>>>> 66f68a6 (Ethereum Oracle)
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error

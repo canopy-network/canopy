@@ -9,10 +9,10 @@
     },
     {
       "chainId": 2,
-      "url": "http://node-2:40002"
+      "url": "http://node-3:30002"
     }
   ],
-  "runVDF": false,
+  "runVDF": true,
   "headless": false,
   "walletPort": "40000",
   "explorerPort": "40001",

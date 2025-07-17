@@ -8,7 +8,7 @@
       "url": "http://node-1:50002"
     }
   ],
-  "runVDF": false,
+  "runVDF": true,
   "headless": false,
   "walletPort": "50000",
   "explorerPort": "50001",
