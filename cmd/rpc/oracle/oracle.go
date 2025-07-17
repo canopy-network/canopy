@@ -137,6 +137,9 @@ func (o *Oracle) run(ctx context.Context, blockCh chan types.BlockI) {
 
 // Stop gracefully shuts down the oracle and all oracle components
 func (o *Oracle) Stop() {
+	if o == nil {
+		return
+	}
 	o.log.Info("Stopping Oracle")
 	// Cancel the context, stopping oracle and oracle components
 	o.ctxCancel()
@@ -316,6 +319,10 @@ func (o *Oracle) saveBlockHeight(height uint64) lib.ErrorI {
 // This is called when the BFT module validates a block proposal to ensure that each order
 // in the proposed block is an exact match for an order in the witnessed order store.
 func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
+	// oracle is disabled
+	if o == nil {
+		return nil
+	}
 	// handle nil orders case
 	if orders == nil {
 		return nil
@@ -369,6 +376,9 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
+	if o == nil {
+		return
+	}
 	// lock order book while updating it and updating order store
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
@@ -473,6 +483,10 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bo
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
 	lockOrders := []*lib.LockOrder{}
 	closeOrders := [][]byte{}
+	// oracle is disabled
+	if o == nil {
+		return lockOrders, closeOrders
+	}
 	// iterate over the order book looking in the order store for lock/close orders this node has witnessed
 	for _, order := range orderBook.Orders {
 		// buyer receive address indicates if this is a locked sell order

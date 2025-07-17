@@ -41,6 +41,15 @@ func NewOracleDiskStorage(storagePath string, logger lib.LoggerI) (*OracleDiskSt
 	if logger == nil {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
+
+	if strings.HasPrefix(storagePath, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		storagePath = filepath.Join(home, storagePath[2:])
+	}
+
 	// create storage directory if it doesn't exist
 	if err := os.MkdirAll(storagePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)

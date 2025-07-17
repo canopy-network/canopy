@@ -319,9 +319,9 @@ type OracleConfig struct {
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		OrderStorePath:     "/home/enielson/.canopy/oracle/orders",
-		StateSaveFile:      "/home/enielson/.canopy/oracle/last_block_height.txt",
-		LogPath:            "/home/enielson/.canopy/oracle/log",
+		OrderStorePath:     "~/.canopy/oracle/orders",
+		StateSaveFile:      "~/.canopy/oracle/last_block_height.txt",
+		LogPath:            "~/.canopy/oracle",
 		OrderResubmitDelay: 2,
 	}
 }

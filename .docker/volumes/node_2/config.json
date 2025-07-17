@@ -6,10 +6,6 @@
     {
       "chainId": 1,
       "url": "http://node-1:50002"
-    },
-    {
-      "chainId": 2,
-      "url": "http://node-3:30002"
     }
   ],
   "runVDF": true,

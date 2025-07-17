@@ -93,26 +93,34 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
-	// create a seperate logger for the oracle and all oracle components
-	oracleLogger := lib.NewOracleLogger(lib.LoggerConfig{Level: config.GetLogLevel()}, config.OracleConfig.LogPath)
-	// create a new ethereum disk storage instance for the oracle order store
-	oracleStorage, e := oracle.NewOracleDiskStorage(config.OracleConfig.OrderStorePath, oracleLogger)
-	if e != nil {
-		l.Fatal(e.Error())
+	var o *oracle.Oracle
+	// only enable oracle if configuration is present
+	if config.EthBlockProviderConfig.NodeUrl != "" {
+		// create a seperate logger for the oracle and all oracle components
+		oracleLogger := lib.NewOracleLogger(
+			lib.LoggerConfig{Level: config.GetLogLevel()},
+			config.OracleConfig.LogPath,
+		)
+		// create a new ethereum disk storage instance for the oracle order store
+		oracleStorage, e := oracle.NewOracleDiskStorage(config.OracleConfig.OrderStorePath, oracleLogger)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+		// create a new order validator
+		orderValidator := oracle.NewOrderValidator()
+		// create the ethereum block provider
+		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
+		// create a new oracle instance and pass the ethereum block provider with shared context
+		o, e := oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
+		if e != nil {
+			l.Fatal(e.Error())
+		}
+		// start the oracle with shared context
+		o.Start(ctx)
 	}
-	// create a new order validator
-	orderValidator := oracle.NewOrderValidator()
-	// create the ethereum block provider
-	ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
-	// create a new oracle instance and pass the ethereum block provider with shared context
-	oracle, e := oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
-	if e != nil {
-		l.Fatal(e.Error())
-	}
-	// start the oracle with shared context
-	oracle.Start(ctx)
+
 	// create a new instance of the application
-	app, err := controller.New(sm, oracle, config, validatorKey, metrics, l)
+	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -129,7 +137,7 @@ func Start() {
 	// cancel the shared context to stop oracle components
 	cancel()
 	// gracefuly stop oracle
-	oracle.Stop()
+	o.Stop()
 	// gracefully stop the app
 	app.Stop()
 	// gracefully stop the metrics server

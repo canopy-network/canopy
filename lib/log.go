@@ -164,7 +164,6 @@ func NewOracleLogger(config LoggerConfig, dataDirPath ...string) LoggerI {
 			dataDirPath[0] = DefaultDataDirPath()
 		}
 		logPath := filepath.Join(dataDirPath[0], LogDirectory, LogFileName)
-		fmt.Println("logPath", logPath)
 		if _, err := os.Stat(logPath); errors.Is(err, os.ErrNotExist) {
 			if err = os.MkdirAll(filepath.Join(dataDirPath[0], LogDirectory), os.ModePerm); err != nil {
 				fmt.Println(err)

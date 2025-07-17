@@ -6,7 +6,7 @@
         {
             "chainId": 1,
             "url": "http://node-1:50002"
-        },
+        }
     ],
     "runVDF": false,
     "headless": false,
@@ -55,6 +55,7 @@
     "oracleConfig": {
         "orderStorePath": "/root/.canopy/oracle/orders",
         "stateSaveFile": "/root/.canopy/oracle/last_block_height.txt",
-        "logPath": "/root/.canopy/oracle/logs"
+        "logPath": "/root/.canopy/oracle/logs",
+        "orderResubmitDelay": 3
     }
 }

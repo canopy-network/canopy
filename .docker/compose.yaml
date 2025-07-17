@@ -8,7 +8,7 @@ services:
       - canopy
     entrypoint: ["anvil", "-vvv", "--host", "0.0.0.0", "--block-time", "2", "--port", "8545"]
     volumes:
-      - ./volumes/anvil:/anvil
+      - ./anvil:/anvil
     healthcheck:
       test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
       interval: 30s
@@ -18,13 +18,14 @@ services:
   anvil-init:
     image: ghcr.io/foundry-rs/foundry:latest
     container_name: anvil-init
+    user: "0"
     networks:
       - canopy
     depends_on:
       - anvil
     entrypoint: ["/anvil/anvil.sh"]
     volumes:
-      - ./volumes/anvil:/anvil
+      - ./anvil:/anvil
     working_dir: /anvil
   node-1:
     container_name: node-1
