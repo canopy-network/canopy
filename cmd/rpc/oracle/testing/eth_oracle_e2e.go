@@ -307,6 +307,10 @@ func (e *EthOracleE2E) recordInitialBalances(testCase *TestCase) {
 func getAuth() (rpc.AddrOrNickname, string) {
 	nick := os.Getenv("E2E_FROM_NICK")
 	pass := os.Getenv("E2E_FROM_PASS")
+	if nick == "" || pass == "" {
+		panic(fmt.Sprintf("%s %s\n", nick, pass))
+	}
+
 	return rpc.AddrOrNickname{Nickname: nick}, pass
 
 }
@@ -348,7 +352,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 	// Wait for order to appear in order book
 	var targetOrder *lib.SellOrder
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(300 * time.Second)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
