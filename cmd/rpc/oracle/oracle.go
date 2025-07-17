@@ -65,6 +65,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		}
 		filePath = filepath.Join(home, config.StateSaveFile[2:])
 	}
+	fmt.Println(filePath)
 	// Ensure the state save file location exists
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		logger.Errorf("failed to create directories for %s: %w", config.StateSaveFile, err)
