@@ -96,6 +96,14 @@ func Start() {
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
 	if config.EthBlockProviderConfig.NodeUrl != "" {
+		// handle ~/
+		if strings.HasPrefix(config.OracleConfig.LogPath, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			config.OracleConfig.LogPath = filepath.Join(home, config.OracleConfig.LogPath[2:])
+		}
 		// create a seperate logger for the oracle and all oracle components
 		oracleLogger := lib.NewOracleLogger(
 			lib.LoggerConfig{Level: config.GetLogLevel()},
