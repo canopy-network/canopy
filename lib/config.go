@@ -319,23 +319,11 @@ type OracleConfig struct {
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		OrderStorePath:     expandPath("~/.canopy/oracle/orders"),
-		StateSaveFile:      expandPath("~/.canopy/oracle/last_block_height.txt"),
-		LogPath:            expandPath("~/.canopy/oracle"),
+		OrderStorePath:     "~/.canopy/oracle/orders",
+		StateSaveFile:      "~/.canopy/oracle/last_block_height.txt",
+		LogPath:            "~/.canopy/oracle",
 		OrderResubmitDelay: 2,
 	}
-}
-
-// expandPath expands ~ to the user's home directory if present
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return path // return original path if we can't get home dir
-		}
-		return filepath.Join(homeDir, path[2:])
-	}
-	return path
 }
 
 // WriteToFile() saves the Config object to a JSON file
