@@ -12,6 +12,6 @@ canopy query orders | jq -r '
   "\tUSDC: \(.requestedAmount)\n" +
   "\tBuyer  USDC: \(.buyerSendAddress) CNPY: \(.buyerReceiveAddress)\n" +
   "\tSeller USDC: \(.sellerReceiveAddress) CNPY: \(.sellersSendAddress)\n" +
-  "\tData: \(.data)\n"
+  "\tData: \(.data) Committee: \(.committee)\n"
 '
 echo

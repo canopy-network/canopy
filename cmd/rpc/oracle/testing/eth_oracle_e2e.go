@@ -24,6 +24,8 @@ import (
 const (
 	erc20TransferMethodID = "a9059cbb"
 	lockInterval          = 10 * time.Second
+
+	chainId = 2
 )
 
 // TestCase represents a single test case with expected balance changes
@@ -327,7 +329,6 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 
 	sellAmount := testCase.OrderAmount
 	receiveAmount := testCase.ExpectedUSDCTransfer
-	chainId := uint64(2)
 	receiveAddress := strings.TrimPrefix(testCase.SellerAddress, "0x")
 	submit := true
 	optFee := uint64(100000)
@@ -366,17 +367,20 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 			if err != nil {
 				continue
 			}
+			e.logger.Infof("Checking %d order books", len(orders.OrderBooks))
 
-			// Find our order (look for unlocked orders with matching amounts)
-			for _, order := range orders.OrderBooks[0].Orders {
-				if order.BuyerSendAddress == nil && // unlocked
-					order.AmountForSale == testCase.OrderAmount &&
-					order.RequestedAmount == testCase.ExpectedUSDCTransfer {
-					targetOrder = order
-					testCase.Status = "created"
-					testCase.OrderID = lib.BytesToString(order.Id)
-					orderFound = true
-					break
+			for _, book := range orders.OrderBooks {
+				// Find our order (look for unlocked orders with matching amounts)
+				for _, order := range book.Orders {
+					if order.BuyerSendAddress == nil && // unlocked
+						order.AmountForSale == testCase.OrderAmount &&
+						order.RequestedAmount == testCase.ExpectedUSDCTransfer {
+						targetOrder = order
+						testCase.Status = "created"
+						testCase.OrderID = lib.BytesToString(order.Id)
+						orderFound = true
+						break
+					}
 				}
 			}
 		}
@@ -394,7 +398,7 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 		BuyerSendAddress:    common.FromHex(testCase.BuyerAddress),
 		BuyerReceiveAddress: common.Hex2Bytes(testCase.CanopyReceiveAddress),
 		BuyerChainDeadline:  height,
-		ChainId:             2,
+		ChainId:             chainId,
 	}
 
 	data, rr := json.Marshal(lockOrder)
