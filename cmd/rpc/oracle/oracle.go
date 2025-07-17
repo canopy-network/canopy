@@ -56,13 +56,21 @@ type Oracle struct {
 
 // NewOracle creates a new Oracle instance
 func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI) (*Oracle, error) {
-	// create context cancel function for the passed context
-	ctx, cancel := context.WithCancel(ctx)
-
+	// ensure state save file location exists
+	filePath := ""
+	if strings.HasPrefix(config.StateSaveFile, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		filePath = filepath.Join(home, config.StateSaveFile[2:])
+	}
 	// Ensure the state save file location exists
-	if err := os.MkdirAll(filepath.Dir(config.StateSaveFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		logger.Errorf("failed to create directories for %s: %w", config.StateSaveFile, err)
 	}
+	// create context cancel function for the passed context
+	ctx, cancel := context.WithCancel(ctx)
 	// create new oracle instance
 	o := &Oracle{
 		blockProvider:      blockProvider,
