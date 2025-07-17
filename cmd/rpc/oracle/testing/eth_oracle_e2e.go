@@ -303,6 +303,14 @@ func (e *EthOracleE2E) recordInitialBalances(testCase *TestCase) {
 		testCase.InitialCNPYBalance)
 }
 
+// getAuth gets credentials from the env
+func getAuth() (rpc.AddrOrNickname, string) {
+	nick := os.Getenv("E2E_FROM_NICK")
+	pass := os.Getenv("E2E_FROM_PASS")
+	return rpc.AddrOrNickname{Nickname: nick}, pass
+
+}
+
 // createTestOrder creates an order for the test case
 func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 	// load the keystore from file
@@ -311,13 +319,12 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 		return fmt.Errorf("failed to load keystore: %w", err)
 	}
 
-	// create the order
-	from := rpc.AddrOrNickname{Nickname: "localhost"}
+	from, pass := getAuth()
+
 	sellAmount := testCase.OrderAmount
 	receiveAmount := testCase.ExpectedUSDCTransfer
 	chainId := uint64(1)
 	receiveAddress := strings.TrimPrefix(testCase.SellerAddress, "0x")
-	pwd := "test"
 	submit := true
 	optFee := uint64(100000)
 	contract := strings.TrimPrefix(os.Getenv("USDC_CONTRACT"), "0x")
@@ -326,7 +333,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 		return fmt.Errorf("failed to create contract data: %w", err)
 	}
 
-	_, _, err = e.client.TxCreateOrder(from, sellAmount, receiveAmount, chainId, receiveAddress, pwd, data, submit, optFee)
+	_, _, err = e.client.TxCreateOrder(from, sellAmount, receiveAmount, chainId, receiveAddress, pass, data, submit, optFee)
 	if err != nil {
 		return fmt.Errorf("failed to create order: %w", err)
 	}
@@ -633,17 +640,18 @@ func (e *EthOracleE2E) deleteAllExistingOrders() error {
 		return fmt.Errorf("failed to get existing orders: %w", err)
 	}
 
+	from, pass := getAuth()
+
 	deletedCount := 0
 	// Delete each order
 	for _, orderBook := range orders.OrderBooks {
 		for _, order := range orderBook.Orders {
 			// Delete the order using e.client.TxDeleteOrder
 			orderId := lib.BytesToString(order.Id)
-			from := rpc.AddrOrNickname{Nickname: "localhost"}
 
 			e.logger.Infof("Deleting order %s created by %s", orderId, from)
 
-			_, _, err := e.client.TxDeleteOrder(from, orderId, 1, "test", true, 100000)
+			_, _, err := e.client.TxDeleteOrder(from, orderId, 1, pass, true, 100000)
 			if err != nil {
 				e.logger.Errorf("Failed to delete order %s: %v", orderId, err)
 				continue
