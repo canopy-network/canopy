@@ -127,6 +127,7 @@ func Start() {
 		o.Start(ctx)
 	}
 
+	fmt.Println("RAOCLE", o)
 	// create a new instance of the application
 	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
 	if err != nil {
