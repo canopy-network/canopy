@@ -19,7 +19,7 @@ run_orders() {
 # Function to run store script
 run_store() {
     if [ -f "scripts/store.sh" ]; then
-        bash scripts/store.sh /home/enielson/.canopy/oracle/orders
+        bash scripts/store.sh /home/enielson/canopy/deployments/canopy_data/node2/oracle/orders/
     fi
 }
 

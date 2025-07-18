@@ -386,8 +386,6 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
-	// log this event
-	o.log.Infof("%v OrderBook from root chain updated, %d orders", o, len(info.Orders.Orders))
 	if o == nil {
 		return
 	}
@@ -530,7 +528,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
 				continue
 			}
-			o.log.Debugf("Witnessed lock order %x", wOrder.LockOrder.OrderId)
+			o.log.Debugf("Witnessed lock order %s", lib.BytesToString(wOrder.LockOrder.OrderId))
 			// submit this witnessed lock order by returning it in the lockOrders slice
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
@@ -552,7 +550,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
 				continue
 			}
-			o.log.Debugf("Witnessed close order %x", wOrder.OrderId)
+			o.log.Debugf("Witnessed close order %s", lib.BytesToString(wOrder.OrderId))
 			// submit this witnessed close order by returning it in the closeOrders slice
 			closeOrders = append(closeOrders, wOrder.OrderId)
 		}
