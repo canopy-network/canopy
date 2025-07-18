@@ -9,7 +9,7 @@ canopy query orders | jq -r '
   .orders[] |
   "ID: " + green + "\(.id) " + reset +
   "CNPY: \(.amountForSale) " +
-  "\tUSDC: \(.requestedAmount)\n" +
+  "\tUSDC: \(.requestedAmount) Deadline: \(.buyerChainDeadline)\n" +
   "\tBuyer  USDC: \(.buyerSendAddress) CNPY: \(.buyerReceiveAddress)\n" +
   "\tSeller USDC: \(.sellerReceiveAddress) CNPY: \(.sellersSendAddress)\n" +
   "\tData: \(.data) Committee: \(.committee)\n"

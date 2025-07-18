@@ -510,7 +510,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	if o == nil {
 		return lockOrders, closeOrders
 	}
-	// iterate over the order book looking in the order store for lock/close orders this node has witnessed
+	// loop through the order book searching the order store for lock/close orders witnessed by this node
 	for _, order := range orderBook.Orders {
 		// buyer receive address indicates if this is a locked sell order
 		// TODO: revisit this, add method to lock order type?
