@@ -343,6 +343,7 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 	}
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
+		o.log.Infof("Verifying lock order %s", lib.BytesToString(lock.OrderId))
 		// get order from order store
 		witnessedOrder, err := o.orderStore.ReadOrder(lock.OrderId, types.LockOrderType)
 		if err != nil {
