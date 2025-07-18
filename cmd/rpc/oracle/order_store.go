@@ -141,7 +141,10 @@ func (e *OracleDiskStorage) ReadOrder(orderId []byte, orderType types.OrderType)
 	// unmarshal the order
 	order := &types.WitnessedOrder{}
 	err = json.Unmarshal(data, order)
-	return order, ErrUnmarshalOrder(err)
+	if err != nil {
+		return nil, ErrUnmarshalOrder(err)
+	}
+	return order, nil
 }
 
 // RemoveOrder removes an order from disk
