@@ -260,7 +260,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		// this should not happen under normal circumstances but is not an error
 		if canopyOrder == nil {
 			// log a warning and continue processing transactions
-			o.log.Warnf("Order %x not found in order book", order.OrderId)
+			o.log.Warnf("Order %s not found in order book", lib.BytesToString(order.OrderId))
 			continue
 		}
 		// validate the order that was witnessed against the order found in the order book
@@ -285,7 +285,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		// write order to disk.
 		err = o.orderStore.WriteOrder(order, orderType)
 		if err != nil {
-			o.log.Errorf("Failed to write order %x: %v", order.OrderId, err)
+			o.log.Errorf("Failed to write order %s: %v", lib.BytesToString(order.OrderId), err)
 			return err
 		}
 		o.log.Debugf("Wrote order %s %s to store", lib.BytesToString(order.OrderId), orderType)
@@ -409,7 +409,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// examine stored lock orders and remove any not present in the order book
 	for _, id := range storedOrders {
-		o.log.Debugf("UpdateRootChainInfo checking stored lock order %x for removal", id)
+		o.log.Debugf("UpdateRootChainInfo: Should remove lock order %s?", lib.BytesToString(id))
 		// attempt to get stored lock order from order book
 		if o.orderBook == nil {
 			o.log.Warn("Order book is nil, skipping lock order check")
@@ -425,9 +425,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		//   - root chain sell order is locked (lock order in store no longer needed)
 		switch {
 		case order == nil:
-			o.log.Infof("Order %x no longer in order book, removing lock order from store", id)
+			o.log.Infof("Order %s no longer in order book, removing lock order from store", lib.BytesToString(id))
 		case order.BuyerSendAddress != nil:
-			o.log.Infof("Order %x is locked in order book, removing lock order from store", id)
+			o.log.Infof("Order %s is locked in order book, removing lock order from store", lib.BytesToString(id))
 		default:
 			// neither condition was met, do not remove this order
 			// continue processing remaining stored orders
