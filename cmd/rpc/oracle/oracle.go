@@ -47,6 +47,8 @@ type Oracle struct {
 	stateSaveFile string
 	// how many root chain blocks to wait until resubmitting an order
 	orderResubmitDelay uint64
+	// committee
+	committee uint64
 	// context to allow graceful shutdown
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -66,7 +68,6 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		filePath = filepath.Join(home, config.StateSaveFile[2:])
 	}
 	logger.Infof("state save file: %s\n", filePath)
-	fmt.Println(filePath)
 	// Ensure the state save file location exists
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 		logger.Errorf("failed to create directories for %s: %w", config.StateSaveFile, err)
@@ -80,6 +81,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		log:                logger,
 		stateSaveFile:      filePath,
 		orderResubmitDelay: config.OrderResubmitDelay,
+		committee:          config.Committee,
 		ctx:                ctx,
 		ctxCancel:          cancel,
 	}
@@ -165,7 +167,6 @@ func (o *Oracle) validateOrder(tx types.TransactionI, sellOrder *lib.SellOrder) 
 	// convenience variables
 	hasLock := order.LockOrder != nil
 	hasClose := order.CloseOrder != nil
-
 	// witnessed order must contain either a lock or close order
 	if !hasLock && !hasClose {
 		return ErrOrderValidation("witnessed order must contain either lock or close order")
@@ -337,17 +338,21 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 	if orders == nil {
 		return nil
 	}
+	// order book not received yet
+	if o.orderBook == nil {
+		return nil
+	}
 	// skip validation when no orders are present
 	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
 		return nil
 	}
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
-		o.log.Infof("Verifying lock order %s", lib.BytesToString(lock.OrderId))
+		o.log.Infof("Validating proposed lock order %s", lib.BytesToString(lock.OrderId))
 		// get order from order store
 		witnessedOrder, err := o.orderStore.ReadOrder(lock.OrderId, types.LockOrderType)
 		if err != nil {
-			return err
+			return ErrReadOrder(err)
 		}
 		// compare orderbook order and witnessed order
 		if !lock.Equals(witnessedOrder.LockOrder) {
@@ -357,20 +362,20 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 	}
 	// validate each close order against the witnessed order store
 	for _, orderId := range orders.CloseOrders {
-		o.log.Infof("Verifying close order %s", lib.BytesToString(orderId))
+		o.log.Infof("Validating proposed close order %s", lib.BytesToString(orderId))
 		// get the witnessd order
-		wOrder, err := o.orderStore.ReadOrder(orderId, types.CloseOrderType)
+		witnessedOrder, err := o.orderStore.ReadOrder(orderId, types.CloseOrderType)
 		if err != nil {
 			return ErrReadOrder(err)
 		}
 		// construct close order for comparison
 		order := lib.CloseOrder{
 			OrderId:    orderId,
-			ChainId:    o.orderBook.ChainId,
+			ChainId:    o.committee,
 			CloseOrder: true,
 		}
 		// compare orderbook order and witnessed order
-		if !order.Equals(wOrder.CloseOrder) {
+		if !order.Equals(witnessedOrder.CloseOrder) {
 			return ErrOrderNotVerified(lib.BytesToString(orderId), errors.New("close order unequal"))
 		}
 		o.log.Debugf("Validated proposed close order %s successfully", lib.BytesToString(order.OrderId))
@@ -409,7 +414,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// examine stored lock orders and remove any not present in the order book
 	for _, id := range storedOrders {
-		o.log.Debugf("UpdateRootChainInfo: Should remove lock order %s?", lib.BytesToString(id))
+		o.log.Debugf("UpdateRootChainInfo checking stored lock order %x for removal", id)
 		// attempt to get stored lock order from order book
 		if o.orderBook == nil {
 			o.log.Warn("Order book is nil, skipping lock order check")
@@ -495,8 +500,8 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bo
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // WitnessedOrders is called from two different stages in the BFT process:
-// - when the proposer produces a block proposal it uses the orders returned here to build the block
-// - when a validator (a witness node) validates a block proposal it uses the orders returned here to validate all proposed orders were witnessed by this node
+// - when the proposer produces a block proposal it uses the orders returned here to build the proposed block
+// - when a validator (a witness node) validates a block proposal it uses the orders returned here to verify all proposed orders were witnessed by this node
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
 	lockOrders := []*lib.LockOrder{}
 	closeOrders := [][]byte{}
@@ -509,11 +514,11 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 		// buyer receive address indicates if this is a locked sell order
 		// TODO: revisit this, add method to lock order type?
 		if order.BuyerReceiveAddress == nil {
-			// process unlocked sell orders - look for witnessed lock orderskjkjkjkjjjjkjk
+			// process unlocked sell orders - look for witnessed lock orders
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.LockOrderType)
 			if err != nil {
 				if err.Code() != CodeReadOrder {
-					o.log.Errorf("Failed to read order %x: %v", order.Id, err)
+					o.log.Errorf("Failed to read order %s: %v", lib.BytesToString(order.Id), err)
 				}
 				continue
 			}
@@ -526,16 +531,19 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// save this update to disk
 			err = o.orderStore.WriteOrder(wOrder, types.LockOrderType)
 			if err != nil {
-				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
+				o.log.Errorf("Failed to write order %s: %v", lib.BytesToString(order.Id), err)
 				continue
 			}
 			o.log.Debugf("Witnessed lock order %s", lib.BytesToString(wOrder.LockOrder.OrderId))
 			// submit this witnessed lock order by returning it in the lockOrders slice
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
-			// process wOrder book locked orders - look for witnessed close orders
+			// process locked orders - look for witnessed close orders
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
 			if err != nil {
+				if err.Code() != CodeReadOrder {
+					o.log.Errorf("Failed to read order %s: %v", lib.BytesToString(order.Id), err)
+				}
 				// No witnessed order is a normal condition, do not log
 				continue
 			}
@@ -548,7 +556,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// update the witnessed order in the store
 			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
 			if err != nil {
-				o.log.Errorf("Failed to write order %x: %v", order.Id, err)
+				o.log.Errorf("Failed to write order %s: %v", lib.BytesToString(order.Id), err)
 				continue
 			}
 			o.log.Debugf("Witnessed close order %s", lib.BytesToString(wOrder.OrderId))

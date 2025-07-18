@@ -314,6 +314,7 @@ type OracleConfig struct {
 	StateSaveFile      string `json:"stateSaveFile"`      // file to save oracle state
 	LogPath            string `json:"oracleLogPath"`      // path to store oracle logs
 	OrderResubmitDelay uint64 `json:"orderResubmitDelay"` // how many root blocks to wait to resubmit order
+	Committee          uint64 `json:"committee"`          // committee this oracle will be witnessed orders for
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -323,6 +324,7 @@ func DefaultOracleConfig() OracleConfig {
 		StateSaveFile:      "~/.canopy/oracle/last_block_height.txt",
 		LogPath:            "~/.canopy/oracle",
 		OrderResubmitDelay: 2,
+		Committee:          2,
 	}
 }
 
