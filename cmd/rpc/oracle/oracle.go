@@ -365,7 +365,7 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		// construct close order for comparison
 		order := lib.CloseOrder{
 			OrderId:    orderId,
-			ChainId:    1,
+			ChainId:    o.orderBook.ChainId,
 			CloseOrder: true,
 		}
 		// compare orderbook order and witnessed order
