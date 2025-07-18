@@ -392,6 +392,7 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
+	// oracle is disabled
 	if o == nil {
 		return
 	}
