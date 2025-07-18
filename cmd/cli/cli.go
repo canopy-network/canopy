@@ -119,7 +119,7 @@ func Start() {
 		// create the ethereum block provider
 		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
 		// create a new oracle instance and pass the ethereum block provider with shared context
-		o, e := oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
+		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
 		if e != nil {
 			l.Fatal(e.Error())
 		}
