@@ -310,9 +310,7 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 
 // OracleConfig represents the configuration of the off-chain order witness oracle
 type OracleConfig struct {
-	OrderStorePath     string `json:"orderStorePath"`     // filesystem path to store orders
 	StateSaveFile      string `json:"stateSaveFile"`      // file to save oracle state
-	LogPath            string `json:"oracleLogPath"`      // path to store oracle logs
 	OrderResubmitDelay uint64 `json:"orderResubmitDelay"` // how many root blocks to wait to resubmit order
 	Committee          uint64 `json:"committee"`          // committee this oracle will be witnessed orders for
 }
@@ -320,9 +318,7 @@ type OracleConfig struct {
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		OrderStorePath:     "~/.canopy/oracle/orders",
-		StateSaveFile:      "~/.canopy/oracle/last_block_height.txt",
-		LogPath:            "~/.canopy/oracle",
+		StateSaveFile:      "last_block_height.txt",
 		OrderResubmitDelay: 2,
 		Committee:          2,
 	}

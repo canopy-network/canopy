@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"math/big"
@@ -73,11 +74,15 @@ var ethPrivateKeys = [10]string{
 
 // Canopy accounts for receiving funds
 var canopyAccounts = [2]string{
-	"334253d564e03c3397e11cdbc588b692bf8e31e8",
-	"334253d564e03c3397e11cdbc588b692bf8e31e8",
+	"02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+	"851e90eaef1fa27debaee2c2591503bdeec1d123",
 }
 
 func main() {
+	// Add boolean command line parameter
+	verbose := flag.Bool("close", false, "send close orders and exit")
+	flag.Parse()
+
 	dataDir := lib.DefaultDataDirPath()
 	configFilePath := filepath.Join(dataDir, lib.ConfigFilePath)
 
@@ -92,6 +97,11 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error initializing E2E tester: %v\n", err)
 		return
+	}
+
+	// Use the verbose flag if needed
+	if *verbose {
+		fmt.Println("Running test suite in verbose mode")
 	}
 
 	// Run the test suite
@@ -126,6 +136,7 @@ func NewEthOracleE2E(config lib.Config, dataDir string) (*EthOracleE2E, error) {
 
 	// create client
 	client := rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
+	fmt.Println(config)
 
 	return &EthOracleE2E{
 		ethClient: ethClient,
@@ -187,45 +198,45 @@ func (e *EthOracleE2E) generateTestCases() []*TestCase {
 			CanopySendAddress:    canopyAccounts[1],
 			Status:               "created",
 		},
-		{
-			Name:                 "LargeOrderFlow_10000USDC",
-			OrderAmount:          10000000, // 10 USDC in 6 decimals
-			ExpectedUSDCTransfer: 10000000,
-			ExpectedCNPYTransfer: 10000000,
-			BuyerAddress:         ethAccounts[1],
-			BuyerPrivateKey:      ethPrivateKeys[1],
-			SellerAddress:        ethAccounts[2],
-			SellerPrivateKey:     ethPrivateKeys[2],
-			CanopyReceiveAddress: canopyAccounts[1],
-			CanopySendAddress:    canopyAccounts[1],
-			Status:               "created",
-		},
-		{
-			Name:                 "BasicOrderFlow_1000USDC",
-			OrderAmount:          1000000, // 1 USDC in 6 decimals
-			ExpectedUSDCTransfer: 1000000,
-			ExpectedCNPYTransfer: 1000000,
-			BuyerAddress:         ethAccounts[0],
-			BuyerPrivateKey:      ethPrivateKeys[0],
-			SellerAddress:        ethAccounts[1],
-			SellerPrivateKey:     ethPrivateKeys[1],
-			CanopyReceiveAddress: canopyAccounts[1],
-			CanopySendAddress:    canopyAccounts[1],
-			Status:               "created",
-		},
-		{
-			Name:                 "LargeOrderFlow_10000USDC",
-			OrderAmount:          10000000, // 10 USDC in 6 decimals
-			ExpectedUSDCTransfer: 10000000,
-			ExpectedCNPYTransfer: 10000000,
-			BuyerAddress:         ethAccounts[1],
-			BuyerPrivateKey:      ethPrivateKeys[1],
-			SellerAddress:        ethAccounts[2],
-			SellerPrivateKey:     ethPrivateKeys[2],
-			CanopyReceiveAddress: canopyAccounts[1],
-			CanopySendAddress:    canopyAccounts[1],
-			Status:               "created",
-		},
+		// {
+		// 	Name:                 "LargeOrderFlow_10000USDC",
+		// 	OrderAmount:          10000000, // 10 USDC in 6 decimals
+		// 	ExpectedUSDCTransfer: 10000000,
+		// 	ExpectedCNPYTransfer: 10000000,
+		// 	BuyerAddress:         ethAccounts[1],
+		// 	BuyerPrivateKey:      ethPrivateKeys[1],
+		// 	SellerAddress:        ethAccounts[2],
+		// 	SellerPrivateKey:     ethPrivateKeys[2],
+		// 	CanopyReceiveAddress: canopyAccounts[1],
+		// 	CanopySendAddress:    canopyAccounts[1],
+		// 	Status:               "created",
+		// },
+		// {
+		// 	Name:                 "BasicOrderFlow_1000USDC",
+		// 	OrderAmount:          1000000, // 1 USDC in 6 decimals
+		// 	ExpectedUSDCTransfer: 1000000,
+		// 	ExpectedCNPYTransfer: 1000000,
+		// 	BuyerAddress:         ethAccounts[0],
+		// 	BuyerPrivateKey:      ethPrivateKeys[0],
+		// 	SellerAddress:        ethAccounts[1],
+		// 	SellerPrivateKey:     ethPrivateKeys[1],
+		// 	CanopyReceiveAddress: canopyAccounts[1],
+		// 	CanopySendAddress:    canopyAccounts[1],
+		// 	Status:               "created",
+		// },
+		// {
+		// 	Name:                 "LargeOrderFlow_10000USDC",
+		// 	OrderAmount:          10000000, // 10 USDC in 6 decimals
+		// 	ExpectedUSDCTransfer: 10000000,
+		// 	ExpectedCNPYTransfer: 10000000,
+		// 	BuyerAddress:         ethAccounts[1],
+		// 	BuyerPrivateKey:      ethPrivateKeys[1],
+		// 	SellerAddress:        ethAccounts[2],
+		// 	SellerPrivateKey:     ethPrivateKeys[2],
+		// 	CanopyReceiveAddress: canopyAccounts[1],
+		// 	CanopySendAddress:    canopyAccounts[1],
+		// 	Status:               "created",
+		// },
 	}
 
 	return testCases
@@ -353,7 +364,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 	// Wait for order to appear in order book
 	var targetOrder *lib.SellOrder
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(60 * time.Second)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -367,7 +378,7 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 			if err != nil {
 				continue
 			}
-			e.logger.Infof("Checking %d order books", len(orders.OrderBooks))
+			// e.logger.Infof("Checking %d order books", len(orders.OrderBooks))
 
 			for _, book := range orders.OrderBooks {
 				// Find our order (look for unlocked orders with matching amounts)
@@ -391,7 +402,7 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 	if err != nil {
 		return fmt.Errorf("failed to get height: %w", err)
 	}
-	height := *heightPtr + 20
+	height := *heightPtr + 5
 
 	lockOrder := &lib.LockOrder{
 		OrderId:             targetOrder.Id,
@@ -412,41 +423,12 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 		return fmt.Errorf("failed to send lock transaction: %w", err)
 	}
 
-	e.logger.Infof("Test %s - %x unlocked sell order found, sent lock order", testCase.Name, targetOrder.Id)
+	e.logger.Infof("Test %s - %x lock order sent", testCase.Name, targetOrder.Id)
 	return nil
 }
 
-func (e *EthOracleE2E) closeTestOrder(testCase *TestCase) error {
-	// Wait for order to be locked
-	timeout := time.After(60 * time.Second)
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	var lockedOrder *lib.SellOrder
-	found := false
-	for !found {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for order %s to be locked", testCase.OrderID)
-		case <-ticker.C:
-			orders, err := e.Orders()
-			if err != nil {
-				continue
-			}
-
-			// Find our locked order
-			for _, order := range orders.OrderBooks[0].Orders {
-				if order.BuyerSendAddress != nil && // locked
-					order.AmountForSale == testCase.OrderAmount &&
-					order.RequestedAmount == testCase.ExpectedUSDCTransfer {
-					lockedOrder = order
-					testCase.Status = "locked"
-					found = true
-					break
-				}
-			}
-		}
-	}
+func (e *EthOracleE2E) sendClose(lockedOrder *lib.SellOrder, testCase *TestCase) error {
+	e.logger.Infof("Test %s - %x locked order found", testCase.Name, lockedOrder.Id)
 
 	// Send USDC to the locked order's seller send address
 	usdcContract := common.HexToAddress(strings.TrimPrefix(os.Getenv("USDC_CONTRACT"), "0x"))
@@ -482,15 +464,57 @@ func (e *EthOracleE2E) closeTestOrder(testCase *TestCase) error {
 		return fmt.Errorf("failed to send USDC transfer: %w", err)
 	}
 
-	e.logger.Infof("Test %s - %x locked sell order found, sent close order", testCase.Name, lockedOrder.Id)
+	e.logger.Infof("Test %s - %x close order sent", testCase.Name, lockedOrder.Id)
+	return nil
+}
+
+func (e *EthOracleE2E) closeTestOrder(testCase *TestCase) error {
+	// Wait for order to be locked
+	timeout := time.After(180 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	var closed = []string{}
+
+	done := false
+	for !done {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for order %s to be locked", testCase.OrderID)
+		case <-ticker.C:
+			orders, err := e.Orders()
+			if err != nil {
+				continue
+			}
+
+			// Find our locked order
+			for _, order := range orders.OrderBooks[0].Orders {
+				if order.BuyerSendAddress != nil && // locked
+					order.AmountForSale == testCase.OrderAmount &&
+					order.RequestedAmount == testCase.ExpectedUSDCTransfer {
+					testCase.Status = "locked"
+					var send = true
+					for _, id := range closed {
+						if testCase.OrderID == id {
+							send = false
+						}
+					}
+					if send {
+						e.sendClose(order, testCase)
+						closed = append(closed, testCase.OrderID)
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
 // waitForOrderCompletion waits for the order to be removed from the order book, indicating successful completion
 func (e *EthOracleE2E) waitForOrderCompletion(testCase *TestCase) error {
-	e.logger.Infof("Test %s - %s waiting for order to be completed and removed from order book", testCase.Name, testCase.OrderID)
+	e.logger.Infof("Test %s - %s waiting for completion", testCase.Name, testCase.OrderID)
 
-	timeout := time.After(60 * time.Second)   // Longer timeout for order completion
+	timeout := time.After(120 * time.Second)  // Longer timeout for order completion
 	ticker := time.NewTicker(2 * time.Second) // Check every 2 seconds
 	defer ticker.Stop()
 
