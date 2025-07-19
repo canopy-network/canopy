@@ -114,7 +114,7 @@ func (e *OracleDiskStorage) WriteOrder(order *types.WitnessedOrder, orderType ty
 		os.Remove(tempPath)
 		return ErrWriteOrder(fmt.Errorf("failed to rename temporary file: %w", err))
 	}
-	e.logger.Debugf("OrderStore: Wrote %d bytes to %s", len(bz), filePath)
+	// e.logger.Debugf("OrderStore: Wrote %d bytes to %s", len(bz), filePath)
 	return nil
 }
 
@@ -131,13 +131,13 @@ func (e *OracleDiskStorage) ReadOrder(orderId []byte, orderType types.OrderType)
 	if err != nil {
 		return nil, ErrReadOrder(err)
 	}
-	e.logger.Debugf("OrderStore: Attempting to read %s", filePath)
+	// e.logger.Debugf("OrderStore: Attempting to read %s", filePath)
 	// read file contents
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, ErrReadOrder(err)
 	}
-	e.logger.Debugf("OrderStore: Read %d bytes from %s", len(data), filePath)
+	// e.logger.Debugf("OrderStore: Read %d bytes from %s", len(data), filePath)
 	// unmarshal the order
 	order := &types.WitnessedOrder{}
 	err = json.Unmarshal(data, order)
@@ -164,7 +164,7 @@ func (e *OracleDiskStorage) RemoveOrder(orderId []byte, orderType types.OrderTyp
 	if err := os.Remove(filePath); err != nil {
 		return ErrRemoveOrder(err)
 	}
-	e.logger.Debugf("OrderStore: Removed %s", filePath)
+	// e.logger.Debugf("OrderStore: Removed %s", filePath)
 	return nil
 }
 
@@ -203,7 +203,7 @@ func (e *OracleDiskStorage) GetAllOrderIds(orderType types.OrderType) ([][]byte,
 			orderIds = append(orderIds, id)
 		}
 	}
-	e.logger.Debugf("OrderStore: All %s IDs %v", orderType, orderIds)
+	// e.logger.Debugf("OrderStore: All %s IDs %v", orderType, orderIds)
 	return orderIds, nil
 }
 

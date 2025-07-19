@@ -33,6 +33,9 @@ var rootCmd = &cobra.Command{
 	Use:     "canopy",
 	Short:   "the canopy blockchain software",
 	Version: rpc.SoftwareVersion,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initEnv()
+	},
 }
 
 var (
@@ -49,8 +52,15 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
+}
+
+// initEnv initializes global components required for operation
+func initEnv() {
+	// create logger used throughout the application
 	l = lib.NewLogger(lib.LoggerConfig{Level: config.GetLogLevel()})
+	// initialize data directory, creating required files if neccessary
+	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
+	// create an rpc client for this node
 	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 }
 
@@ -80,7 +90,6 @@ func Start() {
 	// create a shared context for oracle and ethereum block provider
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), config.MetricsConfig)
 	// create a new database object from the config
@@ -96,21 +105,13 @@ func Start() {
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
 	if config.EthBlockProviderConfig.NodeUrl != "" {
-		// handle ~/
-		if strings.HasPrefix(config.OracleConfig.LogPath, "~/") {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				l.Fatal(err.Error())
-			}
-			config.OracleConfig.LogPath = filepath.Join(home, config.OracleConfig.LogPath[2:])
-		}
 		// create a seperate logger for the oracle and all oracle components
 		oracleLogger := lib.NewOracleLogger(
 			lib.LoggerConfig{Level: config.GetLogLevel()},
-			config.OracleConfig.LogPath,
+			filepath.Join(DataDir, "oracle"),
 		)
 		// create a new ethereum disk storage instance for the oracle order store
-		oracleStorage, e := oracle.NewOracleDiskStorage(config.OracleConfig.OrderStorePath, oracleLogger)
+		oracleStorage, e := oracle.NewOracleDiskStorage(filepath.Join(DataDir, "oracle/store"), oracleLogger)
 		if e != nil {
 			l.Fatal(e.Error())
 		}
@@ -118,6 +119,9 @@ func Start() {
 		orderValidator := oracle.NewOrderValidator()
 		// create the ethereum block provider
 		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
+
+		// create an absolute path for the state save file
+		config.OracleConfig.StateSaveFile = filepath.Join(DataDir, config.OracleConfig.StateSaveFile)
 		// create a new oracle instance and pass the ethereum block provider with shared context
 		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
 		if e != nil {
@@ -126,8 +130,6 @@ func Start() {
 		// start the oracle with shared context
 		o.Start(ctx)
 	}
-
-	fmt.Println("RAOCLE", o)
 	// create a new instance of the application
 	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
 	if err != nil {

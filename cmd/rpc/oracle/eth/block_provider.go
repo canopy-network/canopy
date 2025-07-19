@@ -77,7 +77,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		blockChan:              ch,
 		erc20TokenCache:        tokenCache,
 		logger:                 logger,
-		chainId:                config.ChainID,
+		chainId:                config.EVMChainId,
 		orderValidator:         orderValidator,
 		retryDelay:             time.Duration(config.RetryDelay) * time.Second,
 		safeBlockConfirmations: big.NewInt(int64(config.SafeBlockConfirmations)),

@@ -79,9 +79,45 @@ var canopyAccounts = [2]string{
 }
 
 func main() {
-	// Add boolean command line parameter
-	verbose := flag.Bool("close", false, "send close orders and exit")
+	// Command line flags
+	createOrder := flag.Bool("create-order", false, "Create a new sell order")
+	lockOrder := flag.String("lock-order", "", "Lock an order by order ID")
+	closeOrder := flag.String("close-order", "", "Close an order by order ID")
+	runTests := flag.Bool("run-tests", false, "Run the full E2E test suite")
+	verbose := flag.Bool("verbose", false, "Enable verbose logging")
+
+	// Order parameters
+	amount := flag.Uint64("amount", 1000000, "Order amount in smallest unit (default: 1 USDC = 1000000)")
+	buyerAddr := flag.String("buyer-addr", ethAccounts[0], "Buyer Ethereum address")
+	buyerKey := flag.String("buyer-key", ethPrivateKeys[0], "Buyer private key")
+	sellerAddr := flag.String("seller-addr", ethAccounts[1], "Seller Ethereum address")
+	_ = flag.String("seller-key", ethPrivateKeys[1], "Seller private key") // Reserved for future use
+	canopyAddr := flag.String("canopy-addr", canopyAccounts[0], "Canopy receive address")
+
 	flag.Parse()
+
+	// Show help if no flags provided
+	if !*createOrder && *lockOrder == "" && *closeOrder == "" && !*runTests {
+		fmt.Println("Usage:")
+		fmt.Println("  --create-order                    Create a new sell order")
+		fmt.Println("  --lock-order <order-id|first>     Lock an order (use 'first' for first unlocked)")
+		fmt.Println("  --close-order <order-id|first>    Close an order (use 'first' for first locked)")
+		fmt.Println("  --run-tests                       Run full E2E test suite")
+		fmt.Println("  --verbose                         Enable verbose logging")
+		fmt.Println("\nExamples:")
+		fmt.Println("  ./eth_oracle_e2e --create-order")
+		fmt.Println("  ./eth_oracle_e2e --lock-order first")
+		fmt.Println("  ./eth_oracle_e2e --close-order first")
+		fmt.Println("  ./eth_oracle_e2e --lock-order abc123def456")
+		fmt.Println("\nOrder Parameters (all have defaults):")
+		fmt.Printf("  --amount <amount>                 Order amount (default: 1000000)\n")
+		fmt.Printf("  --buyer-addr <address>            Buyer address (default: %s)\n", ethAccounts[0])
+		fmt.Printf("  --buyer-key <private-key>         Buyer private key (default: %s)\n", ethPrivateKeys[0])
+		fmt.Printf("  --seller-addr <address>           Seller address (default: %s)\n", ethAccounts[1])
+		fmt.Printf("  --seller-key <private-key>        Seller private key (default: %s)\n", ethPrivateKeys[1])
+		fmt.Printf("  --canopy-addr <address>           Canopy address (default: %s)\n", canopyAccounts[0])
+		return
+	}
 
 	dataDir := lib.DefaultDataDirPath()
 	configFilePath := filepath.Join(dataDir, lib.ConfigFilePath)
@@ -99,13 +135,83 @@ func main() {
 		return
 	}
 
-	// Use the verbose flag if needed
-	if *verbose {
-		fmt.Println("Running test suite in verbose mode")
-	}
+	// Route to appropriate operation
+	if *createOrder {
+		// Use default seller address if not provided or use first account
+		sellerAddress := *sellerAddr
+		if sellerAddress == "" {
+			sellerAddress = ethAccounts[0]
+		}
 
-	// Run the test suite
-	e2e.RunTestSuite()
+		// Use default canopy address if not provided
+		canopyAddress := *canopyAddr
+		if canopyAddress == "" {
+			canopyAddress = canopyAccounts[0]
+		}
+
+		err := e2e.CreateSellOrder(*amount, *amount, sellerAddress, canopyAddress)
+		if err != nil {
+			fmt.Printf("Error creating order: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Order created successfully: %d CNPY -> %d USDC (seller: %s)\n", *amount, *amount, sellerAddress)
+	} else if *lockOrder != "" {
+		if *lockOrder == "first" || *lockOrder == "auto" {
+			// Lock the first available unlocked order
+			err := e2e.LockFirstOrder(*buyerAddr, *buyerKey, *canopyAddr)
+			if err != nil {
+				fmt.Printf("Error locking first available order: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("First available order locked successfully\n")
+		} else {
+			// Lock specific order by ID
+			err := e2e.LockOrder(*lockOrder, *buyerAddr, *buyerKey, *canopyAddr)
+			if err != nil {
+				fmt.Printf("Error locking order: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Order %s locked successfully\n", *lockOrder)
+		}
+	} else if *closeOrder != "" {
+		if *closeOrder == "first" || *closeOrder == "auto" {
+			// Close the first available locked order
+			err := e2e.CloseFirstOrder(*buyerKey, *amount)
+			if err != nil {
+				fmt.Printf("Error closing first available order: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("First available order closed successfully\n")
+		} else {
+			// Close specific order by ID
+			err := e2e.CloseOrder(*closeOrder, *buyerKey, *amount)
+			if err != nil {
+				fmt.Printf("Error closing order: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Order %s closed successfully\n", *closeOrder)
+		}
+	} else if *runTests {
+		if *verbose {
+			fmt.Println("Running test suite in verbose mode")
+		}
+		e2e.RunTestSuite()
+	} else {
+		fmt.Println("Usage:")
+		fmt.Println("  --create-order                     Create a new sell order")
+		fmt.Println("  --lock-order <order-id>           Lock an existing order")
+		fmt.Println("  --close-order <order-id>          Close a locked order")
+		fmt.Println("  --run-tests                       Run full E2E test suite")
+		fmt.Println("  --verbose                         Enable verbose logging")
+		fmt.Println("\nOrder Parameters:")
+		fmt.Println("  --amount <amount>                 Order amount (default: 1000000)")
+		fmt.Println("  --buyer-addr <address>            Buyer Ethereum address")
+		fmt.Println("  --buyer-key <private-key>         Buyer private key")
+		fmt.Println("  --seller-addr <address>           Seller Ethereum address")
+		fmt.Println("  --seller-key <private-key>        Seller private key")
+		fmt.Println("  --canopy-addr <address>           Canopy receive address")
+		os.Exit(0)
+	}
 }
 
 // EthOracleE2E handles RPC requests to the canopy blockchain
@@ -328,8 +434,8 @@ func getAuth() (rpc.AddrOrNickname, string) {
 
 }
 
-// createTestOrder creates an order for the test case
-func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
+// CreateSellOrder creates a sell order with specified parameters
+func (e *EthOracleE2E) CreateSellOrder(sellAmount, receiveAmount uint64, sellerAddress, canopyAddress string) error {
 	// load the keystore from file
 	_, err := crypto.NewKeystoreFromFile(e.dataDir)
 	if err != nil {
@@ -338,9 +444,7 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 
 	from, pass := getAuth()
 
-	sellAmount := testCase.OrderAmount
-	receiveAmount := testCase.ExpectedUSDCTransfer
-	receiveAddress := strings.TrimPrefix(testCase.SellerAddress, "0x")
+	receiveAddress := strings.TrimPrefix(sellerAddress, "0x")
 	submit := true
 	optFee := uint64(100000)
 	contract := strings.TrimPrefix(os.Getenv("USDC_CONTRACT"), "0x")
@@ -354,16 +458,139 @@ func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 
-	e.logger.Infof("Test %s - Sent TxCreateOrder: %d CNPY -> %d USDC",
-		testCase.Name, sellAmount, receiveAmount)
+	e.logger.Infof("Created sell order: %d CNPY -> %d USDC (seller: %s)",
+		sellAmount, receiveAmount, sellerAddress)
+	
+	// Print balances after creating order
+	e.printAccountBalances("Balances After Creating Order")
 
 	return nil
+}
+
+// createTestOrder creates an order for the test case
+func (e *EthOracleE2E) createTestOrder(testCase *TestCase) error {
+	return e.CreateSellOrder(testCase.OrderAmount, testCase.ExpectedUSDCTransfer, testCase.SellerAddress, testCase.CanopyReceiveAddress)
+}
+
+// LockOrder locks an order by its ID with specified buyer parameters
+func (e *EthOracleE2E) LockOrder(orderID, buyerAddress, buyerPrivateKey, canopyAddress string) error {
+	// Find the order by ID
+	targetOrder, err := e.findOrderByID(orderID)
+	if err != nil {
+		return fmt.Errorf("failed to find order %s: %w", orderID, err)
+	}
+
+	if targetOrder.BuyerSendAddress != nil {
+		return fmt.Errorf("order %s is already locked", orderID)
+	}
+
+	return e.lockOrderInternal(targetOrder, buyerAddress, buyerPrivateKey, canopyAddress)
+}
+
+// LockFirstOrder locks the first available unlocked order
+func (e *EthOracleE2E) LockFirstOrder(buyerAddress, buyerPrivateKey, canopyAddress string) error {
+	// Find the first unlocked order
+	targetOrder, err := e.findFirstUnlockedOrder()
+	if err != nil {
+		return fmt.Errorf("failed to find unlocked order: %w", err)
+	}
+
+	return e.lockOrderInternal(targetOrder, buyerAddress, buyerPrivateKey, canopyAddress)
+}
+
+// lockOrderInternal handles the actual locking logic
+func (e *EthOracleE2E) lockOrderInternal(targetOrder *lib.SellOrder, buyerAddress, buyerPrivateKey, canopyAddress string) error {
+	// Lock the order
+	heightPtr, err := e.client.Height()
+	if err != nil {
+		return fmt.Errorf("failed to get height: %w", err)
+	}
+	height := *heightPtr + 5
+
+	lockOrder := &lib.LockOrder{
+		OrderId:             targetOrder.Id,
+		BuyerSendAddress:    common.FromHex(buyerAddress),
+		BuyerReceiveAddress: common.Hex2Bytes(canopyAddress),
+		BuyerChainDeadline:  height,
+		ChainId:             chainId,
+	}
+
+	data, er := json.Marshal(lockOrder)
+	if er != nil {
+		return fmt.Errorf("failed to marshal lock order: %w", er)
+	}
+
+	sendAddress := common.HexToAddress(strings.TrimPrefix(buyerAddress, "0x"))
+	err2 := SendTransaction(e.ethClient, sendAddress, buyerPrivateKey, new(big.Int).SetUint64(0), data)
+	if err2 != nil {
+		return fmt.Errorf("failed to send lock transaction: %w", err2)
+	}
+
+	orderID := lib.BytesToString(targetOrder.Id)
+	e.logger.Infof("Lock order sent for order %s by buyer %s", orderID, buyerAddress)
+	
+	// Print balances after locking order
+	e.printAccountBalances("Balances After Locking Order")
+	return nil
+}
+
+// findOrderByID finds an order by its ID in the order books
+func (e *EthOracleE2E) findOrderByID(orderID string) (*lib.SellOrder, error) {
+	orders, err := e.Orders()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+
+	for _, book := range orders.OrderBooks {
+		for _, order := range book.Orders {
+			if lib.BytesToString(order.Id) == orderID {
+				return order, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("order %s not found", orderID)
+}
+
+// findFirstUnlockedOrder finds the first unlocked order in the order books
+func (e *EthOracleE2E) findFirstUnlockedOrder() (*lib.SellOrder, error) {
+	orders, err := e.Orders()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+
+	for _, book := range orders.OrderBooks {
+		for _, order := range book.Orders {
+			if order.BuyerSendAddress == nil { // unlocked
+				return order, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no unlocked orders found")
+}
+
+// findFirstLockedOrder finds the first locked order in the order books
+func (e *EthOracleE2E) findFirstLockedOrder() (*lib.SellOrder, error) {
+	orders, err := e.Orders()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+
+	for _, book := range orders.OrderBooks {
+		for _, order := range book.Orders {
+			if order.BuyerSendAddress != nil { // locked
+				return order, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no locked orders found")
 }
 
 // waitAndLockOrder waits for the order to appear and locks it
 func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 	// Wait for order to appear in order book
-	var targetOrder *lib.SellOrder
 	timeout := time.After(60 * time.Second)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -386,7 +613,6 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 					if order.BuyerSendAddress == nil && // unlocked
 						order.AmountForSale == testCase.OrderAmount &&
 						order.RequestedAmount == testCase.ExpectedUSDCTransfer {
-						targetOrder = order
 						testCase.Status = "created"
 						testCase.OrderID = lib.BytesToString(order.Id)
 						orderFound = true
@@ -397,39 +623,37 @@ func (e *EthOracleE2E) waitAndLockOrder(testCase *TestCase) error {
 		}
 	}
 
-	// Lock the order
-	heightPtr, err := e.client.Height()
-	if err != nil {
-		return fmt.Errorf("failed to get height: %w", err)
-	}
-	height := *heightPtr + 5
-
-	lockOrder := &lib.LockOrder{
-		OrderId:             targetOrder.Id,
-		BuyerSendAddress:    common.FromHex(testCase.BuyerAddress),
-		BuyerReceiveAddress: common.Hex2Bytes(testCase.CanopyReceiveAddress),
-		BuyerChainDeadline:  height,
-		ChainId:             chainId,
-	}
-
-	data, rr := json.Marshal(lockOrder)
-	if rr != nil {
-		return fmt.Errorf("failed to marshal lock order: %w", err)
-	}
-
-	sendAddress := common.HexToAddress(strings.TrimPrefix(testCase.BuyerAddress, "0x"))
-	rr = SendTransaction(e.ethClient, sendAddress, testCase.BuyerPrivateKey, new(big.Int).SetUint64(0), data)
-	if rr != nil {
-		return fmt.Errorf("failed to send lock transaction: %w", err)
-	}
-
-	e.logger.Infof("Test %s - %x lock order sent", testCase.Name, targetOrder.Id)
-	return nil
+	return e.LockOrder(testCase.OrderID, testCase.BuyerAddress, testCase.BuyerPrivateKey, testCase.CanopyReceiveAddress)
 }
 
-func (e *EthOracleE2E) sendClose(lockedOrder *lib.SellOrder, testCase *TestCase) error {
-	e.logger.Infof("Test %s - %x locked order found", testCase.Name, lockedOrder.Id)
+// CloseOrder closes a locked order by sending USDC transfer with close order data
+func (e *EthOracleE2E) CloseOrder(orderID, buyerPrivateKey string, transferAmount uint64) error {
+	// Find the locked order by ID
+	lockedOrder, err := e.findOrderByID(orderID)
+	if err != nil {
+		return fmt.Errorf("failed to find order %s: %w", orderID, err)
+	}
 
+	if lockedOrder.BuyerSendAddress == nil {
+		return fmt.Errorf("order %s is not locked", orderID)
+	}
+
+	return e.closeOrderInternal(lockedOrder, buyerPrivateKey, transferAmount)
+}
+
+// CloseFirstOrder closes the first available locked order
+func (e *EthOracleE2E) CloseFirstOrder(buyerPrivateKey string, transferAmount uint64) error {
+	// Find the first locked order
+	lockedOrder, err := e.findFirstLockedOrder()
+	if err != nil {
+		return fmt.Errorf("failed to find locked order: %w", err)
+	}
+
+	return e.closeOrderInternal(lockedOrder, buyerPrivateKey, transferAmount)
+}
+
+// closeOrderInternal handles the actual closing logic
+func (e *EthOracleE2E) closeOrderInternal(lockedOrder *lib.SellOrder, buyerPrivateKey string, transferAmount uint64) error {
 	// Send USDC to the locked order's seller send address
 	usdcContract := common.HexToAddress(strings.TrimPrefix(os.Getenv("USDC_CONTRACT"), "0x"))
 	sellerReceiveAddress := common.BytesToAddress(lockedOrder.SellerReceiveAddress)
@@ -437,7 +661,7 @@ func (e *EthOracleE2E) sendClose(lockedOrder *lib.SellOrder, testCase *TestCase)
 	// Create USDC transfer transaction
 	transferData := erc20TransferMethodID +
 		hex.EncodeToString(common.LeftPadBytes(sellerReceiveAddress.Bytes(), 32)) +
-		hex.EncodeToString(common.LeftPadBytes(new(big.Int).SetUint64(testCase.ExpectedUSDCTransfer).Bytes(), 32))
+		hex.EncodeToString(common.LeftPadBytes(new(big.Int).SetUint64(transferAmount).Bytes(), 32))
 
 	transferDataBytes, err := hex.DecodeString(transferData)
 	if err != nil {
@@ -459,13 +683,20 @@ func (e *EthOracleE2E) sendClose(lockedOrder *lib.SellOrder, testCase *TestCase)
 	// Append the close order bytes to the transfer data
 	finalTransferData := append(transferDataBytes, closeOrderBytes...)
 
-	err = SendTransaction(e.ethClient, usdcContract, testCase.BuyerPrivateKey, new(big.Int).SetUint64(0), finalTransferData)
+	err = SendTransaction(e.ethClient, usdcContract, buyerPrivateKey, new(big.Int).SetUint64(0), finalTransferData)
 	if err != nil {
 		return fmt.Errorf("failed to send USDC transfer: %w", err)
 	}
 
-	e.logger.Infof("Test %s - %x close order sent", testCase.Name, lockedOrder.Id)
+	orderID := lib.BytesToString(lockedOrder.Id)
+	e.logger.Infof("Close order sent for order %s with %d USDC transfer", orderID, transferAmount)
 	return nil
+}
+
+func (e *EthOracleE2E) sendClose(lockedOrder *lib.SellOrder, testCase *TestCase) error {
+	e.logger.Infof("Test %s - %x locked order found", testCase.Name, lockedOrder.Id)
+
+	return e.CloseOrder(lib.BytesToString(lockedOrder.Id), testCase.BuyerPrivateKey, testCase.ExpectedUSDCTransfer)
 }
 
 func (e *EthOracleE2E) closeTestOrder(testCase *TestCase) error {
@@ -610,6 +841,42 @@ func (e *EthOracleE2E) verifyFinalBalances(testCase *TestCase) error {
 
 	testCase.Status = "verified"
 	return nil
+}
+
+// isCanopyAddress checks if an address is a canopy address (shorter format without 0x prefix)
+func (e *EthOracleE2E) isCanopyAddress(address string) bool {
+	// Canopy addresses are shorter and don't have 0x prefix
+	// Ethereum addresses are 42 chars with 0x prefix, or 40 chars without
+	if len(address) == 40 && !strings.HasPrefix(address, "0x") {
+		return true
+	}
+	return false
+}
+
+// printAccountBalances prints the balances of all related accounts for debugging
+func (e *EthOracleE2E) printAccountBalances(label string) {
+	fmt.Printf("\n=== %s ===\n", label)
+	
+	// Print Ethereum account USDC balances
+	for i, account := range ethAccounts {
+		usdcBalance, err := e.getUSDCBalance(account)
+		if err != nil {
+			fmt.Printf("ETH Account %d (%s): USDC balance error: %v\n", i, account, err)
+		} else {
+			fmt.Printf("ETH Account %d (%s): USDC balance: %s\n", i, account, e.formatUSDCBalance(usdcBalance))
+		}
+	}
+	
+	// Print Canopy account CNPY balances
+	for i, account := range canopyAccounts {
+		cnpyBalance, err := e.getCNPYBalance(account)
+		if err != nil {
+			fmt.Printf("Canopy Account %d (%s): CNPY balance error: %v\n", i, account, err)
+		} else {
+			fmt.Printf("Canopy Account %d (%s): CNPY balance: %d\n", i, account, cnpyBalance)
+		}
+	}
+	fmt.Println("===========================")
 }
 
 // Helper functions
