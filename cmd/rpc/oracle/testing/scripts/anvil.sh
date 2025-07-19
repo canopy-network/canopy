@@ -5,7 +5,7 @@ ANVIL_URL="http://localhost:8545"
 # Run anvil in the background
 echo "Starting anvil node..."
 # RUST_LOG=info anvil --block-time 2 &
-RUST_LOG=info anvil -vvv --print-traces --block-time 2 &
+RUST_LOG=info anvil -vvv --print-traces --block-time 2 --chain-id 1 &
 ANVIL_PID=$!
 
 # Wait a moment for anvil to start

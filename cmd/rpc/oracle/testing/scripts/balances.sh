@@ -28,7 +28,7 @@ get_eth_balance() {
 
 # Function to get all CNPY balances
 get_cnpy_balances() {
-    canopy_output=$(canopy query accounts 2>&1)
+    canopy_output=$(canopy query accounts --data-dir node-1 2>&1)
     canopy_exit_code=$?
     if [ $canopy_exit_code -eq 0 ]; then
         local jq_output=$(echo "$canopy_output" | jq -r '.results[] | "\(.address): \(.amount)"' 2>&1)
