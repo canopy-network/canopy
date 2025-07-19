@@ -288,7 +288,7 @@ func DefaultMetricsConfig() MetricsConfig {
 type EthBlockProviderConfig struct {
 	NodeUrl                string `json:"ethNodeUrl"`             // ethereum rpc node url
 	NodeWSUrl              string `json:"ethNodeWsUrl"`           // ethereum node websocket url
-	ChainID                uint64 `json:"ethChainId"`             // ethereum chain id
+	EVMChainId             uint64 `json:"ethChainId"`             // ethereum chain id
 	RetryDelay             int    `json:"retryDelay"`             // retry delay in seconds for connection failures
 	SafeBlockConfirmations int    `json:"safeBlockConfirmations"` // number of confirmations required for a block to be considered safe
 }
@@ -302,7 +302,7 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 		// NodeWSSUrl: "wss://eth-canopy-ws.us.nodefleet.net",
 		NodeUrl:                "http://localhost:8545",
 		NodeWSUrl:              "ws://localhost:8545",
-		ChainID:                1,
+		EVMChainId:             1,
 		RetryDelay:             5, // default 5 seconds retry delay
 		SafeBlockConfirmations: 5, // default 5 block confirmations for safety
 	}
