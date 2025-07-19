@@ -216,7 +216,6 @@ func (c *Controller) HandleSwaps(fsm *fsm.StateMachine, blockResult *lib.BlockRe
 	if err != nil {
 		c.log.Errorf("Error getting order book: %v", err)
 	}
-	c.log.Warnf("lock %d close %d\n", len(lockOrders), len(closeOrders))
 	// append any witnessed orders to the on chain orders
 	witnessedLockOrders, witnessedCloseOrders := c.oracle.WitnessedOrders(orderBook, rootChainHeight)
 	lockOrders = append(lockOrders, witnessedLockOrders...)

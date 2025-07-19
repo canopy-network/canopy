@@ -1,15 +1,17 @@
 {
   "logLevel": "debug",
-  "chainId": 1,
+  "chainId": 2,
   "sleepUntil": 0,
   "rootChain": [
     {
       "chainId": 1,
-      "url": "http://node-1:50002"
+      "url": "http://node1:50002"
     }
   ],
-  "runVDF": true,
+  "runVDF": false,
   "headless": false,
+  "autoUpdate": true,
+  "runningAutoUpdate": false,
   "walletPort": "40000",
   "explorerPort": "40001",
   "rpcPort": "40002",
@@ -19,14 +21,17 @@
   "timeoutS": 3,
   "dataDirPath": "/root/.canopy",
   "dbName": "canopy",
+  "indexByAccount": true,
   "inMemory": false,
   "networkID": 1,
-  "listenAddress": "0.0.0.0:9001",
-  "externalAddress": "node-2",
+  "listenAddress": "0.0.0.0:9002",
+  "externalAddress": "node2",
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": [],
+    "dialPeers": [
+        "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2@tcp://node-1"
+    ],
   "bannedPeerIDs": null,
   "bannedIPs": null,
   "minimumPeersToStart": 0,
@@ -34,7 +39,7 @@
   "electionTimeoutMS": 1500,
   "electionVoteTimeoutMS": 1500,
   "proposeTimeoutMS": 2500,
-  "proposeVoteTimeoutMS": 4000,
+  "proposeVoteTimeoutMS": 2000,
   "precommitTimeoutMS": 2000,
   "precommitVoteTimeoutMS": 2000,
   "commitTimeoutMS": 2000,
@@ -43,6 +48,21 @@
   "maxTransactionCount": 5000,
   "individualMaxTxSize": 4000,
   "dropPercentage": 35,
+  "lazyMempoolCheckFrequencyS": 1,
   "metricsEnabled": true,
-  "prometheusAddress": "0.0.0.0:9090"
+  "prometheusAddress": "0.0.0.0:9090",
+  "ethBlockProviderConfig": {
+    "ethNodeUrl": "http://anvil:8545",
+    "ethNodeWsUrl": "ws://anvil:8545",
+    "ethChainId": 1,
+    "retryDelay": 5,
+    "safeBlockConfirmations": 5
+  },
+  "oracleConfig": {
+    "orderStorePath": "~/.canopy/oracle/orders",
+    "stateSaveFile": "~/.canopy/oracle/last_block_height.txt",
+    "oracleLogPath": "~/.canopy/oracle",
+    "orderResubmitDelay": 1,
+    "committee": 2
+  }
 }
