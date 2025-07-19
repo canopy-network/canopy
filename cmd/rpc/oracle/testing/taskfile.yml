@@ -25,6 +25,21 @@ tasks:
       - ./socket.sh
       - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start
 
+  node-1:
+    desc: "Build and start Canopy root node"
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - ./socket.sh
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start --data-dir cmd/rpc/oracle/testing/node-1
+
+  node-2:
+    desc: "Build and start Canopy oracle node"
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start --data-dir cmd/rpc/oracle/testing/node-2
+
   # Run end-to-end oracle testing automation
   # - Loads testing environment variables
   # - Executes the e2e Go program that:
