@@ -1,0 +1,93 @@
+version: '3'
+
+tasks:
+  # Start local Ethereum test environment with USDC contract
+  # - Launches Anvil (local Ethereum node) with 2-second block times
+  # - Deploys USDC ERC20 contract to the local network
+  # - Mints USDC tokens to test accounts for testing purposes
+  # - Keeps Anvil running until manually stopped
+  anvil:
+    desc: "Start Anvil node, deploy USDC contract, and mint test tokens"
+    cmds:
+      - scripts/anvil.sh
+
+  # Build and start Canopy blockchain node for oracle testing
+  # - Builds the Canopy binary from source
+  # - Cleans up previous oracle state (eth_last_height.txt)
+  # - Executes socket.sh (likely for network setup)
+  # - Loads USDC contract environment variables and starts Canopy node
+  canopy:
+    desc: "Build and start Canopy node with oracle configuration"
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - rm -rf ~/.canopy/oracle/last_block_height.txt
+      - ./socket.sh
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start
+
+  node-1:
+    desc: "Build and start Canopy root node"
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - ./socket.sh
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start --data-dir cmd/rpc/oracle/testing/node-1
+
+  node-2:
+    desc: "Build and start Canopy oracle node"
+    dir: ~/go/src/canopy
+    cmds:
+      - make build/canopy
+      - source cmd/rpc/oracle/testing/env/usdc_contract.env && canopy start --data-dir cmd/rpc/oracle/testing/node-2
+
+  # Run end-to-end oracle testing automation
+  # - Loads testing environment variables
+  # - Executes the e2e Go program that:
+  #   * Maintains sell orders in the Canopy order book
+  #   * Monitors for unlocked orders and creates lock transactions on Ethereum
+  #   * Monitors for locked orders and creates close transactions (USDC transfers)
+  #   * Simulates a complete cross-chain order lifecycle
+  e2e:
+    desc: "Run automated end-to-end oracle testing (order creation, locking, closing)"
+    cmds:
+      - source env/testing.env && go build . && go run .
+
+  # Launch comprehensive monitoring dashboard
+  # - Shows real-time balances (ETH, USDC, CNPY)
+  # - Displays current order book state
+  # - Shows oracle disk store contents
+  # - Refreshes every 5 seconds for live monitoring
+  monitor:
+    desc: "Start comprehensive monitoring dashboard (balances, orders, store)"
+    cmds:
+      - scripts/monitor.sh
+
+  # Monitor account balances only
+  # - ETH balances for test accounts
+  # - USDC balances for test accounts  
+  # - CNPY balances from Canopy blockchain
+  # - Refreshes every 5 seconds
+  balances:
+    desc: "Monitor ETH, USDC, and CNPY account balances"
+    cmds:
+      - scripts/monitor.sh balances
+
+  # Monitor Canopy order book state
+  # - Shows all active sell orders with details
+  # - Displays order IDs, amounts, buyer/seller addresses
+  # - Shows lock status and associated data
+  # - Refreshes every 5 seconds
+  orders:
+    desc: "Monitor Canopy order book state and order details"
+    cmds:
+      - scripts/monitor.sh orders
+
+  # Monitor oracle disk storage
+  # - Shows witnessed orders stored by the oracle
+  # - Displays order files and their contents from /var/canopy/eth
+  # - Helpful for debugging oracle storage and persistence
+  # - Refreshes every 5 seconds
+  store:
+    desc: "Monitor oracle disk storage contents (/var/canopy/eth)"
+    cmds:
+      - scripts/monitor.sh store

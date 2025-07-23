@@ -3,9 +3,12 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"runtime"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -20,7 +23,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// think of 'lock orders' like reserving the 'sell order'
 		for _, lockOrder := range orders.LockOrders {
 			if err := s.LockOrder(lockOrder, chainId); err != nil {
-				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("LockOrder %s failed %d (can happen due to asynchronicity): %s", lib.BytesToString(lockOrder.OrderId), chainId, err.Error())
 			}
 		}
 		// reset orders are a result of the committee witnessing 'no-action' from the buyer of the sell order aka NOT sending the
@@ -35,7 +38,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// buy assets before the 'deadline height' of the 'buyer chain'
 		for _, closeOrderId := range orders.CloseOrders {
 			if err := s.CloseOrder(closeOrderId, chainId); err != nil {
-				s.log.Warnf("CloseOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("CloseOrder %s failed %d (can happen due to asynchronicity): %s", lib.BytesToString(closeOrderId), chainId, err.Error())
 			}
 		}
 	}
@@ -249,6 +252,17 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
+	// Print full stack trace
+	buf := make([]byte, 1024)
+	for {
+		n := runtime.Stack(buf, false)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	fmt.Printf("Stack trace:\n%s\n", buf)
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
 	if err != nil {
@@ -265,6 +279,16 @@ func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.Erro
 
 // GetOrder() gets the sell order from state
 func (s *StateMachine) GetOrder(orderId []byte, chainId uint64) (order *lib.SellOrder, err lib.ErrorI) {
+	buf := make([]byte, 1024)
+	for {
+		n := runtime.Stack(buf, false)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	fmt.Printf("Stack trace:\n%s\n", buf)
 	// get the order proto bytes from the state
 	protoBytes, err := s.Get(KeyForOrder(chainId, orderId))
 	if err != nil {
