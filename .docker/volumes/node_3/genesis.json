@@ -17,14 +17,14 @@
   "nonSigners": null,
   "validators": [
     {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
-      "committees": [
-        2
-      ],
-      "netAddress": "tcp://node-2",
-      "stakedAmount": 1000000000,
-      "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+        "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+        "committees": [
+            2
+        ],
+        "netAddress": "tcp://node-3",
+        "stakedAmount": 1000000000,
+        "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
     }
   ],
   "params": {

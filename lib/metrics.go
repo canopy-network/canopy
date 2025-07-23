@@ -64,14 +64,16 @@ type Metrics struct {
 	log             LoggerI       // the logger
 	startupBlockSet bool          // flag to ensure startup block is only set once
 
-	NodeMetrics    // general telemetry about the node
-	BlockMetrics   // block telemetry
-	PeerMetrics    // peer telemetry
-	P2PMetrics     // p2p performance telemetry
-	BFTMetrics     // bft telemetry
-	FSMMetrics     // fsm telemetry
-	StoreMetrics   // persistence telemetry
-	MempoolMetrics // tx memory pool telemetry
+	NodeMetrics             // general telemetry about the node
+	BlockMetrics            // block telemetry
+	PeerMetrics             // peer telemetry
+	P2PMetrics              // p2p performance telemetry
+	BFTMetrics              // bft telemetry
+	FSMMetrics              // fsm telemetry
+	StoreMetrics            // persistence telemetry
+	MempoolMetrics          // tx memory pool telemetry
+	OracleMetrics           // oracle telemetry
+	EthBlockProviderMetrics // ethereum block provider telemetry
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -163,6 +165,51 @@ type StoreMetrics struct {
 type MempoolMetrics struct {
 	MempoolSize    prometheus.Gauge // how many bytes are in the mempool?
 	MempoolTxCount prometheus.Gauge // how many transactions are in the mempool?
+}
+
+// OracleMetrics represents the telemetry for the Oracle module
+type OracleMetrics struct {
+	// Block processing metrics
+	OracleBlockProcessingTime prometheus.Histogram // how long does it take to process blocks?
+	OrderValidationTime       prometheus.Histogram // how long does it take to validate orders?
+	// Order counting metrics
+	OrdersWitnessed prometheus.Counter // total orders witnessed
+	OrdersValidated prometheus.Counter // total orders validated successfully
+	OrdersSubmitted prometheus.Counter // total orders submitted for consensus
+	OrdersRejected  prometheus.Counter // total orders rejected during validation
+	// Order store metrics
+	TotalOrdersStored prometheus.Gauge // total orders currently stored in order store
+	LockOrdersStored  prometheus.Gauge // total lock orders currently stored
+	CloseOrdersStored prometheus.Gauge // total close orders currently stored
+	// State management metrics
+	SafeHeight                prometheus.Gauge // current safe block height
+	SourceChainHeight         prometheus.Gauge // current source chain height
+	LockOrderSubmissionsSize  prometheus.Gauge // size of lock order submissions map
+	CloseOrderSubmissionsSize prometheus.Gauge // size of close order submissions map
+	// Error and reorg metrics
+	ChainReorgs           prometheus.Counter // total chain reorganizations detected
+	OrdersPruned          prometheus.Counter // total orders pruned during cleanup
+	BlockProcessingErrors prometheus.Counter // total block processing errors
+	// Performance metrics
+	OrderBookUpdateTime prometheus.Histogram // how long does it take to update order book?
+	RootChainSyncTime   prometheus.Histogram // how long does it take to sync with root chain?
+}
+
+// EthBlockProviderMetrics represents the telemetry for the Ethereum block provider
+type EthBlockProviderMetrics struct {
+	// Block and transaction processing metrics
+	BlockFetchTime         prometheus.Histogram // how long does it take to fetch Ethereum blocks?
+	TransactionProcessTime prometheus.Histogram // how long does it take to process Ethereum transactions?
+	ReceiptFetchTime       prometheus.Histogram // how long does it take to fetch transaction receipts?
+	// Token cache metrics
+	TokenCacheHits   prometheus.Counter // total ERC20 token cache hits
+	TokenCacheMisses prometheus.Counter // total ERC20 token cache misses
+	// Connection and error metrics
+	ConnectionErrors prometheus.Counter // total Ethereum connection errors
+	// Processing counters
+	BlocksProcessed       prometheus.Counter // total Ethereum blocks processed
+	TransactionsProcessed prometheus.Counter // total Ethereum transactions processed
+	TransactionRetries    prometheus.Counter // total Ethereum transaction processing retries
 }
 
 // NewMetricsServer() creates a new telemetry server
@@ -441,6 +488,120 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			MempoolTxCount: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_mempool_tx_count",
 				Help: "Count of transactions in the transaction memory pool",
+			}),
+		},
+		// ORACLE
+		OracleMetrics: OracleMetrics{
+			OracleBlockProcessingTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_block_processing_time",
+				Help: "Time to process blocks in the oracle in seconds",
+			}),
+			OrderValidationTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_order_validation_time",
+				Help: "Time to validate orders in the oracle in seconds",
+			}),
+			OrdersWitnessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_witnessed_total",
+				Help: "Total number of orders witnessed from Ethereum",
+			}),
+			OrdersValidated: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_validated_total",
+				Help: "Total number of orders validated successfully",
+			}),
+			OrdersSubmitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_submitted_total",
+				Help: "Total number of orders submitted for consensus",
+			}),
+			OrdersRejected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_rejected_total",
+				Help: "Total number of orders rejected during validation",
+			}),
+			TotalOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_total_orders_stored",
+				Help: "Total number of orders currently stored in order store",
+			}),
+			LockOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_lock_orders_stored",
+				Help: "Total number of lock orders currently stored",
+			}),
+			CloseOrdersStored: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_close_orders_stored",
+				Help: "Total number of close orders currently stored",
+			}),
+			SafeHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_safe_height",
+				Help: "Current safe block height in the oracle",
+			}),
+			SourceChainHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_source_chain_height",
+				Help: "Current source chain height in the oracle",
+			}),
+			LockOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_lock_order_submissions_size",
+				Help: "Size of the lock order submissions map",
+			}),
+			CloseOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_close_order_submissions_size",
+				Help: "Size of the close order submissions map",
+			}),
+			ChainReorgs: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_chain_reorgs_total",
+				Help: "Total number of chain reorganizations detected",
+			}),
+			OrdersPruned: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_pruned_total",
+				Help: "Total number of orders pruned during cleanup",
+			}),
+			BlockProcessingErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_block_processing_errors_total",
+				Help: "Total number of block processing errors",
+			}),
+			OrderBookUpdateTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_order_book_update_time",
+				Help: "Time to update order book in the oracle in seconds",
+			}),
+			RootChainSyncTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_oracle_root_chain_sync_time",
+				Help: "Time to sync with root chain in the oracle in seconds",
+			}),
+		},
+		// ETH
+		EthBlockProviderMetrics: EthBlockProviderMetrics{
+			BlockFetchTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_eth_block_fetch_time",
+				Help: "Time to fetch Ethereum blocks in seconds",
+			}),
+			TransactionProcessTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_eth_transaction_process_time",
+				Help: "Time to process Ethereum transactions in seconds",
+			}),
+			ReceiptFetchTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: "canopy_eth_receipt_fetch_time",
+				Help: "Time to fetch Ethereum transaction receipts in seconds",
+			}),
+			TokenCacheHits: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_token_cache_hits_total",
+				Help: "Total number of ERC20 token cache hits",
+			}),
+			TokenCacheMisses: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_token_cache_misses_total",
+				Help: "Total number of ERC20 token cache misses",
+			}),
+			ConnectionErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_connection_errors_total",
+				Help: "Total number of Ethereum connection errors",
+			}),
+			BlocksProcessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_blocks_processed_total",
+				Help: "Total number of Ethereum blocks processed",
+			}),
+			TransactionsProcessed: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transactions_processed_total",
+				Help: "Total number of Ethereum transactions processed",
+			}),
+			TransactionRetries: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_retries_total",
+				Help: "Total number of Ethereum transaction processing retries",
 			}),
 		},
 	}
@@ -736,4 +897,94 @@ func (m *Metrics) SetStartupBlock(blockHeight uint64) {
 		m.StartupBlock.Set(float64(blockHeight))
 		m.startupBlockSet = true
 	}
+}
+
+// UpdateOracleBlockMetrics() updates oracle block processing metrics
+func (m *Metrics) UpdateOracleBlockMetrics(processingTime time.Duration) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update the block processing time
+	m.OracleBlockProcessingTime.Observe(processingTime.Seconds())
+}
+
+// UpdateOracleOrderMetrics() updates oracle order processing metrics
+func (m *Metrics) UpdateOracleOrderMetrics(witnessed, validated, submitted, rejected int, validationTime time.Duration) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update counters
+	m.OrdersWitnessed.Add(float64(witnessed))
+	m.OrdersValidated.Add(float64(validated))
+	m.OrdersSubmitted.Add(float64(submitted))
+	m.OrdersRejected.Add(float64(rejected))
+	// update timing metrics
+	if validationTime > 0 {
+		m.OrderValidationTime.Observe(validationTime.Seconds())
+	}
+}
+
+// UpdateOracleStateMetrics() updates oracle state management metrics
+func (m *Metrics) UpdateOracleStateMetrics(safeHeight, sourceHeight uint64, lockOrderSubmissionsSize, closeOrderSubmissionsSize int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update state metrics
+	m.SafeHeight.Set(float64(safeHeight))
+	m.SourceChainHeight.Set(float64(sourceHeight))
+	m.LockOrderSubmissionsSize.Set(float64(lockOrderSubmissionsSize))
+	m.CloseOrderSubmissionsSize.Set(float64(closeOrderSubmissionsSize))
+}
+
+// UpdateOracleStoreMetrics() updates oracle order store metrics
+func (m *Metrics) UpdateOracleStoreMetrics(lockOrders, closeOrders int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update store count metrics
+	m.TotalOrdersStored.Set(float64(lockOrders + closeOrders))
+	m.LockOrdersStored.Set(float64(lockOrders))
+	m.CloseOrdersStored.Set(float64(closeOrders))
+}
+
+// UpdateOracleErrorMetrics() updates oracle error and reorg metrics
+func (m *Metrics) UpdateOracleErrorMetrics(reorgs, pruned, blockErrors int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update error counters
+	m.ChainReorgs.Add(float64(reorgs))
+	m.OrdersPruned.Add(float64(pruned))
+	m.BlockProcessingErrors.Add(float64(blockErrors))
+}
+
+// UpdateEthBlockProviderMetrics() updates Ethereum block provider metrics
+func (m *Metrics) UpdateEthBlockProviderMetrics(blockFetchTime, transactionProcessTime, receiptFetchTime time.Duration,
+	cacheHits, cacheMisses, connectionErrors, blocksProcessed, transactionsProcessed, retries int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update timing metrics
+	if blockFetchTime > 0 {
+		m.BlockFetchTime.Observe(blockFetchTime.Seconds())
+	}
+	if transactionProcessTime > 0 {
+		m.TransactionProcessTime.Observe(transactionProcessTime.Seconds())
+	}
+	if receiptFetchTime > 0 {
+		m.ReceiptFetchTime.Observe(receiptFetchTime.Seconds())
+	}
+	// update counters
+	m.TokenCacheHits.Add(float64(cacheHits))
+	m.TokenCacheMisses.Add(float64(cacheMisses))
+	m.ConnectionErrors.Add(float64(connectionErrors))
+	m.BlocksProcessed.Add(float64(blocksProcessed))
+	m.TransactionsProcessed.Add(float64(transactionsProcessed))
+	m.TransactionRetries.Add(float64(retries))
 }

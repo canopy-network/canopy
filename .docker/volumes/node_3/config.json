@@ -1,52 +1,61 @@
 {
-  "logLevel": "debug",
-  "chainId": 2,
-  "sleepUntil": 0,
-  "rootChain": [
-    {
-      "chainId": 1,
-      "url": "http://node-1:50002"
-    },
-    {
-      "chainId": 2,
-      "url": "http://node-3:30002"
-    }
-  ],
-  "runVDF": false,
-  "headless": false,
-  "walletPort": "30000",
-  "explorerPort": "30001",
-  "rpcPort": "30002",
-  "adminPort": "30003",
-  "rpcURL": "http://localhost:30002",
-  "adminRPCUrl": "http://localhost:30003",
-  "timeoutS": 3,
-  "dataDirPath": "/root/.canopy",
-  "dbName": "canopy",
-  "inMemory": false,
-  "networkID": 1,
-  "listenAddress": "0.0.0.0:9002",
-  "externalAddress": "node-3",
-  "maxInbound": 21,
-  "maxOutbound": 7,
-  "trustedPeerIDs": null,
-  "dialPeers": ["b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2@tcp://node-2"],
-  "bannedPeerIDs": null,
-  "bannedIPs": null,
-  "minimumPeersToStart": 0,
-  "newHeightTimeoutMS": 4500,
-  "electionTimeoutMS": 1500,
-  "electionVoteTimeoutMS": 1500,
-  "proposeTimeoutMS": 2500,
-  "proposeVoteTimeoutMS": 4000,
-  "precommitTimeoutMS": 2000,
-  "precommitVoteTimeoutMS": 2000,
-  "commitTimeoutMS": 2000,
-  "roundInterruptTimeoutMS": 2000,
+    "logLevel": "debug",
+    "chainId": 2,
+    "sleepUntil": 0,
+    "rootChain": [
+        {
+            "chainId": 1,
+            "url": "http://node-1:50002"
+        }
+    ],
+    "runVDF": false,
+    "headless": false,
+    "walletPort": "30000",
+    "explorerPort": "30001",
+    "rpcPort": "30002",
+    "adminPort": "30003",
+    "rpcURL": "http://localhost:30002",
+    "adminRPCUrl": "http://localhost:30003",
+    "timeoutS": 3,
+    "dataDirPath": "/root/.canopy",
+    "dbName": "canopy",
+    "inMemory": false,
+    "networkID": 1,
+    "listenAddress": "0.0.0.0:9002",
+    "externalAddress": "node-3",
+    "maxInbound": 21,
+    "maxOutbound": 7,
+    "trustedPeerIDs": null,
+    "dialPeers": [
+        "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2@tcp://node-1"
+    ],
+    "bannedPeerIDs": null,
+    "bannedIPs": null,
+    "minimumPeersToStart": 0,
+    "newHeightTimeoutMS": 1000,
+    "electionTimeoutMS": 1000,
+    "electionVoteTimeoutMS": 1000,
+    "proposeTimeoutMS": 1000,
+    "proposeVoteTimeoutMS": 1000,
+    "precommitTimeoutMS": 1000,
+    "precommitVoteTimeoutMS": 1000,
+    "commitTimeoutMS": 1000,
+    "roundInterruptTimeoutMS": 0,
   "maxTotalBytes": 1000000,
   "maxTransactionCount": 5000,
   "individualMaxTxSize": 4000,
   "dropPercentage": 35,
   "metricsEnabled": true,
-  "prometheusAddress": "0.0.0.0:9090"
+    "prometheusAddress": "0.0.0.0:9090",
+    "ethBlockProviderConfig": {
+        "ethNodeUrl": "http://anvil:8545",
+        "ethNodeWsUrl": "ws://anvil:8545",
+        "ethChainId": 31337
+    },
+    "oracleConfig": {
+        "orderStorePath": "/root/.canopy/oracle/orders",
+        "stateSaveFile": "/root/.canopy/oracle/last_block_height.txt",
+        "logPath": "/root/.canopy/oracle/logs",
+        "orderResubmitDelay": 3
+    }
 }

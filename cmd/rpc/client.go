@@ -13,6 +13,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 )
 
 type Client struct {
@@ -239,6 +240,11 @@ func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBa
 func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
 	p = new(lib.DexBatch)
 	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
+	return
+}
+
+func (c *Client) CanopyOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
+	err = c.paginatedHeightRequest(CanopyOrdersRouteName, height, params, &orders)
 	return
 }
 
