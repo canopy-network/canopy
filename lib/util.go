@@ -1046,3 +1046,82 @@ func RandSlice(byteSize uint64) []byte {
 	rand.Read(value)
 	return value
 }
+
+// Integer defines a constraint for integer types including big.Int
+type Integer interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
+// BigInt converts integer t into a bigInt
+func BigInt[T Integer](t T) *big.Int {
+	switch v := any(t).(type) {
+	case int:
+		return big.NewInt(int64(v))
+	case int8:
+		return big.NewInt(int64(v))
+	case int16:
+		return big.NewInt(int64(v))
+	case int32:
+		return big.NewInt(int64(v))
+	case int64:
+		return big.NewInt(v)
+	case uint:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint8:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint16:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint32:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint64:
+		return new(big.Int).SetUint64(v)
+	default:
+		return new(big.Int).SetUint64(0)
+	}
+}
+
+func BigIntIsZero(i *big.Int) bool {
+	return i.Cmp(big.NewInt(0)) == 0
+}
+
+func BigIntSub(x, y *big.Int) *big.Int {
+	return new(big.Int).Sub(x, y)
+}
+
+// AtomicWriteFile writes data to a file atomically using write-and-move pattern
+func AtomicWriteFile(filePath string, data []byte) error {
+	// create temporary file in the same directory as the target file
+	dir := filepath.Dir(filePath)
+	tempFile, err := os.CreateTemp(dir, ".tmp_atomic_*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tempFilePath := tempFile.Name()
+	// ensure temporary file is cleaned up if something goes wrong
+	defer func() {
+		tempFile.Close()
+		os.Remove(tempFilePath)
+	}()
+	// write data to temporary file
+	_, err = tempFile.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write to temporary file: %w", err)
+	}
+	// sync to ensure data is written to disk
+	err = tempFile.Sync()
+	if err != nil {
+		return fmt.Errorf("failed to sync temporary file: %w", err)
+	}
+	// close temporary file before rename
+	err = tempFile.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+	// atomically move temporary file to final destination
+	err = os.Rename(tempFilePath, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to rename temporary file to final destination: %w", err)
+	}
+	return nil
+}

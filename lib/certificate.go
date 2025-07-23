@@ -817,6 +817,27 @@ func (x *LockOrder) UnmarshalJSON(jsonBytes []byte) (err error) {
 	return
 }
 
+// Equals() compares two LockOrders for equality
+func (x *CloseOrder) Equals(y *CloseOrder) bool {
+	// if both the lock orders are empty
+	if x == nil && y == nil {
+		// exit with 'equal'
+		return true
+	}
+	// if either of the lock orders are empty
+	if x == nil || y == nil {
+		// exit with 'unequal'
+		return false
+	}
+	// if the chain ids aren't the same
+	if x.ChainId != y.ChainId {
+		// exit with 'unequal'
+		return false
+	}
+	// if the order ids are not the same
+	return bytes.Equal(x.OrderId, y.OrderId)
+}
+
 // closeOrderJSON implements the json.Marshaller & json.Unmarshaler interfaces for LockOrder
 type closeOrderJSON struct {
 	// order_id: is the number id that is unique to this committee to identify the order
