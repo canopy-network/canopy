@@ -153,6 +153,10 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	if err != nil {
 		return
 	}
+	orderBook, err := c.LoadRootChainOrderBook(1, rcBuildHeight)
+	if err != nil {
+		return
+	}
 	// replace the VDF and last certificate in the header
 	p.Block.BlockHeader.LastQuorumCertificate, p.Block.BlockHeader.Vdf = lastCertificate, vdf
 	p.Block.BlockHeader.TotalVdfIterations = vdf.GetIterations() + lastBlock.BlockHeader.TotalVdfIterations
@@ -163,6 +167,10 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 		// exit with error
 		return
 	}
+	// append any witnessed orders to the on chain orders
+	lockOrders, closeOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	results.Orders.LockOrders = lockOrders
+	results.Orders.CloseOrders = closeOrders
 	// convert the block reference to bytes
 	blockBytes, err = lib.Marshal(p.Block)
 	if err != nil {
@@ -210,6 +218,18 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
+
+	// // get the root chain order book at latest height
+	// orderBook, err := c.GetOrderBook()
+	// if err != nil {
+	// 	c.log.Errorf("Error getting order book: %v", err)
+	// }
+	// validate the proposed orders were witnessed by the oracle
+	err = c.oracle.ValidateProposedOrders(qc.Results.Orders)
+	if err != nil {
+		return
+	}
+	compareResults.Orders = qc.Results.Orders
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error
@@ -227,6 +247,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+	c.log.Warnf("CommitCertificate block: %d qc %d chain %d", block.BlockHeader.Height, qc.Header.Height, qc.Header.ChainId)
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -282,6 +303,12 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	}
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
+	// execute Oracle CommitCertificate
+	err = c.oracle.CommitCertificate(qc, block, blockResult, ts)
+	if err != nil {
+		// exit with error
+		return err
+	}
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
 	if err != nil {
