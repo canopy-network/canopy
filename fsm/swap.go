@@ -23,7 +23,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// think of 'lock orders' like reserving the 'sell order'
 		for _, lockOrder := range orders.LockOrders {
 			if err := s.LockOrder(lockOrder, chainId); err != nil {
-				s.log.Warnf("LockOrder %s failed %d (can happen due to asynchronicity): %s", lib.BytesToString(lockOrder.OrderId), chainId, err.Error())
+				s.log.Warnf("LockOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(lockOrder.OrderId), err.Error())
 			}
 		}
 		// reset orders are a result of the committee witnessing 'no-action' from the buyer of the sell order aka NOT sending the
@@ -38,7 +38,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// buy assets before the 'deadline height' of the 'buyer chain'
 		for _, closeOrderId := range orders.CloseOrders {
 			if err := s.CloseOrder(closeOrderId, chainId); err != nil {
-				s.log.Warnf("CloseOrder %s failed %d (can happen due to asynchronicity): %s", lib.BytesToString(closeOrderId), chainId, err.Error())
+				s.log.Warnf("CloseOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(closeOrderId), err.Error())
 			}
 		}
 	}
