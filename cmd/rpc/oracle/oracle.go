@@ -260,7 +260,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	defer o.orderBookMu.RUnlock()
 	// log that we received a new block
 	if len(block.Transactions()) > 0 {
-		o.log.Infof("Received block %d (%d transactions) with hash %s", block.Number(), len(block.Transactions()), block.Hash())
+		o.log.Infof("Received block %s at height %d (%d transactions)", block.Number(), block.Hash(), len(block.Transactions()))
 	}
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {
@@ -302,7 +302,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		// check if the witnessed order already exists in store
 		_, err := o.orderStore.ReadOrder(order.OrderId, orderType)
 		if err == nil {
-			o.log.Warnf("Order %s already exists, skipping new order", lib.BytesToString(order.OrderId))
+			o.log.Warnf("Order %s already exists in store, skipping new order", lib.BytesToString(order.OrderId))
 			// order exists, skip writing
 			// this prevents newer orders from overwriting older orders
 			// TODO should there be any more logic here?
