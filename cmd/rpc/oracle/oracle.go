@@ -302,6 +302,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		// check if the witnessed order already exists in store
 		_, err := o.orderStore.ReadOrder(order.OrderId, orderType)
 		if err == nil {
+			o.log.Warnf("Order %s already exists, skipping new order", lib.BytesToString(order.OrderId))
 			// order exists, skip writing
 			// this prevents newer orders from overwriting older orders
 			// TODO should there be any more logic here?
