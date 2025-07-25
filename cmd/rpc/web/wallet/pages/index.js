@@ -26,7 +26,7 @@ export default function Home() {
     Keystore().then((ks) => {
       if (!ks.addressMap || Object.keys(ks.addressMap).length === 0) {
         console.warn("mergedKS is empty. No data to query.");
-        setState({ ...state, keystore: {}, account: {}, validator: {} }); // Handle empty case
+        setState({ ...state, keystore: {}, account: {}, validator: {}, navIdx: state.navIdx }); // Handle empty case
         return;
       }
 
@@ -60,6 +60,7 @@ export default function Home() {
           validator: settledResults[1],
           height: settledResults[2],
           params: settledResults[3],
+          navIdx: state.navIdx, // Preserve the current navigation index
         });
       });
     });
@@ -75,7 +76,7 @@ export default function Home() {
       queryAPI();
     }, 4000);
     return () => clearInterval(i);
-  });
+  }, []); // Add empty dependency array to prevent re-creation of interval
 
   if (state.keystore === null) {
     return <Spinner id="spinner" />;
