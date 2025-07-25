@@ -1,9 +1,37 @@
 services:
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: anvil
+    ports:
+      - 8545:8545
+    networks:
+      - canopy
+    entrypoint: ["anvil", "-vvv", "--host", "0.0.0.0", "--block-time", "2", "--port", "8545"]
+    volumes:
+      - ./anvil:/anvil
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  anvil-init:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: anvil-init
+    user: "0"
+    networks:
+      - canopy
+    depends_on:
+      - anvil
+    entrypoint: ["/anvil/anvil.sh"]
+    volumes:
+      - ./anvil:/anvil
+    working_dir: /anvil
   node-1:
     container_name: node-1
     build:
       context: ..
-      dockerfile: .docker/Dockerfile
+      dockerfile: .docker/Dockerfile-rootchain
       args:
         EXPLORER_BASE_PATH: ""
         WALLET_BASE_PATH: ""
@@ -24,7 +52,6 @@ services:
 #        limits:
 #          memory: 2G
 #          cpus: "1.0"
-
   node-2:
     container_name: node-2
     build:
@@ -45,34 +72,35 @@ services:
     command: ["start"]
     volumes:
       - ./volumes/node_2:/root/.canopy
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 2G
-#          cpus: "1.0"
-#  node-3:
-#    container_name: node-3
-#    build:
-#      context: ..
-#      dockerfile: .docker/Dockerfile
-#      args:
-#        BUILD_PATH: cmd/cli
-#    ports:
-#      - 30000:30000 # Wallet
-#      - 30001:30001 # Explorer
-#      - 30002:30002 # RPC
-#      - 30003:30003 # Admin RPC
-#      - 9003:9003   # TCP P2P
-#    networks:
-#      - canopy
-#    command: ["start"]
-#    volumes:
-#      - ./volumes/node_3:/root/.canopy
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 2G
-#          cpus: "1.0"
+   # deploy:
+   #   resources:
+   #     limits:
+   #       memory: 1G
+   #       cpus: "1.0"
+  # node-3:
+  #   container_name: node-3
+  #   build:
+  #     context: ..
+  #     dockerfile: .docker/Dockerfile
+  #     args:
+  #       EXPLORER_BASE_PATH: ""
+  #       WALLET_BASE_PATH: ""
+  #   ports:
+  #     - 30000:30000 # Wallet
+  #     - 30001:30001 # Explorer
+  #     - 30002:30002 # RPC
+  #     - 30003:30003 # Admin RPC
+  #     - 9003:9003   # TCP P2P
+  #   networks:
+  #     - canopy
+  #   command: ["start"]
+  #   volumes:
+  #     - ./volumes/node_3:/root/.canopy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #         cpus: "1.0"
 
 networks:
   canopy:
