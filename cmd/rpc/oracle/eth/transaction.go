@@ -84,7 +84,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		err := orderValidator.ValidateOrderJsonBytes(txData, types.LockOrderType)
 		if err != nil {
 			// self-sent transaction did not contain canopy lock order json - normal condition
-			return nil
+			return err
 		}
 		order := &lib.LockOrder{}
 		// unmarshal the validated json data

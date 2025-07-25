@@ -260,7 +260,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	defer o.orderBookMu.RUnlock()
 	// log that we received a new block
 	if len(block.Transactions()) > 0 {
-		o.log.Infof("Received block %s at height %d (%d transactions)", block.Number(), block.Hash(), len(block.Transactions()))
+		o.log.Infof("Received block %s at height %d (%d transactions)", block.Hash(), block.Number(), len(block.Transactions()))
 	}
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {

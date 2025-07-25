@@ -87,7 +87,7 @@ func (v *OrderValidator) ValidateOrderJsonBytes(jsonBytes []byte, orderType type
 		// use pre-created schema loader
 		schemaLoader = v.closeOrderSchemaLoader
 	default:
-		return fmt.Errorf("Error validating json bytes: Invalid order type")
+		return fmt.Errorf("error validating json bytes: Invalid order type")
 	}
 	// create document loader
 	documentLoader := gojsonschema.NewBytesLoader(jsonBytes)
