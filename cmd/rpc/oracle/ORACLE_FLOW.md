@@ -16,12 +16,12 @@ sequenceDiagram
     participant BFT as BFT
     participant RC as Root Chain
 
-    Note over SC,O: Source Chain Block Processing
     %% Block retrieval and processing
-loop
-    SC->>BP: New block available
+    Note over SC,O: Source Chain Block Processing
+    SC->>BP: New block header received
     BP->>BP: Calculate safe block height
-    BP->>SC: Fetch block at safe height
+loop Fetch all safe blocks
+    BP->>SC: Fetch block
     SC->>BP: Return block data
     BP->>O: Send block via channel
 end
