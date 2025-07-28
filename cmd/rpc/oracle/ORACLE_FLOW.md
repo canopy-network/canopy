@@ -20,7 +20,7 @@ sequenceDiagram
     Note over SC,O: Source Chain Block Processing
     SC->>BP: New block header received
     BP->>BP: Calculate safe block height
-loop Fetch all safe blocks
+loop Fetch Safe Blocks
     BP->>SC: Fetch block
     SC->>BP: Return block data
     BP->>O: Send block via channel
