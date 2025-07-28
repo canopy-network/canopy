@@ -38,7 +38,7 @@ sequenceDiagram
     %% Oracle block processing
     O->>O: ValidateBlock (gaps/reorgs)
     O->>O: Process block orders
-    O->>O: CompleteProcessing state
+    O->>O: Write to Store
     
     %% BFT consensus integration
     BFT->>O: WitnessedOrders(orderBook, rootHeight)
