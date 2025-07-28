@@ -7,21 +7,6 @@ The Canopy Oracle system is a cross-chain bridge that monitors Ethereum blockcha
 ## Flow Diagram
 
 ```mermaid
-graph TD
-    A[Ethereum Node] --> C[EthBlockProvider]
-    C --> D[Safe Block Calculation]
-    D --> E[Block Fetch & Processing]
-    E --> F[Transaction Parsing]
-    F --> G[Order Validation]
-    G --> H[Oracle Block Processing]
-    H --> I[Order Store]
-    I --> J[BFT Consensus]
-    J --> K[WitnessedOrders]
-    K --> L[ValidateProposedOrders]
-    L --> M[shouldSubmit Logic]
-```
-
-```mermaid
 sequenceDiagram
     participant SC as Source Chain
     participant BP as BlockProvider
@@ -54,6 +39,7 @@ sequenceDiagram
     
     %% Root Chain interaction
     BFT->>RC: Submit results
+    RC->>O: Synchronize order store to order book
 ```
 
 ## Detailed Component Analysis
