@@ -37,11 +37,7 @@ sequenceDiagram
     
     %% Oracle block processing
     O->>O: ValidateBlock (gaps/reorgs)
-    O->>O: BeginProcessing state
-    O->>O: Process block transactions
-    O->>O: Parse orders from transactions
-    O->>O: Validate orders against order book
-    O->>O: Write validated orders to store
+    O->>O: Process block orders
     O->>O: CompleteProcessing state
     
     %% BFT consensus integration
