@@ -329,7 +329,6 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 // This is called when the BFT module validates a block proposal to ensure that each order
 // in the proposed block is an exact match for an order in the witnessed order store.
 func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
-	lib.PrintStackTrace()
 	// oracle is disabled
 	if o == nil {
 		return nil
@@ -402,7 +401,6 @@ func (o *Oracle) UpdateOrderBook(orderBook *lib.OrderBook) {
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
-	lib.PrintStackTrace()
 	// oracle is disabled
 	if o == nil {
 		return
@@ -428,7 +426,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		// attempt to get stored lock order from order book
 		if o.orderBook == nil {
 			o.log.Warn("Order book is nil, skipping lock order check")
-			lib.PrintStackTrace()
 			continue
 		}
 		order, err := o.orderBook.GetOrder(id)
@@ -513,8 +510,9 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bo
 // WitnessedOrders is called from two different stages in the BFT process:
 // - when the proposer produces a block proposal it uses the orders returned here to build the proposed block
 // - when a validator (a witness node) validates a block proposal it uses the orders returned here to verify all proposed orders were witnessed by this node
+// TODO no two orders with same id in block
+// TODO lock order already submitted with block with specific id, put hold for any locks for that same id
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
-	lib.PrintStackTrace()
 	lockOrders := []*lib.LockOrder{}
 	closeOrders := [][]byte{}
 	// oracle is disabled

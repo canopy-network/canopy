@@ -38,7 +38,7 @@ func (bsm *BlockStateManager) ValidateBlock(block types.BlockI) lib.ErrorI {
 		// continue processing but log the warning
 		return nil
 	}
-	
+
 	if lastProcessedHeight == 0 {
 		// first block, no validation needed
 		bsm.log.Debugf("Processing first block at height %d", block.Number())
@@ -152,7 +152,7 @@ func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash strin
 		bsm.log.Errorf("Failed to marshal block processing state: %v", err)
 		return ErrWriteHeightFile(err)
 	}
-	bsm.log.Infof("Saved block processing state height %d: %s", state.Height, state.Status)
+	// bsm.log.Infof("Saved block processing state height %d: %s", state.Height, state.Status)
 	// write state to file atomically
 	return bsm.atomicWriteFile(stateFile, stateBytes)
 }

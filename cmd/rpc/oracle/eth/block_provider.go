@@ -84,7 +84,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		heightMu:               &sync.Mutex{},
 	}
 	// log provider creation
-	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s", p.rpcUrl, p.wsUrl)
+	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s, eth chain id: %d", p.rpcUrl, p.wsUrl, p.chainId)
 	return p
 }
 
@@ -307,6 +307,7 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 		}
 		// look for a canopy order in this transaction
 		if tx.order == nil {
+			p.logger.Warnf("Transaction had no order, %s", string(tx.tx.Data()))
 			// no orders found, no processing required
 			continue
 		}

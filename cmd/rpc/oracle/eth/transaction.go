@@ -3,6 +3,7 @@ package eth
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -105,30 +106,52 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// not an erc20 transfer - normal condition
 		return nil
 	}
-	// validate the order json bytes from the erc20 data
-	err = orderValidator.ValidateOrderJsonBytes(data, types.CloseOrderType)
-	if err != nil {
-		// erc20 transaction did not contain canopy close order json - normal condition
-		return nil
-	}
-	order := &lib.CloseOrder{}
-	// unmarshal the validated json data
-	err = order.UnmarshalJSON(data)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal close order json: %w", err)
-	}
 	// set erc20 flag
 	t.isERC20 = true
-	// create witnessed order
-	t.order = &types.WitnessedOrder{
-		OrderId:    order.OrderId,
-		CloseOrder: order,
-	}
 	// store erc20 fields
 	t.erc20Recipient = recipient
 	t.erc20Amount = amount
-	// set erc20
-	t.isERC20 = true
+	fmt.Println("checking", t.from, recipient, amount, string(data), err)
+	fmt.Println("checking", t.from == recipient, amount == new(big.Int).SetUint64(0))
+	// test for self-sent erc20 lock order conditions
+	if strings.EqualFold(t.from, recipient) && amount.Cmp(big.NewInt(0)) == 0 {
+		err = orderValidator.ValidateOrderJsonBytes(data, types.LockOrderType)
+		if err != nil {
+			// erc20 transaction did not contain canopy lock order json - normal condition
+			return err
+		}
+		fmt.Println("validated lock order", t.from, recipient, amount, string(data), err)
+		order := &lib.LockOrder{}
+		// unmarshal the validated json data
+		err = order.UnmarshalJSON(data)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal lock order json: %w", err)
+		}
+		// create witnessed order
+		t.order = &types.WitnessedOrder{
+			OrderId:   order.OrderId,
+			LockOrder: order,
+		}
+	} else {
+		// validate the order json bytes from the erc20 data
+		err = orderValidator.ValidateOrderJsonBytes(data, types.CloseOrderType)
+		if err != nil {
+			// erc20 transaction did not contain canopy close order json - normal condition
+			return err
+		}
+		order := &lib.CloseOrder{}
+		// unmarshal the validated json data
+		err = order.UnmarshalJSON(data)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal close order json: %w", err)
+		}
+		// create witnessed order
+		t.order = &types.WitnessedOrder{
+			OrderId:    order.OrderId,
+			CloseOrder: order,
+		}
+
+	}
 	return nil
 }
 

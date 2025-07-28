@@ -288,7 +288,7 @@ func DefaultMetricsConfig() MetricsConfig {
 type EthBlockProviderConfig struct {
 	NodeUrl                string `json:"ethNodeUrl"`             // ethereum rpc node url
 	NodeWSUrl              string `json:"ethNodeWsUrl"`           // ethereum node websocket url
-	EVMChainId             uint64 `json:"ethChainId"`             // ethereum chain id
+	EVMChainId             uint64 `json:"evmChainId"`             // ethereum chain id
 	RetryDelay             int    `json:"retryDelay"`             // retry delay in seconds for connection failures
 	SafeBlockConfirmations int    `json:"safeBlockConfirmations"` // number of confirmations required for a block to be considered safe
 }
