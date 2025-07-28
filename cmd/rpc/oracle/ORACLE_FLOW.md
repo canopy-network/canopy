@@ -22,7 +22,7 @@ graph TD
 ```
 
 ```mermaid
-// Oracle sequence diagram showing interaction between Ethereum Node, BlockProvider, Oracle, and BFT
+sequenceDiagram
 participant EthereumNode
 participant BlockProvider  
 participant Oracle
