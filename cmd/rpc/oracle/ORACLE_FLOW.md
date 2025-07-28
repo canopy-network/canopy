@@ -23,9 +23,7 @@ sequenceDiagram
     BP->>O: Send block via channel
     
     %% Oracle block processing
-    O->>O: ValidateBlock (gaps/reorgs)
-    O->>O: Process block orders
-    O->>O: Write to Store
+    O->>O: Validate & write to Store
     
     Note over BFT,O: Consensus Participation
     %% BFT consensus integration
@@ -35,7 +33,7 @@ sequenceDiagram
     BFT->>BFT: Produces block with witnessed orders
     
     %% Block proposal validation
-    BFT->>O: Validate proposed orders
+    BFT->>O: Block proposal validation
     O->>O: Compare proposed vs witnessed orders
     O->>BFT: Return validation result
     
