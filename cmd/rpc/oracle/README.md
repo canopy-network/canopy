@@ -23,7 +23,7 @@ The Oracle package is designed to handle:
 
 ### Oracle
 
-The main entry point for the Transaction Oracle system. It manages the overall cross-chain witnessing process, including:
+The core of the Canopy Oracle system. It manages the overall cross-chain witnessing process, including:
 - Receiving blocks from block providers
 - Validating witnessed orders against the root chain order book
 - Persisting witnessed orders to local storage

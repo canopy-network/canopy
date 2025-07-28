@@ -44,7 +44,7 @@ type Oracle struct {
 	// mutex to protect order book
 	orderBookMu sync.RWMutex
 	// stateManager handles block processing state, gap detection, and reorg detection
-	stateManager *BlockStateManager
+	stateManager *OracleStateManager
 	// oracle configuration
 	config lib.OracleConfig
 	// committee to use when constructing close orders. this must match the order bookc committee
@@ -70,7 +70,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider: blockProvider,
 		orderStore:    transactionStore,
 		log:           logger,
-		stateManager:  NewBlockStateManager(stateFile, logger),
+		stateManager:  NewOracleStateManager(stateFile, logger),
 		config:        config,
 		committee:     config.Committee,
 		ctx:           ctx,
@@ -160,10 +160,10 @@ func (o *Oracle) run(ctx context.Context) {
 				o.log.Errorf("Failed to process block at height %d: %v", block.Number(), err)
 				// phase 2a: mark block processing as failed
 				o.stateManager.FailProcessing(block)
-			} else {
-				// phase 2b: mark block processing as completed and save last processed height
-				o.stateManager.CompleteProcessing(block)
+				continue
 			}
+			// phase 2b: mark block processing as completed and save last processed height
+			o.stateManager.CompleteProcessing(block)
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
 			o.log.Info("Oracle context cancelled, stopping block processing")
@@ -258,7 +258,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 // processBlock examines any witnessed orders in the block, validates them, and writes them to the order store
 // any orders that are not present in the order book, or fail validation, are dropped and not saved to the order store
 func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
-	// block validation (gaps and reorgs) is now handled by BlockStateManager
+	// block validation (gaps and reorgs) is now handled by OracleStateManager
 	// this method focuses on processing the block content
 	// lock order book for reading
 	o.orderBookMu.RLock()

@@ -21,7 +21,7 @@ func createTestBlock(number uint64, hash string, parentHash string) types.BlockI
 	}
 }
 
-func TestBlockStateManager_ValidateSequence(t *testing.T) {
+func TestOracleStateManager_ValidateSequence(t *testing.T) {
 	// Helper function to create a temporary directory for test state files
 	createTempDir := func(t *testing.T) string {
 		dir, err := os.MkdirTemp("", "oracle_state_test_*")
@@ -31,21 +31,21 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 	}
 
 	// Helper function to create a state manager with test setup
-	createStateManager := func(t *testing.T, tempDir string) *BlockStateManager {
+	createStateManager := func(t *testing.T, tempDir string) *OracleStateManager {
 		stateFile := filepath.Join(tempDir, "test_state")
 		logger := lib.NewDefaultLogger()
-		return NewBlockStateManager(stateFile, logger)
+		return NewOracleStateManager(stateFile, logger)
 	}
 
 	// Helper function to setup a completed block state
-	setupCompletedBlock := func(t *testing.T, bsm *BlockStateManager, height uint64, hash string, parentHash string) {
+	setupCompletedBlock := func(t *testing.T, bsm *OracleStateManager, height uint64, hash string, parentHash string) {
 		err := bsm.saveBlockProcessingState(height, hash, parentHash, types.ProcessingStatusCompleted)
 		require.NoError(t, err)
 	}
 
 	tests := []struct {
 		name         string
-		setupState   func(t *testing.T, bsm *BlockStateManager)
+		setupState   func(t *testing.T, bsm *OracleStateManager)
 		block        types.BlockI
 		expectError  bool
 		errorCode    lib.ErrorCode
@@ -53,7 +53,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 	}{
 		{
 			name: "first block validation should pass",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				// No setup needed - simulates first run
 			},
 			block:       createTestBlock(1, "0xblock1", "0xparent1"),
@@ -61,7 +61,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "sequential block validation should pass",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:       createTestBlock(2, "0xblock2", "0xblock1"),
@@ -69,7 +69,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "block gap should be detected",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(3, "0xblock3", "0xblock2"), // Skipping block 2
@@ -79,7 +79,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "chain reorganization should be detected",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(2, "0xblock2", "0xdifferentparent"), // Wrong parent hash
@@ -89,7 +89,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "valid chain continuation after multiple blocks",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:       createTestBlock(6, "0xblock6", "0xblock5"),
@@ -97,7 +97,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "gap detection with large height difference",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(100, "0xblock100", "0xblock99"),
@@ -107,7 +107,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "reorganization with correct height but wrong parent",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 10, "0xblock10", "0xblock9")
 			},
 			block:        createTestBlock(11, "0xblock11", "0xwrongparent"),
@@ -117,7 +117,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "backward block should be detected as gap",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:        createTestBlock(3, "0xblock3", "0xblock2"), // Going backwards
@@ -127,7 +127,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "same height block should be detected as gap",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:        createTestBlock(5, "0xblock5_alt", "0xblock4"), // Same height, different block
@@ -137,7 +137,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "empty hash values should still work",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "", "")
 			},
 			block:       createTestBlock(2, "", ""),
@@ -145,7 +145,7 @@ func TestBlockStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "reorg detection with empty parent hash",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
+			setupState: func(t *testing.T, bsm *OracleStateManager) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(2, "0xblock2", ""), // Empty parent hash

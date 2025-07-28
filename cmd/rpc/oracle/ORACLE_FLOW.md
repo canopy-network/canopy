@@ -74,7 +74,7 @@ The system processes transactions from the block provider looking for Canopy ord
 #### Main Processing Loop
 
 1. **Initialization**: Waits for order book from root chain before accepting blocks
-2. **Height Recovery**: Uses `BlockStateManager` to determine starting height
+2. **Height Recovery**: Uses `OracleStateManager` to determine starting height
 3. **Block Reception**: Receives blocks from from the block provider via the `blockCh` channel
 4. **Two-Phase Processing**: 
    - Phase 1: `BeginProcessing()` - marks block as being processed

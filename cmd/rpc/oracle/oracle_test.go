@@ -681,7 +681,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			oracle := &Oracle{
 				orderStore:   tt.orderStore,
-				stateManager: &BlockStateManager{},
+				stateManager: &OracleStateManager{},
 				log:          lib.NewDefaultLogger(),
 			}
 			// 100 to specify a high enough root height that shouldSubmit always passes

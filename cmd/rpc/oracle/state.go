@@ -11,8 +11,8 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-// BlockStateManager manages block processing state, gap detection, and chain reorganization detection
-type BlockStateManager struct {
+// OracleStateManager manages block processing state, gap detection, and chain reorganization detection
+type OracleStateManager struct {
 	// externalChainHeight is the last seen height for the source chain
 	externalChainHeight uint64
 	// stateSaveFile is the base path for state files
@@ -21,16 +21,16 @@ type BlockStateManager struct {
 	log lib.LoggerI
 }
 
-// NewBlockStateManager creates a new BlockStateManager instance
-func NewBlockStateManager(stateSaveFile string, logger lib.LoggerI) *BlockStateManager {
-	return &BlockStateManager{
+// NewOracleStateManager creates a new OracleStateManager instance
+func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStateManager {
+	return &OracleStateManager{
 		stateSaveFile: stateSaveFile,
 		log:           logger,
 	}
 }
 
 // ValidateSequence performs comprehensive block validation including gap detection and reorg detection
-func (bsm *BlockStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
+func (bsm *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// verify sequential block processing to detect gaps and chain reorganizations
 	lastState, err := bsm.readBlockProcessingState()
 	if err != nil {
@@ -69,23 +69,23 @@ func (bsm *BlockStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 }
 
 // BeginProcessing marks a block as being processed (phase 1 of two-phase commit)
-func (bsm *BlockStateManager) BeginProcessing(block types.BlockI) lib.ErrorI {
+func (bsm *OracleStateManager) BeginProcessing(block types.BlockI) lib.ErrorI {
 	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusProcessing)
 }
 
 // CompleteProcessing marks a block as successfully processed (phase 2 of two-phase commit)
-func (bsm *BlockStateManager) CompleteProcessing(block types.BlockI) lib.ErrorI {
+func (bsm *OracleStateManager) CompleteProcessing(block types.BlockI) lib.ErrorI {
 	// mark block processing as completed
 	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusCompleted)
 }
 
 // FailProcessing marks a block as failed processing
-func (bsm *BlockStateManager) FailProcessing(block types.BlockI) lib.ErrorI {
+func (bsm *OracleStateManager) FailProcessing(block types.BlockI) lib.ErrorI {
 	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusFailed)
 }
 
 // GetStartingHeight determines the height to start processing from based on saved state
-func (bsm *BlockStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
+func (bsm *OracleStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
 	// check for incomplete block processing state from previous run
 	if state, err := bsm.readBlockProcessingState(); err == nil {
 		bsm.log.Infof("Found block processing state: height %d, status %s", state.Height, state.Status)
@@ -116,7 +116,7 @@ func (bsm *BlockStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
 }
 
 // saveBlockProcessingState saves the block processing state to disk
-func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash string, parentHash string, status types.ProcessingStatus) lib.ErrorI {
+func (bsm *OracleStateManager) saveBlockProcessingState(height uint64, hash string, parentHash string, status types.ProcessingStatus) lib.ErrorI {
 	// create block processing state struct
 	state := types.BlockProcessingState{
 		Height:     height,
@@ -144,7 +144,7 @@ func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash strin
 }
 
 // readBlockProcessingState reads the block processing state from disk
-func (bsm *BlockStateManager) readBlockProcessingState() (*types.BlockProcessingState, lib.ErrorI) {
+func (bsm *OracleStateManager) readBlockProcessingState() (*types.BlockProcessingState, lib.ErrorI) {
 	// read file contents
 	data, err := os.ReadFile(bsm.stateSaveFile)
 	if err != nil {
@@ -162,7 +162,7 @@ func (bsm *BlockStateManager) readBlockProcessingState() (*types.BlockProcessing
 }
 
 // atomicWriteFile writes data to a file atomically using write-and-move pattern
-func (bsm *BlockStateManager) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
+func (bsm *OracleStateManager) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
 	// create temporary file in the same directory as the target file
 	dir := filepath.Dir(filePath)
 	tempFile, err := os.CreateTemp(dir, ".tmp_oracle_state_*")
