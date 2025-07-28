@@ -309,18 +309,20 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 		}
 		// look for a canopy order in this transaction
 		if tx.order == nil {
-			p.logger.Warnf("Transaction had no order, %s", string(tx.tx.Data()))
+			p.logger.Warnf("Transaction had no Canopy order, %s", string(tx.tx.Data()))
 			// no orders found, no processing required
 			continue
 		}
-		// set the height this order was witnessed
+		// set the ethereum height this order was witnessed
 		tx.order.WitnessedHeight = block.Number()
 		// a valid canopy order was found, check transaction success
 		if !p.transactionSuccess(ctx, tx) {
 			// ignore all orders in failed transactions
 			tx.clearOrder()
+			// process next transaction
 			continue
 		}
+		// test if this was an erc20 transfer
 		if !tx.isERC20 {
 			// no more processing required
 			continue

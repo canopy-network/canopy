@@ -85,7 +85,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		err := orderValidator.ValidateOrderJsonBytes(txData, types.LockOrderType)
 		if err != nil {
 			// self-sent transaction did not contain canopy lock order json - normal condition
-			return err
+			return nil
 		}
 		order := &lib.LockOrder{}
 		// unmarshal the validated json data
@@ -100,10 +100,14 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		}
 		return nil
 	}
-	// try to get ERC20 "data" - data that is past the abi encoded transfer call
+	// try to get ERC20 transfer information and "data" - data that is past the abi encoded transfer call
 	recipient, amount, data, err := parseERC20Transfer(txData)
 	if err != nil {
 		// not an erc20 transfer - normal condition
+		return nil
+	}
+	// all erc20 transfers Canopy is interested in have erc20 transfer data
+	if len(data) == 0 {
 		return nil
 	}
 	// set erc20 flag
@@ -113,7 +117,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	t.erc20Amount = amount
 	fmt.Println("checking", t.from, recipient, amount, string(data), err)
 	fmt.Println("checking", t.from == recipient, amount == new(big.Int).SetUint64(0))
-	// test for self-sent erc20 lock order conditions
+	// test for self-sent erc20 lock order conditions: sending value of 0 to self
 	if strings.EqualFold(t.from, recipient) && amount.Cmp(big.NewInt(0)) == 0 {
 		err = orderValidator.ValidateOrderJsonBytes(data, types.LockOrderType)
 		if err != nil {
