@@ -448,92 +448,113 @@ func TestOracle_shouldSubmit(t *testing.T) {
 	tests := []struct {
 		name               string
 		lastSubmitHeight   uint64
+		witnessedHeight    uint64
 		rootHeight         uint64
+		sourceChainHeight  uint64
 		orderResubmitDelay uint64
+		proposeLeadTime    uint64
 		expected           bool
-		description        string
 	}{
 		{
-			name:               "first submission - LastSubmitHeight is 0",
-			lastSubmitHeight:   0,
-			rootHeight:         100,
-			orderResubmitDelay: 10,
-			expected:           true,
-			description:        "Should submit when it's the first submission",
-		},
-		{
-			name:               "same height - propose and validate scenario",
-			lastSubmitHeight:   50,
-			rootHeight:         50,
-			orderResubmitDelay: 10,
-			expected:           true,
-			description:        "Should submit when LastSubmitHeight equals rootHeight",
-		},
-		{
-			name:               "resubmit delay reached - exact boundary",
+			name:               "propose lead time not passed - should not submit",
 			lastSubmitHeight:   40,
-			rootHeight:         60, // 40 + 20 = 60
+			witnessedHeight:    10,
+			rootHeight:         60,
+			sourceChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
 			orderResubmitDelay: 20,
-			expected:           true,
-			description:        "Should submit when resubmit delay is exactly reached",
-		},
-		{
-			name:               "resubmit delay exceeded",
-			lastSubmitHeight:   30,
-			rootHeight:         100, // 30 + 20 = 50, so 100 > 50
-			orderResubmitDelay: 20,
-			expected:           true,
-			description:        "Should submit when resubmit delay is exceeded",
-		},
-		{
-			name:               "resubmit delay not reached",
-			lastSubmitHeight:   50,
-			rootHeight:         55, // 50 + 20 = 70, so 55 < 70
-			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
 			expected:           false,
-			description:        "Should not submit when resubmit delay is not reached",
 		},
 		{
-			name:               "edge case - delay of 1 block",
-			lastSubmitHeight:   100,
-			rootHeight:         101, // 100 + 1 = 101
-			orderResubmitDelay: 1,
+			name:               "propose lead time exact boundary - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         60,
+			sourceChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			expected:           false,
+		},
+		{
+			name:               "resubmit delay not reached - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
+			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			expected:           false,
+		},
+		{
+			name:               "resubmit delay exact boundary - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
+			sourceChainHeight:  16,
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			expected:           false,
+		},
+		{
+			name:               "resubmit delay exceeded - should submit",
+			lastSubmitHeight:   30,
+			witnessedHeight:    10,
+			rootHeight:         100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
+			sourceChainHeight:  16,
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
 			expected:           true,
-			description:        "Should submit with minimal delay",
 		},
 		{
-			name:               "edge case - zero delay",
+			name:               "first submission with all checks passed - should submit",
+			lastSubmitHeight:   0,
+			witnessedHeight:    10,
+			rootHeight:         100,
+			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay: 10,
+			proposeLeadTime:    5,
+			expected:           true,
+		},
+		{
+			name:               "zero propose lead time with resubmit delay exceeded - should submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
+			sourceChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
+			orderResubmitDelay: 20,
+			proposeLeadTime:    0,
+			expected:           true,
+		},
+		{
+			name:               "zero delay with propose lead time passed - should submit",
 			lastSubmitHeight:   50,
-			rootHeight:         50, // Since delay is 0, 50 >= 50 + 0
+			witnessedHeight:    10,
+			rootHeight:         51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
+			sourceChainHeight:  16,
 			orderResubmitDelay: 0,
+			proposeLeadTime:    5,
 			expected:           true,
-			description:        "Should submit when delay is zero",
-		},
-		{
-			name:               "edge case - zero delay, higher root height",
-			lastSubmitHeight:   50,
-			rootHeight:         51, // 51 >= 50 + 0
-			orderResubmitDelay: 0,
-			expected:           true,
-			description:        "Should submit when delay is zero and root height is higher",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			oracle := &Oracle{
+				log:                lib.NewDefaultLogger(),
 				orderResubmitDelay: tt.orderResubmitDelay,
+				proposeLeadTime:    tt.proposeLeadTime,
 			}
 
 			order := &types.WitnessedOrder{
 				LastSubmitHeight: tt.lastSubmitHeight,
+				WitnessedHeight:  tt.witnessedHeight,
 			}
 
-			result := oracle.shouldSubmit(order, tt.rootHeight)
+			result := oracle.shouldSubmit(order, tt.rootHeight, tt.sourceChainHeight)
 
 			if result != tt.expected {
-				t.Errorf("shouldSubmit() = %v, expected %v. %s",
-					result, tt.expected, tt.description)
+				t.Errorf("shouldSubmit() = %v, expected %v",
+					result, tt.expected)
 			}
 		})
 	}

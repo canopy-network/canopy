@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/ethereum/go-ethereum"
@@ -18,6 +19,8 @@ const (
 	erc20SymbolFunction = "0x95d89b41"
 	// erc20DecimalsFunction is the function signature for decimals()
 	erc20DecimalsFunction = "0x313ce567"
+	// context timeout for call contract calls
+	callContractTimeoutS = 5
 )
 
 // ContractCaller interface defines the method needed to call ethereum contracts
@@ -97,8 +100,11 @@ func callContract(ctx context.Context, client ContractCaller, address, function 
 		To:   &contractAddr,
 		Data: data,
 	}
+	// create fresh context with timeout that respects the parent context
+	callCtx, cancel := context.WithTimeout(ctx, callContractTimeoutS*time.Second)
+	defer cancel()
 	// make the contract call
-	result, err := client.CallContract(ctx, msg, nil)
+	result, err := client.CallContract(callCtx, msg, nil)
 	if err != nil {
 		return nil, ErrContractNotFound
 	}

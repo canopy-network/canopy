@@ -47,6 +47,8 @@ type Oracle struct {
 	stateManager *BlockStateManager
 	// how many root chain blocks to wait until resubmitting an order
 	orderResubmitDelay uint64
+	// how many blocks to wait before a newly witnessed order is proposed
+	proposeLeadTime uint64
 	// committee
 	committee uint64
 	// context to allow graceful shutdown
@@ -71,6 +73,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		log:                logger,
 		stateManager:       NewBlockStateManager(config.StateSaveFile, logger),
 		orderResubmitDelay: config.OrderResubmitDelay,
+		proposeLeadTime:    config.ProposeLeadTime,
 		committee:          config.Committee,
 		ctx:                ctx,
 		ctxCancel:          cancel,
@@ -487,29 +490,31 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 //   - this is the first submission (LastSubmitHeight is 0)
 //   - the same node is handling both proposal and validation at the same height
 //   - the resubmit delay period has elapsed since the last submission
-func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bool {
-	// first submission
-	if order.LastSubmitHeight == 0 {
-		return true
+func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64) bool {
+	// order proopsal lead time has not passed, do not submit
+	if sourceChainHeight < order.WitnessedHeight+o.proposeLeadTime {
+		o.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
+		return false
 	}
+
 	// the same node can both propose and validate a witnessed order
 	// in this scencario this method will be called a second time with the same root height
 	// handle this
-	if order.LastSubmitHeight == rootHeight {
-		return true
+	// if order.LastSubmitHeight == rootHeight {
+	// 	return true
+	// }
+
+	// resubmit block has not been reached
+	if rootHeight <= order.LastSubmitHeight+o.orderResubmitDelay {
+		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
+		return false
 	}
-	// resubmit block has been reached
-	if rootHeight >= order.LastSubmitHeight+o.orderResubmitDelay {
-		return true
-	}
-	// do not submit
-	return false
+	// all checks passed, submit this witnessed order
+	return true
 }
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
-// WitnessedOrders is called from two different stages in the BFT process:
-// - when the proposer produces a block proposal it uses the orders returned here to build the proposed block
-// - when a validator (a witness node) validates a block proposal it uses the orders returned here to verify all proposed orders were witnessed by this node
+// When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
 // TODO no two orders with same id in block
 // TODO lock order already submitted with block with specific id, put hold for any locks for that same id
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
@@ -532,7 +537,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight) {
+			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.sourceChainHeight) {
 				o.log.Debugf("Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}
@@ -558,7 +563,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight) {
+			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.sourceChainHeight) {
 				o.log.Debugf("Not submitting close order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}

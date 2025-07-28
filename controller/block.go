@@ -255,6 +255,8 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+	lib.PrintStackTrace()
+	c.log.Warnf("CommitCertificate block: %d qc %d chain %d", block.BlockHeader.Height, qc.Header.Height, qc.Header.ChainId)
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()

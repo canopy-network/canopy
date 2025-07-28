@@ -18,6 +18,8 @@ import (
 const (
 	// header channel buffer size
 	headerChannelBufferSize = 10
+	// timeout for the transaction receipt call
+	transactionReceiptTimeoutS = 5
 )
 
 // Ensures *EthBlockProvider implements BlockProvider interface
@@ -340,8 +342,12 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 // transactionSuccess fetches the transaction receipt and determines transaction success
 // This prevents potential exploits or bugs where failed ERC20 transactions are processed
 func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transaction) bool {
+	// create a fresh context with timeout for the RPC call
+	rpcCtx, cancel := context.WithTimeout(ctx, transactionReceiptTimeoutS*time.Second)
+	defer cancel()
+
 	// get transaction receipt
-	receipt, err := p.rpcClient.TransactionReceipt(ctx, tx.tx.Hash())
+	receipt, err := p.rpcClient.TransactionReceipt(rpcCtx, tx.tx.Hash())
 	if err != nil {
 		p.logger.Errorf("failed to get transaction receipt for tx %s: %s", tx.tx.Hash().String(), err.Error())
 		return false

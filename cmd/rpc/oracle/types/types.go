@@ -52,14 +52,14 @@ type BlockProcessingState struct {
 type WitnessedOrder struct {
 	// OrderId for the enclosed lock or close order
 	OrderId lib.HexBytes `json:"orderId"`
-	// witnessed height on the source block chain (ethereum, solana, etc)
+	// Witnessed height on the source block chain (ethereum, solana, etc)
 	WitnessedHeight uint64 `json:"witnessedHeight"`
 	// last canopy root chain height this order was submitted
 	LastSubmitHeight uint64 `json:"lastSubmightHeight"`
 	// Witnessed lock order
-	LockOrder *lib.LockOrder `json:"lockOrder"`
+	LockOrder *lib.LockOrder `json:"lockOrder,omitempty"`
 	// Witnessed close order
-	CloseOrder *lib.CloseOrder `json:"closeOrder"`
+	CloseOrder *lib.CloseOrder `json:"closeOrder,omitempty"`
 }
 
 // String returns a formatted string representation of WitnessedOrder

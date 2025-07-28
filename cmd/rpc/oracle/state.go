@@ -15,6 +15,8 @@ import (
 
 // BlockStateManager manages block processing state, gap detection, and chain reorganization detection
 type BlockStateManager struct {
+	// sourceChainHeight is the last seen height for the source chain
+	sourceChainHeight uint64
 	// stateSaveFile is the base path for state files
 	stateSaveFile string
 	// logger for state management operations
@@ -62,10 +64,12 @@ func (bsm *BlockStateManager) ValidateBlock(block types.BlockI) lib.ErrorI {
 			bsm.log.Errorf("Chain reorganization detected: %s", errorMsg)
 			return ErrChainReorg(errorMsg)
 		}
-		bsm.log.Debugf("Chain continuity verified: block %d parent hash matches previous block hash", block.Number())
+		// bsm.log.Debugf("Chain continuity verified: block %d parent hash matches previous block hash", block.Number())
 	}
 
 	bsm.log.Debugf("Block sequence verified: processing block %d after %d", block.Number(), lastProcessedHeight)
+	// save last seen source chain height
+	bsm.sourceChainHeight = block.Number()
 	return nil
 }
 

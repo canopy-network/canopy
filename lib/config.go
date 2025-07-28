@@ -303,7 +303,7 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 		NodeUrl:                "http://localhost:8545",
 		NodeWSUrl:              "ws://localhost:8545",
 		EVMChainId:             1,
-		RetryDelay:             5, // default 5 seconds retry delay
+		RetryDelay:             5, // default 5 seconds reconnect retry delay
 		SafeBlockConfirmations: 5, // default 5 block confirmations for safety
 	}
 }
@@ -313,6 +313,7 @@ type OracleConfig struct {
 	StateSaveFile      string `json:"stateSaveFile"`      // file to save oracle state
 	OrderResubmitDelay uint64 `json:"orderResubmitDelay"` // how many root blocks to wait to resubmit order
 	Committee          uint64 `json:"committee"`          // committee this oracle will be witnessed orders for
+	ProposeLeadTime    uint64 `json:"proposeLeadTime"`    // oracle will wait this number of blocks before including an order in a proposed block
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -321,6 +322,7 @@ func DefaultOracleConfig() OracleConfig {
 		StateSaveFile:      "last_block_height.txt",
 		OrderResubmitDelay: 2,
 		Committee:          2,
+		ProposeLeadTime:    3,
 	}
 }
 
