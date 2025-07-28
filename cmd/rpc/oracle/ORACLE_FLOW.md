@@ -39,6 +39,7 @@ sequenceDiagram
     O->>O: Compare proposed vs witnessed orders
     O->>BFT: Return validation result
     
+    Note over O,RC: Root Chain Interaction
     %% Root Chain interaction
     BFT->>RC: Certificate Results
     RC->>RC: Handle Swaps
