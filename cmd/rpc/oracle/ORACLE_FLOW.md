@@ -14,6 +14,7 @@ sequenceDiagram
     participant BFT as BFT
     participant RC as Root Chain
 
+    Note over SC,O: Source Chain Block Processing
     %% Block retrieval and processing
     SC->>BP: New block available
     BP->>BP: Calculate safe block height
@@ -26,8 +27,7 @@ sequenceDiagram
     O->>O: Process block orders
     O->>O: Write to Store
     
-    %%{wrap}%%
-    
+    Note over BFT,O: Consensus Participation
     %% BFT consensus integration
     BFT->>O: Request witnessed orders
     O->>O: Check should submit logic
