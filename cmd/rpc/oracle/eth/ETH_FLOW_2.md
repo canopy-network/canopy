@@ -9,14 +9,6 @@
 ## Flow Diagram
 ```mermaid
 graph TD
-    A[EthBlockProvider.Start] --> B[Launch run goroutine]
-    B --> C[Connection Loop]
-    C --> D[connect - Establish RPC/WS]
-    D --> E{Connection Success?}
-    E -->|No| F[Retry after delay]
-    F --> C
-    E -->|Yes| G[monitorHeaders]
-    G --> H[Subscribe to new headers]
     H --> I[Header received via WebSocket]
     I --> J[processBlocks]
     J --> K[Calculate safe height]
@@ -36,11 +28,6 @@ graph TD
     X --> Y{More blocks to process?}
     Y -->|Yes| L
     Y -->|No| I
-    
-    style A fill:#e1f5fe
-    style W fill:#c8e6c9
-    style R fill:#fff3e0
-    style P fill:#f3e5f5
 ```
 
 ## Detailed Flow Analysis
