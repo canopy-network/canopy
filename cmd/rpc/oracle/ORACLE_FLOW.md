@@ -21,7 +21,7 @@ graph TD
     L --> M[shouldSubmit Logic]
 ```
 
-```
+```mermaid
 // Oracle sequence diagram showing interaction between Ethereum Node, BlockProvider, Oracle, and BFT
 participant EthereumNode
 participant BlockProvider  
