@@ -27,13 +27,13 @@ sequenceDiagram
     O->>O: Write to Store
     
     %% BFT consensus integration
-    BFT->>O: WitnessedOrders(orderBook, rootHeight)
-    O->>O: Check shouldSubmit logic
-    O->>O: Update LastSubmitHeight
-    O->>BFT: Return lock/close orders
+    BFT->>O: Request witnessed orders
+    O->>O: Check should submit logic
+    O->>BFT: Return witnessed orders
+    BFT->>BFT: Produces block with witnessed orders
     
     %% Block proposal validation
-    BFT->>O: ValidateProposedOrders(orders)
+    BFT->>O: Validate proposed orders
     O->>O: Compare proposed vs witnessed orders
     O->>BFT: Return validation result
     
