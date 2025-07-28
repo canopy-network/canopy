@@ -26,6 +26,8 @@ sequenceDiagram
     O->>O: Process block orders
     O->>O: Write to Store
     
+    %% ═══════════════════════════════════════════════════════════════════
+    
     %% BFT consensus integration
     BFT->>O: Request witnessed orders
     O->>O: Check should submit logic
