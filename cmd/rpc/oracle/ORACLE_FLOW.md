@@ -18,7 +18,7 @@ sequenceDiagram
 
     Note over SC,O: Source Chain Block Processing
     %% Block retrieval and processing
-loop Block Processing Loop
+loop
     SC->>BP: New block available
     BP->>BP: Calculate safe block height
     BP->>SC: Fetch block at safe height
