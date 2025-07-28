@@ -21,148 +21,62 @@ graph TD
     L --> M[shouldSubmit Logic]
 ```
 
-```mermaid
-sequenceDiagram
-    participant Ethereum as Ethereum Node
-    participant Provider as EthBlockProvider
-    participant Oracle as Oracle
-    participant StateManager as BlockStateManager
-    participant OrderStore as OrderStore
-    participant OrderBook as OrderBook
-    participant BFT as BFT Consensus
-    participant Controller as Controller
+```
+// Oracle sequence diagram showing interaction between Ethereum Node, BlockProvider, Oracle, and BFT
+participant EthereumNode
+participant BlockProvider  
+participant Oracle
+participant BFT
 
-    Note over Oracle: Oracle Start Process
-    Oracle->>Oracle: Start()
-    Oracle->>Oracle: run()
+note over EthereumNode, BFT: Oracle Start Process
+Oracle -> BlockProvider: Start(ctx)
+BlockProvider -> EthereumNode: Connect and sync
+EthereumNode -> BlockProvider: Latest block height
+BlockProvider -> Oracle: SetHeight(startingHeight)
+
+note over EthereumNode, BFT: Block Processing Loop
+loop Block Processing
+    EthereumNode -> BlockProvider: New block available
+    BlockProvider -> BlockProvider: Calculate safe block
+    BlockProvider -> EthereumNode: Fetch block data
+    EthereumNode -> BlockProvider: Block with transactions
+    BlockProvider -> Oracle: Send block via BlockCh()
     
-    Note over Oracle: Wait for OrderBook
-    loop Until OrderBook Available
-        Oracle->>OrderBook: Check if orderBook != nil
-        Note over Oracle: Wait 1 second if nil
+    Oracle -> Oracle: ValidateBlock() - check gaps/reorgs
+    Oracle -> Oracle: BeginProcessing() - mark block as processing
+    Oracle -> Oracle: processBlock() - extract and validate orders
+    
+    loop For each transaction in block
+        Oracle -> Oracle: Extract order from transaction
+        Oracle -> Oracle: Find order in orderBook
+        Oracle -> Oracle: validateOrder() - match against sell order
+        Oracle -> Oracle: Check if order already exists in store
+        Oracle -> Oracle: WriteOrder() to order store
+        Oracle -> Oracle: ArchiveOrder() for persistence
     end
     
-    Note over Oracle: Determine Starting Height
-    Oracle->>StateManager: GetStartingHeight()
-    StateManager-->>Oracle: height / error
-    Oracle->>Provider: SetHeight(height + 1)
-    Oracle->>Provider: Start(ctx)
-    
-    Note over Oracle: Main Block Processing Loop
-    loop Block Processing
-        Provider->>Ethereum: Request new blocks
-        Ethereum-->>Provider: Block data
-        Provider->>Oracle: block (via channel)
-        
-        Note over Oracle: Block Validation
-        Oracle->>StateManager: ValidateBlock(block)
-        StateManager-->>Oracle: validation result
-        
-        alt Block Valid
-            Oracle->>StateManager: BeginProcessing(block)
-            Oracle->>Oracle: processBlock(block)
-            
-            Note over Oracle: Process Each Transaction
-            loop For each transaction in block
-                Oracle->>Oracle: tx.Order()
-                
-                alt Order exists
-                    Oracle->>OrderBook: GetOrder(order.OrderId)
-                    OrderBook-->>Oracle: canopyOrder
-                    
-                    alt Order found in OrderBook
-                        Oracle->>Oracle: validateOrder(tx, canopyOrder)
-                        
-                        alt Order Valid
-                            Oracle->>OrderStore: ReadOrder(orderId, orderType)
-                            
-                            alt Order not in store
-                                Oracle->>OrderStore: WriteOrder(order, orderType)
-                                Oracle->>OrderStore: ArchiveOrder(order, orderType)
-                            else Order exists
-                                Note over Oracle: Skip duplicate order
-                            end
-                        else Order Invalid
-                            Note over Oracle: Log warning, continue
-                        end
-                    else Order not in OrderBook
-                        Note over Oracle: Log warning, continue
-                    end
-                else No Order
-                    Note over Oracle: Continue to next transaction
-                end
-            end
-            
-            Oracle->>StateManager: CompleteProcessing(block)
-        else Block Invalid
-            Oracle->>StateManager: FailProcessing(block)
-        end
-    end
-    
-    Note over Oracle: BFT Integration - Block Proposal
-    BFT->>Oracle: WitnessedOrders(orderBook, rootHeight)
-    
-    loop For each order in OrderBook
-        Oracle->>OrderStore: ReadOrder(orderId, orderType)
-        OrderStore-->>Oracle: witnessedOrder
-        
-        Oracle->>Oracle: shouldSubmit(order, rootHeight, externalHeight)
-        
-        alt Should Submit
-            Oracle->>OrderStore: WriteOrder(order, orderType)
-            Oracle-->>BFT: Add to lockOrders/closeOrders
-        else Should Not Submit
-            Note over Oracle: Skip order submission
-        end
-    end
-    
-    Oracle-->>BFT: Return witnessed orders
-    
-    Note over Oracle: BFT Integration - Block Validation
-    BFT->>Oracle: ValidateProposedOrders(orders)
-    
-    loop For each lock order
-        Oracle->>OrderStore: ReadOrder(orderId, LockOrderType)
-        OrderStore-->>Oracle: witnessedOrder
-        Oracle->>Oracle: Compare proposed vs witnessed
-    end
-    
-    loop For each close order
-        Oracle->>OrderStore: ReadOrder(orderId, CloseOrderType)
-        OrderStore-->>Oracle: witnessedOrder
-        Oracle->>Oracle: Compare proposed vs witnessed
-    end
-    
-    Oracle-->>BFT: Validation result
-    
-    Note over Oracle: Root Chain Updates
-    Controller->>Oracle: UpdateOrderBook(orderBook)
-    Oracle->>Oracle: Store updated orderBook
-    
-    Controller->>Oracle: UpdateRootChainInfo(info)
-    Oracle->>OrderBook: Update local orderBook
-    
-    Note over Oracle: Clean up stored orders
-    Oracle->>OrderStore: GetAllOrderIds(LockOrderType)
-    loop For each stored lock order
-        Oracle->>OrderBook: GetOrder(orderId)
-        alt Order not found or locked
-            Oracle->>OrderStore: RemoveOrder(orderId, LockOrderType)
-        end
-    end
-    
-    Oracle->>OrderStore: GetAllOrderIds(CloseOrderType)
-    loop For each stored close order
-        Oracle->>OrderBook: GetOrder(orderId)
-        alt Order not found
-            Oracle->>OrderStore: RemoveOrder(orderId, CloseOrderType)
-        end
-    end
-    
-    Note over Oracle: Graceful Shutdown
-    Controller->>Oracle: Stop()
-    Oracle->>Oracle: ctxCancel()
-    Note over Oracle: All goroutines stop
+    Oracle -> Oracle: CompleteProcessing() - mark block complete
+end
+
+note over EthereumNode, BFT: BFT Consensus Integration
+BFT -> Oracle: WitnessedOrders(orderBook, rootHeight)
+Oracle -> Oracle: Loop through orderBook orders
+Oracle -> Oracle: ReadOrder() from order store
+Oracle -> Oracle: shouldSubmit() - check timing constraints
+Oracle -> Oracle: Update LastSubmitHeight
+Oracle -> BFT: Return []*LockOrder and [][]byte closeOrders
+
+BFT -> Oracle: ValidateProposedOrders(orders)
+Oracle -> Oracle: ReadOrder() from store for each proposed order
+Oracle -> Oracle: Compare proposed vs witnessed orders
+Oracle -> BFT: Return validation result (ErrorI or nil)
+
+note over EthereumNode, BFT: Order Book Updates
+BFT -> Oracle: UpdateOrderBook(orderBook)
+Oracle -> Oracle: Store orderBook for validation
+BFT -> Oracle: UpdateRootChainInfo(info)
+Oracle -> Oracle: Update orderBook from root chain
+Oracle -> Oracle: Remove processed orders from store
 ```
 
 ## Detailed Component Analysis
