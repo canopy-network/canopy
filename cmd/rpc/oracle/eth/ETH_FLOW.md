@@ -4,19 +4,11 @@
 - **Component Purpose**: Real-time Ethereum blockchain monitoring system that processes blocks, validates transactions, and extracts Canopy orders for the oracle system
 - **Entry Points**: `EthBlockProvider.Start()` method in `block_provider.go:148`
 - **Scope**: Complete flow from Ethereum block reception through WebSocket subscriptions to order extraction and channel delivery
-- **Risk Level**: Medium (some race conditions and validation gaps identified)
 
 ## Flow Diagram
 ```mermaid
 graph TD
-    A[EthBlockProvider.Start] --> B[run goroutine]
-    B --> C[connect to RPC/WS]
-    C --> D{Connection Success?}
-    D -->|No| E[Retry after delay]
-    E --> C
-    D -->|Yes| F[monitorHeaders]
-    F --> G[Subscribe to new headers]
-    G --> H[Receive header notification]
+    H[Receive header notification]
     H --> I[processBlocks]
     I --> J[Calculate safe height]
     J --> K[fetchBlock for each height]
@@ -27,8 +19,8 @@ graph TD
     N -->|No| P[Continue to next tx]
     O --> Q{Transaction successful?}
     Q -->|Yes| R[Extract ERC20 token info]
-    Q -->|No| S[Clear order]
-    R --> T[Send block through channel]
+    Q -->|No| S[Clear Order]
+    R --> T[Send block to Oracle]
     T --> U[Increment next height]
     U --> V{More blocks to process?}
     V -->|Yes| K
@@ -116,7 +108,7 @@ graph TD
 
 ## Data Flow Mapping
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph Input
         A[Ethereum Node] --> B[WebSocket Headers]
         A --> C[RPC Block Data]

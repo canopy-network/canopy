@@ -182,7 +182,7 @@ func (t *Transaction) Hash() string {
 	return t.tx.Hash().Hex()
 }
 
-// clearOrder resets order and transfer data
+// clearOrder clears order and transfer data
 func (t *Transaction) clearOrder() {
 	t.order = nil
 	t.isERC20 = false
