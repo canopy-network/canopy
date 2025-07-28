@@ -23,60 +23,37 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-participant EthereumNode
-participant BlockProvider  
-participant Oracle
-participant BFT
+    participant EN as Ethereum Node
+    participant BP as BlockProvider
+    participant O as Oracle
+    participant BFT as BFT
 
-note over EthereumNode, BFT: Oracle Start Process
-Oracle -> BlockProvider: Start(ctx)
-BlockProvider -> EthereumNode: Connect and sync
-EthereumNode -> BlockProvider: Latest block height
-BlockProvider -> Oracle: SetHeight(startingHeight)
-
-note over EthereumNode, BFT: Block Processing Loop
-loop Block Processing
-    EthereumNode -> BlockProvider: New block available
-    BlockProvider -> BlockProvider: Calculate safe block
-    BlockProvider -> EthereumNode: Fetch block data
-    EthereumNode -> BlockProvider: Block with transactions
-    BlockProvider -> Oracle: Send block via BlockCh()
+    %% Block retrieval and processing
+    EN->>BP: New block available
+    BP->>BP: Calculate safe block height
+    BP->>EN: Fetch block at safe height
+    EN->>BP: Return block data
+    BP->>O: Send block via channel
     
-    Oracle -> Oracle: ValidateBlock() - check gaps/reorgs
-    Oracle -> Oracle: BeginProcessing() - mark block as processing
-    Oracle -> Oracle: processBlock() - extract and validate orders
+    %% Oracle block processing
+    O->>O: ValidateBlock (gaps/reorgs)
+    O->>O: BeginProcessing state
+    O->>O: Process block transactions
+    O->>O: Parse orders from transactions
+    O->>O: Validate orders against order book
+    O->>O: Write validated orders to store
+    O->>O: CompleteProcessing state
     
-    loop For each transaction in block
-        Oracle -> Oracle: Extract order from transaction
-        Oracle -> Oracle: Find order in orderBook
-        Oracle -> Oracle: validateOrder() - match against sell order
-        Oracle -> Oracle: Check if order already exists in store
-        Oracle -> Oracle: WriteOrder() to order store
-        Oracle -> Oracle: ArchiveOrder() for persistence
-    end
+    %% BFT consensus integration
+    BFT->>O: WitnessedOrders(orderBook, rootHeight)
+    O->>O: Check shouldSubmit logic
+    O->>O: Update LastSubmitHeight
+    O->>BFT: Return lock/close orders
     
-    Oracle -> Oracle: CompleteProcessing() - mark block complete
-end
-
-note over EthereumNode, BFT: BFT Consensus Integration
-BFT -> Oracle: WitnessedOrders(orderBook, rootHeight)
-Oracle -> Oracle: Loop through orderBook orders
-Oracle -> Oracle: ReadOrder() from order store
-Oracle -> Oracle: shouldSubmit() - check timing constraints
-Oracle -> Oracle: Update LastSubmitHeight
-Oracle -> BFT: Return []*LockOrder and [][]byte closeOrders
-
-BFT -> Oracle: ValidateProposedOrders(orders)
-Oracle -> Oracle: ReadOrder() from store for each proposed order
-Oracle -> Oracle: Compare proposed vs witnessed orders
-Oracle -> BFT: Return validation result (ErrorI or nil)
-
-note over EthereumNode, BFT: Order Book Updates
-BFT -> Oracle: UpdateOrderBook(orderBook)
-Oracle -> Oracle: Store orderBook for validation
-BFT -> Oracle: UpdateRootChainInfo(info)
-Oracle -> Oracle: Update orderBook from root chain
-Oracle -> Oracle: Remove processed orders from store
+    %% Block proposal validation
+    BFT->>O: ValidateProposedOrders(orders)
+    O->>O: Compare proposed vs witnessed orders
+    O->>BFT: Return validation result
 ```
 
 ## Detailed Component Analysis
