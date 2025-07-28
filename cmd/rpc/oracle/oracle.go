@@ -30,8 +30,8 @@ import (
 // - The root chain by submitting certificate results containing majority witnessed orders, and receiving order book updates which represent root chain order book activity
 
 // The oracle integrates with the BFT consensus process through two key methods:
-// - ValidateProposedOrders
 // - WitnessedOrders
+// - ValidateProposedOrders
 // It also receives root chain updates through:
 // - UpdateRootChainInfo
 type Oracle struct {
@@ -45,11 +45,9 @@ type Oracle struct {
 	orderBookMu sync.RWMutex
 	// stateManager handles block processing state, gap detection, and reorg detection
 	stateManager *BlockStateManager
-	// how many root chain blocks to wait until resubmitting an order
-	orderResubmitDelay uint64
-	// how many blocks to wait before a newly witnessed order is proposed
-	proposeLeadTime uint64
-	// committee
+	// oracle configuration
+	config lib.OracleConfig
+	// committee to use when constructing close orders. this must match the order bookc committee
 	committee uint64
 	// context to allow graceful shutdown
 	ctx       context.Context
@@ -60,9 +58,10 @@ type Oracle struct {
 
 // NewOracle creates a new Oracle instance
 func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI) (*Oracle, error) {
+	stateFile := "oracle/" + config.StateFile
 	// Ensure the state save file location exists
-	if err := os.MkdirAll(filepath.Dir(config.StateSaveFile), 0755); err != nil {
-		logger.Errorf("failed to create directories for %s: %w", config.StateSaveFile, err)
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err != nil {
+		logger.Errorf("failed to create directories for %s: %w", config.StateFile, err)
 	}
 	// create context cancel function for the passed context
 	ctx, cancel := context.WithCancel(ctx)
@@ -71,9 +70,8 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider:      blockProvider,
 		orderStore:         transactionStore,
 		log:                logger,
-		stateManager:       NewBlockStateManager(config.StateSaveFile, logger),
-		orderResubmitDelay: config.OrderResubmitDelay,
-		proposeLeadTime:    config.ProposeLeadTime,
+		stateManager:       NewBlockStateManager(stateFile, logger),
+		config:             config,
 		committee:          config.Committee,
 		ctx:                ctx,
 		ctxCancel:          cancel,
@@ -91,30 +89,32 @@ func (o *Oracle) Start(ctx context.Context) {
 }
 
 // run runs the main Oracle loop
+// - wait for order book to be present
 // - receive new block from provider
 // - persist that block height to disk
 // - process new block
 func (o *Oracle) run(ctx context.Context) {
-	// an order book must be present to validate incoming orders
-	// wait for the controller to set it
-
-	// determine starting height using state manager
-	height, err := o.stateManager.GetStartingHeight()
-	if err != nil {
-		o.log.Errorf("Failed to get starting height: %v", err)
-		height = 0
-	}
 	// ticker to wait for order book
 	ticker := time.NewTicker(1 * time.Second)
-	// wait for order book
+	// an order book must be present to validate incoming orders
+	// wait for the controller to set it
 	for o.orderBook == nil {
 		<-ticker.C
 		o.log.Warnf("Oracle waiting for order book")
 	}
 	// stop order book ticker
 	ticker.Stop()
-	// set the starting height for the block provider
-	o.blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
+	// determine starting height using state manager
+	height, err := o.stateManager.GetStartingHeight()
+	// check for error
+	if err != nil {
+		o.log.Errorf("Failed to get starting height from state file: %v", err)
+		// signal the block provider to determine its own starting height
+		o.blockProvider.SetHeight(new(big.Int).SetUint64(0))
+	} else {
+		// set the starting height for the block provider
+		o.blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
+	}
 	// start block provider with shared context
 	o.blockProvider.Start(ctx)
 	// get the block channel from provider
@@ -155,6 +155,7 @@ func (o *Oracle) run(ctx context.Context) {
 			}
 			// process the received block
 			err := o.processBlock(block)
+			// check for processing error
 			if err != nil {
 				o.log.Errorf("Failed to process block at height %d: %v", block.Number(), err)
 				// phase 2a: mark block processing as failed
@@ -490,9 +491,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 //   - this is the first submission (LastSubmitHeight is 0)
 //   - the same node is handling both proposal and validation at the same height
 //   - the resubmit delay period has elapsed since the last submission
-func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64) bool {
+func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, externalChainHeight uint64) bool {
 	// order proopsal lead time has not passed, do not submit
-	if sourceChainHeight < order.WitnessedHeight+o.proposeLeadTime {
+	if externalChainHeight < order.WitnessedHeight+o.config.ProposeLeadTime {
 		o.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
@@ -505,7 +506,7 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, so
 	// }
 
 	// resubmit block has not been reached
-	if rootHeight <= order.LastSubmitHeight+o.orderResubmitDelay {
+	if rootHeight <= order.LastSubmitHeight+o.config.OrderResubmitDelay {
 		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
@@ -537,7 +538,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.sourceChainHeight) {
+			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.externalChainHeight) {
 				o.log.Debugf("Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}
@@ -563,7 +564,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.sourceChainHeight) {
+			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.externalChainHeight) {
 				o.log.Debugf("Not submitting close order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}

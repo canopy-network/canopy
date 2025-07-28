@@ -45,7 +45,7 @@ The EthBlockProvider manages the connection to Ethereum and provides safe blocks
 
 **Process Flow:**
 1. **WebSocket Subscription**: `monitorHeaders()` subscribes to new block headers
-2. **Safe Height Calculation**: Each header triggers `processBlocks()` which calculates safe height = current height - confirmations
+2. **Safe Height Calculation**: Each header triggers `processBlocks()` which calculates `safe height = current height - confirmations`
 3. **Sequential Processing**: Processes all blocks from `nextHeight` to `safeHeight` sequentially
 4. **Block Fetching**: `fetchBlock()` retrieves full block data via RPC
 5. **Transaction Processing**: `processBlockTransactions()` validates and processes each transaction
@@ -53,12 +53,11 @@ The EthBlockProvider manages the connection to Ethereum and provides safe blocks
 **Key Safety Mechanisms:**
 - **Safe Block Confirmations**: Only processes blocks after N confirmations (configurable)
 - **Sequential Processing**: Blocks are processed in strict order to prevent gaps
-- **Transaction Success Verification**: Checks transaction receipts to ensure ERC20 transfers actually succeeded
+- **Transaction Success Verification**: Checks transaction receipts to ensure token transfers actually succeeded
 - **Connection Resilience**: Automatic reconnection on RPC/WebSocket failures with exponential backoff
-- **Height Tracking**: Thread-safe height management with mutex protection
 - **Order Validation**: All orders are validated before processing using `OrderValidator`
 
-#### Transaction Parsing (`transaction.go:72`)
+#### Transaction Parsing (`transaction.go`)
 The system parses transactions looking for Canopy orders:
 
 **Lock Orders:**
@@ -75,15 +74,15 @@ The system parses transactions looking for Canopy orders:
 - Transaction success verification via receipts
 - Token info caching to prevent repeated RPC calls
 
-### 2. Oracle Block Processing (`oracle.go:97`)
+### 2. Oracle Block Processing (`oracle.go`)
 
 #### Main Processing Loop
 The Oracle's `run()` method implements a robust block processing pipeline:
 
 **Flow:**
-1. **Initialization**: Waits for order book from root chain
+1. **Initialization**: Waits for order book from root chain before accepting blocks
 2. **Height Recovery**: Uses `BlockStateManager` to determine starting height
-3. **Block Reception**: Receives blocks from `blockCh` channel
+3. **Block Reception**: Receives blocks from from the block provider via the `blockCh` channel
 4. **Two-Phase Processing**: 
    - Phase 1: `BeginProcessing()` - marks block as being processed
    - Phase 2: `CompleteProcessing()` or `FailProcessing()` - finalizes state
@@ -96,7 +95,7 @@ The Oracle's `run()` method implements a robust block processing pipeline:
 - **Recovery Logic**: Can resume from any interrupted state on restart
 - **Order Book Dependency**: Waits for valid order book before processing
 
-#### Block Processing (`processBlock:258`)
+#### Block Processing (`processBlock()`)
 Processes individual blocks and their transactions:
 
 **Process:**
@@ -113,26 +112,25 @@ Processes individual blocks and their transactions:
 - **Transaction Validation**: Failed transactions are ignored
 - **Atomic Operations**: Order writing operations are atomic
 
-### 3. WitnessedOrders Method (`oracle.go:520`)
+### 3. WitnessedOrders Method
 
 #### Purpose
-Returns witnessed orders that should be included in the next block proposal. Called by the BFT consensus when a validator is selected as block proposer.
+Returns witnessed orders that should be included in the next block proposal. Called by the BFT consensus when the elected leader is building a block proposal.
 
 **Process Flow:**
 1. **Order Book Iteration**: Scans through all orders in the root chain order book
 2. **Lock Order Processing**: For unlocked sell orders, looks for witnessed lock orders
 3. **Close Order Processing**: For locked orders, looks for witnessed close orders
 4. **Submission Logic**: Uses `shouldSubmit()` to determine if order should be included
-5. **State Update**: Updates last submission height to prevent spam
+5. **State Update**: Updates last submission height to allow for resubmit delays
 
 **Key Safety Mechanisms:**
 - **Order Book Synchronization**: Only processes orders present in current order book
 - **Submission Throttling**: `shouldSubmit()` prevents rapid resubmission
 - **Lead Time Protection**: Orders must wait minimum time before first submission
-- **Resubmit Delay**: Failed orders have delay before resubmission
-- **State Tracking**: Tracks submission history to prevent duplicates
+- **Resubmit Delay**: Orders have delay before resubmission to allow for root chain processing time
 
-### 4. ValidateProposedOrders Method (`oracle.go:334`)
+### 4. ValidateProposedOrders Method
 
 #### Purpose
 Validates that all orders in a proposed block are present in the local order store. Called during BFT consensus validation phase.
@@ -147,16 +145,15 @@ Validates that all orders in a proposed block are present in the local order sto
 - **Exact Matching**: Orders must be identical to witnessed orders
 - **Complete Validation**: All orders in proposal must be validated
 - **Store Consistency**: Ensures local store has all required orders
-- **Error Handling**: Clear error messages for debugging failed validations
 - **Defensive Coding**: Handles nil cases and missing orders gracefully
 
-### 5. shouldSubmit Method (`oracle.go:493`)
+### 5. shouldSubmit Method
 
 #### Purpose
 Determines whether a witnessed order should be submitted based on timing and submission history.
 
 **Logic Flow:**
-1. **Lead Time Check**: Order must wait `proposeLeadTime` blocks after being witnessed
+1. **Lead Time Check**: Order must wait `proposeLeadTime` external chain blocks after being witnessed
 2. **Resubmit Delay**: Must wait `orderResubmitDelay` blocks since last submission
 3. **Height Comparison**: Uses source chain height for lead time, root chain height for resubmit delay
 
@@ -179,13 +176,6 @@ Determines whether a witnessed order should be submitted based on timing and sub
 3. **Safe Block Confirmations**: Only processes blocks after N confirmations
 4. **State Persistence**: Processing state is saved to disk for recovery
 5. **Recovery Logic**: Can detect and retry processing from any interruption point
-
-**Potential Issues:**
-- Chain reorganizations could cause blocks to be "missed" from the main chain
-- WebSocket connection failures could cause temporary gaps
-- Oracle restart during processing could skip blocks if state is corrupted
-
-**Mitigation**: The system detects these conditions and logs errors, but automatic recovery is limited.
 
 ### Token Transfer Missing Prevention
 
@@ -213,10 +203,9 @@ Determines whether a witnessed order should be submitted based on timing and sub
 - ✅ Sequential height processing prevents gaps
 - ✅ Connection resilience with automatic reconnection
 - ✅ Transaction success verification prevents processing failed transactions
-- ✅ Thread-safe height management
 - ✅ Order validation before processing
 
-### Oracle Processing Safety  
+### Oracle Processing Safety
 - ✅ Two-phase block processing with state persistence
 - ✅ Gap and reorganization detection
 - ✅ Recovery from interrupted processing
@@ -226,7 +215,6 @@ Determines whether a witnessed order should be submitted based on timing and sub
 
 ### Consensus Integration Safety
 - ✅ Exact order matching in validation
-- ✅ Submission throttling to prevent spam
 - ✅ Lead time protection for new orders
 - ✅ Complete proposal validation
 - ✅ Error handling with clear diagnostics

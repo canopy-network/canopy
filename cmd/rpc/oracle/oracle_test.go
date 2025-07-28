@@ -450,7 +450,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 		lastSubmitHeight   uint64
 		witnessedHeight    uint64
 		rootHeight         uint64
-		sourceChainHeight  uint64
+		externalChainHeight  uint64
 		orderResubmitDelay uint64
 		proposeLeadTime    uint64
 		expected           bool
@@ -460,7 +460,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   40,
 			witnessedHeight:    10,
 			rootHeight:         60,
-			sourceChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
+			externalChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(14) < 15
 			orderResubmitDelay: 20,
 			proposeLeadTime:    5,
 			expected:           false,
@@ -470,7 +470,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   40,
 			witnessedHeight:    10,
 			rootHeight:         60,
-			sourceChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15
+			externalChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(15) >= 15
 			orderResubmitDelay: 20,
 			proposeLeadTime:    5,
 			expected:           false,
@@ -480,7 +480,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   40,
 			witnessedHeight:    10,
 			rootHeight:         55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
-			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			externalChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
 			orderResubmitDelay: 20,
 			proposeLeadTime:    5,
 			expected:           false,
@@ -490,7 +490,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   40,
 			witnessedHeight:    10,
 			rootHeight:         60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
-			sourceChainHeight:  16,
+			externalChainHeight:  16,
 			orderResubmitDelay: 20,
 			proposeLeadTime:    5,
 			expected:           false,
@@ -500,7 +500,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   30,
 			witnessedHeight:    10,
 			rootHeight:         100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
-			sourceChainHeight:  16,
+			externalChainHeight:  16,
 			orderResubmitDelay: 20,
 			proposeLeadTime:    5,
 			expected:           true,
@@ -510,7 +510,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   0,
 			witnessedHeight:    10,
 			rootHeight:         100,
-			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			externalChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
 			orderResubmitDelay: 10,
 			proposeLeadTime:    5,
 			expected:           true,
@@ -520,7 +520,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   40,
 			witnessedHeight:    10,
 			rootHeight:         80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
-			sourceChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
+			externalChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, externalChainHeight(11) > 10
 			orderResubmitDelay: 20,
 			proposeLeadTime:    0,
 			expected:           true,
@@ -530,7 +530,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:   50,
 			witnessedHeight:    10,
 			rootHeight:         51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
-			sourceChainHeight:  16,
+			externalChainHeight:  16,
 			orderResubmitDelay: 0,
 			proposeLeadTime:    5,
 			expected:           true,
@@ -540,9 +540,11 @@ func TestOracle_shouldSubmit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			oracle := &Oracle{
-				log:                lib.NewDefaultLogger(),
-				orderResubmitDelay: tt.orderResubmitDelay,
-				proposeLeadTime:    tt.proposeLeadTime,
+				log: lib.NewDefaultLogger(),
+				config: lib.OracleConfig{
+					OrderResubmitDelay: tt.orderResubmitDelay,
+					ProposeLeadTime:    tt.proposeLeadTime,
+				},
 			}
 
 			order := &types.WitnessedOrder{
@@ -550,7 +552,7 @@ func TestOracle_shouldSubmit(t *testing.T) {
 				WitnessedHeight:  tt.witnessedHeight,
 			}
 
-			result := oracle.shouldSubmit(order, tt.rootHeight, tt.sourceChainHeight)
+			result := oracle.shouldSubmit(order, tt.rootHeight, tt.externalChainHeight)
 
 			if result != tt.expected {
 				t.Errorf("shouldSubmit() = %v, expected %v",

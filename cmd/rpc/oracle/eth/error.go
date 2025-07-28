@@ -18,4 +18,5 @@ var (
 	ErrTransactionSigning     = errors.New("failed to sign transaction")
 	ErrTransactionSending     = errors.New("failed to send transaction")
 	ErrNilTransaction         = errors.New("transaction is nil")
+	ErrMaxRetries             = errors.New("maximum retries reached")
 )

@@ -50,10 +50,6 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	if info, exists := m.cache[contractAddress]; exists {
 		return info, nil
 	}
-	// validate contract address format
-	if !common.IsHexAddress(contractAddress) {
-		return types.TokenInfo{}, ErrInvalidAddress
-	}
 	// fetch name from contract
 	nameBytes, err := callContract(ctx, m.client, contractAddress, erc20NameFunction)
 	if err != nil {

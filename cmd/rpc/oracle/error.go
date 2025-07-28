@@ -14,9 +14,9 @@ const (
 	OracleModule lib.ErrorModule = "oracle"
 
 	// Oracle Module Error Codes
-	CodeReadHeightFile   lib.ErrorCode = 1
+	CodeReadStateFile    lib.ErrorCode = 1
 	CodeParseHeight      lib.ErrorCode = 2
-	CodeWriteHeightFile  lib.ErrorCode = 3
+	CodeWriteStateFile   lib.ErrorCode = 3
 	CodeCreateDirectory  lib.ErrorCode = 4
 	CodeGetHomeDirectory lib.ErrorCode = 5
 	CodeUnmarshalOrder   lib.ErrorCode = 6
@@ -62,16 +62,16 @@ func ErrWriteOrder(err error) lib.ErrorI {
 }
 
 // Error functions for Oracle module
-func ErrReadHeightFile(err error) lib.ErrorI {
-	return lib.NewError(CodeReadHeightFile, OracleModule, "failed to read height file: "+err.Error())
+func ErrReadStateFile(err error) lib.ErrorI {
+	return lib.NewError(CodeReadStateFile, OracleModule, "failed to read oracle state file: "+err.Error())
 }
 
-func ErrParseHeight(err error) lib.ErrorI {
+func ErrParseState(err error) lib.ErrorI {
 	return lib.NewError(CodeParseHeight, OracleModule, "failed to parse height: "+err.Error())
 }
 
-func ErrWriteHeightFile(err error) lib.ErrorI {
-	return lib.NewError(CodeWriteHeightFile, OracleModule, "failed to write height file: "+err.Error())
+func ErrWriteStateFile(err error) lib.ErrorI {
+	return lib.NewError(CodeWriteStateFile, OracleModule, "failed to oracle state file: "+err.Error())
 }
 
 func ErrCreateDirectory(err error) lib.ErrorI {

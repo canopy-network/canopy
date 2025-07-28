@@ -7,6 +7,7 @@ import (
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -57,6 +58,10 @@ func NewTransaction(ethTx *ethtypes.Transaction, chainId uint64) (*Transaction, 
 	if ethTx.To() != nil {
 		// set to address
 		tx.to = ethTx.To().Hex()
+	}
+	// validateaddress format
+	if !common.IsHexAddress(tx.to) {
+		return nil, ErrInvalidAddress
 	}
 	// extract sender address using latest signer
 	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(big.NewInt(int64(chainId))), ethTx)

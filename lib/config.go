@@ -291,6 +291,7 @@ type EthBlockProviderConfig struct {
 	EVMChainId             uint64 `json:"evmChainId"`             // ethereum chain id
 	RetryDelay             int    `json:"retryDelay"`             // retry delay in seconds for connection failures
 	SafeBlockConfirmations int    `json:"safeBlockConfirmations"` // number of confirmations required for a block to be considered safe
+	StartupBlockDepth      uint64 `json:"startupBlockDepth"`      // how far back to start processing blocks when no next height was provided
 }
 
 // DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
@@ -305,21 +306,23 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 		EVMChainId:             1,
 		RetryDelay:             5, // default 5 seconds reconnect retry delay
 		SafeBlockConfirmations: 5, // default 5 block confirmations for safety
+		StartupBlockDepth:      1000,
 	}
 }
 
 // OracleConfig represents the configuration of the off-chain order witness oracle
 type OracleConfig struct {
-	StateSaveFile      string `json:"stateSaveFile"`      // file to save oracle state
-	OrderResubmitDelay uint64 `json:"orderResubmitDelay"` // how many root blocks to wait to resubmit order
-	Committee          uint64 `json:"committee"`          // committee this oracle will be witnessed orders for
-	ProposeLeadTime    uint64 `json:"proposeLeadTime"`    // oracle will wait this number of blocks before including an order in a proposed block
+	StateFile           string `json:"stateSaveFile"`       // file to save oracle state
+	OrderResubmitDelay  uint64 `json:"orderResubmitDelay"`  // how many root blocks to wait to resubmit order
+	Committee           uint64 `json:"committee"`           // committee this oracle will be witnessed orders for
+	ProposeLeadTime     uint64 `json:"proposeLeadTime"`     // oracle will wait this number of blocks before including an order in a proposed block
+	ErrorReprocessDepth uint64 `json:"errorReprocessDepth"` // how far back to reprocess on sequence errors
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		StateSaveFile:      "last_block_height.txt",
+		StateFile:          "oracle.state",
 		OrderResubmitDelay: 2,
 		Committee:          2,
 		ProposeLeadTime:    3,

@@ -17,9 +17,13 @@ import (
 
 const (
 	// header channel buffer size
-	headerChannelBufferSize = 10
+	headerChannelBufferSize = 1000
 	// timeout for the transaction receipt call
 	transactionReceiptTimeoutS = 5
+	// ethereum transaction receipt success status value
+	TransactionStatusSuccess = 1
+	// how many times to try to process a transaction (erc20 token fetch + transaction receipt)
+	maxTransactionProcessAttempts = 3
 )
 
 // Ensures *EthBlockProvider implements BlockProvider interface
@@ -46,19 +50,20 @@ type OrderValidator interface {
 
 // EthBlockProvider provides ethereum blocks through a channel
 type EthBlockProvider struct {
-	rpcUrl                 string            // rpc connection url
-	wsUrl                  string            // websocket connection url
-	blockChan              chan types.BlockI // channel to send safe blocks
-	erc20TokenCache        *ERC20TokenCache  // erc20 token info cache
-	logger                 lib.LoggerI       // logger for debug and error messages
-	rpcClient              EthereumRpcClient // rpc client for fetching blocks
-	wsClient               EthereumWsClient  // websocket client for monitoring headers
-	orderValidator         OrderValidator    // order validator
-	nextHeight             *big.Int          // next block height to be sent through channel
-	chainId                uint64            // ethereum chain id
-	retryDelay             time.Duration     // retry delay for connection failures
-	safeBlockConfirmations *big.Int          // number of confirmations required for a block to be considered safe
-	heightMu               *sync.Mutex       // mutex around next height
+	config                 lib.EthBlockProviderConfig // provider configuration
+	rpcUrl                 string                     // rpc connection url
+	wsUrl                  string                     // websocket connection url
+	blockChan              chan types.BlockI          // channel to send safe blocks
+	erc20TokenCache        *ERC20TokenCache           // erc20 token info cache
+	logger                 lib.LoggerI                // logger for debug and error messages
+	rpcClient              EthereumRpcClient          // rpc client for fetching blocks
+	wsClient               EthereumWsClient           // websocket client for monitoring headers
+	orderValidator         OrderValidator             // order validator
+	nextHeight             *big.Int                   // next block height to be sent through channel
+	chainId                uint64                     // ethereum chain id
+	retryDelay             time.Duration              // retry delay for connection failures
+	safeBlockConfirmations *big.Int                   // number of confirmations required for a block to be considered safe
+	heightMu               *sync.Mutex                // mutex around next height
 }
 
 // NewEthBlockProvider creates a new EthBlockProvider instance
@@ -70,7 +75,8 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 	}
 	// create a new erc20 token cache
 	tokenCache := NewERC20TokenCache(ethClient)
-	// create the block output channel
+	// create the block output channel, this is unbuffered so the provider
+	// halts processing until the receiver is ready to process more blocks
 	ch := make(chan types.BlockI)
 	// create new provider instance
 	p := &EthBlockProvider{
@@ -131,7 +137,7 @@ func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Bl
 	return block, nil
 }
 
-// BlockCh returns the channel this provider will send new blocks through
+// BlockCh returns the channel through which new blocks will be sent
 func (p *EthBlockProvider) BlockCh() chan types.BlockI {
 	// return the block channel
 	return p.blockChan
@@ -301,63 +307,108 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, currentHeight *big
 func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *Block) error {
 	// perform validation on transactions that had canopy orders
 	for _, tx := range block.transactions {
-		// examine transaction data for canopy orders
-		err := tx.parseDataForOrders(p.orderValidator)
-		if err != nil {
-			p.logger.Warnf("Error parsing data for orders: %w", err)
-			continue
+		var lastErr error
+		// retry logic for processing transaction
+		for attempt := range maxTransactionProcessAttempts {
+			err := p.processTransaction(ctx, block, tx)
+			if err == nil {
+				break
+			}
+			lastErr = err
+			// implement exponential backoff for failed attempts
+			if attempt < maxTransactionProcessAttempts-1 {
+				backoffDuration := time.Duration(1<<attempt) * time.Second
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(backoffDuration):
+					// continue to next attempt after backoff
+				}
+			}
 		}
-		// look for a canopy order in this transaction
-		if tx.order == nil {
-			p.logger.Warnf("Transaction had no Canopy order, %s", string(tx.tx.Data()))
-			// no orders found, no processing required
-			continue
-		}
-		// set the ethereum height this order was witnessed
-		tx.order.WitnessedHeight = block.Number()
-		// a valid canopy order was found, check transaction success
-		if !p.transactionSuccess(ctx, tx) {
-			// ignore all orders in failed transactions
+		// check for error
+		if lastErr != nil {
+			// an error here means valid JSON of a Canopy order was found in this transaction
+			// but there was an error procesing it
+			// TODO persist this transaction somewhere for investigation? alert?
+			p.logger.Errorf("Error processing transaction %s with Canopy order in block %s: %v", tx.Hash(), block.Hash(), lastErr)
+			// transaction processing has failed - clear any discovered transactions
 			tx.clearOrder()
-			// process next transaction
-			continue
+			return lastErr
 		}
-		// test if this was an erc20 transfer
-		if !tx.isERC20 {
-			// no more processing required
-			continue
-		}
-		// fetch erc20 token info (name, symbol, decimals)
-		tokenInfo, err := p.erc20TokenCache.TokenInfo(ctx, tx.To())
-		if err != nil {
-			p.logger.Errorf("failed to get token info for contract %s: %v", tx.To(), err)
-			// close order not valid if token info call fails
-			tx.clearOrder()
-			continue
-		}
-		// store the erc20 token info
-		tx.tokenInfo = tokenInfo
 	}
 	return nil
 }
 
+// processTransaction processes a single transaction
+// the return value of nil means there was no canopy order in this transaction and processing need not be retried
+// a return of an error means there was a canopy order and what could be a temporary error. A retry should be attempted
+func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block, tx *Transaction) error {
+	// examine transaction data for canopy orders
+	err := tx.parseDataForOrders(p.orderValidator)
+	// check for error
+	if err != nil {
+		p.logger.Warnf("Error parsing data for orders: %w", err)
+		return nil
+	}
+	// look for a canopy order in this transaction
+	if tx.order == nil {
+		p.logger.Warnf("Transaction had no Canopy order, %s", string(tx.tx.Data()))
+		// no orders found, no processing required
+		return nil
+	}
+	// set the ethereum height this order was witnessed
+	tx.order.WitnessedHeight = block.Number()
+	// a valid canopy order was found, check transaction success
+	success, err := p.transactionSuccess(ctx, tx)
+	// check for error
+	if err != nil {
+		// there was an error fetching the transaction receipt
+		return err
+	}
+	if !success {
+		// the ethereum transaction was not successful, clear any orders it contained
+		tx.clearOrder()
+		// process next transaction
+		return nil
+	}
+	// test if this was an erc20 transfer
+	if !tx.isERC20 {
+		// no more processing required
+		return nil
+	}
+	// fetch erc20 token info (name, symbol, decimals)
+	tokenInfo, err := p.erc20TokenCache.TokenInfo(ctx, tx.To())
+	if err != nil {
+		p.logger.Errorf("failed to get token info for contract %s: %v", tx.To(), err)
+		return err
+	}
+	// store the erc20 token info
+	tx.tokenInfo = tokenInfo
+	return nil
+}
+
 // transactionSuccess fetches the transaction receipt and determines transaction success
-// This prevents potential exploits or bugs where failed ERC20 transactions are processed
-func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transaction) bool {
+// This prevents scenarios where failed ERC20 transactions are processed as successful transfers
+func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transaction) (bool, error) {
+	txHash := tx.tx.Hash()
+	txHashStr := txHash.String()
+
 	// create a fresh context with timeout for the RPC call
 	rpcCtx, cancel := context.WithTimeout(ctx, transactionReceiptTimeoutS*time.Second)
-	defer cancel()
-
 	// get transaction receipt
-	receipt, err := p.rpcClient.TransactionReceipt(rpcCtx, tx.tx.Hash())
+	receipt, err := p.rpcClient.TransactionReceipt(rpcCtx, txHash)
+	cancel()
+	// check for error
 	if err != nil {
-		p.logger.Errorf("failed to get transaction receipt for tx %s: %s", tx.tx.Hash().String(), err.Error())
-		return false
+		p.logger.Warnf("failed to get transaction receipt for tx %s: %v", txHashStr, err)
+		return false, err
 	}
 	// check for success
-	if receipt.Status != 1 {
-		p.logger.Errorf("transaction %s with ERC20 transfer was a failed transaction, ignoring", tx.tx.Hash().String())
-		return false
+	if receipt.Status == TransactionStatusSuccess {
+		return true, nil
 	}
-	return true
+	p.logger.Errorf("transaction %s with ERC20 transfer was a failed on-chain transaction, ignoring", txHashStr)
+	// return unsuccessful transaction
+	return false, nil
 }

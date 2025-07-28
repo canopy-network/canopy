@@ -19,20 +19,6 @@ const (
 	CloseOrderType OrderType = "close"
 )
 
-// ProcessingStatus represents the state of block processing
-type ProcessingStatus string
-
-const (
-	// ProcessingStatusPending indicates block is queued for processing
-	ProcessingStatusPending ProcessingStatus = "pending"
-	// ProcessingStatusProcessing indicates block is currently being processed
-	ProcessingStatusProcessing ProcessingStatus = "processing"
-	// ProcessingStatusCompleted indicates block processing completed successfully
-	ProcessingStatusCompleted ProcessingStatus = "completed"
-	// ProcessingStatusFailed indicates block processing failed
-	ProcessingStatusFailed ProcessingStatus = "failed"
-)
-
 // BlockProcessingState tracks the processing state of a block
 type BlockProcessingState struct {
 	// Height is the block height being processed

@@ -137,7 +137,7 @@ func Start() {
 		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
 
 		// create an absolute path for the state save file
-		config.OracleConfig.StateSaveFile = filepath.Join(DataDir, config.OracleConfig.StateSaveFile)
+		config.OracleConfig.StateFile = filepath.Join(DataDir, config.OracleConfig.StateFile)
 		// create a new oracle instance and pass the ethereum block provider with shared context
 		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
 		if e != nil {
