@@ -23,16 +23,17 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant EN as Ethereum Node
+    participant SC as Source Chain
     participant BP as BlockProvider
     participant O as Oracle
     participant BFT as BFT
+    participant RC as Root Chain
 
     %% Block retrieval and processing
-    EN->>BP: New block available
+    SC->>BP: New block available
     BP->>BP: Calculate safe block height
-    BP->>EN: Fetch block at safe height
-    EN->>BP: Return block data
+    BP->>SC: Fetch block at safe height
+    SC->>BP: Return block data
     BP->>O: Send block via channel
     
     %% Oracle block processing
@@ -50,6 +51,9 @@ sequenceDiagram
     BFT->>O: ValidateProposedOrders(orders)
     O->>O: Compare proposed vs witnessed orders
     O->>BFT: Return validation result
+    
+    %% Root Chain interaction
+    BFT->>RC: Submit results
 ```
 
 ## Detailed Component Analysis
