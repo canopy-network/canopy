@@ -11,19 +11,6 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-// ProcessingStatus represents the state of block processing
-type ProcessingStatus string
-
-const (
-	// ProcessingStatusPending indicates block is queued for processing
-	ProcessingStatusPending ProcessingStatus = "pending"
-	// ProcessingStatusProcessing indicates block is currently being processed
-	ProcessingStatusProcessing ProcessingStatus = "processing"
-	// ProcessingStatusCompleted indicates block processing completed successfully
-	ProcessingStatusCompleted ProcessingStatus = "completed"
-	// ProcessingStatusFailed indicates block processing failed
-	ProcessingStatusFailed ProcessingStatus = "failed"
-)
 
 // BlockStateManager manages block processing state, gap detection, and chain reorganization detection
 type BlockStateManager struct {
@@ -53,7 +40,7 @@ func (bsm *BlockStateManager) ValidateBlock(block types.BlockI) lib.ErrorI {
 		return nil
 	}
 
-	if lastState.Status != ProcessingStatusCompleted {
+	if lastState.Status != types.ProcessingStatusCompleted {
 		// last block wasn't completed, no validation needed for retry
 		bsm.log.Debugf("Last block wasn't completed, no gap validation needed")
 		return nil
@@ -84,18 +71,18 @@ func (bsm *BlockStateManager) ValidateBlock(block types.BlockI) lib.ErrorI {
 
 // BeginProcessing marks a block as being processed (phase 1 of two-phase commit)
 func (bsm *BlockStateManager) BeginProcessing(block types.BlockI) lib.ErrorI {
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), ProcessingStatusProcessing)
+	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusProcessing)
 }
 
 // CompleteProcessing marks a block as successfully processed (phase 2 of two-phase commit)
 func (bsm *BlockStateManager) CompleteProcessing(block types.BlockI) lib.ErrorI {
 	// mark block processing as completed
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), ProcessingStatusCompleted)
+	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusCompleted)
 }
 
 // FailProcessing marks a block as failed processing
 func (bsm *BlockStateManager) FailProcessing(block types.BlockI) lib.ErrorI {
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), ProcessingStatusFailed)
+	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusFailed)
 }
 
 // GetStartingHeight determines the height to start processing from based on saved state
@@ -105,7 +92,7 @@ func (bsm *BlockStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
 		bsm.log.Infof("Found block processing state: height %d, status %s", state.Height, state.Status)
 		// handle the different processing states
 		switch state.Status {
-		case ProcessingStatusProcessing:
+		case types.ProcessingStatusProcessing:
 			// block was being processed when oracle stopped, retry it
 			bsm.log.Warnf("Block %d was being processed when oracle stopped, will retry processing",
 				state.Height)
@@ -113,10 +100,10 @@ func (bsm *BlockStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
 				return state.Height - 1, nil
 			}
 			return 0, nil
-		case ProcessingStatusCompleted:
+		case types.ProcessingStatusCompleted:
 			// block was completed successfully, start from next block
 			return state.Height, nil
-		case ProcessingStatusFailed:
+		case types.ProcessingStatusFailed:
 			// previous block failed, retry it
 			bsm.log.Warnf("Block %d failed processing, will retry", state.Height)
 			if state.Height > 0 {
@@ -130,7 +117,7 @@ func (bsm *BlockStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
 }
 
 // saveBlockProcessingState saves the block processing state to disk
-func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash string, parentHash string, status ProcessingStatus) lib.ErrorI {
+func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash string, parentHash string, status types.ProcessingStatus) lib.ErrorI {
 	// create block processing state struct
 	state := types.BlockProcessingState{
 		Height:     height,
@@ -142,7 +129,7 @@ func (bsm *BlockStateManager) saveBlockProcessingState(height uint64, hash strin
 	// read existing state to preserve retry count if updating existing block
 	if existingState, err := bsm.readBlockProcessingState(); err == nil && existingState.Height == height {
 		state.RetryCount = existingState.RetryCount
-		if status == ProcessingStatusFailed {
+		if status == types.ProcessingStatusFailed {
 			state.RetryCount++
 		}
 	}

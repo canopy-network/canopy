@@ -51,8 +51,6 @@ type OrderValidator interface {
 // EthBlockProvider provides ethereum blocks through a channel
 type EthBlockProvider struct {
 	config                 lib.EthBlockProviderConfig // provider configuration
-	rpcUrl                 string                     // rpc connection url
-	wsUrl                  string                     // websocket connection url
 	blockChan              chan types.BlockI          // channel to send safe blocks
 	erc20TokenCache        *ERC20TokenCache           // erc20 token info cache
 	logger                 lib.LoggerI                // logger for debug and error messages
@@ -61,8 +59,6 @@ type EthBlockProvider struct {
 	orderValidator         OrderValidator             // order validator
 	nextHeight             *big.Int                   // next block height to be sent through channel
 	chainId                uint64                     // ethereum chain id
-	retryDelay             time.Duration              // retry delay for connection failures
-	safeBlockConfirmations *big.Int                   // number of confirmations required for a block to be considered safe
 	heightMu               *sync.Mutex                // mutex around next height
 }
 
@@ -80,19 +76,16 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 	ch := make(chan types.BlockI)
 	// create new provider instance
 	p := &EthBlockProvider{
-		rpcUrl:                 config.NodeUrl,
-		wsUrl:                  config.NodeWSUrl,
-		blockChan:              ch,
-		erc20TokenCache:        tokenCache,
-		logger:                 logger,
-		chainId:                config.EVMChainId,
-		orderValidator:         orderValidator,
-		retryDelay:             time.Duration(config.RetryDelay) * time.Second,
-		safeBlockConfirmations: big.NewInt(int64(config.SafeBlockConfirmations)),
-		heightMu:               &sync.Mutex{},
+		config:          config,
+		blockChan:       ch,
+		erc20TokenCache: tokenCache,
+		logger:          logger,
+		chainId:         config.EVMChainId,
+		orderValidator:  orderValidator,
+		heightMu:        &sync.Mutex{},
 	}
 	// log provider creation
-	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s, eth chain id: %d", p.rpcUrl, p.wsUrl, p.chainId)
+	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s, eth chain id: %d", p.config.NodeUrl, p.config.NodeWSUrl, p.chainId)
 	return p
 }
 
@@ -175,7 +168,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(p.retryDelay):
+			case <-time.After(time.Duration(p.config.RetryDelay) * time.Second):
 				continue
 			}
 		}
@@ -194,28 +187,28 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	// close any existing connections
 	p.closeConnections()
 	// attempt to connect to rpc client
-	rpcClient, err := ethclient.DialContext(ctx, p.rpcUrl)
+	rpcClient, err := ethclient.DialContext(ctx, p.config.NodeUrl)
 	if err != nil {
 		// log error and retry
-		p.logger.Errorf("Failed to connect to rpc client: %v, retrying in %v", err, p.retryDelay)
+		p.logger.Errorf("Failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay) * time.Second)
 		return err
 	}
 	// set rpc client
 	p.rpcClient = rpcClient
 	// log successful rpc connection
-	p.logger.Infof("Successfully connected to ethereum RPC at %s", p.rpcUrl)
+	p.logger.Infof("Successfully connected to ethereum RPC at %s", p.config.NodeUrl)
 	// attempt to connect to websocket client
-	wsClient, err := ethclient.DialContext(ctx, p.wsUrl)
+	wsClient, err := ethclient.DialContext(ctx, p.config.NodeWSUrl)
 	if err != nil {
 		p.rpcClient.Close()
 		// log error and retry
-		p.logger.Errorf("Failed to connect to websocket client: %v, retrying in %v", err, p.retryDelay)
+		p.logger.Errorf("Failed to connect to websocket client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay) * time.Second)
 		return err
 	}
 	// set websocket client
 	p.wsClient = wsClient
 	// log successful websocket connection
-	p.logger.Infof("Websockets successfully connected to ethereum node at %s", p.wsUrl)
+	p.logger.Infof("Websockets successfully connected to ethereum node at %s", p.config.NodeWSUrl)
 	return nil
 }
 
@@ -267,7 +260,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, currentHeight *big
 	p.heightMu.Lock()
 	defer p.heightMu.Unlock()
 	// calculate safe height with confirmations
-	safeHeight := new(big.Int).Sub(currentHeight, p.safeBlockConfirmations)
+	safeHeight := new(big.Int).Sub(currentHeight, big.NewInt(int64(p.config.SafeBlockConfirmations)))
 	// Ensure safe height is not negative
 	if safeHeight.Sign() < 0 {
 		safeHeight.SetInt64(0) // or handle the error case appropriately

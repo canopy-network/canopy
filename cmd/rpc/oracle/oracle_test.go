@@ -446,94 +446,94 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 
 func TestOracle_shouldSubmit(t *testing.T) {
 	tests := []struct {
-		name               string
-		lastSubmitHeight   uint64
-		witnessedHeight    uint64
-		rootHeight         uint64
-		externalChainHeight  uint64
-		orderResubmitDelay uint64
-		proposeLeadTime    uint64
-		expected           bool
+		name                string
+		lastSubmitHeight    uint64
+		witnessedHeight     uint64
+		rootHeight          uint64
+		externalChainHeight uint64
+		orderResubmitDelay  uint64
+		proposeLeadTime     uint64
+		expected            bool
 	}{
 		{
-			name:               "propose lead time not passed - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60,
-			externalChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(14) < 15
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			expected:           false,
+			name:                "propose lead time not passed - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60,
+			externalChainHeight: 14, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(14) < 15
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			expected:            false,
 		},
 		{
-			name:               "propose lead time exact boundary - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60,
-			externalChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(15) >= 15
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			expected:           false,
+			name:                "propose lead time exact boundary - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60,
+			externalChainHeight: 15, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(15) >= 15
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay not reached - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
-			externalChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			expected:           false,
+			name:                "resubmit delay not reached - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
+			externalChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay exact boundary - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
-			externalChainHeight:  16,
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			expected:           false,
+			name:                "resubmit delay exact boundary - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
+			externalChainHeight: 16,
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay exceeded - should submit",
-			lastSubmitHeight:   30,
-			witnessedHeight:    10,
-			rootHeight:         100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
-			externalChainHeight:  16,
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			expected:           true,
+			name:                "resubmit delay exceeded - should submit",
+			lastSubmitHeight:    30,
+			witnessedHeight:     10,
+			rootHeight:          100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
+			externalChainHeight: 16,
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			expected:            true,
 		},
 		{
-			name:               "first submission with all checks passed - should submit",
-			lastSubmitHeight:   0,
-			witnessedHeight:    10,
-			rootHeight:         100,
-			externalChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
-			orderResubmitDelay: 10,
-			proposeLeadTime:    5,
-			expected:           true,
+			name:                "first submission with all checks passed - should submit",
+			lastSubmitHeight:    0,
+			witnessedHeight:     10,
+			rootHeight:          100,
+			externalChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
+			orderResubmitDelay:  10,
+			proposeLeadTime:     5,
+			expected:            true,
 		},
 		{
-			name:               "zero propose lead time with resubmit delay exceeded - should submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
-			externalChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, externalChainHeight(11) > 10
-			orderResubmitDelay: 20,
-			proposeLeadTime:    0,
-			expected:           true,
+			name:                "zero propose lead time with resubmit delay exceeded - should submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
+			externalChainHeight: 11, // witnessedHeight(10) + proposeLeadTime(0) = 10, externalChainHeight(11) > 10
+			orderResubmitDelay:  20,
+			proposeLeadTime:     0,
+			expected:            true,
 		},
 		{
-			name:               "zero delay with propose lead time passed - should submit",
-			lastSubmitHeight:   50,
-			witnessedHeight:    10,
-			rootHeight:         51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
-			externalChainHeight:  16,
-			orderResubmitDelay: 0,
-			proposeLeadTime:    5,
-			expected:           true,
+			name:                "zero delay with propose lead time passed - should submit",
+			lastSubmitHeight:    50,
+			witnessedHeight:     10,
+			rootHeight:          51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
+			externalChainHeight: 16,
+			orderResubmitDelay:  0,
+			proposeLeadTime:     5,
+			expected:            true,
 		},
 	}
 
@@ -680,10 +680,12 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			oracle := &Oracle{
-				orderStore: tt.orderStore,
-				log:        lib.NewDefaultLogger(),
+				orderStore:   tt.orderStore,
+				stateManager: &BlockStateManager{},
+				log:          lib.NewDefaultLogger(),
 			}
-			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 0)
+			// 100 to specify a high enough root height that shouldSubmit always passes
+			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 100)
 			if len(witnessedLockOrders) != tt.expectedLockOrdersLen {
 				t.Errorf("expected %d lock orders, got %d", tt.expectedLockOrdersLen, len(witnessedLockOrders))
 			}

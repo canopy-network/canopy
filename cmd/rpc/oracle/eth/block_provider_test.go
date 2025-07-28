@@ -163,11 +163,13 @@ func TestEthBlockProvider_fetchBlock(t *testing.T) {
 			logger := lib.NewDefaultLogger()
 
 			provider := &EthBlockProvider{
-				rpcClient:              mockClient,
-				logger:                 logger,
-				chainId:                1,
-				safeBlockConfirmations: big.NewInt(5), // default test value
-				heightMu:               &sync.Mutex{},
+				rpcClient: mockClient,
+				logger:    logger,
+				chainId:   1,
+				config: lib.EthBlockProviderConfig{
+					SafeBlockConfirmations: 5, // default test value
+				},
+				heightMu: &sync.Mutex{},
 			}
 
 			block, err := provider.fetchBlock(context.Background(), new(big.Int).SetUint64(tt.height))
@@ -304,15 +306,17 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 			// Create a buffered channel to capture sent blocks
 			blockChan := make(chan types.BlockI, 10)
 			provider := &EthBlockProvider{
-				rpcClient:              mockClient,
-				erc20TokenCache:        tokenCache,
-				orderValidator:         &mockOrderValidator{},
-				logger:                 logger,
-				blockChan:              blockChan,
-				nextHeight:             new(big.Int).Set(tt.nextHeight),
-				chainId:                1,
-				safeBlockConfirmations: big.NewInt(5), // default test value
-				heightMu:               &sync.Mutex{},
+				rpcClient:       mockClient,
+				erc20TokenCache: tokenCache,
+				orderValidator:  &mockOrderValidator{},
+				logger:          logger,
+				blockChan:       blockChan,
+				nextHeight:      new(big.Int).Set(tt.nextHeight),
+				chainId:         1,
+				config: lib.EthBlockProviderConfig{
+					SafeBlockConfirmations: 5, // default test value
+				},
+				heightMu: &sync.Mutex{},
 			}
 			provider.processBlocks(context.Background(), new(big.Int).Set(tt.currentHeight))
 			// Collect all blocks sent to channel

@@ -41,8 +41,6 @@ func TestBlockStateManager_ValidateBlock(t *testing.T) {
 	setupCompletedBlock := func(t *testing.T, bsm *BlockStateManager, height uint64, hash string, parentHash string) {
 		err := bsm.saveBlockProcessingState(height, hash, parentHash, types.ProcessingStatusCompleted)
 		require.NoError(t, err)
-		err = bsm.saveLastProcessedHeight(height)
-		require.NoError(t, err)
 	}
 
 	tests := []struct {
@@ -136,16 +134,6 @@ func TestBlockStateManager_ValidateBlock(t *testing.T) {
 			expectError:  true,
 			errorCode:    CodeBlockSequence,
 			errorMessage: "expected height 6, got 5",
-		},
-		{
-			name: "validation passes when no processing state exists but last processed height is set",
-			setupState: func(t *testing.T, bsm *BlockStateManager) {
-				// Only set last processed height, no processing state
-				err := bsm.saveLastProcessedHeight(3)
-				require.NoError(t, err)
-			},
-			block:       createTestBlock(4, "0xblock4", "0xblock3"),
-			expectError: false,
 		},
 		{
 			name: "empty hash values should still work",
