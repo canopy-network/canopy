@@ -18,11 +18,13 @@ sequenceDiagram
 
     Note over SC,O: Source Chain Block Processing
     %% Block retrieval and processing
+loop Block Processing Loop
     SC->>BP: New block available
     BP->>BP: Calculate safe block height
     BP->>SC: Fetch block at safe height
     SC->>BP: Return block data
     BP->>O: Send block via channel
+end
     
     %% Oracle block processing
     O->>O: Validate & write to store
@@ -43,7 +45,6 @@ sequenceDiagram
     Note over O,RC: Root Chain Interaction
     %% Root Chain interaction
     BFT->>RC: Certificate Results
-    RC->>RC: Release escrowed CNPY
     RC->>O: Synchronize order store to order book
 ```
 
