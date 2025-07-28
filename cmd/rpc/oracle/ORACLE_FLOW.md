@@ -36,6 +36,7 @@ sequenceDiagram
     BFT->>O: Block proposal validation
     O->>O: Compare proposed vs witnessed orders
     O->>BFT: Return validation result
+    BFT->>BFT: Commit Certificate
     
     Note over O,RC: Root Chain Interaction
     %% Root Chain interaction
