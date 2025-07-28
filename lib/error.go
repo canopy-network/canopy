@@ -232,11 +232,11 @@ const (
 	CodeInvalidDoubleSignHeights ErrorCode = 62
 	CodeInvalidDoubleSigner      ErrorCode = 63
 	CodeInvalidNumCommittees     ErrorCode = 64
-
-	CodeValidatorIsADelegate ErrorCode = 66
-
-	CodeInvalidChainId ErrorCode = 68
-	CodeWrongNetworkID ErrorCode = 69
+	CodeInvalidSlashRecipients   ErrorCode = 65
+	CodeValidatorIsADelegate     ErrorCode = 66
+	CodeInvalidSlashRecipient    ErrorCode = 67
+	CodeInvalidChainId           ErrorCode = 68
+	CodeWrongNetworkID           ErrorCode = 69
 
 	CodeRootHeight               ErrorCode = 71
 	CodeInvalidQCCommitteeHeight ErrorCode = 72
@@ -644,6 +644,14 @@ func ErrInvalidDoubleSignHeights() ErrorI {
 
 func ErrInvalidDoubleSigner() ErrorI {
 	return NewError(CodeInvalidDoubleSigner, ConsensusModule, "double signer is invalid")
+}
+
+func ErrInvalidSlashRecipients() ErrorI {
+	return NewError(CodeInvalidSlashRecipients, ConsensusModule, "slash recipients is invalid")
+}
+
+func ErrInvalidSlashRecipient() ErrorI {
+	return NewError(CodeInvalidSlashRecipient, ConsensusModule, "slash recipient is invalid")
 }
 
 func ErrMismatchResultsHash() ErrorI {

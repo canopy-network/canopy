@@ -538,6 +538,17 @@ func (x *SlashRecipients) CheckBasic() (err ErrorI) {
 			return ErrInvalidDoubleSigner()
 		}
 	}
+	// prevent too many slash recipients
+	if len(x.SlashRecipients) > 25 {
+		return ErrInvalidSlashRecipients()
+	}
+	// for each slash recipient
+	for _, s := range x.SlashRecipients {
+		// ensure valid slash recipients
+		if s == nil || s.Address == nil || s.Percent > 100 {
+			return ErrInvalidSlashRecipient()
+		}
+	}
 	// exit
 	return
 }
@@ -568,6 +579,24 @@ func (x *SlashRecipients) Equals(y *SlashRecipients) bool {
 		}
 		// if the heights are not equal
 		if !slices.Equal(ds.Heights, y.DoubleSigners[i].Heights) {
+			// exit with 'unequal'
+			return false
+		}
+	}
+	// ensure slash recipients length's are the same
+	if len(x.SlashRecipients) != len(y.SlashRecipients) {
+		// exit with 'unequal'
+		return false
+	}
+	// for each slash recipient
+	for i, sr := range x.SlashRecipients {
+		// if the address is not equal
+		if !bytes.Equal(sr.Address, y.SlashRecipients[i].Address) {
+			// exit with 'unequal'
+			return false
+		}
+		// if the amount is not equal
+		if sr.Percent != y.SlashRecipients[i].Percent {
 			// exit with 'unequal'
 			return false
 		}

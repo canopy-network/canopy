@@ -73,6 +73,16 @@ message RewardRecipients {
 message SlashRecipients {
   // double_signers: a list of actors who the committee agreed double-signed based on evidence
   repeated DoubleSigner double_signers = 1; // @gotags: json:"doubleSigners"
+  // slash_recipients: a list of Validators who should be slashed
+  repeated SlashRecipient slash_recipients = 2; // @gotags: json:"slashRecipients"
+}
+
+// SlashRecipient is an actor who receives a slash
+message SlashRecipient {
+  // address: the address of the recipient to be slashed
+  bytes address = 1;
+  // percent: the percent of the slash
+  uint64 percent = 2;
 }
 
 // Orders: tracks actions related to 'buyer side' activities for sell orders
