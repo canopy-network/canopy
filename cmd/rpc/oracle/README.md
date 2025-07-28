@@ -2,11 +2,9 @@
 
 ## Multi-Oracle Consensus with Validator Voting
 
-The Oracle package provides cross-chain transaction witnessing and validation capabilities for the Canopy blockchain system. It implements a chain-agnostic oracle that coordinates between external blockchains (like Ethereum) and the Canopy nested chain to facilitate cross-chain order execution and validation.
+The Oracle package provides cross-chain transaction witnessing and validation capabilities for the Canopy blockchain. It implements a chain-agnostic oracle that coordinates between external blockchains (like Ethereum) and a Canopy nested chain (observer chain) running this software to facilitate cross-chain order execution and validation.
 
-The Canopy oracle child chain employs a hybrid consensus mechanism that combines multiple independent oracle nodes with economic stake-based validation to ensure secure and reliable attestation of Ethereum transactions. Each oracle node in the network independently monitors the Ethereum blockchain and verifies deposit transactions made by liquidity providers. When a relevant transaction is detected, oracle nodes submit their observations to the oracle chain's consensus layer, where they are aggregated and validated through a Byzantine fault-tolerant protocol that requires majority agreement among participating nodes before any attestation is considered valid.
-
-The system incorporates economic security through validator voting, where each oracle node must stake Canopy tokens to participate in the consensus process. Validators cast stake-weighted votes on the validity of observed Ethereum transactions, with their voting power proportional to their staked amount. This creates strong economic incentives for honest behavior, as validators who submit incorrect attestations or vote on fraudulent transactions face slashing penalties that reduce their staked tokens. The combination of majority consensus requirements and economic penalties ensures that attackers would need to control both a majority of oracle nodes and a significant portion of the total staked value to successfully manipulate the system. Once consensus is reached on an Ethereum transaction's validity, the oracle chain generates a cryptographically signed attestation that can be verified by the parent chain, enabling secure cross-chain liquidity operations while maintaining the decentralized nature of the Canopy network.
+The Canopy oracle nested chain employs a witness-based consensus mechanism that combines independent validator nodes with BFT consensus validation to ensure secure and reliable attestation of external blockchain transactions. Each validator node in the committee independently monitors external chains (such as Ethereum) through configurable block providers and witnesses lock/close order transactions. When a relevant transaction is detected, oracle nodes validate it against the current order book and store witnessed orders locally. They participate in the NestBFT consensus protocol where witnessed orders are proposed in blocks, validated against other nodes' through the Canopy BFT process process. Thie ensures that the required +2/3 supermajority agreement among participating validators before any witnessed order is finalized on the observer chain and reported to the root chain.
 
 ## Overview
 
@@ -28,19 +26,21 @@ The main entry point for the Transaction Oracle system. It manages the overall c
 - Coordinating with the BFT consensus mechanism
 - Maintaining synchronization with root chain order book state
 
-### BlockProvider Integration
+# BlockProvider Integration
 
 The Oracle integrates with external block providers through the `BlockProvider` interface. It provides:
 - Real-time block monitoring from external chains
 - Transaction parsing and order extraction
+- Integration with Oracle's state management for gap detection and reorg handling
 
-### Order Store Management
+# Order Store Management
 
 The Oracle manages witnessed orders through a persistent store that:
-- Stores validated lock and close orders separately
+- Stores validated lock and close orders separately by type
 - Provides atomic read/write operations for order data
-- Maintains submission history for resubmission logic
-- Supports cleanup operations based on root chain updates
+- Maintains submission history with timestamps for resubmission logic
+- Supports cleanup operations based on root chain order book updates
+- Archives processed orders for audit and recovery purposes
 
 ## Sequence Diagram
 

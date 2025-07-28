@@ -8,8 +8,7 @@ The Canopy Oracle system is a cross-chain bridge that monitors Ethereum blockcha
 
 ```mermaid
 graph TD
-    A[Ethereum Node] --> B[EthBlockProvider]
-    B --> C[WebSocket Header Subscription]
+    A[Ethereum Node] --> C[EthBlockProvider]
     C --> D[Safe Block Calculation]
     D --> E[Block Fetch & Processing]
     E --> F[Transaction Parsing]
@@ -20,20 +19,6 @@ graph TD
     J --> K[WitnessedOrders]
     K --> L[ValidateProposedOrders]
     L --> M[shouldSubmit Logic]
-    
-    subgraph "Safety Mechanisms"
-        N[Chain Reorg Detection]
-        O[Block Gap Detection]
-        P[Transaction Success Verification]
-        Q[Order Book Validation]
-        R[State Persistence]
-    end
-    
-    H --> N
-    H --> O
-    E --> P
-    G --> Q
-    H --> R
 ```
 
 ## Detailed Component Analysis
