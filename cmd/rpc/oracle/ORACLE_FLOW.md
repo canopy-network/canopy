@@ -25,7 +25,7 @@ sequenceDiagram
     BP->>O: Send block via channel
     
     %% Oracle block processing
-    O->>O: Validate & write to Store
+    O->>O: Validate & write to store
     
     Note over BFT,O: Consensus Participation
     %% BFT consensus integration
@@ -43,7 +43,7 @@ sequenceDiagram
     Note over O,RC: Root Chain Interaction
     %% Root Chain interaction
     BFT->>RC: Certificate Results
-    RC->>RC: Handle Swaps
+    RC->>RC: Release escrowed CNPY
     RC->>O: Synchronize order store to order book
 ```
 
