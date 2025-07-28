@@ -11,7 +11,6 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-
 // BlockStateManager manages block processing state, gap detection, and chain reorganization detection
 type BlockStateManager struct {
 	// externalChainHeight is the last seen height for the source chain
@@ -30,8 +29,8 @@ func NewBlockStateManager(stateSaveFile string, logger lib.LoggerI) *BlockStateM
 	}
 }
 
-// ValidateBlock performs comprehensive block validation including gap detection and reorg detection
-func (bsm *BlockStateManager) ValidateBlock(block types.BlockI) lib.ErrorI {
+// ValidateSequence performs comprehensive block validation including gap detection and reorg detection
+func (bsm *BlockStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// verify sequential block processing to detect gaps and chain reorganizations
 	lastState, err := bsm.readBlockProcessingState()
 	if err != nil {

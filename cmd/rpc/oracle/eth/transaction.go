@@ -113,6 +113,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	}
 	// all erc20 transfers Canopy is interested in have erc20 transfer data
 	if len(data) == 0 {
+		// no data to process
 		return nil
 	}
 	// set erc20 flag
@@ -120,8 +121,8 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	// store erc20 fields
 	t.erc20Recipient = recipient
 	t.erc20Amount = amount
-	fmt.Println("checking", t.from, recipient, amount, string(data), err)
-	fmt.Println("checking", t.from == recipient, amount == new(big.Int).SetUint64(0))
+	// fmt.Println("checking", t.from, recipient, amount, string(data), err)
+	// fmt.Println("checking", t.from == recipient, amount == new(big.Int).SetUint64(0))
 	// test for self-sent erc20 lock order conditions: sending value of 0 to self
 	if strings.EqualFold(t.from, recipient) && amount.Cmp(big.NewInt(0)) == 0 {
 		err = orderValidator.ValidateOrderJsonBytes(data, types.LockOrderType)

@@ -21,7 +21,7 @@ func createTestBlock(number uint64, hash string, parentHash string) types.BlockI
 	}
 }
 
-func TestBlockStateManager_ValidateBlock(t *testing.T) {
+func TestBlockStateManager_ValidateSequence(t *testing.T) {
 	// Helper function to create a temporary directory for test state files
 	createTempDir := func(t *testing.T) string {
 		dir, err := os.MkdirTemp("", "oracle_state_test_*")
@@ -167,7 +167,7 @@ func TestBlockStateManager_ValidateBlock(t *testing.T) {
 			}
 
 			// Execute the test
-			err := bsm.ValidateBlock(tt.block)
+			err := bsm.ValidateSequence(tt.block)
 
 			// Verify results
 			if tt.expectError {

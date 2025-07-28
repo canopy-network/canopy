@@ -4,6 +4,8 @@
 
 The Canopy Oracle system is a cross-chain bridge that monitors Ethereum blockchain for Canopy-related transactions (lock/close orders) and integrates them into the Canopy nested chain through BFT consensus. This analysis examines the complete flow from Ethereum block reception to order validation and submission.
 
+The Canopy Oracle system implements a robust and safety-focused architecture for cross-chain order processing. The multiple layers of validation, state persistence, and error detection provide strong guarantees against missing blocks or token transfers.
+
 ## Flow Diagram
 
 ```mermaid
@@ -49,46 +51,27 @@ sequenceDiagram
 
 ### 1. Ethereum Block Provider (`cmd/rpc/oracle/eth/`)
 
-#### Block Reception Flow
-The EthBlockProvider manages the connection to Ethereum and provides safe blocks through a robust pipeline:
-
-**Process Flow:**
-1. **WebSocket Subscription**: `monitorHeaders()` subscribes to new block headers
-2. **Safe Height Calculation**: Each header triggers `processBlocks()` which calculates `safe height = current height - confirmations`
-3. **Sequential Processing**: Processes all blocks from `nextHeight` to `safeHeight` sequentially
-4. **Block Fetching**: `fetchBlock()` retrieves full block data via RPC
-5. **Transaction Processing**: `processBlockTransactions()` validates and processes each transaction
-
 **Key Safety Mechanisms:**
 - **Safe Block Confirmations**: Only processes blocks after N confirmations (configurable)
 - **Sequential Processing**: Blocks are processed in strict order to prevent gaps
 - **Transaction Success Verification**: Checks transaction receipts to ensure token transfers actually succeeded
-- **Connection Resilience**: Automatic reconnection on RPC/WebSocket failures with exponential backoff
-- **Order Validation**: All orders are validated before processing using `OrderValidator`
+- **Order Validation**: All order JSON is strictly validated before processing
+- **Transfer Validation**: Strict ERC20 transfer format validation
 
 #### Transaction Parsing (`transaction.go`)
-The system parses transactions looking for Canopy orders:
+The system processes transactions from the block provider looking for Canopy orders:
 
 **Lock Orders:**
-- Self-sent transactions with lock order JSON in transaction data
+- Self-sent transactions with lock order JSON in transaction data, or
 - ERC20 transfers to self with 0 value and lock order JSON in extra data
 
 **Close Orders:**
 - ERC20 transfers with close order JSON in extra data
-- Validates actual token transfer occurred
-
-**Safety Features:**
-- Strict ERC20 transfer format validation
-- JSON schema validation for orders
-- Transaction success verification via receipts
-- Token info caching to prevent repeated RPC calls
 
 ### 2. Oracle Block Processing (`oracle.go`)
 
 #### Main Processing Loop
-The Oracle's `run()` method implements a robust block processing pipeline:
 
-**Flow:**
 1. **Initialization**: Waits for order book from root chain before accepting blocks
 2. **Height Recovery**: Uses `BlockStateManager` to determine starting height
 3. **Block Reception**: Receives blocks from from the block provider via the `blockCh` channel
@@ -97,12 +80,10 @@ The Oracle's `run()` method implements a robust block processing pipeline:
    - Phase 2: `CompleteProcessing()` or `FailProcessing()` - finalizes state
 
 **Key Safety Mechanisms:**
-- **Block Validation**: `ValidateBlock()` checks for gaps and reorganizations
 - **State Persistence**: All processing states saved to disk for recovery
 - **Gap Detection**: Ensures no blocks are skipped in sequence
 - **Reorg Detection**: Compares parent hashes to detect chain reorganizations
 - **Recovery Logic**: Can resume from any interrupted state on restart
-- **Order Book Dependency**: Waits for valid order book before processing
 
 #### Block Processing (`processBlock()`)
 Processes individual blocks and their transactions:
@@ -110,8 +91,12 @@ Processes individual blocks and their transactions:
 **Process:**
 1. **Order Extraction**: Gets witnessed orders from each transaction
 2. **Order Book Lookup**: Validates orders exist in the root chain order book
-3. **Order Validation**: Ensures witnessed orders match order book entries
-4. **Deduplication**: Prevents duplicate orders from being stored
+3. **Lock Order Validation**: Ensures witnessed lock matches order book entries
+   - `ID` and `Chain` must match.
+4. **Close Order Validation**: Ensures witnessed lock matches order book entries
+   - Transaction `To` must match `data` field in Canopy order (ERC20-specific test)
+   - `ID` and `Chain` must match.
+   - Asset `TransferAmount` in transaction must match Canopy order `Requested Amount`
 5. **Persistence**: Writes validated orders to order store and archive
 
 **Key Safety Mechanisms:**
@@ -124,10 +109,10 @@ Processes individual blocks and their transactions:
 ### 3. WitnessedOrders Method
 
 #### Purpose
-Returns witnessed orders that should be included in the next block proposal. Called by the BFT consensus when the elected leader is building a block proposal.
+Returns witnessed orders that should be included in the next block proposal. Called by the BFT consensus when the proposer is building a block proposal.
 
 **Process Flow:**
-1. **Order Book Iteration**: Scans through all orders in the root chain order book
+1. **Order Book Iteration**: Iterates through all orders in the root chain order book
 2. **Lock Order Processing**: For unlocked sell orders, looks for witnessed lock orders
 3. **Close Order Processing**: For locked orders, looks for witnessed close orders
 4. **Submission Logic**: Uses `shouldSubmit()` to determine if order should be included
@@ -135,9 +120,9 @@ Returns witnessed orders that should be included in the next block proposal. Cal
 
 **Key Safety Mechanisms:**
 - **Order Book Synchronization**: Only processes orders present in current order book
-- **Submission Throttling**: `shouldSubmit()` prevents rapid resubmission
-- **Lead Time Protection**: Orders must wait minimum time before first submission
-- **Resubmit Delay**: Orders have delay before resubmission to allow for root chain processing time
+- **Smart Submission Logic**: 
+  - **Lead Time Protection**: Orders must wait minimum time before first submission
+  - **Resubmit Delay**: Orders have delay before resubmission to allow for root chain processing time
 
 ### 4. ValidateProposedOrders Method
 
@@ -153,8 +138,6 @@ Validates that all orders in a proposed block are present in the local order sto
 **Key Safety Mechanisms:**
 - **Exact Matching**: Orders must be identical to witnessed orders
 - **Complete Validation**: All orders in proposal must be validated
-- **Store Consistency**: Ensures local store has all required orders
-- **Defensive Coding**: Handles nil cases and missing orders gracefully
 
 ### 5. shouldSubmit Method
 
@@ -168,42 +151,9 @@ Determines whether a witnessed order should be submitted based on timing and sub
 
 **Key Safety Mechanisms:**
 - **Lead Time Protection**: Prevents immediate submission of newly witnessed orders
-- **Resubmit Throttling**: Prevents spam by limiting resubmission frequency
+- **Resubmit Throttling**: Prevents root chain errors by limiting resubmission frequency
 - **Height Tracking**: Separate tracking for source chain vs root chain heights
 - **Submission History**: Tracks when orders were last submitted
-
-## Critical Safety Analysis
-
-### Block Missing Prevention
-
-**Question**: Is it possible to miss blocks?
-
-**Analysis**: The system has multiple layers of protection against missing blocks:
-
-1. **Sequential Processing**: Blocks are processed in strict sequential order
-2. **Gap Detection**: `BlockStateManager.ValidateBlock()` detects if any blocks are skipped
-3. **Safe Block Confirmations**: Only processes blocks after N confirmations
-4. **State Persistence**: Processing state is saved to disk for recovery
-5. **Recovery Logic**: Can detect and retry processing from any interruption point
-
-### Token Transfer Missing Prevention
-
-**Question**: Is it possible to miss token transfers?
-
-**Analysis**: Multiple safeguards prevent missing valid token transfers:
-
-1. **Complete Transaction Processing**: All transactions in each block are examined
-2. **ERC20 Format Validation**: Strict parsing of ERC20 transfer format
-3. **Transaction Success Verification**: Checks transaction receipts to confirm success
-4. **Order Validation**: Orders must exist in root chain order book
-5. **Deduplication Logic**: Prevents processing same order twice
-
-**Potential Issues:**
-- Non-standard ERC20 implementations might not be detected
-- Receipt fetching failures could cause valid transfers to be ignored
-- Order book synchronization delays could cause temporary misses
-
-**Mitigation**: Conservative approach - better to miss invalid transfers than process invalid ones.
 
 ## Key Safety Mechanisms Summary
 
@@ -229,32 +179,7 @@ Determines whether a witnessed order should be submitted based on timing and sub
 - ✅ Error handling with clear diagnostics
 
 ### State Management Safety
-- ✅ Atomic file operations for state persistence
-- ✅ Temporary file usage to prevent corruption
 - ✅ Recovery from any processing state
 - ✅ Chain continuity verification
 - ✅ Retry logic for failed operations
-
-## Recommendations
-
-### High Priority
-1. **Implement Automatic Backfill**: Add logic to automatically request missing blocks when gaps are detected
-2. **Add Chain Reorg Recovery**: Implement automatic rollback and reprocessing from fork points
-3. **Enhance Error Recovery**: Add more sophisticated retry logic for transient failures
-
-### Medium Priority
-1. **Monitoring and Alerting**: Add metrics for block processing latency and error rates
-2. **Configuration Validation**: Validate all configuration parameters on startup
-3. **Performance Optimization**: Consider parallel processing of transactions within blocks
-
-### Low Priority
-1. **Enhanced Logging**: Add structured logging with correlation IDs
-2. **Health Checks**: Add endpoint to verify oracle health and synchronization status
-3. **Graceful Shutdown**: Implement proper cleanup on shutdown signals
-
-## Conclusion
-
-The Oracle system implements a robust and safety-focused architecture for cross-chain order processing. The multiple layers of validation, state persistence, and error detection provide strong guarantees against missing blocks or token transfers. While there are some edge cases around chain reorganizations and connection failures, the conservative approach ensures system integrity is maintained.
-
-The two-phase processing, comprehensive state management, and strict validation make the system resilient to failures and restarts. The integration with BFT consensus through `WitnessedOrders` and `ValidateProposedOrders` provides additional safety through distributed validation.
 

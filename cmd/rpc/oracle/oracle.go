@@ -67,14 +67,14 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 	ctx, cancel := context.WithCancel(ctx)
 	// create new oracle instance
 	o := &Oracle{
-		blockProvider:      blockProvider,
-		orderStore:         transactionStore,
-		log:                logger,
-		stateManager:       NewBlockStateManager(stateFile, logger),
-		config:             config,
-		committee:          config.Committee,
-		ctx:                ctx,
-		ctxCancel:          cancel,
+		blockProvider: blockProvider,
+		orderStore:    transactionStore,
+		log:           logger,
+		stateManager:  NewBlockStateManager(stateFile, logger),
+		config:        config,
+		committee:     config.Committee,
+		ctx:           ctx,
+		ctxCancel:     cancel,
 	}
 	// return new oracle instance
 	return o, nil
@@ -132,8 +132,8 @@ func (o *Oracle) run(ctx context.Context) {
 				o.log.Warn("Received nil block, skipping")
 				continue
 			}
-			// validate block for gaps and reorganizations
-			if err := o.stateManager.ValidateBlock(block); err != nil {
+			// check block for gaps and reorganizations
+			if err := o.stateManager.ValidateSequence(block); err != nil {
 				o.log.Errorf("Block validation failed for height %d: %v", block.Number(), err)
 				// mark block processing as failed
 				o.stateManager.FailProcessing(block)
@@ -216,6 +216,7 @@ func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.Sell
 	if lockOrder.ChainId != sellOrder.Committee {
 		return ErrOrderValidation("lock order chain ID does not match sell order committee")
 	}
+	// TODO validate seller send and receive addresses
 	return nil
 }
 
