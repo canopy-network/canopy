@@ -38,7 +38,8 @@ sequenceDiagram
     O->>BFT: Return validation result
     
     %% Root Chain interaction
-    BFT->>RC: Submit results
+    BFT->>RC: Certificate Results
+    RC->>RC: Handle Swaps
     RC->>O: Synchronize order store to order book
 ```
 
