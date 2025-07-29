@@ -494,16 +494,12 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, so
 		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
-	if o.stateManager.shouldSubmit(order, rootHeight) {
-
-	}
-	// all checks passed, submit this witnessed order
-	return true
+	// delegate to state manager for additional submission checks
+	return o.stateManager.shouldSubmit(order, rootHeight)
 }
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
-// TODO no two orders with same id in block
 // TODO lock order already submitted with block with specific id, put hold for any locks for that same id
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
 	lockOrders := []*lib.LockOrder{}
