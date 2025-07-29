@@ -196,7 +196,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 		lastSubmitHeight         uint64
 		witnessedHeight          uint64
 		rootHeight               uint64
-		externalChainHeight      uint64
+		sourceChainHeight      uint64
 		orderResubmitDelay       uint64
 		proposeLeadTime          uint64
 		lockOrderHoldTime        uint64
@@ -210,7 +210,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    40,
 			witnessedHeight:     10,
 			rootHeight:          60,
-			externalChainHeight: 14, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(14) < 15
+			sourceChainHeight: 14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
 			orderResubmitDelay:  20,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -222,7 +222,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    40,
 			witnessedHeight:     10,
 			rootHeight:          60,
-			externalChainHeight: 15, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(15) >= 15 but still not passed
+			sourceChainHeight: 15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15 but still not passed
 			orderResubmitDelay:  20,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -234,7 +234,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    40,
 			witnessedHeight:     10,
 			rootHeight:          55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
-			externalChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
+			sourceChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
 			orderResubmitDelay:  20,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -246,7 +246,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    40,
 			witnessedHeight:     10,
 			rootHeight:          60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
-			externalChainHeight: 16,
+			sourceChainHeight: 16,
 			orderResubmitDelay:  20,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -258,7 +258,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    30,
 			witnessedHeight:     10,
 			rootHeight:          100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
-			externalChainHeight: 16,
+			sourceChainHeight: 16,
 			orderResubmitDelay:  20,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -270,7 +270,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    0,
 			witnessedHeight:     10,
 			rootHeight:          100,
-			externalChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, externalChainHeight(16) > 15
+			sourceChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
 			orderResubmitDelay:  10,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -282,7 +282,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    40,
 			witnessedHeight:     10,
 			rootHeight:          80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
-			externalChainHeight: 11, // witnessedHeight(10) + proposeLeadTime(0) = 10, externalChainHeight(11) > 10
+			sourceChainHeight: 11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
 			orderResubmitDelay:  20,
 			proposeLeadTime:     0,
 			lockOrderHoldTime:   10,
@@ -294,7 +294,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    50,
 			witnessedHeight:     10,
 			rootHeight:          51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
-			externalChainHeight: 16,
+			sourceChainHeight: 16,
 			orderResubmitDelay:  0,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   10,
@@ -306,7 +306,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:    0,
 			witnessedHeight:     10,
 			rootHeight:          100,
-			externalChainHeight: 16,
+			sourceChainHeight: 16,
 			orderResubmitDelay:  10,
 			proposeLeadTime:     5,
 			lockOrderHoldTime:   20,
@@ -318,7 +318,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:         0,
 			witnessedHeight:          10,
 			rootHeight:               105,
-			externalChainHeight:      16,
+			sourceChainHeight:      16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
 			lockOrderHoldTime:        20,
@@ -332,7 +332,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:         0,
 			witnessedHeight:          10,
 			rootHeight:               125,
-			externalChainHeight:      16,
+			sourceChainHeight:      16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
 			lockOrderHoldTime:        20,
@@ -348,6 +348,8 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			// Create state manager with logger
 			logger := lib.NewDefaultLogger()
 			stateManager := NewOracleStateManager("test_state", logger)
+			// Set external chain height for the test
+			stateManager.sourceChainHeight = tt.sourceChainHeight
 			// Setup previous submission if needed
 			if tt.setupPreviousSubmission {
 				stateManager.lockOrderSubmissions = make(map[string]uint64)
@@ -378,7 +380,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 				}
 			}
 			// Execute test
-			result := stateManager.shouldSubmit(order, tt.rootHeight, tt.externalChainHeight, config)
+			result := stateManager.shouldSubmit(order, tt.rootHeight, config)
 
 			// Verify result
 			if result != tt.expected {

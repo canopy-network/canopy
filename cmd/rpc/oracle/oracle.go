@@ -481,10 +481,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 }
 
-// shouldSubmit determines whether a witnessed order should be submitted
-func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64) bool {
-	return o.stateManager.shouldSubmit(order, rootHeight, sourceChainHeight, o.config)
-}
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
@@ -509,7 +505,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.externalChainHeight) {
+			if !o.stateManager.shouldSubmit(wOrder, rootHeight, o.config) {
 				o.log.Debugf("Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}
@@ -535,7 +531,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
-			if !o.shouldSubmit(wOrder, rootHeight, o.stateManager.externalChainHeight) {
+			if !o.stateManager.shouldSubmit(wOrder, rootHeight, o.config) {
 				o.log.Debugf("Not submitting close order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}

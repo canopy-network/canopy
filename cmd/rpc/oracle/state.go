@@ -25,8 +25,8 @@ type OracleBlockState struct {
 
 // OracleStateManager manages block processing state, gap detection, and chain reorganization detection
 type OracleStateManager struct {
-	// externalChainHeight is the last seen height for the source chain
-	externalChainHeight uint64
+	// sourceChainHeight is the last seen height for the source chain
+	sourceChainHeight uint64
 	// stateSaveFile is the base path for state files
 	stateSaveFile string
 	// submissionHistory tracks orders that have been submitted at specific root heights to prevent duplicate submissions
@@ -49,11 +49,11 @@ func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStat
 
 // shouldSubmit determines if the current oracle state allows for submitting this order
 // Performs all submission checks including lead time, resubmit delay, lock order restrictions, and history tracking
-func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64, config lib.OracleConfig) bool {
+func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// CHECK 1: Propose lead time validation
-	if sourceChainHeight < order.WitnessedHeight+config.ProposeLeadTime {
+	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeLeadTime {
 		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
@@ -126,7 +126,7 @@ func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 
 	m.log.Debugf("Block sequence verified: processing block %d after %d", block.Number(), lastState.Height)
 	// save last seen source chain height
-	m.externalChainHeight = block.Number()
+	m.sourceChainHeight = block.Number()
 	return nil
 }
 
