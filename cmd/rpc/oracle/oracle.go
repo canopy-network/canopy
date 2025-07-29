@@ -481,20 +481,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 }
 
-// shouldSubmit determines whether a witnessed order should be submitted based on
-// the current root height and submission history.
+// shouldSubmit determines whether a witnessed order should be submitted
 func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64) bool {
-	// order proposal lead time has not passed, do not submit
-	if sourceChainHeight < order.WitnessedHeight+o.config.ProposeLeadTime {
-		o.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
-		return false
-	}
-	// resubmit block has not been reached
-	if rootHeight <= order.LastSubmitHeight+o.config.OrderResubmitDelay {
-		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
-		return false
-	}
-	return o.stateManager.shouldSubmit(order, rootHeight, o.config)
+	return o.stateManager.shouldSubmit(order, rootHeight, sourceChainHeight, o.config)
 }
 
 // WitnessedOrders returns witnessed orders that match orders in the order book

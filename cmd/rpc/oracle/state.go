@@ -48,42 +48,44 @@ func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStat
 }
 
 // shouldSubmit determines if the current oracle state allows for submitting this order
-func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
+// Performs all submission checks including lead time, resubmit delay, lock order restrictions, and history tracking
+func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64, config lib.OracleConfig) bool {
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
-	// check if this is a lock order and apply lock order restrictions
+	// CHECK 1: Propose lead time validation
+	if sourceChainHeight < order.WitnessedHeight+config.ProposeLeadTime {
+		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
+		return false
+	}
+	// CHECK 2: Resubmit delay validation
+	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelay {
+		m.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
+		return false
+	}
+	// CHECK 3: Lock order specific time restrictions
 	if order.LockOrder != nil {
 		// check if this lock order was previously submitted
 		if submittedHeight, exists := m.lockOrderSubmissions[orderIdStr]; exists {
 			// calculate blocks since last submission
 			blocksSinceSubmission := rootHeight - submittedHeight
 			// check if enough time has passed
-			if blocksSinceSubmission < config.LockOrderBlockTime {
-				if m.log != nil {
-					m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission",
-						orderIdStr, submittedHeight, blocksSinceSubmission, config.LockOrderBlockTime)
-				}
+			if blocksSinceSubmission < config.LockOrderHoldTime {
+				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission",
+					orderIdStr, submittedHeight, blocksSinceSubmission, config.LockOrderHoldTime)
 				return false
 			}
-			if m.log != nil {
-				m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission",
-					orderIdStr, submittedHeight, blocksSinceSubmission)
-			}
+			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission",
+				orderIdStr, submittedHeight, blocksSinceSubmission)
 		}
 		// record the submission height for this lock order
 		m.lockOrderSubmissions[orderIdStr] = rootHeight
 	}
-	// initialize submissionHistory map if nil
-	if m.submissionHistory == nil {
-		m.submissionHistory = make(map[string]map[uint64]bool)
-	}
+	// CHECK 4: General submission history tracking
 	// check if we have submission history for this order
 	if orderHeights, exists := m.submissionHistory[orderIdStr]; exists {
 		// check if this order was already submitted at this root height
 		if orderHeights[rootHeight] {
-			if m.log != nil {
-				m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
-			}
+			m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
 			return false
 		}
 	} else {
@@ -92,9 +94,7 @@ func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeigh
 	}
 	// record that we are submitting this order at this root height
 	m.submissionHistory[orderIdStr][rootHeight] = true
-	if m.log != nil {
-		m.log.Debugf("Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
-	}
+	m.log.Debugf("Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
 	return true
 }
 
