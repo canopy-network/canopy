@@ -28,6 +28,7 @@ const (
 	CodeOrderValidation  lib.ErrorCode = 12
 	CodeBlockSequence    lib.ErrorCode = 13
 	CodeChainReorg       lib.ErrorCode = 14
+	CodeNilOrderBook     lib.ErrorCode = 15
 
 	// OrderStore Module
 	OrderStoreModule lib.ErrorModule = "order_store"
@@ -116,4 +117,8 @@ func ErrBlockSequence(message string) lib.ErrorI {
 
 func ErrChainReorg(message string) lib.ErrorI {
 	return lib.NewError(CodeChainReorg, OracleModule, "chain reorganization detected: "+message)
+}
+
+func ErrNilOrderBook() lib.ErrorI {
+	return lib.NewError(CodeNilOrderBook, OracleModule, "order book is nil")
 }

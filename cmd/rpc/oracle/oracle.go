@@ -18,13 +18,13 @@ import (
 
 // Terminology
 // 1. *Observer Chain* - The Canopy nested chain recording the witnessed transactions
-// 2. *External Chain* - The external chain, such as Ethereum, where this Oracle witnesses transactions
-// 2. *Witness Node* - An individual validator monitoring external chain transactions, running in the observer chain
+// 2. *Source Chain* - The source chain, such as Ethereum, where this Oracle witnesses transactions
+// 2. *Witness Node* - An individual validator monitoring source chain transactions, running in the observer chain
 // 4. *Transaction Oracle* - The overall system connecting Ethereum to Canopy
 
 // Oracle is a chain-agnostic type implementing validation and storage logic for a cross-chain Oracle
 // It coordinates between three components:
-// - The external chain where transactions containing Canopy lock & close orders are witnessed
+// - The source chain where transactions containing Canopy lock & close orders are witnessed
 // - The witness nodes order store where Canopy lock & close orders are persisted
 // - The witness nodes participation in the observer chain BFT process.
 // - The root chain by submitting certificate results containing majority witnessed orders, and receiving order book updates which represent root chain order book activity
@@ -105,7 +105,7 @@ func (o *Oracle) run(ctx context.Context) {
 	// stop order book ticker
 	ticker.Stop()
 	// determine starting height using state manager
-	height, err := o.stateManager.GetStartingHeight()
+	height, err := o.stateManager.GetLastHeight()
 	// check for error
 	if err != nil {
 		o.log.Errorf("Failed to get starting height from state file: %v", err)
@@ -269,12 +269,11 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 			// no order in this transaction
 			continue
 		}
-		// find the order in the order book
+		// ensure order book is present
 		if o.orderBook == nil {
-			// TODO update this - save it for processing when order book is not nil
-			o.log.Warn("Order book is nil, skipping order validation")
-			continue
+			return ErrNilOrderBook()
 		}
+		// find the order in the order book
 		canopyOrder, orderErr := o.orderBook.GetOrder(order.OrderId)
 		if orderErr != nil {
 			o.log.Errorf("Error getting order from order book: %s", orderErr.Error())
@@ -480,7 +479,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		}
 	}
 }
-
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block

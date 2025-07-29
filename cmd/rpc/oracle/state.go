@@ -107,7 +107,6 @@ func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 		// first block, no validation needed
 		return nil
 	}
-
 	// check for block sequence gaps
 	expectedHeight := lastState.Height + 1
 	if block.Number() != expectedHeight {
@@ -115,7 +114,6 @@ func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 		m.log.Errorf("Block gap detected: %s", errorMsg)
 		return ErrBlockSequence(errorMsg)
 	}
-
 	// check for chain reorganization by comparing parent hash with last processed block
 	if block.ParentHash() != lastState.Hash {
 		errorMsg := fmt.Sprintf("parent hash mismatch at height %d: expected %s, got %s",
@@ -123,7 +121,6 @@ func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 		m.log.Errorf("Chain reorganization detected: %s", errorMsg)
 		return ErrChainReorg(errorMsg)
 	}
-
 	m.log.Debugf("Block sequence verified: processing block %d after %d", block.Number(), lastState.Height)
 	// save last seen source chain height
 	m.sourceChainHeight = block.Number()
@@ -150,8 +147,8 @@ func (m *OracleStateManager) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 	return m.atomicWriteFile(m.stateSaveFile, stateBytes)
 }
 
-// GetStartingHeight determines the height to start processing from based on saved state
-func (m *OracleStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
+// GetLastHeight returns the last processed source chain height
+func (m *OracleStateManager) GetLastHeight() (uint64, lib.ErrorI) {
 	// check for previous state from last run
 	if state, err := m.readBlockState(); err == nil {
 		m.log.Infof("Found previous block state: height %d", state.Height)
