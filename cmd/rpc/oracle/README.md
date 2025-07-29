@@ -52,35 +52,42 @@ The following sequence diagram illustrates the core interactions in the Oracle p
 
 ```mermaid
 sequenceDiagram
-    participant EXT as External Chain
+    participant SC as Source Chain
     participant BP as BlockProvider
     participant O as Oracle
-    participant OS as OrderStore
-    participant BFT as BFT Consensus
+    participant BFT as BFT
     participant RC as Root Chain
 
-    %% Block Processing Flow
-    Note over EXT,BP: Transaction Monitoring
-    EXT->>BP: New Block with Transactions
-    BP->>O: Safe Block sent to Oracle
-    O->>O: Process Block
-    O->>OS: Validate & Store Orders
-    O->>O: Save Block Height
-
-    %% BFT Integration Flow
+    %% Block retrieval and processing
+    Note over SC,O: Source Chain Block Processing
+    SC->>BP: New block header received
+    BP->>BP: Calculate safe block height
+loop Fetch Safe Blocks
+    BP->>SC: Fetch block
+    SC->>BP: Return block data
+    BP->>O: Send block via channel
+end
+    
+    %% Oracle block processing
+    O->>O: Validate & write to store
+    
     Note over BFT,O: Consensus Participation
-    BFT->>O: WitnessedOrders(orderBook, height)
-    O->>OS: Read Witnessed Orders
-    O->>BFT: Return Lock/Close Orders
-    BFT->>O: ValidateProposedOrders(orders)
-    O->>OS: Verify Orders Exist
-    O->>BFT: Validation Result
-
-    %% Root Chain Sync Flow
-    Note over RC,O: State Synchronization
-    RC->>O: UpdateRootChainInfo(info)
-    O->>O: Update Local OrderBook
-    O->>OS: Cleanup Stale Orders
+    %% BFT consensus integration
+    BFT->>O: Request witnessed orders
+    O->>O: Check should submit logic
+    O->>BFT: Return witnessed orders
+    BFT->>BFT: Produces block with witnessed orders
+    
+    %% Block proposal validation
+    BFT->>O: Block proposal validation
+    O->>O: Compare proposed vs witnessed orders
+    O->>BFT: Return validation result
+    BFT->>BFT: Commit Certificate
+    
+    Note over O,RC: Root Chain Interaction
+    %% Root Chain interaction
+    BFT->>RC: Certificate Results
+    RC->>O: Synchronize order store to order book
 ```
 
 ## Technical Details
