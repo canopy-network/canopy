@@ -2,7 +2,7 @@
 
 ## Multi-Oracle Consensus with Validator Voting
 
-The Oracle package provides cross-chain transaction witnessing and validation capabilities for the Canopy blockchain. It implements a chain-agnostic oracle that coordinates between external blockchains (like Ethereum) and a Canopy nested chain (observer chain) running this software to facilitate cross-chain order execution and validation.
+The Oracle package provides cross-chain transaction witnessing and validation capabilities for the Canopy blockchain. It implements a chain-agnostic oracle that coordinates between source blockchains (like Ethereum) and a Canopy nested chain (observer chain) running this software to facilitate cross-chain order execution and validation.
 
 The Canopy oracle nested chain employs a witness-based consensus mechanism that combines independent validator nodes with the NestBFT consensus algorithm to ensure reliable attestation of external blockchain transactions.
 
@@ -105,7 +105,7 @@ The system works like a specialized blockchain monitor that specifically looks f
 
 State persistence ensures that the Oracle can recover from interruptions without losing witnessed orders or reprocessing previously seen blocks.
 
-### BFT Consensus Integration
+# BFT Consensus Integration
 
 The Oracle system uses a dual-phase approach to participate in Byzantine Fault Tolerant consensus:
 

@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document provides a comprehensive analysis of the Canopy Oracle system, examining the complete flow from Ethereum block reception to order validation and submission. The analysis covers three critical components: the ETH block provider, the main Oracle coordinator, and the state management system.
+This document provides a comprehensive analysis of the Canopy Oracle system, examining the complete flow from Ethereum block reception to order validation and submission. The analysis covers three critical components: the Ethereum block provider, the main Oracle coordinator, and the state management system.
 
 The Oracle system demonstrates robust security measures and data integrity controls throughout its operation, with multiple validation layers, error handling mechanisms, and state consistency checks.
 

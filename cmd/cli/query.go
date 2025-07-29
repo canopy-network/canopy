@@ -40,6 +40,7 @@ func init() {
 	queryCmd.AddCommand(retiredCommitteeCmd)
 	queryCmd.AddCommand(orderCmd)
 	queryCmd.AddCommand(ordersCmd)
+	queryCmd.AddCommand(canopyOrdersCmd)
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
@@ -183,6 +184,20 @@ var (
 		Short: "query all sell orders for a committee",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Orders(height, committee))
+		},
+	}
+
+	canopyOrdersCmd = &cobra.Command{
+		Use:   "canopy-orders [address] --per-page=10 --page-number=1",
+		Short: "query canopy orders stored in the oracle order store, optionally filtered by address",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			address := ""
+			if len(args) > 0 {
+				address = args[0]
+			}
+			_, p := getPaginatedArgs()
+			writeToConsole(client.CanopyOrders(address, p))
 		},
 	}
 
