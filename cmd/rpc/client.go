@@ -7,13 +7,13 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 )
 
 type Client struct {
@@ -207,9 +207,8 @@ func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.Erro
 	return
 }
 
-func (c *Client) CanopyOrders(address string, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
-	p = new(lib.Page)
-	err = c.paginatedAddrRequest(CanopyOrdersRouteName, address, params, p)
+func (c *Client) CanopyOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
+	err = c.paginatedHeightRequest(CanopyOrdersRouteName, height, params, &orders)
 	return
 }
 

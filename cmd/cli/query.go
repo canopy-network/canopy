@@ -188,16 +188,11 @@ var (
 	}
 
 	canopyOrdersCmd = &cobra.Command{
-		Use:   "canopy-orders [address] --per-page=10 --page-number=1",
-		Short: "query canopy orders stored in the oracle order store, optionally filtered by address",
-		Args:  cobra.MaximumNArgs(1),
+		Use:   "canopy-orders --height=1 --per-page=10 --page-number=1",
+		Short: "query canopy orders stored in the oracle order store",
 		Run: func(cmd *cobra.Command, args []string) {
-			address := ""
-			if len(args) > 0 {
-				address = args[0]
-			}
-			_, p := getPaginatedArgs()
-			writeToConsole(client.CanopyOrders(address, p))
+			h, p := getPaginatedArgs()
+			writeToConsole(client.CanopyOrders(h, p))
 		},
 	}
 
