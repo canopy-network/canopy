@@ -540,7 +540,8 @@ func TestOracle_shouldSubmit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			oracle := &Oracle{
-				log: lib.NewDefaultLogger(),
+				log:          lib.NewDefaultLogger(),
+				stateManager: &OracleStateManager{},
 				config: lib.OracleConfig{
 					OrderResubmitDelay: tt.orderResubmitDelay,
 					ProposeLeadTime:    tt.proposeLeadTime,
@@ -679,10 +680,11 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			log := lib.NewDefaultLogger()
 			oracle := &Oracle{
 				orderStore:   tt.orderStore,
-				stateManager: &OracleStateManager{},
-				log:          lib.NewDefaultLogger(),
+				stateManager: NewOracleStateManager("file", log),
+				log:          log,
 			}
 			// 100 to specify a high enough root height that shouldSubmit always passes
 			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 100)

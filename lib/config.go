@@ -317,6 +317,7 @@ type OracleConfig struct {
 	Committee           uint64 `json:"committee"`           // committee this oracle will be witnessed orders for
 	ProposeLeadTime     uint64 `json:"proposeLeadTime"`     // oracle will wait this number of blocks before including an order in a proposed block
 	ErrorReprocessDepth uint64 `json:"errorReprocessDepth"` // how far back to reprocess on sequence errors
+	LockOrderBlockTime  uint64 `json:"lockOrderBlockTime"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -326,6 +327,7 @@ func DefaultOracleConfig() OracleConfig {
 		OrderResubmitDelay: 2,
 		Committee:          2,
 		ProposeLeadTime:    3,
+		LockOrderBlockTime: 2,
 	}
 }
 

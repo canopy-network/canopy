@@ -494,8 +494,7 @@ func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, so
 		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
-	// delegate to state manager for additional submission checks
-	return o.stateManager.shouldSubmit(order, rootHeight)
+	return o.stateManager.shouldSubmit(order, rootHeight, o.config)
 }
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
