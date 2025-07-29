@@ -39,7 +39,8 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 
 	// Helper function to setup a completed block state
 	setupCompletedBlock := func(t *testing.T, bsm *OracleStateManager, height uint64, hash string, parentHash string) {
-		err := bsm.saveBlockProcessingState(height, hash, parentHash, types.ProcessingStatusCompleted)
+		block := createTestBlock(height, hash, parentHash)
+		err := bsm.SaveProcessedBlock(block)
 		require.NoError(t, err)
 	}
 

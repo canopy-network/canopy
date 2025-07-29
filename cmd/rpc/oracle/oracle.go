@@ -135,8 +135,6 @@ func (o *Oracle) run(ctx context.Context) {
 			// check block for gaps and reorganizations
 			if err := o.stateManager.ValidateSequence(block); err != nil {
 				o.log.Errorf("Block validation failed for height %d: %v", block.Number(), err)
-				// mark block processing as failed
-				o.stateManager.FailProcessing(block)
 				// handle specific error types
 				switch err.Code() {
 				case CodeBlockSequence:
@@ -148,22 +146,18 @@ func (o *Oracle) run(ctx context.Context) {
 				}
 				continue
 			}
-			// phase 1: mark block as processing to enable recovery if oracle stops
-			if err := o.stateManager.BeginProcessing(block); err != nil {
-				o.log.Errorf("Failed to begin processing state for block %d: %v", block.Number(), err)
-				continue
-			}
 			// process the received block
 			err := o.processBlock(block)
 			// check for processing error
 			if err != nil {
 				o.log.Errorf("Failed to process block at height %d: %v", block.Number(), err)
-				// phase 2a: mark block processing as failed
-				o.stateManager.FailProcessing(block)
 				continue
 			}
-			// phase 2b: mark block processing as completed and save last processed height
-			o.stateManager.CompleteProcessing(block)
+			// save state after successful block processing
+			if err := o.stateManager.SaveProcessedBlock(block); err != nil {
+				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
+				// continue processing despite state save failure
+			}
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
 			o.log.Info("Oracle context cancelled, stopping block processing")
@@ -488,28 +482,20 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 }
 
 // shouldSubmit determines whether a witnessed order should be submitted based on
-// the current root height and submission history. Returns true if:
-//   - this is the first submission (LastSubmitHeight is 0)
-//   - the same node is handling both proposal and validation at the same height
-//   - the resubmit delay period has elapsed since the last submission
-func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, externalChainHeight uint64) bool {
-	// order proopsal lead time has not passed, do not submit
-	if externalChainHeight < order.WitnessedHeight+o.config.ProposeLeadTime {
+// the current root height and submission history.
+func (o *Oracle) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, sourceChainHeight uint64) bool {
+	// order proposal lead time has not passed, do not submit
+	if sourceChainHeight < order.WitnessedHeight+o.config.ProposeLeadTime {
 		o.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
-
-	// the same node can both propose and validate a witnessed order
-	// in this scencario this method will be called a second time with the same root height
-	// handle this
-	// if order.LastSubmitHeight == rootHeight {
-	// 	return true
-	// }
-
 	// resubmit block has not been reached
 	if rootHeight <= order.LastSubmitHeight+o.config.OrderResubmitDelay {
 		o.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
+	}
+	if o.stateManager.shouldSubmit(order, rootHeight) {
+
 	}
 	// all checks passed, submit this witnessed order
 	return true

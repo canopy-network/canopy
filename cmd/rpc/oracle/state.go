@@ -11,6 +11,18 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
+// OracleBlockState represents the simple state of the last processed block
+type OracleBlockState struct {
+	// Height is the last successfully processed block height
+	Height uint64 `json:"height"`
+	// Hash is the block hash for verification
+	Hash string `json:"hash"`
+	// ParentHash is the parent block hash for chain reorganization detection
+	ParentHash string `json:"parentHash"`
+	// Timestamp when the block was processed
+	Timestamp time.Time `json:"timestamp"`
+}
+
 // OracleStateManager manages block processing state, gap detection, and chain reorganization detection
 type OracleStateManager struct {
 	// externalChainHeight is the last seen height for the source chain
@@ -29,19 +41,20 @@ func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStat
 	}
 }
 
+// shouldSubmit determines if the current oracle state allows for submitting this order
+func (bsm *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64) bool {
+	// if an order has already been submitted for this rootHeight, return false
+
+	return true
+}
+
 // ValidateSequence performs comprehensive block validation including gap detection and reorg detection
 func (bsm *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// verify sequential block processing to detect gaps and chain reorganizations
-	lastState, err := bsm.readBlockProcessingState()
+	lastState, err := bsm.readBlockState()
 	if err != nil {
-		bsm.log.Debugf("No previous processing state found, assuming first block")
+		bsm.log.Debugf("No previous state found, assuming first block")
 		// first block, no validation needed
-		return nil
-	}
-
-	if lastState.Status != types.ProcessingStatusCompleted {
-		// last block wasn't completed, no validation needed for retry
-		bsm.log.Debugf("Last block wasn't completed, no gap validation needed")
 		return nil
 	}
 
@@ -60,7 +73,6 @@ func (bsm *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 		bsm.log.Errorf("Chain reorganization detected: %s", errorMsg)
 		return ErrChainReorg(errorMsg)
 	}
-	// bsm.log.Debugf("Chain continuity verified: block %d parent hash matches previous block hash", block.Number())
 
 	bsm.log.Debugf("Block sequence verified: processing block %d after %d", block.Number(), lastState.Height)
 	// save last seen source chain height
@@ -68,94 +80,51 @@ func (bsm *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 	return nil
 }
 
-// BeginProcessing marks a block as being processed (phase 1 of two-phase commit)
-func (bsm *OracleStateManager) BeginProcessing(block types.BlockI) lib.ErrorI {
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusProcessing)
-}
-
-// CompleteProcessing marks a block as successfully processed (phase 2 of two-phase commit)
-func (bsm *OracleStateManager) CompleteProcessing(block types.BlockI) lib.ErrorI {
-	// mark block processing as completed
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusCompleted)
-}
-
-// FailProcessing marks a block as failed processing
-func (bsm *OracleStateManager) FailProcessing(block types.BlockI) lib.ErrorI {
-	return bsm.saveBlockProcessingState(block.Number(), block.Hash(), block.ParentHash(), types.ProcessingStatusFailed)
+// SaveProcessedBlock saves the state after a block has been successfully processed
+func (bsm *OracleStateManager) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
+	// create the simple block state
+	state := OracleBlockState{
+		Height:     block.Number(),
+		Hash:       block.Hash(),
+		ParentHash: block.ParentHash(),
+		Timestamp:  time.Now(),
+	}
+	// marshal state to JSON
+	stateBytes, err := json.Marshal(state)
+	if err != nil {
+		bsm.log.Errorf("Failed to marshal block state: %v", err)
+		return ErrWriteStateFile(err)
+	}
+	bsm.log.Debugf("Saved block state for height %d", state.Height)
+	// write state to file atomically
+	return bsm.atomicWriteFile(bsm.stateSaveFile, stateBytes)
 }
 
 // GetStartingHeight determines the height to start processing from based on saved state
 func (bsm *OracleStateManager) GetStartingHeight() (uint64, lib.ErrorI) {
-	// check for incomplete block processing state from previous run
-	if state, err := bsm.readBlockProcessingState(); err == nil {
-		bsm.log.Infof("Found block processing state: height %d, status %s", state.Height, state.Status)
-		// handle the different processing states
-		switch state.Status {
-		case types.ProcessingStatusProcessing:
-			// block was being processed when oracle stopped, retry it
-			bsm.log.Warnf("Block %d was being processed when oracle stopped, will retry processing",
-				state.Height)
-			if state.Height > 0 {
-				return state.Height - 1, nil
-			}
-			return 0, nil
-		case types.ProcessingStatusCompleted:
-			// block was completed successfully, start from next block
-			return state.Height, nil
-		case types.ProcessingStatusFailed:
-			// previous block failed, retry it
-			bsm.log.Warnf("Block %d failed processing, will retry", state.Height)
-			if state.Height > 0 {
-				return state.Height - 1, nil
-			}
-			return 0, nil
-		}
+	// check for previous state from last run
+	if state, err := bsm.readBlockState(); err == nil {
+		bsm.log.Infof("Found previous block state: height %d", state.Height)
+		// start from the next block after the last successfully processed one
+		return state.Height, nil
 	}
 	bsm.log.Infof("No previous state found, returning start height 0")
 	return 0, nil
 }
 
-// saveBlockProcessingState saves the block processing state to disk
-func (bsm *OracleStateManager) saveBlockProcessingState(height uint64, hash string, parentHash string, status types.ProcessingStatus) lib.ErrorI {
-	// create block processing state struct
-	state := types.BlockProcessingState{
-		Height:     height,
-		Hash:       hash,
-		ParentHash: parentHash,
-		Status:     status,
-		Timestamp:  time.Now(),
-	}
-	// read existing state to preserve retry count if updating existing block
-	if existingState, err := bsm.readBlockProcessingState(); err == nil && existingState.Height == height {
-		state.RetryCount = existingState.RetryCount
-		if status == types.ProcessingStatusFailed {
-			state.RetryCount++
-		}
-	}
-	// marshal state to JSON
-	stateBytes, err := json.Marshal(state)
-	if err != nil {
-		bsm.log.Errorf("Failed to marshal block processing state: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	// bsm.log.Infof("Saved block processing state height %d: %s", state.Height, state.Status)
-	// write state to file atomically
-	return bsm.atomicWriteFile(bsm.stateSaveFile, stateBytes)
-}
-
-// readBlockProcessingState reads the block processing state from disk
-func (bsm *OracleStateManager) readBlockProcessingState() (*types.BlockProcessingState, lib.ErrorI) {
+// readBlockState reads the simple block state from disk
+func (bsm *OracleStateManager) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	// read file contents
 	data, err := os.ReadFile(bsm.stateSaveFile)
 	if err != nil {
-		bsm.log.Infof("Block processing state file not found: %v", err)
+		bsm.log.Debugf("Block state file not found: %v", err)
 		return nil, ErrReadStateFile(err)
 	}
 	// unmarshal JSON data
-	var state types.BlockProcessingState
+	var state OracleBlockState
 	err = json.Unmarshal(data, &state)
 	if err != nil {
-		bsm.log.Errorf("Failed to unmarshal block processing state: %v", err)
+		bsm.log.Errorf("Failed to unmarshal block state: %v", err)
 		return nil, ErrParseState(err)
 	}
 	return &state, nil
