@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -35,6 +36,7 @@ type Controller struct {
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
+	Plugin      *lib.Plugin                        // extensible plugin for FSM
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
 	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
 	log         lib.LoggerI                        // object for logging
@@ -75,6 +77,10 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
+	// setup plugin if enabled
+	if c.Plugin {
+		controller.PluginConnectSync()
+	}
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// initialize the mempool controller
@@ -235,6 +241,36 @@ func (c *Controller) IsValidDoubleSigner(rootChainId, rootHeight uint64, address
 	}
 	// return the result from the remote call
 	return *isValidDoubleSigner
+}
+
+// PLUGIN CALLS BELOW
+
+const socketPath = "plugin.sock"
+
+// PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
+func (c *Controller) PluginConnectSync() {
+	sockPath := filepath.Join(c.Config.DataDirPath, socketPath)
+	// clean old socket
+	if err := os.RemoveAll(sockPath); err != nil {
+		c.log.Fatalf("Failed to remove plugin socket %s: %v", sockPath, err)
+	}
+	// create a unix listener
+	l, err := net.Listen("unix", sockPath)
+	if err != nil {
+		c.log.Fatalf("Failed to listen on socket: %v", err)
+	}
+	defer l.Close()
+	// log the listener
+	c.log.Infof("Plugin service listening on socket: %s", sockPath)
+	// wait for a connection
+	conn, e := l.Accept()
+	if e != nil {
+		c.log.Fatalf("Failed to accept plugin connection: %v", e)
+	}
+	// create plugin object
+	c.Plugin = lib.NewPlugin(conn, c.log)
+	// set plugin in FSM and mempool FSM
+	c.FSM.Plugin, c.Mempool.FSM.Plugin = c.Plugin, c.Plugin
 }
 
 // INTERNAL CALLS BELOW

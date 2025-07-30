@@ -9,6 +9,12 @@ import (
 // BeginBlock() is code that is executed at the start of `applying` the block
 func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 	s.events.Refer(lib.EventStageBeginBlock)
+	// execute plugin begin block if enabled
+	if s.Plugin != nil {
+		if _, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{}); err != nil {
+			return nil, err
+		}
+	}
 	// prevent attempting to load the certificate for height 0
 	if s.Height() <= 1 {
 		return nil, nil
@@ -69,6 +75,12 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	// delete validators who are finishing unstaking
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
+	}
+	// execute plugin end block if enabled
+	if s.Plugin != nil {
+		if _, err = s.Plugin.EndBlock(s, &lib.PluginEndRequest{}); err != nil {
+			return nil, err
+		}
 	}
 	// return the events
 	return s.events.Reset(), nil

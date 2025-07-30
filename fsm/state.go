@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"context"
+	"math"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -30,6 +31,7 @@ type StateMachine struct {
 	Config             lib.Config                              // the main configuration as defined by the 'config.json' file
 	Metrics            *lib.Metrics                            // the telemetry module
 	events             *lib.EventsTracker                      // a simple event tracker for 'per-transaction' events
+	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 	log                lib.LoggerI                             // the logger for standard output and debugging
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
@@ -43,7 +45,7 @@ type cache struct {
 }
 
 // New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -52,6 +54,7 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) 
 		slashTracker:      NewSlashTracker(),
 		proposeVoteConfig: AcceptAllProposals,
 		Config:            c,
+		Plugin:            plugin,
 		Metrics:           metrics,
 		log:               log,
 		events:            new(lib.EventsTracker),
@@ -322,7 +325,7 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Metrics, s.log)
+	return New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
@@ -511,12 +514,95 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		proposeVoteConfig:  s.proposeVoteConfig,
 		events:             new(lib.EventsTracker),
 		Config:             s.Config,
+		Plugin:             s.Plugin,
 		log:                s.log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
+}
+
+// ResetToBeginBlock() resets the store and executes 'begin-block'
+func (s *StateMachine) ResetToBeginBlock() {
+	// reset the state machine (store)
+	s.Reset()
+	// run the 'begin block' code
+	if err := s.BeginBlock(); err != nil {
+		s.log.Errorf("BEGIN_BLOCK FAILURE: %s", err.Error())
+	}
+}
+
+var _ lib.PluginCompatibleFSM = new(StateMachine)
+
+// StateRead() implements the 'state read' interface for plugins
+func (s *StateMachine) StateRead(request lib.PluginStateReadRequest) (response lib.PluginStateReadResponse, err lib.ErrorI) {
+	// for each 'get' request
+	for _, getRequest := range request.Keys {
+		var value []byte
+		// execute the 'get'
+		value, err = s.Get(getRequest.Key)
+		if err != nil {
+			return
+		}
+		// add to the response
+		response.Results = append(response.Results, &lib.PluginReadResult{
+			QueryId: getRequest.QueryId,
+			Entries: []*lib.PluginStateEntry{{Key: getRequest.Key, Value: value}},
+		})
+	}
+	// for each 'iteration' request
+	for _, r := range request.Ranges {
+		var it lib.IteratorI
+		// execute the 'iteration'
+		if r.Reverse {
+			it, err = s.Iterator(r.Prefix)
+		} else {
+			it, err = s.RevIterator(r.Prefix)
+		}
+		// handle error
+		if err != nil {
+			return
+		}
+		// calculate entries
+		var entries []*lib.PluginStateEntry
+		// allow 0 limit
+		if r.Limit == 0 {
+			r.Limit = math.MaxUint64
+		}
+		// while the iterator is valid and the limit is not reached
+		for i := uint64(0); i < r.Limit && it.Valid(); it.Next() {
+			entries = append(entries, &lib.PluginStateEntry{
+				Key:   it.Key(),
+				Value: it.Value(),
+			})
+		}
+		// add to the response
+		response.Results = append(response.Results, &lib.PluginReadResult{
+			QueryId: r.QueryId,
+			Entries: entries,
+		})
+	}
+	return
+}
+
+// StateWrite() implements the 'state write' interface for plugins
+func (s *StateMachine) StateWrite(request lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
+	// for each 'set' request
+	for _, setRequest := range request.Sets {
+		// execute the 'set'
+		if err = s.Set(setRequest.Key, setRequest.Value); err != nil {
+			return
+		}
+	}
+	// for each 'del' request
+	for _, delRequest := range request.Deletes {
+		// execute the 'delete'
+		if err = s.Delete(delRequest.Key); err != nil {
+			return
+		}
+	}
+	return
 }
 
 // Set() upserts a key-value pair under a key
