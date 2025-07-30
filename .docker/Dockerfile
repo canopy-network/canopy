@@ -1,21 +1,21 @@
-FROM golang:1.23.9-alpine AS builder
+from golang:1.23.9-alpine as builder
 
-RUN apk update && apk add --no-cache make bash nodejs npm
+run apk update && apk add --no-cache make bash nodejs npm
 
-ARG EXPLORER_BASE_PATH
-ARG WALLET_BASE_PATH
+arg explorer_base_path
+arg wallet_base_path
 
-WORKDIR /go/src/github.com/canopy-network/canopy
-COPY . /go/src/github.com/canopy-network/canopy
+workdir /go/src/github.com/canopy-network/canopy
+copy . /go/src/github.com/canopy-network/canopy
 
-ENV EXPLORER_BASE_PATH=${EXPLORER_BASE_PATH}
-ENV WALLET_BASE_PATH=${WALLET_BASE_PATH}
+env explorer_base_path=${explorer_base_path}
+env wallet_base_path=${wallet_base_path}
 
-RUN make build/wallet
-RUN make build/explorer
-RUN go build -a -o bin ./cmd/main/...
+#run make build/wallet
+#run make build/explorer
+run go build -a -o bin ./cmd/main/...
 
-FROM alpine:3.19
-WORKDIR /app
-COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
-ENTRYPOINT ["/app/bin"]
+from alpine:3.19
+workdir /app
+copy --from=builder /go/src/github.com/canopy-network/canopy/bin ./
+entrypoint ["/app/bin"]

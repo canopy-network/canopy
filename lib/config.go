@@ -31,28 +31,32 @@ const (
 
 // Config is the structure of the user configuration options for a Canopy node
 type Config struct {
-	MainConfig         // main options spanning over all modules
-	LoggerConfig       // logger options
-	RPCConfig          // rpc API options
-	StateMachineConfig // FSM options
-	StoreConfig        // persistence options
-	P2PConfig          // peer-to-peer options
-	ConsensusConfig    // bft options
-	MempoolConfig      // mempool options
-	MetricsConfig      // telemetry options
+	MainConfig                                             // main options spanning over all modules
+	LoggerConfig                                           // logger options
+	RPCConfig                                              // rpc API options
+	StateMachineConfig                                     // FSM options
+	StoreConfig                                            // persistence options
+	P2PConfig                                              // peer-to-peer options
+	ConsensusConfig                                        // bft options
+	MempoolConfig                                          // mempool options
+	MetricsConfig                                          // telemetry options
+	EthBlockProviderConfig `json:"ethBlockProviderConfig"` // ethereum block provider configuration
+	OracleConfig           `json:"oracleConfig"`           // oracle configuration
 }
 
 // DefaultConfig() returns a Config with developer set options
 func DefaultConfig() Config {
 	return Config{
-		MainConfig:         DefaultMainConfig(),
-		RPCConfig:          DefaultRPCConfig(),
-		StateMachineConfig: DefaultStateMachineConfig(),
-		StoreConfig:        DefaultStoreConfig(),
-		P2PConfig:          DefaultP2PConfig(),
-		ConsensusConfig:    DefaultConsensusConfig(),
-		MempoolConfig:      DefaultMempoolConfig(),
-		MetricsConfig:      DefaultMetricsConfig(),
+		MainConfig:             DefaultMainConfig(),
+		RPCConfig:              DefaultRPCConfig(),
+		StateMachineConfig:     DefaultStateMachineConfig(),
+		StoreConfig:            DefaultStoreConfig(),
+		P2PConfig:              DefaultP2PConfig(),
+		ConsensusConfig:        DefaultConsensusConfig(),
+		MempoolConfig:          DefaultMempoolConfig(),
+		MetricsConfig:          DefaultMetricsConfig(),
+		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
+		OracleConfig:           DefaultOracleConfig(),
 	}
 }
 
@@ -278,6 +282,52 @@ func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
 		MetricsEnabled:    true,           // enabled by default
 		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
+	}
+}
+
+type EthBlockProviderConfig struct {
+	NodeUrl                string `json:"ethNodeUrl"`             // ethereum rpc node url
+	NodeWSUrl              string `json:"ethNodeWsUrl"`           // ethereum node websocket url
+	EVMChainId             uint64 `json:"evmChainId"`             // ethereum chain id
+	RetryDelay             int    `json:"retryDelay"`             // retry delay in seconds for connection failures
+	SafeBlockConfirmations int    `json:"safeBlockConfirmations"` // number of confirmations required for a block to be considered safe
+	StartupBlockDepth      uint64 `json:"startupBlockDepth"`      // how far back to start processing blocks when no next height was provided
+}
+
+// DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
+func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
+	return EthBlockProviderConfig{
+		// NodeUrl:              "https://eth-mainnet.alchemyapi.io/v2/demo",
+		// NodeWSSUrl:           "wss://eth-mainnet.alchemyapi.io/v2/demo",
+		// NodeUrl:    "https://eth-mainnet-canopy.us.nodefleet.net",
+		// NodeWSSUrl: "wss://eth-canopy-ws.us.nodefleet.net",
+		NodeUrl:                "http://localhost:8545",
+		NodeWSUrl:              "ws://localhost:8545",
+		EVMChainId:             1,
+		RetryDelay:             5, // default 5 seconds reconnect retry delay
+		SafeBlockConfirmations: 5, // default 5 block confirmations for safety
+		StartupBlockDepth:      1000,
+	}
+}
+
+// OracleConfig represents the configuration of the off-chain order witness oracle
+type OracleConfig struct {
+	StateFile           string `json:"stateSaveFile"`       // file to save oracle state
+	OrderResubmitDelay  uint64 `json:"orderResubmitDelay"`  // how many root blocks to wait to resubmit order
+	Committee           uint64 `json:"committee"`           // committee this oracle will be witnessed orders for
+	ProposeLeadTime     uint64 `json:"proposeLeadTime"`     // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
+	ErrorReprocessDepth uint64 `json:"errorReprocessDepth"` // how far back to reprocess on sequence errors
+	LockOrderHoldTime   uint64 `json:"lockOrderBlockTime"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
+}
+
+// DefaultOracleConfig() returns the default ethereum block provider configuration
+func DefaultOracleConfig() OracleConfig {
+	return OracleConfig{
+		StateFile:          "oracle.state",
+		OrderResubmitDelay: 2,
+		Committee:          2,
+		ProposeLeadTime:    3,
+		LockOrderHoldTime:  2,
 	}
 }
 

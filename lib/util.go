@@ -5,9 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"math"
 	"math/big"
 	"os"
@@ -20,6 +17,10 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/canopy-network/canopy/lib/crypto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 /* This file implements shared general utility functions that are used throughout the app */
@@ -752,6 +753,18 @@ func TimeTrack(l LoggerI, start time.Time) {
 	l.Warnf("%s took %s", functionName, elapsed)
 }
 
+// // Print full stack trace
+//
+//	buf := make([]byte, 1024)
+//	for {
+//		n := runtime.Stack(buf, false)
+//		if n < len(buf) {
+//			buf = buf[:n]
+//			break
+//		}
+//		buf = make([]byte, 2*len(buf))
+//	}
+//	fmt.Printf("Stack trace:\n%s\n", buf)
 func PrintStackTrace() {
 	pc := make([]uintptr, 10) // Get at most 10 stack frames
 	n := runtime.Callers(2, pc)

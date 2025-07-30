@@ -2,8 +2,9 @@ package controller
 
 import (
 	"bytes"
-	"github.com/canopy-network/canopy/fsm"
 	"slices"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -211,6 +212,10 @@ func (c *Controller) HandleSwaps(fsm *fsm.StateMachine, blockResult *lib.BlockRe
 	// process the root chain order book against the state
 	lockOrders, closeOrders, resetOrders := fsm.ProcessRootChainOrderBook(orders, blockResult)
 	// add the orders to the certificate result - truncating the 'lock orders' for defensive spam protection
+	// append any witnessed orders to the on chain orders
+	// l, co := c.oracle.WitnessedOrders(orders, rootChainHeight)
+	// lockOrders = append(lockOrders, l...)
+	// closeOrders = append(closeOrders, co...)
 	results.Orders = &lib.Orders{
 		LockOrders:  lib.TruncateSlice(lockOrders, 1000),
 		ResetOrders: resetOrders,

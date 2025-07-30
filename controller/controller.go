@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -23,20 +24,20 @@ type Controller struct {
 	PrivateKey crypto.PrivateKeyI // self private key
 	Config     lib.Config         // node configuration
 	Metrics    *lib.Metrics       // telemetry
-
-	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
-	Mempool   *Mempool          // the in memory list of pending transactions
-	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
-	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
+	FSM        *fsm.StateMachine  // the core protocol component responsible for maintaining and updating the state of the blockchain
+	Mempool    *Mempool           // the in memory list of pending transactions
+	Consensus  *bft.BFT           // the async consensus process between the committee members for the chain
+	P2P        *p2p.P2P           // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI // the data manager for the 'root chain'
+	oracle      *oracle.Oracle // witness oracle
 	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
 	log         lib.LoggerI    // object for logging
 	*sync.Mutex                // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
@@ -52,6 +53,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		// exit with error
 		return
 	}
+
 	// create the controller
 	controller = &Controller{
 		Address:    address.Bytes(),
@@ -60,6 +62,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Config:     c,
 		Metrics:    metrics,
 		FSM:        fsm,
+		oracle:     oracle,
 		Mempool:    mempool,
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
@@ -119,6 +122,14 @@ func (c *Controller) Start() {
 		go c.Sync()
 		// start the bft consensus (if synced to top)
 		go c.Consensus.Start()
+		// update the oracle order book
+		ob, err := c.GetOrderBook()
+		if err != nil {
+			c.log.Errorf("Error getting root chain order book: %v", err.Error())
+			c.log.Errorf("Oracle will not start until an order book is received")
+			return
+		}
+		c.oracle.UpdateOrderBook(ob)
 	}()
 }
 
@@ -153,6 +164,12 @@ func (c *Controller) Stop() {
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	c.log.Debugf("Updating root chain info")
+	// log a warning for a nil order book
+	if info.Orders == nil {
+		c.log.Warn("OrderBook from root chain was nil")
+	}
+	// log this event
+	c.log.Infof("OrderBook from root chain updated, %d orders", len(info.Orders.Orders))
 	// ensure this root chain is active
 	activeRootChainId, _ := c.FSM.GetRootChainId()
 	// if inactive
@@ -160,6 +177,7 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
+	c.oracle.UpdateOrderBook(info.Orders)
 	// set timestamp if included
 	var timestamp time.Time
 	// if timestamp is not 0
@@ -186,6 +204,11 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
+}
+
+// GetOrderBook fetches the root chain order book at the latest height
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
