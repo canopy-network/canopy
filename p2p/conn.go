@@ -440,7 +440,7 @@ func sendLengthPrefixed(conn net.Conn, bz []byte, timeout ...time.Duration) lib.
 	if len(timeout) == 1 {
 		writeTimeout = timeout[0]
 	}
-	// create the length prefix (2 bytes, big endian)
+	// create the length prefix (4 bytes, big endian)
 	lengthPrefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(lengthPrefix, uint32(len(bz)))
 	// set the write deadline

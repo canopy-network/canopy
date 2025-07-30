@@ -3,18 +3,20 @@ package lib
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"runtime"
 )
 
 type ErrorI interface {
 	Code() ErrorCode     // Returns the error code
 	Module() ErrorModule // Returns the error module
+	Message() string     // Returns the message embedded in the error
 	error                // Implements the built-in error interface
 }
 
 var _ ErrorI = &Error{} // Ensures *Error implements ErrorI
 
-type ErrorCode uint32 // Defines a type for error codes
+type ErrorCode uint64 // Defines a type for error codes
 
 type ErrorModule string // Defines a type for error modules
 
@@ -31,6 +33,9 @@ func NewError(code ErrorCode, module ErrorModule, msg string) *Error {
 
 // Code() returns the associated error code
 func (p *Error) Code() ErrorCode { return p.ECode }
+
+// Message() returns the associated error code
+func (p *Error) Message() string { return p.Msg }
 
 // Module() returns module field
 func (p *Error) Module() ErrorModule { return p.EModule }
@@ -250,17 +255,25 @@ const (
 	CodeInvalidBuyerDeadline ErrorCode = 80
 	CodeInvalidCloseOrder    ErrorCode = 81
 
-	CodeInvalidCheckpoint        ErrorCode = 83
-	CodeInvalidSellOrder         ErrorCode = 84
-	CodeStartPollHeight          ErrorCode = 85
-	CodeEmptyChainId             ErrorCode = 86
-	CodeMismatchCertResults      ErrorCode = 87
-	CodeInvalidQCRootChainHeight ErrorCode = 88
-	CodeEmptyCertificateResults  ErrorCode = 89
-	CodeSlashNonValidator        ErrorCode = 90
-	CodeEmptyOrderBook           ErrorCode = 91
-	CodeNoSubsidizedCommittees   ErrorCode = 92
-	CodeEmptyLotteryWinner       ErrorCode = 93
+	CodeInvalidCheckpoint         ErrorCode = 83
+	CodeInvalidSellOrder          ErrorCode = 84
+	CodeStartPollHeight           ErrorCode = 85
+	CodeEmptyChainId              ErrorCode = 86
+	CodeMismatchCertResults       ErrorCode = 87
+	CodeInvalidQCRootChainHeight  ErrorCode = 88
+	CodeEmptyCertificateResults   ErrorCode = 89
+	CodeSlashNonValidator         ErrorCode = 90
+	CodeEmptyOrderBook            ErrorCode = 91
+	CodeNoSubsidizedCommittees    ErrorCode = 92
+	CodeEmptyLotteryWinner        ErrorCode = 93
+	CodeFailedPluginWrite         ErrorCode = 94
+	CodeFailedPluginRead          ErrorCode = 95
+	CodeInvalidPluginToFSMMessage ErrorCode = 96
+	CodeInvalidFSMToPluginmessage ErrorCode = 97
+	CodeInvalidPluginConfig       ErrorCode = 98
+	CodeInvalidPluginRespId       ErrorCode = 99
+	CodeUnexpectedPluginToFSM     ErrorCode = 100
+	CodePluginTimeout             ErrorCode = 101
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -817,4 +830,35 @@ func ErrEmptyLotteryWinner() ErrorI {
 
 func ErrFailedTransactions() ErrorI {
 	return NewError(CodeErrFailedTransactions, StateMachineModule, "a block contained failed transactions")
+}
+
+func ErrFailedPluginWrite(err error) ErrorI {
+	return NewError(CodeFailedPluginWrite, StateMachineModule, fmt.Sprintf("a plugin write failed with error: %s", err.Error()))
+}
+func ErrFailedPluginRead(err error) ErrorI {
+	return NewError(CodeFailedPluginRead, StateMachineModule, fmt.Sprintf("a plugin read failed with error: %s", err.Error()))
+}
+
+func ErrInvalidPluginToFSMMessage(t reflect.Type) ErrorI {
+	return NewError(CodeInvalidPluginToFSMMessage, StateMachineModule, fmt.Sprintf("unrecognized plugin_to_fsm message: %v", t))
+}
+
+func ErrInvalidPluginConfig() ErrorI {
+	return NewError(CodeInvalidPluginConfig, StateMachineModule, "invalid plugin config")
+}
+
+func ErrInvalidPluginRespId() ErrorI {
+	return NewError(CodeInvalidPluginRespId, StateMachineModule, "plugin response id is invalid")
+}
+
+func ErrUnexpectedPluginToFSM(t reflect.Type) ErrorI {
+	return NewError(CodeUnexpectedPluginToFSM, StateMachineModule, fmt.Sprintf("unexpected plugin_to_fsm message: %v", t))
+}
+
+func ErrPluginTimeout() ErrorI {
+	return NewError(CodePluginTimeout, StateMachineModule, "a plugin timeout occurred")
+}
+
+func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
+	return NewError(CodeInvalidFSMToPluginmessage, StateMachineModule, fmt.Sprintf("unrecognized fsm_to_plugin message: %v", t))
 }
