@@ -114,16 +114,6 @@ The Oracle system uses a dual-phase approach to participate in Byzantine Fault T
 
 This ensures that only orders witnessed by a majority of validator nodes are included in the blockchain, providing strong guarantees about cross-chain transaction validity.
 
-### Order Book Synchronization
-
-The Oracle system implements several synchronization mechanisms to maintain consistency with the root chain:
-
-- **Order Book Updates**: Receives periodic updates of the complete root chain order book state
-- **Stale Order Cleanup**: Automatically removes witnessed orders that are no longer relevant (locked orders, completed orders)
-- **State Validation**: Ensures witnessed orders match current order book entries before including them in block proposals
-
-This synchronization acts like a cache invalidation system, where the Oracle maintains local copies of relevant data but periodically synchronizes with the authoritative root chain state.
-
 ## Component Interactions
 
 ### 1. Block Processing: External Chain Monitoring
@@ -136,20 +126,16 @@ When a new block arrives from an external blockchain, the Oracle performs the fo
 - **Order Validation**: Validates witnessed orders against the current root chain order book
 - **Storage Operations**: Persists valid orders to the local order store with appropriate metadata
 
-This process is similar to how a blockchain indexer works, but with specific focus on cross-chain order validation and storage.
-
 ### 2. Consensus Participation: BFT Integration
 
 The Oracle participates in the BFT consensus process through two key interfaces:
 
 - **WitnessedOrders**: Called during block proposal to provide witnessed orders that should be included in the next block
-- **ValidateProposedOrders**: Called during block validation to verify that proposed orders were actually witnessed by this node
-
-This is analogous to how a validator node participates in consensus, but with specialized logic for cross-chain order validation.
+- **ValidateProposedOrders**: Called during block validation to verify that proposed orders were witnessed by this node
 
 ## Configuration
 
-The Oracle system utilizes two primary configuration structures defined in `lib/config.go` that control both Ethereum block monitoring and Oracle consensus behavior. These configurations provide comprehensive safety mechanisms and integrity measures for cross-chain transaction witnessing.
+The Oracle system utilizes two primary configuration structures defined in `lib/config.go` that control both Ethereum block monitoring and Oracle consensus behavior.
 
 ### EthBlockProviderConfig
 
@@ -162,7 +148,7 @@ Controls how the Oracle connects to and monitors Ethereum blockchain for order t
 - **`SafeBlockConfirmations`** (int): Number of block confirmations required before processing. Provides protection against chain reorganizations by only processing blocks that are unlikely to be reverted.
 - **`StartupBlockDepth`** (uint64): How far back to start processing when no previous height is available. Ensures the Oracle can catch recently witnessed orders after restarts.
 
-### OracleConfig  
+### OracleConfig
 
 Controls the Oracle's consensus participation and order submission behavior (`lib/config.go:313-332`):
 
@@ -173,52 +159,17 @@ Controls the Oracle's consensus participation and order submission behavior (`li
 - **`ErrorReprocessDepth`** (uint64): How far back to reprocess blocks when sequence errors are detected. Enables recovery from chain reorganizations and missed blocks.
 - **`LockOrderHoldTime`** (uint64): Number of root blocks to prevent resubmission of lock orders with the same ID. Prevents duplicate lock order submissions and potential double-spending.
 
-## Key Safety Mechanisms
-
-### cmd/rpc/oracle/eth Package Safety Mechanisms
-
-- **Safe Block Processing**: Uses configurable confirmations (`SafeBlockConfirmations`) to only process blocks unlikely to be reorganized
-- **Transaction Receipt Validation**: Verifies ERC20 transactions were successful on-chain before processing orders to prevent failed transaction exploitation
-- **Connection Resilience**: Automatic retry logic with exponential backoff for RPC/WebSocket connection failures
-- **Concurrent Processing Protection**: Unbuffered channels ensure block processing doesn't outpace consumer capacity
-- **ERC20 Transfer Validation**: Strict parsing of transfer function calls with amount and recipient validation
-- **Order Data Validation**: Multiple validation layers for lock/close order JSON parsing and structure verification
-- **Height Synchronization**: Atomic height management with mutex protection for concurrent access safety
-
-### cmd/rpc/oracle/oracle.go Safety Mechanisms
-
-- **Order Book Synchronization**: Waits for valid order book before processing to prevent validation against stale data
-- **Comprehensive Order Validation**: Multi-layer validation including ID matching, committee verification, and amount validation
-- **State Persistence**: Atomic state saves after successful block processing for crash recovery
-- **Gap Detection**: Validates sequential block processing to detect missed blocks or chain reorganizations
-- **Duplicate Prevention**: Checks for existing orders in store before writing to prevent overwriting
-- **Lock/Close Order Segregation**: Separate handling and validation logic for different order types
-- **Order Book Matching**: Validates witnessed orders against current root chain order book state
-- **Graceful Shutdown**: Context-based cancellation for clean Oracle shutdown
-- **Error Isolation**: Individual transaction processing errors don't halt entire block processing
-
-### cmd/rpc/oracle/state.go Safety Mechanisms
-
-- **Lead Time Enforcement**: Ensures sufficient confirmations have passed before submitting orders (`ProposeLeadTime`)
-- **Resubmission Control**: Prevents rapid resubmission of orders using configurable delays (`OrderResubmitDelay`) 
-- **Lock Order Protection**: Special time-based restrictions for lock orders to prevent duplicate submissions (`LockOrderHoldTime`)
-- **Submission History Tracking**: Maintains in-memory record of order submissions to prevent duplicates within the same proposal
-- **Chain Reorganization Detection**: Validates parent hash continuity to detect chain reorgs
-- **Atomic State Persistence**: Write-and-move pattern for crash-safe state file updates
-- **Gap Detection**: Sequential height validation to identify missed blocks or processing errors
-- **Recovery Support**: Comprehensive state recovery from disk for reliable Oracle restarts
-
 ## Detailed Configuration Analysis
 
 ### cmd/rpc/oracle/eth Package - Block and Transaction Processing
 
 #### Next Height and Safe Height Usage
 
-The Ethereum block provider implements a sophisticated block processing system centered around height management:
+The Ethereum block provider implements a block processing system centered around height management:
 
-- **Next Height Tracking**: The `nextHeight` field in `EthBlockProvider` (`block_provider.go:60`) tracks the next block to be processed. It's protected by `heightMu` mutex for concurrent access safety and updated atomically in `processBlocks()` at line 297.
+- **Next Height Tracking**: The `nextHeight` field in `EthBlockProvider` tracks the next block to be processed.
 
-- **Safe Height Calculation**: In `processBlocks()` method (`block_provider.go:261-299`), safe height is calculated by subtracting `SafeBlockConfirmations` from the current block height received via WebSocket headers. This ensures only confirmed blocks are processed, protecting against chain reorganizations.
+- **Safe Height Calculation**: In `processBlocks()` safe height is calculated by subtracting `SafeBlockConfirmations` from the current block height received via new block header notifications. This ensures only confirmed blocks are processed, protecting against chain reorganizations.
 
 - **Block Processing Loop**: The system processes all blocks from `nextHeight` to `safeHeight` in sequential order, fetching each block via `fetchBlock()`, processing transactions, and sending complete blocks through the unbuffered channel to the Oracle.
 
@@ -226,43 +177,36 @@ The Ethereum block provider implements a sophisticated block processing system c
 
 Transaction processing follows a multi-stage validation pipeline:
 
-- **ERC20 Detection**: `parseDataForOrders()` in `transaction.go:78-166` examines transaction data to detect ERC20 transfers using the method signature `a9059cbb` and validates data length (68 bytes minimum).
+- **ERC20 Detection**: `parseDataForOrders()` examines transaction data to detect ERC20 transfers using the method signature `a9059cbb` and validates data length (68 bytes minimum).
 
 - **Self-Sent Lock Orders**: For transactions where `From()` equals `To()`, the entire transaction data is validated as lock order JSON. For ERC20 transfers with amount 0 sent to self, the extra data beyond the transfer call is validated as lock order JSON.
 
 - **Close Order Processing**: For standard ERC20 transfers, the extra data beyond the transfer parameters is validated as close order JSON and associated with the token transfer information.
 
-- **Transaction Success Validation**: `transactionSuccess()` method (`block_provider.go:389-410`) fetches transaction receipts to ensure only successful on-chain transactions are processed, preventing failed transaction exploitation.
+- **Transaction Success Validation**: `transactionSuccess()` fetches transaction receipts to ensure only successful on-chain transactions are processed, preventing failed transaction exploitation.
 
 ### cmd/rpc/oracle/oracle.go - Core Oracle Operations
 
 #### The run() Method Analysis
 
-The `run()` method (`oracle.go:96-167`) implements the main Oracle processing loop with robust error handling:
+The `run()` method implements the main Oracle processing loop with robust error handling:
 
-- **Order Book Dependency**: Waits for valid order book before processing any blocks, using a 1-second ticker to prevent CPU spinning while waiting for the controller to provide order book data.
+- **Order Book Dependency**: Waits for valid order book before processing any blocks.
 
 - **Height Recovery**: Uses `OracleStateManager.GetLastHeight()` to determine starting height from persistent state, enabling crash recovery and gap detection.
 
 - **Block Validation**: Each received block undergoes sequence validation via `stateManager.ValidateSequence()` to detect gaps and chain reorganizations before processing.
 
-- **Error Handling**: Implements specific error handling for `CodeBlockSequence` (missing blocks) and `CodeChainReorg` (chain reorganizations) with detailed logging for operational monitoring.
-
 - **State Persistence**: After successful block processing, saves state atomically using `stateManager.SaveProcessedBlock()` for reliable crash recovery.
 
 #### Order Validation Methods
 
-**validateOrder() Method**: Performs comprehensive order validation (`oracle.go:180-203`):
-- Ensures witnessed order contains exactly one of lock or close order (not both, not neither)
-- Routes to specialized validation based on order type
-- Validates against corresponding sell order from root chain order book
-
-**validateLockOrder() Method** (`oracle.go:206-215`):
+**validateLockOrder() Method**:
 - Verifies lock order ID matches sell order ID using byte-level comparison
 - Ensures lock order chain ID matches sell order committee
 - Placeholder for additional seller address validation
 
-**validateCloseOrder() Method** (`oracle.go:220-249`):
+**validateCloseOrder() Method**:
 - Validates sell order data field matches transaction recipient address (Ethereum-specific)
 - Ensures close order ID matches sell order ID via byte comparison
 - Verifies close order chain ID matches sell order committee
@@ -271,17 +215,16 @@ The `run()` method (`oracle.go:96-167`) implements the main Oracle processing lo
 
 #### WitnessedOrders Method Analysis
 
-The `WitnessedOrders()` method (`oracle.go:486-554`) implements the core consensus participation logic:
+The `WitnessedOrders()` method implements the core consensus participation logic:
 
 - **Order Book Iteration**: Iterates through root chain order book to find corresponding witnessed orders in local store
 - **Lock Order Processing**: For unlocked sell orders (BuyerReceiveAddress == nil), searches for witnessed lock orders and applies submission logic via `shouldSubmit()`
 - **Close Order Processing**: For locked sell orders (BuyerReceiveAddress != nil), searches for witnessed close orders and applies submission logic
 - **Submission History**: Updates `LastSubmitHeight` for each submitted order to enable resubmission delay tracking
-- **Atomic Updates**: Writes order updates to disk immediately after marking for submission
 
 #### ValidateProposedOrders Method Analysis
 
-The `ValidateProposedOrders()` method (`oracle.go:329-386`) ensures consensus integrity:
+The `ValidateProposedOrders()` method ensures consensus integrity:
 
 - **Lock Order Validation**: For each proposed lock order, retrieves witnessed order from local store and performs exact equality comparison using `lock.Equals()`
 - **Close Order Validation**: For proposed close orders, constructs comparison close order with committee ID and validates equality
@@ -290,32 +233,28 @@ The `ValidateProposedOrders()` method (`oracle.go:329-386`) ensures consensus in
 
 ### cmd/rpc/oracle/state.go - Submission Logic
 
-#### The shouldSubmit Method Analysis  
+#### The shouldSubmit Method Analysis
 
-The `shouldSubmit()` method (`state.go:52-99`) implements sophisticated submission control logic with multiple validation layers:
+The `shouldSubmit()` method implements submission control logic with multiple validation layers:
 
-**CHECK 1 - Propose Lead Time** (`state.go:56-59`):
+**CHECK 1 - Propose Lead Time**:
 - Compares current source chain height with witnessed height plus `ProposeLeadTime`
 - Ensures sufficient confirmations have passed since the order was witnessed
 - Allows time for other validators to receive and process the same Ethereum blocks
 - Prevents premature submission of recently witnessed orders
 
-**CHECK 2 - Resubmit Delay** (`state.go:61-64`):
+**CHECK 2 - Resubmit Delay**:
 - Compares current root height with last submission height plus `OrderResubmitDelay`
 - Prevents rapid resubmission of the same order across consecutive root chain blocks
 - Uses per-order tracking via `LastSubmitHeight` field in witnessed orders
 
-**CHECK 3 - Lock Order Specific Restrictions** (`state.go:66-82`):
+**CHECK 3 - Lock Order Specific Restrictions**:
 - Maintains `lockOrderSubmissions` map tracking when each lock order ID was first submitted
 - Enforces `LockOrderHoldTime` delay between submissions of lock orders with the same ID
-- Prevents duplicate lock order submissions that could lead to double-spending
+- Prevents duplicate lock order submissions
 - Records new submission heights for lock orders upon successful validation
 
-**CHECK 4 - General Submission History** (`state.go:84-96`):
+**CHECK 4 - General Submission History**:
 - Maintains `submissionHistory` map preventing duplicate submissions within the same proposal round
 - Tracks order submissions at specific root heights to prevent immediate resubmission
-- Initializes tracking maps for new orders and records successful submissions
 - Provides final approval for order submission after all other checks pass
-
-The method provides comprehensive protection against duplicate submissions, premature proposals, and consensus timing issues while enabling reliable order resubmission when conditions are met.
-
