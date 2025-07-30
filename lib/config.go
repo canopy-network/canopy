@@ -24,6 +24,7 @@ const (
 const (
 	// FILE NAMES in the 'data directory'
 	ConfigFilePath    = "config.json"        // the file path for the node configuration
+	ChainsFilePath    = "chains.json"        // the file path for the node configuration
 	ValKeyPath        = "validator_key.json" // the file path for the node's private key
 	GenesisFilePath   = "genesis.json"       // the file path for the genesis (first block)
 	ProposalsFilePath = "proposals.json"     // the file path for governance proposal voting configuration
@@ -70,7 +71,25 @@ type ChainConfig struct {
 	Color1Hex       string `json:"color1Hex,omitempty"`       // the primary color for the front end
 	Color2Hex       string `json:"color2Hex,omitempty"`       // the secondary color for the front end
 	Description     string `json:"description,omitempty"`     // description of the chain
-	ConsensusPreset string `json:"consensusPreset,omitempty"` // the consensus preset for the chain
+	ConsensusPreset uint64 `json:"consensusPreset,omitempty"` // the consensus preset for the chain
+}
+
+// DefaultChainConfig() returns the default 'chain configuration'
+func DefaultChainConfig() ChainConfig {
+	return ChainConfig{
+		ChainId:         1,
+		ChainName:       "canopy",
+		ChainSymbol:     "CNPY",
+		Website:         "https://canopynetwork.org",
+		LogoURI:         "https://",
+		BannerURI:       "https://",
+		ExplorerLogoURI: "https://",
+		WalletLogoURI:   "https://",
+		Color1Hex:       "#2c9b5a",
+		Color2Hex:       "#16502e",
+		Description:     "Canopy is a recursive, progressive-sovereignty framework for blockchains",
+		ConsensusPreset: 1,
+	}
 }
 
 // MAIN CONFIG BELOW
@@ -86,7 +105,7 @@ type MainConfig struct {
 	Plugin     bool        `json:"plugin"`     // if an extended binary is utilized in this instance of canopy
 }
 
-// DefaultMainConfig() sets log level to 'info'
+// DefaultMainConfig() returns the default 'main configuration'
 func DefaultMainConfig() MainConfig {
 	return MainConfig{
 		LogLevel: "info", // everything but debug is the default
@@ -166,15 +185,16 @@ func DefaultStateMachineConfig() StateMachineConfig { return StateMachineConfig{
 // - async faults may lead to extended block time
 // - social consensus dictates BlockTime for the protocol - being oo fast or too slow can lead to Non-Signing and Consensus failures
 type ConsensusConfig struct {
-	NewHeightTimeoutMs      int `json:"newHeightTimeoutMS,omitempty"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
-	ElectionTimeoutMS       int `json:"electionTimeoutMS,omitempty"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
-	ElectionVoteTimeoutMS   int `json:"electionVoteTimeoutMS,omitempty"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
-	ProposeTimeoutMS        int `json:"proposeTimeoutMS,omitempty"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
-	ProposeVoteTimeoutMS    int `json:"proposeVoteTimeoutMS,omitempty"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
-	PrecommitTimeoutMS      int `json:"precommitTimeoutMS,omitempty"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
-	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS,omitempty"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
-	CommitTimeoutMS         int `json:"commitTimeoutMS,omitempty"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
-	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS,omitempty"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
+	ConsensusPreset         uint64 `json:"consensusPreset,omitempty"`         // the consensus preset for the chain
+	NewHeightTimeoutMs      int    `json:"newHeightTimeoutMS,omitempty"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
+	ElectionTimeoutMS       int    `json:"electionTimeoutMS,omitempty"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
+	ElectionVoteTimeoutMS   int    `json:"electionVoteTimeoutMS,omitempty"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
+	ProposeTimeoutMS        int    `json:"proposeTimeoutMS,omitempty"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
+	ProposeVoteTimeoutMS    int    `json:"proposeVoteTimeoutMS,omitempty"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
+	PrecommitTimeoutMS      int    `json:"precommitTimeoutMS,omitempty"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
+	PrecommitVoteTimeoutMS  int    `json:"precommitVoteTimeoutMS,omitempty"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
+	CommitTimeoutMS         int    `json:"commitTimeoutMS,omitempty"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
+	RoundInterruptTimeoutMS int    `json:"roundInterruptTimeoutMS,omitempty"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
 }
 
 // DefaultConsensusConfig() configures the block time
@@ -331,6 +351,39 @@ func NewConfigFromFile(filepath string) (Config, error) {
 	if err = json.Unmarshal(fileBytes, &c); err != nil {
 		// exit with error
 		return Config{}, err
+	}
+	// exit
+	return c, nil
+}
+
+// WriteToFile() saves the chains config object to a JSON file
+func (c ChainConfig) WriteToFile(filepath string) error {
+	// convert the config to indented 'pretty' json bytes
+	jsonBytes, err := json.MarshalIndent(c, "", "  ")
+	// if an error occurred during the conversion
+	if err != nil {
+		// exit with error
+		return err
+	}
+	// write the config.json file to the data directory
+	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
+}
+
+// NewChainConfigFromFile() populates a ChainConfig object from a JSON file
+func NewChainConfigFromFile(filepath string) (ChainConfig, error) {
+	// read the file into bytes using
+	fileBytes, err := os.ReadFile(filepath)
+	// if an error occurred
+	if err != nil {
+		// exit with error
+		return ChainConfig{}, err
+	}
+	// define the default config to fill in any blanks in the file
+	c := DefaultChainConfig()
+	// populate the default config with the file bytes
+	if err = json.Unmarshal(fileBytes, &c); err != nil {
+		// exit with error
+		return ChainConfig{}, err
 	}
 	// exit
 	return c, nil
