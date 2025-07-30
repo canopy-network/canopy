@@ -208,3 +208,114 @@ Controls the Oracle's consensus participation and order submission behavior (`li
 - **Gap Detection**: Sequential height validation to identify missed blocks or processing errors
 - **Recovery Support**: Comprehensive state recovery from disk for reliable Oracle restarts
 
+## Detailed Configuration Analysis
+
+### cmd/rpc/oracle/eth Package - Block and Transaction Processing
+
+#### Next Height and Safe Height Usage
+
+The Ethereum block provider implements a sophisticated block processing system centered around height management:
+
+- **Next Height Tracking**: The `nextHeight` field in `EthBlockProvider` (`block_provider.go:60`) tracks the next block to be processed. It's protected by `heightMu` mutex for concurrent access safety and updated atomically in `processBlocks()` at line 297.
+
+- **Safe Height Calculation**: In `processBlocks()` method (`block_provider.go:261-299`), safe height is calculated by subtracting `SafeBlockConfirmations` from the current block height received via WebSocket headers. This ensures only confirmed blocks are processed, protecting against chain reorganizations.
+
+- **Block Processing Loop**: The system processes all blocks from `nextHeight` to `safeHeight` in sequential order, fetching each block via `fetchBlock()`, processing transactions, and sending complete blocks through the unbuffered channel to the Oracle.
+
+#### Transaction Processing for Order Data
+
+Transaction processing follows a multi-stage validation pipeline:
+
+- **ERC20 Detection**: `parseDataForOrders()` in `transaction.go:78-166` examines transaction data to detect ERC20 transfers using the method signature `a9059cbb` and validates data length (68 bytes minimum).
+
+- **Self-Sent Lock Orders**: For transactions where `From()` equals `To()`, the entire transaction data is validated as lock order JSON. For ERC20 transfers with amount 0 sent to self, the extra data beyond the transfer call is validated as lock order JSON.
+
+- **Close Order Processing**: For standard ERC20 transfers, the extra data beyond the transfer parameters is validated as close order JSON and associated with the token transfer information.
+
+- **Transaction Success Validation**: `transactionSuccess()` method (`block_provider.go:389-410`) fetches transaction receipts to ensure only successful on-chain transactions are processed, preventing failed transaction exploitation.
+
+### cmd/rpc/oracle/oracle.go - Core Oracle Operations
+
+#### The run() Method Analysis
+
+The `run()` method (`oracle.go:96-167`) implements the main Oracle processing loop with robust error handling:
+
+- **Order Book Dependency**: Waits for valid order book before processing any blocks, using a 1-second ticker to prevent CPU spinning while waiting for the controller to provide order book data.
+
+- **Height Recovery**: Uses `OracleStateManager.GetLastHeight()` to determine starting height from persistent state, enabling crash recovery and gap detection.
+
+- **Block Validation**: Each received block undergoes sequence validation via `stateManager.ValidateSequence()` to detect gaps and chain reorganizations before processing.
+
+- **Error Handling**: Implements specific error handling for `CodeBlockSequence` (missing blocks) and `CodeChainReorg` (chain reorganizations) with detailed logging for operational monitoring.
+
+- **State Persistence**: After successful block processing, saves state atomically using `stateManager.SaveProcessedBlock()` for reliable crash recovery.
+
+#### Order Validation Methods
+
+**validateOrder() Method**: Performs comprehensive order validation (`oracle.go:180-203`):
+- Ensures witnessed order contains exactly one of lock or close order (not both, not neither)
+- Routes to specialized validation based on order type
+- Validates against corresponding sell order from root chain order book
+
+**validateLockOrder() Method** (`oracle.go:206-215`):
+- Verifies lock order ID matches sell order ID using byte-level comparison
+- Ensures lock order chain ID matches sell order committee
+- Placeholder for additional seller address validation
+
+**validateCloseOrder() Method** (`oracle.go:220-249`):
+- Validates sell order data field matches transaction recipient address (Ethereum-specific)
+- Ensures close order ID matches sell order ID via byte comparison
+- Verifies close order chain ID matches sell order committee
+- Validates ERC20 transfer amount matches sell order requested amount
+- Comprehensive validation against malicious or erroneous off-chain data
+
+#### WitnessedOrders Method Analysis
+
+The `WitnessedOrders()` method (`oracle.go:486-554`) implements the core consensus participation logic:
+
+- **Order Book Iteration**: Iterates through root chain order book to find corresponding witnessed orders in local store
+- **Lock Order Processing**: For unlocked sell orders (BuyerReceiveAddress == nil), searches for witnessed lock orders and applies submission logic via `shouldSubmit()`
+- **Close Order Processing**: For locked sell orders (BuyerReceiveAddress != nil), searches for witnessed close orders and applies submission logic
+- **Submission History**: Updates `LastSubmitHeight` for each submitted order to enable resubmission delay tracking
+- **Atomic Updates**: Writes order updates to disk immediately after marking for submission
+
+#### ValidateProposedOrders Method Analysis
+
+The `ValidateProposedOrders()` method (`oracle.go:329-386`) ensures consensus integrity:
+
+- **Lock Order Validation**: For each proposed lock order, retrieves witnessed order from local store and performs exact equality comparison using `lock.Equals()`
+- **Close Order Validation**: For proposed close orders, constructs comparison close order with committee ID and validates equality
+- **Strict Validation**: Returns validation errors if any proposed order doesn't exactly match witnessed orders, preventing malicious or incorrect proposals from being accepted
+- **Comprehensive Logging**: Provides detailed logging for each validation step to aid in debugging consensus issues
+
+### cmd/rpc/oracle/state.go - Submission Logic
+
+#### The shouldSubmit Method Analysis  
+
+The `shouldSubmit()` method (`state.go:52-99`) implements sophisticated submission control logic with multiple validation layers:
+
+**CHECK 1 - Propose Lead Time** (`state.go:56-59`):
+- Compares current source chain height with witnessed height plus `ProposeLeadTime`
+- Ensures sufficient confirmations have passed since the order was witnessed
+- Allows time for other validators to receive and process the same Ethereum blocks
+- Prevents premature submission of recently witnessed orders
+
+**CHECK 2 - Resubmit Delay** (`state.go:61-64`):
+- Compares current root height with last submission height plus `OrderResubmitDelay`
+- Prevents rapid resubmission of the same order across consecutive root chain blocks
+- Uses per-order tracking via `LastSubmitHeight` field in witnessed orders
+
+**CHECK 3 - Lock Order Specific Restrictions** (`state.go:66-82`):
+- Maintains `lockOrderSubmissions` map tracking when each lock order ID was first submitted
+- Enforces `LockOrderHoldTime` delay between submissions of lock orders with the same ID
+- Prevents duplicate lock order submissions that could lead to double-spending
+- Records new submission heights for lock orders upon successful validation
+
+**CHECK 4 - General Submission History** (`state.go:84-96`):
+- Maintains `submissionHistory` map preventing duplicate submissions within the same proposal round
+- Tracks order submissions at specific root heights to prevent immediate resubmission
+- Initializes tracking maps for new orders and records successful submissions
+- Provides final approval for order submission after all other checks pass
+
+The method provides comprehensive protection against duplicate submissions, premature proposals, and consensus timing issues while enabling reliable order resubmission when conditions are met.
+
