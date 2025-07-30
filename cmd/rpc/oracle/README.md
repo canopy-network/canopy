@@ -56,7 +56,7 @@ sequenceDiagram
 loop Fetch Safe Blocks
     BP->>SC: Fetch block
     SC->>BP: Return block data
-    BP->>O: Send block via channel
+    BP->>O: Send block to Oracle
 end
     
     %% Oracle block processing
@@ -67,7 +67,7 @@ end
     BFT->>O: Request witnessed orders
     O->>O: Check should submit logic
     O->>BFT: Return witnessed orders
-    BFT->>BFT: Produces block with witnessed orders
+    BFT->>BFT: Produce block with witnessed orders
     
     %% Block proposal validation
     BFT->>O: Block proposal validation
