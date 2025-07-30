@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -280,12 +281,19 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	})
 }
 
+// CanopyOrdersResponse holds categorized witnessed orders
+type CanopyOrdersResponse struct {
+	LockOrders  []*types.WitnessedOrder `json:"lock_orders"`
+	CloseOrders []*types.WitnessedOrder `json:"close_orders"`
+}
+
 // CanopyOrders returns canopy orders stored in the order store
 func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// use the standard heightPaginated helper for paginated height requests
 	s.heightPaginated(w, r, func(state *fsm.StateMachine, p *paginatedHeightRequest) (any, lib.ErrorI) {
 		// create order store instance using config data dir path
-		orderStorePath := filepath.Join(s.config.DataDirPath, "oracle", "orders")
+		orderStorePath := filepath.Join(s.config.DataDirPath, "oracle/store")
+		fmt.Println(orderStorePath)
 		orderStore, err := oracle.NewOracleDiskStorage(orderStorePath, s.logger)
 		if err != nil {
 			return nil, lib.ErrNewStore(err)
@@ -300,8 +308,12 @@ func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprout
 		if libErr != nil {
 			return nil, libErr
 		}
-		// collect all witnessed orders
-		allOrders := make([]*types.WitnessedOrder, 0, len(lockOrderIds)+len(closeOrderIds))
+		fmt.Println("CanopyOrders()", lockOrderIds, closeOrderIds)
+		// create response structure to hold categorized orders
+		response := &CanopyOrdersResponse{
+			LockOrders:  make([]*types.WitnessedOrder, 0, len(lockOrderIds)),
+			CloseOrders: make([]*types.WitnessedOrder, 0, len(closeOrderIds)),
+		}
 		// read lock orders
 		for _, orderId := range lockOrderIds {
 			order, readErr := orderStore.ReadOrder(orderId, types.LockOrderType)
@@ -309,7 +321,7 @@ func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprout
 				s.logger.Errorf("Failed to read lock order %x: %v", orderId, readErr)
 				continue
 			}
-			allOrders = append(allOrders, order)
+			response.LockOrders = append(response.LockOrders, order)
 		}
 		// read close orders
 		for _, orderId := range closeOrderIds {
@@ -318,10 +330,10 @@ func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprout
 				s.logger.Errorf("Failed to read close order %x: %v", orderId, readErr)
 				continue
 			}
-			allOrders = append(allOrders, order)
+			response.CloseOrders = append(response.CloseOrders, order)
 		}
-		// return all witnessed orders without pagination
-		return allOrders, nil
+		// return categorized witnessed orders
+		return response, nil
 	})
 }
 
@@ -348,7 +360,6 @@ func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprout
 // 	}
 // 	return false
 // }
-
 
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {

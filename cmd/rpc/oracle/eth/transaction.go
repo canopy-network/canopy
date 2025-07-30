@@ -59,7 +59,7 @@ func NewTransaction(ethTx *ethtypes.Transaction, chainId uint64) (*Transaction, 
 		// set to address
 		tx.to = ethTx.To().Hex()
 	}
-	// validateaddress format
+	// validate address format
 	if !common.IsHexAddress(tx.to) {
 		return nil, ErrInvalidAddress
 	}

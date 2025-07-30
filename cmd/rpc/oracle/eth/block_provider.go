@@ -50,16 +50,16 @@ type OrderValidator interface {
 
 // EthBlockProvider provides ethereum blocks through a channel
 type EthBlockProvider struct {
-	config                 lib.EthBlockProviderConfig // provider configuration
-	blockChan              chan types.BlockI          // channel to send safe blocks
-	erc20TokenCache        *ERC20TokenCache           // erc20 token info cache
-	logger                 lib.LoggerI                // logger for debug and error messages
-	rpcClient              EthereumRpcClient          // rpc client for fetching blocks
-	wsClient               EthereumWsClient           // websocket client for monitoring headers
-	orderValidator         OrderValidator             // order validator
-	nextHeight             *big.Int                   // next block height to be sent through channel
-	chainId                uint64                     // ethereum chain id
-	heightMu               *sync.Mutex                // mutex around next height
+	config          lib.EthBlockProviderConfig // provider configuration
+	blockChan       chan types.BlockI          // channel to send safe blocks
+	erc20TokenCache *ERC20TokenCache           // erc20 token info cache
+	logger          lib.LoggerI                // logger for debug and error messages
+	rpcClient       EthereumRpcClient          // rpc client for fetching blocks
+	wsClient        EthereumWsClient           // websocket client for monitoring headers
+	orderValidator  OrderValidator             // order validator
+	nextHeight      *big.Int                   // next block height to be sent through channel
+	chainId         uint64                     // ethereum chain id
+	heightMu        *sync.Mutex                // mutex around next height
 }
 
 // NewEthBlockProvider creates a new EthBlockProvider instance
@@ -120,7 +120,9 @@ func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Bl
 		// create new Transaction from ethereum transaction
 		tx, err := NewTransaction(ethTx, p.chainId)
 		if err != nil {
-			return nil, err // return error if transaction creation fails
+			p.logger.Errorf("failed to create transaction: %s", height, err)
+			continue
+			// return nil, err // return error if transaction creation fails
 		}
 		// append transaction to block's transaction list
 		block.transactions = append(block.transactions, tx)
@@ -190,7 +192,7 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	rpcClient, err := ethclient.DialContext(ctx, p.config.NodeUrl)
 	if err != nil {
 		// log error and retry
-		p.logger.Errorf("Failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay) * time.Second)
+		p.logger.Errorf("Failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
 		return err
 	}
 	// set rpc client
@@ -202,7 +204,7 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	if err != nil {
 		p.rpcClient.Close()
 		// log error and retry
-		p.logger.Errorf("Failed to connect to websocket client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay) * time.Second)
+		p.logger.Errorf("Failed to connect to websocket client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
 		return err
 	}
 	// set websocket client
@@ -356,6 +358,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	success, err := p.transactionSuccess(ctx, tx)
 	// check for error
 	if err != nil {
+		p.logger.Errorf("Error fetching transaction receipt: %s", err.Error())
 		// there was an error fetching the transaction receipt
 		return err
 	}
