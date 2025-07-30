@@ -150,8 +150,6 @@ Controls the Oracle's consensus participation and order submission behavior (`li
 - **`ErrorReprocessDepth`** (uint64): How far back to reprocess blocks when sequence errors are detected. Enables recovery from chain reorganizations and missed blocks.
 - **`LockOrderHoldTime`** (uint64): Number of root blocks to prevent resubmission of lock orders with the same ID. Prevents duplicate lock order submissions and potential double-spending.
 
-## Detailed Configuration Analysis
-
 ### cmd/rpc/oracle/eth Package - Block and Transaction Processing
 
 #### Next Height and Safe Height Usage
