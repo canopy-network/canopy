@@ -142,7 +142,7 @@ func (m *OracleStateManager) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 		m.log.Errorf("Failed to marshal block state: %v", err)
 		return ErrWriteStateFile(err)
 	}
-	m.log.Debugf("Saved block state for height %d", state.Height)
+	// m.log.Debugf("Saved block state for height %d", state.Height)
 	// write state to file atomically
 	return m.atomicWriteFile(m.stateSaveFile, stateBytes)
 }
