@@ -37,15 +37,6 @@ The Oracle integrates with external block providers through the `BlockProvider` 
 - Transaction parsing and order extraction
 - Integration with Oracle's state management for gap detection and reorg handling
 
-# Order Store Management
-
-The Oracle manages witnessed orders through a persistent store that:
-- Stores validated lock and close orders separately by type
-- Provides atomic read/write operations for order data
-- Maintains submission history with timestamps for resubmission logic
-- Supports cleanup operations based on root chain order book updates
-- Archives processed orders for audit and recovery purposes
-
 ## Sequence Diagram
 
 The following sequence diagram illustrates the core interactions in the Oracle package:
