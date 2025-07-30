@@ -147,24 +147,64 @@ The Oracle participates in the BFT consensus process through two key interfaces:
 
 This is analogous to how a validator node participates in consensus, but with specialized logic for cross-chain order validation.
 
-### 3. Root Chain Synchronization: State Management
-
-- **Order Book Updates**: Receives and processes complete order book state from the root chain
-- **Cleanup Operations**: Removes witnessed orders that are no longer needed based on root chain state
-- **Consistency Validation**: Ensures witnessed orders still match their corresponding root chain entries
-
-## Cross-Chain Security Features
-
-The Oracle system implements several security mechanisms to ensure reliable cross-chain operation:
-
-- **Comprehensive Validation**: Performs strict validation of all witnessed order fields against root chain data
-
 ## Configuration
 
-The Oracle accepts configuration through `lib.OracleConfig` with the following parameters:
+The Oracle system utilizes two primary configuration structures defined in `lib/config.go` that control both Ethereum block monitoring and Oracle consensus behavior. These configurations provide comprehensive safety mechanisms and integrity measures for cross-chain transaction witnessing.
 
-- `OrderStorePath`: Filesystem path to store witnessed orders (default: `$HOME/.canopy/oracle/orders`)
-- `StateSaveFile`: File path for persisting the last processed block height (default: `$HOME/.canopy/oracle/last_block_height.txt`)
-- `LogPath`: Path to store oracle logs (default: `$HOME/.canopy/oracle/log`)
-- `OrderResubmitDelay`: Number of root blocks to wait before resubmitting an order to consensus (default: `2`)
+### EthBlockProviderConfig
+
+Controls how the Oracle connects to and monitors Ethereum blockchain for order transactions (`lib/config.go:288-311`):
+
+- **`NodeUrl`** (string): Ethereum RPC node URL for fetching blocks and transaction receipts. Used by the RPC client for all read operations including block retrieval and transaction validation.
+- **`NodeWSUrl`** (string): Ethereum WebSocket URL for real-time block header notifications. Enables efficient block monitoring by subscribing to new block events.
+- **`EVMChainId`** (uint64): Ethereum chain ID for transaction signature validation. Ensures transaction sender addresses are correctly extracted using the appropriate chain-specific signer.
+- **`RetryDelay`** (int): Connection retry delay in seconds for RPC/WebSocket failures. Prevents rapid reconnection attempts that could overwhelm nodes during network issues.
+- **`SafeBlockConfirmations`** (int): Number of block confirmations required before processing. Provides protection against chain reorganizations by only processing blocks that are unlikely to be reverted.
+- **`StartupBlockDepth`** (uint64): How far back to start processing when no previous height is available. Ensures the Oracle can catch recently witnessed orders after restarts.
+
+### OracleConfig  
+
+Controls the Oracle's consensus participation and order submission behavior (`lib/config.go:313-332`):
+
+- **`StateFile`** (string): Filename for persisting Oracle processing state. Enables recovery of the last processed block height and hash for gap detection and chain reorganization handling.
+- **`OrderResubmitDelay`** (uint64): Number of root chain blocks to wait before resubmitting an order. Prevents duplicate submissions.
+- **`Committee`** (uint64): Committee identifier this Oracle witnesses orders for. Must match the target committee in the root chain order book for proper order validation.
+- **`ProposeLeadTime`** (uint64): Number of source chain blocks to wait before including newly witnessed orders in proposals. This allows a small amount of time for other validators to receive eth blocks should they be behind.
+- **`ErrorReprocessDepth`** (uint64): How far back to reprocess blocks when sequence errors are detected. Enables recovery from chain reorganizations and missed blocks.
+- **`LockOrderHoldTime`** (uint64): Number of root blocks to prevent resubmission of lock orders with the same ID. Prevents duplicate lock order submissions and potential double-spending.
+
+## Key Safety Mechanisms
+
+### cmd/rpc/oracle/eth Package Safety Mechanisms
+
+- **Safe Block Processing**: Uses configurable confirmations (`SafeBlockConfirmations`) to only process blocks unlikely to be reorganized
+- **Transaction Receipt Validation**: Verifies ERC20 transactions were successful on-chain before processing orders to prevent failed transaction exploitation
+- **Connection Resilience**: Automatic retry logic with exponential backoff for RPC/WebSocket connection failures
+- **Concurrent Processing Protection**: Unbuffered channels ensure block processing doesn't outpace consumer capacity
+- **ERC20 Transfer Validation**: Strict parsing of transfer function calls with amount and recipient validation
+- **Order Data Validation**: Multiple validation layers for lock/close order JSON parsing and structure verification
+- **Height Synchronization**: Atomic height management with mutex protection for concurrent access safety
+
+### cmd/rpc/oracle/oracle.go Safety Mechanisms
+
+- **Order Book Synchronization**: Waits for valid order book before processing to prevent validation against stale data
+- **Comprehensive Order Validation**: Multi-layer validation including ID matching, committee verification, and amount validation
+- **State Persistence**: Atomic state saves after successful block processing for crash recovery
+- **Gap Detection**: Validates sequential block processing to detect missed blocks or chain reorganizations
+- **Duplicate Prevention**: Checks for existing orders in store before writing to prevent overwriting
+- **Lock/Close Order Segregation**: Separate handling and validation logic for different order types
+- **Order Book Matching**: Validates witnessed orders against current root chain order book state
+- **Graceful Shutdown**: Context-based cancellation for clean Oracle shutdown
+- **Error Isolation**: Individual transaction processing errors don't halt entire block processing
+
+### cmd/rpc/oracle/state.go Safety Mechanisms
+
+- **Lead Time Enforcement**: Ensures sufficient confirmations have passed before submitting orders (`ProposeLeadTime`)
+- **Resubmission Control**: Prevents rapid resubmission of orders using configurable delays (`OrderResubmitDelay`) 
+- **Lock Order Protection**: Special time-based restrictions for lock orders to prevent duplicate submissions (`LockOrderHoldTime`)
+- **Submission History Tracking**: Maintains in-memory record of order submissions to prevent duplicates within the same proposal
+- **Chain Reorganization Detection**: Validates parent hash continuity to detect chain reorgs
+- **Atomic State Persistence**: Write-and-move pattern for crash-safe state file updates
+- **Gap Detection**: Sequential height validation to identify missed blocks or processing errors
+- **Recovery Support**: Comprehensive state recovery from disk for reliable Oracle restarts
 
