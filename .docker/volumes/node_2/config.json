@@ -48,5 +48,5 @@
   "individualMaxTxSize": 4000,
   "dropPercentage": 35,
   "metricsEnabled": true,
-  "prometheusAddress": "0.0.0.0:9090"
+  "prometheusAddress": "0.0.0.0:9091"
 }
