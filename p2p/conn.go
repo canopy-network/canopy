@@ -64,6 +64,7 @@ type MultiConn struct {
 	close          sync.Once                   // flag to identify if MultiConn is closed
 	addedToPeerSet atomic.Bool                 // flag to identify if MultiConn is added to the peer list and should be removed
 	log            lib.LoggerI                 // logging
+	pooled         atomic.Bool                 // whether the connection has been pooled
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -121,6 +122,23 @@ func (c *MultiConn) Stop() {
 			stream.cleanup()
 		}
 	})
+}
+
+// isHealthyForPooling checks if the connection is suitable for returning to the pool
+func (c *MultiConn) isHealthyForPooling() bool {
+	// don't pool if connection is nil
+	if c.conn == nil {
+		return false
+	}
+	// don't pool if address is nil (need peer identity for secure pooling)
+	if c.Address == nil || len(c.Address.PublicKey) == 0 {
+		return false
+	}
+	// don't pool again if it was already pooled
+	if c.pooled.Load() {
+		return false
+	}
+	return true
 }
 
 // Send() queues the sending of a message to a specific Stream
@@ -247,8 +265,12 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 		} else {
 			c.log.Debug(err.Error())
 		}
-		// stop the multi-conn
-		c.Stop()
+
+		// Try to return authenticated connection to pool if it exists and has peer identity
+		if healthy := c.isHealthyForPooling(); !healthy {
+			// stop the multi-conn
+			c.Stop()
+		}
 	})
 }
 
@@ -345,6 +367,7 @@ func (s *Stream) queueSend(p *Packet) bool {
 	case s.sendQueue <- p: // enqueue to the back of the line
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
+		s.logger.Warnf("Queue send timeout for topic %s - message DROPPED", lib.Topic_name[int32(s.topic)])
 		return false
 	}
 }

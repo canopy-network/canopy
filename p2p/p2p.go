@@ -36,8 +36,9 @@ type P2P struct {
 	listener               net.Listener
 	channels               lib.Channels
 	meta                   *lib.PeerMeta
-	PeerSet                          // active set
-	book                   *PeerBook // not active set
+	PeerSet                                             // active set
+	book                   *PeerBook                    // not active set
+	pool                   *AuthenticatedConnectionPool // authenticated connection pool
 	MustConnectsReceiver   chan []*lib.PeerAddress
 	maxMembersPerCommittee int
 	bannedIPs              []net.IPAddr // banned IPs (non-string)
@@ -70,6 +71,8 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 	ReadTimeout = WriteTimeout * 2
 	// set the peer meta
 	meta := &lib.PeerMeta{NetworkId: c.NetworkID, ChainId: c.ChainId}
+	// create authenticated connection pool
+	pool := NewAuthConnectionPool(l)
 	// return the p2p structure
 	return &P2P{
 		privateKey:             p,
@@ -77,8 +80,9 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		metrics:                m,
 		config:                 c,
 		meta:                   meta.Sign(p),
-		PeerSet:                NewPeerSet(c, p, m, l),
+		PeerSet:                NewPeerSet(c, p, m, l, pool),
 		book:                   peerBook,
+		pool:                   pool,
 		MustConnectsReceiver:   make(chan []*lib.PeerAddress, maxChanSize),
 		maxMembersPerCommittee: int(maxMembersPerCommittee),
 		bannedIPs:              bannedIPs,
@@ -111,6 +115,10 @@ func (p *P2P) Stop() {
 	}
 	// gracefully closes all the existing connections
 	p.PeerSet.Stop()
+	// close the connection pool
+	if p.pool != nil {
+		p.pool.Close()
+	}
 }
 
 // ListenForInboundPeers() starts a rate-limited tcp listener service to accept inbound peers
@@ -222,13 +230,23 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 	// only log if not immediate disconnect
 	if !disconnect {
 		p.log.Debugf("Dialing %s@%s", lib.BytesToString(address.PublicKey), address.NetAddress)
+		// try to get a pooled authenticated connection first (only for persistent connections)
+		if pooledMultiConn, pooledPeerInfo, ok := p.pool.Get(address.PublicKey); ok {
+			peer := &Peer{
+				conn:     pooledMultiConn,
+				PeerInfo: pooledPeerInfo,
+			}
+			return p.PeerSet.Add(peer)
+		}
 	}
-	// try to establish the basic tcp connection
-	conn, er := net.DialTimeout(transport, address.NetAddress, dialTimeout)
-	if er != nil {
-		return ErrFailedDial(er)
+
+	// create new TCP connection (no pre-auth pooling for security)
+	conn, err := net.DialTimeout(transport, address.NetAddress, dialTimeout)
+	if err != nil {
+		return ErrFailedDial(err)
 	}
-	// try to use the basic tcp connection to establish a peer
+
+	// try to use the tcp connection to establish an authenticated peer
 	return p.AddPeer(conn, &lib.PeerInfo{Address: address, IsOutbound: true}, disconnect, strictPublicKey)
 }
 
@@ -252,6 +270,21 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	}()
 	// log the peer add attempt
 	p.log.Debugf("Try Add peer: %s@%s", lib.BytesToString(connection.Address.PublicKey), info.Address.NetAddress)
+
+	// check if we have a pooled connection for this authenticated peer (works for both inbound and outbound)
+	if !disconnect {
+		if pooledMultiConn, pooledPeerInfo, ok := p.pool.Get(connection.Address.PublicKey); ok {
+			// close the new handshake connection since a pooled connection is available
+			connection.Stop()
+			// add the pooled connection back to peer set using the stored PeerInfo
+			peer := &Peer{
+				conn:     pooledMultiConn,
+				PeerInfo: pooledPeerInfo,
+			}
+			return p.PeerSet.Add(peer)
+		}
+	}
+
 	// if peer is outbound, ensure the public key matches who we expected to dial
 	// this validation should just be done if the peer is from config not the peer book
 	if info.IsOutbound && strictPublicKey {
@@ -281,11 +314,8 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		}
 	}
 	// check if is trusted
-	for _, item := range p.config.TrustedPeerIDs {
-		if item == lib.BytesToString(info.Address.PublicKey) {
-			info.IsTrusted = true
-			break
-		}
+	if slices.Contains(p.config.TrustedPeerIDs, lib.BytesToString(info.Address.PublicKey)) {
+		info.IsTrusted = true
 	}
 	// check if is banned
 	for _, item := range p.config.BannedPeerIDs {

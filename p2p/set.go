@@ -27,9 +27,10 @@ type PeerSet struct {
 	config       lib.P2PConfig      // p2p configuration
 	publicKey    []byte             // self public key
 	logger       lib.LoggerI
+	pool         *AuthenticatedConnectionPool // authenticated connection pool
 }
 
-func NewPeerSet(c lib.Config, priv crypto.PrivateKeyI, metrics *lib.Metrics, logger lib.LoggerI) PeerSet {
+func NewPeerSet(c lib.Config, priv crypto.PrivateKeyI, metrics *lib.Metrics, logger lib.LoggerI, pool *AuthenticatedConnectionPool) PeerSet {
 	return PeerSet{
 		m:           make(map[string]*Peer),
 		mustConnect: make([]*lib.PeerAddress, 0),
@@ -40,6 +41,7 @@ func NewPeerSet(c lib.Config, priv crypto.PrivateKeyI, metrics *lib.Metrics, log
 		config:      c.P2PConfig,
 		publicKey:   priv.PublicKey().Bytes(),
 		logger:      logger,
+		pool:        pool,
 	}
 }
 
@@ -281,6 +283,11 @@ func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
 
 // remove() decrements the in/out counters, and deletes it from the set
 func (ps *PeerSet) remove(peer *Peer) {
+	// Try to return authenticated connection to pool if it exists and has peer identity
+	if healthy := peer.conn.isHealthyForPooling(); healthy {
+		ps.pool.Put(peer.conn, peer.PeerInfo)
+	}
+
 	if !peer.IsTrusted && !peer.IsMustConnect {
 		if peer.IsOutbound {
 			ps.outbound--
