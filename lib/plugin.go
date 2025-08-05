@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"reflect"
@@ -17,16 +18,16 @@ import (
 // PluginCompatibleFSM: defines the 'expected' interface that plugins utilize to read and write data from the FSM store
 type PluginCompatibleFSM interface {
 	// StateRead() executes a 'read request' to the state store
-	StateRead(request PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
+	StateRead(request *PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
 	// StateWrite() executes a 'write request' to the state store
-	StateWrite(request PluginStateWriteRequest) (response PluginStateWriteResponse, err ErrorI)
+	StateWrite(request *PluginStateWriteRequest) (response PluginStateWriteResponse, err ErrorI)
 }
 
 // Plugin defines the 'VM-less' extension of the Finite State Machine
 type Plugin struct {
 	config      *PluginConfig                         // the plugin configuration
 	conn        net.Conn                              // the underlying unix sock file connection
-	pending     map[uint64]chan isPluginToFSM_Payload // the outstanding requests that
+	pending     map[uint64]chan isPluginToFSM_Payload // the outstanding requests from the FSM
 	requestFSMs map[uint64]PluginCompatibleFSM        // maps request IDs to their FSM context for concurrent operations
 	l           sync.Mutex                            // thread safety
 	log         LoggerI                               // the logger associated with the plugin
@@ -43,11 +44,7 @@ func NewPlugin(conn net.Conn, log LoggerI) (p *Plugin) {
 		log:         log,
 	}
 	// begin the listening service
-	go func() {
-		if err := p.ListenForInbound(); err != nil {
-			p.log.Fatal(err.Error())
-		}
-	}()
+	go p.ListenForInbound()
 	// exit
 	return
 }
@@ -163,41 +160,49 @@ func (p *Plugin) SupportsTransaction(name string) bool {
 }
 
 // ListenForInbound() routes inbound requests from the plugin
-func (p *Plugin) ListenForInbound() ErrorI {
+func (p *Plugin) ListenForInbound() {
 	for {
 		// block until a message is received
 		msg := new(PluginToFSM)
 		if err := p.receiveProtoMsg(msg); err != nil {
-			return err
+			log.Fatal(err.Error())
 		}
-		// route the message
-		switch payload := msg.Payload.(type) {
-		// response to a request made by the FSM
-		case *PluginToFSM_Genesis, *PluginToFSM_Begin, *PluginToFSM_Deliver, *PluginToFSM_End:
-			return p.handlePluginResponse(msg)
-		// inbound requests from the plugin
-		case *PluginToFSM_Config:
-			return p.handleConfigMessage(payload.Config)
-		case *PluginToFSM_StateRead:
-			return p.handleStateReadRequest(msg)
-		case *PluginToFSM_StateWrite:
-			return p.handleStateWriteRequest(msg)
-		default:
-			return ErrInvalidPluginToFSMMessage(reflect.TypeOf(payload))
-		}
+		go func() {
+			if err := func() ErrorI {
+				// route the message
+				switch payload := msg.Payload.(type) {
+				// response to a request made by the FSM
+				case *PluginToFSM_Genesis, *PluginToFSM_Begin, *PluginToFSM_Check, *PluginToFSM_Deliver, *PluginToFSM_End:
+					return p.handlePluginResponse(msg)
+				// inbound requests from the plugin
+				case *PluginToFSM_Config:
+					return p.handleConfigMessage(msg)
+				case *PluginToFSM_StateRead:
+					return p.handleStateReadRequest(msg)
+				case *PluginToFSM_StateWrite:
+					return p.handleStateWriteRequest(msg)
+				default:
+					return ErrInvalidPluginToFSMMessage(reflect.TypeOf(payload))
+				}
+			}(); err != nil {
+				log.Fatal(err.Error())
+			}
+		}()
 	}
 }
 
 // HandleConfigMessage() handles an inbound configuration message
-func (p *Plugin) handleConfigMessage(config *PluginConfig) ErrorI {
+func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
+	m, ok := msg.Payload.(*PluginToFSM_Config)
 	// validate the config
-	if config == nil || config.Name == "" || config.Id == 0 || config.Version == 0 {
+	if !ok || m.Config == nil || m.Config.Name == "" || m.Config.Id == 0 || m.Config.Version == 0 {
 		return ErrInvalidPluginConfig()
 	}
 	// set config
-	p.config = config
+	p.config = m.Config
 	// ack the config - send FSMToPlugin config response
 	response := &FSMToPlugin{
+		Id:      msg.Id,
 		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{}},
 	}
 	return p.sendProtoMsg(response)
@@ -210,7 +215,7 @@ func (p *Plugin) handleStateReadRequest(msg *PluginToFSM) ErrorI {
 	fsm := p.requestFSMs[msg.Id]
 	p.l.Unlock()
 	// forward request to the appropriate FSM
-	response, err := fsm.StateRead(*msg.GetStateRead())
+	response, err := fsm.StateRead(msg.GetStateRead())
 	if err != nil {
 		response.Error = NewPluginError(err)
 	}
@@ -230,7 +235,7 @@ func (p *Plugin) handleStateWriteRequest(msg *PluginToFSM) ErrorI {
 	fsm := p.requestFSMs[msg.Id]
 	p.l.Unlock()
 	// forward request to the appropriate FSM
-	response, err := fsm.StateWrite(*msg.GetStateWrite())
+	response, err := fsm.StateWrite(msg.GetStateWrite())
 	if err != nil {
 		response.Error = NewPluginError(err)
 	}

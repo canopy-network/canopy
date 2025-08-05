@@ -603,9 +603,9 @@ func (s *StateMachine) calculateRewardPerCommittee(t *testing.T, numberOfSubsidi
 	govParams, err := s.GetParamsGov()
 	require.NoError(t, err)
 	// calculate the number of halvenings
-	halvings := float64(s.height / uint64(BlocksPerHalvening))
+	halvings := float64(s.height / s.Config.BlocksPerHalvening)
 	// each halving, the reward is divided by 2
-	totalMintAmount := uint64(float64(InitialTokensPerBlock) / (math.Pow(2, halvings)))
+	totalMintAmount := uint64(float64(s.Config.InitialMintPerBlock) / (math.Pow(2, halvings)))
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut

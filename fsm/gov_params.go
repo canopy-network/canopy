@@ -29,13 +29,6 @@ const (
 	RejectAllProposals  = GovProposalVoteConfig_REJECT_ALL
 )
 
-var (
-	// the number of tokens in micro denomination that are initially (before halvenings) minted per block
-	InitialTokensPerBlock = 80 * 1000000 // 80 CNPY
-	// the number of blocks between each halvening (block reward is cut in half) event
-	BlocksPerHalvening = 3150000 // ~ 2 years - 20 second blocks
-)
-
 // ParamSpace is a distinct, isolated category within the overarching Params structure
 type ParamSpace interface {
 	Check() lib.ErrorI

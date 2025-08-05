@@ -22,7 +22,7 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 	// if the transaction is meant for the plugin
 	if result.plugin {
 		// route to plugin
-		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: transaction})
+		resp, e := s.Plugin.DeliverTx(s, &lib.PluginDeliverRequest{Tx: result.tx})
 		// handle error
 		if err = e; err != nil {
 			return nil, err
@@ -78,7 +78,7 @@ func (s *StateMachine) CheckTx(transaction []byte, txHash string, batchVerifier 
 	// if the transaction is meant for the plugin
 	if s.Plugin.SupportsTransaction(tx.MessageType) {
 		// execute check tx on the plugin
-		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: transaction})
+		resp, e := s.Plugin.CheckTx(s, &lib.PluginCheckRequest{Tx: tx})
 		if err = e; err != nil {
 			return
 		}

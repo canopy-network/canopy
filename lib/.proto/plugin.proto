@@ -2,7 +2,23 @@ syntax = "proto3";
 
 package types;
 option go_package = "github.com/canopy-network/canopy/lib";
+import "tx.proto";
 
+// *****************************************************************************************************
+// This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
+//
+// Protobuf is a language-neutral, platform-neutral serialization format. It allows users
+// to define objects in a way that’s both efficient to store and fast to transmit over the network.
+// These definitions are compiled into code that *enables different systems and programming languages
+// to communicate in a byte-perfect manner*
+//
+// To update these structures, make changes to the source .proto files, then recompile
+// to regenerate this file.
+// These auto-generated files are easily recognized by checking for a `.pb.go` ending
+// *****************************************************************************************************
+//_
+//_
+//_
 // FSMToPlugin is the outbound message to the plugin from the main FSM (fsm -> plugin)
 message FSMToPlugin {
   // id: the unique ID of the request
@@ -85,7 +101,7 @@ message PluginBeginRequest {}
 message PluginBeginResponse { PluginError error = 99; }
 
 // PluginCheckRequest carries a transaction to be checked
-message PluginCheckRequest {bytes tx = 1;}
+message PluginCheckRequest { Transaction tx = 1; }
 
 // PluginCheckResponse acknowledges transaction check
 message PluginCheckResponse {
@@ -98,13 +114,13 @@ message PluginCheckResponse {
 }
 
 // PluginDeliverRequest carries a transaction to be processed
-message PluginDeliverRequest {bytes tx = 1;}
+message PluginDeliverRequest {Transaction tx = 1; }
 
 // PluginDeliverResponse acknowledges transaction delivery
 message PluginDeliverResponse {PluginError error = 99;}
 
 // PluginEndRequest signals end of the current block
-message PluginEndRequest {}
+message PluginEndRequest { bytes proposer_address = 1; }
 
 // PluginEndResponse acknowledges end block execution
 message PluginEndResponse {PluginError error = 99;}

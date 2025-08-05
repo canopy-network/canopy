@@ -24,7 +24,7 @@ const (
 const (
 	// FILE NAMES in the 'data directory'
 	ConfigFilePath    = "config.json"        // the file path for the node configuration
-	ChainsFilePath    = "chains.json"        // the file path for the node configuration
+	ChainsFilePath    = "chain.json"         // the file path for the node configuration
 	ValKeyPath        = "validator_key.json" // the file path for the node's private key
 	GenesisFilePath   = "genesis.json"       // the file path for the genesis (first block)
 	ProposalsFilePath = "proposals.json"     // the file path for governance proposal voting configuration
@@ -42,6 +42,7 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
+	ChainConfig        // configuration for the chain
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -60,35 +61,39 @@ func DefaultConfig() Config {
 
 // CHAIN CONFIG BELOW
 type ChainConfig struct {
-	ChainId         uint64 `json:"chainId,omitempty"`         // the unique identifier of the chain (1 for CNPY)
-	ChainName       string `json:"name,omitempty"`            // the name of the chain (Canopy)
-	ChainSymbol     string `json:"symbol,omitempty"`          // the ticker of the chain (like CNPY)
-	Website         string `json:"website,omitempty"`         // the website of the chain
-	LogoURI         string `json:"logoURI,omitempty"`         // the uri where the logo is located
-	BannerURI       string `json:"bannerURI,omitempty"`       // the uri where the banner is located
-	ExplorerLogoURI string `json:"explorerLogoURI,omitempty"` // the banner for the explorer
-	WalletLogoURI   string `json:"walletLogoURI,omitempty"`   // the banner for the wallet
-	Color1Hex       string `json:"color1Hex,omitempty"`       // the primary color for the front end
-	Color2Hex       string `json:"color2Hex,omitempty"`       // the secondary color for the front end
-	Description     string `json:"description,omitempty"`     // description of the chain
-	ConsensusPreset uint64 `json:"consensusPreset,omitempty"` // the consensus preset for the chain
+	ChainId             uint64 `json:"chainId,omitempty"`             // the unique identifier of the chain (1 for CNPY)
+	ChainName           string `json:"name,omitempty"`                // the name of the chain (Canopy)
+	ChainSymbol         string `json:"symbol,omitempty"`              // the ticker of the chain (like CNPY)
+	Website             string `json:"website,omitempty"`             // the website of the chain
+	LogoURI             string `json:"logoURI,omitempty"`             // the uri where the logo is located
+	BannerURI           string `json:"bannerURI,omitempty"`           // the uri where the banner is located
+	ExplorerLogoURI     string `json:"explorerLogoURI,omitempty"`     // the banner for the explorer
+	WalletLogoURI       string `json:"walletLogoURI,omitempty"`       // the banner for the wallet
+	Color1Hex           string `json:"color1Hex,omitempty"`           // the primary color for the front end
+	Color2Hex           string `json:"color2Hex,omitempty"`           // the secondary color for the front end
+	Description         string `json:"description,omitempty"`         // description of the chain
+	ConsensusPreset     uint64 `json:"consensusPreset,omitempty"`     // the consensus preset for the chain
+	InitialMintPerBlock uint64 `json:"initialMintPerBlock,omitempty"` // the starting number of mint per block
+	BlocksPerHalvening  uint64 `json:"blocksPerHalvening,omitempty"`  // the amount of blocks per halvening (0) to disable
 }
 
 // DefaultChainConfig() returns the default 'chain configuration'
 func DefaultChainConfig() ChainConfig {
 	return ChainConfig{
-		ChainId:         1,
-		ChainName:       "canopy",
-		ChainSymbol:     "CNPY",
-		Website:         "https://canopynetwork.org",
-		LogoURI:         "https://",
-		BannerURI:       "https://",
-		ExplorerLogoURI: "https://",
-		WalletLogoURI:   "https://",
-		Color1Hex:       "#2c9b5a",
-		Color2Hex:       "#16502e",
-		Description:     "Canopy is a recursive, progressive-sovereignty framework for blockchains",
-		ConsensusPreset: 1,
+		ChainId:             1,
+		ChainName:           "canopy",
+		ChainSymbol:         "CNPY",
+		Website:             "https://canopynetwork.org",
+		LogoURI:             "https://",
+		BannerURI:           "https://",
+		ExplorerLogoURI:     "https://",
+		WalletLogoURI:       "https://",
+		Color1Hex:           "#2c9b5a",
+		Color2Hex:           "#16502e",
+		Description:         "Canopy is a recursive, progressive-sovereignty framework for blockchains",
+		ConsensusPreset:     1,
+		InitialMintPerBlock: 80 * 1000000,
+		BlocksPerHalvening:  3150000,
 	}
 }
 
@@ -96,7 +101,6 @@ func DefaultChainConfig() ChainConfig {
 
 type MainConfig struct {
 	LogLevel   string      `json:"logLevel"`   // any level includes the levels above it: debug < info < warning < error
-	ChainId    uint64      `json:"chainId"`    // the identifier of this particular chain within a single 'network id'
 	SleepUntil uint64      `json:"sleepUntil"` // allows coordinated 'wake-ups' for genesis or chain halt events
 	RootChain  []RootChain `json:"rootChain"`  // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
 	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
@@ -115,10 +119,9 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:     true,          // run the VDF by default
-		ChainId:    CanopyChainId, // default chain url is 1
-		Headless:   false,         // serve the web wallet and block explorer by default
-		AutoUpdate: true,          // set it as default while in inmature state
+		RunVDF:     true,  // run the VDF by default
+		Headless:   false, // serve the web wallet and block explorer by default
+		AutoUpdate: true,  // set it as default while in inmature state
 	}
 }
 
@@ -185,16 +188,15 @@ func DefaultStateMachineConfig() StateMachineConfig { return StateMachineConfig{
 // - async faults may lead to extended block time
 // - social consensus dictates BlockTime for the protocol - being oo fast or too slow can lead to Non-Signing and Consensus failures
 type ConsensusConfig struct {
-	ConsensusPreset         uint64 `json:"consensusPreset,omitempty"`         // the consensus preset for the chain
-	NewHeightTimeoutMs      int    `json:"newHeightTimeoutMS,omitempty"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
-	ElectionTimeoutMS       int    `json:"electionTimeoutMS,omitempty"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
-	ElectionVoteTimeoutMS   int    `json:"electionVoteTimeoutMS,omitempty"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
-	ProposeTimeoutMS        int    `json:"proposeTimeoutMS,omitempty"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
-	ProposeVoteTimeoutMS    int    `json:"proposeVoteTimeoutMS,omitempty"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
-	PrecommitTimeoutMS      int    `json:"precommitTimeoutMS,omitempty"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
-	PrecommitVoteTimeoutMS  int    `json:"precommitVoteTimeoutMS,omitempty"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
-	CommitTimeoutMS         int    `json:"commitTimeoutMS,omitempty"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
-	RoundInterruptTimeoutMS int    `json:"roundInterruptTimeoutMS,omitempty"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
+	NewHeightTimeoutMs      int `json:"newHeightTimeoutMS,omitempty"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
+	ElectionTimeoutMS       int `json:"electionTimeoutMS,omitempty"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
+	ElectionVoteTimeoutMS   int `json:"electionVoteTimeoutMS,omitempty"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
+	ProposeTimeoutMS        int `json:"proposeTimeoutMS,omitempty"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
+	ProposeVoteTimeoutMS    int `json:"proposeVoteTimeoutMS,omitempty"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
+	PrecommitTimeoutMS      int `json:"precommitTimeoutMS,omitempty"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
+	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS,omitempty"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
+	CommitTimeoutMS         int `json:"commitTimeoutMS,omitempty"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
+	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS,omitempty"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
 }
 
 // DefaultConsensusConfig() configures the block time

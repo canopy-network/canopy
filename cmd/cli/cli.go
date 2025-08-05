@@ -55,7 +55,7 @@ func init() {
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
 	config, chainConfig, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	config.ChainId, config.ConsensusPreset = chainConfig.ChainId, chainConfig.ConsensusPreset
+	config.ChainConfig = chainConfig
 	l = lib.NewLogger(lib.LoggerConfig{
 		Level:      config.GetLogLevel(),
 		Structured: config.Structured,
@@ -164,7 +164,7 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 			log.Fatal(err.Error())
 		}
 	}
-	// make the chains.json file if missing
+	// make the chain.json file if missing
 	chainsFilePath := filepath.Join(dataDirPath, lib.ChainsFilePath)
 	if _, err := os.Stat(chainsFilePath); errors.Is(err, os.ErrNotExist) {
 		log.Infof("Creating %s file", lib.ChainsFilePath)

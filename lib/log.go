@@ -64,10 +64,10 @@ var (
 
 // LoggerConfig holds configuration settings for the logger, including logging level and output writer
 type LoggerConfig struct {
-	Level      int32 `json:"level"`         // logging level
-	Structured bool  `json:"logStructured"` // output structured logging for observability tooling
-	JSON       bool  `json:"logJSON"`       // output JSON formatted logs, only works if structured logging is enabled
-	Out        io.Writer
+	Level      int32     `json:"-"`             // logging level
+	Structured bool      `json:"logStructured"` // output structured logging for observability tooling
+	JSON       bool      `json:"logJSON"`       // output JSON formatted logs, only works if structured logging is enabled
+	Out        io.Writer `json:"-"`
 }
 
 // Logger is the concrete implementation of LoggerI, managing log output based on configuration

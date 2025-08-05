@@ -12,13 +12,12 @@ import (
 
 // FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
-	daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
+	daoCut, totalMintAmount, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
-		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
-			return nil
-		}
 		return err
 	}
+	// log total mint
+	s.log.Infof("Total mint amount: %d | Mint per committee: %d | DAO cut: %d", totalMintAmount, mintAmountPerCommittee, daoCut)
 	// mint to the DAO account
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
@@ -55,16 +54,14 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 		subsidizedChainIds = append(subsidizedChainIds, chainId)
 	}
 	// calculate the number of halvenings
-	halvenings := s.height / uint64(BlocksPerHalvening)
+	var halvenings uint64
+	if s.Config.BlocksPerHalvening > 0 {
+		halvenings = s.height / s.Config.BlocksPerHalvening
+	}
 	// each halving, the reward is divided by 2
-	totalMintAmount := uint64(InitialTokensPerBlock >> halvenings)
+	totalMintAmount := s.Config.InitialMintPerBlock >> halvenings
 	// define a convenience variable for the number of subsidized committees
 	subsidizedCount := uint64(len(subsidizedChainIds))
-	// if there are no subsidized committees or no mint amount
-	if subsidizedCount == 0 || totalMintAmount == 0 {
-		err = lib.ErrNoSubsidizedCommittees(chainId)
-		return
-	}
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
@@ -73,7 +70,9 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 	// calculate the amount given to each qualifying committee
 	// mintAmountPerCommittee may truncate, but that's expected,
 	// less mint will be created and effectively 'burned'
-	mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
+	if subsidizedCount > 0 {
+		mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
+	}
 
 	return daoCut, totalMintAmount, mintAmountPerCommittee, nil
 }

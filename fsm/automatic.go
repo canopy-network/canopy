@@ -33,15 +33,21 @@ func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI
 		// the byzantine evidence is handled at `Transaction Level` on the root
 		// chain with a HandleMessageCertificateResults
 		if s.Config.ChainId != rootChainId {
-			return s.HandleCertificateResults(lastCertificate, nil)
+			if err = s.HandleCertificateResults(lastCertificate, nil); err != nil {
+				return err
+			}
+		} else {
+			var committee lib.ValidatorSet
+			// if is root-chain: load the committee from state as the certificate result
+			// will match the evidence and there's no Transaction to HandleMessageCertificateResults
+			committee, err = s.LoadCommittee(s.Config.ChainId, s.Height()-1)
+			if err != nil {
+				return err
+			}
+			if err = s.HandleCertificateResults(lastCertificate, &committee); err != nil {
+				return err
+			}
 		}
-		// if is root-chain: load the committee from state as the certificate result
-		// will match the evidence and there's no Transaction to HandleMessageCertificateResults
-		committee, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
-		if err != nil {
-			return err
-		}
-		return s.HandleCertificateResults(lastCertificate, &committee)
 	}
 	// execute plugin begin block
 	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{})
@@ -88,7 +94,7 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 		return
 	}
 	// execute plugin end block
-	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{})
+	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{ProposerAddress: proposerAddress})
 	// handle error
 	if err != nil {
 		return err
