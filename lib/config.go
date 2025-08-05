@@ -24,6 +24,7 @@ const (
 const (
 	// FILE NAMES in the 'data directory'
 	ConfigFilePath    = "config.json"        // the file path for the node configuration
+	ChainsFilePath    = "chain.json"         // the file path for the node configuration
 	ValKeyPath        = "validator_key.json" // the file path for the node's private key
 	GenesisFilePath   = "genesis.json"       // the file path for the genesis (first block)
 	ProposalsFilePath = "proposals.json"     // the file path for governance proposal voting configuration
@@ -41,6 +42,7 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
+	ChainConfig        // configuration for the chain
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -59,25 +61,46 @@ func DefaultConfig() Config {
 
 // CHAIN CONFIG BELOW
 type ChainConfig struct {
-	ChainId         uint64 `json:"chainId,omitempty"`         // the unique identifier of the chain (1 for CNPY)
-	ChainName       string `json:"name,omitempty"`            // the name of the chain (Canopy)
-	ChainSymbol     string `json:"symbol,omitempty"`          // the ticker of the chain (like CNPY)
-	Website         string `json:"website,omitempty"`         // the website of the chain
-	LogoURI         string `json:"logoURI,omitempty"`         // the uri where the logo is located
-	BannerURI       string `json:"bannerURI,omitempty"`       // the uri where the banner is located
-	ExplorerLogoURI string `json:"explorerLogoURI,omitempty"` // the banner for the explorer
-	WalletLogoURI   string `json:"walletLogoURI,omitempty"`   // the banner for the wallet
-	Color1Hex       string `json:"color1Hex,omitempty"`       // the primary color for the front end
-	Color2Hex       string `json:"color2Hex,omitempty"`       // the secondary color for the front end
-	Description     string `json:"description,omitempty"`     // description of the chain
-	ConsensusPreset string `json:"consensusPreset,omitempty"` // the consensus preset for the chain
+	ChainId             uint64 `json:"chainId,omitempty"`             // the unique identifier of the chain (1 for CNPY)
+	ChainName           string `json:"name,omitempty"`                // the name of the chain (Canopy)
+	ChainSymbol         string `json:"symbol,omitempty"`              // the ticker of the chain (like CNPY)
+	Website             string `json:"website,omitempty"`             // the website of the chain
+	LogoURI             string `json:"logoURI,omitempty"`             // the uri where the logo is located
+	BannerURI           string `json:"bannerURI,omitempty"`           // the uri where the banner is located
+	ExplorerLogoURI     string `json:"explorerLogoURI,omitempty"`     // the banner for the explorer
+	WalletLogoURI       string `json:"walletLogoURI,omitempty"`       // the banner for the wallet
+	Color1Hex           string `json:"color1Hex,omitempty"`           // the primary color for the front end
+	Color2Hex           string `json:"color2Hex,omitempty"`           // the secondary color for the front end
+	Description         string `json:"description,omitempty"`         // description of the chain
+	ConsensusPreset     uint64 `json:"consensusPreset,omitempty"`     // the consensus preset for the chain
+	InitialMintPerBlock uint64 `json:"initialMintPerBlock,omitempty"` // the starting number of mint per block
+	BlocksPerHalvening  uint64 `json:"blocksPerHalvening,omitempty"`  // the amount of blocks per halvening (0) to disable
+}
+
+// DefaultChainConfig() returns the default 'chain configuration'
+func DefaultChainConfig() ChainConfig {
+	return ChainConfig{
+		ChainId:             1,
+		ChainName:           "canopy",
+		ChainSymbol:         "CNPY",
+		Website:             "https://canopynetwork.org",
+		LogoURI:             "https://",
+		BannerURI:           "https://",
+		ExplorerLogoURI:     "https://",
+		WalletLogoURI:       "https://",
+		Color1Hex:           "#2c9b5a",
+		Color2Hex:           "#16502e",
+		Description:         "Canopy is a recursive, progressive-sovereignty framework for blockchains",
+		ConsensusPreset:     1,
+		InitialMintPerBlock: 80 * 1000000,
+		BlocksPerHalvening:  3150000,
+	}
 }
 
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
 	LogLevel   string      `json:"logLevel"`   // any level includes the levels above it: debug < info < warning < error
-	ChainId    uint64      `json:"chainId"`    // the identifier of this particular chain within a single 'network id'
 	SleepUntil uint64      `json:"sleepUntil"` // allows coordinated 'wake-ups' for genesis or chain halt events
 	RootChain  []RootChain `json:"rootChain"`  // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
 	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
@@ -86,7 +109,7 @@ type MainConfig struct {
 	Plugin     bool        `json:"plugin"`     // if an extended binary is utilized in this instance of canopy
 }
 
-// DefaultMainConfig() sets log level to 'info'
+// DefaultMainConfig() returns the default 'main configuration'
 func DefaultMainConfig() MainConfig {
 	return MainConfig{
 		LogLevel: "info", // everything but debug is the default
@@ -96,10 +119,9 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:     true,          // run the VDF by default
-		ChainId:    CanopyChainId, // default chain url is 1
-		Headless:   false,         // serve the web wallet and block explorer by default
-		AutoUpdate: true,          // set it as default while in inmature state
+		RunVDF:     true,  // run the VDF by default
+		Headless:   false, // serve the web wallet and block explorer by default
+		AutoUpdate: true,  // set it as default while in inmature state
 	}
 }
 
@@ -365,6 +387,39 @@ func NewConfigFromFile(filepath string) (Config, error) {
 	if err = json.Unmarshal(fileBytes, &c); err != nil {
 		// exit with error
 		return Config{}, err
+	}
+	// exit
+	return c, nil
+}
+
+// WriteToFile() saves the chains config object to a JSON file
+func (c ChainConfig) WriteToFile(filepath string) error {
+	// convert the config to indented 'pretty' json bytes
+	jsonBytes, err := json.MarshalIndent(c, "", "  ")
+	// if an error occurred during the conversion
+	if err != nil {
+		// exit with error
+		return err
+	}
+	// write the config.json file to the data directory
+	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
+}
+
+// NewChainConfigFromFile() populates a ChainConfig object from a JSON file
+func NewChainConfigFromFile(filepath string) (ChainConfig, error) {
+	// read the file into bytes using
+	fileBytes, err := os.ReadFile(filepath)
+	// if an error occurred
+	if err != nil {
+		// exit with error
+		return ChainConfig{}, err
+	}
+	// define the default config to fill in any blanks in the file
+	c := DefaultChainConfig()
+	// populate the default config with the file bytes
+	if err = json.Unmarshal(fileBytes, &c); err != nil {
+		// exit with error
+		return ChainConfig{}, err
 	}
 	// exit
 	return c, nil

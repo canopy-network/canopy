@@ -536,7 +536,7 @@ func (s *StateMachine) ResetToBeginBlock() {
 var _ lib.PluginCompatibleFSM = new(StateMachine)
 
 // StateRead() implements the 'state read' interface for plugins
-func (s *StateMachine) StateRead(request lib.PluginStateReadRequest) (response lib.PluginStateReadResponse, err lib.ErrorI) {
+func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response lib.PluginStateReadResponse, err lib.ErrorI) {
 	// for each 'get' request
 	for _, getRequest := range request.Keys {
 		var value []byte
@@ -587,7 +587,7 @@ func (s *StateMachine) StateRead(request lib.PluginStateReadRequest) (response l
 }
 
 // StateWrite() implements the 'state write' interface for plugins
-func (s *StateMachine) StateWrite(request lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
+func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
 	// for each 'set' request
 	for _, setRequest := range request.Sets {
 		// execute the 'set'

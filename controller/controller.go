@@ -249,7 +249,11 @@ const socketPath = "plugin.sock"
 
 // PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
 func (c *Controller) PluginConnectSync() {
-	sockPath := filepath.Join(c.Config.DataDirPath, socketPath)
+	sockPath := filepath.Join("/tmp/plugin", socketPath)
+	// make the path
+	if err := os.MkdirAll(sockPath, 0777); err != nil {
+		c.log.Fatalf("Failed to make the plugin socket path %s: %v", sockPath, err)
+	}
 	// clean old socket
 	if err := os.RemoveAll(sockPath); err != nil {
 		c.log.Fatalf("Failed to remove plugin socket %s: %v", sockPath, err)
