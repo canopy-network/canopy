@@ -333,10 +333,11 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context) {
 func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *Block) error {
 	// perform validation on transactions that had canopy orders
 	for _, tx := range block.transactions {
+		var err error
 		// retry logic for processing transaction
 		for attempt := range maxTransactionProcessAttempts {
 			// process transaction - look for orders
-			err := p.processTransaction(ctx, block, tx)
+			err = p.processTransaction(ctx, block, tx)
 			// success indicates no order found, or order successfully found and validated
 			if err == nil {
 				break
@@ -361,7 +362,9 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 				}
 			}
 		}
-		p.logger.Errorf("Error processing transaction %s in block %s: %v - all attempts failed", tx.Hash(), block.Hash())
+		if err != nil {
+			p.logger.Errorf("Error processing transaction %s in block %s: %v - all attempts failed", tx.Hash(), block.Hash())
+		}
 	}
 	return nil
 }

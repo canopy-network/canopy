@@ -118,24 +118,30 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// not an erc20 transfer - normal condition
 		return nil
 	}
+	fmt.Println("checking", t.from, recipient, amount, string(data), err)
+	fmt.Println("checking", t.from == recipient, amount.Cmp(big.NewInt(0)))
 	// all Canopy swap ERC20 transfers have aux data
 	if len(data) == 0 {
 		// no data to process - not a canopy swap ERC20 transfer
 		return nil
 	}
+
+	var selfSend bool
 	// test for self-sent ERC20 transfers
-	if t.from != recipient {
-		// not self sent - not a canopy swap ERC20 transfer
-		return nil
+	if t.from == recipient {
+		selfSend = true
 	}
-	// fmt.Println("checking", t.from, recipient, amount, string(data), err)
-	// fmt.Println("checking", t.from == recipient, amount == new(big.Int).SetUint64(0))
 
 	switch amount.Cmp(big.NewInt(0)) {
 	case 0: // zero amount - potential lock order
+		// lock orders are self sent
+		if !selfSend {
+			break
+		}
 		// attempt to validate a lock order
 		err = orderValidator.ValidateOrderJsonBytes(data, types.LockOrderType)
 		if err != nil {
+			fmt.Println(err)
 			// erc20 transaction did not contain canopy lock order json - normal condition
 			return nil
 		}
@@ -154,6 +160,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	case 1: // positive amount - potential close order
 		// attempt to validate a close order
 		err = orderValidator.ValidateOrderJsonBytes(data, types.CloseOrderType)
+		fmt.Println(err)
 		if err != nil {
 			// erc20 transaction did not contain canopy close order json - normal condition
 			return nil
@@ -238,7 +245,7 @@ func parseERC20Transfer(data []byte) (recipientAddress string, amount *big.Int, 
 	}
 	// extract recipient address from bytes 4-36 (32 bytes, but address is only last 20 bytes)
 	recipientBytes := data[16:36]
-	recipientAddress = "0x" + lib.BytesToString(recipientBytes)
+	recipientAddress = common.BytesToAddress(recipientBytes).Hex()
 	// extract amount from bytes 36-68 (32 bytes)
 	amountBytes := data[36:68]
 	amount = new(big.Int).SetBytes(amountBytes)
