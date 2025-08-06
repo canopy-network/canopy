@@ -43,6 +43,7 @@ const (
 	TxByHashRoutePath              = "/v1/query/tx-by-hash"
 	OrderRoutePath                 = "/v1/query/order"
 	OrdersRoutePath                = "/v1/query/orders"
+	CanopyOrdersRoutePath          = "/v1/query/canopy-orders"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -137,6 +138,7 @@ const (
 	PollRouteName                  = "poll"
 	OrderRouteName                 = "order"
 	OrdersRouteName                = "orders"
+	CanopyOrdersRouteName          = "canopy-orders"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -228,6 +230,7 @@ var routePaths = routes{
 	TxByHashRouteName:              {Method: http.MethodPost, Path: TxByHashRoutePath},
 	OrderRouteName:                 {Method: http.MethodPost, Path: OrderRoutePath},
 	OrdersRouteName:                {Method: http.MethodPost, Path: OrdersRoutePath},
+	CanopyOrdersRouteName:          {Method: http.MethodPost, Path: CanopyOrdersRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -323,6 +326,7 @@ func createRouter(s *Server) *httprouter.Router {
 		TxByHashRouteName:              s.TransactionByHash,
 		OrderRouteName:                 s.Order,
 		OrdersRouteName:                s.Orders,
+		CanopyOrdersRouteName:          s.CanopyOrders,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,

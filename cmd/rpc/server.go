@@ -73,9 +73,10 @@ func NewServer(controller *controller.Controller, config lib.Config, logger lib.
 
 // Start initializes the Canopy RPC servers
 func (s *Server) Start() {
+	hostport := strings.Split(s.config.ListenAddress, ":")
 	// Start the Query and Admin RPC servers concurrently
-	go s.startRPC(createRouter(s), s.config.RPCPort)
-	go s.startRPC(createAdminRouter(s), s.config.AdminPort)
+	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
+	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
@@ -106,7 +107,7 @@ func (s *Server) Start() {
 }
 
 // startRPC starts an RPC server with the provided router and port
-func (s *Server) startRPC(router *httprouter.Router, port string) {
+func (s *Server) startRPC(router *httprouter.Router, host, port string) {
 
 	// Create CORS policy
 	cor := cors.New(cors.Options{
@@ -118,9 +119,9 @@ func (s *Server) startRPC(router *httprouter.Router, port string) {
 	timeout := time.Duration(s.config.TimeoutS) * time.Second
 
 	// Start RPC server
-	s.logger.Infof("Starting RPC server at 0.0.0.0:%s", port)
+	s.logger.Infof("Starting RPC server at %s:%s", host, port)
 	s.logger.Fatal((&http.Server{
-		Addr:              colon + port,
+		Addr:              host + colon + port,
 		ReadHeaderTimeout: timeout,
 		ReadTimeout:       timeout,
 		WriteTimeout:      timeout,
@@ -159,7 +160,7 @@ func (s *Server) updatePollResults() {
 			return nil
 
 		}(); err != nil {
-			s.logger.Error(err.Error())
+			// s.logger.Error(err.Error())
 		}
 		time.Sleep(time.Second * 3)
 	}
@@ -167,9 +168,11 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
+	hostport := strings.Split(s.config.ListenAddress, ":")
+	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", hostport[0], s.config.WalletPort)
+
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
+	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", hostport[0], s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
