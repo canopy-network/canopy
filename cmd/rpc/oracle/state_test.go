@@ -21,7 +21,7 @@ func createTestBlock(number uint64, hash string, parentHash string) types.BlockI
 	}
 }
 
-func TestOracleStateManager_ValidateSequence(t *testing.T) {
+func TestOracleState_ValidateSequence(t *testing.T) {
 	// Helper function to create a temporary directory for test state files
 	createTempDir := func(t *testing.T) string {
 		dir, err := os.MkdirTemp("", "oracle_state_test_*")
@@ -31,14 +31,14 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 	}
 
 	// Helper function to create a state manager with test setup
-	createStateManager := func(t *testing.T, tempDir string) *OracleStateManager {
+	createStateManager := func(t *testing.T, tempDir string) *OracleState {
 		stateFile := filepath.Join(tempDir, "test_state")
 		logger := lib.NewDefaultLogger()
-		return NewOracleStateManager(stateFile, logger)
+		return NewOracleState(stateFile, logger)
 	}
 
 	// Helper function to setup a completed block state
-	setupCompletedBlock := func(t *testing.T, bsm *OracleStateManager, height uint64, hash string, parentHash string) {
+	setupCompletedBlock := func(t *testing.T, bsm *OracleState, height uint64, hash string, parentHash string) {
 		block := createTestBlock(height, hash, parentHash)
 		err := bsm.SaveProcessedBlock(block)
 		require.NoError(t, err)
@@ -46,7 +46,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		setupState   func(t *testing.T, bsm *OracleStateManager)
+		setupState   func(t *testing.T, bsm *OracleState)
 		block        types.BlockI
 		expectError  bool
 		errorCode    lib.ErrorCode
@@ -54,7 +54,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 	}{
 		{
 			name: "first block validation should pass",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				// No setup needed - simulates first run
 			},
 			block:       createTestBlock(1, "0xblock1", "0xparent1"),
@@ -62,7 +62,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "sequential block validation should pass",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:       createTestBlock(2, "0xblock2", "0xblock1"),
@@ -70,7 +70,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "block gap should be detected",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(3, "0xblock3", "0xblock2"), // Skipping block 2
@@ -80,7 +80,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "chain reorganization should be detected",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(2, "0xblock2", "0xdifferentparent"), // Wrong parent hash
@@ -90,7 +90,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "valid chain continuation after multiple blocks",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:       createTestBlock(6, "0xblock6", "0xblock5"),
@@ -98,7 +98,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "gap detection with large height difference",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(100, "0xblock100", "0xblock99"),
@@ -108,7 +108,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "reorganization with correct height but wrong parent",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 10, "0xblock10", "0xblock9")
 			},
 			block:        createTestBlock(11, "0xblock11", "0xwrongparent"),
@@ -118,7 +118,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "backward block should be detected as gap",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:        createTestBlock(3, "0xblock3", "0xblock2"), // Going backwards
@@ -128,7 +128,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "same height block should be detected as gap",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 5, "0xblock5", "0xblock4")
 			},
 			block:        createTestBlock(5, "0xblock5_alt", "0xblock4"), // Same height, different block
@@ -138,7 +138,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "empty hash values should still work",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "", "")
 			},
 			block:       createTestBlock(2, "", ""),
@@ -146,7 +146,7 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 		},
 		{
 			name: "reorg detection with empty parent hash",
-			setupState: func(t *testing.T, bsm *OracleStateManager) {
+			setupState: func(t *testing.T, bsm *OracleState) {
 				setupCompletedBlock(t, bsm, 1, "0xblock1", "0xparent1")
 			},
 			block:        createTestBlock(2, "0xblock2", ""), // Empty parent hash
@@ -190,13 +190,13 @@ func TestOracleStateManager_ValidateSequence(t *testing.T) {
 	}
 }
 
-func TestOracleStateManager_shouldSubmit(t *testing.T) {
+func TestOracleState_shouldSubmit(t *testing.T) {
 	tests := []struct {
 		name                     string
 		lastSubmitHeight         uint64
 		witnessedHeight          uint64
 		rootHeight               uint64
-		sourceChainHeight      uint64
+		sourceChainHeight        uint64
 		orderResubmitDelay       uint64
 		proposeLeadTime          uint64
 		lockOrderHoldTime        uint64
@@ -206,119 +206,119 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 		expected                 bool
 	}{
 		{
-			name:                "propose lead time not passed - should not submit",
-			lastSubmitHeight:    40,
-			witnessedHeight:     10,
-			rootHeight:          60,
-			sourceChainHeight: 14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
-			orderResubmitDelay:  20,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            false,
+			name:               "propose lead time not passed - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         60,
+			sourceChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           false,
 		},
 		{
-			name:                "propose lead time exact boundary - should not submit",
-			lastSubmitHeight:    40,
-			witnessedHeight:     10,
-			rootHeight:          60,
-			sourceChainHeight: 15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15 but still not passed
-			orderResubmitDelay:  20,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            false,
+			name:               "propose lead time exact boundary - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         60,
+			sourceChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15 but still not passed
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           false,
 		},
 		{
-			name:                "resubmit delay not reached - should not submit",
-			lastSubmitHeight:    40,
-			witnessedHeight:     10,
-			rootHeight:          55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
-			sourceChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
-			orderResubmitDelay:  20,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            false,
+			name:               "resubmit delay not reached - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
+			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           false,
 		},
 		{
-			name:                "resubmit delay exact boundary - should not submit",
-			lastSubmitHeight:    40,
-			witnessedHeight:     10,
-			rootHeight:          60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
-			sourceChainHeight: 16,
-			orderResubmitDelay:  20,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            false,
+			name:               "resubmit delay exact boundary - should not submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
+			sourceChainHeight:  16,
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           false,
 		},
 		{
-			name:                "resubmit delay exceeded - should submit close order",
-			lastSubmitHeight:    30,
-			witnessedHeight:     10,
-			rootHeight:          100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
-			sourceChainHeight: 16,
-			orderResubmitDelay:  20,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            true,
+			name:               "resubmit delay exceeded - should submit close order",
+			lastSubmitHeight:   30,
+			witnessedHeight:    10,
+			rootHeight:         100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
+			sourceChainHeight:  16,
+			orderResubmitDelay: 20,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           true,
 		},
 		{
-			name:                "first submission with all checks passed - should submit",
-			lastSubmitHeight:    0,
-			witnessedHeight:     10,
-			rootHeight:          100,
-			sourceChainHeight: 16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
-			orderResubmitDelay:  10,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "lock",
-			expected:            true,
+			name:               "first submission with all checks passed - should submit",
+			lastSubmitHeight:   0,
+			witnessedHeight:    10,
+			rootHeight:         100,
+			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay: 10,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "lock",
+			expected:           true,
 		},
 		{
-			name:                "zero propose lead time with resubmit delay exceeded - should submit",
-			lastSubmitHeight:    40,
-			witnessedHeight:     10,
-			rootHeight:          80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
-			sourceChainHeight: 11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
-			orderResubmitDelay:  20,
-			proposeLeadTime:     0,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            true,
+			name:               "zero propose lead time with resubmit delay exceeded - should submit",
+			lastSubmitHeight:   40,
+			witnessedHeight:    10,
+			rootHeight:         80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
+			sourceChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
+			orderResubmitDelay: 20,
+			proposeLeadTime:    0,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           true,
 		},
 		{
-			name:                "zero delay with propose lead time passed - should submit",
-			lastSubmitHeight:    50,
-			witnessedHeight:     10,
-			rootHeight:          51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
-			sourceChainHeight: 16,
-			orderResubmitDelay:  0,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   10,
-			orderType:           "close",
-			expected:            true,
+			name:               "zero delay with propose lead time passed - should submit",
+			lastSubmitHeight:   50,
+			witnessedHeight:    10,
+			rootHeight:         51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
+			sourceChainHeight:  16,
+			orderResubmitDelay: 0,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  10,
+			orderType:          "close",
+			expected:           true,
 		},
 		{
-			name:                "lock order first submission - should submit",
-			lastSubmitHeight:    0,
-			witnessedHeight:     10,
-			rootHeight:          100,
-			sourceChainHeight: 16,
-			orderResubmitDelay:  10,
-			proposeLeadTime:     5,
-			lockOrderHoldTime:   20,
-			orderType:           "lock",
-			expected:            true,
+			name:               "lock order first submission - should submit",
+			lastSubmitHeight:   0,
+			witnessedHeight:    10,
+			rootHeight:         100,
+			sourceChainHeight:  16,
+			orderResubmitDelay: 10,
+			proposeLeadTime:    5,
+			lockOrderHoldTime:  20,
+			orderType:          "lock",
+			expected:           true,
 		},
 		{
 			name:                     "lock order resubmission too soon - should not submit",
 			lastSubmitHeight:         0,
 			witnessedHeight:          10,
 			rootHeight:               105,
-			sourceChainHeight:      16,
+			sourceChainHeight:        16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
 			lockOrderHoldTime:        20,
@@ -332,7 +332,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 			lastSubmitHeight:         0,
 			witnessedHeight:          10,
 			rootHeight:               125,
-			sourceChainHeight:      16,
+			sourceChainHeight:        16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
 			lockOrderHoldTime:        20,
@@ -347,7 +347,7 @@ func TestOracleStateManager_shouldSubmit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create state manager with logger
 			logger := lib.NewDefaultLogger()
-			stateManager := NewOracleStateManager("test_state", logger)
+			stateManager := NewOracleState("test_state", logger)
 			// Set external chain height for the test
 			stateManager.sourceChainHeight = tt.sourceChainHeight
 			// Setup previous submission if needed

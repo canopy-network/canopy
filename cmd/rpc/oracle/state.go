@@ -23,8 +23,8 @@ type OracleBlockState struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// OracleStateManager manages block processing state, gap detection, and chain reorganization detection
-type OracleStateManager struct {
+// OracleState manages block processing state, gap detection, and chain reorganization detection
+type OracleState struct {
 	// sourceChainHeight is the last seen height for the source chain
 	sourceChainHeight uint64
 	// stateSaveFile is the base path for state files
@@ -37,9 +37,9 @@ type OracleStateManager struct {
 	log lib.LoggerI
 }
 
-// NewOracleStateManager creates a new OracleStateManager instance
-func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStateManager {
-	return &OracleStateManager{
+// NewOracleState creates a new OracleState instance
+func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
+	return &OracleState{
 		stateSaveFile:        stateSaveFile,
 		log:                  logger,
 		submissionHistory:    make(map[string]map[uint64]bool),
@@ -49,7 +49,7 @@ func NewOracleStateManager(stateSaveFile string, logger lib.LoggerI) *OracleStat
 
 // shouldSubmit determines if the current oracle state allows for submitting this order
 // Performs all submission checks including lead time, resubmit delay, lock order restrictions, and history tracking
-func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
+func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// CHECK 1: Propose lead time validation
@@ -99,7 +99,7 @@ func (m *OracleStateManager) shouldSubmit(order *types.WitnessedOrder, rootHeigh
 }
 
 // ValidateSequence performs comprehensive block validation including gap detection and reorg detection
-func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
+func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// verify sequential block processing to detect gaps and chain reorganizations
 	lastState, err := m.readBlockState()
 	if err != nil {
@@ -128,7 +128,7 @@ func (m *OracleStateManager) ValidateSequence(block types.BlockI) lib.ErrorI {
 }
 
 // SaveProcessedBlock saves the state after a block has been successfully processed
-func (m *OracleStateManager) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
+func (m *OracleState) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 	// create the simple block state
 	state := OracleBlockState{
 		Height:     block.Number(),
@@ -148,7 +148,7 @@ func (m *OracleStateManager) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 }
 
 // GetLastHeight returns the last processed source chain height
-func (m *OracleStateManager) GetLastHeight() (uint64, lib.ErrorI) {
+func (m *OracleState) GetLastHeight() (uint64, lib.ErrorI) {
 	// check for previous state from last run
 	if state, err := m.readBlockState(); err == nil {
 		m.log.Infof("Found previous block state: height %d", state.Height)
@@ -160,7 +160,7 @@ func (m *OracleStateManager) GetLastHeight() (uint64, lib.ErrorI) {
 }
 
 // readBlockState reads the simple block state from disk
-func (m *OracleStateManager) readBlockState() (*OracleBlockState, lib.ErrorI) {
+func (m *OracleState) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	// read file contents
 	data, err := os.ReadFile(m.stateSaveFile)
 	if err != nil {
@@ -178,7 +178,7 @@ func (m *OracleStateManager) readBlockState() (*OracleBlockState, lib.ErrorI) {
 }
 
 // atomicWriteFile writes data to a file atomically using write-and-move pattern
-func (m *OracleStateManager) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
+func (m *OracleState) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
 	// create temporary file in the same directory as the target file
 	dir := filepath.Dir(filePath)
 	tempFile, err := os.CreateTemp(dir, ".tmp_oracle_state_*")

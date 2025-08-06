@@ -44,7 +44,7 @@ type Oracle struct {
 	// mutex to protect order book
 	orderBookMu sync.RWMutex
 	// stateManager handles block processing state, gap detection, and reorg detection
-	stateManager *OracleStateManager
+	stateManager *OracleState
 	// oracle configuration
 	config lib.OracleConfig
 	// committee to use when constructing close orders. this must match the order bookc committee
@@ -70,7 +70,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider: blockProvider,
 		orderStore:    transactionStore,
 		log:           logger,
-		stateManager:  NewOracleStateManager(stateFile, logger),
+		stateManager:  NewOracleState(stateFile, logger),
 		config:        config,
 		committee:     config.Committee,
 		ctx:           ctx,

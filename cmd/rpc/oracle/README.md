@@ -182,7 +182,7 @@ The `run()` method implements the main Oracle processing loop with robust error 
 
 - **Order Book Dependency**: Waits for valid order book before processing any blocks.
 
-- **Height Recovery**: Uses `OracleStateManager.GetLastHeight()` to determine starting height from persistent state, enabling crash recovery and gap detection.
+- **Height Recovery**: Uses `OracleState.GetLastHeight()` to determine starting height from persistent state, enabling crash recovery and gap detection.
 
 - **Block Validation**: Each received block undergoes sequence validation via `stateManager.ValidateSequence()` to detect gaps and chain reorganizations before processing.
 
