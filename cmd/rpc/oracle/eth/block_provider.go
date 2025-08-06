@@ -253,7 +253,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				continue
 			}
 			// update current safe height and next height
-			p.calculateFetchRange(header.Number)
+			p.updateHeights(header.Number)
 			// process safe blocks up to current height
 			p.processBlocks(ctx)
 		case err := <-sub.Err():
@@ -263,8 +263,8 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	}
 }
 
-// calculateFetchRange determines the safe height based on current height and confirmations
-func (p *EthBlockProvider) calculateFetchRange(currentHeight *big.Int) {
+// updateHeights determines the safe height based on current height and confirmations
+func (p *EthBlockProvider) updateHeights(currentHeight *big.Int) {
 	// protect next height
 	p.heightMu.Lock()
 	defer p.heightMu.Unlock()

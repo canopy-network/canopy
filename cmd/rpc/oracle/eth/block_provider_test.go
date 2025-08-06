@@ -542,7 +542,7 @@ func uint64Ptr(v uint64) *uint64 {
 	return &v
 }
 
-func TestEthBlockProvider_calculateFetchRange(t *testing.T) {
+func TestEthBlockProvider_updateHeights(t *testing.T) {
 	tests := []struct {
 		name               string
 		config             lib.EthBlockProviderConfig
@@ -666,7 +666,7 @@ func TestEthBlockProvider_calculateFetchRange(t *testing.T) {
 			}
 
 			// Execute the function under test
-			provider.calculateFetchRange(tt.currentHeight)
+			provider.updateHeights(tt.currentHeight)
 
 			// Verify next height
 			if provider.nextHeight.Cmp(tt.expectedNextHeight) != 0 {
