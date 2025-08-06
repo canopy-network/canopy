@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func createERC20TransferData(recipient string, amount *big.Int, extra []byte) []byte {
@@ -36,8 +38,8 @@ func createERC20TransferData(recipient string, amount *big.Int, extra []byte) []
 }
 
 func TestParseERC20Transfer(t *testing.T) {
-	recipient1 := "0x742d35cc6634c0532925a3b8d0c9e3e0c8b0e8c2"
-	recipient2 := "0x1234567890abcdef1234567890abcdef12345678"
+	recipient1 := common.HexToAddress("0x742d35cc6634c0532925a3b8d0c9e3e0c8b0e8c2").Hex()
+	recipient2 := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678").Hex()
 	amount1 := big.NewInt(1000000000000000000)
 	amount2 := big.NewInt(500000000000000000)
 	extraData1 := []byte("extra")
