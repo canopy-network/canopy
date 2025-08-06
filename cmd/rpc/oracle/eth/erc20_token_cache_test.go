@@ -121,10 +121,10 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 	tests := []struct {
 		name             string
 		contractAddress  string
-		initialCache     map[string]types.TokenInfo
+		setupCache       func(*ERC20TokenCache)
 		mockCaller       *mockContractCaller
 		expectedResult   types.TokenInfo
-		expectedCache    map[string]types.TokenInfo
+		verifyCacheHit   bool
 		expectedNumCalls int
 		expectError      bool
 	}{
@@ -141,24 +141,18 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 				Symbol:   "USDC",
 				Decimals: 6,
 			},
-			expectedCache: map[string]types.TokenInfo{
-				usdcAddress: {
-					Name:     "USD Coin",
-					Symbol:   "USDC",
-					Decimals: 6,
-				},
-			},
+			verifyCacheHit:   true,
 			expectedNumCalls: 3,
 			expectError:      false,
 		},
 		{
 			name: "should return cached token info for USDC",
-			initialCache: map[string]types.TokenInfo{
-				usdcAddress: {
+			setupCache: func(cache *ERC20TokenCache) {
+				cache.cache.Put(usdcAddress, types.TokenInfo{
 					Name:     "USD Coin",
 					Symbol:   "USDC",
 					Decimals: 6,
-				},
+				})
 			},
 			contractAddress: usdcAddress,
 			mockCaller: &mockContractCaller{
@@ -171,13 +165,7 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 				Symbol:   "USDC",
 				Decimals: 6,
 			},
-			expectedCache: map[string]types.TokenInfo{
-				usdcAddress: {
-					Name:     "USD Coin",
-					Symbol:   "USDC",
-					Decimals: 6,
-				},
-			},
+			verifyCacheHit:   true,
 			expectedNumCalls: 0,
 			expectError:      false,
 		},
@@ -210,14 +198,10 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// create new token cache with mock caller
-			cache := ERC20TokenCache{
-				client: tt.mockCaller,
-			}
-			// set up initial cache
-			if tt.initialCache != nil {
-				cache.cache = tt.initialCache
-			} else {
-				cache.cache = make(map[string]types.TokenInfo)
+			cache := NewERC20TokenCache(tt.mockCaller)
+			// set up initial cache if provided
+			if tt.setupCache != nil {
+				tt.setupCache(cache)
 			}
 			// call TokenInfo method
 			result, err := cache.TokenInfo(context.Background(), tt.contractAddress)
@@ -237,9 +221,13 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			// Compare the expected cache
-			if diff := cmp.Diff(tt.expectedCache, cache.cache); diff != "" {
-				t.Errorf("cache mismatch (-expected +actual):\n%s", diff)
+			// Verify cache hit if expected
+			if tt.verifyCacheHit {
+				if cachedResult, exists := cache.cache.Get(tt.contractAddress); !exists {
+					t.Errorf("expected token info to be cached for %s", tt.contractAddress)
+				} else if diff := cmp.Diff(tt.expectedResult, cachedResult); diff != "" {
+					t.Errorf("cached result mismatch (-expected +actual):\n%s", diff)
+				}
 			}
 			// Compare the expected results
 			if diff := cmp.Diff(tt.expectedResult, result); diff != "" {

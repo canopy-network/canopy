@@ -26,6 +26,8 @@ const (
 	TransactionStatusSuccess = 1
 	// how many times to try to process a transaction (erc20 token fetch + transaction receipt)
 	maxTransactionProcessAttempts = 3
+	// how long to allow processBlock to run
+	processBlockTimeLimitS = 12
 )
 
 // Ensures *EthBlockProvider implements BlockProvider interface
@@ -263,6 +265,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 
 // calculateFetchRange determines the safe height based on current height and confirmations
 func (p *EthBlockProvider) calculateFetchRange(currentHeight *big.Int) {
+	// protect next height
 	p.heightMu.Lock()
 	defer p.heightMu.Unlock()
 	safeBlocks := big.NewInt(int64(p.config.SafeBlockConfirmations))
@@ -277,7 +280,7 @@ func (p *EthBlockProvider) calculateFetchRange(currentHeight *big.Int) {
 		startUp := new(big.Int).SetUint64(p.config.StartupBlockDepth)
 		// default to startup block depth
 		p.nextHeight = new(big.Int).Sub(currentHeight, startUp)
-		// ensure next height is never negative
+		// ensure next height is not negative
 		if p.nextHeight.Sign() < 0 {
 			p.nextHeight.SetInt64(0)
 		}
@@ -291,9 +294,9 @@ func (p *EthBlockProvider) calculateFetchRange(currentHeight *big.Int) {
 		p.logger.Errorf("eth block provider next expected source chain height was %d, higher than current source chain height: %d. If this is expected, remove state file and restart node. Exiting.", p.nextHeight, currentHeight)
 		os.Exit(1)
 	}
-	// ensure safe height never goes backward (reorg protection)
+	// ensure safe height is never lowered
 	if calculatedSafeHeight.Cmp(p.safeHeight) < 0 {
-		p.logger.Warnf("calculated safe height %d would go backward from current safe height %d, keeping current", calculatedSafeHeight, p.safeHeight)
+		p.logger.Warnf("calculated safe height %d is lower than current safe height %d, keeping current", calculatedSafeHeight, p.safeHeight)
 		// no safe height update
 		return
 	}
@@ -303,20 +306,33 @@ func (p *EthBlockProvider) calculateFetchRange(currentHeight *big.Int) {
 // processBlocks calculates the current safe height based on the received current height
 // and sends all unprocessed blocks up to the safe height to the consumer
 func (p *EthBlockProvider) processBlocks(ctx context.Context) {
+	// Create a context with ethereum block time timeout
+	// this is so this method does not block new eth neaders
+	timeoutCtx, cancel := context.WithTimeout(ctx, processBlockTimeLimitS*time.Second)
+	defer cancel()
+
+	// protect next height
 	p.heightMu.Lock()
 	defer p.heightMu.Unlock()
 	p.logger.Debugf("block provider processing safe blocks from %d to %d", p.nextHeight, p.safeHeight)
 	// process blocks from next height to safe height
 	for p.nextHeight.Cmp(p.safeHeight) <= 0 { // nextHeight <= safeHeight
+		// Check if context has been cancelled or timed out
+		select {
+		case <-timeoutCtx.Done():
+			p.logger.Errorf("processBlocks timed out after 12 seconds")
+			return
+		default:
+		}
 		// get block from ethereum node and create our Block wrapper
-		block, err := p.fetchBlock(ctx, p.nextHeight)
+		block, err := p.fetchBlock(timeoutCtx, p.nextHeight)
 		if err != nil {
 			// log error and return without continuing
 			p.logger.Errorf("failed to get block at height %d: %v", p.nextHeight, err)
 			return
 		}
 		// process each transaction, populating orders and transfer data
-		if err := p.processBlockTransactions(ctx, block); err != nil {
+		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
 			p.logger.Errorf("failed to process block transactions: %v", err)
 			return
 		}
@@ -412,6 +428,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 		p.logger.Errorf("failed to get token info for contract %s: %v", tx.To(), err)
 		return err
 	}
+	p.logger.Infof("Obtained token info for contract %x: %s", tx.To(), tokenInfo)
 	// store the erc20 token info
 	tx.tokenInfo = tokenInfo
 	return nil

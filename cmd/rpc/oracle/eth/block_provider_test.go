@@ -94,7 +94,7 @@ func createEthereumBlock(height uint64, txs []*ethtypes.Transaction) *ethtypes.B
 
 func setupTokenCache(address common.Address, token types.TokenInfo) *ERC20TokenCache {
 	cache := NewERC20TokenCache(&mockEthClient{})
-	cache.cache[address.Hex()] = token
+	cache.cache.Put(address.Hex(), token)
 	return cache
 }
 
@@ -368,7 +368,7 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 
 // 	// Set up token cache
 // 	tokenCache := NewERC20TokenCache(&mockEthClient{contractErr: errors.New("error")})
-// 	tokenCache.cache[contract1Address.Hex()] = testToken
+// 	tokenCache.cache.Put(contract1Address.Hex(), testToken)
 
 // 	tests := []struct {
 // 		name                  string

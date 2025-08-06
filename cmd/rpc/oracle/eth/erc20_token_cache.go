@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
+	"github.com/canopy-network/canopy/lib"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -21,6 +22,8 @@ const (
 	erc20DecimalsFunction = "0x313ce567"
 	// context timeout for call contract calls
 	callContractTimeoutS = 5
+	// default cache size for token information
+	defaultCacheSize = 1000
 )
 
 // ContractCaller interface defines the method needed to call ethereum contracts
@@ -32,22 +35,22 @@ type ContractCaller interface {
 type ERC20TokenCache struct {
 	// client is the ethereum client used to make contract calls
 	client ContractCaller
-	// cache stores token information by contract address
-	cache map[string]types.TokenInfo
+	// cache stores token information by contract address using LRU eviction
+	cache *lib.LRUCache[types.TokenInfo]
 }
 
 // NewERC20TokenCache creates a new ERC20TokenCache instance
 func NewERC20TokenCache(client ContractCaller) *ERC20TokenCache {
 	return &ERC20TokenCache{
 		client: client,
-		cache:  make(map[string]types.TokenInfo),
+		cache:  lib.NewLRUCache[types.TokenInfo](defaultCacheSize),
 	}
 }
 
 // TokenInfo fetches an erc20's name, symbol and decimals from the contract
 func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string) (types.TokenInfo, error) {
 	// check if token info is already cached
-	if info, exists := m.cache[contractAddress]; exists {
+	if info, exists := m.cache.Get(contractAddress); exists {
 		return info, nil
 	}
 	// fetch name from contract
@@ -78,7 +81,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 		Decimals: decimals,
 	}
 	// cache the token info
-	m.cache[contractAddress] = tokenInfo
+	m.cache.Put(contractAddress, tokenInfo)
 	return tokenInfo, nil
 }
 

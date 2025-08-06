@@ -273,7 +273,6 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		if o.orderBook == nil {
 			return ErrNilOrderBook()
 		}
-		// TODO prevent duplicate lock orders here
 		// find the order in the order book
 		canopyOrder, orderErr := o.orderBook.GetOrder(order.OrderId)
 		if orderErr != nil {
