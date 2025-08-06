@@ -248,8 +248,8 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	return nil
 }
 
-// processBlock processes a block received from the witness chain lb
-// processBlock examines any witnessed orders in the block, validates them, and writes them to the order store
+// processBlock processes a block received from the source chain
+// examines any witnessed orders in the block, validates them, and writes them to the order store
 // any orders that are not present in the order book, or fail validation, are dropped and not saved to the order store
 func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	// lock order book for reading
@@ -259,6 +259,10 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	if len(block.Transactions()) > 0 {
 		o.log.Infof("Received block %s at height %d (%d transactions)", block.Hash(), block.Number(), len(block.Transactions()))
 	}
+	// ensure order book is present
+	if o.orderBook == nil {
+		return ErrNilOrderBook()
+	}
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {
 		// get order in this transaction
@@ -266,10 +270,6 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		if order == nil {
 			// no order in this transaction
 			continue
-		}
-		// ensure order book is present
-		if o.orderBook == nil {
-			return ErrNilOrderBook()
 		}
 		// find the order in the order book
 		canopyOrder, orderErr := o.orderBook.GetOrder(order.OrderId)
@@ -449,6 +449,11 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// lock order book while updating it and updating order store
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
+
+	if o.orderBook == nil {
+		o.log.Warn("Order book is nil, skipping order store cleanup")
+		return
+	}
 	// log a warning for a nil order book
 	if info.Orders == nil {
 		o.log.Warn("OrderBook from root chain was nil")
@@ -463,10 +468,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	for _, id := range storedOrders {
 		// o.log.Debugf("UpdateRootChainInfo checking stored lock order %x for removal", id)
 		// attempt to get stored lock order from order book
-		if o.orderBook == nil {
-			o.log.Warn("Order book is nil, skipping lock order check")
-			continue
-		}
 		order, err := o.orderBook.GetOrder(id)
 		if err != nil {
 			o.log.Errorf("Error getting order from order book: %s", err.Error())
@@ -474,10 +475,10 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		}
 		// remove lock order from store if one of the following conditions is met:
 		//   - corresponding sell order was not found in the root chain order book
-		//   - root chain sell order is locked (lock order in store no longer needed)
+		//   - root chain sell order is locked
 		switch {
 		case order == nil:
-			o.log.Infof("Order %x no longer in order book, removing lock order from store", order.Id)
+			o.log.Infof("Order %x no longer in order book, removing lock order from store", id)
 		case order.BuyerSendAddress != nil:
 			o.log.Infof("Order %x is locked in order book, removing lock order from store", order.Id)
 		default:
@@ -501,10 +502,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	for _, id := range storedOrders {
 		// o.log.Debugf("UpdateRootChainInfo checking stored close order %x for removal", id)
 		// attempt to get stored close order from order book
-		if o.orderBook == nil {
-			o.log.Warn("Order book is nil, skipping close order check")
-			continue
-		}
 		order, err := o.orderBook.GetOrder(id)
 		if err != nil {
 			o.log.Errorf("Error getting order from order book: %s", err.Error())

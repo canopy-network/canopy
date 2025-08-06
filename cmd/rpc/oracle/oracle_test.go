@@ -685,14 +685,16 @@ func TestOracle_UpdateRootChainInfo(t *testing.T) {
 				mockStore.WriteOrder(order, types.CloseOrderType)
 			}
 
+			orderBook := newOrderBook(tt.orderBookIds...)
 			oracle := &Oracle{
 				orderStore: mockStore,
+				orderBook:  orderBook,
 				log:        lib.NewDefaultLogger(),
 			}
 
 			// Execute
 			info := &lib.RootChainInfo{
-				Orders: newOrderBook(tt.orderBookIds...),
+				Orders: orderBook,
 			}
 			oracle.UpdateRootChainInfo(info)
 
