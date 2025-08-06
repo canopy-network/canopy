@@ -320,7 +320,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context) {
 		// Check if context has been cancelled or timed out
 		select {
 		case <-timeoutCtx.Done():
-			p.logger.Errorf("processBlocks timed out after 12 seconds")
+			p.logger.Errorf("processBlocks maximum run time hit, returning.")
 			return
 		default:
 		}
@@ -428,7 +428,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 		p.logger.Errorf("failed to get token info for contract %s: %v", tx.To(), err)
 		return err
 	}
-	p.logger.Infof("Obtained token info for contract %x: %s", tx.To(), tokenInfo)
+	p.logger.Infof("Obtained token info for contract %s: %s", tx.To(), tokenInfo)
 	// store the erc20 token info
 	tx.tokenInfo = tokenInfo
 	return nil

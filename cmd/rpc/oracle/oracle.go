@@ -109,7 +109,7 @@ func (o *Oracle) run(ctx context.Context) {
 	// check for error
 	if err != nil {
 		o.log.Errorf("Failed to get starting height from state file: %v", err)
-		// signal the block provider to determine its own starting height
+		// zero signals the block provider to determine its own starting height
 		o.blockProvider.SetHeight(new(big.Int).SetUint64(0))
 	} else {
 		// set the starting height for the block provider
@@ -252,8 +252,6 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 // processBlock examines any witnessed orders in the block, validates them, and writes them to the order store
 // any orders that are not present in the order book, or fail validation, are dropped and not saved to the order store
 func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
-	// block validation (gaps and reorgs) is now handled by OracleStateManager
-	// this method focuses on processing the block content
 	// lock order book for reading
 	o.orderBookMu.RLock()
 	defer o.orderBookMu.RUnlock()
@@ -455,8 +453,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.Orders == nil {
 		o.log.Warn("OrderBook from root chain was nil")
 	}
-	// retain updated order book for future oracle operations
-	o.orderBook = info.Orders
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
@@ -481,9 +477,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		//   - root chain sell order is locked (lock order in store no longer needed)
 		switch {
 		case order == nil:
-			o.log.Infof("Order %s no longer in order book, removing lock order from store", order)
+			o.log.Infof("Order %x no longer in order book, removing lock order from store", order.Id)
 		case order.BuyerSendAddress != nil:
-			o.log.Infof("Order %s is locked in order book, removing lock order from store", order)
+			o.log.Infof("Order %x is locked in order book, removing lock order from store", order.Id)
 		default:
 			// neither condition was met, do not remove this order
 			// continue processing remaining stored orders
@@ -527,7 +523,6 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
-// TODO lock order already submitted with block with specific id, put hold for any locks for that same id
 // TODO watch for conflicts while syncing ethereum block, prooducer might resubmit order
 func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
 	lockOrders := []*lib.LockOrder{}

@@ -202,6 +202,8 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// update the oracle with the latest order book
 	c.oracle.UpdateOrderBook(info.Orders)
+	// sync the order store
+	c.oracle.UpdateRootChainInfo(info)
 	// set timestamp if included
 	var timestamp time.Time
 	// if timestamp is not 0

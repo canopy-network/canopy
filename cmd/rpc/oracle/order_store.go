@@ -23,8 +23,12 @@ const (
 
 // OracleDiskStorage implements OrderStore interface for Ethereum order storage
 type OracleDiskStorage struct {
-	// storagePath is the directory path where orders are stored
+	// storagePath is the directory path for order storage
 	storagePath string
+	// absStoragePath is the absolute path used for validation
+	absStoragePath string
+	// absArchivePath is the absolute archive path used for validation
+	absArchivePath string
 	// logger is used for logging operations
 	logger lib.LoggerI
 	// mutex to protect concurrent access
@@ -50,15 +54,29 @@ func NewOracleDiskStorage(storagePath string, logger lib.LoggerI) (*OracleDiskSt
 		storagePath = filepath.Join(home, storagePath[2:])
 	}
 
+	// get absolute path for secure validation
+	absStoragePath, err := filepath.Abs(storagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute storage path: %w", err)
+	}
+	// clean the path to resolve any .. or . elements
+	absStoragePath = filepath.Clean(absStoragePath)
+
 	// create storage directory if it doesn't exist
-	if err := os.MkdirAll(storagePath, 0755); err != nil {
+	if err := os.MkdirAll(absStoragePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
 	// create archive directory structure
-	archiveDir := filepath.Join(storagePath, "archive")
+	archiveDir := filepath.Join(absStoragePath, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create archive directory: %w", err)
 	}
+	// get absolute archive path for validation
+	absArchivePath, err := filepath.Abs(archiveDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute archive path: %w", err)
+	}
+	absArchivePath = filepath.Clean(absArchivePath)
 	// create lock and close subdirectories in archive
 	lockArchiveDir := filepath.Join(archiveDir, "lock")
 	if err := os.MkdirAll(lockArchiveDir, 0755); err != nil {
@@ -70,9 +88,11 @@ func NewOracleDiskStorage(storagePath string, logger lib.LoggerI) (*OracleDiskSt
 	}
 	// return new instance
 	return &OracleDiskStorage{
-		storagePath: storagePath,
-		logger:      logger,
-		rwLock:      sync.RWMutex{},
+		storagePath:    storagePath,
+		absStoragePath: absStoragePath,
+		absArchivePath: absArchivePath,
+		logger:         logger,
+		rwLock:         sync.RWMutex{},
 	}, nil
 }
 
@@ -272,19 +292,27 @@ func (e *OracleDiskStorage) validateOrderParameters(orderId []byte, orderType ty
 
 // buildFilePath builds a file path for an order JSON file
 func (e *OracleDiskStorage) buildFilePath(orderId []byte, orderType types.OrderType) (string, error) {
-	filename := fmt.Sprintf("%s.%s%s", hex.EncodeToString(orderId), string(orderType), jsonExtension)
-	filePath := filepath.Join(e.storagePath, filename)
-
-	// Ensure the path is within the storage directory
-	if !strings.HasPrefix(filePath, e.storagePath) {
-		return "", fmt.Errorf("invalid file path")
+	// convert to hex string (orderId is already validated by caller)
+	orderIdHex := hex.EncodeToString(orderId)
+	// build filename with validated components
+	filename := fmt.Sprintf("%s.%s%s", orderIdHex, string(orderType), jsonExtension)
+	// use absolute path for security
+	filePath := filepath.Join(e.absStoragePath, filename)
+	// clean the final path to resolve any remaining path elements
+	filePath = filepath.Clean(filePath)
+	// ensure the resolved path is within the storage directory using absolute paths
+	if !e.isPathWithinDirectory(filePath, e.absStoragePath) {
+		return "", fmt.Errorf("path traversal attempt detected: resolved path outside storage directory")
 	}
 	return filePath, nil
 }
 
 // buildArchiveFilePath builds a file path for an archived order JSON file
 func (e *OracleDiskStorage) buildArchiveFilePath(orderId []byte, orderType types.OrderType) (string, error) {
-	filename := fmt.Sprintf("%s.%s%s", hex.EncodeToString(orderId), string(orderType), jsonExtension)
+	// convert to hex string (orderId is already validated by caller)
+	orderIdHex := hex.EncodeToString(orderId)
+	// build filename with validated components
+	filename := fmt.Sprintf("%s.%s%s", orderIdHex, string(orderType), jsonExtension)
 	// determine archive subdirectory based on order type
 	var archiveSubDir string
 	switch orderType {
@@ -295,14 +323,69 @@ func (e *OracleDiskStorage) buildArchiveFilePath(orderId []byte, orderType types
 	default:
 		return "", fmt.Errorf("invalid order type for archive: %s", orderType)
 	}
-	// build full archive path
-	archiveDir := filepath.Join(e.storagePath, "archive", archiveSubDir)
+	// validate subdirectory name
+	if err := e.validateFilename(archiveSubDir); err != nil {
+		return "", fmt.Errorf("invalid archive subdirectory: %w", err)
+	}
+	// build full archive path using absolute paths
+	archiveDir := filepath.Join(e.absArchivePath, archiveSubDir)
 	filePath := filepath.Join(archiveDir, filename)
-
-	// ensure the path is within the archive directory
-	expectedPrefix := filepath.Join(e.storagePath, "archive")
-	if !strings.HasPrefix(filePath, expectedPrefix) {
-		return "", fmt.Errorf("invalid archive file path")
+	// clean the final path to resolve any remaining path elements
+	filePath = filepath.Clean(filePath)
+	// ensure the resolved path is within the archive directory using absolute paths
+	if !e.isPathWithinDirectory(filePath, e.absArchivePath) {
+		return "", fmt.Errorf("path traversal attempt detected: resolved path outside archive directory")
 	}
 	return filePath, nil
+}
+
+// validateFilename validates a filename component to prevent path traversal
+func (e *OracleDiskStorage) validateFilename(filename string) error {
+	// check for empty filename
+	if filename == "" {
+		return errors.New("filename cannot be empty")
+	}
+	// check for path traversal sequences
+	if strings.Contains(filename, "..") {
+		return errors.New("filename cannot contain '..' sequences")
+	}
+	// check for path separators
+	if strings.ContainsAny(filename, "/\\") {
+		return errors.New("filename cannot contain path separators")
+	}
+	// check for null bytes
+	if strings.Contains(filename, "\x00") {
+		return errors.New("filename cannot contain null bytes")
+	}
+	// check for control characters
+	for _, r := range filename {
+		if r < 32 || r == 127 {
+			return errors.New("filename cannot contain control characters")
+		}
+	}
+	return nil
+}
+
+// isPathWithinDirectory securely checks if a path is within a given directory
+// This uses absolute paths and proper canonicalization to prevent bypass attempts
+func (e *OracleDiskStorage) isPathWithinDirectory(targetPath, allowedDir string) bool {
+	// get absolute path of target
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return false
+	}
+	// clean both paths to resolve symlinks and path elements
+	absTarget = filepath.Clean(absTarget)
+	allowedDir = filepath.Clean(allowedDir)
+	// ensure both paths end with separator for proper prefix checking
+	if !strings.HasSuffix(allowedDir, string(filepath.Separator)) {
+		allowedDir += string(filepath.Separator)
+	}
+	if !strings.HasSuffix(absTarget, string(filepath.Separator)) {
+		// for files, check if the directory part is within allowed directory
+		targetDir := filepath.Dir(absTarget) + string(filepath.Separator)
+		return strings.HasPrefix(targetDir, allowedDir)
+	}
+	// for directories, check direct prefix
+	return strings.HasPrefix(absTarget, allowedDir)
 }
