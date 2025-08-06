@@ -187,12 +187,6 @@ func (c *Controller) Stop() {
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	c.log.Debugf("Updating root chain info")
-	// log a warning for a nil order book
-	if info.Orders == nil {
-		c.log.Warn("OrderBook from root chain was nil")
-	}
-	// log this event
-	c.log.Infof("OrderBook from root chain updated, %d orders", len(info.Orders.Orders))
 	// ensure this root chain is active
 	activeRootChainId, _ := c.FSM.GetRootChainId()
 	// if inactive
