@@ -121,13 +121,14 @@ func Start() {
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
 	if config.EthBlockProviderConfig.NodeUrl != "" {
+		oracleRoot := filepath.Join(DataDir, "oracle")
 		// create a seperate logger for the oracle and all oracle components
 		oracleLogger := lib.NewOracleLogger(
 			lib.LoggerConfig{Level: config.GetLogLevel()},
-			filepath.Join(DataDir, "oracle"),
+			oracleRoot,
 		)
 		// create a new ethereum disk storage instance for the oracle order store
-		oracleStorage, e := oracle.NewOracleDiskStorage(filepath.Join(DataDir, "oracle/store"), oracleLogger)
+		oracleStorage, e := oracle.NewOracleDiskStorage(filepath.Join(oracleRoot, "store"), oracleLogger)
 		if e != nil {
 			l.Fatal(e.Error())
 		}
@@ -137,7 +138,7 @@ func Start() {
 		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
 
 		// create an absolute path for the state save file
-		config.OracleConfig.StateFile = filepath.Join(DataDir, config.OracleConfig.StateFile)
+		config.OracleConfig.StateFile = filepath.Join(oracleRoot, config.OracleConfig.StateFile)
 		// create a new oracle instance and pass the ethereum block provider with shared context
 		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
 		if e != nil {
