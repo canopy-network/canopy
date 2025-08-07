@@ -39,6 +39,10 @@ type OracleState struct {
 
 // NewOracleState creates a new OracleState instance
 func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
+	// Ensure the state save file location exists
+	if err := os.MkdirAll(filepath.Dir(stateSaveFile), 0755); err != nil {
+		logger.Errorf("failed to create directories for %s: %w", stateSaveFile, err)
+	}
 	return &OracleState{
 		stateSaveFile:        stateSaveFile,
 		log:                  logger,
@@ -121,7 +125,6 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 		m.log.Errorf("Chain reorganization detected: %s", errorMsg)
 		return ErrChainReorg(errorMsg)
 	}
-	m.log.Debugf("Block sequence verified: processing block %d after %d", block.Number(), lastState.Height)
 	// save last seen source chain height
 	m.sourceChainHeight = block.Number()
 	return nil
@@ -148,30 +151,30 @@ func (m *OracleState) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 }
 
 // GetLastHeight returns the last processed source chain height
-func (m *OracleState) GetLastHeight() (uint64, lib.ErrorI) {
+func (m *OracleState) GetLastHeight() uint64 {
 	// check for previous state from last run
 	if state, err := m.readBlockState(); err == nil {
 		m.log.Infof("Found previous block state: height %d", state.Height)
 		// start from the next block after the last successfully processed one
-		return state.Height, nil
+		return state.Height
 	}
-	m.log.Infof("No previous state found, returning start height 0")
-	return 0, nil
+	m.log.Infof("no previous state found, returning start height 0")
+	return 0
 }
 
-// readBlockState reads the simple block state from disk
+// readBlockState reads the oracle state from disk
 func (m *OracleState) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	// read file contents
 	data, err := os.ReadFile(m.stateSaveFile)
 	if err != nil {
-		m.log.Debugf("Block state file not found: %v", err)
+		m.log.Debugf("block state file not found: %v", err)
 		return nil, ErrReadStateFile(err)
 	}
 	// unmarshal JSON data
 	var state OracleBlockState
 	err = json.Unmarshal(data, &state)
 	if err != nil {
-		m.log.Errorf("Failed to unmarshal block state: %v", err)
+		m.log.Errorf("failed to unmarshal block state: %v", err)
 		return nil, ErrParseState(err)
 	}
 	return &state, nil

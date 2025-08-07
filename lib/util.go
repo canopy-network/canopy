@@ -840,3 +840,45 @@ func MemHash(data []byte) uint64 {
 	ss := (*stringStruct)(unsafe.Pointer(&data))
 	return uint64(memhash(ss.str, 0, uintptr(ss.len)))
 }
+
+// Integer defines a constraint for integer types including big.Int
+type Integer interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
+// BigInt converts integer t into a bigInt
+func BigInt[T Integer](t T) *big.Int {
+	switch v := any(t).(type) {
+	case int:
+		return big.NewInt(int64(v))
+	case int8:
+		return big.NewInt(int64(v))
+	case int16:
+		return big.NewInt(int64(v))
+	case int32:
+		return big.NewInt(int64(v))
+	case int64:
+		return big.NewInt(v)
+	case uint:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint8:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint16:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint32:
+		return new(big.Int).SetUint64(uint64(v))
+	case uint64:
+		return new(big.Int).SetUint64(v)
+	default:
+		return new(big.Int).SetUint64(0)
+	}
+}
+
+func BigIntIsZero(i *big.Int) bool {
+	return i.Cmp(big.NewInt(0)) == 0
+}
+
+func BigIntSub(x, y *big.Int) *big.Int {
+	return new(big.Int).Sub(x, y)
+}
