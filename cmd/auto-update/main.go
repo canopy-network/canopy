@@ -232,7 +232,6 @@ func runAutoUpdate() {
 		var newVersionAlreadyFound atomic.Bool // Prevents multiple goroutines from handling the same update
 		var killedFromChild atomic.Bool        // Indicates if a kill signal was sent from the child process
 
-		firstTime := true                 // Flag to skip random delay on first run
 		downloadLock := new(sync.Mutex)   // Mutex to prevent concurrent binary downloads and replacements
 		curRelease := rpc.SoftwareVersion // Current version of the software for comparison
 
@@ -270,7 +269,7 @@ func runAutoUpdate() {
 
 		// Goroutine to check for updates periodically
 		go func() {
-			for {
+			for i := 0; ; i++ {
 				version, url, err := getLatestRelease()
 				if err != nil {
 					log.Printf("Failed get latest release from %s: %v", repoOwner, err)
@@ -297,7 +296,7 @@ func runAutoUpdate() {
 						go func() {
 							defer newVersionAlreadyFound.Store(false)
 
-							if !firstTime {
+							if i != 0 {
 								// Add random delay between 1-30 minutes before updating
 								minutes := rand.Intn(30) + 1
 								duration := time.Duration(minutes) * time.Minute
@@ -305,8 +304,6 @@ func runAutoUpdate() {
 								log.Printf("Waiting for %v before uploading...\n", duration)
 								time.Sleep(duration)
 								log.Println("Done waiting.")
-							} else {
-								firstTime = false
 							}
 
 							if cmd != nil {
