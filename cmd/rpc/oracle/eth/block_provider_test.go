@@ -213,38 +213,37 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		nextHeight     *big.Int
-		safeHeight     *big.Int
+		startHeight    *big.Int
+		endHeight      *big.Int
 		setupBlocks    func() map[uint64]*ethtypes.Block
 		expectedBlocks []uint64 // expected block heights sent to channel
-		expectedNext   *big.Int // expected nextHeight after processing
+		expectedNext   *big.Int // expected return value from processBlocks
 	}{
 		{
-			name:       "no blocks to process - next height higher than safe height",
-			nextHeight: big.NewInt(96),
-			safeHeight: big.NewInt(95),
+			name:        "no blocks to process - start height higher than end height",
+			startHeight: big.NewInt(96),
+			endHeight:   big.NewInt(95),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				return make(map[uint64]*ethtypes.Block)
 			},
 			expectedNext: big.NewInt(96),
 		},
 		{
-			name:       "process single safe block",
-			nextHeight: big.NewInt(94),
-			safeHeight: big.NewInt(95),
+			name:        "process single block",
+			startHeight: big.NewInt(94),
+			endHeight:   big.NewInt(94),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				blocks := make(map[uint64]*ethtypes.Block)
 				blocks[94] = createEthereumBlock(94, []*ethtypes.Transaction{})
-				blocks[95] = createEthereumBlock(95, []*ethtypes.Transaction{})
 				return blocks
 			},
-			expectedBlocks: []uint64{94, 95},
-			expectedNext:   big.NewInt(96),
+			expectedBlocks: []uint64{94},
+			expectedNext:   big.NewInt(95),
 		},
 		{
-			name:       "process multiple safe blocks",
-			nextHeight: big.NewInt(102),
-			safeHeight: big.NewInt(105),
+			name:        "process multiple blocks",
+			startHeight: big.NewInt(102),
+			endHeight:   big.NewInt(105),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				blocks := make(map[uint64]*ethtypes.Block)
 				for i := uint64(102); i <= 105; i++ {
@@ -256,18 +255,18 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 			expectedNext:   big.NewInt(106),
 		},
 		{
-			name:       "next height higher than safe height - no processing",
-			nextHeight: big.NewInt(10),
-			safeHeight: big.NewInt(8),
+			name:        "start height higher than end height - no processing",
+			startHeight: big.NewInt(10),
+			endHeight:   big.NewInt(8),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				return make(map[uint64]*ethtypes.Block)
 			},
 			expectedNext: big.NewInt(10),
 		},
 		{
-			name:       "exact safe height boundary",
-			nextHeight: big.NewInt(5),
-			safeHeight: big.NewInt(5),
+			name:        "exact range boundary",
+			startHeight: big.NewInt(5),
+			endHeight:   big.NewInt(5),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				blocks := make(map[uint64]*ethtypes.Block)
 				blocks[5] = createEthereumBlock(5, []*ethtypes.Transaction{})
@@ -277,9 +276,9 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 			expectedNext:   big.NewInt(6),
 		},
 		{
-			name:       "process blocks with transactions",
-			nextHeight: big.NewInt(18),
-			safeHeight: big.NewInt(20),
+			name:        "process blocks with transactions",
+			startHeight: big.NewInt(18),
+			endHeight:   big.NewInt(20),
 			setupBlocks: func() map[uint64]*ethtypes.Block {
 				blocks := make(map[uint64]*ethtypes.Block)
 				// Create blocks with some transactions
@@ -310,15 +309,14 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 				orderValidator:  &mockOrderValidator{},
 				logger:          logger,
 				blockChan:       blockChan,
-				nextHeight:      new(big.Int).Set(tt.nextHeight),
-				safeHeight:      new(big.Int).Set(tt.safeHeight),
 				chainId:         1,
 				config: lib.EthBlockProviderConfig{
 					SafeBlockConfirmations: 5, // default test value
 				},
 				heightMu: &sync.Mutex{},
 			}
-			provider.processBlocks(context.Background())
+			// Call processBlocks with start and end parameters
+			resultNext := provider.processBlocks(context.Background(), tt.startHeight, tt.endHeight)
 			// Collect all blocks sent to channel
 			var receivedBlocks []types.BlockI
 			close(blockChan) // Close channel to stop range loop
@@ -336,9 +334,9 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 				t.Errorf("sent blocks mismatch (-want +got):\n%s", diff)
 			}
 
-			// Verify nextHeight was updated correctly
-			if provider.nextHeight.Cmp(tt.expectedNext) != 0 {
-				t.Errorf("expected nextHeight %s, got %s", tt.expectedNext.String(), provider.nextHeight.String())
+			// Verify return value is correct
+			if resultNext.Cmp(tt.expectedNext) != 0 {
+				t.Errorf("expected return value %s, got %s", tt.expectedNext.String(), resultNext.String())
 			}
 		})
 	}
@@ -542,141 +540,3 @@ func uint64Ptr(v uint64) *uint64 {
 	return &v
 }
 
-func TestEthBlockProvider_updateHeights(t *testing.T) {
-	tests := []struct {
-		name               string
-		config             lib.EthBlockProviderConfig
-		initialNextHeight  *big.Int
-		initialSafeHeight  *big.Int
-		currentHeight      *big.Int
-		expectedNextHeight *big.Int
-		expectedSafeHeight *big.Int
-		expectExit         bool // if true, expect os.Exit(1) to be called
-	}{
-		{
-			name: "first time initialization - zero next height",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(0),
-			initialSafeHeight:  big.NewInt(0),
-			currentHeight:      big.NewInt(1000),
-			expectedNextHeight: big.NewInt(900), // 1000 - 100
-			expectedSafeHeight: big.NewInt(995), // 1000 - 5
-		},
-		{
-			name: "first time initialization - zero next height with small current height",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(0),
-			initialSafeHeight:  big.NewInt(0),
-			currentHeight:      big.NewInt(50),
-			expectedNextHeight: big.NewInt(0),  // max(50 - 100, 0) = 0
-			expectedSafeHeight: big.NewInt(45), // 50 - 5
-		},
-		{
-			name: "first time initialization - current height less than safe blocks",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 10,
-				StartupBlockDepth:      5,
-			},
-			initialNextHeight:  big.NewInt(0),
-			initialSafeHeight:  big.NewInt(0),
-			currentHeight:      big.NewInt(8),
-			expectedNextHeight: big.NewInt(3), // 8 - 5
-			expectedSafeHeight: big.NewInt(0), // max(8 - 10, 0) = 0
-		},
-		{
-			name: "normal update - safe height increases",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(990),
-			initialSafeHeight:  big.NewInt(995),
-			currentHeight:      big.NewInt(1010),
-			expectedNextHeight: big.NewInt(990),  // unchanged
-			expectedSafeHeight: big.NewInt(1005), // 1010 - 5
-		},
-		{
-			name: "reorg protection - safe height would go backward",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(990),
-			initialSafeHeight:  big.NewInt(1000),
-			currentHeight:      big.NewInt(1003), // would make safe height 998, less than current 1000
-			expectedNextHeight: big.NewInt(990),  // unchanged
-			expectedSafeHeight: big.NewInt(1000), // unchanged due to reorg protection
-		},
-		{
-			name: "safe height stays same when calculated height equals current",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(990),
-			initialSafeHeight:  big.NewInt(995),
-			currentHeight:      big.NewInt(1000),
-			expectedNextHeight: big.NewInt(990), // unchanged
-			expectedSafeHeight: big.NewInt(995), // 1000 - 5 = 995, same as current
-		},
-		{
-			name: "next height ahead of current height - should exit",
-			config: lib.EthBlockProviderConfig{
-				SafeBlockConfirmations: 5,
-				StartupBlockDepth:      100,
-			},
-			initialNextHeight:  big.NewInt(1010), // ahead of current height
-			initialSafeHeight:  big.NewInt(1000),
-			currentHeight:      big.NewInt(1005),
-			expectedNextHeight: big.NewInt(1010), // unchanged before exit
-			expectedSafeHeight: big.NewInt(1000), // unchanged before exit
-			expectExit:         true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger := lib.NewDefaultLogger()
-
-			provider := &EthBlockProvider{
-				config:     tt.config,
-				logger:     logger,
-				nextHeight: new(big.Int).Set(tt.initialNextHeight),
-				safeHeight: new(big.Int).Set(tt.initialSafeHeight),
-				heightMu:   &sync.Mutex{},
-			}
-
-			if tt.expectExit {
-				// We can't easily test os.Exit, so we'll just verify the condition
-				// that would trigger the exit in the actual function
-				provider.heightMu.Lock()
-				if provider.nextHeight.Cmp(tt.currentHeight) > 0 {
-					provider.heightMu.Unlock()
-					// This condition would trigger os.Exit(1) in the real function
-					// For testing purposes, we just verify this condition is met
-					return
-				}
-				provider.heightMu.Unlock()
-			}
-
-			// Execute the function under test
-			provider.updateHeights(tt.currentHeight)
-
-			// Verify next height
-			if provider.nextHeight.Cmp(tt.expectedNextHeight) != 0 {
-				t.Errorf("expected nextHeight %s, got %s", tt.expectedNextHeight.String(), provider.nextHeight.String())
-			}
-
-			// Verify safe height
-			if provider.safeHeight.Cmp(tt.expectedSafeHeight) != 0 {
-				t.Errorf("expected safeHeight %s, got %s", tt.expectedSafeHeight.String(), provider.safeHeight.String())
-			}
-		})
-	}
-}

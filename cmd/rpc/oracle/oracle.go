@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -58,11 +56,6 @@ type Oracle struct {
 
 // NewOracle creates a new Oracle instance
 func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI) (*Oracle, error) {
-	stateFile := "oracle/" + config.StateFile
-	// Ensure the state save file location exists
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0755); err != nil {
-		logger.Errorf("failed to create directories for %s: %w", config.StateFile, err)
-	}
 	// create context cancel function for the passed context
 	ctx, cancel := context.WithCancel(ctx)
 	// create new oracle instance
@@ -70,7 +63,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider: blockProvider,
 		orderStore:    transactionStore,
 		log:           logger,
-		stateManager:  NewOracleState(stateFile, logger),
+		stateManager:  NewOracleState(config.StateFile, logger),
 		config:        config,
 		committee:     config.Committee,
 		ctx:           ctx,
@@ -104,14 +97,11 @@ func (o *Oracle) run(ctx context.Context) {
 	}
 	// stop order book ticker
 	ticker.Stop()
-	// determine starting height using state manager
-	height, err := o.stateManager.GetLastHeight()
-	// check for error
-	if err != nil {
-		o.log.Errorf("Failed to get starting height from state file: %v", err)
+	// get the last height processed by the oracle
+	if height := o.stateManager.GetLastHeight(); height == 0 {
 		// zero signals the block provider to determine its own starting height
 		o.blockProvider.SetHeight(new(big.Int).SetUint64(0))
-	} else {
+	} else { // height found
 		// set the starting height for the block provider
 		o.blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
 	}

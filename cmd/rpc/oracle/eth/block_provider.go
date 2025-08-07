@@ -62,7 +62,6 @@ type EthBlockProvider struct {
 	wsClient        EthereumWsClient           // websocket client for monitoring headers
 	orderValidator  OrderValidator             // order validator
 	nextHeight      *big.Int                   // next block height to be sent through channel
-	safeHeight      *big.Int                   // the current safe height for the source chain
 	chainId         uint64                     // ethereum chain id
 	heightMu        *sync.Mutex                // mutex around next height
 }
@@ -88,7 +87,6 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		chainId:         config.EVMChainId,
 		orderValidator:  orderValidator,
 		nextHeight:      big.NewInt(0),
-		safeHeight:      big.NewInt(0),
 		heightMu:        &sync.Mutex{},
 	}
 	// log provider creation
@@ -181,6 +179,22 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 				continue
 			}
 		}
+		// fetch latest block
+		block, err := p.rpcClient.BlockByNumber(ctx, nil)
+		if err != nil {
+			p.logger.Errorf("Error fetching latest block from ethereum node: %s", err.Error())
+			continue
+		}
+		// a next height of zero indicates no height was specified by the consumer
+		if lib.BigIntIsZero(p.nextHeight) {
+			// default to startup block depth
+			p.nextHeight = lib.BigIntSub(block.Number(), lib.BigInt(p.config.StartupBlockDepth))
+			// ensure next height is not negative
+			if p.nextHeight.Sign() < 0 {
+				p.nextHeight.SetInt64(0)
+			}
+			p.logger.Warnf("eth block provider: next height was 0 - initialized next height to %s", p.nextHeight.String())
+		}
 		// begin monitoring new block headers
 		err = p.monitorHeaders(ctx)
 		if err != nil {
@@ -252,10 +266,20 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				p.logger.Warn("received nil header or header number, skipping")
 				continue
 			}
-			// update current safe height and next height
-			p.updateHeights(header.Number)
+			// calculate a safe height based on current source chain height
+			safeHeight := lib.BigIntSub(header.Number, lib.BigInt(p.config.SafeBlockConfirmations))
+			// ensure safe height is a positive integer
+			if safeHeight.Cmp(lib.BigInt(0)) <= 0 {
+				continue
+			}
+			// ensure we haven't gotten ahead of the current chain height
+			if p.nextHeight.Cmp(header.Number) > 0 {
+				p.logger.Errorf("eth block provider: next expected source chain height was %d, higher than current source chain height %d", p.nextHeight, header.Number)
+				p.logger.Error("If this is expected, remove state file and restart node. Exiting.")
+				os.Exit(1)
+			}
 			// process safe blocks up to current height
-			p.processBlocks(ctx)
+			p.nextHeight = p.processBlocks(ctx, p.nextHeight, safeHeight)
 		case err := <-sub.Err():
 			sub.Unsubscribe()
 			return err
@@ -263,86 +287,44 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	}
 }
 
-// updateHeights determines the safe height based on current height and confirmations
-func (p *EthBlockProvider) updateHeights(currentHeight *big.Int) {
-	// protect next height
-	p.heightMu.Lock()
-	defer p.heightMu.Unlock()
-	safeBlocks := big.NewInt(int64(p.config.SafeBlockConfirmations))
-	// calculate a safe height based on current source chain height
-	calculatedSafeHeight := new(big.Int).Sub(currentHeight, safeBlocks)
-	// ensure safe height is never negative
-	if calculatedSafeHeight.Sign() < 0 {
-		calculatedSafeHeight.SetInt64(0)
-	}
-	// a next height of zero indicates no height was specified by the consumer
-	if p.nextHeight.Cmp(big.NewInt(0)) == 0 {
-		startUp := new(big.Int).SetUint64(p.config.StartupBlockDepth)
-		// default to startup block depth
-		p.nextHeight = new(big.Int).Sub(currentHeight, startUp)
-		// ensure next height is not negative
-		if p.nextHeight.Sign() < 0 {
-			p.nextHeight.SetInt64(0)
-		}
-		// set safe height to the newly calculated one
-		p.safeHeight = calculatedSafeHeight
-		p.logger.Warnf("eth block provider next height was 0 - initialized block depth %s", p.nextHeight.String())
-		return
-	}
-	// validate that we haven't gotten ahead of the current chain height
-	if p.nextHeight.Cmp(currentHeight) > 0 {
-		p.logger.Errorf("eth block provider next expected source chain height was %d, higher than current source chain height: %d. If this is expected, remove state file and restart node. Exiting.", p.nextHeight, currentHeight)
-		os.Exit(1)
-	}
-	// ensure safe height is never lowered
-	if calculatedSafeHeight.Cmp(p.safeHeight) < 0 {
-		p.logger.Warnf("calculated safe height %d is lower than current safe height %d, keeping current", calculatedSafeHeight, p.safeHeight)
-		// no safe height update
-		return
-	}
-	p.safeHeight = calculatedSafeHeight
-}
-
-// processBlocks calculates the current safe height based on the received current height
-// and sends all unprocessed blocks up to the safe height to the consumer
-func (p *EthBlockProvider) processBlocks(ctx context.Context) {
+// processBlocks fetches and processes ethereum blocks in the specified range
+func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.Int) *big.Int {
 	// Create a context with ethereum block time timeout
 	// this is so this method does not block new eth neaders
 	timeoutCtx, cancel := context.WithTimeout(ctx, processBlockTimeLimitS*time.Second)
 	defer cancel()
-
-	// protect next height
-	p.heightMu.Lock()
-	defer p.heightMu.Unlock()
-	p.logger.Debugf("block provider processing safe blocks from %d to %d", p.nextHeight, p.safeHeight)
+	// track next height to be processed
+	next := new(big.Int).Set(start)
+	p.logger.Debugf("block provider processing safe blocks from %d to %d", start, end)
 	// process blocks from next height to safe height
-	for p.nextHeight.Cmp(p.safeHeight) <= 0 { // nextHeight <= safeHeight
+	for next.Cmp(end) <= 0 {
 		// Check if context has been cancelled or timed out
 		select {
 		case <-timeoutCtx.Done():
 			p.logger.Errorf("processBlocks maximum run time hit, returning.")
-			return
+			return next
 		default:
 		}
 		// get block from ethereum node and create our Block wrapper
-		block, err := p.fetchBlock(timeoutCtx, p.nextHeight)
+		block, err := p.fetchBlock(timeoutCtx, next)
 		if err != nil {
 			// log error and return without continuing
-			p.logger.Errorf("failed to get block at height %d: %v", p.nextHeight, err)
-			return
+			p.logger.Errorf("failed to get block at height %d: %v", next, err)
+			return next
 		}
 		// process each transaction, populating orders and transfer data
 		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
 			p.logger.Errorf("failed to process block transactions: %v", err)
-			return
+			return next
 		}
 		// send block through channel
 		p.blockChan <- block
 		// log successful block processing
-		// p.logger.Infof("eth block provider sent safe block at height %d through channel", p.nextHeight)
-		// increment next height
-		p.nextHeight.Add(p.nextHeight, big.NewInt(1))
+		// p.logger.Infof("eth block provider sent safe block at height %d through channel", next)
+		// increment height for next iteration
+		next.Add(next, big.NewInt(1))
 	}
+	return next
 }
 
 // processBlockTransactions validates and processes block transactions
