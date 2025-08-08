@@ -264,7 +264,7 @@ func createMockBlockWithTransactions(blockNumber uint64, blockHash string, trans
 	}
 }
 
-// createSellOrder creates a sell order with an optional buyer receive address
+// createSellOrder creates a sell order with an optional buyer receive address and seller receive address
 func createSellOrder(orderIdHex string, buyerReceiveAddress ...string) *lib.SellOrder {
 	orderIdBytes := []byte(orderIdHex)
 	sellOrder := &lib.SellOrder{
@@ -272,6 +272,17 @@ func createSellOrder(orderIdHex string, buyerReceiveAddress ...string) *lib.Sell
 	}
 	if len(buyerReceiveAddress) > 0 && len(buyerReceiveAddress[0]) > 0 {
 		sellOrder.BuyerReceiveAddress = []byte(buyerReceiveAddress[0])
+	}
+	return sellOrder
+}
+
+// createSellOrderWithSellerAddr creates a sell order with seller receive address
+func createSellOrderWithSellerAddr(orderIdHex string, buyerReceiveAddress string, sellerReceiveAddress string) *lib.SellOrder {
+	orderIdBytes := []byte(orderIdHex)
+	sellOrder := &lib.SellOrder{
+		Id:                   orderIdBytes,
+		BuyerReceiveAddress:  []byte(buyerReceiveAddress),
+		SellerReceiveAddress: []byte(sellerReceiveAddress),
 	}
 	return sellOrder
 }
@@ -1069,11 +1080,14 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 
 	baseData, _ := lib.StringToBytes(baseTo)
 
+	baseSellerReceiveAddress := []byte("seller_receive_addr")
+	baseSellerReceiveAddressHex := fmt.Sprintf("%x", baseSellerReceiveAddress)
 	baseSellOrder := &lib.SellOrder{
-		Id:              baseOrderId,
-		Committee:       baseChainId,
-		RequestedAmount: baseRequestedAmount,
-		Data:            baseData,
+		Id:                   baseOrderId,
+		Committee:            baseChainId,
+		RequestedAmount:      baseRequestedAmount,
+		Data:                 baseData,
+		SellerReceiveAddress: baseSellerReceiveAddress,
 	}
 
 	baseCloseOrder := &lib.CloseOrder{
@@ -1084,7 +1098,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 	baseTx := &mockTransaction{
 		to: "0x" + baseTo,
 		tokenTransfer: types.TokenTransfer{
-			TokenBaseAmount: big.NewInt(int64(baseRequestedAmount)),
+			TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
+			RecipientAddress: baseSellerReceiveAddressHex,
 		},
 	}
 
@@ -1107,14 +1122,43 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			name:       "sell order data does not match transaction recipient",
 			closeOrder: baseCloseOrder,
 			sellOrder: &lib.SellOrder{
-				Id:              baseOrderId,
-				Committee:       baseChainId,
-				RequestedAmount: baseRequestedAmount,
-				Data:            []byte("0xdifferentaddress"),
+				Id:                   baseOrderId,
+				Committee:            baseChainId,
+				RequestedAmount:      baseRequestedAmount,
+				Data:                 []byte("0xdifferentaddress"),
+				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx:          baseTx,
 			expectError: true,
 			errorMsg:    "sell order data field does not match transaction recipient",
+		},
+		{
+			name:       "token transfer recipient does not match seller receive address",
+			closeOrder: baseCloseOrder,
+			sellOrder:  baseSellOrder,
+			tx: &mockTransaction{
+				to: "0x" + baseTo,
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
+					RecipientAddress: fmt.Sprintf("%x", []byte("different_recipient_address")),
+				},
+			},
+			expectError: true,
+			errorMsg:    "tokens not transferred to sell receive address",
+		},
+		{
+			name:       "error converting recipient address to bytes",
+			closeOrder: baseCloseOrder,
+			sellOrder:  baseSellOrder,
+			tx: &mockTransaction{
+				to: "0x" + baseTo,
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
+					RecipientAddress: "invalid_hex_address_gg",
+				},
+			},
+			expectError: true,
+			errorMsg:    "error converting recipient address to bytes",
 		},
 		{
 			name: "close order ID does not match sell order ID",
@@ -1143,9 +1187,10 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo,
+				to: "0x" + baseTo,
 				tokenTransfer: types.TokenTransfer{
-					TokenBaseAmount: nil,
+					TokenBaseAmount:  nil,
+					RecipientAddress: baseSellerReceiveAddressHex,
 				},
 			},
 			expectError: true,
@@ -1156,9 +1201,10 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo,
+				to: "0x" + baseTo,
 				tokenTransfer: types.TokenTransfer{
-					TokenBaseAmount: big.NewInt(500), // Different from requested amount
+					TokenBaseAmount:  big.NewInt(500), // Different from requested amount
+					RecipientAddress: baseSellerReceiveAddressHex,
 				},
 			},
 			expectError: true,
@@ -1168,15 +1214,17 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			name:       "zero amounts are valid",
 			closeOrder: baseCloseOrder,
 			sellOrder: &lib.SellOrder{
-				Id:              baseOrderId,
-				Committee:       baseChainId,
-				RequestedAmount: 0,
-				Data:            baseData,
+				Id:                   baseOrderId,
+				Committee:            baseChainId,
+				RequestedAmount:      0,
+				Data:                 baseData,
+				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx: &mockTransaction{
-				to: baseTo,
+				to: "0x" + baseTo,
 				tokenTransfer: types.TokenTransfer{
-					TokenBaseAmount: big.NewInt(0),
+					TokenBaseAmount:  big.NewInt(0),
+					RecipientAddress: baseSellerReceiveAddressHex,
 				},
 			},
 			expectError: false,
@@ -1185,15 +1233,17 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			name:       "large amounts are valid",
 			closeOrder: baseCloseOrder,
 			sellOrder: &lib.SellOrder{
-				Id:              baseOrderId,
-				Committee:       baseChainId,
-				RequestedAmount: 18446744073709551615, // Max uint64
-				Data:            baseData,
+				Id:                   baseOrderId,
+				Committee:            baseChainId,
+				RequestedAmount:      18446744073709551615, // Max uint64
+				Data:                 baseData,
+				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx: &mockTransaction{
-				to: baseTo,
+				to: "0x" + baseTo,
 				tokenTransfer: types.TokenTransfer{
-					TokenBaseAmount: big.NewInt(0).SetUint64(18446744073709551615),
+					TokenBaseAmount:  big.NewInt(0).SetUint64(18446744073709551615),
+					RecipientAddress: baseSellerReceiveAddressHex,
 				},
 			},
 			expectError: false,

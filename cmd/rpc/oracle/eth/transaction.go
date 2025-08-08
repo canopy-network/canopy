@@ -126,16 +126,10 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		return nil
 	}
 
-	var selfSend bool
-	// test for self-sent ERC20 transfers
-	if t.from == recipient {
-		selfSend = true
-	}
-
 	switch amount.Cmp(big.NewInt(0)) {
 	case 0: // zero amount - potential lock order
-		// lock orders are self sent
-		if !selfSend {
+		// test for self-sent ERC20 transfers, lock orders must be self-sent
+		if t.from != recipient {
 			break
 		}
 		// attempt to validate a lock order

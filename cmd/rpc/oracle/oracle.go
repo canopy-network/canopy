@@ -200,7 +200,6 @@ func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.Sell
 	if lockOrder.ChainId != sellOrder.Committee {
 		return ErrOrderValidation("lock order chain ID does not match sell order committee")
 	}
-	// TODO validate seller send and receive addresses
 	return nil
 }
 
@@ -225,6 +224,13 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
+	recipient, err := lib.StringToBytes(tokenTransfer.RecipientAddress)
+	if err != nil {
+		return ErrOrderValidation("error converting recipient address to bytes")
+	}
+	if !bytes.Equal(sellOrder.SellerReceiveAddress, recipient) {
+		return ErrOrderValidation("tokens not transferred to sell receive address")
+	}
 	// ensure transfer amount is not nil
 	// TODO validate further fields here?
 	if tokenTransfer.TokenBaseAmount == nil {
