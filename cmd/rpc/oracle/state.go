@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
@@ -33,6 +34,10 @@ type OracleState struct {
 	submissionHistory map[string]map[uint64]bool
 	// lockOrderSubmissions tracks the root height when each lock order ID was first successfully submitted
 	lockOrderSubmissions map[string]uint64
+	// safeHeight is the highest block height that has received sufficient confirmations to be considered safe
+	safeHeight uint64
+	// safeHeightMu protects the safeHeight field from concurrent access
+	safeHeightMu sync.RWMutex
 	// logger for state management operations
 	log lib.LoggerI
 }
@@ -220,4 +225,34 @@ func (m *OracleState) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
 		return ErrWriteStateFile(err)
 	}
 	return nil
+}
+
+// updateSafeHeight calculates and updates the safe block height with monotonic guarantee
+// The safe height can only increase, never decrease, providing stability during reorgs
+func (m *OracleState) updateSafeHeight(currentBlockHeight uint64, config lib.OracleConfig) {
+	// calculate new safe height by subtracting required confirmations
+	var newSafeHeight uint64
+	if currentBlockHeight > config.SafeBlockConfirmations {
+		newSafeHeight = currentBlockHeight - config.SafeBlockConfirmations
+	} else {
+		// handle startup case where current height is less than required confirmations
+		newSafeHeight = 0
+	}
+	// protect safeHeight field with write lock
+	m.safeHeightMu.Lock()
+	defer m.safeHeightMu.Unlock()
+	// only update if the new safe height is higher (monotonic property)
+	if newSafeHeight > m.safeHeight {
+		m.log.Debugf("Updating safe height from %d to %d (current height %d, confirmations %d)",
+			m.safeHeight, newSafeHeight, currentBlockHeight, config.SafeBlockConfirmations)
+		m.safeHeight = newSafeHeight
+	}
+}
+
+// GetSafeHeight returns the current safe block height
+func (m *OracleState) GetSafeHeight() uint64 {
+	// protect safeHeight field with read lock
+	m.safeHeightMu.RLock()
+	defer m.safeHeightMu.RUnlock()
+	return m.safeHeight
 }

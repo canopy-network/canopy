@@ -287,11 +287,10 @@ func DefaultMetricsConfig() MetricsConfig {
 
 type EthBlockProviderConfig struct {
 	NodeUrl                string `json:"ethNodeUrl"`             // ethereum rpc node url
-	NodeWSUrl              string `json:"ethNodeWsUrl"`           // ethereum node websocket url
-	EVMChainId             uint64 `json:"evmChainId"`             // ethereum chain id
-	RetryDelay             int    `json:"retryDelay"`             // retry delay in seconds for connection failures
-	SafeBlockConfirmations int    `json:"safeBlockConfirmations"` // number of confirmations required for a block to be considered safe
-	StartupBlockDepth      uint64 `json:"startupBlockDepth"`      // how far back to start processing blocks when no next height was provided
+	NodeWSUrl         string `json:"ethNodeWsUrl"`     // ethereum node websocket url
+	EVMChainId        uint64 `json:"evmChainId"`       // ethereum chain id
+	RetryDelay        int    `json:"retryDelay"`       // retry delay in seconds for connection failures
+	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
 }
 
 // DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
@@ -304,9 +303,8 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 		NodeUrl:                "http://localhost:8545",
 		NodeWSUrl:              "ws://localhost:8545",
 		EVMChainId:             1,
-		RetryDelay:             5, // default 5 seconds reconnect retry delay
-		SafeBlockConfirmations: 5, // default 5 block confirmations for safety
-		StartupBlockDepth:      1000,
+		RetryDelay:        5,    // default 5 seconds reconnect retry delay
+		StartupBlockDepth: 1000,
 	}
 }
 
