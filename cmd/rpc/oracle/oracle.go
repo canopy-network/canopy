@@ -73,30 +73,95 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 	return o, nil
 }
 
+// reorgRollback gets the last known good height and removes orders from the store until
+// the reorgRollbackDelta
+func (o *Oracle) reorgRollback() {
+	// get the last height processed by the oracle
+	height := o.stateManager.GetLastHeight()
+	if height == 0 {
+		o.log.Warnf("Reorg detected but no last known good height")
+		return
+	}
+	// calculate the rollback height - orders witnessed above this height will be removed
+	rollbackHeight := height - o.config.ReorgRollbackDelta
+	o.log.Infof("Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, o.config.ReorgRollbackDelta)
+	// process lock orders first
+	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
+	// process close orders second
+	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
+	o.log.Infof("Reorg rollback completed")
+}
+
+// rollbackOrderType removes orders of the specified type that were witnessed above the rollback height
+func (o *Oracle) rollbackOrderType(orderType types.OrderType, rollbackHeight uint64) {
+	// get all order ids of the specified type from the order store
+	orderIds, err := o.orderStore.GetAllOrderIds(orderType)
+	if err != nil {
+		o.log.Errorf("Error getting all %s order ids during rollback: %s", orderType, err.Error())
+		return
+	}
+	// track rollback statistics
+	totalOrders := len(orderIds)
+	removedCount := 0
+	// examine each stored order and remove if witnessed above rollback height
+	for _, orderId := range orderIds {
+		// read the witnessed order to check its witnessed height
+		witnessedOrder, err := o.orderStore.ReadOrder(orderId, orderType)
+		if err != nil {
+			o.log.Errorf("Error reading %s order %x during rollback: %s", orderType, orderId, err.Error())
+			continue
+		}
+		// check if this order was witnessed above the rollback height
+		if witnessedOrder.WitnessedHeight > rollbackHeight {
+			// remove the order from the store
+			err = o.orderStore.RemoveOrder(orderId, orderType)
+			if err != nil {
+				o.log.Errorf("Error removing %s order %x during rollback: %s", orderType, orderId, err.Error())
+				continue
+			}
+			removedCount++
+			o.log.Debugf("Removed %s order %x witnessed at height %d", orderType, orderId, witnessedOrder.WitnessedHeight)
+		}
+	}
+	o.log.Infof("Rollback processed %d %s orders, removed %d orders witnessed above height %d", totalOrders, orderType, removedCount, rollbackHeight)
+}
+
 // Start begins listening for blocks from the configured block provider
 func (o *Oracle) Start(ctx context.Context) {
 	// log that we're starting the oracle
 	o.log.Info("Starting oracle")
-	// listen for blocks
-	go o.run(ctx)
+	go func() {
+		for {
+			// an order book must be present to validate incoming orders
+			// wait for the controller to set it
+			for o.orderBook == nil {
+				o.log.Warnf("Oracle waiting for order book")
+				time.Sleep(1 * time.Second)
+			}
+			// listen for blocks
+			err := o.run(ctx)
+			if err == nil {
+				// oracle context cancelled
+				return
+			}
+			o.log.Errorf("Oracle stopped running: %s", err.Error())
+			// handle specific error types
+			switch err.Code() {
+			case CodeBlockSequence:
+				// log an error and allow provider to be restarted at last known good height
+				o.log.Errorf("Block sequence gap detected, restarting block provider")
+			case CodeChainReorg:
+				o.reorgRollback()
+				o.log.Errorf("Chain reorganization detected - oracle may need to rollback and reprocess from fork point")
+			}
+		}
+	}()
 }
 
 // run runs the main Oracle loop
-// - wait for order book to be present
-// - receive new block from provider
-// - persist that block height to disk
-// - process new block
-func (o *Oracle) run(ctx context.Context) {
-	// ticker to wait for order book
-	ticker := time.NewTicker(1 * time.Second)
-	// an order book must be present to validate incoming orders
-	// wait for the controller to set it
-	for o.orderBook == nil {
-		<-ticker.C
-		o.log.Warnf("Oracle waiting for order book")
-	}
-	// stop order book ticker
-	ticker.Stop()
+// - get last height from state manager
+// - start block provider
+func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 	// get the last height processed by the oracle
 	if height := o.stateManager.GetLastHeight(); height == 0 {
 		// zero signals the block provider to determine its own starting height
@@ -105,8 +170,11 @@ func (o *Oracle) run(ctx context.Context) {
 		// set the starting height for the block provider
 		o.blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
 	}
-	// start block provider with shared context
-	o.blockProvider.Start(ctx)
+	// create a new context from the existing one
+	blockProviderCtx, cancelBlockProvider := context.WithCancel(ctx)
+	defer cancelBlockProvider()
+	// start block provider with the new context
+	o.blockProvider.Start(blockProviderCtx)
 	// get the block channel from provider
 	blockCh := o.blockProvider.BlockCh()
 	// start the main oracle loop
@@ -114,27 +182,17 @@ func (o *Oracle) run(ctx context.Context) {
 		select {
 		case block, ok := <-blockCh:
 			if !ok {
-				// channel closed
 				o.log.Warn("Block channel closed, stopping oracle")
-				return
+				return ErrChannelClosed()
 			}
 			if block == nil {
-				o.log.Warn("Received nil block, skipping")
+				o.log.Warn("received nil block, skipping")
 				continue
 			}
 			// check block for gaps and reorganizations
 			if err := o.stateManager.ValidateSequence(block); err != nil {
-				o.log.Errorf("Block validation failed for height %d: %v", block.Number(), err)
-				// handle specific error types
-				switch err.Code() {
-				case CodeBlockSequence:
-					o.log.Errorf("Block sequence gap detected - oracle may need to be restarted with correct height")
-					// TODO trigger block provider to backfill missing blocks
-				case CodeChainReorg:
-					o.log.Errorf("Chain reorganization detected - oracle may need to rollback and reprocess from fork point")
-					// TODO implement automatic rollback and reprocessing
-				}
-				continue
+				o.log.Errorf("block validation failed for height %d: %v", block.Number(), err)
+				return err
 			}
 			// process the received block
 			err := o.processBlock(block)
@@ -151,7 +209,7 @@ func (o *Oracle) run(ctx context.Context) {
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
 			o.log.Info("Oracle context cancelled, stopping block processing")
-			return
+			return nil
 		}
 	}
 }
@@ -228,6 +286,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	if err != nil {
 		return ErrOrderValidation("error converting recipient address to bytes")
 	}
+	// verify the recipient of the transfer was the seller receive address
 	if !bytes.Equal(sellOrder.SellerReceiveAddress, recipient) {
 		return ErrOrderValidation("tokens not transferred to sell receive address")
 	}
@@ -255,10 +314,6 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	if len(block.Transactions()) > 0 {
 		o.log.Infof("Received block %s at height %d (%d transactions)", block.Hash(), block.Number(), len(block.Transactions()))
 	}
-	// ensure order book is present
-	if o.orderBook == nil {
-		return ErrNilOrderBook()
-	}
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {
 		// get order in this transaction
@@ -269,6 +324,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		}
 		// find the order in the order book
 		canopyOrder, orderErr := o.orderBook.GetOrder(order.OrderId)
+		// check for order error - only error possible is nil order book
 		if orderErr != nil {
 			o.log.Errorf("Error getting order from order book: %s", orderErr.Error())
 			return orderErr
