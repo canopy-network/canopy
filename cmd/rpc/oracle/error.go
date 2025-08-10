@@ -29,6 +29,8 @@ const (
 	CodeBlockSequence    lib.ErrorCode = 13
 	CodeChainReorg       lib.ErrorCode = 14
 	CodeNilOrderBook     lib.ErrorCode = 15
+	CodeContextCancelled lib.ErrorCode = 16
+	CodeChannelClosed    lib.ErrorCode = 17
 
 	// OrderStore Module
 	OrderStoreModule lib.ErrorModule = "order_store"
@@ -121,4 +123,12 @@ func ErrChainReorg(message string) lib.ErrorI {
 
 func ErrNilOrderBook() lib.ErrorI {
 	return lib.NewError(CodeNilOrderBook, OracleModule, "order book is nil")
+}
+
+func ErrContextCancelled() lib.ErrorI {
+	return lib.NewError(CodeContextCancelled, OracleModule, "oracle context cancelled")
+}
+
+func ErrChannelClosed() lib.ErrorI {
+	return lib.NewError(CodeChannelClosed, OracleModule, "channel closed")
 }

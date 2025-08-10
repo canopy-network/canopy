@@ -171,7 +171,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		// try to connect to ethereum node
 		err := p.connect(ctx)
 		if err != nil {
-			p.logger.Errorf("Error connecting to ethereum node: %s", err.Error())
+			p.logger.Errorf("error connecting to ethereum node: %s", err.Error())
 			select {
 			case <-ctx.Done():
 				return
@@ -182,7 +182,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		// fetch latest block
 		block, err := p.rpcClient.BlockByNumber(ctx, nil)
 		if err != nil {
-			p.logger.Errorf("Error fetching latest block from ethereum node: %s", err.Error())
+			p.logger.Errorf("error fetching latest block from ethereum node: %s", err.Error())
 			continue
 		}
 		// a next height of zero indicates no height was specified by the consumer
@@ -198,7 +198,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		// begin monitoring new block headers
 		err = p.monitorHeaders(ctx)
 		if err != nil {
-			p.logger.Errorf("Subscription error: %v", err)
+			p.logger.Errorf("subscription error: %v", err)
 		}
 		// close any remaining connections
 		p.closeConnections()
@@ -213,7 +213,7 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	rpcClient, err := ethclient.DialContext(ctx, p.config.NodeUrl)
 	if err != nil {
 		// log error and retry
-		p.logger.Errorf("Failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
+		p.logger.Errorf("failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
 		return err
 	}
 	// set rpc client
@@ -258,7 +258,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			p.logger.Info("header monitoring stopped due to context cancellation")
+			p.logger.Info("block provider context cancelled")
 			sub.Unsubscribe()
 			return ctx.Err()
 		case header := <-headerCh:
