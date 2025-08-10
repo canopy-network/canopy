@@ -574,9 +574,9 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			log := lib.NewDefaultLogger()
 			oracle := &Oracle{
-				orderStore:   tt.orderStore,
-				stateManager: NewOracleState("file", log),
-				log:          log,
+				orderStore: tt.orderStore,
+				state:      NewOracleState("file", log),
+				log:        log,
 			}
 			// 100 to specify a high enough root height that shouldSubmit always passes
 			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 100)
