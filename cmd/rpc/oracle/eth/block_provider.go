@@ -55,7 +55,7 @@ type OrderValidator interface {
 // EthBlockProvider provides ethereum blocks through a channel
 type EthBlockProvider struct {
 	config          lib.EthBlockProviderConfig // provider configuration
-	blockChan       chan types.BlockI          // channel to send safe blocks
+	blockChan       chan types.BlockI          // channel to send blocks
 	erc20TokenCache *ERC20TokenCache           // erc20 token info cache
 	logger          lib.LoggerI                // logger for debug and error messages
 	rpcClient       EthereumRpcClient          // rpc client for fetching blocks
@@ -266,20 +266,14 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				p.logger.Warn("received nil header or header number, skipping")
 				continue
 			}
-			// calculate a safe height based on current source chain height
-			safeHeight := lib.BigIntSub(header.Number, lib.BigInt(p.config.SafeBlockConfirmations))
-			// ensure safe height is a positive integer
-			if safeHeight.Cmp(lib.BigInt(0)) <= 0 {
-				continue
-			}
 			// ensure we haven't gotten ahead of the current chain height
 			if p.nextHeight.Cmp(header.Number) > 0 {
 				p.logger.Errorf("eth block provider: next expected source chain height was %d, higher than current source chain height %d", p.nextHeight, header.Number)
 				p.logger.Error("If this is expected, remove state file and restart node. Exiting.")
 				os.Exit(1)
 			}
-			// process safe blocks up to current height
-			p.nextHeight = p.processBlocks(ctx, p.nextHeight, safeHeight)
+			// process all blocks up to current height
+			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
 		case err := <-sub.Err():
 			sub.Unsubscribe()
 			return err
@@ -295,8 +289,8 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 	defer cancel()
 	// track next height to be processed
 	next := new(big.Int).Set(start)
-	p.logger.Debugf("block provider processing safe blocks from %d to %d", start, end)
-	// process blocks from next height to safe height
+	p.logger.Debugf("block provider processing blocks from %d to %d", start, end)
+	// process blocks from next height to current height
 	for next.Cmp(end) <= 0 {
 		// Check if context has been cancelled or timed out
 		select {

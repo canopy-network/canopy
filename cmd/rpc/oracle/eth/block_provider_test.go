@@ -166,9 +166,7 @@ func TestEthBlockProvider_fetchBlock(t *testing.T) {
 				rpcClient: mockClient,
 				logger:    logger,
 				chainId:   1,
-				config: lib.EthBlockProviderConfig{
-					SafeBlockConfirmations: 5, // default test value
-				},
+				config: lib.EthBlockProviderConfig{},
 				heightMu: &sync.Mutex{},
 			}
 
@@ -310,9 +308,7 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 				logger:          logger,
 				blockChan:       blockChan,
 				chainId:         1,
-				config: lib.EthBlockProviderConfig{
-					SafeBlockConfirmations: 5, // default test value
-				},
+				config: lib.EthBlockProviderConfig{},
 				heightMu: &sync.Mutex{},
 			}
 			// Call processBlocks with start and end parameters

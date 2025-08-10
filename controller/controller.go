@@ -130,6 +130,8 @@ func (c *Controller) Start() {
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				// update oracle's order book so it can start processing blocks
+				c.oracle.UpdateOrderBook(rootChainInfo.Orders)
 				// exit the loop
 				break
 			}
@@ -142,15 +144,6 @@ func (c *Controller) Start() {
 		go c.Sync()
 		// start the bft consensus (if synced to top)
 		go c.Consensus.Start()
-		// update the oracle order book
-		ob, err := c.GetOrderBook()
-		if err != nil {
-			c.log.Errorf("Error getting root chain order book: %v", err.Error())
-			c.log.Errorf("Oracle will not start until an order book is received")
-			return
-		}
-		// update oracle's order book so it can start processing blocks
-		c.oracle.UpdateOrderBook(ob)
 	}()
 }
 

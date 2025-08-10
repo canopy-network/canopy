@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -433,8 +435,11 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create Oracle instance
+			tempDir, _ := os.MkdirTemp("", "oracle_test")
+			defer os.RemoveAll(tempDir)
 			oracle := &Oracle{
 				orderStore: tt.orderStore,
+				state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
 				committee:  1,
 				log:        lib.NewDefaultLogger(),
 			}
