@@ -41,12 +41,14 @@ type Oracle struct {
 	orderBook *lib.OrderBook
 	// mutex to protect order book
 	orderBookMu sync.RWMutex
-	// stateManager handles block processing state, gap detection, and reorg detection
-	stateManager *OracleState
+	// state handles block processing state, gap detection, and reorg detection
+	state *OracleState
 	// oracle configuration
 	config lib.OracleConfig
 	// committee to use when constructing close orders. this must match the order bookc committee
 	committee uint64
+	// safeHeight is the highest block height that has received sufficient confirmations to be considered safe
+	safeHeight uint64
 	// context to allow graceful shutdown
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -63,7 +65,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		blockProvider: blockProvider,
 		orderStore:    transactionStore,
 		log:           logger,
-		stateManager:  NewOracleState(config.StateFile, logger),
+		state:         NewOracleState(config.StateFile, logger),
 		config:        config,
 		committee:     config.Committee,
 		ctx:           ctx,
@@ -77,7 +79,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 // the reorgRollbackDelta
 func (o *Oracle) reorgRollback() {
 	// get the last height processed by the oracle
-	height := o.stateManager.GetLastHeight()
+	height := o.state.GetLastHeight()
 	if height == 0 {
 		o.log.Warnf("Reorg detected but no last known good height")
 		return
@@ -163,7 +165,7 @@ func (o *Oracle) Start(ctx context.Context) {
 // - start block provider
 func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 	// get the last height processed by the oracle
-	if height := o.stateManager.GetLastHeight(); height == 0 {
+	if height := o.state.GetLastHeight(); height == 0 {
 		// zero signals the block provider to determine its own starting height
 		o.blockProvider.SetHeight(new(big.Int).SetUint64(0))
 	} else { // height found
@@ -190,7 +192,7 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 				continue
 			}
 			// check block for gaps and reorganizations
-			if err := o.stateManager.ValidateSequence(block); err != nil {
+			if err := o.state.ValidateSequence(block); err != nil {
 				o.log.Errorf("block validation failed for height %d: %v", block.Number(), err)
 				return err
 			}
@@ -201,8 +203,10 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 				o.log.Errorf("Failed to process block at height %d: %v", block.Number(), err)
 				continue
 			}
+			// update safe height after successful block processing
+			o.updateSafeHeight(block.Number())
 			// save state after successful block processing
-			if err := o.stateManager.SaveProcessedBlock(block); err != nil {
+			if err := o.state.SaveProcessedBlock(block); err != nil {
 				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
 				// continue processing despite state save failure
 			}
@@ -211,6 +215,25 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 			o.log.Info("Oracle context cancelled, stopping block processing")
 			return nil
 		}
+	}
+}
+
+// updateSafeHeight calculates and updates the safe block height with monotonic guarantee
+// The safe height can only increase, never decrease, providing stability during reorgs
+func (o *Oracle) updateSafeHeight(currentBlockHeight uint64) {
+	// calculate new safe height by subtracting required confirmations
+	var newSafeHeight uint64
+	if currentBlockHeight > o.config.SafeBlockConfirmations {
+		newSafeHeight = currentBlockHeight - o.config.SafeBlockConfirmations
+	} else {
+		// handle startup case where current height is less than required confirmations
+		newSafeHeight = 0
+	}
+	// only update if the new safe height is higher (monotonic property)
+	if newSafeHeight > o.safeHeight {
+		o.log.Debugf("Updating safe height from %d to %d (current height %d, confirmations %d)",
+			o.safeHeight, newSafeHeight, currentBlockHeight, o.config.SafeBlockConfirmations)
+		o.safeHeight = newSafeHeight
 	}
 }
 
@@ -400,6 +423,11 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 			o.log.Warnf("Proposed lock order %s not validated", lib.BytesToString(lock.OrderId))
 			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), err)
 		}
+		// check if the witnessed order is from a safe block (has sufficient confirmations)
+		if witnessedOrder.WitnessedHeight > o.safeHeight {
+			o.log.Warnf("Proposed lock order %s not validated: witnessed at height %d, safe height is %d", lib.BytesToString(lock.OrderId), witnessedOrder.WitnessedHeight, o.safeHeight)
+			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), errors.New("order witnessed above safe height"))
+		}
 		// compare orderbook order and witnessed order
 		if !lock.Equals(witnessedOrder.LockOrder) {
 			o.log.Warnf("Proposed lock order %s not validated", lib.BytesToString(lock.OrderId))
@@ -415,6 +443,11 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		if err != nil {
 			o.log.Warnf("Proposed close order %s not validated", lib.BytesToString(orderId))
 			return ErrOrderNotVerified(lib.BytesToString(orderId), err)
+		}
+		// check if the witnessed order is from a safe block (has sufficient confirmations)
+		if witnessedOrder.WitnessedHeight > o.safeHeight {
+			o.log.Warnf("Proposed close order %s not validated: witnessed at height %d, safe height is %d", lib.BytesToString(orderId), witnessedOrder.WitnessedHeight, o.safeHeight)
+			return ErrOrderNotVerified(lib.BytesToString(orderId), errors.New("order witnessed above safe height"))
 		}
 		// construct close order for comparison
 		order := lib.CloseOrder{
@@ -592,8 +625,13 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				}
 				continue
 			}
+			// check if the witnessed order is from a safe block (has sufficient confirmations)
+			if wOrder.WitnessedHeight > o.safeHeight {
+				o.log.Debugf("Not submitting lock order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, o.safeHeight)
+				continue
+			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
-			if !o.stateManager.shouldSubmit(wOrder, rootHeight, o.config) {
+			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
 				o.log.Debugf("Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}
@@ -610,8 +648,13 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				// No witnessed order is a normal condition, do not log
 				continue
 			}
+			// check if the witnessed order is from a safe block (has sufficient confirmations)
+			if wOrder.WitnessedHeight > o.safeHeight {
+				o.log.Debugf("Not submitting close order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, o.safeHeight)
+				continue
+			}
 			// check whether this witnessed close order should be submitted in the next proposed block
-			if !o.stateManager.shouldSubmit(wOrder, rootHeight, o.config) {
+			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
 				o.log.Debugf("Not submitting close order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}

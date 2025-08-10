@@ -312,23 +312,25 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 
 // OracleConfig represents the configuration of the off-chain order witness oracle
 type OracleConfig struct {
-	StateFile          string `json:"stateSaveFile"`       // file to save oracle state
-	OrderResubmitDelay uint64 `json:"orderResubmitDelay"`  // how many root blocks to wait to resubmit order
-	Committee          uint64 `json:"committee"`           // committee this oracle will be witnessed orders for
-	ProposeLeadTime    uint64 `json:"proposeLeadTime"`     // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
-	ReorgRollbackDelta uint64 `json:"reorgRollbackHeight"` // how far back to rollback the order store on reorgs
-	LockOrderHoldTime  uint64 `json:"lockOrderBlockTime"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
+	StateFile              string `json:"stateSaveFile"`          // file to save oracle state
+	OrderResubmitDelay     uint64 `json:"orderResubmitDelay"`     // how many root blocks to wait to resubmit order
+	Committee              uint64 `json:"committee"`              // committee this oracle will be witnessed orders for
+	ProposeLeadTime        uint64 `json:"proposeLeadTime"`        // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
+	ReorgRollbackDelta     uint64 `json:"reorgRollbackHeight"`    // how far back to rollback the order store on reorgs
+	LockOrderHoldTime      uint64 `json:"lockOrderBlockTime"`     // how many root blocks to wait to prevent resubmission of lock orders with same ID
+	SafeBlockConfirmations uint64 `json:"safeBlockConfirmations"` // number of block confirmations required before considering a block safe
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		StateFile:          "oracle.state",
-		OrderResubmitDelay: 2,
-		Committee:          2,
-		ProposeLeadTime:    3,
-		ReorgRollbackDelta: 60,
-		LockOrderHoldTime:  2,
+		StateFile:              "oracle.state",
+		OrderResubmitDelay:     2,
+		Committee:              2,
+		ProposeLeadTime:        3,
+		ReorgRollbackDelta:     60,
+		LockOrderHoldTime:      2,
+		SafeBlockConfirmations: 5,
 	}
 }
 
