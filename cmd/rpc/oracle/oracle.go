@@ -88,6 +88,8 @@ func (o *Oracle) reorgRollback() {
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
 	// process close orders second
 	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
+	// reset submission history
+	o.state.ResetSubmissionHistory()
 	o.log.Infof("Reorg rollback completed")
 }
 
@@ -203,7 +205,7 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 			// save state after successful block processing
 			if err := o.state.SaveProcessedBlock(block); err != nil {
 				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
-				// continue processing despite state save failure
+				return err
 			}
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
@@ -446,14 +448,6 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 	return nil
 }
 
-// UpdateOrderBook receives a new order book and stores it for order validation
-func (o *Oracle) UpdateOrderBook(orderBook *lib.OrderBook) {
-	o.orderBookMu.Lock()
-	defer o.orderBookMu.Unlock()
-	o.orderBook = orderBook
-	o.log.Debugf("Orderbook updated, %d orders", len(orderBook.Orders))
-}
-
 // CommitCertificate is executed after the quorum agrees on a block
 func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
 
@@ -499,9 +493,9 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 	return
 }
 
-// UpdateRootChainInfo examines the new root chain order book and updates the local order store.
+// UpdateRootChainInfo examines the new root chain order book and prunes the local order store.
 // The method performs the following operations:
-//   - saves the order book for later use
+//   - saves the order book for use in processBlocks
 //   - removes lock orders from the store when corresponding sell orders are locked on the root chain
 //   - removes lock/close orders when their corresponding sell orders are no longer present
 func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
@@ -513,14 +507,13 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
 
-	if o.orderBook == nil {
-		o.log.Warn("Order book is nil, skipping order store cleanup")
-		return
-	}
 	// log a warning for a nil order book
 	if info.Orders == nil {
-		o.log.Warn("OrderBook from root chain was nil")
+		o.log.Warn("UpdateRootChainInfo Order book from root chain was nil")
+		return
 	}
+	// copy and save order book
+	o.orderBook = info.Orders.Copy()
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
