@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"sync"
 	"time"
 
@@ -261,7 +260,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			if p.nextHeight.Cmp(header.Number) > 0 {
 				p.logger.Errorf("eth block provider: next expected source chain height was %d, higher than current source chain height %d", p.nextHeight, header.Number)
 				p.logger.Error("If this is expected, remove state file and restart node. Exiting.")
-				os.Exit(1)
+				return ErrSourceHeight
 			}
 			// process all blocks up to current height
 			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)

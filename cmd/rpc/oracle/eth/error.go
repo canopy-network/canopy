@@ -21,4 +21,5 @@ var (
 	ErrMaxRetries             = errors.New("maximum retries reached")
 	ErrTransactionReceipt     = errors.New("failed to get transaction receipt")
 	ErrTokenInfo              = errors.New("failed to get token info")
+	ErrSourceHeight           = errors.New("ethereum block height lower than expected")
 )
