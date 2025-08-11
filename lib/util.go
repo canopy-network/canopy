@@ -282,6 +282,14 @@ func MarshalJSON(message any) ([]byte, ErrorI) {
 	return jsonBytes, nil
 }
 
+// MustMarshalJSON() serializes a message into a JSON without error checking
+func MustMarshalJSON(message any) []byte {
+	// convert the message to json bytes
+	jsonBytes, _ := json.Marshal(message)
+	// exit with json bytes
+	return jsonBytes
+}
+
 // UnmarshalJSON() deserializes a JSON byte slice into the specified object
 func UnmarshalJSON(jsonBytes []byte, ptr any) ErrorI {
 	// populate the pointer with json bytes

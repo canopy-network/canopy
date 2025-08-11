@@ -71,10 +71,7 @@ type Store struct {
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
 func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	if config.StoreConfig.InMemory {
-		return NewStoreInMemory(l)
-	}
-	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
+	return NewStore(config, filepath.Join(config.DataDirPath, `canopy`), metrics, l)
 }
 
 // NewStore() creates a new instance of a disk DB
