@@ -199,119 +199,119 @@ func TestOracleState_shouldSubmit(t *testing.T) {
 		sourceChainHeight        uint64
 		orderResubmitDelay       uint64
 		proposeLeadTime          uint64
-		lockOrderHoldTime        uint64
+		lockOrderHoldBlocks      uint64
 		orderType                string // "lock" or "close" or "none"
 		setupPreviousSubmission  bool   // whether to simulate a previous lock order submission
 		previousSubmissionHeight uint64
 		expected                 bool
 	}{
 		{
-			name:               "propose lead time not passed - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60,
-			sourceChainHeight:  14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           false,
+			name:                "propose lead time not passed - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60,
+			sourceChainHeight:   14, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(14) < 15
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            false,
 		},
 		{
-			name:               "propose lead time exact boundary - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60,
-			sourceChainHeight:  15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15 but still not passed
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           false,
+			name:                "propose lead time exact boundary - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60,
+			sourceChainHeight:   15, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(15) >= 15 but still not passed
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay not reached - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
-			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           false,
+			name:                "resubmit delay not reached - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          55, // 40 + 20 = 60, so 55 <= 60 (delay not reached)
+			sourceChainHeight:   16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay exact boundary - should not submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
-			sourceChainHeight:  16,
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           false,
+			name:                "resubmit delay exact boundary - should not submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          60, // 40 + 20 = 60, so 60 <= 60 (delay not reached)
+			sourceChainHeight:   16,
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            false,
 		},
 		{
-			name:               "resubmit delay exceeded - should submit close order",
-			lastSubmitHeight:   30,
-			witnessedHeight:    10,
-			rootHeight:         100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
-			sourceChainHeight:  16,
-			orderResubmitDelay: 20,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           true,
+			name:                "resubmit delay exceeded - should submit close order",
+			lastSubmitHeight:    30,
+			witnessedHeight:     10,
+			rootHeight:          100, // 30 + 20 = 50, so 100 > 50 (delay exceeded)
+			sourceChainHeight:   16,
+			orderResubmitDelay:  20,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            true,
 		},
 		{
-			name:               "first submission with all checks passed - should submit",
-			lastSubmitHeight:   0,
-			witnessedHeight:    10,
-			rootHeight:         100,
-			sourceChainHeight:  16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
-			orderResubmitDelay: 10,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "lock",
-			expected:           true,
+			name:                "first submission with all checks passed - should submit",
+			lastSubmitHeight:    0,
+			witnessedHeight:     10,
+			rootHeight:          100,
+			sourceChainHeight:   16, // witnessedHeight(10) + proposeLeadTime(5) = 15, sourceChainHeight(16) > 15
+			orderResubmitDelay:  10,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "lock",
+			expected:            true,
 		},
 		{
-			name:               "zero propose lead time with resubmit delay exceeded - should submit",
-			lastSubmitHeight:   40,
-			witnessedHeight:    10,
-			rootHeight:         80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
-			sourceChainHeight:  11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
-			orderResubmitDelay: 20,
-			proposeLeadTime:    0,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           true,
+			name:                "zero propose lead time with resubmit delay exceeded - should submit",
+			lastSubmitHeight:    40,
+			witnessedHeight:     10,
+			rootHeight:          80, // 40 + 20 = 60, so 80 > 60 (delay exceeded)
+			sourceChainHeight:   11, // witnessedHeight(10) + proposeLeadTime(0) = 10, sourceChainHeight(11) > 10
+			orderResubmitDelay:  20,
+			proposeLeadTime:     0,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            true,
 		},
 		{
-			name:               "zero delay with propose lead time passed - should submit",
-			lastSubmitHeight:   50,
-			witnessedHeight:    10,
-			rootHeight:         51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
-			sourceChainHeight:  16,
-			orderResubmitDelay: 0,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  10,
-			orderType:          "close",
-			expected:           true,
+			name:                "zero delay with propose lead time passed - should submit",
+			lastSubmitHeight:    50,
+			witnessedHeight:     10,
+			rootHeight:          51, // 50 + 0 = 50, so 51 > 50 (delay exceeded)
+			sourceChainHeight:   16,
+			orderResubmitDelay:  0,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 10,
+			orderType:           "close",
+			expected:            true,
 		},
 		{
-			name:               "lock order first submission - should submit",
-			lastSubmitHeight:   0,
-			witnessedHeight:    10,
-			rootHeight:         100,
-			sourceChainHeight:  16,
-			orderResubmitDelay: 10,
-			proposeLeadTime:    5,
-			lockOrderHoldTime:  20,
-			orderType:          "lock",
-			expected:           true,
+			name:                "lock order first submission - should submit",
+			lastSubmitHeight:    0,
+			witnessedHeight:     10,
+			rootHeight:          100,
+			sourceChainHeight:   16,
+			orderResubmitDelay:  10,
+			proposeLeadTime:     5,
+			lockOrderHoldBlocks: 20,
+			orderType:           "lock",
+			expected:            true,
 		},
 		{
 			name:                     "lock order resubmission too soon - should not submit",
@@ -321,7 +321,7 @@ func TestOracleState_shouldSubmit(t *testing.T) {
 			sourceChainHeight:        16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
-			lockOrderHoldTime:        20,
+			lockOrderHoldBlocks:      20,
 			orderType:                "lock",
 			setupPreviousSubmission:  true,
 			previousSubmissionHeight: 100, // 105 - 100 = 5 blocks, need 20
@@ -335,7 +335,7 @@ func TestOracleState_shouldSubmit(t *testing.T) {
 			sourceChainHeight:        16,
 			orderResubmitDelay:       10,
 			proposeLeadTime:          5,
-			lockOrderHoldTime:        20,
+			lockOrderHoldBlocks:      20,
 			orderType:                "lock",
 			setupPreviousSubmission:  true,
 			previousSubmissionHeight: 100, // 125 - 100 = 25 blocks, need 20, so allowed
@@ -358,9 +358,9 @@ func TestOracleState_shouldSubmit(t *testing.T) {
 			}
 			// Create config
 			config := lib.OracleConfig{
-				OrderResubmitDelay: tt.orderResubmitDelay,
-				ProposeLeadTime:    tt.proposeLeadTime,
-				LockOrderHoldTime:  tt.lockOrderHoldTime,
+				OrderResubmitDelay:  tt.orderResubmitDelay,
+				ProposeLeadBlocks:   tt.proposeLeadTime,
+				LockOrderHoldBlocks: tt.lockOrderHoldBlocks,
 			}
 			// Create witnessed order
 			order := &types.WitnessedOrder{
