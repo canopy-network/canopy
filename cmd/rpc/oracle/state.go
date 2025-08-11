@@ -36,8 +36,8 @@ type OracleState struct {
 	lockOrderSubmissions map[string]uint64
 	// safeHeight is the highest block height that has received sufficient confirmations to be considered safe
 	safeHeight uint64
-	// safeHeightMu protects the safeHeight field from concurrent access
-	safeHeightMu sync.RWMutex
+	// rwLock protects all oracle state fields from concurrent access
+	rwLock sync.RWMutex
 	// logger for state management operations
 	log lib.LoggerI
 }
@@ -50,15 +50,19 @@ func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
 	}
 	return &OracleState{
 		stateSaveFile:        stateSaveFile,
-		log:                  logger,
 		submissionHistory:    make(map[string]map[uint64]bool),
 		lockOrderSubmissions: make(map[string]uint64),
+		rwLock:               sync.RWMutex{},
+		log:                  logger,
 	}
 }
 
 // shouldSubmit determines if the current oracle state allows for submitting this order
 // Performs all submission checks including lead time, resubmit delay, lock order restrictions, and history tracking
 func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint64, config lib.OracleConfig) bool {
+	// protect all oracle state fields with write lock
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// CHECK 1: Propose lead time validation
@@ -109,6 +113,9 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 
 // ValidateSequence performs comprehensive block validation including gap detection and reorg detection
 func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
+	// protect oracle state fields with write lock
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
 	// verify sequential block processing to detect gaps and chain reorganizations
 	lastState, err := m.readBlockState()
 	if err != nil {
@@ -152,11 +159,18 @@ func (m *OracleState) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 	}
 	// m.log.Debugf("Saved block state for height %d", state.Height)
 	// write state to file atomically
-	return m.atomicWriteFile(m.stateSaveFile, stateBytes)
+	if err := lib.AtomicWriteFile(m.stateSaveFile, stateBytes); err != nil {
+		m.log.Errorf("Failed to write state file: %v", err)
+		return ErrWriteStateFile(err)
+	}
+	return nil
 }
 
 // GetLastHeight returns the last processed source chain height
 func (m *OracleState) GetLastHeight() uint64 {
+	// protect oracle state fields with read lock
+	m.rwLock.RLock()
+	defer m.rwLock.RUnlock()
 	// check for previous state from last run
 	if state, err := m.readBlockState(); err == nil {
 		m.log.Infof("Found previous block state: height %d", state.Height)
@@ -185,47 +199,6 @@ func (m *OracleState) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	return &state, nil
 }
 
-// atomicWriteFile writes data to a file atomically using write-and-move pattern
-func (m *OracleState) atomicWriteFile(filePath string, data []byte) lib.ErrorI {
-	// create temporary file in the same directory as the target file
-	dir := filepath.Dir(filePath)
-	tempFile, err := os.CreateTemp(dir, ".tmp_oracle_state_*")
-	if err != nil {
-		m.log.Errorf("Failed to create temporary file: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	tempFilePath := tempFile.Name()
-	// ensure temporary file is cleaned up if something goes wrong
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFilePath)
-	}()
-	// write data to temporary file
-	_, err = tempFile.Write(data)
-	if err != nil {
-		m.log.Errorf("Failed to write to temporary file: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	// sync to ensure data is written to disk
-	err = tempFile.Sync()
-	if err != nil {
-		m.log.Errorf("Failed to sync temporary file: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	// close temporary file before rename
-	err = tempFile.Close()
-	if err != nil {
-		m.log.Errorf("Failed to close temporary file: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	// atomically move temporary file to final destination
-	err = os.Rename(tempFilePath, filePath)
-	if err != nil {
-		m.log.Errorf("Failed to rename temporary file to final destination: %v", err)
-		return ErrWriteStateFile(err)
-	}
-	return nil
-}
 
 // updateSafeHeight calculates and updates the safe block height with monotonic guarantee
 // The safe height can only increase, never decrease, providing stability during reorgs
@@ -238,9 +211,9 @@ func (m *OracleState) updateSafeHeight(currentBlockHeight uint64, config lib.Ora
 		// handle startup case where current height is less than required confirmations
 		newSafeHeight = 0
 	}
-	// protect safeHeight field with write lock
-	m.safeHeightMu.Lock()
-	defer m.safeHeightMu.Unlock()
+	// protect oracle state fields with write lock
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
 	// only update if the new safe height is higher (monotonic property)
 	if newSafeHeight > m.safeHeight {
 		m.log.Debugf("Updating safe height from %d to %d (current height %d, confirmations %d)",
@@ -251,8 +224,21 @@ func (m *OracleState) updateSafeHeight(currentBlockHeight uint64, config lib.Ora
 
 // GetSafeHeight returns the current safe block height
 func (m *OracleState) GetSafeHeight() uint64 {
-	// protect safeHeight field with read lock
-	m.safeHeightMu.RLock()
-	defer m.safeHeightMu.RUnlock()
+	// protect oracle state fields with read lock
+	m.rwLock.RLock()
+	defer m.rwLock.RUnlock()
 	return m.safeHeight
+}
+
+// ResetSubmissionHistory clears both submission history fields during reorganization rollback
+// This prevents stale submission records from blocking valid resubmissions after a chain reorg
+func (m *OracleState) ResetSubmissionHistory() {
+	// protect oracle state fields with write lock
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
+	// clear submission history tracking
+	m.submissionHistory = make(map[string]map[uint64]bool)
+	// clear lock order submission tracking
+	m.lockOrderSubmissions = make(map[string]uint64)
+	m.log.Infof("Reset submission history due to chain reorganization")
 }
