@@ -295,19 +295,21 @@ func DefaultMetricsConfig() MetricsConfig {
 }
 
 type EthBlockProviderConfig struct {
-	NodeUrl    string `json:"ethNodeUrl"`   // ethereum rpc node url
-	NodeWSUrl  string `json:"ethNodeWsUrl"` // ethereum node websocket url
-	EVMChainId uint64 `json:"evmChainId"`   // ethereum chain id
-	RetryDelay int    `json:"retryDelay"`   // retry delay in seconds for connection failures
+	NodeUrl           string `json:"ethNodeUrl"`        // ethereum rpc node url
+	NodeWSUrl         string `json:"ethNodeWsUrl"`      // ethereum node websocket url
+	EVMChainId        uint64 `json:"evmChainId"`        // ethereum chain id
+	RetryDelay        int    `json:"retryDelay"`        // retry delay in seconds for connection failures
+	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
 }
 
 // DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
 func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 	return EthBlockProviderConfig{
-		NodeUrl:    "http://localhost:8545",
-		NodeWSUrl:  "ws://localhost:8545",
-		EVMChainId: 1,
-		RetryDelay: 5, // default 5 seconds reconnect retry delay
+		NodeUrl:           "http://localhost:8545",
+		NodeWSUrl:         "ws://localhost:8545",
+		EVMChainId:        1,
+		RetryDelay:        5, // default 5 seconds reconnect retry delay
+		StartupBlockDepth: 1000,
 	}
 }
 
@@ -320,7 +322,6 @@ type OracleConfig struct {
 	ReorgRollbackDelta     uint64 `json:"reorgRollbackHeight"`    // how far back to rollback the order store on reorgs
 	LockOrderHoldBlocks    uint64 `json:"lockOrderBlockTime"`     // how many root blocks to wait to prevent resubmission of lock orders with same ID
 	SafeBlockConfirmations uint64 `json:"safeBlockConfirmations"` // number of block confirmations required before considering a block safe
-	StartupBlockDepth      uint64 `json:"startupBlockDepth"`      // how far back to start processing blocks when no next height was provided
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -333,7 +334,6 @@ func DefaultOracleConfig() OracleConfig {
 		ReorgRollbackDelta:     60,
 		LockOrderHoldBlocks:    2,
 		SafeBlockConfirmations: 5,
-		StartupBlockDepth:      1000,
 	}
 }
 

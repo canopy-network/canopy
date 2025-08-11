@@ -890,3 +890,40 @@ func BigIntIsZero(i *big.Int) bool {
 func BigIntSub(x, y *big.Int) *big.Int {
 	return new(big.Int).Sub(x, y)
 }
+
+// AtomicWriteFile writes data to a file atomically using write-and-move pattern
+func AtomicWriteFile(filePath string, data []byte) error {
+	// create temporary file in the same directory as the target file
+	dir := filepath.Dir(filePath)
+	tempFile, err := os.CreateTemp(dir, ".tmp_atomic_*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tempFilePath := tempFile.Name()
+	// ensure temporary file is cleaned up if something goes wrong
+	defer func() {
+		tempFile.Close()
+		os.Remove(tempFilePath)
+	}()
+	// write data to temporary file
+	_, err = tempFile.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write to temporary file: %w", err)
+	}
+	// sync to ensure data is written to disk
+	err = tempFile.Sync()
+	if err != nil {
+		return fmt.Errorf("failed to sync temporary file: %w", err)
+	}
+	// close temporary file before rename
+	err = tempFile.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+	// atomically move temporary file to final destination
+	err = os.Rename(tempFilePath, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to rename temporary file to final destination: %w", err)
+	}
+	return nil
+}
