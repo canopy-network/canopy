@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -162,19 +161,17 @@ func (o *Oracle) Start(ctx context.Context) {
 // - get last height from state manager
 // - start block provider
 func (o *Oracle) run(ctx context.Context) lib.ErrorI {
-	// get the last height processed by the oracle
-	if height := o.state.GetLastHeight(); height == 0 {
-		// zero signals the block provider to determine its own starting height
-		o.blockProvider.SetHeight(new(big.Int).SetUint64(0))
-	} else { // height found
-		// set the starting height for the block provider
-		o.blockProvider.SetHeight(new(big.Int).SetUint64(height + 1))
-	}
 	// create a new context from the existing one
 	blockProviderCtx, cancelBlockProvider := context.WithCancel(ctx)
 	defer cancelBlockProvider()
-	// start block provider with the new context
-	o.blockProvider.Start(blockProviderCtx)
+	// get the last height processed by the oracle
+	if height := o.state.GetLastHeight(); height == 0 { // no height found
+		// zero signals the block provider to determine its own starting height
+		o.blockProvider.Start(blockProviderCtx, height)
+	} else { // height found
+		// set the starting height for the block provider
+		o.blockProvider.Start(blockProviderCtx, height+1)
+	}
 	// get the block channel from provider
 	blockCh := o.blockProvider.BlockCh()
 	// start the main oracle loop
