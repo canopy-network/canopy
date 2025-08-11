@@ -390,7 +390,7 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		o.log.Debug("No orders to validate")
 		return nil
 	}
-	// get safe height once at the start for efficiency
+	// current safe height
 	safeHeight := o.state.GetSafeHeight()
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
@@ -591,6 +591,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	if o == nil {
 		return lockOrders, closeOrders
 	}
+	// current safe height
+	safeHeight := o.state.GetSafeHeight()
 	// loop through the order book searching the order store for lock/close orders witnessed by this node
 	for _, order := range orderBook.Orders {
 		// buyer receive address being nil indicates this is an unlocked sell order
@@ -604,8 +606,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
-			if wOrder.WitnessedHeight > o.state.GetSafeHeight() {
-				o.log.Debugf("Not submitting lock order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, o.state.GetSafeHeight())
+			if wOrder.WitnessedHeight > safeHeight {
+				o.log.Debugf("Not submitting lock order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
@@ -627,8 +629,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				continue
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
-			if wOrder.WitnessedHeight > o.state.GetSafeHeight() {
-				o.log.Debugf("Not submitting close order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, o.state.GetSafeHeight())
+			if wOrder.WitnessedHeight > safeHeight {
+				o.log.Debugf("Not submitting close order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
