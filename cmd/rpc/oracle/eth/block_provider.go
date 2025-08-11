@@ -94,16 +94,6 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 	return p
 }
 
-// SetHeight sets the next block height that the consumer wants to receive
-func (p *EthBlockProvider) SetHeight(height *big.Int) {
-	p.heightMu.Lock()
-	defer p.heightMu.Unlock()
-	// set the next height to process
-	p.nextHeight = height
-	// log the height setting
-	p.logger.Infof("set next block height to: %d", height)
-}
-
 // fetchBlock fetches the block at the specified height and wraps each transaction
 func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Block, error) {
 	// fetch block from ethereum client
@@ -153,7 +143,8 @@ func (p *EthBlockProvider) closeConnections() {
 }
 
 // Start begins the block provider operation
-func (p *EthBlockProvider) Start(ctx context.Context) {
+func (p *EthBlockProvider) Start(ctx context.Context, height uint64) {
+	p.nextHeight = new(big.Int).SetUint64(height)
 	p.logger.Info("starting ethereum block provider")
 	go p.run(ctx)
 }

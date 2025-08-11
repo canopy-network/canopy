@@ -142,12 +142,10 @@ type OrderStore interface {
 }
 
 type BlockProvider interface {
-	// SetHeight sets the next block to be provided
-	SetHeight(height *big.Int)
+	// Start the block provider at height
+	Start(ctx context.Context, height uint64)
 	// Block returns the channel this provider will send new blocks through
 	BlockCh() chan BlockI
-	// Start starts the block provider
-	Start(ctx context.Context)
 }
 
 // TokenInfo holds the basic information about an ERC20 token
