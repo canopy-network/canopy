@@ -15,7 +15,17 @@ var ReservedIDs = []uint64{
 
 // EscrowPoolAddend is used to translate a chainId into the id for the 'swap' escrow pool
 // Example: pools[chainId] -> stake pool && pools[chainId+EscrowPoolAddend] -> escrow pool for token swaps
-const EscrowPoolAddend = math.MaxUint16
+
+var (
+	MaxChainId          = math.MaxUint16 / 4
+	HoldingPoolAddend   = 1 * math.MaxUint16 / 4
+	LiquidityPoolAddend = 2 * math.MaxUint16 / 4
+	Unused1PoolAddend   = 3 * math.MaxUint16 / 4
+	EscrowPoolAddend    = 4 * math.MaxUint16 / 4
+	Unused2PoolAddend   = 5 * math.MaxUint16 / 4
+	Unused3PoolAddend   = 6 * math.MaxUint16 / 4
+	Unused4PoolAddend   = 7 * math.MaxUint16 / 4
+)
 
 var (
 	accountPrefix          = []byte{1}  // store key prefix for accounts

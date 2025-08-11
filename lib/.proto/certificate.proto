@@ -4,6 +4,7 @@ package types;
 option go_package = "github.com/canopy-network/canopy/lib";
 
 import "consensus.proto";
+import "dex.proto";
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
 //
@@ -57,6 +58,8 @@ message CertificateResult {
   Checkpoint checkpoint = 4;
   // retired: signals if the committee wants to shut down and mark itself as 'forever unsubsidized' on the root-chain
   bool retired = 5;
+  // dex: contains information regarding the selling side 'dex' operations
+
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,
@@ -179,4 +182,14 @@ message CommitteeData {
   // number_of_samples: the total count of processed Certificate Result Transactions, used to dilute reward percentages
   // accurately
   uint64 number_of_samples = 5; // @gotags: json:"numberOfSamples"
+}
+
+// DexData is information regarding 'dex' operations from the nested chain
+message DexData {
+  // orders: contains the list of dex limit orders
+  repeated DexLimitOrder orders = 1; // @gotags: json:"orders"
+  // poolSize: contains the current balance of the liquidity pool
+  uint64 pool_size = 2; // @gotags: json:"poolSize"
+  // receipts: contains the list of dex receipts
+  repeated DexReceipt receipts = 3;
 }

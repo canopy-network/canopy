@@ -806,8 +806,8 @@ func checkChainId(i uint64) lib.ErrorI {
 			return ErrInvalidChainId()
 		}
 	}
-	// NOTE: chainIds should never be GTE MaxUint16, as the 'escrow pool' is just <chainId + uint16>
-	if i >= EscrowPoolAddend {
+	// ensure the chain id doesn't exceed max
+	if i > uint64(MaxChainId) {
 		return ErrInvalidChainId()
 	}
 	return nil

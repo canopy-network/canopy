@@ -1,0 +1,77 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/canopy-network/canopy/lib";
+
+// *****************************************************************************************************
+// This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
+//
+// Protobuf is a language-neutral, platform-neutral serialization format. It allows users
+// to define objects in a way that’s both efficient to store and fast to transmit over the network.
+// These definitions are compiled into code that *enables different systems and programming languages
+// to communicate in a byte-perfect manner*
+//
+// To update these structures, make changes to the source .proto files, then recompile
+// to regenerate this file.
+// These auto-generated files are easily recognized by checking for a `.pb.go` ending
+// *****************************************************************************************************
+//_
+//_
+//_
+// CANOPY DEX PROTOCOL:
+// Facilitates cross-chain token swaps between Token A (Nested) and Token B (Root) chains using an AMM model.
+// Each chain maintains its own validator set and liquid pools, with cross-chain communication for coordination.
+//
+// Token A -> Token B SWAP:
+// 1. Alice submits a 'sell intent' on Token A (chain, locking Token A tokens in a holding pool and specifying
+//    minimum Token B tokens she'll accept (min_receive_tokens limit).
+//
+// 2. Token A validators package Alice's sell intent with current liquid pool balance and send transaction
+//    to Token B validators.
+//
+// 3. Token B validators process the intent using AMM curve formula (constant product with fees), distribute
+//    Token B from their liquid pool to Alice if successful, and save a receipt to state.
+//
+// 4. Token A validators read Token B receipts - if successful, move Alice's locked Token A to liquid pool;
+//    otherwise revert tokens back to Alice.
+//
+// Token B (ROOT) -> Token A (NESTED) SWAP (reverse process):
+// 1. Bob locks Token B tokens and specifies minimum Token A acceptance threshold.
+// 2. Token A validators process intent, distribute Token A if successful, send transaction to Token B.
+// 3. Token B validators process receipts and either move Bob's Token B to liquid pool or revert.
+//
+// BATCH PROCESSING: Uses Uniform Clearing Price (UCP) algorithm that sorts orders by surplus metric
+// (add_amount² / min_ask) and finds the price that maximizes surplus while satisfying all
+// accepted orders' constraints.
+//
+// SAFETY: Implements locking mechanism where one chain waits for receipts before processing new intents,
+// with automatic resubmission (up to 3 times) if receipts aren't received within 5 blocks.
+
+// DexLimitOrder is the core structure holding AMM token swap data - created when user submits intent, processed
+// through cross-chain validation, and resolved when both chains confirm the atomic swap completion.
+message DexLimitOrder {
+  // id: the unique identifier of the order
+  bytes Id = 1; // @gotags: json:"id"
+  // committee: the id of the 'counter asset'
+  uint64 Committee = 2; // @gotags: json:"committee"
+  // amount_for_sale: amount of asset for sale
+  uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
+  // requested_amount: the minimum requested amount of 'counter-asset' to receive
+  uint64 RequestedAmount = 4; // @gotags: json:"requestedAmount"
+  // address: the address where the funds are transferred from and to
+  bytes Address = 5; // @gotags: json:"address"
+  // batch_id: the identifier of the 'batch' that must be fully processed before evicting this limit order from state
+  uint64 batch_id = 6; // @gotags: json:"batchId"
+}
+
+// DexReceipt is the state entry that is created when funds are distributed from a liquidity pool
+message DexReceipt {
+  // id: the unique identifier of the order
+  bytes Id = 1; // @gotags: json:"id"
+  // committee: the id of the 'counter asset'
+  uint64 Committee = 2; // @gotags: json:"committee"
+  // batch_id: the identifier of the 'batch' that must be fully processed before evicting this limit order from state
+  uint64 batch_id = 3; // @gotags: json:"batchId"
+  // success: true if the funds were transferred from the pool, otherwise false
+  bool success = 4;
+}
