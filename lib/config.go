@@ -295,25 +295,19 @@ func DefaultMetricsConfig() MetricsConfig {
 }
 
 type EthBlockProviderConfig struct {
-	NodeUrl                string `json:"ethNodeUrl"`             // ethereum rpc node url
-	NodeWSUrl         string `json:"ethNodeWsUrl"`     // ethereum node websocket url
-	EVMChainId        uint64 `json:"evmChainId"`       // ethereum chain id
-	RetryDelay        int    `json:"retryDelay"`       // retry delay in seconds for connection failures
-	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
+	NodeUrl    string `json:"ethNodeUrl"`   // ethereum rpc node url
+	NodeWSUrl  string `json:"ethNodeWsUrl"` // ethereum node websocket url
+	EVMChainId uint64 `json:"evmChainId"`   // ethereum chain id
+	RetryDelay int    `json:"retryDelay"`   // retry delay in seconds for connection failures
 }
 
 // DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
 func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 	return EthBlockProviderConfig{
-		// NodeUrl:              "https://eth-mainnet.alchemyapi.io/v2/demo",
-		// NodeWSSUrl:           "wss://eth-mainnet.alchemyapi.io/v2/demo",
-		// NodeUrl:    "https://eth-mainnet-canopy.us.nodefleet.net",
-		// NodeWSSUrl: "wss://eth-canopy-ws.us.nodefleet.net",
-		NodeUrl:                "http://localhost:8545",
-		NodeWSUrl:              "ws://localhost:8545",
-		EVMChainId:             1,
-		RetryDelay:        5,    // default 5 seconds reconnect retry delay
-		StartupBlockDepth: 1000,
+		NodeUrl:    "http://localhost:8545",
+		NodeWSUrl:  "ws://localhost:8545",
+		EVMChainId: 1,
+		RetryDelay: 5, // default 5 seconds reconnect retry delay
 	}
 }
 
@@ -322,10 +316,11 @@ type OracleConfig struct {
 	StateFile              string `json:"stateSaveFile"`          // file to save oracle state
 	OrderResubmitDelay     uint64 `json:"orderResubmitDelay"`     // how many root blocks to wait to resubmit order
 	Committee              uint64 `json:"committee"`              // committee this oracle will be witnessed orders for
-	ProposeLeadTime        uint64 `json:"proposeLeadTime"`        // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
+	ProposeLeadBlocks      uint64 `json:"proposeLeadTime"`        // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
 	ReorgRollbackDelta     uint64 `json:"reorgRollbackHeight"`    // how far back to rollback the order store on reorgs
-	LockOrderHoldTime      uint64 `json:"lockOrderBlockTime"`     // how many root blocks to wait to prevent resubmission of lock orders with same ID
+	LockOrderHoldBlocks    uint64 `json:"lockOrderBlockTime"`     // how many root blocks to wait to prevent resubmission of lock orders with same ID
 	SafeBlockConfirmations uint64 `json:"safeBlockConfirmations"` // number of block confirmations required before considering a block safe
+	StartupBlockDepth      uint64 `json:"startupBlockDepth"`      // how far back to start processing blocks when no next height was provided
 }
 
 // DefaultOracleConfig() returns the default ethereum block provider configuration
@@ -334,10 +329,11 @@ func DefaultOracleConfig() OracleConfig {
 		StateFile:              "oracle.state",
 		OrderResubmitDelay:     2,
 		Committee:              2,
-		ProposeLeadTime:        3,
+		ProposeLeadBlocks:      3,
 		ReorgRollbackDelta:     60,
-		LockOrderHoldTime:      2,
+		LockOrderHoldBlocks:    2,
 		SafeBlockConfirmations: 5,
+		StartupBlockDepth:      1000,
 	}
 }
 

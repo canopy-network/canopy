@@ -62,7 +62,7 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// CHECK 1: Propose lead time validation
-	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeLeadTime {
+	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeLeadBlocks {
 		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
@@ -78,9 +78,9 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 			// calculate blocks since last submission
 			blocksSinceSubmission := rootHeight - submittedHeight
 			// check if enough time has passed
-			if blocksSinceSubmission < config.LockOrderHoldTime {
+			if blocksSinceSubmission < config.LockOrderHoldBlocks {
 				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission",
-					orderIdStr, submittedHeight, blocksSinceSubmission, config.LockOrderHoldTime)
+					orderIdStr, submittedHeight, blocksSinceSubmission, config.LockOrderHoldBlocks)
 				return false
 			}
 			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission",
