@@ -88,8 +88,6 @@ func (o *Oracle) reorgRollback() {
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
 	// process close orders second
 	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
-	// reset submission history
-	o.state.ResetSubmissionHistory()
 	o.log.Infof("Reorg rollback completed")
 }
 
@@ -507,6 +505,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
 
+	o.state.PruneHistory(info.Orders)
 	// log a warning for a nil order book
 	if info.Orders == nil {
 		o.log.Warn("UpdateRootChainInfo Order book from root chain was nil")
