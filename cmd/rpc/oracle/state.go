@@ -12,7 +12,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-// OracleBlockState represents the simple state of the last processed block
+// OracleBlockState represents the last processed block
 type OracleBlockState struct {
 	// Height is the last successfully processed block height
 	Height uint64 `json:"height"`
@@ -30,7 +30,7 @@ type OracleState struct {
 	sourceChainHeight uint64
 	// stateSaveFile is the base path for state files
 	stateSaveFile string
-	// submissionHistory tracks orders that have been submitted at specific root heights to prevent duplicate submissions
+	// submissionHistory tracks orders that have been submitted at specific root heights
 	submissionHistory map[string]map[uint64]bool
 	// lockOrderSubmissions tracks the root height when each lock order ID was first successfully submitted
 	lockOrderSubmissions map[string]uint64
@@ -65,17 +65,17 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	defer m.rwLock.Unlock()
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
-	// CHECK 1: Propose lead time validation
+	// propose lead time validation check
 	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeLeadBlocks {
 		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
-	// CHECK 2: Resubmit delay validation
+	// resubmit delay check
 	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelay {
 		m.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
-	// CHECK 3: Lock order specific time restrictions
+	// lock order specific time restrictions
 	if order.LockOrder != nil {
 		// check if this lock order was previously submitted
 		if submittedHeight, exists := m.lockOrderSubmissions[orderIdStr]; exists {
@@ -93,7 +93,6 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		// record the submission height for this lock order
 		m.lockOrderSubmissions[orderIdStr] = rootHeight
 	}
-	// CHECK 4: General submission history tracking
 	// check if we have submission history for this order
 	if orderHeights, exists := m.submissionHistory[orderIdStr]; exists {
 		// check if this order was already submitted at this root height
@@ -111,7 +110,7 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	return true
 }
 
-// ValidateSequence performs comprehensive block validation including gap detection and reorg detection
+// ValidateSequence performs sequence validation and reorg detection
 func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// protect oracle state fields with write lock
 	m.rwLock.Lock()

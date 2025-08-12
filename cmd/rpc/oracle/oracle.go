@@ -51,10 +51,12 @@ type Oracle struct {
 	ctxCancel context.CancelFunc
 	// logger
 	log lib.LoggerI
+	// metrics for telemetry
+	metrics *lib.Metrics
 }
 
 // NewOracle creates a new Oracle instance
-func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI) (*Oracle, error) {
+func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types.BlockProvider, transactionStore types.OrderStore, logger lib.LoggerI, metrics *lib.Metrics) (*Oracle, error) {
 	// create context cancel function for the passed context
 	ctx, cancel := context.WithCancel(ctx)
 	// create new oracle instance
@@ -67,6 +69,7 @@ func NewOracle(ctx context.Context, config lib.OracleConfig, blockProvider types
 		committee:     config.Committee,
 		ctx:           ctx,
 		ctxCancel:     cancel,
+		metrics:       metrics,
 	}
 	// return new oracle instance
 	return o, nil
@@ -88,6 +91,8 @@ func (o *Oracle) reorgRollback() {
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
 	// process close orders second
 	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
+	// update reorg metrics
+	o.metrics.UpdateOracleErrorMetrics(1, 0, 0)
 	o.log.Infof("Reorg rollback completed")
 }
 
@@ -306,6 +311,12 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 // examines any witnessed orders in the block, validates them, and writes them to the order store
 // any orders that are not present in the order book, or fail validation, are dropped and not saved to the order store
 func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
+	// track block processing start time for metrics
+	startTime := time.Now()
+	defer func() {
+		// update block processing metrics
+		o.metrics.UpdateOracleBlockMetrics(time.Since(startTime))
+	}()
 	// lock order book for reading
 	o.orderBookMu.RLock()
 	defer o.orderBookMu.RUnlock()
@@ -313,6 +324,8 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	if len(block.Transactions()) > 0 {
 		o.log.Infof("Received block %s at height %d (%d transactions)", block.Hash(), block.Number(), len(block.Transactions()))
 	}
+	// initialize metrics counters for this block
+	var witnessed, validated, rejected int
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {
 		// get order in this transaction
@@ -333,14 +346,22 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 		if canopyOrder == nil {
 			// log a warning and continue processing transactions
 			o.log.Warnf("Order %s not found in order book", lib.BytesToString(order.OrderId))
+			rejected++
 			continue
 		}
+		// increment witnessed orders counter
+		witnessed++
 		// validate the order that was witnessed against the order found in the order book
+		validationStart := time.Now()
 		if err := o.validateOrder(tx, canopyOrder); err != nil {
 			// log a warning and continue processing transactions
 			o.log.Warnf(err.Error())
+			rejected++
 			continue
 		}
+		// order validation succeeded
+		validated++
+		validationTime := time.Since(validationStart)
 		// determine order type
 		orderType := types.LockOrderType
 		if order.CloseOrder != nil {
@@ -355,7 +376,6 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 			// TODO should there be any more logic here?
 			continue
 		}
-		// write order to disk.
 		err = o.orderStore.WriteOrder(order, orderType)
 		if err != nil {
 			o.log.Errorf("Failed to write order %s: %v", lib.BytesToString(order.OrderId), err)
@@ -367,8 +387,14 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 			o.log.Errorf("Failed to archive order %s: %v", lib.BytesToString(order.OrderId), err)
 			return err
 		}
+		// update order metrics for this successful write
+		o.metrics.UpdateOracleOrderMetrics(0, 0, 0, 0, validationTime)
 		o.log.Debugf("Wrote order %s %s to store", order, orderType)
 	}
+	// update order metrics for this block with counters
+	o.metrics.UpdateOracleOrderMetrics(witnessed, validated, 0, rejected, 0)
+	// update state and store metrics
+	o.updateMetrics()
 	return nil
 }
 
@@ -504,7 +530,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// lock order book while updating it and updating order store
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
-
+	// remove history for orders no longer in order book
 	o.state.PruneHistory(info.Orders)
 	// log a warning for a nil order book
 	if info.Orders == nil {
@@ -657,5 +683,37 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	// if len(lockOrders) > 0 || len(closeOrders) > 0 {
 	o.log.Infof("Witnessed %d lock orders and %d close orders, root height %d", len(lockOrders), len(closeOrders), rootHeight)
 	// }
+	// update submitted orders metrics
+	totalSubmitted := len(lockOrders) + len(closeOrders)
+	o.metrics.UpdateOracleOrderMetrics(0, 0, totalSubmitted, 0, 0)
 	return lockOrders, closeOrders
+}
+
+// updateMetrics updates various oracle metrics with current state information
+func (o *Oracle) updateMetrics() {
+	// exit if empty
+	if o.metrics == nil {
+		return
+	}
+	// get current state metrics
+	safeHeight := o.state.GetSafeHeight()
+	// get submission history sizes
+	submissionHistorySize := len(o.state.submissionHistory)
+	lockOrderSubmissionsSize := len(o.state.lockOrderSubmissions)
+	// get order store counts
+	lockOrderIds, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
+	lockOrders := 0
+	if err == nil {
+		lockOrders = len(lockOrderIds)
+	}
+	closeOrderIds, err := o.orderStore.GetAllOrderIds(types.CloseOrderType)
+	closeOrders := 0
+	if err == nil {
+		closeOrders = len(closeOrderIds)
+	}
+	totalOrders := lockOrders + closeOrders
+	// update state metrics
+	o.metrics.UpdateOracleStateMetrics(safeHeight, o.state.sourceChainHeight, submissionHistorySize, lockOrderSubmissionsSize)
+	// update store metrics
+	o.metrics.UpdateOracleStoreMetrics(totalOrders, lockOrders, closeOrders)
 }

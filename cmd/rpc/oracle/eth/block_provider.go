@@ -63,17 +63,18 @@ type EthBlockProvider struct {
 	nextHeight      *big.Int                   // next block height to be sent through channel
 	chainId         uint64                     // ethereum chain id
 	heightMu        *sync.Mutex                // mutex around next height
+	metrics         *lib.Metrics               // metrics for telemetry
 }
 
 // NewEthBlockProvider creates a new EthBlockProvider instance
-func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator OrderValidator, logger lib.LoggerI) *EthBlockProvider {
+func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator OrderValidator, logger lib.LoggerI, metrics *lib.Metrics) *EthBlockProvider {
 	// create an ethereum client for the token cache
 	ethClient, ethErr := ethclient.Dial(config.NodeUrl)
 	if ethErr != nil {
 		logger.Fatal(ethErr.Error())
 	}
 	// create a new erc20 token cache
-	tokenCache := NewERC20TokenCache(ethClient)
+	tokenCache := NewERC20TokenCache(ethClient, metrics)
 	// create the block output channel, this is unbuffered so the provider
 	// halts processing until the receiver is ready to process more blocks
 	ch := make(chan types.BlockI)
@@ -87,6 +88,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		orderValidator:  orderValidator,
 		nextHeight:      big.NewInt(0),
 		heightMu:        &sync.Mutex{},
+		metrics:         metrics,
 	}
 	// log provider creation
 	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s, eth chain id: %d", p.config.NodeUrl, p.config.NodeWSUrl, p.chainId)
@@ -280,6 +282,8 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 	// track next height to be processed
 	next := new(big.Int).Set(start)
 	p.logger.Debugf("block provider processing blocks from %d to %d", start, end)
+	// initialize metrics counters
+	var blocksProcessed, transactionsProcessed, retries int
 	// process blocks from next height to current height
 	for next.Cmp(end) <= 0 {
 		// Check if context has been cancelled or timed out
@@ -290,21 +294,34 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		default:
 		}
 		// get block from ethereum node and create our Block wrapper
+		fetchStart := time.Now()
 		block, err := p.fetchBlock(timeoutCtx, next)
 		if err != nil {
 			// log error and return without continuing
 			p.logger.Errorf("failed to get block at height %d: %v", next, err)
+			// update metrics before returning
+			p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
 			return next
 		}
+		fetchTime := time.Since(fetchStart)
 		// process each transaction, populating orders and transfer data
+		txProcessStart := time.Now()
 		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
 			p.logger.Errorf("failed to process block transactions: %v", err)
+			// update metrics before returning
+			p.metrics.UpdateEthBlockProviderMetrics(fetchTime, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
 			return next
 		}
+		txProcessTime := time.Since(txProcessStart)
 		// send block through channel
 		p.blockChan <- block
 		// log successful block processing
 		// p.logger.Infof("eth block provider sent safe block at height %d through channel", next)
+		// update counters
+		blocksProcessed++
+		transactionsProcessed += len(block.transactions)
+		// update metrics with current block data
+		p.metrics.UpdateEthBlockProviderMetrics(fetchTime, txProcessTime, 0, 0, 0, 0, 1, len(block.transactions), 0)
 		// increment height for next iteration
 		next.Add(next, big.NewInt(1))
 	}
@@ -313,6 +330,8 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 
 // processBlockTransactions validates and processes block transactions
 func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *Block) error {
+	// track retry count for metrics
+	var retryCount int
 	// perform validation on transactions that had canopy orders
 	for _, tx := range block.transactions {
 		var err error
@@ -333,6 +352,10 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 				break
 			}
 			p.logger.Errorf("Error processing transaction %s in block %s: %v - attempt %d", tx.Hash(), block.Hash(), attempt+1)
+			// count retry for metrics
+			if attempt > 0 {
+				retryCount++
+			}
 			// implement exponential backoff for failed attempts
 			if attempt < maxTransactionProcessAttempts-1 {
 				backoffDuration := time.Duration(1<<attempt) * time.Second
@@ -347,6 +370,10 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 		if err != nil {
 			p.logger.Errorf("Error processing transaction %s in block %s: %v - all attempts failed", tx.Hash(), block.Hash())
 		}
+	}
+	// update retry metrics if there were retries
+	if retryCount > 0 {
+		p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 0, 0, 0, retryCount)
 	}
 	return nil
 }
@@ -408,16 +435,22 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 
 	// create a fresh context with timeout for the RPC call
 	rpcCtx, cancel := context.WithTimeout(ctx, transactionReceiptTimeoutS*time.Second)
-	// get transaction receipt
+	// get transaction receipt with timing
+	receiptStart := time.Now()
 	receipt, err := p.rpcClient.TransactionReceipt(rpcCtx, txHash)
 	cancel()
+	receiptTime := time.Since(receiptStart)
 	// check for error
 	if err != nil {
 		p.logger.Warnf("failed to get transaction receipt for tx %s: %v", txHashStr, err)
+		// update receipt fetch metrics on error
+		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 1, 0, 0, 0)
 		return false, ErrTransactionReceipt
 	}
 	// check for success
 	if receipt.Status == TransactionStatusSuccess {
+		// update receipt fetch metrics on success
+		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 0, 0, 0, 0)
 		return true, nil
 	}
 	p.logger.Errorf("transaction %s with ERC20 transfer was a failed on-chain transaction, ignoring", txHashStr)
