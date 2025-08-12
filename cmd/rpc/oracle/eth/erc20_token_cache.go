@@ -37,13 +37,16 @@ type ERC20TokenCache struct {
 	client ContractCaller
 	// cache stores token information by contract address using LRU eviction
 	cache *lib.LRUCache[types.TokenInfo]
+	// metrics for telemetry
+	metrics *lib.Metrics
 }
 
 // NewERC20TokenCache creates a new ERC20TokenCache instance
-func NewERC20TokenCache(client ContractCaller) *ERC20TokenCache {
+func NewERC20TokenCache(client ContractCaller, metrics *lib.Metrics) *ERC20TokenCache {
 	return &ERC20TokenCache{
-		client: client,
-		cache:  lib.NewLRUCache[types.TokenInfo](defaultCacheSize),
+		client:  client,
+		cache:   lib.NewLRUCache[types.TokenInfo](defaultCacheSize),
+		metrics: metrics,
 	}
 }
 
@@ -51,6 +54,10 @@ func NewERC20TokenCache(client ContractCaller) *ERC20TokenCache {
 func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string) (types.TokenInfo, error) {
 	// check if token info is already cached
 	if info, exists := m.cache.Get(contractAddress); exists {
+		// record cache hit metrics
+		if m.metrics != nil {
+			m.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 1, 0, 0, 0, 0, 0)
+		}
 		return info, nil
 	}
 	// fetch name from contract
@@ -82,6 +89,10 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 	}
 	// cache the token info
 	m.cache.Put(contractAddress, tokenInfo)
+	// record cache miss metrics
+	if m.metrics != nil {
+		m.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 1, 0, 0, 0, 0)
+	}
 	return tokenInfo, nil
 }
 

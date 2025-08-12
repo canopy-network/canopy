@@ -135,12 +135,12 @@ func Start() {
 		// create a new order validator
 		orderValidator := oracle.NewOrderValidator()
 		// create the ethereum block provider
-		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger)
+		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger, metrics)
 
 		// create an absolute path for the state save file
 		config.OracleConfig.StateFile = filepath.Join(oracleRoot, config.OracleConfig.StateFile)
 		// create a new oracle instance and pass the ethereum block provider with shared context
-		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger)
+		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger, metrics)
 		if e != nil {
 			l.Fatal(e.Error())
 		}
