@@ -199,7 +199,6 @@ func (m *OracleState) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	return &state, nil
 }
 
-
 // updateSafeHeight calculates and updates the safe block height with monotonic guarantee
 // The safe height can only increase, never decrease, providing stability during reorgs
 func (m *OracleState) updateSafeHeight(currentBlockHeight uint64, config lib.OracleConfig) {
@@ -230,15 +229,60 @@ func (m *OracleState) GetSafeHeight() uint64 {
 	return m.safeHeight
 }
 
-// ResetSubmissionHistory clears both submission history fields during reorganization rollback
-// This prevents stale submission records from blocking valid resubmissions after a chain reorg
-func (m *OracleState) ResetSubmissionHistory() {
+// PruneHistory removes submission history for orders that are not present in the passed order book
+func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 	// protect oracle state fields with write lock
 	m.rwLock.Lock()
 	defer m.rwLock.Unlock()
-	// clear submission history tracking
-	m.submissionHistory = make(map[string]map[uint64]bool)
-	// clear lock order submission tracking
-	m.lockOrderSubmissions = make(map[string]uint64)
-	m.log.Infof("Reset submission history due to chain reorganization")
+	// handle nil order book case by clearing all history
+	if orderBook == nil {
+		m.submissionHistory = make(map[string]map[uint64]bool)
+		m.lockOrderSubmissions = make(map[string]uint64)
+		m.log.Infof("Order book is nil, cleared all submission history")
+		return
+	}
+	// prune submission history for orders not in order book
+	for orderIdStr := range m.submissionHistory {
+		// convert string back to bytes for order book lookup
+		orderId, err := lib.StringToBytes(orderIdStr)
+		if err != nil {
+			m.log.Errorf("Failed to convert order ID string %s to bytes: %v", orderIdStr, err)
+			continue
+		}
+		// check if order exists in order book
+		order, err := orderBook.GetOrder(orderId)
+		if err != nil {
+			m.log.Errorf("Error checking order %s in order book: %v", orderIdStr, err)
+			continue
+		}
+		// remove submission history for orders not in order book
+		if order == nil {
+			delete(m.submissionHistory, orderIdStr)
+			m.log.Debugf("Pruned submission history for order %s (not in order book)", orderIdStr)
+		} else {
+			m.log.Debugf("Preserved submission history for order %s (still in order book)", orderIdStr)
+		}
+	}
+	// prune lock order submissions for orders not in order book
+	for orderIdStr := range m.lockOrderSubmissions {
+		// convert string back to bytes for order book lookup
+		orderId, err := lib.StringToBytes(orderIdStr)
+		if err != nil {
+			m.log.Errorf("Failed to convert lock order ID string %s to bytes: %v", orderIdStr, err)
+			continue
+		}
+		// check if order exists in order book
+		order, err := orderBook.GetOrder(orderId)
+		if err != nil {
+			m.log.Errorf("Error checking lock order %s in order book: %v", orderIdStr, err)
+			continue
+		}
+		// remove lock order submission for orders not in order book
+		if order == nil {
+			delete(m.lockOrderSubmissions, orderIdStr)
+			m.log.Debugf("Pruned lock order submission for order %s (not in order book)", orderIdStr)
+		} else {
+			m.log.Debugf("Preserved lock order submission for order %s (still in order book)", orderIdStr)
+		}
+	}
 }
