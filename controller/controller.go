@@ -131,7 +131,7 @@ func (c *Controller) Start() {
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// update oracle's order book so it can start processing blocks
-				c.oracle.UpdateOrderBook(rootChainInfo.Orders)
+				c.oracle.UpdateRootChainInfo(rootChainInfo)
 				// exit the loop
 				break
 			}
@@ -187,8 +187,6 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
-	// update the oracle with the latest order book
-	c.oracle.UpdateOrderBook(info.Orders)
 	// sync the order store
 	c.oracle.UpdateRootChainInfo(info)
 	// set timestamp if included

@@ -274,7 +274,6 @@ func createSellOrder(orderIdHex string, data string, buyerReceiveAddress ...stri
 		Id: orderIdBytes,
 	}
 	if data != "" {
-		fmt.Println("data", data)
 		b, err := lib.StringToBytes(strings.TrimPrefix(data, "0x"))
 		if err != nil {
 			panic(err)
@@ -471,11 +470,10 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 
 func TestOracle_WitnessedOrders(t *testing.T) {
 	buyerReceiveAddress := "0034567890123456789012345678901234567800"
+	contractAddress := "0x1234567890123456789012345678901234567890"
 
 	orderIdOne := "order1"
 	orderIdTwo := "order2"
-
-	notLocked := ""
 
 	tests := []struct {
 		name                   string
@@ -505,8 +503,8 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "orders exist in order book but not in store.",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, notLocked),
-				createSellOrder(orderIdTwo, buyerReceiveAddress),
+				createSellOrder(orderIdOne, "", ""),
+				createSellOrder(orderIdTwo, contractAddress, buyerReceiveAddress),
 			),
 			orderStore:             NewMockOrderStore(),
 			expectedLockOrdersLen:  0,
@@ -517,7 +515,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "matching stored lock order, should be included",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, notLocked),
+				createSellOrder(orderIdOne, "", ""),
 			),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder(orderIdOne),
@@ -531,7 +529,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "matching close order exists in store and order book. should be included",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, buyerReceiveAddress),
+				createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress),
 			),
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder(orderIdOne),
@@ -545,7 +543,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "unlocked order exists in order book and matching lock order exists in store. should be included",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, notLocked),
+				createSellOrder(orderIdOne, "", ""),
 			),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder(orderIdOne),
@@ -558,7 +556,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "locked order exists in order book and matching close order exists in store. should be included",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, buyerReceiveAddress),
+				createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress),
 			),
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder(orderIdOne),
@@ -571,8 +569,8 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		{
 			name: "mixed scenario with multiple orders",
 			orderBook: createOrderBook(
-				createSellOrder(orderIdOne, notLocked),
-				createSellOrder(orderIdTwo, buyerReceiveAddress),
+				createSellOrder(orderIdOne, "", ""),
+				createSellOrder(orderIdTwo, contractAddress, buyerReceiveAddress),
 			),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder(orderIdOne),

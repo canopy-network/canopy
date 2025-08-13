@@ -153,6 +153,7 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	if err != nil {
 		return
 	}
+	// TODO change 1 to c.config.ChainId
 	orderBook, err := c.LoadRootChainOrderBook(1, rcBuildHeight)
 	if err != nil {
 		return
@@ -563,6 +564,7 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *l
 
 // HandlePeerBlock() validates and handles an inbound certificate (with a block) from a remote peer
 func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.QuorumCertificate, lib.ErrorI) {
+	lib.PrintStackTrace()
 	// log the start of 'peer block handling'
 	c.log.Info("Handling peer block")
 	// define a convenience variable for the certificate
