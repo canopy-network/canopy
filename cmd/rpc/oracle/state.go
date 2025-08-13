@@ -141,8 +141,8 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	return nil
 }
 
-// SaveProcessedBlock saves the state after a block has been successfully processed
-func (m *OracleState) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
+// saveState saves the state after a block has been successfully processed
+func (m *OracleState) saveState(block types.BlockI) lib.ErrorI {
 	// create the simple block state
 	state := OracleBlockState{
 		Height:     block.Number(),
@@ -160,6 +160,15 @@ func (m *OracleState) SaveProcessedBlock(block types.BlockI) lib.ErrorI {
 	// write state to file atomically
 	if err := lib.AtomicWriteFile(m.stateSaveFile, stateBytes); err != nil {
 		m.log.Errorf("Failed to write state file: %v", err)
+		return ErrWriteStateFile(err)
+	}
+	return nil
+}
+
+// removeState removes the state file from disk
+func (m *OracleState) removeState() lib.ErrorI {
+	err := os.Remove(m.stateSaveFile)
+	if err != nil && !os.IsNotExist(err) {
 		return ErrWriteStateFile(err)
 	}
 	return nil
