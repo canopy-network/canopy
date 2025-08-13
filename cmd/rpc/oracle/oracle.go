@@ -153,11 +153,15 @@ func (o *Oracle) Start(ctx context.Context) {
 			// handle specific error types
 			switch err.Code() {
 			case CodeBlockSequence:
-				// log an error and allow provider to be restarted at last known good height
+				// remove current state
+				o.state.removeState()
 				o.log.Errorf("Block sequence gap detected, restarting block provider")
 			case CodeChainReorg:
+				// execute a rollback
 				o.reorgRollback()
 				o.log.Errorf("Chain reorganization detected - oracle may need to rollback and reprocess from fork point")
+			default:
+				o.log.Errorf("Oracle unexpected error: %v", err)
 			}
 		}
 	}()
@@ -207,7 +211,7 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 			// update safe height after successful block processing
 			o.state.updateSafeHeight(block.Number(), o.config)
 			// save state after successful block processing
-			if err := o.state.SaveProcessedBlock(block); err != nil {
+			if err := o.state.saveState(block); err != nil {
 				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
 				return err
 			}
