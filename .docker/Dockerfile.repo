@@ -1,0 +1,30 @@
+FROM golang:1.23.9-alpine AS builder
+
+RUN apk update && apk add --no-cache make bash nodejs npm git file
+
+ARG EXPLORER_BASE_PATH
+ARG WALLET_BASE_PATH
+ARG REPO_URL=https://github.com/canopy-network/canopy.git
+ARG BRANCH=main
+
+WORKDIR /go/src/github.com/canopy-network/canopy
+
+RUN git clone --branch ${BRANCH} ${REPO_URL} .
+
+ENV EXPLORER_BASE_PATH=${EXPLORER_BASE_PATH}
+ENV WALLET_BASE_PATH=${WALLET_BASE_PATH}
+
+RUN ls -l
+RUN git branch -a
+RUN make build/wallet
+RUN make build/explorer
+RUN ls -l cmd/cli
+# RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin ./${BUILD_PATH}
+RUN go build -a -o bin ./cmd/main/...
+RUN chmod +x bin
+RUN file bin
+
+FROM alpine:3.19
+WORKDIR /app
+COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./
+ENTRYPOINT ["/app/bin"]

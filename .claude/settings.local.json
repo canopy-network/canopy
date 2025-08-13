@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make test:*)",
+      "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(gofmt:*)",
+      "Bash(go build:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pkg.go.dev)",
+      "Bash(go mod:*)",
+      "Bash(go doc:*)",
+      "Bash(rg:*)",
+      "Bash(ls:*)",
+      "Bash(wat2wasm:*)",
+      "Bash(go:*)",
+      "Bash(make:*)",
+      "Bash(docker:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(./eth_oracle_e2e)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)"
+    ],
+    "deny": []
+  }
+}
