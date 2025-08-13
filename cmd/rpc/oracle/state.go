@@ -66,12 +66,12 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	// convert order ID to string for use as map key
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// propose lead time validation check
-	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeLeadBlocks {
+	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeDelayBlocks {
 		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
 	// resubmit delay check
-	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelay {
+	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelayBlocks {
 		m.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
@@ -87,8 +87,8 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 			// calculate blocks since last submission
 			blocksSinceSubmission := rootHeight - height
 			// check if enough time has passed
-			if blocksSinceSubmission < config.LockOrderHoldBlocks {
-				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission", orderIdStr, height, blocksSinceSubmission, config.LockOrderHoldBlocks)
+			if blocksSinceSubmission < config.LockOrderCooldownBlocks {
+				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission", orderIdStr, height, blocksSinceSubmission, config.LockOrderCooldownBlocks)
 				return false
 			}
 			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission", orderIdStr, height, blocksSinceSubmission)

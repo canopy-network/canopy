@@ -86,8 +86,8 @@ func (o *Oracle) reorgRollback() {
 		return
 	}
 	// calculate the rollback height - orders witnessed above this height will be removed
-	rollbackHeight := height - o.config.ReorgRollbackDelta
-	o.log.Infof("Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, o.config.ReorgRollbackDelta)
+	rollbackHeight := height - o.config.ReorgRollbackBlocks
+	o.log.Infof("Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, o.config.ReorgRollbackBlocks)
 	// process lock orders first
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
 	// process close orders second
