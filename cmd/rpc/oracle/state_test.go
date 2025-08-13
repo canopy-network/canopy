@@ -358,9 +358,9 @@ func TestOracleState_shouldSubmit(t *testing.T) {
 			}
 			// Create config
 			config := lib.OracleConfig{
-				OrderResubmitDelay:  tt.orderResubmitDelay,
-				ProposeLeadBlocks:   tt.proposeLeadTime,
-				LockOrderHoldBlocks: tt.lockOrderHoldBlocks,
+				OrderResubmitDelayBlocks: tt.orderResubmitDelay,
+				ProposeDelayBlocks:       tt.proposeLeadTime,
+				LockOrderCooldownBlocks:  tt.lockOrderHoldBlocks,
 			}
 			// Create witnessed order
 			order := &types.WitnessedOrder{
