@@ -30,9 +30,9 @@ type OracleState struct {
 	sourceChainHeight uint64
 	// stateSaveFile is the base path for state files
 	stateSaveFile string
-	// submissionHistory tracks orders that have been submitted at specific root heights
-	submissionHistory map[string]map[uint64]bool
-	// lockOrderSubmissions tracks the root height when each lock order ID was first successfully submitted
+	// closeOrderSubmissions tracks the root height when each close order was submitted
+	closeOrderSubmissions map[string]uint64
+	// lockOrderSubmissions tracks the root height when each lock order was submitted
 	lockOrderSubmissions map[string]uint64
 	// safeHeight is the highest block height that has received sufficient confirmations to be considered safe
 	safeHeight uint64
@@ -49,11 +49,11 @@ func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
 		logger.Errorf("failed to create directories for %s: %w", stateSaveFile, err)
 	}
 	return &OracleState{
-		stateSaveFile:        stateSaveFile,
-		submissionHistory:    make(map[string]map[uint64]bool),
-		lockOrderSubmissions: make(map[string]uint64),
-		rwLock:               sync.RWMutex{},
-		log:                  logger,
+		stateSaveFile:         stateSaveFile,
+		lockOrderSubmissions:  make(map[string]uint64),
+		closeOrderSubmissions: make(map[string]uint64),
+		rwLock:                sync.RWMutex{},
+		log:                   logger,
 	}
 }
 
@@ -78,34 +78,34 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	// lock order specific time restrictions
 	if order.LockOrder != nil {
 		// check if this lock order was previously submitted
-		if submittedHeight, exists := m.lockOrderSubmissions[orderIdStr]; exists {
-			// calculate blocks since last submission
-			blocksSinceSubmission := rootHeight - submittedHeight
-			// check if enough time has passed
-			if blocksSinceSubmission < config.LockOrderHoldBlocks {
-				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission",
-					orderIdStr, submittedHeight, blocksSinceSubmission, config.LockOrderHoldBlocks)
+		if height, exists := m.lockOrderSubmissions[orderIdStr]; exists {
+			// test if already submitted at this root height
+			if height == rootHeight {
+				m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
 				return false
 			}
-			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission",
-				orderIdStr, submittedHeight, blocksSinceSubmission)
+			// calculate blocks since last submission
+			blocksSinceSubmission := rootHeight - height
+			// check if enough time has passed
+			if blocksSinceSubmission < config.LockOrderHoldBlocks {
+				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission", orderIdStr, height, blocksSinceSubmission, config.LockOrderHoldBlocks)
+				return false
+			}
+			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission", orderIdStr, height, blocksSinceSubmission)
 		}
 		// record the submission height for this lock order
 		m.lockOrderSubmissions[orderIdStr] = rootHeight
-	}
-	// check if we have submission history for this order
-	if orderHeights, exists := m.submissionHistory[orderIdStr]; exists {
-		// check if this order was already submitted at this root height
-		if orderHeights[rootHeight] {
-			m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
-			return false
+	} else if order.CloseOrder != nil {
+		if height, exists := m.closeOrderSubmissions[orderIdStr]; exists {
+			// test if already submitted at this root height
+			if height == rootHeight {
+				m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
+				return false
+			}
 		}
-	} else {
-		// initialize submission history for this order
-		m.submissionHistory[orderIdStr] = make(map[uint64]bool)
+		// record the submission height for this close order
+		m.closeOrderSubmissions[orderIdStr] = rootHeight
 	}
-	// record that we are submitting this order at this root height
-	m.submissionHistory[orderIdStr][rootHeight] = true
 	m.log.Debugf("Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
 	return true
 }
@@ -235,32 +235,10 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 	defer m.rwLock.Unlock()
 	// handle nil order book case by clearing all history
 	if orderBook == nil {
-		m.submissionHistory = make(map[string]map[uint64]bool)
 		m.lockOrderSubmissions = make(map[string]uint64)
+		m.closeOrderSubmissions = make(map[string]uint64)
 		m.log.Infof("Order book is nil, cleared all submission history")
 		return
-	}
-	// prune submission history for orders not in order book
-	for orderIdStr := range m.submissionHistory {
-		// convert string back to bytes for order book lookup
-		orderId, err := lib.StringToBytes(orderIdStr)
-		if err != nil {
-			m.log.Errorf("Failed to convert order ID string %s to bytes: %v", orderIdStr, err)
-			continue
-		}
-		// check if order exists in order book
-		order, err := orderBook.GetOrder(orderId)
-		if err != nil {
-			m.log.Errorf("Error checking order %s in order book: %v", orderIdStr, err)
-			continue
-		}
-		// remove submission history for orders not in order book
-		if order == nil {
-			delete(m.submissionHistory, orderIdStr)
-			m.log.Debugf("Pruned submission history for order %s (not in order book)", orderIdStr)
-		} else {
-			m.log.Debugf("Preserved submission history for order %s (still in order book)", orderIdStr)
-		}
 	}
 	// prune lock order submissions for orders not in order book
 	for orderIdStr := range m.lockOrderSubmissions {
@@ -282,6 +260,28 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 			m.log.Debugf("Pruned lock order submission for order %s (not in order book)", orderIdStr)
 		} else {
 			m.log.Debugf("Preserved lock order submission for order %s (still in order book)", orderIdStr)
+		}
+	}
+	// prune close order submissions for orders not in order book
+	for orderIdStr := range m.closeOrderSubmissions {
+		// convert string back to bytes for order book lookup
+		orderId, err := lib.StringToBytes(orderIdStr)
+		if err != nil {
+			m.log.Errorf("Failed to convert close order ID string %s to bytes: %v", orderIdStr, err)
+			continue
+		}
+		// check if order exists in order book
+		order, err := orderBook.GetOrder(orderId)
+		if err != nil {
+			m.log.Errorf("Error checking close order %s in order book: %v", orderIdStr, err)
+			continue
+		}
+		// remove close order submission for orders not in order book
+		if order == nil {
+			delete(m.closeOrderSubmissions, orderIdStr)
+			m.log.Debugf("Pruned close order submission for order %s (not in order book)", orderIdStr)
+		} else {
+			m.log.Debugf("Preserved close order submission for order %s (still in order book)", orderIdStr)
 		}
 	}
 }

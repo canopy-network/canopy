@@ -165,10 +165,10 @@ type OracleMetrics struct {
 	LockOrdersStored  prometheus.Gauge // total lock orders currently stored
 	CloseOrdersStored prometheus.Gauge // total close orders currently stored
 	// State management metrics
-	SafeHeight               prometheus.Gauge // current safe block height
-	SourceChainHeight        prometheus.Gauge // current source chain height
-	SubmissionHistorySize    prometheus.Gauge // size of submission history map
-	LockOrderSubmissionsSize prometheus.Gauge // size of lock order submissions map
+	SafeHeight                prometheus.Gauge // current safe block height
+	SourceChainHeight         prometheus.Gauge // current source chain height
+	LockOrderSubmissionsSize  prometheus.Gauge // size of lock order submissions map
+	CloseOrderSubmissionsSize prometheus.Gauge // size of close order submissions map
 	// Error and reorg metrics
 	ChainReorgs           prometheus.Counter // total chain reorganizations detected
 	OrdersPruned          prometheus.Counter // total orders pruned during cleanup
@@ -461,13 +461,13 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_oracle_source_chain_height",
 				Help: "Current source chain height in the oracle",
 			}),
-			SubmissionHistorySize: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_oracle_submission_history_size",
-				Help: "Size of the submission history map",
-			}),
 			LockOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_oracle_lock_order_submissions_size",
 				Help: "Size of the lock order submissions map",
+			}),
+			CloseOrderSubmissionsSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_close_order_submissions_size",
+				Help: "Size of the close order submissions map",
 			}),
 			ChainReorgs: promauto.NewCounter(prometheus.CounterOpts{
 				Name: "canopy_oracle_chain_reorgs_total",
@@ -850,7 +850,7 @@ func (m *Metrics) UpdateOracleOrderMetrics(witnessed, validated, submitted, reje
 }
 
 // UpdateOracleStateMetrics() updates oracle state management metrics
-func (m *Metrics) UpdateOracleStateMetrics(safeHeight, sourceHeight uint64, submissionHistorySize, lockOrderSubmissionsSize int) {
+func (m *Metrics) UpdateOracleStateMetrics(safeHeight, sourceHeight uint64, lockOrderSubmissionsSize, closeOrderSubmissionsSize int) {
 	// exit if empty
 	if m == nil {
 		return
@@ -858,18 +858,18 @@ func (m *Metrics) UpdateOracleStateMetrics(safeHeight, sourceHeight uint64, subm
 	// update state metrics
 	m.SafeHeight.Set(float64(safeHeight))
 	m.SourceChainHeight.Set(float64(sourceHeight))
-	m.SubmissionHistorySize.Set(float64(submissionHistorySize))
 	m.LockOrderSubmissionsSize.Set(float64(lockOrderSubmissionsSize))
+	m.CloseOrderSubmissionsSize.Set(float64(closeOrderSubmissionsSize))
 }
 
 // UpdateOracleStoreMetrics() updates oracle order store metrics
-func (m *Metrics) UpdateOracleStoreMetrics(totalOrders, lockOrders, closeOrders int) {
+func (m *Metrics) UpdateOracleStoreMetrics(lockOrders, closeOrders int) {
 	// exit if empty
 	if m == nil {
 		return
 	}
 	// update store count metrics
-	m.TotalOrdersStored.Set(float64(totalOrders))
+	m.TotalOrdersStored.Set(float64(lockOrders + closeOrders))
 	m.LockOrdersStored.Set(float64(lockOrders))
 	m.CloseOrdersStored.Set(float64(closeOrders))
 }
