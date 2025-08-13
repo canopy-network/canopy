@@ -170,6 +170,9 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 			OrderId:    order.OrderId,
 			CloseOrder: order,
 		}
+	case -1:
+		// should not happen - input should be validated prior to this
+		return fmt.Errorf("transaction contained negative transfer amount")
 	}
 	// set erc20 flag
 	t.isERC20 = true
