@@ -11,6 +11,7 @@ import (
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Terminology
@@ -271,9 +272,10 @@ func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.Sell
 func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.SellOrder, tx types.TransactionI) lib.ErrorI {
 	// Order data being equal to transaction To address is Ethereum-specific validation
 	// TODO move this logic into the block provider
-	sellOrderDataHex := fmt.Sprintf("%x", sellOrder.Data)
-	txToAddress := strings.ToLower(strings.TrimPrefix(tx.To(), "0x"))
-	if sellOrderDataHex != txToAddress {
+
+	sellOrderDataHex := common.BytesToAddress(sellOrder.Data).String()
+	if sellOrderDataHex != tx.To() {
+		fmt.Println(sellOrderDataHex, tx.To())
 		return ErrOrderValidation("sell order data field does not match transaction recipient")
 	}
 	// ensure the order ids are a match
@@ -286,7 +288,7 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
-	recipient, err := lib.StringToBytes(tokenTransfer.RecipientAddress)
+	recipient, err := lib.StringToBytes(strings.TrimPrefix(tokenTransfer.RecipientAddress, "0x"))
 	if err != nil {
 		return ErrOrderValidation("error converting recipient address to bytes")
 	}
@@ -613,9 +615,9 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	safeHeight := o.state.GetSafeHeight()
 	// loop through the order book searching the order store for lock/close orders witnessed by this node
 	for _, order := range orderBook.Orders {
-		// buyer receive address being nil indicates this is an unlocked sell order
-		if order.BuyerReceiveAddress == nil {
-			// process unlocked sell orders - look for witnessed lock orders
+		// process unlocked sell order
+		if !order.IsLocked() {
+			// try to find a lock oorder
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.LockOrderType)
 			if err != nil {
 				if err.Code() != CodeReadOrder {
@@ -669,20 +671,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			closeOrders = append(closeOrders, wOrder.OrderId)
 		}
 	}
-	// id, _ := lib.StringToBytes("005361a47f682d6e3af948c1f520c48e2e1701f0")
-	// send, _ := lib.StringToBytes("f39fd6e51aad88f6f4ce6ab8827279cfffb92266")
-	// recv, _ := lib.StringToBytes("45281f3e49287fb12a6721bffab01fb60ee02df9")
-
-	// lockOrders = append(lockOrders, &lib.LockOrder{
-	// 	OrderId:             id,
-	// 	ChainId:             2,
-	// 	BuyerSendAddress:    send,
-	// 	BuyerReceiveAddress: recv,
-	// 	BuyerChainDeadline:  100000,
-	// })
-	// if len(lockOrders) > 0 || len(closeOrders) > 0 {
 	o.log.Infof("Witnessed %d lock orders and %d close orders, root height %d", len(lockOrders), len(closeOrders), rootHeight)
-	// }
 	// update submitted orders metrics
 	totalSubmitted := len(lockOrders) + len(closeOrders)
 	o.metrics.UpdateOracleOrderMetrics(0, 0, totalSubmitted, 0, 0)
@@ -698,8 +687,8 @@ func (o *Oracle) updateMetrics() {
 	// get current state metrics
 	safeHeight := o.state.GetSafeHeight()
 	// get submission history sizes
-	submissionHistorySize := len(o.state.submissionHistory)
 	lockOrderSubmissionsSize := len(o.state.lockOrderSubmissions)
+	closeOrderSubmissionsSize := len(o.state.closeOrderSubmissions)
 	// get order store counts
 	lockOrderIds, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	lockOrders := 0
@@ -711,9 +700,8 @@ func (o *Oracle) updateMetrics() {
 	if err == nil {
 		closeOrders = len(closeOrderIds)
 	}
-	totalOrders := lockOrders + closeOrders
 	// update state metrics
-	o.metrics.UpdateOracleStateMetrics(safeHeight, o.state.sourceChainHeight, submissionHistorySize, lockOrderSubmissionsSize)
+	o.metrics.UpdateOracleStateMetrics(safeHeight, o.state.sourceChainHeight, lockOrderSubmissionsSize, closeOrderSubmissionsSize)
 	// update store metrics
-	o.metrics.UpdateOracleStoreMetrics(totalOrders, lockOrders, closeOrders)
+	o.metrics.UpdateOracleStoreMetrics(lockOrders, closeOrders)
 }
