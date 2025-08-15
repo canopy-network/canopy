@@ -62,6 +62,7 @@ type EthBlockProvider struct {
 	orderValidator  OrderValidator             // order validator
 	nextHeight      *big.Int                   // next block height to be sent through channel
 	chainId         uint64                     // ethereum chain id
+	synced          bool                       // flag indicating synced to top
 	heightMu        *sync.Mutex                // mutex around next height
 	metrics         *lib.Metrics               // metrics for telemetry
 }
@@ -84,9 +85,10 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		blockChan:       ch,
 		erc20TokenCache: tokenCache,
 		logger:          logger,
-		chainId:         config.EVMChainId,
 		orderValidator:  orderValidator,
 		nextHeight:      big.NewInt(0),
+		chainId:         config.EVMChainId,
+		synced:          false,
 		heightMu:        &sync.Mutex{},
 		metrics:         metrics,
 	}
@@ -269,6 +271,21 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			}
 			// process all blocks up to current height
 			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
+			if !p.synced {
+				// fetch the latest block height from ethereum to check if we're synced
+				latestBlock, err := p.rpcClient.BlockByNumber(ctx, nil)
+				if err != nil {
+					// log error fetching latest block height
+					p.logger.Errorf("failed to fetch latest block height: %v", err)
+				} else {
+					// check if our next height equals the latest block height
+					if p.nextHeight.Cmp(latestBlock.Number()) == 0 {
+						// we've caught up to the latest block, mark as synced
+						p.synced = true
+						p.logger.Infof("ethereum block provider synced at height %s", p.nextHeight.String())
+					}
+				}
+			}
 		case err := <-sub.Err():
 			// unsubscribe from new headers
 			sub.Unsubscribe()
@@ -306,6 +323,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 			p.logger.Errorf("failed to get block at height %d: %v", next, err)
 			// update metrics before returning
 			p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
+			// return same height so the provider tries this block again
 			return next
 		}
 		fetchTime := time.Since(fetchStart)
