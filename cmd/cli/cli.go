@@ -120,7 +120,7 @@ func Start() {
 	}
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
-	if config.EthBlockProviderConfig.NodeUrl != "" {
+	if config.Enabled {
 		oracleRoot := filepath.Join(DataDir, "oracle")
 		// create a seperate logger for the oracle and all oracle components
 		oracleLogger := lib.NewOracleLogger(
