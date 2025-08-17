@@ -95,7 +95,7 @@ func Start() {
 		l.Fatal(err.Error())
 	}
 	// initialize the state machine
-	sm, err := fsm.New(config, db, new(lib.Plugin), metrics, l)
+	sm, err := fsm.New(config, db, new(lib.Plugin), metrics, nil, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}

@@ -19,6 +19,8 @@ func (c *Controller) NewCertificateResults(
 	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
 	// handle swaps
 	c.HandleSwaps(fsm, blockResult, results, rcBuildHeight)
+	// handle dex
+	c.HandleDex(fsm, results)
 	// set slash recipients
 	c.CalculateSlashRecipients(results, evidence)
 	// set checkpoint
@@ -268,4 +270,23 @@ func (c *Controller) HandleRetired(fsm *fsm.StateMachine, results *lib.Certifica
 	}
 	// set the 'retired' field based on the retired consensus param not being 0
 	results.Retired = cons.Retired != 0
+}
+
+// HandleDex() populates the certificate with 'dex' information
+func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateResult) {
+	rcId, err := sm.GetRootChainId()
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	// set the dex batch based on the 'locked batch' for the root chain id
+	batch, err := sm.GetDexBatch(fsm.KeyForLockedBatch(rcId))
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	// set batch in results if not empty
+	if !batch.IsEmpty() {
+		results.DexBatch = batch
+	}
 }

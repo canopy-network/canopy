@@ -283,7 +283,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
+	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.RCManager, c.log)
 	// set the reference to lastCertificate on the new FSM
 	c.FSM.LastValidatorSet = c.LastValidatorSet
 	if err != nil {
@@ -405,7 +405,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// log to signal finishing the commit
 		c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 		// set up the finite state machine for the next height
-		c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
+		c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.RCManager, c.log)
 		if err != nil {
 			// exit with error
 			return err
@@ -441,7 +441,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	})
 	eg.Go(func() error {
 		// set up the mempool for the next height with the temporary FSM
-		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Plugin, c.Metrics, c.log)
+		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Plugin, c.Metrics, c.RCManager, c.log)
 		if err != nil {
 			// exit with error
 			return err

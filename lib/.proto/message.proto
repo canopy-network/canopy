@@ -226,6 +226,4 @@ message MessageDexLimitOrder {
   uint64 RequestedAmount = 3; // @gotags: json:"requestAmount"
   // sellers_send_address: the Canopy address the seller is selling and signing from
   bytes SellersSendAddress = 4; // @gotags: json:"sellersSendAddress"
-  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
-  bytes OrderId = 5; // @gotags: json:"orderId"
 }

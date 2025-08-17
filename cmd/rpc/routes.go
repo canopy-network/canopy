@@ -43,6 +43,8 @@ const (
 	TxByHashRoutePath              = "/v1/query/tx-by-hash"
 	OrderRoutePath                 = "/v1/query/order"
 	OrdersRoutePath                = "/v1/query/orders"
+	DexBatchRoutePath              = "/v1/query/dex-batch"
+	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -137,6 +139,8 @@ const (
 	PollRouteName                  = "poll"
 	OrderRouteName                 = "order"
 	OrdersRouteName                = "orders"
+	DexBatchRouteName              = "dex-batch"
+	NextDexBatchRouteName          = "next-dex-batch"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -228,6 +232,8 @@ var routePaths = routes{
 	TxByHashRouteName:              {Method: http.MethodPost, Path: TxByHashRoutePath},
 	OrderRouteName:                 {Method: http.MethodPost, Path: OrderRoutePath},
 	OrdersRouteName:                {Method: http.MethodPost, Path: OrdersRoutePath},
+	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
+	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -323,6 +329,8 @@ func createRouter(s *Server) *httprouter.Router {
 		TxByHashRouteName:              s.TransactionByHash,
 		OrderRouteName:                 s.Order,
 		OrdersRouteName:                s.Orders,
+		DexBatchRouteName:              s.DexBatch,
+		NextDexBatchRouteName:          s.NextDexBatch,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,

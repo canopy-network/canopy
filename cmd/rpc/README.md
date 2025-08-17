@@ -38,6 +38,8 @@
 - /v1/query/tx-by-hash
 - /v1/query/order
 - /v1/query/orders
+- /v1/query/dex-batch
+- /v1/query/next-dex-batch
 - /v1/query/last-proposers
 - /v1/query/valid-double-signer
 - /v1/query/double-signers
@@ -2221,6 +2223,78 @@ $ curl -X POST localhost:50002/v1/query/orders \
         "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
       }
     ]
+}
+```
+
+## Dex Batch
+**Route:** `/v1/query/dex-batch`
+**Description**: view the locked dex batch for a committee or all dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+**Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **receipts**: `boolean array` - the list of order success status's
+```
+$ curl -X POST localhost:50002/v1/query/dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "orders": [
+        {
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "poolSize": 5000000000000,
+    "receipts": [true, false, true]
+}
+```
+
+## Next Dex Batch
+**Route:** `/v1/query/next-dex-batch`
+**Description**: view the up-next dex batch for a committee or all upcoming dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+**Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **receipts**: `boolean array` - the list of order success status's
+```
+$ curl -X POST localhost:50002/v1/query/next-dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "orders": [
+        {
+            "amountForSale": 2000000000000,
+            "requestedAmount": 4000000000000,
+            "address": "602c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "poolSize": 5000000000000,
+    "receipts": [true, true, false]
 }
 ```
 

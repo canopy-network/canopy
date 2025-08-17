@@ -1044,10 +1044,8 @@ type MessageDexLimitOrder struct {
 	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
 	// sellers_send_address: the Canopy address the seller is selling and signing from
 	SellersSendAddress []byte `protobuf:"bytes,4,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
-	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
-	OrderId       []byte `protobuf:"bytes,5,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *MessageDexLimitOrder) Reset() {
@@ -1104,13 +1102,6 @@ func (x *MessageDexLimitOrder) GetRequestedAmount() uint64 {
 func (x *MessageDexLimitOrder) GetSellersSendAddress() []byte {
 	if x != nil {
 		return x.SellersSendAddress
-	}
-	return nil
-}
-
-func (x *MessageDexLimitOrder) GetOrderId() []byte {
-	if x != nil {
-		return x.OrderId
 	}
 	return nil
 }
@@ -1195,13 +1186,12 @@ const file_message_proto_rawDesc = "" +
 	"\x14SellerReceiveAddress\x18\x06 \x01(\fR\x14SellerReceiveAddress\"H\n" +
 	"\x12MessageDeleteOrder\x12\x18\n" +
 	"\aOrderId\x18\x01 \x01(\fR\aOrderId\x12\x18\n" +
-	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\xca\x01\n" +
+	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\xb0\x01\n" +
 	"\x14MessageDexLimitOrder\x12\x18\n" +
 	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12$\n" +
 	"\rAmountForSale\x18\x02 \x01(\x04R\rAmountForSale\x12(\n" +
 	"\x0fRequestedAmount\x18\x03 \x01(\x04R\x0fRequestedAmount\x12.\n" +
-	"\x12SellersSendAddress\x18\x04 \x01(\fR\x12SellersSendAddress\x12\x18\n" +
-	"\aOrderId\x18\x05 \x01(\fR\aOrderIdB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
+	"\x12SellersSendAddress\x18\x04 \x01(\fR\x12SellersSendAddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once

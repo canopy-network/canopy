@@ -138,6 +138,10 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
 	results, chainId := qc.Results, qc.Header.ChainId
+	// handle dex action ordered by the quorum
+	if err = s.HandleDexBatch(qc.Header.RootBuildHeight, qc.Header.ChainId, results.DexBatch); err != nil {
+		return err
+	}
 	// handle the token swaps ordered by the quorum
 	s.HandleCommitteeSwaps(results.Orders, chainId)
 	// index the 'nested chain' checkpoint

@@ -41,6 +41,8 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 		return s.HandleMessageEditOrder(x)
 	case *MessageDeleteOrder:
 		return s.HandleMessageDeleteOrder(x)
+	case *MessageDexLimitOrder:
+		return s.HandleMessageDexLimitOrder(x)
 	default:
 		return ErrUnknownMessage(x)
 	}
@@ -318,8 +320,8 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	if err != nil {
 		return err
 	}
-	// block any tx message certificate result for self chain id, as it is stored in the qc
-	if msg.Qc.Header.ChainId == rootChainId {
+	// block any tx message certificate result for root or self chain id, as it is stored in the qc
+	if msg.Qc.Header.ChainId == rootChainId || msg.Qc.Header.ChainId == s.Config.ChainId {
 		return ErrInvalidCertificateResults()
 	}
 	s.log.Debugf("Handling certificate results msg with height %d:%d", msg.Qc.Header.Height, msg.Qc.Header.RootHeight)
@@ -483,6 +485,35 @@ func (s *StateMachine) HandleMessageDeleteOrder(msg *MessageDeleteOrder) (err li
 	}
 	err = s.DeleteOrder(msg.OrderId, msg.ChainId)
 	return
+}
+
+// HandleMessageDexLimitOrder() is the proper handler for a `DexLimitOrder` message
+func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(KeyForNextBatch(msg.ChainId))
+	if err != nil {
+		return err
+	}
+	// hard limit orders to 50K per batch to prevent unchecked state growth
+	if len(batch.Orders) >= 50_000 {
+		return ErrMaxDexBatchSize()
+	}
+	// move funds from user
+	if err = s.AccountSub(crypto.NewAddress(msg.SellersSendAddress), msg.AmountForSale); err != nil {
+		return err
+	}
+	// add funds to holding pool
+	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.AmountForSale); err != nil {
+		return err
+	}
+	// add the batch to the order
+	batch.Orders = append(batch.Orders, &lib.DexLimitOrder{
+		AmountForSale:   msg.AmountForSale,
+		RequestedAmount: msg.RequestedAmount,
+		Address:         msg.SellersSendAddress,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
 }
 
 // GetFeeForMessageName() returns the associated cost for processing a specific type of message based on the name

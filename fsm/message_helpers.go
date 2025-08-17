@@ -23,6 +23,7 @@ const (
 	MessageCreateOrderName        = "createOrder"
 	MessageEditOrderName          = "editOrder"
 	MessageDeleteOrderName        = "deleteOrder"
+	MessageDexLimitOrderName      = "dexLimitOrder"
 )
 
 func init() {
@@ -704,6 +705,58 @@ func (x *MessageDeleteOrder) UnmarshalJSON(b []byte) (err error) {
 type jsonMessageDeleteOrder struct {
 	OrderId lib.HexBytes `json:"orderID"`
 	ChainId uint64       `json:"chainID"`
+}
+
+var _ lib.MessageI = &MessageDexLimitOrder{} // interface enforcement
+
+func (x *MessageDexLimitOrder) New() lib.MessageI { return new(MessageDexLimitOrder) }
+func (x *MessageDexLimitOrder) Name() string      { return MessageDexLimitOrderName }
+func (x *MessageDexLimitOrder) Recipient() []byte { return nil }
+
+// Check() validates the Message structure
+func (x *MessageDexLimitOrder) Check() lib.ErrorI {
+	if err := checkAddress(x.SellersSendAddress); err != nil {
+		return err
+	}
+	if err := checkAmount(x.AmountForSale); err != nil {
+		return err
+	}
+	if err := checkAmount(x.RequestedAmount); err != nil {
+		return err
+	}
+	return checkChainId(x.ChainId)
+}
+
+// MarshalJSON() is the json.Marshaller implementation for MessageEditOrder
+func (x *MessageDexLimitOrder) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageDexLimitOrder{
+		ChainId:            x.ChainId,
+		AmountForSale:      x.AmountForSale,
+		RequestedAmount:    x.RequestedAmount,
+		SellersSendAddress: x.SellersSendAddress,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageEditOrder
+func (x *MessageDexLimitOrder) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageDexLimitOrder
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageDexLimitOrder{
+		ChainId:            j.ChainId,
+		AmountForSale:      j.AmountForSale,
+		RequestedAmount:    j.RequestedAmount,
+		SellersSendAddress: j.SellersSendAddress,
+	}
+	return
+}
+
+type jsonMessageDexLimitOrder struct {
+	ChainId            uint64       `json:"chainID"`
+	AmountForSale      uint64       `json:"amountForSale"`
+	RequestedAmount    uint64       `json:"requestedAmount"`
+	SellersSendAddress lib.HexBytes `json:"sellerReceiveAddress"`
 }
 
 func ensureEmpty(b []byte) lib.ErrorI {

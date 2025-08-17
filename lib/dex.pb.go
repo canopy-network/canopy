@@ -25,18 +25,12 @@ const (
 // through cross-chain validation, and resolved when both chains confirm the atomic swap completion.
 type DexLimitOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// id: the unique identifier of the order
-	Id []byte `protobuf:"bytes,1,opt,name=Id,proto3" json:"id"` // @gotags: json:"id"
-	// committee: the id of the 'counter asset'
-	Committee uint64 `protobuf:"varint,2,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
 	// amount_for_sale: amount of asset for sale
-	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
+	AmountForSale uint64 `protobuf:"varint,1,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the minimum requested amount of 'counter-asset' to receive
-	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
+	RequestedAmount uint64 `protobuf:"varint,2,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// address: the address where the funds are transferred from and to
-	Address []byte `protobuf:"bytes,5,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
-	// batch_id: the identifier of the 'batch' that must be fully processed before evicting this limit order from state
-	BatchId       uint64 `protobuf:"varint,6,opt,name=batch_id,json=batchId,proto3" json:"batchId"` // @gotags: json:"batchId"
+	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -71,20 +65,6 @@ func (*DexLimitOrder) Descriptor() ([]byte, []int) {
 	return file_dex_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *DexLimitOrder) GetId() []byte {
-	if x != nil {
-		return x.Id
-	}
-	return nil
-}
-
-func (x *DexLimitOrder) GetCommittee() uint64 {
-	if x != nil {
-		return x.Committee
-	}
-	return 0
-}
-
 func (x *DexLimitOrder) GetAmountForSale() uint64 {
 	if x != nil {
 		return x.AmountForSale
@@ -106,42 +86,35 @@ func (x *DexLimitOrder) GetAddress() []byte {
 	return nil
 }
 
-func (x *DexLimitOrder) GetBatchId() uint64 {
-	if x != nil {
-		return x.BatchId
-	}
-	return 0
-}
-
-// DexReceipt is the state entry that is created when funds are distributed from a liquidity pool
-type DexReceipt struct {
+// DexBatch is a group of limit orders that must be processed atomically
+type DexBatch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// id: the unique identifier of the order
-	Id []byte `protobuf:"bytes,1,opt,name=Id,proto3" json:"id"` // @gotags: json:"id"
 	// committee: the id of the 'counter asset'
-	Committee uint64 `protobuf:"varint,2,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
-	// batch_id: the identifier of the 'batch' that must be fully processed before evicting this limit order from state
-	BatchId uint64 `protobuf:"varint,3,opt,name=batch_id,json=batchId,proto3" json:"batchId"` // @gotags: json:"batchId"
-	// success: true if the funds were transferred from the pool, otherwise false
-	Success       bool `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
+	Committee uint64 `protobuf:"varint,1,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
+	// orders: the list of dex limit orders
+	Orders []*DexLimitOrder `protobuf:"bytes,2,rep,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
+	// poolSize: contains the current balance of the liquidity pool
+	PoolSize uint64 `protobuf:"varint,3,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
+	// receipts: the list of order success status's
+	Receipts      []bool `protobuf:"varint,4,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DexReceipt) Reset() {
-	*x = DexReceipt{}
+func (x *DexBatch) Reset() {
+	*x = DexBatch{}
 	mi := &file_dex_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DexReceipt) String() string {
+func (x *DexBatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DexReceipt) ProtoMessage() {}
+func (*DexBatch) ProtoMessage() {}
 
-func (x *DexReceipt) ProtoReflect() protoreflect.Message {
+func (x *DexBatch) ProtoReflect() protoreflect.Message {
 	mi := &file_dex_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -153,57 +126,53 @@ func (x *DexReceipt) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DexReceipt.ProtoReflect.Descriptor instead.
-func (*DexReceipt) Descriptor() ([]byte, []int) {
+// Deprecated: Use DexBatch.ProtoReflect.Descriptor instead.
+func (*DexBatch) Descriptor() ([]byte, []int) {
 	return file_dex_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *DexReceipt) GetId() []byte {
-	if x != nil {
-		return x.Id
-	}
-	return nil
-}
-
-func (x *DexReceipt) GetCommittee() uint64 {
+func (x *DexBatch) GetCommittee() uint64 {
 	if x != nil {
 		return x.Committee
 	}
 	return 0
 }
 
-func (x *DexReceipt) GetBatchId() uint64 {
+func (x *DexBatch) GetOrders() []*DexLimitOrder {
 	if x != nil {
-		return x.BatchId
+		return x.Orders
+	}
+	return nil
+}
+
+func (x *DexBatch) GetPoolSize() uint64 {
+	if x != nil {
+		return x.PoolSize
 	}
 	return 0
 }
 
-func (x *DexReceipt) GetSuccess() bool {
+func (x *DexBatch) GetReceipts() []bool {
 	if x != nil {
-		return x.Success
+		return x.Receipts
 	}
-	return false
+	return nil
 }
 
 var File_dex_proto protoreflect.FileDescriptor
 
 const file_dex_proto_rawDesc = "" +
 	"\n" +
-	"\tdex.proto\x12\x05types\"\xc2\x01\n" +
-	"\rDexLimitOrder\x12\x0e\n" +
-	"\x02Id\x18\x01 \x01(\fR\x02Id\x12\x1c\n" +
-	"\tCommittee\x18\x02 \x01(\x04R\tCommittee\x12$\n" +
-	"\rAmountForSale\x18\x03 \x01(\x04R\rAmountForSale\x12(\n" +
-	"\x0fRequestedAmount\x18\x04 \x01(\x04R\x0fRequestedAmount\x12\x18\n" +
-	"\aAddress\x18\x05 \x01(\fR\aAddress\x12\x19\n" +
-	"\bbatch_id\x18\x06 \x01(\x04R\abatchId\"o\n" +
-	"\n" +
-	"DexReceipt\x12\x0e\n" +
-	"\x02Id\x18\x01 \x01(\fR\x02Id\x12\x1c\n" +
-	"\tCommittee\x18\x02 \x01(\x04R\tCommittee\x12\x19\n" +
-	"\bbatch_id\x18\x03 \x01(\x04R\abatchId\x12\x18\n" +
-	"\asuccess\x18\x04 \x01(\bR\asuccessB&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\tdex.proto\x12\x05types\"y\n" +
+	"\rDexLimitOrder\x12$\n" +
+	"\rAmountForSale\x18\x01 \x01(\x04R\rAmountForSale\x12(\n" +
+	"\x0fRequestedAmount\x18\x02 \x01(\x04R\x0fRequestedAmount\x12\x18\n" +
+	"\aAddress\x18\x03 \x01(\fR\aAddress\"\x8f\x01\n" +
+	"\bDexBatch\x12\x1c\n" +
+	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12,\n" +
+	"\x06orders\x18\x02 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x12\x1b\n" +
+	"\tpool_size\x18\x03 \x01(\x04R\bpoolSize\x12\x1a\n" +
+	"\breceipts\x18\x04 \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_dex_proto_rawDescOnce sync.Once
@@ -220,14 +189,15 @@ func file_dex_proto_rawDescGZIP() []byte {
 var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_dex_proto_goTypes = []any{
 	(*DexLimitOrder)(nil), // 0: types.DexLimitOrder
-	(*DexReceipt)(nil),    // 1: types.DexReceipt
+	(*DexBatch)(nil),      // 1: types.DexBatch
 }
 var file_dex_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: types.DexBatch.orders:type_name -> types.DexLimitOrder
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_dex_proto_init() }

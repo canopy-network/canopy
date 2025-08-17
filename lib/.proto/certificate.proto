@@ -53,13 +53,13 @@ message CertificateResult {
   SlashRecipients slash_recipients = 2; // @gotags: json:"slashRecipients"
   // orders: contains information regarding the 'buying side' of sell orders
   // including actions like 'buy/reserve order' or 'close/complete order'
-  Orders orders = 3;
+  Orders orders = 3; // @gotags: json:"orders"
   // checkpoint: contains information from the 3rd party chain in order for Canopy to provide Checkpoint-as-a-Service
-  Checkpoint checkpoint = 4;
+  Checkpoint checkpoint = 4; // @gotags: json:"checkpoint"
   // retired: signals if the committee wants to shut down and mark itself as 'forever unsubsidized' on the root-chain
-  bool retired = 5;
-  // dex: contains information regarding the selling side 'dex' operations
-
+  bool retired = 5; // @gotags: json:"retired"
+  // dex_batch: contains information regarding the selling side 'dex' operations
+  DexBatch dex_batch = 6; // @gotags: json:"dexBatch"
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,
@@ -182,14 +182,4 @@ message CommitteeData {
   // number_of_samples: the total count of processed Certificate Result Transactions, used to dilute reward percentages
   // accurately
   uint64 number_of_samples = 5; // @gotags: json:"numberOfSamples"
-}
-
-// DexData is information regarding 'dex' operations from the nested chain
-message DexData {
-  // orders: contains the list of dex limit orders
-  repeated DexLimitOrder orders = 1; // @gotags: json:"orders"
-  // poolSize: contains the current balance of the liquidity pool
-  uint64 pool_size = 2; // @gotags: json:"poolSize"
-  // receipts: contains the list of dex receipts
-  repeated DexReceipt receipts = 3;
 }

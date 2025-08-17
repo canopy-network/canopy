@@ -17,14 +17,14 @@ var ReservedIDs = []uint64{
 // Example: pools[chainId] -> stake pool && pools[chainId+EscrowPoolAddend] -> escrow pool for token swaps
 
 var (
-	MaxChainId          = math.MaxUint16 / 4
-	HoldingPoolAddend   = 1 * math.MaxUint16 / 4
-	LiquidityPoolAddend = 2 * math.MaxUint16 / 4
-	Unused1PoolAddend   = 3 * math.MaxUint16 / 4
-	EscrowPoolAddend    = 4 * math.MaxUint16 / 4
-	Unused2PoolAddend   = 5 * math.MaxUint16 / 4
-	Unused3PoolAddend   = 6 * math.MaxUint16 / 4
-	Unused4PoolAddend   = 7 * math.MaxUint16 / 4
+	MaxChainId          = uint64(math.MaxUint16 / 4)
+	HoldingPoolAddend   = uint64(1 * math.MaxUint16 / 4)
+	LiquidityPoolAddend = uint64(2 * math.MaxUint16 / 4)
+	Unused1PoolAddend   = uint64(3 * math.MaxUint16 / 4)
+	EscrowPoolAddend    = uint64(4 * math.MaxUint16 / 4)
+	Unused2PoolAddend   = uint64(5 * math.MaxUint16 / 4)
+	Unused3PoolAddend   = uint64(6 * math.MaxUint16 / 4)
+	Unused4PoolAddend   = uint64(7 * math.MaxUint16 / 4)
 )
 
 var (
@@ -42,6 +42,10 @@ var (
 	committeesDataPrefix   = []byte{12} // store key prefix for Quorum Certificate proposals before they are paid
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
+	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
+
+	lockedBatchSegment = []byte("l")
+	nextBatchSement    = []byte("n")
 )
 
 /*
@@ -97,6 +101,14 @@ func KeyForValidator(addr crypto.AddressI) []byte {
 }
 func KeyForParams(s string) []byte {
 	return lib.JoinLenPrefix(paramsPrefix, []byte(prefixForParamSpace(s)))
+}
+
+func KeyForLockedBatch(chainId uint64) []byte {
+	return lib.JoinLenPrefix(dexPrefix, lockedBatchSegment, formatUint64(chainId))
+}
+
+func KeyForNextBatch(chainId uint64) []byte {
+	return lib.JoinLenPrefix(dexPrefix, nextBatchSement, formatUint64(chainId))
 }
 
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {

@@ -46,6 +46,8 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
+	controller.FSM.RCManager = controller.RCManager
+	controller.Mempool.FSM.RCManager = controller.RCManager
 	// exit
 	return
 }
@@ -260,6 +262,17 @@ func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *
 		return nil, lib.ErrNotSubscribed()
 	}
 	return sub.Transaction(tx)
+}
+
+// GetDexBatch() queries a 'dex batch on the root chain
+func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64) (*lib.DexBatch, lib.ErrorI) {
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
+	if !found {
+		// exit with 'not subscribed' error
+		return nil, lib.ErrNotSubscribed()
+	}
+	return sub.DexBatch(height, committee)
 }
 
 // SUBSCRIPTION CODE BELOW (OUTBOUND)

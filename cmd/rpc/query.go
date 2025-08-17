@@ -286,6 +286,30 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	})
 }
 
+// DexBatch retrieves the 'locked' dex batch for a committee
+func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(true)
+		}
+		// return the locked batch
+		return s.GetDexBatch(fsm.KeyForLockedBatch(id))
+	})
+}
+
+// NextDexBatch retrieves the 'up-next' dex batch for a committee
+func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(false)
+		}
+		// return the locked batch
+		return s.GetDexBatch(fsm.KeyForNextBatch(id))
+	})
+}
+
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
