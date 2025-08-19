@@ -98,7 +98,7 @@ State persistence ensures that the Oracle can recover from interruptions without
 
 # BFT Consensus Integration
 
-The Oracle system uses a dual-phase approach to participate in Byzantine Fault Tolerant consensus:
+The Oracle hooks into the BFT process in two phases:
 
 1. **Proposal Phase**: When acting as a proposer, the Oracle queries its witnessed order store to find orders that should be included in the next block proposal
 2. **Validation Phase**: When validating block proposals from other nodes, the Oracle verifies that all proposed orders exist in its local witnessed order store

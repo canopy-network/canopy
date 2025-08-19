@@ -198,7 +198,7 @@ func TestERC20TokenCache_TokenInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// create new token cache with mock caller
-			cache := NewERC20TokenCache(tt.mockCaller)
+			cache := NewERC20TokenCache(tt.mockCaller, nil)
 			// set up initial cache if provided
 			if tt.setupCache != nil {
 				tt.setupCache(cache)

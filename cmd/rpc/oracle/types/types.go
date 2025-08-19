@@ -146,6 +146,8 @@ type BlockProvider interface {
 	Start(ctx context.Context, height uint64)
 	// Block returns the channel this provider will send new blocks through
 	BlockCh() chan BlockI
+	// IsSynced returns whether the provider has synced to the top of the chain
+	IsSynced() bool
 }
 
 // TokenInfo holds the basic information about an ERC20 token

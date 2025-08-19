@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -110,8 +111,22 @@ func (c *Controller) Start() {
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
-				// update oracle's order book so it can start processing blocks
-				c.oracle.UpdateRootChainInfo(rootChainInfo)
+				// oracle specific initialization
+				if c.Config.OracleEnabled {
+					// update oracle's order book so it can start processing blocks
+					c.oracle.UpdateRootChainInfo(rootChainInfo)
+					c.log.Info("Starting Oracle, waiting for source chain sync")
+					// channel to indicate source chain is synced
+					syncCh := make(chan bool)
+					// start the oracle with context and a channel to wait for source chain sync
+					c.oracle.Start(context.Background(), syncCh)
+					<-syncCh // wait for syncCh to be closed
+					c.log.Info("Oracle is synced to top, starting Canopy")
+				}
+				// start the syncing process (if not synced to top)
+				go c.Sync()
+				// start the bft consensus (if synced to top)
+				go c.Consensus.Start()
 				// exit the loop
 				break
 			}
@@ -120,10 +135,10 @@ func (c *Controller) Start() {
 		go c.CheckMempool()
 		// start internal Controller listeners for P2P
 		c.StartListeners()
-		// start the syncing process (if not synced to top)
-		go c.Sync()
-		// start the bft consensus (if synced to top)
-		go c.Consensus.Start()
+		// // start the syncing process (if not synced to top)
+		// go c.Sync()
+		// // start the bft consensus (if synced to top)
+		// go c.Consensus.Start()
 	}()
 }
 
