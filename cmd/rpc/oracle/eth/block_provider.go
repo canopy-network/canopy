@@ -136,6 +136,15 @@ func (p *EthBlockProvider) BlockCh() chan types.BlockI {
 	return p.blockChan
 }
 
+// IsSynced returns whether the block provider has synced to the top of the chain
+func (p *EthBlockProvider) IsSynced() bool {
+	// lock height mutex to safely read synced state
+	p.heightMu.Lock()
+	defer p.heightMu.Unlock()
+	// return current sync status
+	return p.synced
+}
+
 func (p *EthBlockProvider) closeConnections() {
 	if p.rpcClient != nil {
 		p.rpcClient.Close()
@@ -269,15 +278,17 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				// stop listening to new headers and return an error
 				return ErrSourceHeight
 			}
-			// process all blocks up to current height
-			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
+			// not synced to top
 			if !p.synced {
+				// check for source chain sync
 				if p.nextHeight.Cmp(header.Number) == 0 {
 					// we've caught up to the latest block, mark as synced
 					p.synced = true
 					p.logger.Infof("ethereum block provider synced at height %s", p.nextHeight.String())
 				}
 			}
+			// process all blocks up to current height
+			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
 		case err := <-sub.Err():
 			// unsubscribe from new headers
 			sub.Unsubscribe()

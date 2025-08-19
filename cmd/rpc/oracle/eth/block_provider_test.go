@@ -93,7 +93,7 @@ func createEthereumBlock(height uint64, txs []*ethtypes.Transaction) *ethtypes.B
 }
 
 func setupTokenCache(address common.Address, token types.TokenInfo) *ERC20TokenCache {
-	cache := NewERC20TokenCache(&mockEthClient{})
+	cache := NewERC20TokenCache(&mockEthClient{}, nil)
 	cache.cache.Put(address.Hex(), token)
 	return cache
 }

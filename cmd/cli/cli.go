@@ -120,8 +120,9 @@ func Start() {
 	}
 	var o *oracle.Oracle
 	// only enable oracle if configuration is present
-	if config.Enabled {
+	if config.OracleEnabled {
 		oracleRoot := filepath.Join(DataDir, "oracle")
+		l.Infof("Oracle enabled, see oracle log in %s for details", oracleRoot)
 		// create a seperate logger for the oracle and all oracle components
 		oracleLogger := lib.NewOracleLogger(
 			lib.LoggerConfig{Level: config.GetLogLevel()},
@@ -144,8 +145,12 @@ func Start() {
 		if e != nil {
 			l.Fatal(e.Error())
 		}
-		// start the oracle with shared context
-		o.Start(ctx)
+		l.Info("Starting Oracle, waiting for sourec chain sync")
+		syncCh := make(chan bool)
+		// start the oracle with context and a channel to wait for source chain sync
+		o.Start(ctx, syncCh)
+		<-syncCh // wait for syncCh to be closed
+		l.Info("Oracle is synced to top, starting Canopy")
 	}
 	// create a new instance of the application
 	app, err := controller.New(sm, o, config, validatorKey, metrics, l)

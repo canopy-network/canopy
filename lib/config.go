@@ -306,7 +306,7 @@ func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
 
 // OracleConfig represents the configuration of the off-chain order witness oracle
 type OracleConfig struct {
-	Enabled                  bool   `json:"enabled"`                  // enables or disables the oracle functionality
+	OracleEnabled            bool   `json:"oracleEnabled"`            // enables or disables the oracle functionality
 	StateFile                string `json:"stateSaveFile"`            // file to save oracle state
 	OrderResubmitDelayBlocks uint64 `json:"orderResubmitDelayBlocks"` // how many root blocks to wait to resubmit order
 	Committee                uint64 `json:"committee"`                // committee this oracle will witnessed orders for
@@ -319,7 +319,7 @@ type OracleConfig struct {
 // DefaultOracleConfig() returns the default ethereum block provider configuration
 func DefaultOracleConfig() OracleConfig {
 	return OracleConfig{
-		Enabled:                  true,
+		OracleEnabled:            false,
 		StateFile:                "oracle.state",
 		OrderResubmitDelayBlocks: 2,
 		Committee:                2,
