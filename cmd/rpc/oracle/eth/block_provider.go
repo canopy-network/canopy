@@ -272,18 +272,10 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			// process all blocks up to current height
 			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
 			if !p.synced {
-				// fetch the latest block height from ethereum to check if we're synced
-				latestBlock, err := p.rpcClient.BlockByNumber(ctx, nil)
-				if err != nil {
-					// log error fetching latest block height
-					p.logger.Errorf("failed to fetch latest block height: %v", err)
-				} else {
-					// check if our next height equals the latest block height
-					if p.nextHeight.Cmp(latestBlock.Number()) == 0 {
-						// we've caught up to the latest block, mark as synced
-						p.synced = true
-						p.logger.Infof("ethereum block provider synced at height %s", p.nextHeight.String())
-					}
+				if p.nextHeight.Cmp(header.Number) == 0 {
+					// we've caught up to the latest block, mark as synced
+					p.synced = true
+					p.logger.Infof("ethereum block provider synced at height %s", p.nextHeight.String())
 				}
 			}
 		case err := <-sub.Err():
