@@ -132,7 +132,8 @@ func (o *Oracle) rollbackOrderType(orderType types.OrderType, rollbackHeight uin
 }
 
 // Start begins listening for blocks from the configured block provider
-func (o *Oracle) Start(ctx context.Context) {
+// syncCh: optional channel to notify when block provider syncs to top (can be nil)
+func (o *Oracle) Start(ctx context.Context, syncCh chan<- bool) {
 	// log that we're starting the oracle
 	o.log.Info("Starting oracle")
 	go func() {
@@ -144,7 +145,7 @@ func (o *Oracle) Start(ctx context.Context) {
 				time.Sleep(1 * time.Second)
 			}
 			// listen for blocks
-			err := o.run(ctx)
+			err := o.run(ctx, syncCh)
 			if err == nil {
 				// oracle context cancelled
 				return
@@ -170,7 +171,8 @@ func (o *Oracle) Start(ctx context.Context) {
 // run runs the main Oracle loop
 // - get last height from state manager
 // - start block provider
-func (o *Oracle) run(ctx context.Context) lib.ErrorI {
+// syncCh: optional channel to notify when block provider syncs to top (can be nil)
+func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 	// create a new context from the existing one
 	blockProviderCtx, cancelBlockProvider := context.WithCancel(ctx)
 	defer cancelBlockProvider()
@@ -184,6 +186,8 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 	}
 	// get the block channel from provider
 	blockCh := o.blockProvider.BlockCh()
+	// track sync status to avoid duplicate notifications
+	lastSyncStatus := false
 	// start the main oracle loop
 	for {
 		select {
@@ -215,9 +219,26 @@ func (o *Oracle) run(ctx context.Context) lib.ErrorI {
 				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
 				return err
 			}
+			o.log.Infof("%v %v\n", syncCh, lastSyncStatus)
+			// close syncCh when provider is synced to top
+			if syncCh != nil && !lastSyncStatus {
+				if o.blockProvider.IsSynced() {
+					lastSyncStatus = true
+					close(syncCh)
+				}
+			}
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
 			o.log.Info("Oracle context cancelled, stopping block processing")
+			// notify that oracle is no longer synced when shutting down
+			if syncCh != nil {
+				select {
+				case syncCh <- false:
+					o.log.Info("Oracle sync status set to false on shutdown")
+				default:
+					// channel full or closed, continue shutdown
+				}
+			}
 			return nil
 		}
 	}
@@ -545,6 +566,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// copy and save order book
 	o.orderBook = info.Orders.Copy()
+	for _, order := range o.orderBook.Orders {
+		o.log.Warnf("ORDER %s\n", order)
+	}
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
