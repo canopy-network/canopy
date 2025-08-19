@@ -139,7 +139,7 @@ func (b *BFT) handleHighQCVDFAndEvidence(vote *Message) lib.ErrorI {
 				b.HighQC = vote.HighQc
 				b.Block, b.Results = vote.Qc.Block, vote.Qc.Results
 				// TODO DEPRECATE (7)
-				if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+				if b.BeforeUpgradeHeight() {
 					b.RCBuildHeight = vote.RcBuildHeight
 				} else {
 					b.RootBuildHeight = vote.Header.RootBuildHeight

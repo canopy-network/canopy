@@ -22,7 +22,15 @@ import (
 //   2) Upgrade height which switches to the embedded 'root build height' once Validators all upgraded
 //   3) Cleanup the deprecated code
 
-var PROTOCOL_BREAK_UPGRADE_HEIGHT = uint64(520000)
+var PROTOCOL_BREAK_UPGRADE_HEIGHT = uint64(109000)
+
+func (b *BFT) BeforeUpgradeHeight() bool {
+	if b.LoadIsOwnRoot() {
+		return b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT
+	} else {
+		return b.RootHeight < PROTOCOL_BREAK_UPGRADE_HEIGHT
+	}
+}
 
 // BFT is a structure that holds data for a Hotstuff BFT instance
 type BFT struct {
@@ -157,7 +165,7 @@ func (b *BFT) Start() {
 					b.LastCommitTime = time.UnixMicro(int64(resetBFT.BFTMeta.GetLastCommitTime()))
 					resetOnRootHeight = resetBFT.BFTMeta.GetResetOnRootHeight()
 				} else {
-					if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT { // TODO DEPRECATE (11)
+					if b.BeforeUpgradeHeight() { // TODO DEPRECATE (11)
 						b.NewHeight(true)
 						b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
 					} else {
@@ -284,7 +292,7 @@ func (b *BFT) StartElectionVotePhase() {
 	b.HighVDF = b.VDFService.Finish()
 	// TODO DEPRECATE (1)
 	var rootBuildHeight uint64
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		rootBuildHeight = b.RCBuildHeight
 	} else {
 		rootBuildHeight = b.RootBuildHeight
@@ -326,7 +334,7 @@ func (b *BFT) StartProposePhase() {
 	b.HighVDF = highVDF
 	// TODO DEPRECATE (2)
 	var rootBuildHeight uint64
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		rootBuildHeight = b.RCBuildHeight
 	} else {
 		rootBuildHeight = b.RootBuildHeight
@@ -342,7 +350,7 @@ func (b *BFT) StartProposePhase() {
 		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
 	}
 	// TODO DEPRECATE (3)
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		b.RCBuildHeight = rootBuildHeight
 	} else {
 		b.RootBuildHeight = rootBuildHeight
@@ -396,7 +404,7 @@ func (b *BFT) StartProposeVotePhase() {
 	}
 	// TODO DEPRECATE (4)
 	var rootBuildHeight uint64
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		rootBuildHeight = msg.RcBuildHeight
 	} else {
 		rootBuildHeight = msg.Qc.Header.RootBuildHeight
@@ -456,7 +464,7 @@ func (b *BFT) StartPrecommitPhase() {
 	}
 	// TODO DEPRECATE (5)
 	var rootBuildHeight uint64
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		rootBuildHeight = b.RCBuildHeight
 	} else {
 		rootBuildHeight = b.RootBuildHeight
@@ -496,7 +504,7 @@ func (b *BFT) StartPrecommitVotePhase() {
 	// `lock` on the proposal (only by satisfying the SAFE-NODE-PREDICATE or COMMIT can this node unlock)
 	b.HighQC = msg.Qc
 	// TODO DEPRECATE (6)
-	if b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT {
+	if b.BeforeUpgradeHeight() {
 		b.RCBuildHeight = msg.RcBuildHeight
 	} else {
 		b.RootBuildHeight = msg.Header.RootBuildHeight
@@ -1086,7 +1094,7 @@ type (
 		// LoadCertificate() gets the Quorum Certificate from the chainId-> plugin at a certain height
 		LoadCertificate(height uint64) (*lib.QuorumCertificate, lib.ErrorI)
 		// CommitCertificate() commits a block to persistence
-		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI)
+		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI)
 		// GossipBlock() is a P2P call to gossip a completed Quorum Certificate with a Proposal
 		GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64, bftMeta *lib.BFTCoordinationMeta)
 		// SendToSelf() is a P2P call to directly send  a completed Quorum Certificate to self

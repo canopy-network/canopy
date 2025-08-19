@@ -153,7 +153,7 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 	}
 	// don't accept any blocks below the local height
 	if height > block.BlockHeader.Height {
-		return nil, ErrWrongBlockHeight(block.BlockHeader.Height, height+1)
+		return nil, ErrWrongBlockHeight(block.BlockHeader.Height, height)
 	}
 	// new height notified error
 	if height < block.BlockHeader.Height {

@@ -500,7 +500,7 @@ type testController struct {
 	sendToReplicasChan chan lib.Signable
 }
 
-func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
 	return nil
 }
 

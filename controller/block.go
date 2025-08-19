@@ -228,100 +228,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - re-checks all transactions in mempool
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
-func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
-	start := time.Now()
-	// cancel any running mempool check
-	c.Mempool.stop()
-	// lock the mempool
-	c.Mempool.L.Lock()
-	defer c.Mempool.L.Unlock()
-	// log the beginning of the commit
-	c.log.Debugf("TryCommit block %s", lib.BytesToString(qc.ResultsHash))
-	// cast the store to ensure the proper store type to complete this operation
-	storeI := c.FSM.Store().(lib.StoreI)
-	// reset the store once this code finishes; if code execution gets to `store.Commit()` - this will effectively be a noop
-	defer c.FSM.Reset()
-	// if the block result isn't 'pre-calculated'
-	if blockResult == nil {
-		// reset the FSM to ensure stale proposal validations don't come into play
-		c.FSM.Reset()
-		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, true)
-		if err != nil {
-			// exit with error
-			return
-		}
-	}
-	// log indexing the quorum certificate
-	c.log.Debugf("Indexing certificate for height %d", qc.Header.Height)
-	// index the quorum certificate in the store
-	if err = storeI.IndexQC(qc); err != nil {
-		// exit with error
-		return
-	}
-	// log indexing the block
-	c.log.Debugf("Indexing block %d", block.BlockHeader.Height)
-	// index the block in the store
-	if err = storeI.IndexBlock(blockResult); err != nil {
-		// exit with error
-		return
-	}
-	// delete each transaction from the mempool
-	c.Mempool.DeleteTransaction(block.Transactions...)
-	// parse committed block for straw polls
-	c.FSM.ParsePollTransactions(blockResult)
-	// if self was the proposer
-	if bytes.Equal(qc.ProposerKey, c.PublicKey) && !c.isSyncing.Load() {
-		// send the certificate results transaction on behalf of the quorum
-		c.SendCertificateResultsTx(qc)
-	}
-	// log the start of the commit
-	c.log.Debug("Committing to store")
-	// atomically write all from the ephemeral database batch to the actual database
-	if _, err = storeI.Commit(); err != nil {
-		// exit with error
-		return err
-	}
-	// log to signal finishing the commit
-	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
-	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
-	if err != nil {
-		// exit with error
-		return err
-	}
-	// set up the mempool with the actual new FSM for the next height
-	// this makes c.Mempool.FSM.Reset() is unnecessary
-	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
-		// exit with error
-		return err
-	}
-	// check the mempool to cache a proposal block and validate the mempool itself
-	c.Mempool.CheckMempool()
-	// reset mempool FSM
-	c.Mempool.FSM.Reset()
-	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
-	defer c.UpdateTelemetry(qc, block, time.Since(start))
-	// publish the root chain info to the nested chain subscribers
-	for _, id := range c.RCManager.ChainIds() {
-		// get the root chain info
-		info, e := c.FSM.LoadRootChainInfo(id, 0)
-		if e != nil {
-			// don't log 'no-validators' error as this is possible
-			if e.Error() != lib.ErrNoValidators().Error() {
-				c.log.Error(e.Error())
-			}
-			continue
-		}
-		// publish root chain information
-		go c.RCManager.Publish(id, info)
-	}
-	// exit
-	return
-}
-
-// CommitCertificate() the experimental and parallelized version of the above
-func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
+func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -561,7 +468,7 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 		result = nil
 	}
 	// attempts to commit the QC to persistence of chain by playing it against the state machine
-	if err = c.CommitCertificate(qc, block, result, msg.Time); err != nil {
+	if err = c.CommitCertificate(qc, block, result); err != nil {
 		// exit with error
 		return nil, err
 	}
