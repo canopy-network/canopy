@@ -142,7 +142,7 @@ func (b *BFT) handleHighQCVDFAndEvidence(vote *Message) lib.ErrorI {
 				if b.BeforeUpgradeHeight() {
 					b.RCBuildHeight = vote.RcBuildHeight
 				} else {
-					b.RootBuildHeight = vote.Header.RootBuildHeight
+					b.RootBuildHeight = vote.Qc.Header.RootBuildHeight
 				}
 			}
 		}

@@ -612,6 +612,7 @@ func (b *BFT) RoundInterrupt() {
 	view := b.View.Copy()
 	// determine the best faction based on what is currently known
 	_, view.RootHeight, view.Round = b.DetermineNextRootHeightAndRound(b.Round + 1)
+	b.log.Infof("Round Interrupt Voting (%d) and root height (%d)", view.Round, view.RootHeight)
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{Header: view},
@@ -637,7 +638,7 @@ func (b *BFT) Pacemaker(waitS int) {
 			// set root height and refresh root chain info
 			b.RefreshRootChainInfo(rootHeight)
 			// log
-			b.log.Infof("Pacemaker set round and root height: %d, %d with VP: %.2f%%",
+			b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
 				nextRound, rootHeight, float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
 			// exit
 			return
@@ -655,30 +656,31 @@ type PacemakerMessages map[string]*Message // [ public_key_string ] -> View mess
 func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight, nextRound uint64) {
 	rootHeights, rounds := make(map[uint64]uint64), make(map[uint64]uint64) // rootHeight/round -> votingPower
 	// helper to track voting power
-	addVote := func(pubKey []byte, r, rh uint64, allowSelf bool) {
+	addVote := func(pubKey []byte, r, rh uint64) {
 		if v, err := b.ValidatorSet.GetValidator(pubKey); err == nil {
-			if allowSelf || !bytes.Equal(v.PublicKey, b.PublicKey) {
-				rounds[r] += v.VotingPower
-				rootHeights[rh] += v.VotingPower
-			}
+			rounds[r] += v.VotingPower
+			rootHeights[rh] += v.VotingPower
 		}
 	}
 	// add self during the RoundInterrupt() phase to determine the best faction to vote on
 	// but omit self during the PacemakerPhase() in order to determine if a +2/3 majority may be reached if self joins the best faction
 	isPrePacemakerPhase := round == b.Round+1
 	if isPrePacemakerPhase {
-		addVote(b.PublicKey, round, b.Controller.RootChainHeight(), true)
+		b.log.Infof("Latest root chain height detected at: %d", b.Controller.RootChainHeight())
+		addVote(b.PublicKey, round, b.Controller.RootChainHeight())
 	}
 	// convert map to slice and sort
 	pacemakerVotes := make([]*Message, 0, len(b.PacemakerMessages))
 	for _, msg := range b.PacemakerMessages {
-		pacemakerVotes = append(pacemakerVotes, msg)
+		if msg.Qc.Header.Round >= round {
+			pacemakerVotes = append(pacemakerVotes, msg)
+		}
 	}
 	sort.Slice(pacemakerVotes, func(i, j int) bool { return pacemakerVotes[i].Qc.Header.Round > pacemakerVotes[j].Qc.Header.Round })
 	// for each pacemaker vote
 	for _, msg := range pacemakerVotes {
-		if msg.Qc.Header.Round >= round {
-			addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight, false)
+		if !bytes.Equal(msg.Signature.PublicKey, b.PublicKey) {
+			addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight)
 		}
 	}
 	// find max round by voting power
