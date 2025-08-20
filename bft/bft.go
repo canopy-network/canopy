@@ -349,15 +349,17 @@ func (b *BFT) StartProposePhase() {
 	} else {
 		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
 	}
+	// get view
+	view := b.View.Copy()
 	// TODO DEPRECATE (3)
 	if b.BeforeUpgradeHeight() {
 		b.RCBuildHeight = rootBuildHeight
 	} else {
-		b.RootBuildHeight = rootBuildHeight
+		view.RootBuildHeight = rootBuildHeight
 	}
 	// send PROPOSE message to the replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
-		Header: b.View.Copy(),
+		Header: view,
 		Qc: &QC{
 			Header:      vote.Qc.Header, // the current view
 			Results:     b.Results,      // the proposed `certificate results`
@@ -433,10 +435,14 @@ func (b *BFT) StartProposeVotePhase() {
 	if err := b.RunVDF(b.GetBlockHash()); err != nil {
 		b.log.Errorf("RunVDF() failed with error, %s", err.Error())
 	}
+	// get view and set Root chain build height
+	view := b.View.Copy()
+	// set RootBuildHeight
+	view.RootBuildHeight = rootBuildHeight
 	// send vote to the proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
-			Header:      b.View.Copy(),
+			Header:      view,
 			BlockHash:   b.GetBlockHash(),
 			ResultsHash: b.Results.Hash(),
 			ProposerKey: b.ProposerKey,
@@ -671,7 +677,9 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	sort.Slice(pacemakerVotes, func(i, j int) bool { return pacemakerVotes[i].Qc.Header.Round > pacemakerVotes[j].Qc.Header.Round })
 	// for each pacemaker vote
 	for _, msg := range pacemakerVotes {
-		addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight, false)
+		if msg.Qc.Header.Round >= round {
+			addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight, false)
+		}
 	}
 	// find max round by voting power
 	for r, vp := range rounds {
