@@ -145,7 +145,7 @@ func Start() {
 		if e != nil {
 			l.Fatal(e.Error())
 		}
-		l.Info("Starting Oracle, waiting for sourec chain sync")
+		l.Info("Starting Oracle, waiting for source chain sync")
 		syncCh := make(chan bool)
 		// start the oracle with context and a channel to wait for source chain sync
 		o.Start(ctx, syncCh)
