@@ -120,10 +120,10 @@ func (c *Controller) Start() {
 		go c.CheckMempool()
 		// start internal Controller listeners for P2P
 		c.StartListeners()
-		// start the syncing process (if not synced to top)
-		go c.Sync()
-		// start the bft consensus (if synced to top)
-		go c.Consensus.Start()
+		// // start the syncing process (if not synced to top)
+		// go c.Sync()
+		// // start the bft consensus (if synced to top)
+		// go c.Consensus.Start()
 	}()
 }
 

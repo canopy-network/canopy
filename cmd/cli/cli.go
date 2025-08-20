@@ -145,12 +145,6 @@ func Start() {
 		if e != nil {
 			l.Fatal(e.Error())
 		}
-		l.Info("Starting Oracle, waiting for source chain sync")
-		syncCh := make(chan bool)
-		// start the oracle with context and a channel to wait for source chain sync
-		o.Start(ctx, syncCh)
-		<-syncCh // wait for syncCh to be closed
-		l.Info("Oracle is synced to top, starting Canopy")
 	}
 	// create a new instance of the application
 	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
@@ -165,6 +159,18 @@ func Start() {
 	app.Start()
 	// start the rpc server
 	rpcServer.Start()
+	if config.OracleEnabled {
+		l.Info("Starting Oracle, waiting for source chain sync")
+		syncCh := make(chan bool)
+		// start the oracle with context and a channel to wait for source chain sync
+		o.Start(ctx, syncCh)
+		<-syncCh // wait for syncCh to be closed
+		l.Info("Oracle is synced to top, starting Canopy")
+		// start the syncing process (if not synced to top)
+		go app.Sync()
+		// start the bft consensus (if synced to top)
+		go app.Consensus.Start()
+	}
 	// block until a kill signal is received
 	waitForKill()
 	// cancel the shared context to stop oracle components
