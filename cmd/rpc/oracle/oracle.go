@@ -566,6 +566,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	}
 	// copy and save order book
 	o.orderBook = info.Orders.Copy()
+	for _, order := range o.orderBook.Orders {
+		o.log.Warnf("ORDER %s\n", order)
+	}
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
 	if err != nil {
