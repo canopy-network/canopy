@@ -413,7 +413,7 @@ func (b *BFT) StartProposeVotePhase() {
 	}
 	// ensure the build height isn't too old
 	if rootBuildHeight < b.CommitteeData.LastRootHeightUpdated {
-		b.log.Error(lib.ErrInvalidRCBuildHeight().Error())
+		b.log.Error(lib.ErrInvalidRCBuildHeight(rootBuildHeight, b.CommitteeData.LastRootHeightUpdated).Error())
 		b.RoundInterrupt()
 		return
 	}
@@ -632,14 +632,16 @@ func (b *BFT) Pacemaker(waitS int) {
 		// determine largest faction
 		totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
 		// check exit condition
-		if totalVP >= b.ValidatorSet.MinimumMaj23 && b.ValidatorSet.MinimumMaj23 > 0 || i == waitS {
+		if totalVP >= b.ValidatorSet.MinimumMaj23 || i == waitS {
 			// set round
 			b.Round = nextRound
 			// set root height and refresh root chain info
 			b.RefreshRootChainInfo(rootHeight)
-			// log
-			b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
-				nextRound, rootHeight, float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+			// log with div 0 protection
+			if b.ValidatorSet.MinimumMaj23 > 0 {
+				b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
+					nextRound, rootHeight, float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+			}
 			// exit
 			return
 		}

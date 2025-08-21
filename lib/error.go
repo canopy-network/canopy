@@ -478,8 +478,8 @@ func ErrInvalidQCRootChainHeight() ErrorI {
 	return NewError(CodeInvalidQCRootChainHeight, ConsensusModule, "invalid certificate root-chain height")
 }
 
-func ErrInvalidRCBuildHeight() ErrorI {
-	return NewError(CodeInvalidRCBuildHeight, ConsensusModule, "invalid root chain build height")
+func ErrInvalidRCBuildHeight(height, stateHeight uint64) ErrorI {
+	return NewError(CodeInvalidRCBuildHeight, ConsensusModule, fmt.Sprintf("invalid root chain build height %d with state height %d", height, stateHeight))
 }
 
 func ErrEmptyView() ErrorI {
