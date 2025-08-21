@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"math/bits"
 	"sort"
-	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -189,49 +188,87 @@ func (s *SMT) Commit(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 	return s.commit(false)
 }
 
-// CommitParallel(): sorts the operations in 8 subtree threads, executes those threads in parallel and combines them into the master tree
+// CommitParallel() executes deferred operations in parallel by partitioning them into
+// 8 subtrees based on their 3-bit prefix (000-111), avoiding conflicts between operations
+// that would modify overlapping tree regions. Each subtree is processed independently,
+// then the results are merged back into the main tree.
 func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
-	var wg sync.WaitGroup
-	errChan := make(chan lib.ErrorI, NumSubtrees)
-	// add 16 synthetic borders to the tree
+	// if there are too few operations, fall back to sequential processing
+	// if len(unsortedOps) < NumSubtrees*2 {
+	// 	return s.Commit(unsortedOps)
+	// }
+
+	// sort operations by their 3-bit prefix to avoid conflicts
+	groups, err := s.sortOperationsByPrefix(unsortedOps)
+	if err != nil {
+		return err
+	}
+
+	// add synthetic borders to enable safe parallel processing
 	cleanup, err := s.addSyntheticBorders()
 	if err != nil {
 		return err
 	}
-	// collect the roots for each group (000, 001, 010, 011...)
-	roots, err := s.getSubtreeRoots()
+	defer func() {
+		// cleanup synthetic borders regardless of success/failure
+		if cleanupErr := cleanup(); cleanupErr != nil && err == nil {
+			err = cleanupErr
+		}
+	}()
+
+	// get subtree roots for parallel processing
+	subtreeRoots, err := s.getSubtreeRoots()
 	if err != nil {
 		return err
 	}
-	// sort operations grouping by prefix
-	groupedByPrefix, err := s.sortOperationsByPrefix(unsortedOps)
-	if err != nil {
-		return
+
+	// process subtrees in parallel using goroutines
+	type subtreeResult struct {
+		index int
+		err   lib.ErrorI
 	}
-	// commit each group in parallel
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			// create subtree
-			subtree := s.createSubtree(roots[index], groupedByPrefix[index])
+
+	resultChan := make(chan subtreeResult, NumSubtrees)
+	activeSubtrees := 0
+
+	// launch goroutines for each subtree that has operations
+	for i := 0; i < NumSubtrees; i++ {
+		if len(groups[i]) == 0 {
+			continue // skip empty groups
+		}
+
+		activeSubtrees++
+		go func(idx int, ops []*node, root *node) {
+			// create an isolated subtree for this prefix
+			subtree := s.createSubtree(root, ops)
+			// reset subtree state for processing
 			subtree.reset()
-			// commit the subtree
-			if e := subtree.commit(true); e != nil {
-				errChan <- e
-			}
-		}(i)
+			// process operations in this subtree
+			err := subtree.commit(true)
+			// send result back
+			resultChan <- subtreeResult{index: idx, err: err}
+		}(i, groups[i], subtreeRoots[i])
 	}
-	// wait for all goroutines to finish
-	wg.Wait()
-	close(errChan)
-	// check if any errors occurred
-	for err = range errChan {
-		if err != nil {
-			return
+
+	// collect results from all active subtrees
+	for completed := 0; completed < activeSubtrees; completed++ {
+		result := <-resultChan
+		if result.err != nil {
+			// if any subtree fails, we need to return the error
+			// the cleanup function will handle synthetic border removal
+			return result.err
 		}
 	}
-	return cleanup()
+
+	// after all subtrees are processed, the tree state is already consistent
+	// because each subtree operation updated the shared store
+	// we just need to refresh our in-memory view of the root
+	s.root, err = s.getNode(s.root.Key.bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // commit(): executes the deferred operations in order (left-to-right),
