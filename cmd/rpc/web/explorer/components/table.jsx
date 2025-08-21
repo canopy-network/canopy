@@ -17,7 +17,7 @@ import {
 function convertValue(k, v, openModal) {
   if (k === "Id" || k === "Data") return v;
   if (k === "publicKey") return <Truncate text={v} />;
-  if (k === "netAddress") return <span className="net-address">{v}</span>;
+  if (k === "netAddress") return <span className="net-address">{v || "tcp://delegating"}</span>;
   if (isHex(v) || k === "height") {
     const content = isNumber(v) ? v : <Truncate text={v} />;
     return (
@@ -208,7 +208,14 @@ export default function DTable(props) {
         <h5 className="data-table-head">{getHeader(tableData)}</h5>
       </div>
 
-      <Table responsive bordered hover size="sm" className="table" style={{ opacity: tableLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+      <Table
+        responsive
+        bordered
+        hover
+        size="sm"
+        className="table"
+        style={{ opacity: tableLoading ? 0.6 : 1, transition: "opacity 0.2s" }}
+      >
         <thead>
           <tr>
             {Object.keys(getTableBody(tableData)[0]).map((s, i) => (
@@ -233,7 +240,10 @@ export default function DTable(props) {
           {sortedData.map((val, idx) => (
             <tr key={idx}>
               {Object.keys(val).map((k, i) => (
-                <td key={i} className={k === 'Id' ? 'large-table-col' : k === 'netAddress' ? 'net-address-col' : 'table-col'}>
+                <td
+                  key={i}
+                  className={k === "Id" ? "large-table-col" : k === "netAddress" ? "net-address-col" : "table-col"}
+                >
                   {convertValue(k, val[k], props.openModal)}
                 </td>
               ))}
