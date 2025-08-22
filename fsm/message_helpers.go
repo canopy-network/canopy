@@ -10,20 +10,22 @@ import (
 
 const (
 	// Names for each Transaction Message (payload) type
-	MessageSendName               = "send"
-	MessageStakeName              = "stake"
-	MessageUnstakeName            = "unstake"
-	MessageEditStakeName          = "editStake"
-	MessagePauseName              = "pause"
-	MessageUnpauseName            = "unpause"
-	MessageChangeParameterName    = "changeParameter"
-	MessageDAOTransferName        = "daoTransfer"
-	MessageCertificateResultsName = "certificateResults"
-	MessageSubsidyName            = "subsidy"
-	MessageCreateOrderName        = "createOrder"
-	MessageEditOrderName          = "editOrder"
-	MessageDeleteOrderName        = "deleteOrder"
-	MessageDexLimitOrderName      = "dexLimitOrder"
+	MessageSendName                 = "send"
+	MessageStakeName                = "stake"
+	MessageUnstakeName              = "unstake"
+	MessageEditStakeName            = "editStake"
+	MessagePauseName                = "pause"
+	MessageUnpauseName              = "unpause"
+	MessageChangeParameterName      = "changeParameter"
+	MessageDAOTransferName          = "daoTransfer"
+	MessageCertificateResultsName   = "certificateResults"
+	MessageSubsidyName              = "subsidy"
+	MessageCreateOrderName          = "createOrder"
+	MessageEditOrderName            = "editOrder"
+	MessageDeleteOrderName          = "deleteOrder"
+	MessageDexLimitOrderName        = "dexLimitOrder"
+	MessageDexLiquidityDepositName  = "dexLiquidityDeposit"
+	MessageDexLiquidityWithdrawName = "dexLiquidityWithdraw"
 )
 
 func init() {
@@ -41,6 +43,9 @@ func init() {
 	lib.RegisteredMessages[MessageCreateOrderName] = new(MessageCreateOrder)
 	lib.RegisteredMessages[MessageEditOrderName] = new(MessageEditOrder)
 	lib.RegisteredMessages[MessageDeleteOrderName] = new(MessageDeleteOrder)
+	lib.RegisteredMessages[MessageDexLimitOrderName] = new(MessageDexLimitOrder)
+	lib.RegisteredMessages[MessageDexLiquidityDepositName] = new(MessageDexLiquidityDeposit)
+	lib.RegisteredMessages[MessageDexLiquidityWithdrawName] = new(MessageDexLiquidityWithdraw)
 }
 
 var _ lib.MessageI = &MessageSend{} // interface enforcement
@@ -759,6 +764,98 @@ type jsonMessageDexLimitOrder struct {
 	SellersSendAddress lib.HexBytes `json:"sellerReceiveAddress"`
 }
 
+var _ lib.MessageI = &MessageDexLiquidityDeposit{} // interface enforcement
+
+func (x *MessageDexLiquidityDeposit) New() lib.MessageI { return new(MessageDexLiquidityDeposit) }
+func (x *MessageDexLiquidityDeposit) Name() string      { return MessageDexLiquidityDepositName }
+func (x *MessageDexLiquidityDeposit) Recipient() []byte { return nil }
+
+// Check() validates the Message structure
+func (x *MessageDexLiquidityDeposit) Check() lib.ErrorI {
+	if err := checkAddress(x.Address); err != nil {
+		return err
+	}
+	if err := checkAmount(x.Amount); err != nil {
+		return err
+	}
+	return checkChainId(x.ChainId)
+}
+
+// MarshalJSON() is the json.Marshaller implementation for MessageEditOrder
+func (x *MessageDexLiquidityDeposit) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageDexLiquidityDeposit{
+		ChainId: x.ChainId,
+		Amount:  x.Amount,
+		Address: x.Address,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageEditOrder
+func (x *MessageDexLiquidityDeposit) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageDexLiquidityDeposit
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageDexLiquidityDeposit{
+		ChainId: j.ChainId,
+		Amount:  j.Amount,
+		Address: j.Address,
+	}
+	return
+}
+
+type jsonMessageDexLiquidityDeposit struct {
+	ChainId uint64       `json:"chainID"`
+	Amount  uint64       `json:"amount"`
+	Address lib.HexBytes `json:"address"`
+}
+
+var _ lib.MessageI = &MessageDexLiquidityWithdraw{} // interface enforcement
+
+func (x *MessageDexLiquidityWithdraw) New() lib.MessageI { return new(MessageDexLiquidityWithdraw) }
+func (x *MessageDexLiquidityWithdraw) Name() string      { return MessageDexLiquidityWithdrawName }
+func (x *MessageDexLiquidityWithdraw) Recipient() []byte { return nil }
+
+// Check() validates the Message structure
+func (x *MessageDexLiquidityWithdraw) Check() lib.ErrorI {
+	if err := checkAddress(x.Address); err != nil {
+		return err
+	}
+	if err := checkPercent(x.Percent); err != nil {
+		return err
+	}
+	return checkChainId(x.ChainId)
+}
+
+// MarshalJSON() is the json.Marshaller implementation for MessageEditOrder
+func (x *MessageDexLiquidityWithdraw) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageDexLiquidityWithdraw{
+		ChainId: x.ChainId,
+		Percent: x.Percent,
+		Address: x.Address,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageEditOrder
+func (x *MessageDexLiquidityWithdraw) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageDexLiquidityWithdraw
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageDexLiquidityWithdraw{
+		ChainId: j.ChainId,
+		Percent: j.Percent,
+		Address: j.Address,
+	}
+	return
+}
+
+type jsonMessageDexLiquidityWithdraw struct {
+	ChainId uint64       `json:"chainID"`
+	Percent uint64       `json:"percent"`
+	Address lib.HexBytes `json:"address"`
+}
+
 func ensureEmpty(b []byte) lib.ErrorI {
 	if len(b) != 0 {
 		return ErrNotEmpty()
@@ -770,6 +867,17 @@ func ensureEmpty(b []byte) lib.ErrorI {
 func checkAmount(amount uint64) lib.ErrorI {
 	if amount == 0 {
 		return ErrInvalidAmount()
+	}
+	return nil
+}
+
+// checkPercent() validates the percent sent in the Message
+func checkPercent(percent uint64) lib.ErrorI {
+	if percent == 0 {
+		return lib.ErrInvalidPercentAllocation()
+	}
+	if percent > 100 {
+		return lib.ErrInvalidPercentAllocation()
 	}
 	return nil
 }

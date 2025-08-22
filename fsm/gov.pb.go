@@ -7,12 +7,11 @@
 package fsm
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -352,14 +351,8 @@ type ValidatorParams struct {
 	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buyDeadlineBlocks"` // @gotags: json:"buyDeadlineBlocks"
 	// lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
 	LockOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=lock_order_fee_multiplier,json=lockOrderFeeMultiplier,proto3" json:"lockOrderFeeMultiplier"` // @gotags: json:"lockOrderFeeMultiplier"
-	// minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
-	MinimumStakeForValidators uint64 `protobuf:"varint,17,opt,name=minimum_stake_for_validators,json=minimumStakeForValidators,proto3" json:"minimumStakeForValidators"` // @gotags: json:"minimumStakeForValidators"
-	// minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
-	MinimumStakeForDelegates uint64 `protobuf:"varint,18,opt,name=minimum_stake_for_delegates,json=minimumStakeForDelegates,proto3" json:"minimumStakeForDelegates"` // @gotags: json:"minimumStakeForDelegates"
-	// maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
-	MaximumDelegatesPerCommittee uint64 `protobuf:"varint,19,opt,name=maximum_delegates_per_committee,json=maximumDelegatesPerCommittee,proto3" json:"maximumDelegatesPerCommittee"` // @gotags: json:"maximumDelegatesPerCommittee"
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ValidatorParams) Reset() {
@@ -504,27 +497,6 @@ func (x *ValidatorParams) GetLockOrderFeeMultiplier() uint64 {
 	return 0
 }
 
-func (x *ValidatorParams) GetMinimumStakeForValidators() uint64 {
-	if x != nil {
-		return x.MinimumStakeForValidators
-	}
-	return 0
-}
-
-func (x *ValidatorParams) GetMinimumStakeForDelegates() uint64 {
-	if x != nil {
-		return x.MinimumStakeForDelegates
-	}
-	return 0
-}
-
-func (x *ValidatorParams) GetMaximumDelegatesPerCommittee() uint64 {
-	if x != nil {
-		return x.MaximumDelegatesPerCommittee
-	}
-	return 0
-}
-
 // FeeParams is the parameter space that defines various amounts for transaction fees
 type FeeParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -554,8 +526,14 @@ type FeeParams struct {
 	EditOrderFee uint64 `protobuf:"varint,12,opt,name=edit_order_fee,json=editOrderFee,proto3" json:"editOrderFee"` // @gotags: json:"editOrderFee"
 	// delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
 	DeleteOrderFee uint64 `protobuf:"varint,13,opt,name=delete_order_fee,json=deleteOrderFee,proto3" json:"deleteOrderFee"` // @gotags: json:"deleteOrderFee"
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// dex_limit_order_fee: is the fee amount (in uCNPY) for Message Dex Limit Order
+	DexLimitOrderFee uint64 `protobuf:"varint,14,opt,name=dex_limit_order_fee,json=dexLimitOrderFee,proto3" json:"dexLimitOrderFee"` // @gotags: json:"dexLimitOrderFee"
+	// dex_liquidity_deposit_fee: is the fee amount (in uCNPY) for Message Dex Liquidity Deposit
+	DexLiquidityDepositFee uint64 `protobuf:"varint,15,opt,name=dex_liquidity_deposit_fee,json=dexLiquidityDepositFee,proto3" json:"dexLiquidityDeposit"` // @gotags: json:"dexLiquidityDeposit"
+	// dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
+	DexLiquidityWithdrawFee uint64 `protobuf:"varint,16,opt,name=dex_liquidity_withdraw_fee,json=dexLiquidityWithdrawFee,proto3" json:"dexLiquidityWithdraw"` // @gotags: json:"dexLiquidityWithdraw"
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *FeeParams) Reset() {
@@ -679,6 +657,27 @@ func (x *FeeParams) GetDeleteOrderFee() uint64 {
 	return 0
 }
 
+func (x *FeeParams) GetDexLimitOrderFee() uint64 {
+	if x != nil {
+		return x.DexLimitOrderFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetDexLiquidityDepositFee() uint64 {
+	if x != nil {
+		return x.DexLiquidityDepositFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetDexLiquidityWithdrawFee() uint64 {
+	if x != nil {
+		return x.DexLiquidityWithdrawFee
+	}
+	return 0
+}
+
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous
 // governing of the network
 type GovernanceParams struct {
@@ -746,7 +745,7 @@ const file_gov_proto_rawDesc = "" +
 	"block_size\x18\x01 \x01(\x04R\tblockSize\x12)\n" +
 	"\x10protocol_version\x18\x02 \x01(\tR\x0fprotocolVersion\x12\"\n" +
 	"\rroot_chain_id\x18\x03 \x01(\x04R\vrootChainId\x12\x18\n" +
-	"\aretired\x18\x04 \x01(\x04R\aretired\"\xa0\b\n" +
+	"\aretired\x18\x04 \x01(\x04R\aretired\"\xd9\x06\n" +
 	"\x0fValidatorParams\x12)\n" +
 	"\x10unstaking_blocks\x18\x01 \x01(\x04R\x0funstakingBlocks\x12(\n" +
 	"\x10max_pause_blocks\x18\x02 \x01(\x04R\x0emaxPauseBlocks\x12?\n" +
@@ -765,10 +764,7 @@ const file_gov_proto_rawDesc = "" +
 	"\x17max_slash_per_committee\x18\r \x01(\x04R\x14maxSlashPerCommittee\x12<\n" +
 	"\x1adelegate_reward_percentage\x18\x0e \x01(\x04R\x18delegateRewardPercentage\x12.\n" +
 	"\x13buy_deadline_blocks\x18\x0f \x01(\x04R\x11buyDeadlineBlocks\x129\n" +
-	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\x12?\n" +
-	"\x1cminimum_stake_for_validators\x18\x11 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
-	"\x1bminimum_stake_for_delegates\x18\x12 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
-	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\xf7\x03\n" +
+	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\"\x9e\x05\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12\x1b\n" +
 	"\tstake_fee\x18\x02 \x01(\x04R\bstakeFee\x12$\n" +
@@ -786,7 +782,10 @@ const file_gov_proto_rawDesc = "" +
 	"subsidyFee\x12(\n" +
 	"\x10create_order_fee\x18\v \x01(\x04R\x0ecreateOrderFee\x12$\n" +
 	"\x0eedit_order_fee\x18\f \x01(\x04R\feditOrderFee\x12(\n" +
-	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"F\n" +
+	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\x12-\n" +
+	"\x13dex_limit_order_fee\x18\x0e \x01(\x04R\x10dexLimitOrderFee\x129\n" +
+	"\x19dex_liquidity_deposit_fee\x18\x0f \x01(\x04R\x16dexLiquidityDepositFee\x12;\n" +
+	"\x1adex_liquidity_withdraw_fee\x18\x10 \x01(\x04R\x17dexLiquidityWithdrawFee\"F\n" +
 	"\x10GovernanceParams\x122\n" +
 	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage*I\n" +
 	"\x15GovProposalVoteConfig\x12\x0e\n" +

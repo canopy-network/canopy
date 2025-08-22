@@ -1042,7 +1042,7 @@ type MessageDexLimitOrder struct {
 	AmountForSale uint64 `protobuf:"varint,2,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
 	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
-	// sellers_send_address: the Canopy address the seller is selling and signing from
+	// sellers_send_address: the address the seller is selling and signing from
 	SellersSendAddress []byte `protobuf:"bytes,4,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -1102,6 +1102,134 @@ func (x *MessageDexLimitOrder) GetRequestedAmount() uint64 {
 func (x *MessageDexLimitOrder) GetSellersSendAddress() []byte {
 	if x != nil {
 		return x.SellersSendAddress
+	}
+	return nil
+}
+
+// MessageDexLiquidityDeposit: deposits tokens to the liquidity pool in exchange for liquidity points
+type MessageDexLiquidityDeposit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// chain_id: the id of the committee that is responsible for the 'counter asset'
+	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	// amount: the amount tokens, transferred to escrow
+	Amount uint64 `protobuf:"varint,2,opt,name=Amount,proto3" json:"amount"` // @gotags: json:"amount"
+	// sellers_send_address: the address the seller is selling and signing from
+	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageDexLiquidityDeposit) Reset() {
+	*x = MessageDexLiquidityDeposit{}
+	mi := &file_message_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageDexLiquidityDeposit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageDexLiquidityDeposit) ProtoMessage() {}
+
+func (x *MessageDexLiquidityDeposit) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageDexLiquidityDeposit.ProtoReflect.Descriptor instead.
+func (*MessageDexLiquidityDeposit) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MessageDexLiquidityDeposit) GetChainId() uint64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *MessageDexLiquidityDeposit) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *MessageDexLiquidityDeposit) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+// MessageDexLiquidityWithdraw: withdraw tokens from both liquidity pools in exchange for burning liquidity points
+type MessageDexLiquidityWithdraw struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	// percent: the percent of tokens to withdraw
+	Percent uint64 `protobuf:"varint,2,opt,name=Percent,proto3" json:"percent"` // @gotags: json:"percent"
+	// address: the address the LP is signing from
+	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageDexLiquidityWithdraw) Reset() {
+	*x = MessageDexLiquidityWithdraw{}
+	mi := &file_message_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageDexLiquidityWithdraw) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageDexLiquidityWithdraw) ProtoMessage() {}
+
+func (x *MessageDexLiquidityWithdraw) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageDexLiquidityWithdraw.ProtoReflect.Descriptor instead.
+func (*MessageDexLiquidityWithdraw) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *MessageDexLiquidityWithdraw) GetChainId() uint64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *MessageDexLiquidityWithdraw) GetPercent() uint64 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
+func (x *MessageDexLiquidityWithdraw) GetAddress() []byte {
+	if x != nil {
+		return x.Address
 	}
 	return nil
 }
@@ -1191,7 +1319,15 @@ const file_message_proto_rawDesc = "" +
 	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12$\n" +
 	"\rAmountForSale\x18\x02 \x01(\x04R\rAmountForSale\x12(\n" +
 	"\x0fRequestedAmount\x18\x03 \x01(\x04R\x0fRequestedAmount\x12.\n" +
-	"\x12SellersSendAddress\x18\x04 \x01(\fR\x12SellersSendAddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
+	"\x12SellersSendAddress\x18\x04 \x01(\fR\x12SellersSendAddress\"h\n" +
+	"\x1aMessageDexLiquidityDeposit\x12\x18\n" +
+	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12\x16\n" +
+	"\x06Amount\x18\x02 \x01(\x04R\x06Amount\x12\x18\n" +
+	"\aAddress\x18\x03 \x01(\fR\aAddress\"k\n" +
+	"\x1bMessageDexLiquidityWithdraw\x12\x18\n" +
+	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12\x18\n" +
+	"\aPercent\x18\x02 \x01(\x04R\aPercent\x12\x18\n" +
+	"\aAddress\x18\x03 \x01(\fR\aAddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once
@@ -1205,28 +1341,30 @@ func file_message_proto_rawDescGZIP() []byte {
 	return file_message_proto_rawDescData
 }
 
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_message_proto_goTypes = []any{
-	(*MessageSend)(nil),               // 0: types.MessageSend
-	(*MessageStake)(nil),              // 1: types.MessageStake
-	(*MessageEditStake)(nil),          // 2: types.MessageEditStake
-	(*MessageUnstake)(nil),            // 3: types.MessageUnstake
-	(*MessagePause)(nil),              // 4: types.MessagePause
-	(*MessageUnpause)(nil),            // 5: types.MessageUnpause
-	(*MessageChangeParameter)(nil),    // 6: types.MessageChangeParameter
-	(*MessageDAOTransfer)(nil),        // 7: types.MessageDAOTransfer
-	(*MessageCertificateResults)(nil), // 8: types.MessageCertificateResults
-	(*MessageSubsidy)(nil),            // 9: types.MessageSubsidy
-	(*MessageCreateOrder)(nil),        // 10: types.MessageCreateOrder
-	(*MessageEditOrder)(nil),          // 11: types.MessageEditOrder
-	(*MessageDeleteOrder)(nil),        // 12: types.MessageDeleteOrder
-	(*MessageDexLimitOrder)(nil),      // 13: types.MessageDexLimitOrder
-	(*anypb.Any)(nil),                 // 14: google.protobuf.Any
-	(*lib.QuorumCertificate)(nil),     // 15: types.QuorumCertificate
+	(*MessageSend)(nil),                 // 0: types.MessageSend
+	(*MessageStake)(nil),                // 1: types.MessageStake
+	(*MessageEditStake)(nil),            // 2: types.MessageEditStake
+	(*MessageUnstake)(nil),              // 3: types.MessageUnstake
+	(*MessagePause)(nil),                // 4: types.MessagePause
+	(*MessageUnpause)(nil),              // 5: types.MessageUnpause
+	(*MessageChangeParameter)(nil),      // 6: types.MessageChangeParameter
+	(*MessageDAOTransfer)(nil),          // 7: types.MessageDAOTransfer
+	(*MessageCertificateResults)(nil),   // 8: types.MessageCertificateResults
+	(*MessageSubsidy)(nil),              // 9: types.MessageSubsidy
+	(*MessageCreateOrder)(nil),          // 10: types.MessageCreateOrder
+	(*MessageEditOrder)(nil),            // 11: types.MessageEditOrder
+	(*MessageDeleteOrder)(nil),          // 12: types.MessageDeleteOrder
+	(*MessageDexLimitOrder)(nil),        // 13: types.MessageDexLimitOrder
+	(*MessageDexLiquidityDeposit)(nil),  // 14: types.MessageDexLiquidityDeposit
+	(*MessageDexLiquidityWithdraw)(nil), // 15: types.MessageDexLiquidityWithdraw
+	(*anypb.Any)(nil),                   // 16: google.protobuf.Any
+	(*lib.QuorumCertificate)(nil),       // 17: types.QuorumCertificate
 }
 var file_message_proto_depIdxs = []int32{
-	14, // 0: types.MessageChangeParameter.parameter_value:type_name -> google.protobuf.Any
-	15, // 1: types.MessageCertificateResults.qc:type_name -> types.QuorumCertificate
+	16, // 0: types.MessageChangeParameter.parameter_value:type_name -> google.protobuf.Any
+	17, // 1: types.MessageCertificateResults.qc:type_name -> types.QuorumCertificate
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
@@ -1245,7 +1383,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

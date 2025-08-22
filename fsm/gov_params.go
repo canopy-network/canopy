@@ -67,19 +67,22 @@ func DefaultParams() *Params {
 			MaximumDelegatesPerCommittee:       0,
 		},
 		Fee: &FeeParams{
-			SendFee:               10000,
-			StakeFee:              10000,
-			EditStakeFee:          10000,
-			UnstakeFee:            10000,
-			PauseFee:              10000,
-			UnpauseFee:            10000,
-			ChangeParameterFee:    10000,
-			DaoTransferFee:        10000,
-			CertificateResultsFee: 0,
-			SubsidyFee:            10000,
-			CreateOrderFee:        10000,
-			EditOrderFee:          10000,
-			DeleteOrderFee:        10000,
+			SendFee:                 10000,
+			StakeFee:                10000,
+			EditStakeFee:            10000,
+			UnstakeFee:              10000,
+			PauseFee:                10000,
+			UnpauseFee:              10000,
+			ChangeParameterFee:      10000,
+			DaoTransferFee:          10000,
+			CertificateResultsFee:   0,
+			SubsidyFee:              10000,
+			CreateOrderFee:          10000,
+			EditOrderFee:            10000,
+			DeleteOrderFee:          10000,
+			DexLimitOrderFee:        0,
+			DexLiquidityDepositFee:  0,
+			DexLiquidityWithdrawFee: 0,
 		},
 		Governance: &GovernanceParams{
 			DaoRewardPercentage: 5,
@@ -338,59 +341,26 @@ func (x *ValidatorParams) SetString(_ string, _ string) lib.ErrorI {
 var _ ParamSpace = &FeeParams{}
 
 const (
-	ParamSendFee               = "sendFee"               // transaction fee for MessageSend
-	ParamStakeFee              = "stakeFee"              // transaction fee for MessageStake
-	ParamEditStakeFee          = "editStakeFee"          // transaction fee for MessageEditStake
-	ParamUnstakeFee            = "unstakeFee"            // transaction fee for MessageUnstake
-	ParamPauseFee              = "pauseFee"              // transaction fee for MessagePause
-	ParamUnpauseFee            = "unpauseFee"            // transaction fee for MessageUnpause
-	ParamChangeParameterFee    = "changeParameterFee"    // transaction fee for MessageChangeParameter
-	ParamDAOTransferFee        = "daoTransferFee"        // transaction fee for MessageDAOTransfer
-	ParamCertificateResultsFee = "certificateResultsFee" // transaction fee for MessageCertificateResults
-	ParamSubsidyFee            = "subsidyFee"            // transaction fee for MessageSubsidy
-	ParamCreateOrderFee        = "createOrderFee"        // transaction fee for MessageCreateOrder
-	ParamEditOrderFee          = "editOrderFee"          // transaction fee for MessageEditOrder
-	ParamDeleteOrderFee        = "deleteOrderFee"        // transaction fee for MessageDeleteOrder
+	ParamSendFee                 = "sendFee"                 // transaction fee for MessageSend
+	ParamStakeFee                = "stakeFee"                // transaction fee for MessageStake
+	ParamEditStakeFee            = "editStakeFee"            // transaction fee for MessageEditStake
+	ParamUnstakeFee              = "unstakeFee"              // transaction fee for MessageUnstake
+	ParamPauseFee                = "pauseFee"                // transaction fee for MessagePause
+	ParamUnpauseFee              = "unpauseFee"              // transaction fee for MessageUnpause
+	ParamChangeParameterFee      = "changeParameterFee"      // transaction fee for MessageChangeParameter
+	ParamDAOTransferFee          = "daoTransferFee"          // transaction fee for MessageDAOTransfer
+	ParamCertificateResultsFee   = "certificateResultsFee"   // transaction fee for MessageCertificateResults
+	ParamSubsidyFee              = "subsidyFee"              // transaction fee for MessageSubsidy
+	ParamCreateOrderFee          = "createOrderFee"          // transaction fee for MessageCreateOrder
+	ParamEditOrderFee            = "editOrderFee"            // transaction fee for MessageEditOrder
+	ParamDeleteOrderFee          = "deleteOrderFee"          // transaction fee for MessageDeleteOrder
+	ParamDexLimitOrderFee        = "dexLimitOrderFee"        // transaction fee for MessageDexLimitOrder
+	ParamDexLiquidityDepositFee  = "dexLiquidityDepositFee"  // transaction fee for MessageDexLiquidityDeposit
+	ParamDexLiquidityWithdrawFee = "dexLiquidityWithdrawFee" // transaction fee for MessageDexLiquidityWithdraw
 )
 
 // Check() validates the Fee params
 func (x *FeeParams) Check() lib.ErrorI {
-	if x.SendFee == 0 {
-		return ErrInvalidParam(ParamSendFee)
-	}
-	if x.StakeFee == 0 {
-		return ErrInvalidParam(ParamStakeFee)
-	}
-	if x.EditStakeFee == 0 {
-		return ErrInvalidParam(ParamEditStakeFee)
-	}
-	if x.UnstakeFee == 0 {
-		return ErrInvalidParam(ParamUnstakeFee)
-	}
-	if x.PauseFee == 0 {
-		return ErrInvalidParam(ParamPauseFee)
-	}
-	if x.UnpauseFee == 0 {
-		return ErrInvalidParam(ParamUnpauseFee)
-	}
-	if x.ChangeParameterFee == 0 {
-		return ErrInvalidParam(ParamChangeParameterFee)
-	}
-	if x.DaoTransferFee == 0 {
-		return ErrInvalidParam(ParamDAOTransferFee)
-	}
-	if x.SubsidyFee == 0 {
-		return ErrInvalidParam(ParamSubsidyFee)
-	}
-	if x.CreateOrderFee == 0 {
-		return ErrInvalidParam(ParamCreateOrderFee)
-	}
-	if x.EditOrderFee == 0 {
-		return ErrInvalidParam(ParamEditOrderFee)
-	}
-	if x.DeleteOrderFee == 0 {
-		return ErrInvalidParam(ParamDeleteOrderFee)
-	}
 	return nil
 }
 
@@ -428,6 +398,12 @@ func (x *FeeParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.DeleteOrderFee = value
 	case ParamEditOrderFee:
 		x.EditOrderFee = value
+	case ParamDexLimitOrderFee:
+		x.DexLimitOrderFee = value
+	case ParamDexLiquidityDepositFee:
+		x.DexLiquidityDepositFee = value
+	case ParamDexLiquidityWithdrawFee:
+		x.DexLiquidityWithdrawFee = value
 	default:
 		return ErrUnknownParam()
 	}

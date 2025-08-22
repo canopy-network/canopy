@@ -187,23 +187,6 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	to simply prove that no-one owns the private key for that account
 */
 
-// GetLiquidityPoints() retrieves the amount of liquidity points and total points for an address
-func (s *StateMachine) GetLiquidityPoints(address []byte, chainId uint64) (points, totalPoints, poolBalance uint64, err lib.ErrorI) {
-	// retrieve the liquidity pool for the chain id
-	liquidityPool, err := s.GetPool(chainId + LiquidityPoolAddend)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	// for each 'shareholder'
-	for _, shareHolder := range liquidityPool.Points {
-		// if the address is found
-		if bytes.Equal(shareHolder.Address, address) {
-			return shareHolder.Points, liquidityPool.TotalPoolPoints, liquidityPool.Amount, nil
-		}
-	}
-	return 0, 0, 0, lib.ErrPointHolderNotFound()
-}
-
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
 	// get the pool bytes from the state using the Key a specific id

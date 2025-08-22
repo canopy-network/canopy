@@ -516,6 +516,63 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
 }
 
+// HandleMessageDexLiquidityDeposit() is the proper handler for a `DexLiquidityDeposit` message
+func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidityDeposit) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(KeyForNextBatch(msg.ChainId))
+	if err != nil {
+		return err
+	}
+	// hard limit ops to 10K per batch to prevent unchecked state growth
+	if len(batch.Deposits) >= 10_000 {
+		return ErrMaxDexBatchSize()
+	}
+	// move funds from user
+	if err = s.AccountSub(crypto.NewAddress(msg.Address), msg.Amount); err != nil {
+		return err
+	}
+	// add funds to holding pool
+	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.Amount); err != nil {
+		return err
+	}
+	// add the batch to the order
+	batch.Deposits = append(batch.Deposits, &lib.DexLiquidityDeposit{
+		Address: msg.Address,
+		Amount:  msg.Amount,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
+}
+
+// HandleMessageDexLiquidityWithdraw() is the proper handler for a `DexLiquidityWithdraw` message
+func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidityWithdraw) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(KeyForNextBatch(msg.ChainId))
+	if err != nil {
+		return err
+	}
+	// hard limit ops to 10K per batch to prevent unchecked state growth
+	if len(batch.Withdraws) >= 10_000 {
+		return ErrMaxDexBatchSize()
+	}
+	// get the liquidity pool
+	p, err := s.GetPool(msg.ChainId + LiquidityPoolAddend)
+	if err != nil {
+		return err
+	}
+	// sanity check has liquidity points
+	if _, err = p.GetPointsFor(msg.Address); err != nil {
+		return err
+	}
+	// add the batch to the order
+	batch.Withdraws = append(batch.Withdraws, &lib.DexLiquidityWithdraw{
+		Address: msg.Address,
+		Percent: msg.Percent,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
+}
+
 // GetFeeForMessageName() returns the associated cost for processing a specific type of message based on the name
 func (s *StateMachine) GetFeeForMessageName(name string) (fee uint64, err lib.ErrorI) {
 	// retrieve the fee parameters from the state
@@ -551,6 +608,12 @@ func (s *StateMachine) GetFeeForMessageName(name string) (fee uint64, err lib.Er
 		return feeParams.EditOrderFee, nil
 	case MessageDeleteOrderName:
 		return feeParams.DeleteOrderFee, nil
+	case MessageDexLimitOrderName:
+		return feeParams.DexLimitOrderFee, nil
+	case MessageDexLiquidityDepositName:
+		return feeParams.DexLiquidityDepositFee, nil
+	case MessageDexLiquidityWithdrawName:
+		return feeParams.DexLiquidityWithdrawFee, nil
 	default:
 		return 0, lib.ErrUnknownMessageName(name)
 	}
@@ -602,6 +665,12 @@ func (s *StateMachine) GetAuthorizedSignersFor(msg lib.MessageI) (signers [][]by
 			return nil, e
 		}
 		return [][]byte{order.SellersSendAddress}, nil
+	case *MessageDexLimitOrder:
+		return [][]byte{x.SellersSendAddress}, nil
+	case *MessageDexLiquidityDeposit:
+		return [][]byte{x.SellersSendAddress}, nil
+	case *MessageDexLiquidityWithdraw:
+		return [][]byte{x.SellersSendAddress}, nil
 	default:
 		return nil, ErrUnknownMessage(x)
 	}
