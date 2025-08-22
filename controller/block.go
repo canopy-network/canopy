@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -227,6 +230,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+	defer lib.TimeTrack(c.log, time.Now())
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -560,6 +564,18 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	if result == nil || result.BlockHeader == nil || !bytes.Equal(result.BlockHeader.Hash, block.BlockHeader.Hash) {
 		result = nil
 	}
+	c.log.Errorf("BLOCK RECEIVE P2P TOOK: %s", time.Since(time.UnixMicro(int64(msg.Time))))
+	f, e := os.Create(filepath.Join(c.Config.DataDirPath, "cpu.prof"))
+	if e != nil {
+		panic(e)
+	}
+	defer f.Close()
+	// Start CPU profiling
+	if err := pprof.StartCPUProfile(f); err != nil {
+		panic(err)
+	}
+	// Ensure the profile is stopped before the program exits
+	defer pprof.StopCPUProfile()
 	// attempts to commit the QC to persistence of chain by playing it against the state machine
 	if err = c.CommitCertificate(qc, block, result, msg.Time); err != nil {
 		// exit with error
