@@ -58,14 +58,34 @@ message DexLimitOrder {
   bytes Address = 3; // @gotags: json:"address"
 }
 
+// DexLiquidityDeposit a liquidity deposit command
+message DexLiquidityDeposit {
+    // address: the address where the funds are deposited from
+    bytes address = 1;
+    // amount: the amount of the deposit
+    uint64 amount = 2;
+}
+
+// DexLiquidityWithdraw a liquidity withdraw command
+message DexLiquidityWithdraw {
+  // address: the address where the funds are withdrawn to
+  bytes address = 1;
+  // percent: the percent of points being withdrawn
+  uint64 percent = 2;
+}
+
 // DexBatch is a group of limit orders that must be processed atomically
 message DexBatch {
   // committee: the id of the 'counter asset'
   uint64 Committee = 1; // @gotags: json:"committee"
   // orders: the list of dex limit orders
   repeated DexLimitOrder orders = 2; // @gotags: json:"orders"
+  // deposits: the liquidity provider 'deposit' command
+  repeated DexLiquidityDeposit deposits = 3;
+  // withdraws: the liquidity provider 'withdraw' command
+  repeated DexLiquidityWithdraw withdraws = 4;
   // poolSize: contains the current balance of the liquidity pool
-  uint64 pool_size = 3; // @gotags: json:"poolSize"
+  uint64 pool_size = 5; // @gotags: json:"poolSize"
   // receipts: the list of order success status's
-  repeated bool receipts = 4;
+  repeated bool receipts = 6;
 }

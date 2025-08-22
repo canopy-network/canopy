@@ -244,12 +244,12 @@ const (
 	CodeInvalidChainId            ErrorCode = 68
 	CodeWrongNetworkID            ErrorCode = 69
 	CodeInvalidLiquidityPool      ErrorCode = 70
+	CodeRootHeight                ErrorCode = 71
+	CodeInvalidQCCommitteeHeight  ErrorCode = 72
+	CodeZeroPointHolder           ErrorCode = 73
+	CodeOrderNotFound             ErrorCode = 74
+	CodePointHolderNotFound       ErrorCode = 75
 	CodeMaxDexBatchSize           ErrorCode = 103
-
-	CodeRootHeight               ErrorCode = 71
-	CodeInvalidQCCommitteeHeight ErrorCode = 72
-
-	CodeOrderNotFound ErrorCode = 74
 
 	CodeMinimumOrderSize     ErrorCode = 76
 	CodeOrderLocked          ErrorCode = 77
@@ -869,4 +869,12 @@ func ErrPluginTimeout() ErrorI {
 
 func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
 	return NewError(CodeInvalidFSMToPluginmessage, StateMachineModule, fmt.Sprintf("unrecognized fsm_to_plugin message: %v", t))
+}
+
+func ErrPointHolderNotFound() ErrorI {
+	return NewError(CodePointHolderNotFound, StateMachineModule, "point holder not found")
+}
+
+func ErrZeroLiquidityPool() ErrorI {
+	return NewError(CodeZeroPointHolder, StateMachineModule, "pool cannot have zero points after allocated")
 }

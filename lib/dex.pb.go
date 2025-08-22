@@ -86,6 +86,116 @@ func (x *DexLimitOrder) GetAddress() []byte {
 	return nil
 }
 
+// DexLiquidityDeposit a liquidity deposit command
+type DexLiquidityDeposit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// address: the address where the funds are deposited from
+	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	// amount: the amount of the deposit
+	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DexLiquidityDeposit) Reset() {
+	*x = DexLiquidityDeposit{}
+	mi := &file_dex_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DexLiquidityDeposit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DexLiquidityDeposit) ProtoMessage() {}
+
+func (x *DexLiquidityDeposit) ProtoReflect() protoreflect.Message {
+	mi := &file_dex_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DexLiquidityDeposit.ProtoReflect.Descriptor instead.
+func (*DexLiquidityDeposit) Descriptor() ([]byte, []int) {
+	return file_dex_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *DexLiquidityDeposit) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *DexLiquidityDeposit) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// DexLiquidityWithdraw a liquidity withdraw command
+type DexLiquidityWithdraw struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// address: the address where the funds are withdrawn to
+	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	// percent: the percent of points being withdrawn
+	Percent       uint64 `protobuf:"varint,2,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DexLiquidityWithdraw) Reset() {
+	*x = DexLiquidityWithdraw{}
+	mi := &file_dex_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DexLiquidityWithdraw) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DexLiquidityWithdraw) ProtoMessage() {}
+
+func (x *DexLiquidityWithdraw) ProtoReflect() protoreflect.Message {
+	mi := &file_dex_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DexLiquidityWithdraw.ProtoReflect.Descriptor instead.
+func (*DexLiquidityWithdraw) Descriptor() ([]byte, []int) {
+	return file_dex_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DexLiquidityWithdraw) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *DexLiquidityWithdraw) GetPercent() uint64 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
 // DexBatch is a group of limit orders that must be processed atomically
 type DexBatch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -93,17 +203,21 @@ type DexBatch struct {
 	Committee uint64 `protobuf:"varint,1,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
 	// orders: the list of dex limit orders
 	Orders []*DexLimitOrder `protobuf:"bytes,2,rep,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
+	// deposits: the liquidity provider 'deposit' command
+	Deposits []*DexLiquidityDeposit `protobuf:"bytes,3,rep,name=deposits,proto3" json:"deposits,omitempty"`
+	// withdraws: the liquidity provider 'withdraw' command
+	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,4,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
 	// poolSize: contains the current balance of the liquidity pool
-	PoolSize uint64 `protobuf:"varint,3,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
+	PoolSize uint64 `protobuf:"varint,5,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
 	// receipts: the list of order success status's
-	Receipts      []bool `protobuf:"varint,4,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
+	Receipts      []bool `protobuf:"varint,6,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DexBatch) Reset() {
 	*x = DexBatch{}
-	mi := &file_dex_proto_msgTypes[1]
+	mi := &file_dex_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -115,7 +229,7 @@ func (x *DexBatch) String() string {
 func (*DexBatch) ProtoMessage() {}
 
 func (x *DexBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_dex_proto_msgTypes[1]
+	mi := &file_dex_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -128,7 +242,7 @@ func (x *DexBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DexBatch.ProtoReflect.Descriptor instead.
 func (*DexBatch) Descriptor() ([]byte, []int) {
-	return file_dex_proto_rawDescGZIP(), []int{1}
+	return file_dex_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DexBatch) GetCommittee() uint64 {
@@ -141,6 +255,20 @@ func (x *DexBatch) GetCommittee() uint64 {
 func (x *DexBatch) GetOrders() []*DexLimitOrder {
 	if x != nil {
 		return x.Orders
+	}
+	return nil
+}
+
+func (x *DexBatch) GetDeposits() []*DexLiquidityDeposit {
+	if x != nil {
+		return x.Deposits
+	}
+	return nil
+}
+
+func (x *DexBatch) GetWithdraws() []*DexLiquidityWithdraw {
+	if x != nil {
+		return x.Withdraws
 	}
 	return nil
 }
@@ -167,12 +295,20 @@ const file_dex_proto_rawDesc = "" +
 	"\rDexLimitOrder\x12$\n" +
 	"\rAmountForSale\x18\x01 \x01(\x04R\rAmountForSale\x12(\n" +
 	"\x0fRequestedAmount\x18\x02 \x01(\x04R\x0fRequestedAmount\x12\x18\n" +
-	"\aAddress\x18\x03 \x01(\fR\aAddress\"\x8f\x01\n" +
+	"\aAddress\x18\x03 \x01(\fR\aAddress\"G\n" +
+	"\x13DexLiquidityDeposit\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +
+	"\x14DexLiquidityWithdraw\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\"\x82\x02\n" +
 	"\bDexBatch\x12\x1c\n" +
 	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12,\n" +
-	"\x06orders\x18\x02 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x12\x1b\n" +
-	"\tpool_size\x18\x03 \x01(\x04R\bpoolSize\x12\x1a\n" +
-	"\breceipts\x18\x04 \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\x06orders\x18\x02 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
+	"\bdeposits\x18\x03 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
+	"\twithdraws\x18\x04 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
+	"\tpool_size\x18\x05 \x01(\x04R\bpoolSize\x12\x1a\n" +
+	"\breceipts\x18\x06 \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_dex_proto_rawDescOnce sync.Once
@@ -186,18 +322,22 @@ func file_dex_proto_rawDescGZIP() []byte {
 	return file_dex_proto_rawDescData
 }
 
-var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_dex_proto_goTypes = []any{
-	(*DexLimitOrder)(nil), // 0: types.DexLimitOrder
-	(*DexBatch)(nil),      // 1: types.DexBatch
+	(*DexLimitOrder)(nil),        // 0: types.DexLimitOrder
+	(*DexLiquidityDeposit)(nil),  // 1: types.DexLiquidityDeposit
+	(*DexLiquidityWithdraw)(nil), // 2: types.DexLiquidityWithdraw
+	(*DexBatch)(nil),             // 3: types.DexBatch
 }
 var file_dex_proto_depIdxs = []int32{
 	0, // 0: types.DexBatch.orders:type_name -> types.DexLimitOrder
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: types.DexBatch.deposits:type_name -> types.DexLiquidityDeposit
+	2, // 2: types.DexBatch.withdraws:type_name -> types.DexLiquidityWithdraw
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_dex_proto_init() }
@@ -211,7 +351,7 @@ func file_dex_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dex_proto_rawDesc), len(file_dex_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

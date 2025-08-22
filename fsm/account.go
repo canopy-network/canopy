@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -185,6 +186,23 @@ func (s *StateMachine) marshalAccount(account *Account) ([]byte, lib.ErrorI) {
 	NOTE: A distinct structure for pools are used instead of a 'hard-coded account address'
 	to simply prove that no-one owns the private key for that account
 */
+
+// GetLiquidityPoints() retrieves the amount of liquidity points and total points for an address
+func (s *StateMachine) GetLiquidityPoints(address []byte, chainId uint64) (points, totalPoints, poolBalance uint64, err lib.ErrorI) {
+	// retrieve the liquidity pool for the chain id
+	liquidityPool, err := s.GetPool(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	// for each 'shareholder'
+	for _, shareHolder := range liquidityPool.Points {
+		// if the address is found
+		if bytes.Equal(shareHolder.Address, address) {
+			return shareHolder.Points, liquidityPool.TotalPoolPoints, liquidityPool.Amount, nil
+		}
+	}
+	return 0, 0, 0, lib.ErrPointHolderNotFound()
+}
 
 // GetPool() returns a Pool structure for a specific ID
 func (s *StateMachine) GetPool(id uint64) (*Pool, lib.ErrorI) {
@@ -705,4 +723,66 @@ func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
 	}
 	x.Id, x.Amount = a.ID, a.Amount
 	return
+}
+
+// GetPointsFor() returns the amount of points an address has
+func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// exit
+			return lp.Points, nil
+		}
+	}
+	// exit
+	return 0, lib.ErrPointHolderNotFound()
+}
+
+// AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
+// Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
+func (x *Pool) AddPoints(address []byte, points uint64) lib.ErrorI {
+	// add to total points
+	x.TotalPoolPoints += points
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// add points
+			lp.Points += points
+			// exit
+			return nil
+		}
+	}
+	// add to the points
+	x.Points = append(x.Points, &PoolPoints{Address: address, Points: points})
+	// exit
+	return nil
+}
+
+// RemovePoints() removes liquidity points for a certain provider in the pool
+func (x *Pool) RemovePoints(address []byte, points uint64) (err lib.ErrorI) {
+	// add to existing if found
+	for i, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// update total points
+			x.TotalPoolPoints -= points
+			// calculate the remaining lp points
+			x.Points[i].Points -= points
+			// check if should evict from slice
+			if x.Points[i].Points == 0 {
+				// remove from the slice
+				x.Points = append(x.Points[:i], x.Points[i+1:]...)
+			}
+			// check for zero pool
+			if x.TotalPoolPoints == 0 {
+				return lib.ErrZeroLiquidityPool()
+			}
+			// exit
+			return
+		}
+	}
+	// exit
+	return lib.ErrPointHolderNotFound()
 }

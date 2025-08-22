@@ -36,6 +36,14 @@ message Pool {
   uint64 id = 1;
   // amount: the balance of funds the pool has
   uint64 amount = 2;
+
+  // LIQUIDITY POOL ONLY
+  // ------------------------------------------------------------------------------------
+  // points: a list of pool share holders and their respective points
+  repeated PoolPoints points = 11; // @gotags: json:"poolPoints"
+  // total_pool_points: the total number of pool points
+  uint64 total_pool_points = 12; // @gotags: json:"totalPoolPoints"
+  // ------------------------------------------------------------------------------------
 }
 
 // A supply structure keeps track of the total amount of tokens or funds available across the entire blockchain
@@ -53,4 +61,12 @@ message Supply {
   repeated Pool committee_staked = 4; // @gotags: json:"committeeStaked"
   // committee_delegated_only: a list of committees and their 'delegated only' tokens, sorted by stake
   repeated Pool committee_delegated_only = 5; // @gotags: json:"committeeDelegatedOnly"
+}
+
+// PoolPoints represents an ownership 'share' of the pool
+message PoolPoints {
+  // address: the recipient address of the points
+  bytes address = 1; // @gotags: json:"address"
+  // points: the amount of points owned
+  uint64 points = 2; // @gotags: json:"points"
 }

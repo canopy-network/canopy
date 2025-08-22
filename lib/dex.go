@@ -34,10 +34,10 @@ func (x *DexBatch) IsEmpty() bool {
 	if x == nil {
 		return true
 	}
-	return len(x.Receipts) == 0 && len(x.Orders) == 0
+	return len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
 }
 
-func (x *DexBatch) Copy() *DexBatch {
+func (x *DexBatch) CopyOrders() []*DexLimitOrder {
 	if x == nil {
 		return nil
 	}
@@ -45,7 +45,7 @@ func (x *DexBatch) Copy() *DexBatch {
 	for i, order := range x.Orders {
 		orders[i] = order.Copy()
 	}
-	return &DexBatch{Orders: orders}
+	return orders
 }
 
 func (x *DexLimitOrder) Equals(y *DexLimitOrder) bool {
