@@ -356,6 +356,7 @@ func (b *BFT) StartProposePhase() {
 		b.RCBuildHeight = rootBuildHeight
 	} else {
 		view.RootBuildHeight = rootBuildHeight
+		b.RootBuildHeight = rootBuildHeight
 	}
 	// send PROPOSE message to the replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
