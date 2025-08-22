@@ -469,15 +469,18 @@ func (b *BFT) StartPrecommitPhase() {
 		return
 	}
 	// TODO DEPRECATE (5)
+	// get view
+	view := b.View.Copy()
 	var rootBuildHeight uint64
 	if b.BeforeUpgradeHeight() {
 		rootBuildHeight = b.RCBuildHeight
 	} else {
-		rootBuildHeight = b.RootBuildHeight
+		view.RootBuildHeight = vote.Qc.Header.RootBuildHeight
+		rootBuildHeight = vote.Qc.Header.RootBuildHeight
 	}
 	// send PRECOMMIT msg to Replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
-		Header: b.Copy(),
+		Header: view,
 		Qc: &QC{
 			Header:      vote.Qc.Header,   // vote view
 			BlockHash:   b.GetBlockHash(), // vote block payload
