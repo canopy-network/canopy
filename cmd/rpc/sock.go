@@ -101,6 +101,9 @@ func (r *RCManager) ChainIds() (list []uint64) {
 
 // GetHeight() returns the height from the root-chain
 func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// check the map to see if the info exists
 	if sub, found := r.subscriptions[rootChainId]; found {
 		// exit with the height of the root-chain-info
@@ -133,6 +136,9 @@ func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.Roo
 
 // GetValidatorSet() returns the validator set from the root-chain
 func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -157,6 +163,9 @@ func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.Val
 
 // GetOrders() returns the order book from the root-chain
 func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBook, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -188,6 +197,9 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 
 // Order() returns a specific order from the root order book
 func (r *RCManager) GetOrder(rootChainId, height uint64, orderId string, chainId uint64) (*lib.SellOrder, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -199,6 +211,9 @@ func (r *RCManager) GetOrder(rootChainId, height uint64, orderId string, chainId
 
 // IsValidDoubleSigner() returns if an address is a valid double signer for a specific 'double sign height'
 func (r *RCManager) IsValidDoubleSigner(rootChainId, height uint64, address string) (*bool, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -211,6 +226,9 @@ func (r *RCManager) IsValidDoubleSigner(rootChainId, height uint64, address stri
 
 // GetMinimumEvidenceHeight() returns the minimum height double sign evidence must have to be 'valid'
 func (r *RCManager) GetMinimumEvidenceHeight(rootChainId, height uint64) (*uint64, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -224,6 +242,9 @@ func (r *RCManager) GetMinimumEvidenceHeight(rootChainId, height uint64) (*uint6
 // GetCheckpoint() returns the checkpoint if any for a specific chain height
 // TODO should be able to get these from the file or the root-chain upon independence
 func (r *RCManager) GetCheckpoint(rootChainId, height, chainId uint64) (blockHash lib.HexBytes, err lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -236,6 +257,9 @@ func (r *RCManager) GetCheckpoint(rootChainId, height, chainId uint64) (blockHas
 
 // GetLotteryWinner() returns the winner of the delegate lottery from the root-chain
 func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.LotteryWinner, lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -253,6 +277,9 @@ func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.Lotte
 
 // Transaction() executes a transaction on the root chain
 func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *string, err lib.ErrorI) {
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
@@ -371,10 +398,10 @@ func (r *RCSubscription) Listen() {
 		r.manager.l.Lock()
 		// update the root chain info
 		r.Info = newInfo
-		// execute the callback
-		r.manager.afterRCUpdate(newInfo)
 		// release
 		r.manager.l.Unlock()
+		// execute the callback
+		r.manager.afterRCUpdate(newInfo)
 	}
 }
 

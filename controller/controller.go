@@ -302,7 +302,10 @@ func (c *Controller) ResetFSM() { c.FSM.Reset() }
 
 // RootChainHeight() returns the height of the canopy root-chain
 func (c *Controller) RootChainHeight() uint64 {
-	chainId, _ := c.FSM.GetRootChainId()
+	chainId, err := c.FSM.GetRootChainId()
+	if err != nil {
+		c.log.Error(err.Error())
+	}
 	return c.RCManager.GetHeight(chainId)
 }
 

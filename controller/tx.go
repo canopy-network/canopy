@@ -213,7 +213,20 @@ func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
 func (m *Mempool) CheckMempool() {
 	m.log.Info("Validating mempool and caching a new proposal block")
 	var err lib.ErrorI
-	// check if a validator
+	// get RC build height
+	rcBuildHeight := m.controller.RootChainHeight()
+	if rcBuildHeight == 0 {
+		m.log.Error("Root Chain Height == 0")
+	}
+	// calculate rc build height
+	ownRoot, err := m.FSM.LoadIsOwnRoot()
+	if err != nil {
+		m.log.Error(err.Error())
+	}
+	// if ownRoot
+	if ownRoot {
+		rcBuildHeight = m.FSM.Height()
+	}
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
 		BlockHeader:  &lib.BlockHeader{Time: m.controller.NextBFTCommitTime(), ProposerAddress: m.address.Bytes()},
@@ -233,17 +246,6 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult.BlockHeader = block.BlockHeader
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
-	// calculate rc build height
-	ownRoot, err := m.FSM.LoadIsOwnRoot()
-	if err != nil {
-		m.log.Error(err.Error())
-	}
-	// if ownRoot
-	if ownRoot {
-		rcBuildHeight = m.FSM.Height()
-	}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,

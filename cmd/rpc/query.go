@@ -217,9 +217,7 @@ func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprou
 			return err
 		}
 		// get the lottery winner
-		s.rcManager.l.Lock()
 		delegate, err := s.rcManager.GetLotteryWinner(rootChainId, 0, s.config.ChainId)
-		s.rcManager.l.Unlock()
 		// if an error occurred
 		if err != nil {
 			return err
