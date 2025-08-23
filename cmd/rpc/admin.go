@@ -374,7 +374,9 @@ func (s *Server) TransactionCloseOrder(w http.ResponseWriter, r *http.Request, _
 			return nil, err
 		}
 		// Execute rpc call to the root chain
+		s.rcManager.l.Lock()
 		order, err := s.rcManager.GetOrder(rootChainId, 0, ptr.OrderId, s.config.ChainId)
+		s.rcManager.l.Unlock()
 		if err != nil {
 			return nil, err
 		}

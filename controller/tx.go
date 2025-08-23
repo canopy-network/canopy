@@ -214,6 +214,7 @@ func (m *Mempool) CheckMempool() {
 	m.log.Info("Validating mempool and caching a new proposal block")
 	var err lib.ErrorI
 	// get RC build height
+	m.controller.Lock()
 	rcBuildHeight := m.controller.RootChainHeight()
 	if rcBuildHeight == 0 {
 		m.log.Error("Root Chain Height == 0")
@@ -227,6 +228,7 @@ func (m *Mempool) CheckMempool() {
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	}
+	m.controller.Unlock()
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
 		BlockHeader:  &lib.BlockHeader{Time: m.controller.NextBFTCommitTime(), ProposerAddress: m.address.Bytes()},
