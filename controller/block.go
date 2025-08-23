@@ -324,8 +324,21 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 			// exit with error
 			return err
 		}
+		rcBuildHeight := c.RootChainHeight()
+		if rcBuildHeight == 0 {
+			c.log.Error("Root Chain Height == 0")
+		}
+		// calculate rc build height
+		ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()
+		if err != nil {
+			c.log.Error(err.Error())
+		}
+		// if ownRoot
+		if ownRoot {
+			rcBuildHeight = c.Mempool.FSM.Height()
+		}
 		// check the mempool to cache a proposal block and validate the mempool itself
-		c.Mempool.CheckMempool()
+		c.Mempool.CheckMempool(rcBuildHeight)
 		// discard the temporary store after checking the mempool
 		memPoolStore.Discard()
 		// exit

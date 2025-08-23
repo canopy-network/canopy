@@ -104,7 +104,7 @@ func (c *Controller) Start() {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
 				// call mempool check
-				c.Mempool.CheckMempool()
+				c.Mempool.CheckMempool(rootChainInfo.Height)
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// exit the loop
