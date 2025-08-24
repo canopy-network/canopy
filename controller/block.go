@@ -282,6 +282,10 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// send the certificate results transaction on behalf of the quorum
 		c.SendCertificateResultsTx(qc)
 	}
+	rcBuildHeight := c.RootChainHeight()
+	if rcBuildHeight == 0 {
+		c.log.Error("Root Chain Height == 0")
+	}
 	// create an error group to run the commit and mempool update in parallel
 	eg := errgroup.Group{}
 	eg.Go(func() error {
@@ -323,10 +327,6 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		if err != nil {
 			// exit with error
 			return err
-		}
-		rcBuildHeight := c.RootChainHeight()
-		if rcBuildHeight == 0 {
-			c.log.Error("Root Chain Height == 0")
 		}
 		// calculate rc build height
 		ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()

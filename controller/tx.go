@@ -95,6 +95,13 @@ func (c *Controller) CheckMempool() {
 		return
 	}
 	for {
+		// get root chain height
+		c.Lock()
+		rcBuildHeight := c.RootChainHeight()
+		if rcBuildHeight == 0 {
+			c.log.Error("Root Chain Height == 0")
+		}
+		c.Unlock()
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
 		// if recheck is necessary
@@ -109,13 +116,6 @@ func (c *Controller) CheckMempool() {
 				defer func() { resetProposalConfig() }()
 				// reset the mempool
 				c.Mempool.FSM.Reset()
-				// get root chain height
-				c.Lock()
-				rcBuildHeight := c.RootChainHeight()
-				if rcBuildHeight == 0 {
-					c.log.Error("Root Chain Height == 0")
-				}
-				c.Unlock()
 				// calculate rc build height
 				ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()
 				if err != nil {
