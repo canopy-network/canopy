@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"sort"
 	"sync/atomic"
 	"time"
 
@@ -615,8 +614,12 @@ func (b *BFT) RoundInterrupt() {
 	b.ResetFSM()
 	view := b.View.Copy()
 	// determine the best faction based on what is currently known
-	_, view.RootHeight, view.Round = b.DetermineNextRootHeightAndRound(b.Round + 1)
-	b.log.Infof("Round Interrupt Voting (%d) and root height (%d)", view.Round, view.RootHeight)
+	var votingPower uint64
+	votingPower, view.RootHeight, view.Round = b.DetermineNextRootHeightAndRound(b.Round + 1)
+	if b.ValidatorSet.MinimumMaj23 > 0 {
+		b.log.Infof("Round Interrupt set round (%d) and root height (%d) with VP: %.2f%%",
+			view.Round, view.RootHeight, float64(votingPower/b.ValidatorSet.MinimumMaj23)*100)
+	}
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{Header: view},
@@ -675,16 +678,8 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 		b.log.Infof("Latest root chain height detected at: %d", b.Controller.RootChainHeight())
 		addVote(b.PublicKey, round, b.Controller.RootChainHeight())
 	}
-	// convert map to slice and sort
-	pacemakerVotes := make([]*Message, 0, len(b.PacemakerMessages))
-	for _, msg := range b.PacemakerMessages {
-		if msg.Qc.Header.Round >= round {
-			pacemakerVotes = append(pacemakerVotes, msg)
-		}
-	}
-	sort.Slice(pacemakerVotes, func(i, j int) bool { return pacemakerVotes[i].Qc.Header.Round > pacemakerVotes[j].Qc.Header.Round })
 	// for each pacemaker vote
-	for _, msg := range pacemakerVotes {
+	for _, msg := range b.PacemakerMessages {
 		if !bytes.Equal(msg.Signature.PublicKey, b.PublicKey) {
 			addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight)
 		}
