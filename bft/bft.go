@@ -661,6 +661,8 @@ func (b *BFT) Pacemaker(waitS int) {
 				b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
 					nextRound, rootHeight, float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
 			}
+			// clear the pacemaker messages
+			b.PacemakerMessages = make(PacemakerMessages)
 			// exit
 			return
 		}
@@ -691,7 +693,7 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	// but omit self during the PacemakerPhase() in order to determine if a +2/3 majority may be reached if self joins the best faction
 	isPrePacemakerPhase := round == b.Round+1
 	if isPrePacemakerPhase {
-		b.log.Infof("Latest root chain height detected at: %d", b.Controller.RootChainHeight())
+		b.log.Infof("Round %d Latest root chain height detected at: %d", round, b.Controller.RootChainHeight())
 		addVote(b.PublicKey, round, b.Controller.RootChainHeight())
 	}
 	// for each pacemaker vote
@@ -718,7 +720,7 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	// handle the result appropriately
 	if !isPrePacemakerPhase {
 		if v, err := b.ValidatorSet.GetValidator(b.PublicKey); err == nil {
-			// if our voting power outweighs the largest faction
+			// if the largest faction outweighs our voting power
 			if totalVP >= v.VotingPower {
 				totalVP += v.VotingPower
 			} else {
