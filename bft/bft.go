@@ -624,18 +624,18 @@ func (b *BFT) RoundInterrupt() {
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{Header: view},
 	})
-	// wait if necessary
-	waitS := 10
-	for i := 0; ; i++ {
-		totalVotingPower, _, _ := b.DetermineNextRootHeightAndRound(b.Round + 1)
-		if b.ValidatorSet.MinimumMaj23 > 0 {
-			b.log.Infof("RoundInterrupt: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-				float64(votingPower/b.ValidatorSet.MinimumMaj23)*100)
-		}
-		if totalVotingPower >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
-			break
-		}
-	}
+	//// wait if necessary
+	//waitS := 10
+	//for i := 0; ; i++ {
+	//	totalVotingPower, _, _ := b.DetermineNextRootHeightAndRound(b.Round + 1)
+	//	if b.ValidatorSet.MinimumMaj23 > 0 {
+	//		b.log.Infof("RoundInterrupt: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
+	//			float64(votingPower/b.ValidatorSet.MinimumMaj23)*100)
+	//	}
+	//	if totalVotingPower >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
+	//		break
+	//	}
+	//}
 }
 
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
@@ -651,7 +651,7 @@ func (b *BFT) Pacemaker(waitS int) {
 		// determine largest faction
 		totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
 		// check exit condition
-		if totalVP >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
+		//if totalVP >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
 			// set round
 			b.Round = nextRound
 			// set root height and refresh root chain info
@@ -666,11 +666,11 @@ func (b *BFT) Pacemaker(waitS int) {
 			// exit
 			return
 		}
-		if b.ValidatorSet.MinimumMaj23 > 0 {
-			b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-				float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
-		}
-		<-time.After(time.Second)
+		//if b.ValidatorSet.MinimumMaj23 > 0 {
+		//	b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
+		//		float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+		//}
+		//<-time.After(time.Second)
 	}
 }
 
