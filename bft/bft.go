@@ -618,7 +618,7 @@ func (b *BFT) RoundInterrupt() {
 	votingPower, view.RootHeight, view.Round = b.DetermineNextRootHeightAndRound(b.Round + 1)
 	if b.ValidatorSet.MinimumMaj23 > 0 {
 		b.log.Infof("Round Interrupt set round (%d) and root height (%d) with VP: %.2f%%",
-			view.Round, view.RootHeight, float64(votingPower/b.ValidatorSet.MinimumMaj23)*100)
+			view.Round, view.RootHeight, float64(votingPower)/float64(b.ValidatorSet.MinimumMaj23)*100)
 	}
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
@@ -659,7 +659,7 @@ func (b *BFT) Pacemaker(waitS int) {
 		// log with div 0 protection
 		if b.ValidatorSet.MinimumMaj23 > 0 {
 			b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
-				nextRound, rootHeight, float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+				nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.MinimumMaj23)*100)
 		}
 		// clear the pacemaker messages
 		b.PacemakerMessages = make(PacemakerMessages)
