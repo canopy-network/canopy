@@ -635,6 +635,7 @@ func (b *BFT) RoundInterrupt() {
 func (b *BFT) Pacemaker(waitS int) {
 	b.log.Info(b.View.ToString())
 	b.NewRound(false)
+	b.log.Info(b.View.ToString())
 	for i := 0; ; i++ {
 		// determine largest faction
 		totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
@@ -686,9 +687,11 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	}
 	// find max round by voting power
 	for r, vp := range rounds {
-		if nextRound == 0 || (r >= round && vp > rounds[nextRound]) {
-			nextRound = r
-			totalVP = vp
+		if r >= round {
+			if nextRound == 0 || vp > rounds[nextRound] {
+				nextRound = r
+				totalVP = vp
+			}
 		}
 	}
 	// find max root height by voting power
