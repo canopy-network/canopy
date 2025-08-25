@@ -356,7 +356,7 @@ Once the Pacemaker phase is complete, the consensus process restarts at the
 Election phase, electing a new leader and potentially unlocking a proposal that
 was locked in this round.
 
-# Phase Times and Total Block Time
+# Phase Times and Total Block LastCommitTime
 
 In NestBFT, block times are managed by setting the duration for each phase in the `config.json` file. The initial phase time configurations are as follows:
 

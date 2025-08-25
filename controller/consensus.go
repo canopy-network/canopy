@@ -658,8 +658,10 @@ func (c *Controller) finishSyncing() {
 	defer c.Unlock()
 	// set the startup block metric (block height when first sync completed)
 	c.Metrics.SetStartupBlock(c.FSM.Height())
+	// get block time
+	blockTime, _ := c.FSM.LoadBlockTime(c.FSM.Height())
 	// signal a reset of bft for the chain
-	c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: c.LoadLastCommitTime(c.FSM.Height())}
+	c.Consensus.ResetBFT <- bft.ResetBFT{BFTMeta: &lib.BFTCoordinationMeta{LastCommitTime: blockTime.GetEstCommitTime()}}
 	// set syncing to false
 	c.isSyncing.Store(false)
 	// enable listening for a block

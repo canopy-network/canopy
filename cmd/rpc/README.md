@@ -32,6 +32,7 @@
 - /v1/query/block-by-height
 - /v1/query/blocks
 - /v1/query/block-by-hash
+- /v1/query/block-time
 - /v1/query/txs-by-height
 - /v1/query/txs-by-sender
 - /v1/query/txs-by-rec
@@ -41,7 +42,58 @@
 - /v1/query/last-proposers
 - /v1/query/valid-double-signer
 - /v1/query/double-signers
-- /v1/query/minimum-evidence-height
+- /v1/query/minimum-evidence-height## Height
+
+**Route:** `/v1/query/height`
+
+**Description**: responds with the next block version
+
+**HTTP Method**: `POST`
+
+**Request**: `null`
+
+**Response**: `uint64` - the number of the next block
+
+**Example:**:
+
+```
+$ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v1/query/height
+
+> 9157
+```
+
+## Account
+
+**Route:** `/v1/query/account`
+
+**Description**: responds with an account for the specified address
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **address**: `hex string` - the 20 byte identifier of the account
+
+**Response**:
+
+- **address**: `hex string` - the 20 byte identifier
+- **amount**: `uint64` - the balance of funds the account has
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/account \
+  -H "Content-Type: application/json" \
+  -d '{
+        "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
+        "height": 1000
+      }'
+
+> {
+    "address": "0971d5d96f1533479ab1a6472fe0260df6ae732d",
+    "amount": 99990000
+  }
+```
 - /v1/query/lottery
 - /v1/query/pending
 - /v1/query/failed-txs
@@ -1732,6 +1784,41 @@ $ curl -X POST localhost:50002/v1/query/block-by-hash \
 }
 ```
 
+## Block LastCommitTime
+
+**Route:** `/v1/query/block-time`
+
+**Description**: responds with the block time information
+
+**HTTP Method**: `POST`
+
+**Request**: `null`
+- **height**: `uint64` – the block height (optional: use 0 to read from the latest block)
+
+**Response**: 
+- **buildTime**: `uint64` - the timestamp in the block header when the proposer built the block
+- **estCommitTime**: `uint64` - the estimated time the block was committed
+- **estNextBlockTime**: `uint64` - the estimated time when the next block will be committed
+- **blockFrequencyMS**: `uint64` - the block time in milliseconds
+
+**Example:**:
+
+```
+$ curl -X POST localhost:50002/v1/query/block-time \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 17585
+      }'
+
+> {
+  height: 17585,
+  buildTime: 1755375158520243,
+  estCommitTime: 1755375181877258,
+  estNextBlockTime: 1755375221200408,
+  blockFrequencyMS: 20000
+}
+```
+
 ## Transactions By Height
 
 **Route:** `/v1/query/txs-by-height`
@@ -2539,6 +2626,11 @@ $ curl -X GET localhost:50002/v1/gov/poll
     - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
     - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
     - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+- **blockTime**: `object` - the block time information
+  - **buildTime**: `uint64` - the timestamp in the block header when the proposer built the block
+  - **estCommitTime**: `uint64` - the estimated time the block was committed
+  - **estNextBlockTime**: `uint64` - the estimated time when the next block will be committed
+  - **blockFrequencyMS**: `uint64` - the block time in milliseconds
 
 
 ```
@@ -2576,6 +2668,13 @@ $ curl -X POST localhost:50002/v1/query/root-chain-info \
   },
   "orders": {
     "chainID": 1
+  },
+  "blockTime": {
+    height: 17585,
+    buildTime: 1755375158520243,
+    estCommitTime: 1755375181877258,
+    estNextBlockTime: 1755375221200408,
+    blockFrequencyMS: 20000
   }
 }
 ```

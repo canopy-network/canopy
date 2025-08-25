@@ -182,9 +182,11 @@ type View struct {
 	// represents the smallest unit in the consensus process. Each round consists of multiple phases, and these phases are
 	// executed sequentially to achieve consensus on the next block.
 	// ELECTION->ELECTION-VOTE->PROPOSE->PROPOSE-VOTE->PRECOMMIT->PRECOMMIT-VOTE->COMMIT->COMMIT-PROCESS
-	Phase         Phase `protobuf:"varint,6,opt,name=phase,proto3,enum=types.Phase" json:"phase,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Phase Phase `protobuf:"varint,6,opt,name=phase,proto3,enum=types.Phase" json:"phase,omitempty"`
+	// the root height the block was built on
+	RootBuildHeight uint64 `protobuf:"varint,7,opt,name=root_build_height,json=rootBuildHeight,proto3" json:"rootBuildHeight"` // @gotags: json:"rootBuildHeight"
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *View) Reset() {
@@ -257,6 +259,13 @@ func (x *View) GetPhase() Phase {
 		return x.Phase
 	}
 	return Phase_UNKNOWN
+}
+
+func (x *View) GetRootBuildHeight() uint64 {
+	if x != nil {
+		return x.RootBuildHeight
+	}
+	return 0
 }
 
 // An Aggregate Signature is a single, compact signature created by combining multiple individual signatures from
@@ -547,8 +556,8 @@ type RootChainInfo struct {
 	LotteryWinner *LotteryWinner `protobuf:"bytes,5,opt,name=lottery_winner,json=lotteryWinner,proto3" json:"lotteryWinner"` // @gotags: json:"lotteryWinner"
 	// orders: the swap order book from the 'root chain' for the 'nested chain'
 	Orders *OrderBook `protobuf:"bytes,6,opt,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
-	// timestamp: a timestamp of when the notification should cause a reset
-	Timestamp     uint64 `protobuf:"varint,7,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// block_time_info: the block timining information about the root chain
+	BlockTimeInfo *BlockTimeInfo `protobuf:"bytes,7,opt,name=block_time_info,json=blockTimeInfo,proto3" json:"blockTimeInfo"` // @gotags: json:"blockTimeInfo"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -625,9 +634,91 @@ func (x *RootChainInfo) GetOrders() *OrderBook {
 	return nil
 }
 
-func (x *RootChainInfo) GetTimestamp() uint64 {
+func (x *RootChainInfo) GetBlockTimeInfo() *BlockTimeInfo {
 	if x != nil {
-		return x.Timestamp
+		return x.BlockTimeInfo
+	}
+	return nil
+}
+
+// BlockTimeInfo: describes the block time info
+type BlockTimeInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// height: the block height
+	Height uint64 `protobuf:"varint,1,opt,name=height,proto3" json:"height"` // @gotags: json:"height"
+	// build_time: the unix micro timestamp of building the block
+	BuildTime uint64 `protobuf:"varint,2,opt,name=build_time,json=buildTime,proto3" json:"buildTime"` // @gotags: json:"buildTime"
+	// est_commit_time: the unix micro estimated timestamp of commit time of a block
+	EstCommitTime uint64 `protobuf:"varint,3,opt,name=est_commit_time,json=estCommitTime,proto3" json:"estCommitTime"` // @gotags: json:"estCommitTime"
+	// est_next_block: the unix micro estimated timestamp of when the next block should occur
+	EstNextBlockTime uint64 `protobuf:"varint,4,opt,name=est_next_block_time,json=estNextBlockTime,proto3" json:"estNextBlockTime"` // @gotags: json:"estNextBlockTime"
+	// block_frequency_ms: the block time in milliseconds
+	BlockFrequencyMs uint64 `protobuf:"varint,5,opt,name=block_frequency_ms,json=blockFrequencyMs,proto3" json:"blockTimeMS"` // @gotags: json:"blockTimeMS"
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BlockTimeInfo) Reset() {
+	*x = BlockTimeInfo{}
+	mi := &file_consensus_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockTimeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockTimeInfo) ProtoMessage() {}
+
+func (x *BlockTimeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_consensus_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockTimeInfo.ProtoReflect.Descriptor instead.
+func (*BlockTimeInfo) Descriptor() ([]byte, []int) {
+	return file_consensus_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *BlockTimeInfo) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+func (x *BlockTimeInfo) GetBuildTime() uint64 {
+	if x != nil {
+		return x.BuildTime
+	}
+	return 0
+}
+
+func (x *BlockTimeInfo) GetEstCommitTime() uint64 {
+	if x != nil {
+		return x.EstCommitTime
+	}
+	return 0
+}
+
+func (x *BlockTimeInfo) GetEstNextBlockTime() uint64 {
+	if x != nil {
+		return x.EstNextBlockTime
+	}
+	return 0
+}
+
+func (x *BlockTimeInfo) GetBlockFrequencyMs() uint64 {
+	if x != nil {
+		return x.BlockFrequencyMs
 	}
 	return 0
 }
@@ -637,7 +728,7 @@ var File_consensus_proto protoreflect.FileDescriptor
 const file_consensus_proto_rawDesc = "" +
 	"\n" +
 	"\x0fconsensus.proto\x12\x05types\x1a\n" +
-	"swap.proto\"\xb3\x01\n" +
+	"swap.proto\"\xdf\x01\n" +
 	"\x04View\x12\x1d\n" +
 	"\n" +
 	"network_id\x18\x01 \x01(\x04R\tnetworkId\x12\x19\n" +
@@ -646,7 +737,8 @@ const file_consensus_proto_rawDesc = "" +
 	"\vroot_height\x18\x04 \x01(\x04R\n" +
 	"rootHeight\x12\x14\n" +
 	"\x05round\x18\x05 \x01(\x04R\x05round\x12\"\n" +
-	"\x05phase\x18\x06 \x01(\x0e2\f.types.PhaseR\x05phase\"J\n" +
+	"\x05phase\x18\x06 \x01(\x0e2\f.types.PhaseR\x05phase\x12*\n" +
+	"\x11root_build_height\x18\a \x01(\x04R\x0frootBuildHeight\"J\n" +
 	"\x12AggregateSignature\x12\x1c\n" +
 	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x16\n" +
 	"\x06bitmap\x18\x02 \x01(\fR\x06bitmap\")\n" +
@@ -662,15 +754,22 @@ const file_consensus_proto_rawDesc = "" +
 	"\fValidatorSet\x18\x01 \x03(\v2\x19.types.ConsensusValidatorR\fValidatorSet\"9\n" +
 	"\rLotteryWinner\x12\x16\n" +
 	"\x06winner\x18\x01 \x01(\fR\x06winner\x12\x10\n" +
-	"\x03cut\x18\x02 \x01(\x04R\x03cut\"\xdb\x02\n" +
+	"\x03cut\x18\x02 \x01(\x04R\x03cut\"\xfb\x02\n" +
 	"\rRootChainInfo\x12\"\n" +
 	"\rroot_chain_id\x18\x01 \x01(\x04R\vrootChainId\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12?\n" +
 	"\rvalidator_set\x18\x03 \x01(\v2\x1a.types.ConsensusValidatorsR\fvalidatorSet\x12H\n" +
 	"\x12last_validator_set\x18\x04 \x01(\v2\x1a.types.ConsensusValidatorsR\x10lastValidatorSet\x12;\n" +
 	"\x0elottery_winner\x18\x05 \x01(\v2\x14.types.LotteryWinnerR\rlotteryWinner\x12(\n" +
-	"\x06orders\x18\x06 \x01(\v2\x10.types.OrderBookR\x06orders\x12\x1c\n" +
-	"\ttimestamp\x18\a \x01(\x04R\ttimestamp*\xbb\x01\n" +
+	"\x06orders\x18\x06 \x01(\v2\x10.types.OrderBookR\x06orders\x12<\n" +
+	"\x0fblock_time_info\x18\a \x01(\v2\x14.types.BlockTimeInfoR\rblockTimeInfo\"\xcb\x01\n" +
+	"\rBlockTimeInfo\x12\x16\n" +
+	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x1d\n" +
+	"\n" +
+	"build_time\x18\x02 \x01(\x04R\tbuildTime\x12&\n" +
+	"\x0fest_commit_time\x18\x03 \x01(\x04R\restCommitTime\x12-\n" +
+	"\x13est_next_block_time\x18\x04 \x01(\x04R\x10estNextBlockTime\x12,\n" +
+	"\x12block_frequency_ms\x18\x05 \x01(\x04R\x10blockFrequencyMs*\xbb\x01\n" +
 	"\x05Phase\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\f\n" +
 	"\bELECTION\x10\x01\x12\x11\n" +
@@ -699,7 +798,7 @@ func file_consensus_proto_rawDescGZIP() []byte {
 }
 
 var file_consensus_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_consensus_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_consensus_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_consensus_proto_goTypes = []any{
 	(Phase)(0),                  // 0: types.Phase
 	(*View)(nil),                // 1: types.View
@@ -709,7 +808,8 @@ var file_consensus_proto_goTypes = []any{
 	(*ConsensusValidators)(nil), // 5: types.ConsensusValidators
 	(*LotteryWinner)(nil),       // 6: types.LotteryWinner
 	(*RootChainInfo)(nil),       // 7: types.RootChainInfo
-	(*OrderBook)(nil),           // 8: types.OrderBook
+	(*BlockTimeInfo)(nil),       // 8: types.BlockTimeInfo
+	(*OrderBook)(nil),           // 9: types.OrderBook
 }
 var file_consensus_proto_depIdxs = []int32{
 	0, // 0: types.View.phase:type_name -> types.Phase
@@ -717,12 +817,13 @@ var file_consensus_proto_depIdxs = []int32{
 	5, // 2: types.RootChainInfo.validator_set:type_name -> types.ConsensusValidators
 	5, // 3: types.RootChainInfo.last_validator_set:type_name -> types.ConsensusValidators
 	6, // 4: types.RootChainInfo.lottery_winner:type_name -> types.LotteryWinner
-	8, // 5: types.RootChainInfo.orders:type_name -> types.OrderBook
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	9, // 5: types.RootChainInfo.orders:type_name -> types.OrderBook
+	8, // 6: types.RootChainInfo.block_time_info:type_name -> types.BlockTimeInfo
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_consensus_proto_init() }
@@ -737,7 +838,7 @@ func file_consensus_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_consensus_proto_rawDesc), len(file_consensus_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

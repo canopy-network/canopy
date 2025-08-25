@@ -233,6 +233,10 @@ func (s *StateMachine) CheckMessage(msg *anypb.Any) (message lib.MessageI, err l
 	if !ok {
 		return nil, ErrInvalidTxMessage()
 	}
+	// ensure no unknown fields
+	if err = checkUnknown(message); err != nil {
+		return nil, err
+	}
 	// do stateless checks on the message
 	if err = message.Check(); err != nil {
 		return nil, err

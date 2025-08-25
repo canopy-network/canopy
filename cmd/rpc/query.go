@@ -355,6 +355,14 @@ func (s *Server) BlockByHash(w http.ResponseWriter, r *http.Request, _ httproute
 	s.hashIndexer(w, r, func(s lib.StoreI, h lib.HexBytes) (any, lib.ErrorI) { return s.GetBlockByHash(h) })
 }
 
+// BlockTime responds with last and next block time
+func (s *Server) BlockTime(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(st lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.controller.BlockTime(h)
+	})
+}
+
 // Blocks responds with a page of blocks based on the page parameters
 func (s *Server) Blocks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/codec"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
 )
@@ -809,6 +810,16 @@ func checkChainId(i uint64) lib.ErrorI {
 	// NOTE: chainIds should never be GTE MaxUint16, as the 'escrow pool' is just <chainId + uint16>
 	if i >= EscrowPoolAddend {
 		return ErrInvalidChainId()
+	}
+	return nil
+}
+
+func checkUnknown(m proto.Message) lib.ErrorI {
+	if m == nil {
+		return lib.ErrEmptyMessage()
+	}
+	if codec.HasUnknown(m) {
+		return lib.ErrUnknownFields()
 	}
 	return nil
 }

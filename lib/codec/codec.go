@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -145,4 +146,39 @@ func NullifyProtoField(protoBytes []byte, fieldNumber int) ([]byte, error) {
 	}
 	// return the result
 	return result, nil
+}
+
+// HasUnknownFields() returns true if the protobuf message (or any nested message) has unknown fields
+// NOTE: this version doesn't support maps in protobuf structure
+func HasUnknown(msg proto.Message) bool {
+	if msg == nil {
+		return false
+	}
+	m := msg.ProtoReflect()
+	// check for this message's unknowns
+	if len(m.GetUnknown()) > 0 {
+		return true
+	}
+	// recursively check nested messages
+	hasUnknownFound := false
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		if fd.Message() != nil {
+			if fd.IsList() {
+				l := v.List()
+				for i := 0; i < l.Len(); i++ {
+					if HasUnknown(l.Get(i).Message().Interface()) {
+						hasUnknownFound = true
+						return false // stop iteration
+					}
+				}
+			} else { // single message
+				if HasUnknown(v.Message().Interface()) {
+					hasUnknownFound = true
+					return false // stop iteration
+				}
+			}
+		}
+		return true // continue iteration
+	})
+	return hasUnknownFound
 }

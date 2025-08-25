@@ -435,6 +435,27 @@ func TestCheckMessage(t *testing.T) {
 	// convert the message to 'any' for transaction wrapping
 	invalidMsgSendAny, e := lib.NewAny(invalidSend)
 	require.NoError(t, e)
+	// predefine a send message with unknown fields
+	unknownFieldsSendMessage := &MessageSend{
+		FromAddress: newTestAddressBytes(t),
+		ToAddress:   newTestAddressBytes(t),
+		Amount:      100,
+	}
+	m := unknownFieldsSendMessage.ProtoReflect()
+	// create some unknown field data (tag 99 with string value)
+	unknownData := []byte{
+		// tag 6, wire type 2 (length-delimited)
+		(6 << 3) | 2,
+		// length: 7 bytes
+		7,
+		// value: "unknown"
+		'u', 'n', 'k', 'n', 'o', 'w', 'n',
+	}
+	// Set the unknown fields using reflection
+	m.SetUnknown(unknownData)
+	// convert the message to 'any' for transaction wrapping
+	invalidUnknownSendMessageAny, e := lib.NewAny(unknownFieldsSendMessage)
+	require.NoError(t, e)
 	// predefine a send message
 	sendMsg := &MessageSend{
 		FromAddress: newTestAddressBytes(t),
@@ -462,6 +483,18 @@ func TestCheckMessage(t *testing.T) {
 			detail: "a invalid message that fails check()",
 			msg:    invalidMsgSendAny,
 			error:  "recipient address is empty",
+		},
+		{
+			name:   "check() invalid message",
+			detail: "a invalid message that fails check()",
+			msg:    invalidMsgSendAny,
+			error:  "recipient address is empty",
+		},
+		{
+			name:   "check() invalid message unknown",
+			detail: "a invalid message that fails unknown check",
+			msg:    invalidUnknownSendMessageAny,
+			error:  "unknown fields",
 		},
 		{
 			name:     "valid message",
