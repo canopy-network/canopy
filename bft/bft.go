@@ -721,13 +721,13 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	if !isPrePacemakerPhase {
 		if v, err := b.ValidatorSet.GetValidator(b.PublicKey); err == nil {
 			// if the largest faction outweighs our voting power
-			//if totalVP >= v.VotingPower {
-			totalVP += v.VotingPower
-			//} else {
-			//	totalVP = v.VotingPower
-			//	nextRound = round
-			//	rootHeight = b.RootHeight
-			//}
+			if totalVP >= v.VotingPower {
+				totalVP += v.VotingPower
+			} else {
+				totalVP = v.VotingPower
+				nextRound = round
+				rootHeight = b.RootHeight
+			}
 		}
 	}
 	return
