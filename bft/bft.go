@@ -657,7 +657,7 @@ func (b *BFT) Pacemaker(waitS int) {
 		}
 		if b.ValidatorSet.MinimumMaj23 > 0 {
 			b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-				float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+				float64(totalVP)/float64(b.ValidatorSet.MinimumMaj23)*100)
 		}
 		<-time.After(time.Second)
 	}
