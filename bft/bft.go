@@ -657,7 +657,7 @@ func (b *BFT) Pacemaker(waitS int) {
 		}
 		if b.ValidatorSet.MinimumMaj23 > 0 {
 			b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-				float64(totalVP)/float64(b.ValidatorSet.MinimumMaj23)*100)
+				float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
 		}
 		<-time.After(time.Second)
 	}
@@ -904,7 +904,7 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 
 // waitTime() calculates the waiting time for a specific sleepTime configuration and Round number (helper)
 func (b *BFT) waitTime(sleepTimeMS int, round uint64) time.Duration {
-	extraTime := int(math.Pow(float64(2_000), float64(round)))
+	extraTime := int(math.Pow(float64(2), float64(round)))
 	return time.Duration(sleepTimeMS+extraTime) * time.Millisecond
 }
 
