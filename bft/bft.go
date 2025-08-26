@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -624,18 +625,6 @@ func (b *BFT) RoundInterrupt() {
 	b.SendToReplicas(b.ValidatorSet, &Message{
 		Qc: &lib.QuorumCertificate{Header: view},
 	})
-	//// wait if necessary
-	//waitS := 10
-	//for i := 0; ; i++ {
-	//	totalVotingPower, _, _ := b.DetermineNextRootHeightAndRound(b.Round + 1)
-	//	if b.ValidatorSet.MinimumMaj23 > 0 {
-	//		b.log.Infof("RoundInterrupt: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-	//			float64(votingPower/b.ValidatorSet.MinimumMaj23)*100)
-	//	}
-	//	if totalVotingPower >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
-	//		break
-	//	}
-	//}
 }
 
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
@@ -651,27 +640,27 @@ func (b *BFT) Pacemaker(waitS int) {
 		// determine largest faction
 		totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
 		// check exit condition
-		//if totalVP >= b.ValidatorSet.MinimumMaj23 || i == waitS*int(b.Round) {
-		// set round
-		b.Round = nextRound
-		// set root height and refresh root chain info
-		b.RefreshRootChainInfo(rootHeight)
-		// log with div 0 protection
-		if b.ValidatorSet.MinimumMaj23 > 0 {
-			b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
-				nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
+		if totalVP >= b.ValidatorSet.MinimumMaj23 || i == int(math.Pow(float64(waitS), float64(b.Round))) {
+			// set round
+			b.Round = nextRound
+			// set root height and refresh root chain info
+			b.RefreshRootChainInfo(rootHeight)
+			// log with div 0 protection
+			if b.ValidatorSet.MinimumMaj23 > 0 {
+				b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
+					nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
+			}
+			// clear the pacemaker messages
+			b.PacemakerMessages = make(PacemakerMessages)
+			// exit
+			return
 		}
-		// clear the pacemaker messages
-		b.PacemakerMessages = make(PacemakerMessages)
-		// exit
-		return
+		if b.ValidatorSet.MinimumMaj23 > 0 {
+			b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
+				float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
+		}
+		<-time.After(time.Second)
 	}
-	//if b.ValidatorSet.MinimumMaj23 > 0 {
-	//	b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-	//		float64(totalVP/b.ValidatorSet.MinimumMaj23)*100)
-	//}
-	//<-time.After(time.Second)
-	//}
 }
 
 // PacemakerMessages is a collection of 'View' messages keyed by each Replica's public key
@@ -698,9 +687,7 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	}
 	// for each pacemaker vote
 	for _, msg := range b.PacemakerMessages {
-		if !bytes.Equal(msg.Signature.PublicKey, b.PublicKey) {
-			addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight)
-		}
+		addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight)
 	}
 	// find max round by voting power
 	for r, vp := range rounds {
@@ -715,19 +702,6 @@ func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight
 	for rh, vp := range rootHeights {
 		if rootHeight == 0 || vp > rootHeights[rootHeight] {
 			rootHeight = rh
-		}
-	}
-	// handle the result appropriately
-	if !isPrePacemakerPhase {
-		if v, err := b.ValidatorSet.GetValidator(b.PublicKey); err == nil {
-			// if the largest faction outweighs our voting power
-			if totalVP >= v.VotingPower {
-				totalVP += v.VotingPower
-			} else {
-				totalVP = v.VotingPower
-				nextRound = round
-				rootHeight = b.RootHeight
-			}
 		}
 	}
 	return
@@ -930,7 +904,8 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 
 // waitTime() calculates the waiting time for a specific sleepTime configuration and Round number (helper)
 func (b *BFT) waitTime(sleepTimeMS int, round uint64) time.Duration {
-	return time.Duration(uint64(sleepTimeMS)*(2*round+1)) * time.Millisecond
+	extraTime := int(math.Pow(float64(2_000), float64(round)))
+	return time.Duration(sleepTimeMS+extraTime) * time.Millisecond
 }
 
 // NewHeightWaitTime() calculates the waiting time between last commit and election
