@@ -736,7 +736,7 @@ func TestPacemaker(t *testing.T) {
 			voters := test.numPeerVals + 1
 			c := newTestConsensus(t, Propose, voters)
 			c.simPacemakerPhase(t)
-			c.bft.Pacemaker(1)
+			c.bft.Pacemaker()
 			require.Equal(t, test.expectedPacemakerRound, c.bft.Round)
 			require.Equal(t, test.expectedRootHeight, c.bft.RootHeight)
 		})

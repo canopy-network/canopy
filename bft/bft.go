@@ -218,7 +218,7 @@ func (b *BFT) HandlePhase() {
 	case CommitProcess:
 		b.StartCommitProcessPhase()
 	case Pacemaker:
-		b.Pacemaker(10)
+		b.Pacemaker()
 	}
 	// after each phase, set the timers for the next phase
 	b.SetTimerForNextPhase(time.Since(startTime))
@@ -633,34 +633,24 @@ func (b *BFT) RoundInterrupt() {
 //     the set can split on root height and root info.
 //   - Identify the largest voting-power group (“faction”) that agrees on (RootHeight X, Round Y).
 //   - Wait until there’s a ≥2/3 majority voting for that faction or timeout after 10 seconds
-func (b *BFT) Pacemaker(waitS int) {
+func (b *BFT) Pacemaker() {
 	b.log.Info(b.View.ToString())
 	b.NewRound(false)
-	for i := 0; ; i++ {
-		// determine largest faction
-		totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
-		// check exit condition
-		if totalVP >= b.ValidatorSet.MinimumMaj23 || i == (waitS*int(b.Round)) {
-			// set round
-			b.Round = nextRound
-			// set root height and refresh root chain info
-			b.RefreshRootChainInfo(rootHeight)
-			// log with div 0 protection
-			if b.ValidatorSet.MinimumMaj23 > 0 {
-				b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
-					nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
-			}
-			// clear the pacemaker messages
-			b.PacemakerMessages = make(PacemakerMessages)
-			// exit
-			return
-		}
-		if b.ValidatorSet.MinimumMaj23 > 0 {
-			b.log.Infof("Pacemaker: Waiting for +2/3 majority voting power to move forward (VP: %.2f%%)",
-				float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
-		}
-		<-time.After(time.Second)
+	// determine largest faction
+	totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
+	// set round
+	b.Round = nextRound
+	// set root height and refresh root chain info
+	b.RefreshRootChainInfo(rootHeight)
+	// log with div 0 protection
+	if b.ValidatorSet.MinimumMaj23 > 0 {
+		b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
+			nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
 	}
+	// clear the pacemaker messages
+	b.PacemakerMessages = make(PacemakerMessages)
+	// exit
+	return
 }
 
 // PacemakerMessages is a collection of 'View' messages keyed by each Replica's public key
