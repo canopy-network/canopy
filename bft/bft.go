@@ -347,7 +347,7 @@ func (b *BFT) StartProposePhase() {
 			return
 		}
 	} else {
-		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
+		rootBuildHeight, b.Block, b.Results = b.HighQC.Header.RootBuildHeight, b.HighQC.Block, b.HighQC.Results
 	}
 	// get view
 	view := b.View.Copy()
