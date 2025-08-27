@@ -770,7 +770,7 @@ func (b *BFT) NewRound(newHeight bool) {
 	b.RefreshRootChainInfo()
 	// reset ProposerKey, Proposal, and Sortition data
 	b.ProposerKey = nil
-	b.Block, b.BlockHash, b.Results = nil, nil, nil
+	b.Block, b.BlockHash, b.Results, b.RootBuildHeight = nil, nil, nil, 0
 	b.SortitionData = nil
 	b.VDFCache = []*Message{}
 }
