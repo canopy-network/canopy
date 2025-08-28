@@ -203,7 +203,7 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 	// ack the config - send FSMToPlugin config response
 	response := &FSMToPlugin{
 		Id:      msg.Id,
-		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{}},
+		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{Config: m.Config}},
 	}
 	return p.sendProtoMsg(response)
 }

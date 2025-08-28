@@ -84,7 +84,7 @@ message PluginConfig {
 }
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
-message PluginFSMConfig {}
+message PluginFSMConfig {PluginConfig config = 1;}
 
 // Core block lifecycle messages
 
@@ -95,7 +95,7 @@ message PluginGenesisRequest {bytes genesis_json = 1;}
 message PluginGenesisResponse {PluginError error = 99;}
 
 // PluginBeginRequest signals start of a new block
-message PluginBeginRequest {}
+message PluginBeginRequest {uint64 height = 1;}
 
 // PluginBeginResponse acknowledges begin block execution
 message PluginBeginResponse { PluginError error = 99; }
@@ -120,7 +120,10 @@ message PluginDeliverRequest {Transaction tx = 1; }
 message PluginDeliverResponse {PluginError error = 99;}
 
 // PluginEndRequest signals end of the current block
-message PluginEndRequest { bytes proposer_address = 1; }
+message PluginEndRequest {
+  uint64 height = 1;
+  bytes proposer_address = 2;
+}
 
 // PluginEndResponse acknowledges end block execution
 message PluginEndResponse {PluginError error = 99;}

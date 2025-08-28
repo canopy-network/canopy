@@ -50,7 +50,7 @@ func (s *StateMachine) BeginBlock() lib.ErrorI {
 		}
 	}
 	// execute plugin begin block
-	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{})
+	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{Height: s.Height()})
 	// handle error
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 		return
 	}
 	// execute plugin end block
-	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{ProposerAddress: proposerAddress})
+	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{Height: s.Height(), ProposerAddress: proposerAddress})
 	// handle error
 	if err != nil {
 		return err
