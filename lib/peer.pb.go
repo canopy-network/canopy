@@ -398,9 +398,11 @@ type BlockMessage struct {
 	// block_and_certificate: is the actual block and the super-majority signed quorum certificate that justifies it
 	BlockAndCertificate *QuorumCertificate `protobuf:"bytes,4,opt,name=BlockAndCertificate,proto3" json:"blockAndCertificate"` // @gotags: json:"blockAndCertificate"
 	// timestamp: optional timestamp to help coordinate new height
-	Time          uint64 `protobuf:"varint,5,opt,name=time,proto3" json:"time,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Time uint64 `protobuf:"varint,5,opt,name=time,proto3" json:"time"` // @gotags: json:"time"
+	// bft_coordination_meta: coordination info from the last leader enabling in-sync handling of the next height
+	BftCoordinationMeta *BFTCoordinationMeta `protobuf:"bytes,6,opt,name=bft_coordination_meta,json=bftCoordinationMeta,proto3" json:"bftCoordinationMeta"` // @gotags: json:"bftCoordinationMeta"
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BlockMessage) Reset() {
@@ -468,6 +470,71 @@ func (x *BlockMessage) GetTime() uint64 {
 	return 0
 }
 
+func (x *BlockMessage) GetBftCoordinationMeta() *BFTCoordinationMeta {
+	if x != nil {
+		return x.BftCoordinationMeta
+	}
+	return nil
+}
+
+// BFTCoordinationMeta is information from the last leader that enables proper coordination of the next height
+type BFTCoordinationMeta struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// last_commit_time: optional timestamp to help coordinate new height (with last commit time)
+	LastCommitTime uint64 `protobuf:"varint,1,opt,name=last_commit_time,json=lastCommitTime,proto3" json:"time"` // @gotags: json:"time"
+	// reset_on_root_height: 0 for no reset, else will reset if ROUND=0 and ROOT_HEIGHT=reset_on_root_height
+	// If a root chain notification arrives right as the nested chain transitions to NEW_HEIGHT, the validator set can split 50%/50% at Round 0
+	// Let the previous leader decide whether to issue a "reset on Round 0 for rHeight X" command inside the last certificate.
+	// If each validator makes this decision individually, a notification arriving exactly at a border can produce inconsistent outcomes.
+	ResetOnRootHeight uint64 `protobuf:"varint,2,opt,name=reset_on_root_height,json=resetOnRootHeight,proto3" json:"resetOnRootHeight"` // @gotags: json:"resetOnRootHeight"
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *BFTCoordinationMeta) Reset() {
+	*x = BFTCoordinationMeta{}
+	mi := &file_peer_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BFTCoordinationMeta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BFTCoordinationMeta) ProtoMessage() {}
+
+func (x *BFTCoordinationMeta) ProtoReflect() protoreflect.Message {
+	mi := &file_peer_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BFTCoordinationMeta.ProtoReflect.Descriptor instead.
+func (*BFTCoordinationMeta) Descriptor() ([]byte, []int) {
+	return file_peer_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BFTCoordinationMeta) GetLastCommitTime() uint64 {
+	if x != nil {
+		return x.LastCommitTime
+	}
+	return 0
+}
+
+func (x *BFTCoordinationMeta) GetResetOnRootHeight() uint64 {
+	if x != nil {
+		return x.ResetOnRootHeight
+	}
+	return 0
+}
+
 // TxMessage is a p2p message payload that is an inbound transaction to be processed by the blockchain's FSM and saved
 // in that chains mempool
 type TxMessage struct {
@@ -482,7 +549,7 @@ type TxMessage struct {
 
 func (x *TxMessage) Reset() {
 	*x = TxMessage{}
-	mi := &file_peer_proto_msgTypes[5]
+	mi := &file_peer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -494,7 +561,7 @@ func (x *TxMessage) String() string {
 func (*TxMessage) ProtoMessage() {}
 
 func (x *TxMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_peer_proto_msgTypes[5]
+	mi := &file_peer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +574,7 @@ func (x *TxMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TxMessage.ProtoReflect.Descriptor instead.
 func (*TxMessage) Descriptor() ([]byte, []int) {
-	return file_peer_proto_rawDescGZIP(), []int{5}
+	return file_peer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TxMessage) GetChainId() uint64 {
@@ -555,14 +622,18 @@ const file_peer_proto_rawDesc = "" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12\x1f\n" +
 	"\vheight_only\x18\x03 \x01(\bR\n" +
-	"heightOnly\"\xda\x01\n" +
+	"heightOnly\"\xaa\x02\n" +
 	"\fBlockMessage\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x1d\n" +
 	"\n" +
 	"max_height\x18\x02 \x01(\x04R\tmaxHeight\x120\n" +
 	"\x14total_vdf_iterations\x18\x03 \x01(\x04R\x12totalVdfIterations\x12J\n" +
 	"\x13BlockAndCertificate\x18\x04 \x01(\v2\x18.types.QuorumCertificateR\x13BlockAndCertificate\x12\x12\n" +
-	"\x04time\x18\x05 \x01(\x04R\x04time\"8\n" +
+	"\x04time\x18\x05 \x01(\x04R\x04time\x12N\n" +
+	"\x15bft_coordination_meta\x18\x06 \x01(\v2\x1a.types.BFTCoordinationMetaR\x13bftCoordinationMeta\"p\n" +
+	"\x13BFTCoordinationMeta\x12(\n" +
+	"\x10last_commit_time\x18\x01 \x01(\x04R\x0elastCommitTime\x12/\n" +
+	"\x14reset_on_root_height\x18\x02 \x01(\x04R\x11resetOnRootHeight\"8\n" +
 	"\tTxMessage\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x10\n" +
 	"\x03txs\x18\x02 \x03(\fR\x03txs*p\n" +
@@ -588,7 +659,7 @@ func file_peer_proto_rawDescGZIP() []byte {
 }
 
 var file_peer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_peer_proto_goTypes = []any{
 	(Topic)(0),                  // 0: types.Topic
 	(*PeerInfo)(nil),            // 1: types.PeerInfo
@@ -596,18 +667,20 @@ var file_peer_proto_goTypes = []any{
 	(*PeerMeta)(nil),            // 3: types.PeerMeta
 	(*BlockRequestMessage)(nil), // 4: types.BlockRequestMessage
 	(*BlockMessage)(nil),        // 5: types.BlockMessage
-	(*TxMessage)(nil),           // 6: types.TxMessage
-	(*QuorumCertificate)(nil),   // 7: types.QuorumCertificate
+	(*BFTCoordinationMeta)(nil), // 6: types.BFTCoordinationMeta
+	(*TxMessage)(nil),           // 7: types.TxMessage
+	(*QuorumCertificate)(nil),   // 8: types.QuorumCertificate
 }
 var file_peer_proto_depIdxs = []int32{
 	2, // 0: types.PeerInfo.Address:type_name -> types.PeerAddress
 	3, // 1: types.PeerAddress.peer_meta:type_name -> types.PeerMeta
-	7, // 2: types.BlockMessage.BlockAndCertificate:type_name -> types.QuorumCertificate
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 2: types.BlockMessage.BlockAndCertificate:type_name -> types.QuorumCertificate
+	6, // 3: types.BlockMessage.bft_coordination_meta:type_name -> types.BFTCoordinationMeta
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_peer_proto_init() }
@@ -622,7 +695,7 @@ func file_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_peer_proto_rawDesc), len(file_peer_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

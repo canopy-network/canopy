@@ -95,6 +95,13 @@ func (c *Controller) CheckMempool() {
 		return
 	}
 	for {
+		// get root chain height
+		c.Lock()
+		rcBuildHeight := c.RootChainHeight()
+		if rcBuildHeight == 0 {
+			c.log.Error("Root Chain Height == 0")
+		}
+		c.Unlock()
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
 		// if recheck is necessary
@@ -109,8 +116,17 @@ func (c *Controller) CheckMempool() {
 				defer func() { resetProposalConfig() }()
 				// reset the mempool
 				c.Mempool.FSM.Reset()
+				// calculate rc build height
+				ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()
+				if err != nil {
+					c.log.Error(err.Error())
+				}
+				// if ownRoot
+				if ownRoot {
+					rcBuildHeight = c.Mempool.FSM.Height()
+				}
 				// check the mempool to cache a proposal block and validate the mempool itself
-				c.Mempool.CheckMempool()
+				c.Mempool.CheckMempool(rcBuildHeight)
 				// get the transactions to gossip
 				toGossip = c.Mempool.GetTransactions(math.MaxUint64)
 				// set recheck to false
@@ -210,13 +226,12 @@ func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
 }
 
 // CheckMempool() Checks each transaction in the mempool and caches a block proposal
-func (m *Mempool) CheckMempool() {
+func (m *Mempool) CheckMempool(rcBuildHeight uint64) {
 	m.log.Info("Validating mempool and caching a new proposal block")
 	var err lib.ErrorI
-	// check if a validator
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
-		BlockHeader:  &lib.BlockHeader{Time: uint64(time.Now().UnixMicro()), ProposerAddress: m.address.Bytes()},
+		BlockHeader:  &lib.BlockHeader{Time: m.controller.LastBFTCommitTime(), ProposerAddress: m.address.Bytes()},
 		Transactions: m.GetTransactions(math.MaxUint64), // get all transactions in mempool - but apply block will only keep 'max-block' amount
 	}
 	// capture the tentative block result using a new object reference
@@ -233,17 +248,6 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult.BlockHeader = block.BlockHeader
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
-	// calculate rc build height
-	ownRoot, err := m.FSM.LoadIsOwnRoot()
-	if err != nil {
-		m.log.Error(err.Error())
-	}
-	// if ownRoot
-	if ownRoot {
-		rcBuildHeight = m.FSM.Height()
-	}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,

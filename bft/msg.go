@@ -132,6 +132,12 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 		if !bytes.Equal(x.Qc.ResultsHash, p.resultsHash) {
 			return false, lib.ErrMismatchResultsHash()
 		}
+		// check RC build height
+		if x.Qc.Header.Phase > Precommit {
+			if x.Qc.Header.RootBuildHeight != p.view.RootBuildHeight {
+				return false, lib.ErrWrongRootBuildHeight()
+			}
+		}
 	}
 	return
 }
@@ -150,13 +156,20 @@ func (b *BFT) CheckReplicaMessage(x *Message, params *validateMessageParams) lib
 	if err := checkSignature(x.Signature, x); err != nil {
 		return err
 	}
+	// the validation is done for Pacemaker message types
+	if x.IsPacemakerMessage() {
+		if err := x.Qc.Header.Check(params.view, false); err != nil {
+			return err
+		}
+		// check for wrong height error
+		if x.Qc.Header.Height != params.view.Height {
+			return lib.ErrWrongViewHeight(x.Qc.Header.Height, params.view.Height)
+		}
+		return nil
+	}
 	// validate the header of the Quorum  Certificate
 	if err := x.Qc.Header.Check(params.view, true); err != nil {
 		return err
-	}
-	// the validation is done for Pacemaker message types
-	if x.IsPacemakerMessage() {
-		return nil
 	}
 	if x.Qc.Header.Phase == ElectionVote {
 		// ELECTION-VOTE Replica message
@@ -172,6 +185,12 @@ func (b *BFT) CheckReplicaMessage(x *Message, params *validateMessageParams) lib
 		} else {
 			if !bytes.Equal(x.Qc.BlockHash, params.blockHash) {
 				return lib.ErrMismatchConsBlockHash()
+			}
+		}
+		// check RC build height
+		if x.Qc.Header.Phase >= PrecommitVote {
+			if x.Qc.Header.RootBuildHeight != params.view.RootBuildHeight {
+				return lib.ErrWrongRootBuildHeight()
 			}
 		}
 		if !bytes.Equal(x.Qc.ResultsHash, params.resultsHash) {
