@@ -263,7 +263,7 @@ func (c *Controller) LastBFTCommitTime() uint64 {
 	blockTime := time.Duration(c.Config.BlockTimeMS()) * time.Millisecond
 	lastCommitTime := c.Consensus.LastCommitTime
 	c.log.Infof("Last BFT commit time: %s", lastCommitTime.Format("15:04:05"))
-	if time.Since(lastCommitTime) > blockTime || time.Until(lastCommitTime) > blockTime {
+	if time.Since(lastCommitTime) > blockTime*2 || time.Until(lastCommitTime) > blockTime*2 {
 		c.log.Warnf("Last BFT commit time out of range (%s), using time.Now(%s)",
 			lastCommitTime.Format("15:04:05"), time.Now().Format("15:04:05"))
 		return uint64(time.Now().UnixMicro())
