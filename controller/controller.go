@@ -261,14 +261,14 @@ func (c *Controller) LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (
 // NextBFTCommitTime() returns the estimated next CommitTime()
 func (c *Controller) NextBFTCommitTime() uint64 {
 	blockTime := time.Duration(c.Config.BlockTimeMS()) * time.Millisecond
-	nextBFTStartTime := c.Consensus.LastCommitTime.Add(blockTime)
-	c.log.Infof("Next BFT commit time: %s", nextBFTStartTime.Format("15:04:05"))
+	nextBFTCommitTime := c.Consensus.LastCommitTime.Add(blockTime)
+	c.log.Infof("Next BFT commit time: %s", nextBFTCommitTime.Format("15:04:05"))
 	//if nextBFTStartTime.Add(-1*blockTime).Before(time.Now()) || time.Until(nextBFTStartTime) > blockTime {
 	//	c.log.Warnf("Next BFT commit time too early (%s), using time.Now(%s)", nextBFTStartTime.Format("15:04:05"),
 	//		time.Now().Format("15:04:05"))
 	//	return uint64(time.Now().UnixMicro())
 	//}
-	return uint64(nextBFTStartTime.UnixMicro())
+	return uint64(nextBFTCommitTime.UnixMicro())
 }
 
 // LoadMaxBlockSize() gets the max block size from the state

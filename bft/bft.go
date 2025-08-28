@@ -894,9 +894,11 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 
 // waitTime() calculates the waiting time for a specific sleepTime configuration and Round number (helper)
 func (b *BFT) waitTime(sleepTimeMS int, round uint64) time.Duration {
-	extraTimeMs := int(math.Pow(float64(2), float64(round))) * 1000 // ms
-	sleepTimeMS += extraTimeMs
-	return time.Duration(sleepTimeMS) * time.Millisecond
+	var extraTimeMs int
+	if round != 0 {
+		extraTimeMs = int(math.Pow(float64(2), float64(round))) * 1000 // ms
+	}
+	return time.Duration(sleepTimeMS+extraTimeMs) * time.Millisecond
 }
 
 // NewHeightWaitTime() calculates the waiting time between last commit and election
