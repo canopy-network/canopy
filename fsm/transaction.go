@@ -173,39 +173,6 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	for _, authorized := range authorizedSigners {
 		// if the address that signed the transaction matches one of the authorized signers
 		if address.Equals(crypto.NewAddressFromBytes(authorized)) {
-			// handle special fields for transactions
-			switch x := msg.(type) {
-			case *MessageStake:
-				// populate the signer field for stake
-				x.Signer = authorized
-			case *MessageEditStake:
-				// populate the signer field for edit-stake
-				x.Signer = authorized
-			case *MessageChangeParameter:
-				// populate the proposal hash for change parameter
-				hash, _ := tx.GetHash()
-				x.ProposalHash = lib.BytesToString(hash)
-			case *MessageDAOTransfer:
-				// populate the proposal hash for dao transfer
-				hash, _ := tx.GetHash()
-				x.ProposalHash = lib.BytesToString(hash)
-			case *MessageCreateOrder:
-				// populate the order id
-				hash, _ := tx.GetHash()
-				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
-			case *MessageDexLimitOrder:
-				// populate the order id
-				hash, _ := tx.GetHash()
-				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
-			case *MessageDexLiquidityDeposit:
-				// populate the order id
-				hash, _ := tx.GetHash()
-				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
-			case *MessageDexLiquidityWithdraw:
-				// populate the order id
-				hash, _ := tx.GetHash()
-				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
-			}
 			// return the signer address
 			return address, nil
 		}

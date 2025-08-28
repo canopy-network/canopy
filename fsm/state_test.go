@@ -68,6 +68,7 @@ func TestInitialize(t *testing.T) {
 				height: test.height,
 				Config: lib.Config{
 					StateMachineConfig: lib.DefaultStateMachineConfig(),
+					ChainConfig:        lib.DefaultChainConfig(),
 				},
 				log: log,
 				cache: &cache{
@@ -321,6 +322,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		Config: lib.Config{
 			MainConfig:         lib.DefaultMainConfig(),
 			StateMachineConfig: lib.DefaultStateMachineConfig(),
+			ChainConfig:        lib.DefaultChainConfig(),
 		},
 		events: new(lib.EventsTracker),
 		log:    log,

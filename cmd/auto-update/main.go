@@ -92,7 +92,7 @@ type Configs struct {
 
 // getConfigs returns the configuration for the updater, snapshotter, and process supervisor.
 func getConfigs() (*Configs, lib.LoggerI) {
-	canopyConfig, _ := cli.InitializeDataDirectory(cli.DataDir, lib.NewDefaultLogger())
+	canopyConfig, _, _ := cli.InitializeDataDirectory(cli.DataDir, lib.NewDefaultLogger())
 	l := lib.NewLogger(lib.LoggerConfig{
 		Level:      canopyConfig.GetLogLevel(),
 		Structured: canopyConfig.Structured,

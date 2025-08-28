@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -78,7 +79,8 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
 	// setup plugin if enabled
-	if c.Plugin {
+	if c.Plugin != "" {
+		controller.PluginExecute(c.Plugin)
 		controller.PluginConnectSync()
 	}
 	// initialize the consensus in the controller, passing a reference to itself
@@ -245,13 +247,31 @@ func (c *Controller) IsValidDoubleSigner(rootChainId, rootHeight uint64, address
 
 // PLUGIN CALLS BELOW
 
-const socketPath = "plugin.sock"
+const socketDir = "/tmp/plugin"
+const socketFile = "plugin.sock"
+
+// PluginExecute() executes the plugin control script to start the plugin process
+func (c *Controller) PluginExecute(plugin string) {
+	// construct the shell command path: plugin/<plugin>/pluginctl.sh start
+	cmdPath := filepath.Join("plugin", plugin, "pluginctl.sh")
+	// create the command to execute the plugin control script with 'start' argument
+	cmd := exec.Command(cmdPath, "start")
+	// execute the command and capture output
+	output, err := cmd.CombinedOutput()
+	// if an error occurred during execution
+	if err != nil {
+		// log the error and exit
+		c.log.Errorf("Failed to execute plugin %s: %v, output: %s", plugin, err, string(output))
+	}
+	// log successful plugin execution
+	c.log.Infof("Plugin %s started: %s", plugin, string(output))
+}
 
 // PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
 func (c *Controller) PluginConnectSync() {
-	sockPath := filepath.Join("/tmp/plugin", socketPath)
+	sockPath := filepath.Join(socketDir, socketFile)
 	// make the path
-	if err := os.MkdirAll(sockPath, 0777); err != nil {
+	if err := os.MkdirAll(socketDir, 0777); err != nil {
 		c.log.Fatalf("Failed to make the plugin socket path %s: %v", sockPath, err)
 	}
 	// clean old socket

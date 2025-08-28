@@ -46,11 +46,11 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []u
 	}
 	// calculate the number of halvenings
 	var halvenings uint64
-	if s.Config.BlocksPerHalvening > 0 {
-		halvenings = s.height / s.Config.BlocksPerHalvening
+	if s.Config.StateMachineConfig.BlocksPerHalvening > 0 {
+		halvenings = s.height / s.Config.StateMachineConfig.BlocksPerHalvening
 	}
 	// each halving, the reward is divided by 2
-	totalMintAmount := s.Config.InitialTokensPerBlock >> halvenings
+	totalMintAmount := s.Config.StateMachineConfig.InitialTokensPerBlock >> halvenings
 	// define a convenience variable for the number of subsidized committees
 	subsidizedCount := uint64(len(subsidizedChainIds))
 	// calculate the amount left for the committees after the parameterized DAO cut

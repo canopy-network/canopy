@@ -56,6 +56,7 @@ func DefaultConfig() Config {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
+		ChainConfig:        DefaultChainConfig(),
 	}
 }
 
@@ -106,7 +107,7 @@ type MainConfig struct {
 	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
 	Headless   bool        `json:"headless"`   // turn off the web wallet and block explorer 'web' front ends
 	AutoUpdate bool        `json:"autoUpdate"` // check for new versions of software each X time
-	Plugin     bool        `json:"plugin"`     // if an extended binary is utilized in this instance of canopy
+	Plugin     string      `json:"plugin"`     // the configured plugin to use - Canopy will execute this plugin and wait for it to connect via the Unix socket
 }
 
 // DefaultMainConfig() returns the default 'main configuration'
@@ -387,6 +388,10 @@ func NewConfigFromFile(filepath string) (Config, error) {
 	if err = json.Unmarshal(fileBytes, &c); err != nil {
 		// exit with error
 		return Config{}, err
+	}
+	// allow environment variable override for plugin (useful for Docker containers)
+	if plugin := os.Getenv("CANOPY_PLUGIN"); plugin != "" {
+		c.Plugin = plugin
 	}
 	// exit
 	return c, nil

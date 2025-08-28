@@ -523,15 +523,15 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 	}, nil
 }
 
-// ResetToBeginBlock() resets the store and executes 'begin-block'
-func (s *StateMachine) ResetToBeginBlock() {
-	// reset the state machine (store)
-	s.Reset()
-	// run the 'begin block' code
-	if err := s.BeginBlock(); err != nil {
-		s.log.Errorf("BEGIN_BLOCK FAILURE: %s", err.Error())
-	}
-}
+// // ResetToBeginBlock() resets the store and executes 'begin-block'
+// func (s *StateMachine) ResetToBeginBlock() {
+// 	// reset the state machine (store)
+// 	s.Reset()
+// 	// run the 'begin block' code
+// 	if err := s.BeginBlock(); err != nil {
+// 		s.log.Errorf("BEGIN_BLOCK FAILURE: %s", err.Error())
+// 	}
+// }
 
 var _ lib.PluginCompatibleFSM = new(StateMachine)
 
