@@ -480,6 +480,8 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	if result == nil || result.BlockHeader == nil || !bytes.Equal(result.BlockHeader.Hash, block.BlockHeader.Hash) {
 		result = nil
 	}
+	// set the last BFT time
+	c.Consensus.LastCommitTime = time.UnixMicro(int64(msg.BftCoordinationMeta.GetLastCommitTime()))
 	// attempts to commit the QC to persistence of chain by playing it against the state machine
 	if err = c.CommitCertificate(qc, block, result); err != nil {
 		// exit with error

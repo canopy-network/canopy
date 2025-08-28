@@ -231,7 +231,7 @@ func (m *Mempool) CheckMempool(rcBuildHeight uint64) {
 	var err lib.ErrorI
 	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
 	block := &lib.Block{
-		BlockHeader:  &lib.BlockHeader{Time: m.controller.NextBFTCommitTime(), ProposerAddress: m.address.Bytes()},
+		BlockHeader:  &lib.BlockHeader{Time: m.controller.NextBFTCommitTime(m.FSM.Height()), ProposerAddress: m.address.Bytes()},
 		Transactions: m.GetTransactions(math.MaxUint64), // get all transactions in mempool - but apply block will only keep 'max-block' amount
 	}
 	// capture the tentative block result using a new object reference
