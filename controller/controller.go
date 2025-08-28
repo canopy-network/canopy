@@ -258,17 +258,17 @@ func (c *Controller) LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (
 	return c.RCManager.GetMinimumEvidenceHeight(rootChainId, rootHeight)
 }
 
-// NextBFTCommitTime() returns the estimated next CommitTime()
-func (c *Controller) NextBFTCommitTime() uint64 {
+// LastBFTCommitTime() returns the estimated next CommitTime()
+func (c *Controller) LastBFTCommitTime() uint64 {
 	blockTime := time.Duration(c.Config.BlockTimeMS()) * time.Millisecond
-	nextBFTCommitTime := c.Consensus.LastCommitTime.Add(blockTime)
-	c.log.Infof("Next BFT commit time: %s", nextBFTCommitTime.Format("15:04:05"))
-	//if nextBFTStartTime.Add(-1*blockTime).Before(time.Now()) || time.Until(nextBFTStartTime) > blockTime {
-	//	c.log.Warnf("Next BFT commit time too early (%s), using time.Now(%s)", nextBFTStartTime.Format("15:04:05"),
-	//		time.Now().Format("15:04:05"))
-	//	return uint64(time.Now().UnixMicro())
-	//}
-	return uint64(nextBFTCommitTime.UnixMicro())
+	lastCommitTime := c.Consensus.LastCommitTime
+	c.log.Infof("Last BFT commit time: %s", lastCommitTime.Format("15:04:05"))
+	if lastCommitTime.Add(-1*blockTime).Before(time.Now()) || time.Until(lastCommitTime) > blockTime {
+		c.log.Warnf("Next BFT commit time too early (%s), using time.Now(%s)", lastCommitTime.Format("15:04:05"),
+			time.Now().Format("15:04:05"))
+		return uint64(time.Now().UnixMicro())
+	}
+	return uint64(lastCommitTime.UnixMicro())
 }
 
 // LoadMaxBlockSize() gets the max block size from the state
