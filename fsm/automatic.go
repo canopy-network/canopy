@@ -4,54 +4,24 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-/* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
+/* This file handles 'automatic' (non-transaction-induced) state changes that occur at the beginning and ending of a block */
 
 // BeginBlock() is code that is executed at the start of `applying` the block
 func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI {
 	// prevent attempting to load the certificate for height 0
-	if s.Height() > 1 {
-		// enforce protocol upgrades
-		if err := s.CheckProtocolVersion(); err != nil {
-			return err
-		}
-		// reward committees
-		if err := s.FundCommitteeRewardPools(); err != nil {
-			return err
-		}
-		// handle last certificate results
-		lastCertificate, err := s.LoadCertificate(s.Height() - 1)
-		if err != nil {
-			return err
-		}
-		// load the root chain id at the certificate height
-		rootChainId, err := s.LoadRootChainId(s.Height() - 1)
-		if err != nil {
-			return err
-		}
-		// if not root-chain: the committee won't match the certificate result
-		// so just set the committee to nil to ignore the byzantine evidence
-		// the byzantine evidence is handled at `Transaction Level` on the root
-		// chain with a HandleMessageCertificateResults
-		if s.Config.ChainId != rootChainId {
-			if err = s.HandleCertificateResults(lastCertificate, nil); err != nil {
-				return err
-			}
-		} else {
-			var committee lib.ValidatorSet
-			// if is root-chain: load the committee from state as the certificate result
-			// will match the evidence and there's no Transaction to HandleMessageCertificateResults
-			committee, err = s.LoadCommittee(s.Config.ChainId, s.Height()-1)
-			if err != nil {
-				return err
-			}
-			if err = s.HandleCertificateResults(lastCertificate, &committee); err != nil {
-				return err
-			}
-		}
+	if s.Height() <= 1 {
+		return nil
 	}
-	// execute plugin begin block
-	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{})
-	// handle error
+	// enforce protocol upgrades
+	if err := s.CheckProtocolVersion(); err != nil {
+		return err
+	}
+	// reward committees
+	if err := s.FundCommitteeRewardPools(); err != nil {
+		return err
+	}
+	// handle last certificate results
+	lastCertificate, err := s.LoadCertificate(s.Height() - 1)
 	if err != nil {
 		return err
 	}
@@ -59,6 +29,16 @@ func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI
 	rootChainId, err := s.LoadRootChainId(s.Height() - 1)
 	if err != nil {
 		return err
+	}
+	// execute plugin begin block
+	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{Height: s.Height()})
+	// handle error
+	if err != nil {
+		return err
+	}
+	// handle plugin error
+	if resp.Error.E() != nil {
+		return resp.Error.E()
 	}
 	// if not root-chain: the committee won't match the certificate result
 	// so just set the committee to nil to ignore the byzantine evidence
@@ -70,8 +50,6 @@ func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI
 	// if is root-chain: load the committee from state as the certificate result
 	// will match the evidence and there's no Transaction to HandleMessageCertificateResults
 	return s.HandleCertificateResults(lastCertificate, lastValidatorSet)
-	// handle plugin error
-	return resp.Error.E()
 }
 
 // EndBlock() is code that is executed at the end of `applying` the block
@@ -94,7 +72,7 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 		return
 	}
 	// execute plugin end block
-	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{ProposerAddress: proposerAddress})
+	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{Height: s.Height(), ProposerAddress: proposerAddress})
 	// handle error
 	if err != nil {
 		return err

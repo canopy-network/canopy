@@ -1,0 +1,32 @@
+{
+    "watch": ["src", "test", ".env"],
+    "ext": "ts,json,js",
+    "ignore": [
+        "src/**/*.test.ts",
+        "src/**/*.spec.ts",
+        "test/**/*",
+        "coverage/**/*",
+        "dist/**/*",
+        "node_modules/**/*",
+        "*.log"
+    ],
+    "exec": "node --loader ts-node/esm src/main.ts",
+    "env": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug"
+    },
+    "delay": 1000,
+    "restartable": "rs",
+    "colours": true,
+    "legacyWatch": false,
+    "pollingInterval": 100,
+    "runOnChangeOnly": false,
+    "verbose": true,
+    "signal": "SIGTERM",
+    "events": {
+        "start": "echo \"🚀 Starting TypeScript development server...\"",
+        "crash": "echo \"💥 Server crashed - waiting for file changes...\"",
+        "exit": "echo \"👋 Development server stopped\"",
+        "restart": "echo \"🔄 Restarting due to file changes...\""
+    }
+}
