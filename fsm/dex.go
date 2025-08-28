@@ -11,7 +11,7 @@ import (
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
    not to be confused with 1 way order book swaps implemented in swap.go */
 
-// HandleDexBatch() handles dex batch from the counterparty (buying logic)
+// HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, buyBatch *lib.DexBatch) (err lib.ErrorI) {
 	// handle 'self certificate' as a trigger to get dex data from the root chain
 	if chainId == s.Config.ChainId {
@@ -35,7 +35,37 @@ func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, buyBatch 
 	return s.HandleDexBuyBatch(chainId, buyBatch)
 }
 
-// HandleDexBuyBatch() handles a 'buy' batch: (1) dex receipts (2) 'buy' batch
+// HandleDexBuyBatch() handles the 'dex lifecycle'
+//
+//	**Trigger:**
+//	- **Nested Chain**: On `begin_block` after its own `CertificateResult`
+//	- **Root Chain**: On `deliver_tx` with `certificateResultTx` from Nested Chain
+//
+//	**Steps:**
+//
+//	1. **Process Inbound Receipts for local LockedBatch**
+//	- **If** `LockedBatch` exists but its receipts aren’t fully matched → exit (retry next trigger).
+//	- **Else If** Success → move from `HoldingPool` → `LiquidityPool`
+//	- **Else If** Fail → refund from `HoldingPool` → seller
+//
+//	2. **Process local LockedBatch Liquidity**
+//	- **Withdraw**: burn points, distribute tokens pro-rata
+//	- **Deposit**: pro-rata distribute liquidity points using the included virtualPoolSize
+//
+//	3. **Process Inbound Sell Orders**
+//	- For each order:
+//	1. Compute uniform clearing price (AMM curve)
+//	2. If within limit → pay from `LiquidityPool` and update virtualPoolSize (dX)
+//	3. Record outcome as `BuyReceipt` in `NextBatch`
+//
+//	4. **Process Inbound Liquidity**
+//	- **Withdraw**: burn points, distribute tokens, update virtualPoolSize from 3.
+//	- **Deposit**: assign points using virtualPoolSize from 3.
+//
+//	5. **Rotate Batches**
+//	- set `poolSize` of NextBatch = pool.Amount
+//	- set `LockedBatch = NextBatch`
+//	- Reset `NextBatch`
 func (s *StateMachine) HandleDexBuyBatch(chainId uint64, buyBatch *lib.DexBatch) (err lib.ErrorI) {
 	// exit if dex data is empty
 	if buyBatch == nil {
@@ -43,11 +73,7 @@ func (s *StateMachine) HandleDexBuyBatch(chainId uint64, buyBatch *lib.DexBatch)
 	}
 	// handle the batch receipt - this function manages atomicity of the dex operations
 	locked, err := s.HandleDexBatchReceipt(chainId, buyBatch)
-	if err != nil {
-		return
-	}
-	// do no action further until previous batch is handled
-	if locked {
+	if err != nil || locked {
 		return
 	}
 	// process batch - save receipts to state machine
@@ -55,11 +81,11 @@ func (s *StateMachine) HandleDexBuyBatch(chainId uint64, buyBatch *lib.DexBatch)
 	if err != nil {
 		return
 	}
-	// set the 'next batch' as 'locked batch' in state with receipts and pool size
+	// (6) set the 'next batch' as 'locked batch' in state with receipts and pool size
 	return s.RotateDexSellBatch(receipts, chainId)
 }
 
-// HandleDexBatchReceipt() handles a 'receipt' for a 'sell batch'
+// HandleDexBatchReceipt() handles a 'receipt' for a 'sell batch' and 'locked' liquidity commands
 // Sends funds from holding pool to either the liquidity pool or back to sender
 func (s *StateMachine) HandleDexBatchReceipt(chainId uint64, batch *lib.DexBatch) (locked bool, err lib.ErrorI) {
 	// get locked sell batch
@@ -91,9 +117,13 @@ func (s *StateMachine) HandleDexBatchReceipt(chainId uint64, batch *lib.DexBatch
 			return true, err
 		}
 	}
-	// handle 'inbound' liquidity commands
-	if err = s.HandleLiquidityCommands(batch); err != nil {
-		return
+	// for each liquidity withdraws, move the funds from the liquidity pool to the account
+	if err = s.HandleBatchWithdraw(lockedBatch); err != nil {
+		return false, err
+	}
+	// for each liquidity deposit, move the funds from the holding pool to the liquidity pool
+	if err = s.HandleBatchDeposit(lockedBatch, batch.PoolSize, true); err != nil {
+		return false, err
 	}
 	// remove lockedBatch to lift the 'atomic lock' - enabling orders to be sent in the next transaction
 	return false, s.Delete(KeyForLockedBatch(chainId))
@@ -102,7 +132,8 @@ func (s *StateMachine) HandleDexBatchReceipt(chainId uint64, batch *lib.DexBatch
 // FindUCP() executes AMM logic over a 'batch' of limit orders
 // (1) calculates the uniform clearing price for a batch
 // (2) determines successful orders & distributes from the liquidity pool
-// (3) returns the receipts
+// (3) handle 'inbound' liquidity deposits/withdraws
+// (4) returns the receipts
 func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success []bool, err lib.ErrorI) {
 	// initialize the receipt
 	success = make([]bool, len(b.Orders))
@@ -169,13 +200,22 @@ func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success [
 			}
 		}
 	}
-	// get upcoming sell batch
-	nextSellBatch, err := s.GetDexBatch(KeyForNextBatch(b.Committee))
+	// get the 'counter' pool balance
+	lPoolBalance, err := s.GetPoolBalance(s.Config.ChainId + LiquidityPoolAddend)
 	if err != nil {
-		return
+		return nil, err
 	}
-	// handle 'outbound' liquidity commands
-	return nil, s.HandleLiquidityCommands(nextSellBatch, uint64(deltaX))
+	// update the virtual counter pool amount
+	b.PoolSize = uint64(deltaX)
+	// for each liquidity withdraws, move the funds from the liquidity pool to the account
+	if err = s.HandleBatchWithdraw(b); err != nil {
+		return nil, err
+	}
+	// for each liquidity deposit, move the funds from the holding pool to the liquidity pool
+	if err = s.HandleBatchDeposit(b, lPoolBalance, false); err != nil {
+		return nil, err
+	}
+	return success, nil
 }
 
 // Two-chain LP accounting:
@@ -183,23 +223,8 @@ func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success [
 // - Outbound deposits/withdraws: update ledger + move tokens (use dX from UCP)
 // - Inbound deposits/withdraws: update ledger but only token movement for withdraws
 
-// HandleLiquidityCommands() handles liquidity provider deposits and withdraws
-func (s *StateMachine) HandleLiquidityCommands(b *lib.DexBatch, counterPoolAmount ...uint64) lib.ErrorI {
-	// apply the liquidity deposits
-	if err := s.HandleBatchDeposits(b, counterPoolAmount...); err != nil {
-		return err
-	}
-	// apply the liquidity withdraws
-	return s.HandleBatchWithdraw(b)
-}
-
-// HandleBatchDeposits() handles a batch of 1 sided liquidity injections and awards 'liquidity points'
-func (s *StateMachine) HandleBatchDeposits(batch *lib.DexBatch, counterPoolSize ...uint64) lib.ErrorI {
-	// determine if this is an 'inbound' or 'outbound' handling of batch deposits
-	inbound, counterPoolAmount := len(counterPoolSize) == 0, uint64(0)
-	if inbound {
-		counterPoolAmount = batch.PoolSize
-	}
+// HandleBatchDeposit() handles inbound/outbound liquidity deposits
+func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, counterPoolAmount uint64, outbound bool) lib.ErrorI {
 	// get the liquidity pool
 	p, err := s.GetPool(batch.Committee + LiquidityPoolAddend)
 	if err != nil {
@@ -215,7 +240,7 @@ func (s *StateMachine) HandleBatchDeposits(batch *lib.DexBatch, counterPoolSize 
 		return nil
 	}
 	// x = the initial 'deposit' pool balance
-	// y = the initial 'counter' pool balance
+	// y = the 'counter' pool balance
 	// L = initial liquidity points
 	x, y, L := batch.PoolSize, counterPoolAmount, p.TotalPoolPoints
 	// calculate dL as if it's one big deposit
@@ -225,8 +250,12 @@ func (s *StateMachine) HandleBatchDeposits(batch *lib.DexBatch, counterPoolSize 
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share
 		share := totalDL * order.Amount / totalDeposit
+		// add points to pool
+		if err = p.AddPoints(order.Address, share); err != nil {
+			return err
+		}
 		// update pool
-		if !inbound {
+		if outbound {
 			// remove from holding pool
 			if err = s.PoolSub(s.Config.ChainId+HoldingPoolAddend, order.Amount); err != nil {
 				return err
@@ -234,16 +263,13 @@ func (s *StateMachine) HandleBatchDeposits(batch *lib.DexBatch, counterPoolSize 
 			// add to the liquidity pool amount
 			p.Amount += order.Amount
 		}
-		// add points to pool
-		if err = p.AddPoints(order.Address, share); err != nil {
-			return err
-		}
 	}
 	// update the pool
 	return s.SetPool(p)
 }
 
 // HandleBatchWithdraw() handles inbound/outbound liquidity withdraw requests
+// NOTE: withdraws should come before deposits because it affects pool size
 func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch) lib.ErrorI {
 	// initialize vars
 	totalPointsToRemove, withdraws := uint64(0), make(map[string]uint64)
@@ -272,18 +298,28 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch) lib.ErrorI {
 	}
 	// total reserve to withdraw
 	totalReserve := p.Amount * totalPointsToRemove / p.TotalPoolPoints
+	// total virtual reserve to withdraw
+	totalVReserve := batch.PoolSize * totalPointsToRemove / p.TotalPoolPoints
 	// pro-rata distribute
 	for address, points := range withdraws {
 		// get address
 		addr, _ := lib.StringToBytes(address)
 		// calculate share
 		share := totalReserve * points / totalPointsToRemove
-		// defensive
+		// calculate virtual share
+		vShare := totalVReserve * points / totalPointsToRemove
+		// defensive 1
 		if share > p.Amount {
 			share = p.Amount
 		}
+		// defensive 2
+		if vShare > p.Amount {
+			vShare = p.Amount
+		}
 		// update pool
 		p.Amount -= share
+		// update virtual pool
+		batch.PoolSize -= vShare
 		// remove points from pool
 		if err = p.RemovePoints(addr, points); err != nil {
 			return err
