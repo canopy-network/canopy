@@ -603,7 +603,7 @@ func ErrInvalidNetAddress(s string) ErrorI {
 }
 
 func ErrWrongHighQCHeight() ErrorI {
-	return NewError(CodeWrongHighQCHeight, ConsensusModule, fmt.Sprintf("wrong high qc hegiht"))
+	return NewError(CodeWrongHighQCHeight, ConsensusModule, fmt.Sprintf("wrong high qc height"))
 }
 
 func ErrWriteFile(err error) ErrorI {
