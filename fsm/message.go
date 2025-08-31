@@ -43,6 +43,10 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 		return s.HandleMessageDeleteOrder(x)
 	case *MessageDexLimitOrder:
 		return s.HandleMessageDexLimitOrder(x)
+	case *MessageDexLiquidityDeposit:
+		return s.HandleMessageDexLiquidityDeposit(x)
+	case *MessageDexLiquidityWithdraw:
+		return s.HandleMessageDexLiquidityWithdraw(x)
 	default:
 		return ErrUnknownMessage(x)
 	}
@@ -499,7 +503,7 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 		return ErrMaxDexBatchSize()
 	}
 	// move funds from user
-	if err = s.AccountSub(crypto.NewAddress(msg.SellersSendAddress), msg.AmountForSale); err != nil {
+	if err = s.AccountSub(crypto.NewAddress(msg.Address), msg.AmountForSale); err != nil {
 		return err
 	}
 	// add funds to holding pool
@@ -510,7 +514,7 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 	batch.Orders = append(batch.Orders, &lib.DexLimitOrder{
 		AmountForSale:   msg.AmountForSale,
 		RequestedAmount: msg.RequestedAmount,
-		Address:         msg.SellersSendAddress,
+		Address:         msg.Address,
 	})
 	// update next sell batch
 	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
@@ -666,11 +670,11 @@ func (s *StateMachine) GetAuthorizedSignersFor(msg lib.MessageI) (signers [][]by
 		}
 		return [][]byte{order.SellersSendAddress}, nil
 	case *MessageDexLimitOrder:
-		return [][]byte{x.SellersSendAddress}, nil
+		return [][]byte{x.Address}, nil
 	case *MessageDexLiquidityDeposit:
-		return [][]byte{x.SellersSendAddress}, nil
+		return [][]byte{x.Address}, nil
 	case *MessageDexLiquidityWithdraw:
-		return [][]byte{x.SellersSendAddress}, nil
+		return [][]byte{x.Address}, nil
 	default:
 		return nil, ErrUnknownMessage(x)
 	}

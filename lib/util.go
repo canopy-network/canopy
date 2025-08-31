@@ -823,6 +823,20 @@ func EqualByteSlices(a, b [][]byte) bool {
 	return true
 }
 
+// IntSqrt returns the integer square root of n (truncated)
+func IntSqrt(n uint64) uint64 {
+	if n == 0 {
+		return 0
+	}
+	x := n
+	y := (x + 1) / 2
+	for y < x {
+		x = y
+		y = (x + n/x) / 2
+	}
+	return x
+}
+
 // ContainsByteSlice() checks to see if the byte slice is within the list
 func ContainsByteSlice(list [][]byte, target []byte) (found bool) {
 	for _, item := range list {

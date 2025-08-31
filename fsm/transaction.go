@@ -452,6 +452,34 @@ func NewDeleteOrderTx(from crypto.PrivateKeyI, orderId string, committeeId uint6
 	}, networkId, chainId, fee, height, memo)
 }
 
+// NewDexLimitOrder() creates a DexLimitOrder object in the interface form of TransactionI
+func NewDexLimitOrder(from crypto.PrivateKeyI, amountForSale, requestedAmount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLimitOrder{
+		ChainId:         committeeId,
+		AmountForSale:   amountForSale,
+		RequestedAmount: requestedAmount,
+		Address:         from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityDeposit() creates a DexLiquidityDeposit object in the interface form of TransactionI
+func NewDexLiquidityDeposit(from crypto.PrivateKeyI, amount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityDeposit{
+		ChainId: committeeId,
+		Amount:  amount,
+		Address: from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityWithdraw() creates a DexLiquidityWithdraw object in the interface form of TransactionI
+func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent int, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityWithdraw{
+		ChainId: committeeId,
+		Percent: uint64(percent),
+		Address: from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
 // NewLockOrderTx() reserves a sell order using a send-tx and the memo field
 func NewLockOrderTx(from crypto.PrivateKeyI, order lib.LockOrder, networkId, chainId, fee, height uint64) (lib.TransactionI, lib.ErrorI) {
 	jsonBytes, err := lib.MarshalJSON(order)

@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bytes"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"math"
 )
 
@@ -9,9 +10,9 @@ func (x *DexLimitOrder) MinAsk() float64 {
 	return float64(x.RequestedAmount) / float64(x.AmountForSale)
 }
 
-func (x *DexLimitOrder) MapKey() uint64 {
+func (x *DexLimitOrder) MapKey(blockHash []byte) string {
 	bz, _ := Marshal(x)
-	return MemHash(bz)
+	return crypto.HashString(append(blockHash, bz...))
 }
 
 func (x *DexLimitOrder) SurplusMetric() float64 {
@@ -35,6 +36,21 @@ func (x *DexBatch) IsEmpty() bool {
 		return true
 	}
 	return len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
+}
+
+func (x *DexBatch) EnsureNonNil() {
+	if x.Orders == nil {
+		x.Orders = []*DexLimitOrder{}
+	}
+	if x.Deposits == nil {
+		x.Deposits = []*DexLiquidityDeposit{}
+	}
+	if x.Withdraws == nil {
+		x.Withdraws = []*DexLiquidityWithdraw{}
+	}
+	if x.Receipts == nil {
+		x.Receipts = []bool{}
+	}
 }
 
 func (x *DexBatch) CopyOrders() []*DexLimitOrder {

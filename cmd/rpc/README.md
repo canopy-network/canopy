@@ -75,6 +75,9 @@
 - /v1/admin/tx-create-order
 - /v1/admin/tx-edit-order
 - /v1/admin/tx-delete-order
+- /v1/admin/tx-dex-limit-order
+- /v1/admin/tx-dex-liquidity-deposit
+- /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
 - /v1/admin/subsidy
@@ -3539,6 +3542,159 @@ $ curl -X POST http://localhost:50003/v1/admin/tx-delete-order \
   "signature": {
     "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
     "signature": "8043f0c6827aea8449a238811af800dec35cc78222cd3f3b0c830323c22902920f7b19d963d6ff76165bf3754f6dfb6504ddd20368b32169720880fd928e7ccbbfd628cd4c2c065c280fa51bc2d4b0b23d88fe9ffa6088b5d19e1b3e80463783"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Limit Order
+
+**Route:** `/v1/admin/tx-dex-limit-order`
+
+**Description**: generates/submits a DEX limit order transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to sell in smallest denomination
+- **receiveAmount**: `uint64` - the amount to receive in smallest denomination
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLimitOrder)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-limit-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "receiveAmount": 2000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLimitOrder",
+  "msg": {
+    "chainID": 1,
+    "amountForSale": 1000000,
+    "requestedAmount": 2000000,
+    "sellerReceiveAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Deposit
+
+**Route:** `/v1/admin/tx-dex-liquidity-deposit`
+
+**Description**: generates/submits a DEX liquidity deposit transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to deposit in smallest denomination
+- **committees**: `string` -  the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityDeposit)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-deposit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityDeposit",
+  "msg": {
+    "chainID": 1,
+    "amount": 1000000,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Withdraw
+
+**Route:** `/v1/admin/tx-dex-liquidity-withdraw`
+
+**Description**: generates/submits a DEX liquidity withdraw transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **percent**: `int` - the percentage of liquidity to withdraw (1-100)
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityWithdraw)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-withdraw \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "percent": 50,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityWithdraw",
+  "msg": {
+    "chainID": 1,
+    "percent": 50,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
   },
   "time": 1749644810582870,
   "createdHeight": 196596,

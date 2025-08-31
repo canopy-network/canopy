@@ -83,6 +83,9 @@ const (
 	TxCreateOrderRoutePath     = "/v1/admin/tx-create-order"
 	TxEditOrderRoutePath       = "/v1/admin/tx-edit-order"
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
+	TxDexLimitOrderPath        = "/v1/admin/tx-dex-limit-order"
+	TxDexLiquidityDepositPath  = "/v1/admin/tx-dex-liquidity-deposit"
+	TxDexLiquidityWithdrawPath = "/v1/admin/tx-dex-liquidity-withdraw"
 	TxLockOrderRoutePath       = "/v1/admin/tx-lock-order"
 	TxCloseOrderRoutePath      = "/v1/admin/tx-close-order"
 	TxSubsidyRoutePath         = "/v1/admin/tx-subsidy"
@@ -156,37 +159,40 @@ const (
 	// eth
 	EthereumRouteName = "eth"
 	// admin
-	KeystoreRouteName          = "keystore"
-	KeystoreNewKeyRouteName    = "keystore-new-key"
-	KeystoreImportRouteName    = "keystore-import"
-	KeystoreImportRawRouteName = "keystore-import-raw"
-	KeystoreDeleteRouteName    = "keystore-delete"
-	KeystoreGetRouteName       = "keystore-get"
-	TxSendRouteName            = "tx-send"
-	TxStakeRouteName           = "tx-stake"
-	TxUnstakeRouteName         = "tx-unstake"
-	TxEditStakeRouteName       = "tx-edit-stake"
-	TxPauseRouteName           = "tx-pause"
-	TxUnpauseRouteName         = "tx-unpause"
-	TxChangeParamRouteName     = "tx-change-param"
-	TxDAOTransferRouteName     = "tx-dao-transfer"
-	TxSubsidyRouteName         = "tx-subsidy"
-	TxCreateOrderRouteName     = "tx-create-order"
-	TxEditOrderRouteName       = "tx-edit-order"
-	TxDeleteOrderRouteName     = "tx-delete-order"
-	TxLockOrderRouteName       = "tx-lock-order"
-	TxCloseOrderRouteName      = "tx-close-order"
-	TxStartPollRouteName       = "tx-start-poll"
-	TxVotePollRouteName        = "tx-vote-poll"
-	ResourceUsageRouteName     = "resource-usage"
-	PeerInfoRouteName          = "peer-info"
-	ConsensusInfoRouteName     = "consensus-info"
-	PeerBookRouteName          = "peer-book"
-	ConfigRouteName            = "config"
-	LogsRouteName              = "logs"
-	AddVoteRouteName           = "add-vote"
-	DelVoteRouteName           = "del-vote"
-	SubscribeRCInfoName        = "subscribe-rc-info"
+	KeystoreRouteName               = "keystore"
+	KeystoreNewKeyRouteName         = "keystore-new-key"
+	KeystoreImportRouteName         = "keystore-import"
+	KeystoreImportRawRouteName      = "keystore-import-raw"
+	KeystoreDeleteRouteName         = "keystore-delete"
+	KeystoreGetRouteName            = "keystore-get"
+	TxSendRouteName                 = "tx-send"
+	TxStakeRouteName                = "tx-stake"
+	TxUnstakeRouteName              = "tx-unstake"
+	TxEditStakeRouteName            = "tx-edit-stake"
+	TxPauseRouteName                = "tx-pause"
+	TxUnpauseRouteName              = "tx-unpause"
+	TxChangeParamRouteName          = "tx-change-param"
+	TxDAOTransferRouteName          = "tx-dao-transfer"
+	TxSubsidyRouteName              = "tx-subsidy"
+	TxCreateOrderRouteName          = "tx-create-order"
+	TxEditOrderRouteName            = "tx-edit-order"
+	TxDeleteOrderRouteName          = "tx-delete-order"
+	TxDexLimitOrderRouteName        = "tx-dex-limit-order"
+	TxDexLiquidityDepositRouteName  = "tx-dex-liquidity-deposit"
+	TxDexLiquidityWithdrawRouteName = "tx-dex-liquidity-withdraw"
+	TxLockOrderRouteName            = "tx-lock-order"
+	TxCloseOrderRouteName           = "tx-close-order"
+	TxStartPollRouteName            = "tx-start-poll"
+	TxVotePollRouteName             = "tx-vote-poll"
+	ResourceUsageRouteName          = "resource-usage"
+	PeerInfoRouteName               = "peer-info"
+	ConsensusInfoRouteName          = "consensus-info"
+	PeerBookRouteName               = "peer-book"
+	ConfigRouteName                 = "config"
+	LogsRouteName                   = "logs"
+	AddVoteRouteName                = "add-vote"
+	DelVoteRouteName                = "del-vote"
+	SubscribeRCInfoName             = "subscribe-rc-info"
 )
 
 // routes contains the method and path for a canopy command
@@ -254,37 +260,40 @@ var routePaths = routes{
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
-	KeystoreRouteName:          {Method: http.MethodGet, Path: KeystoreRoutePath},
-	KeystoreNewKeyRouteName:    {Method: http.MethodPost, Path: KeystoreNewKeyRoutePath},
-	KeystoreImportRouteName:    {Method: http.MethodPost, Path: KeystoreImportRoutePath},
-	KeystoreImportRawRouteName: {Method: http.MethodPost, Path: KeystoreImportRawRoutePath},
-	KeystoreDeleteRouteName:    {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
-	KeystoreGetRouteName:       {Method: http.MethodPost, Path: KeystoreGetRoutePath},
-	TxSendRouteName:            {Method: http.MethodPost, Path: TxSendRoutePath},
-	TxStakeRouteName:           {Method: http.MethodPost, Path: TxStakeRoutePath},
-	TxEditOrderRouteName:       {Method: http.MethodPost, Path: TxEditOrderRoutePath},
-	TxUnstakeRouteName:         {Method: http.MethodPost, Path: TxUnstakeRoutePath},
-	TxPauseRouteName:           {Method: http.MethodPost, Path: TxPauseRoutePath},
-	TxUnpauseRouteName:         {Method: http.MethodPost, Path: TxUnpauseRoutePath},
-	TxChangeParamRouteName:     {Method: http.MethodPost, Path: TxChangeParamRoutePath},
-	TxDAOTransferRouteName:     {Method: http.MethodPost, Path: TxDAOTransferRoutePath},
-	TxCreateOrderRouteName:     {Method: http.MethodPost, Path: TxCreateOrderRoutePath},
-	TxEditStakeRouteName:       {Method: http.MethodPost, Path: TxEditStakeRoutePath},
-	TxDeleteOrderRouteName:     {Method: http.MethodPost, Path: TxDeleteOrderRoutePath},
-	TxLockOrderRouteName:       {Method: http.MethodPost, Path: TxLockOrderRoutePath},
-	TxCloseOrderRouteName:      {Method: http.MethodPost, Path: TxCloseOrderRoutePath},
-	TxSubsidyRouteName:         {Method: http.MethodPost, Path: TxSubsidyRoutePath},
-	TxStartPollRouteName:       {Method: http.MethodPost, Path: TxStartPollRoutePath},
-	TxVotePollRouteName:        {Method: http.MethodPost, Path: TxVotePollRoutePath},
-	ResourceUsageRouteName:     {Method: http.MethodGet, Path: ResourceUsageRoutePath},
-	PeerInfoRouteName:          {Method: http.MethodGet, Path: PeerInfoRoutePath},
-	ConsensusInfoRouteName:     {Method: http.MethodGet, Path: ConsensusInfoRoutePath},
-	PeerBookRouteName:          {Method: http.MethodGet, Path: PeerBookRoutePath},
-	ConfigRouteName:            {Method: http.MethodGet, Path: ConfigRoutePath},
-	LogsRouteName:              {Method: http.MethodGet, Path: LogsRoutePath},
-	AddVoteRouteName:           {Method: http.MethodPost, Path: AddVoteRoutePath},
-	DelVoteRouteName:           {Method: http.MethodPost, Path: DelVoteRoutePath},
-	SubscribeRCInfoName:        {Method: http.MethodGet, Path: SubscribeRCInfoPath},
+	KeystoreRouteName:               {Method: http.MethodGet, Path: KeystoreRoutePath},
+	KeystoreNewKeyRouteName:         {Method: http.MethodPost, Path: KeystoreNewKeyRoutePath},
+	KeystoreImportRouteName:         {Method: http.MethodPost, Path: KeystoreImportRoutePath},
+	KeystoreImportRawRouteName:      {Method: http.MethodPost, Path: KeystoreImportRawRoutePath},
+	KeystoreDeleteRouteName:         {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
+	KeystoreGetRouteName:            {Method: http.MethodPost, Path: KeystoreGetRoutePath},
+	TxSendRouteName:                 {Method: http.MethodPost, Path: TxSendRoutePath},
+	TxStakeRouteName:                {Method: http.MethodPost, Path: TxStakeRoutePath},
+	TxEditOrderRouteName:            {Method: http.MethodPost, Path: TxEditOrderRoutePath},
+	TxUnstakeRouteName:              {Method: http.MethodPost, Path: TxUnstakeRoutePath},
+	TxPauseRouteName:                {Method: http.MethodPost, Path: TxPauseRoutePath},
+	TxUnpauseRouteName:              {Method: http.MethodPost, Path: TxUnpauseRoutePath},
+	TxChangeParamRouteName:          {Method: http.MethodPost, Path: TxChangeParamRoutePath},
+	TxDAOTransferRouteName:          {Method: http.MethodPost, Path: TxDAOTransferRoutePath},
+	TxCreateOrderRouteName:          {Method: http.MethodPost, Path: TxCreateOrderRoutePath},
+	TxEditStakeRouteName:            {Method: http.MethodPost, Path: TxEditStakeRoutePath},
+	TxDeleteOrderRouteName:          {Method: http.MethodPost, Path: TxDeleteOrderRoutePath},
+	TxDexLimitOrderRouteName:        {Method: http.MethodPost, Path: TxDexLimitOrderPath},
+	TxDexLiquidityWithdrawRouteName: {Method: http.MethodPost, Path: TxDexLiquidityDepositPath},
+	TxDexLiquidityDepositRouteName:  {Method: http.MethodPost, Path: TxDexLiquidityWithdrawPath},
+	TxLockOrderRouteName:            {Method: http.MethodPost, Path: TxLockOrderRoutePath},
+	TxCloseOrderRouteName:           {Method: http.MethodPost, Path: TxCloseOrderRoutePath},
+	TxSubsidyRouteName:              {Method: http.MethodPost, Path: TxSubsidyRoutePath},
+	TxStartPollRouteName:            {Method: http.MethodPost, Path: TxStartPollRoutePath},
+	TxVotePollRouteName:             {Method: http.MethodPost, Path: TxVotePollRoutePath},
+	ResourceUsageRouteName:          {Method: http.MethodGet, Path: ResourceUsageRoutePath},
+	PeerInfoRouteName:               {Method: http.MethodGet, Path: PeerInfoRoutePath},
+	ConsensusInfoRouteName:          {Method: http.MethodGet, Path: ConsensusInfoRoutePath},
+	PeerBookRouteName:               {Method: http.MethodGet, Path: PeerBookRoutePath},
+	ConfigRouteName:                 {Method: http.MethodGet, Path: ConfigRoutePath},
+	LogsRouteName:                   {Method: http.MethodGet, Path: LogsRoutePath},
+	AddVoteRouteName:                {Method: http.MethodPost, Path: AddVoteRoutePath},
+	DelVoteRouteName:                {Method: http.MethodPost, Path: DelVoteRoutePath},
+	SubscribeRCInfoName:             {Method: http.MethodGet, Path: SubscribeRCInfoPath},
 }
 
 // httpRouteHandlers is a custom type that maps strings to httprouter handle functions
@@ -363,36 +372,39 @@ func createRouter(s *Server) *httprouter.Router {
 // createRouter initializes and returns a new HTTP router with predefined route handlers.
 func createAdminRouter(s *Server) *httprouter.Router {
 	var r = httpRouteHandlers{
-		KeystoreRouteName:          s.Keystore,
-		KeystoreNewKeyRouteName:    s.KeystoreNewKey,
-		KeystoreImportRouteName:    s.KeystoreImport,
-		KeystoreImportRawRouteName: s.KeystoreImportRaw,
-		KeystoreDeleteRouteName:    s.KeystoreDelete,
-		KeystoreGetRouteName:       s.KeystoreGetKeyGroup,
-		TxSendRouteName:            s.TransactionSend,
-		TxStakeRouteName:           s.TransactionStake,
-		TxEditStakeRouteName:       s.TransactionEditStake,
-		TxUnstakeRouteName:         s.TransactionUnstake,
-		TxPauseRouteName:           s.TransactionPause,
-		TxUnpauseRouteName:         s.TransactionUnpause,
-		TxChangeParamRouteName:     s.TransactionChangeParam,
-		TxDAOTransferRouteName:     s.TransactionDAOTransfer,
-		TxCreateOrderRouteName:     s.TransactionCreateOrder,
-		TxEditOrderRouteName:       s.TransactionEditOrder,
-		TxDeleteOrderRouteName:     s.TransactionDeleteOrder,
-		TxLockOrderRouteName:       s.TransactionLockOrder,
-		TxCloseOrderRouteName:      s.TransactionCloseOrder,
-		TxSubsidyRouteName:         s.TransactionSubsidy,
-		TxStartPollRouteName:       s.TransactionStartPoll,
-		TxVotePollRouteName:        s.TransactionVotePoll,
-		ResourceUsageRouteName:     s.ResourceUsage,
-		PeerInfoRouteName:          s.PeerInfo,
-		ConsensusInfoRouteName:     s.ConsensusInfo,
-		PeerBookRouteName:          s.PeerBook,
-		ConfigRouteName:            s.Config,
-		LogsRouteName:              logsHandler(s),
-		AddVoteRouteName:           s.AddVote,
-		DelVoteRouteName:           s.DelVote,
+		KeystoreRouteName:               s.Keystore,
+		KeystoreNewKeyRouteName:         s.KeystoreNewKey,
+		KeystoreImportRouteName:         s.KeystoreImport,
+		KeystoreImportRawRouteName:      s.KeystoreImportRaw,
+		KeystoreDeleteRouteName:         s.KeystoreDelete,
+		KeystoreGetRouteName:            s.KeystoreGetKeyGroup,
+		TxSendRouteName:                 s.TransactionSend,
+		TxStakeRouteName:                s.TransactionStake,
+		TxEditStakeRouteName:            s.TransactionEditStake,
+		TxUnstakeRouteName:              s.TransactionUnstake,
+		TxPauseRouteName:                s.TransactionPause,
+		TxUnpauseRouteName:              s.TransactionUnpause,
+		TxChangeParamRouteName:          s.TransactionChangeParam,
+		TxDAOTransferRouteName:          s.TransactionDAOTransfer,
+		TxCreateOrderRouteName:          s.TransactionCreateOrder,
+		TxEditOrderRouteName:            s.TransactionEditOrder,
+		TxDeleteOrderRouteName:          s.TransactionDeleteOrder,
+		TxDexLimitOrderRouteName:        s.TransactionDexLimitOrder,
+		TxDexLiquidityDepositRouteName:  s.TransactionDexLiquidityDeposit,
+		TxDexLiquidityWithdrawRouteName: s.TransactionDexLiquidityWithdraw,
+		TxLockOrderRouteName:            s.TransactionLockOrder,
+		TxCloseOrderRouteName:           s.TransactionCloseOrder,
+		TxSubsidyRouteName:              s.TransactionSubsidy,
+		TxStartPollRouteName:            s.TransactionStartPoll,
+		TxVotePollRouteName:             s.TransactionVotePoll,
+		ResourceUsageRouteName:          s.ResourceUsage,
+		PeerInfoRouteName:               s.PeerInfo,
+		ConsensusInfoRouteName:          s.ConsensusInfo,
+		PeerBookRouteName:               s.PeerBook,
+		ConfigRouteName:                 s.Config,
+		LogsRouteName:                   logsHandler(s),
+		AddVoteRouteName:                s.AddVote,
+		DelVoteRouteName:                s.DelVote,
 		// debug
 		DebugBlockedRouteName:   debugHandler(DebugBlockedRouteName),
 		DebugHeapRouteName:      debugHandler(DebugHeapRouteName),

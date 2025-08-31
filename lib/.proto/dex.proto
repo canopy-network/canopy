@@ -51,11 +51,11 @@ option go_package = "github.com/canopy-network/canopy/lib";
 // through cross-chain validation, and resolved when both chains confirm the atomic swap completion.
 message DexLimitOrder {
   // amount_for_sale: amount of asset for sale
-  uint64 AmountForSale = 1; // @gotags: json:"amountForSale"
+  uint64 amountForSale = 1; // @gotags: json:"amountForSale"
   // requested_amount: the minimum requested amount of 'counter-asset' to receive
-  uint64 RequestedAmount = 2; // @gotags: json:"requestedAmount"
+  uint64 requestedAmount = 2; // @gotags: json:"requestedAmount"
   // address: the address where the funds are transferred from and to
-  bytes Address = 3; // @gotags: json:"address"
+  bytes address = 3; // @gotags: json:"address"
 }
 
 // DexLiquidityDeposit a liquidity deposit command

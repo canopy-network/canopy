@@ -720,7 +720,7 @@ func (x *MessageDexLimitOrder) Recipient() []byte { return nil }
 
 // Check() validates the Message structure
 func (x *MessageDexLimitOrder) Check() lib.ErrorI {
-	if err := checkAddress(x.SellersSendAddress); err != nil {
+	if err := checkAddress(x.Address); err != nil {
 		return err
 	}
 	if err := checkAmount(x.AmountForSale); err != nil {
@@ -738,7 +738,7 @@ func (x *MessageDexLimitOrder) MarshalJSON() ([]byte, error) {
 		ChainId:            x.ChainId,
 		AmountForSale:      x.AmountForSale,
 		RequestedAmount:    x.RequestedAmount,
-		SellersSendAddress: x.SellersSendAddress,
+		SellersSendAddress: x.Address,
 	})
 }
 
@@ -749,10 +749,10 @@ func (x *MessageDexLimitOrder) UnmarshalJSON(b []byte) (err error) {
 		return
 	}
 	*x = MessageDexLimitOrder{
-		ChainId:            j.ChainId,
-		AmountForSale:      j.AmountForSale,
-		RequestedAmount:    j.RequestedAmount,
-		SellersSendAddress: j.SellersSendAddress,
+		ChainId:         j.ChainId,
+		AmountForSale:   j.AmountForSale,
+		RequestedAmount: j.RequestedAmount,
+		Address:         j.SellersSendAddress,
 	}
 	return
 }

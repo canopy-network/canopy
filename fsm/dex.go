@@ -1,11 +1,10 @@
 package fsm
 
 import (
-	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"math"
 	"sort"
+	"strings"
 )
 
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
@@ -76,8 +75,13 @@ func (s *StateMachine) HandleDexBuyBatch(chainId uint64, buyBatch *lib.DexBatch)
 	if err != nil || locked {
 		return
 	}
+	// load the last block from the indexer
+	lastBlock, err := s.LoadBlock(s.Height() - 1)
+	if err != nil {
+		return
+	}
 	// process batch - save receipts to state machine
-	receipts, err := s.FindUCP(buyBatch, buyBatch.PoolSize)
+	receipts, err := s.HandleDexBatchOrders(buyBatch, lastBlock.BlockHeader.Hash)
 	if err != nil {
 		return
 	}
@@ -85,6 +89,7 @@ func (s *StateMachine) HandleDexBuyBatch(chainId uint64, buyBatch *lib.DexBatch)
 	return s.RotateDexSellBatch(receipts, chainId)
 }
 
+// TODO handle case where there's 0 receipts cause 0 orders but there are withdraws and deposits
 // HandleDexBatchReceipt() handles a 'receipt' for a 'sell batch' and 'locked' liquidity commands
 // Sends funds from holding pool to either the liquidity pool or back to sender
 func (s *StateMachine) HandleDexBatchReceipt(chainId uint64, batch *lib.DexBatch) (locked bool, err lib.ErrorI) {
@@ -129,23 +134,23 @@ func (s *StateMachine) HandleDexBatchReceipt(chainId uint64, batch *lib.DexBatch
 	return false, s.Delete(KeyForLockedBatch(chainId))
 }
 
-// FindUCP() executes AMM logic over a 'batch' of limit orders
+// HandleDexBatchOrders() executes AMM logic over a 'batch' of limit orders
 // (1) calculates the uniform clearing price for a batch
 // (2) determines successful orders & distributes from the liquidity pool
 // (3) handle 'inbound' liquidity deposits/withdraws
 // (4) returns the receipts
-func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success []bool, err lib.ErrorI) {
+func (s *StateMachine) HandleDexBatchOrders(b *lib.DexBatch, blockHash []byte) (success []bool, err lib.ErrorI) {
 	// initialize the receipt
 	success = make([]bool, len(b.Orders))
 	// initialize a map to track accepted
-	accepted := make(map[uint64]bool)
+	accepted := make(map[string]uint64) // map_key -> output
 	// get the buy pool size (pool where distributions are made from)
 	distributePool, err := s.GetPool(s.Config.ChainId + LiquidityPoolAddend)
 	if err != nil {
 		return nil, err
 	}
 	// set pools
-	x, y := float64(addPoolAmount), float64(distributePool.Amount)
+	x, y := b.PoolSize, distributePool.Amount
 	// calculate k
 	k := x * y
 	// handle bad k
@@ -154,48 +159,42 @@ func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success [
 	}
 	// make a copy of the orders
 	orders := b.CopyOrders()
-	// sort descending by P, then Addr
+	// sort pseudorandomly
 	sort.SliceStable(orders, func(i, j int) bool {
-		if orders[i].MinAsk() != orders[j].MinAsk() {
-			return orders[i].MinAsk() > orders[j].MinAsk()
-		}
-		return bytes.Compare(orders[i].Address, orders[j].Address) == -1
+		return orders[i].MapKey(blockHash) < orders[j].MapKey(blockHash) // TODO cache map key inside order structure
 	})
 	// calculate if orders are accepted
-	var deltaY, deltaX float64
-	for i, order := range orders {
-		dx := deltaX + float64(orders[i].AmountForSale)
+	var deltaY, deltaX uint64
+	for _, order := range orders {
+		dx := deltaX + order.AmountForSale
 		if dx <= 0 {
 			continue
 		}
 		// recalculate to enforce a proportional, weighted influence on the price
-		// ΔY = y - k/(x + ΔX)
-		dy := y - (k / (x + dx))
-		price := dy / dx
-
-		if price < order.MinAsk() {
-			break // can't include this or any later order
+		dxWithFee := dx * 997 / 1000
+		// ΔY = y - k/(x + ΔX) - fee
+		dy := y - (k / (x + dxWithFee))
+		// calculate the distribution amount
+		amount := dy - deltaY
+		// if order is not satisfied - continue
+		if amount < order.RequestedAmount {
+			continue
 		}
 		// set order as accepted
-		accepted[order.MapKey()] = true
+		accepted[order.MapKey(blockHash)] = amount
 		// set variables
 		deltaX, deltaY = dx, dy
 	}
-	// calculate distributable amount after .3% fee
-	distributableDeltaY := deltaY * 0.997
 	// set success in the receipt
 	for i, order := range b.Orders {
-		if success[i] = accepted[order.MapKey()]; success[i] {
-			// allocate pro-rata
-			share := float64(order.AmountForSale) / deltaX
-			// distribute from liquidity pool to address
-			distributeAmount := uint64(distributableDeltaY * share)
+		var out uint64
+		if out, success[i] = accepted[order.MapKey(blockHash)]; success[i] {
 			// distribute from pool
-			if err = s.PoolSub(s.Config.ChainId+LiquidityPoolAddend, distributeAmount); err != nil {
+			if err = s.PoolSub(s.Config.ChainId+LiquidityPoolAddend, out); err != nil {
 				return nil, err
 			}
 			// add to account
-			if err = s.AccountAdd(crypto.NewAddress(order.Address), distributeAmount); err != nil {
+			if err = s.AccountAdd(crypto.NewAddress(order.Address), out); err != nil {
 				return nil, err
 			}
 		}
@@ -206,7 +205,7 @@ func (s *StateMachine) FindUCP(b *lib.DexBatch, addPoolAmount uint64) (success [
 		return nil, err
 	}
 	// update the virtual counter pool amount
-	b.PoolSize = uint64(deltaX)
+	b.PoolSize += deltaX
 	// for each liquidity withdraws, move the funds from the liquidity pool to the account
 	if err = s.HandleBatchWithdraw(b); err != nil {
 		return nil, err
@@ -235,17 +234,29 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, counterPoolAmount
 	for _, order := range batch.Deposits {
 		totalDeposit += order.Amount
 	}
-	// nothing to add
-	if totalDeposit == 0 {
-		return nil
-	}
 	// x = the initial 'deposit' pool balance
 	// y = the 'counter' pool balance
 	// L = initial liquidity points
 	x, y, L := batch.PoolSize, counterPoolAmount, p.TotalPoolPoints
+	// nothing to add or failed invariant check
+	if totalDeposit == 0 || x == 0 || y == 0 {
+		return nil
+	}
+	// if no liq points yet assigned - initialize to 'dead' address
+	if L == 0 {
+		// setup dead address
+		deadAddr, _ := crypto.NewAddressFromString(strings.Repeat("dead", 10))
+		// calculate the initial liquidity points using L = √( x * y )
+		L = lib.IntSqrt(batch.PoolSize * counterPoolAmount)
+		// add points to the dead address
+		if err = p.AddPoints(deadAddr.Bytes(), L); err != nil {
+			return err
+		}
+	}
 	// calculate dL as if it's one big deposit
-	// ΔL = L * ( √( (x+deposit) * y ) / √(x*y) - 1 )
-	totalDL := uint64(float64(L) * (math.Sqrt(float64((x+totalDeposit)*y))/math.Sqrt(float64(x*y)) - 1))
+	// ΔL = L * ( √((x + deposit) * y) - √(x * y) ) / √(x * y)
+	sqrtXY := lib.IntSqrt(x * y)
+	totalDL := L * (lib.IntSqrt((x+totalDeposit)*y) - sqrtXY) / sqrtXY
 	// pro-rata distribute the points
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share
@@ -357,7 +368,9 @@ func (s *StateMachine) RotateDexSellBatch(receipts []bool, chainId uint64) (err 
 	// set the pool size
 	nextSellBatch.PoolSize = lPool.Amount
 	// set receipts
-	nextSellBatch.Receipts = receipts
+	if len(receipts) != 0 {
+		nextSellBatch.Receipts = receipts
+	}
 	// delete 'next sell batch'
 	if err = s.Delete(KeyForNextBatch(chainId)); err != nil {
 		return
@@ -387,10 +400,8 @@ func (s *StateMachine) GetDexBatch(key []byte) (b *lib.DexBatch, err lib.ErrorI)
 		return
 	}
 	// create a new batch object reference to ensure no 'nil' batches are used
-	b = &lib.DexBatch{
-		Committee: s.Config.ChainId,
-		Orders:    make([]*lib.DexLimitOrder, 0),
-	}
+	b = &lib.DexBatch{Committee: s.Config.ChainId}
+	defer b.EnsureNonNil()
 	// check for nil bytes
 	if len(bz) == 0 {
 		return

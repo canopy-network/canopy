@@ -1037,15 +1037,15 @@ func (x *MessageDeleteOrder) GetChainId() uint64 {
 type MessageDexLimitOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
-	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// amount_for_sale: the amount of asset listed for sale, transferred to escrow
-	AmountForSale uint64 `protobuf:"varint,2,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
+	AmountForSale uint64 `protobuf:"varint,2,opt,name=amount_for_sale,json=amountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
-	RequestedAmount uint64 `protobuf:"varint,3,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
+	RequestedAmount uint64 `protobuf:"varint,3,opt,name=requested_amount,json=requestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
 	// sellers_send_address: the address the seller is selling and signing from
-	SellersSendAddress []byte `protobuf:"bytes,4,opt,name=SellersSendAddress,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	Address       []byte `protobuf:"bytes,4,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageDexLimitOrder) Reset() {
@@ -1099,9 +1099,9 @@ func (x *MessageDexLimitOrder) GetRequestedAmount() uint64 {
 	return 0
 }
 
-func (x *MessageDexLimitOrder) GetSellersSendAddress() []byte {
+func (x *MessageDexLimitOrder) GetAddress() []byte {
 	if x != nil {
-		return x.SellersSendAddress
+		return x.Address
 	}
 	return nil
 }
@@ -1110,11 +1110,11 @@ func (x *MessageDexLimitOrder) GetSellersSendAddress() []byte {
 type MessageDexLiquidityDeposit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// chain_id: the id of the committee that is responsible for the 'counter asset'
-	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// amount: the amount tokens, transferred to escrow
-	Amount uint64 `protobuf:"varint,2,opt,name=Amount,proto3" json:"amount"` // @gotags: json:"amount"
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount"` // @gotags: json:"amount"
 	// sellers_send_address: the address the seller is selling and signing from
-	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1174,11 +1174,11 @@ func (x *MessageDexLiquidityDeposit) GetAddress() []byte {
 type MessageDexLiquidityWithdraw struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
-	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// percent: the percent of tokens to withdraw
-	Percent uint64 `protobuf:"varint,2,opt,name=Percent,proto3" json:"percent"` // @gotags: json:"percent"
+	Percent uint64 `protobuf:"varint,2,opt,name=percent,proto3" json:"percent"` // @gotags: json:"percent"
 	// address: the address the LP is signing from
-	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
+	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1314,20 +1314,20 @@ const file_message_proto_rawDesc = "" +
 	"\x14SellerReceiveAddress\x18\x06 \x01(\fR\x14SellerReceiveAddress\"H\n" +
 	"\x12MessageDeleteOrder\x12\x18\n" +
 	"\aOrderId\x18\x01 \x01(\fR\aOrderId\x12\x18\n" +
-	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\xb0\x01\n" +
-	"\x14MessageDexLimitOrder\x12\x18\n" +
-	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12$\n" +
-	"\rAmountForSale\x18\x02 \x01(\x04R\rAmountForSale\x12(\n" +
-	"\x0fRequestedAmount\x18\x03 \x01(\x04R\x0fRequestedAmount\x12.\n" +
-	"\x12SellersSendAddress\x18\x04 \x01(\fR\x12SellersSendAddress\"h\n" +
-	"\x1aMessageDexLiquidityDeposit\x12\x18\n" +
-	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12\x16\n" +
-	"\x06Amount\x18\x02 \x01(\x04R\x06Amount\x12\x18\n" +
-	"\aAddress\x18\x03 \x01(\fR\aAddress\"k\n" +
-	"\x1bMessageDexLiquidityWithdraw\x12\x18\n" +
-	"\aChainId\x18\x01 \x01(\x04R\aChainId\x12\x18\n" +
-	"\aPercent\x18\x02 \x01(\x04R\aPercent\x12\x18\n" +
-	"\aAddress\x18\x03 \x01(\fR\aAddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
+	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\x9e\x01\n" +
+	"\x14MessageDexLimitOrder\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12&\n" +
+	"\x0famount_for_sale\x18\x02 \x01(\x04R\ramountForSale\x12)\n" +
+	"\x10requested_amount\x18\x03 \x01(\x04R\x0frequestedAmount\x12\x18\n" +
+	"\aaddress\x18\x04 \x01(\fR\aaddress\"i\n" +
+	"\x1aMessageDexLiquidityDeposit\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x18\n" +
+	"\aaddress\x18\x03 \x01(\fR\aaddress\"l\n" +
+	"\x1bMessageDexLiquidityWithdraw\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x18\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\x12\x18\n" +
+	"\aaddress\x18\x03 \x01(\fR\aaddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once

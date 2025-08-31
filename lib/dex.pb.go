@@ -26,11 +26,11 @@ const (
 type DexLimitOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// amount_for_sale: amount of asset for sale
-	AmountForSale uint64 `protobuf:"varint,1,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
+	AmountForSale uint64 `protobuf:"varint,1,opt,name=amountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the minimum requested amount of 'counter-asset' to receive
-	RequestedAmount uint64 `protobuf:"varint,2,opt,name=RequestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
+	RequestedAmount uint64 `protobuf:"varint,2,opt,name=requestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// address: the address where the funds are transferred from and to
-	Address       []byte `protobuf:"bytes,3,opt,name=Address,proto3" json:"address"` // @gotags: json:"address"
+	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -293,9 +293,9 @@ const file_dex_proto_rawDesc = "" +
 	"\n" +
 	"\tdex.proto\x12\x05types\"y\n" +
 	"\rDexLimitOrder\x12$\n" +
-	"\rAmountForSale\x18\x01 \x01(\x04R\rAmountForSale\x12(\n" +
-	"\x0fRequestedAmount\x18\x02 \x01(\x04R\x0fRequestedAmount\x12\x18\n" +
-	"\aAddress\x18\x03 \x01(\fR\aAddress\"G\n" +
+	"\ramountForSale\x18\x01 \x01(\x04R\ramountForSale\x12(\n" +
+	"\x0frequestedAmount\x18\x02 \x01(\x04R\x0frequestedAmount\x12\x18\n" +
+	"\aaddress\x18\x03 \x01(\fR\aaddress\"G\n" +
 	"\x13DexLiquidityDeposit\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +

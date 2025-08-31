@@ -219,31 +219,31 @@ message MessageDeleteOrder {
 // MessageDexLimitOrder: creates a limit order for the Canopy Dex Protocol
 message MessageDexLimitOrder {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
-  uint64 ChainId = 1; // @gotags: json:"chainID"
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // amount_for_sale: the amount of asset listed for sale, transferred to escrow
-  uint64 AmountForSale = 2; // @gotags: json:"amountForSale"
+  uint64 amount_for_sale = 2; // @gotags: json:"amountForSale"
   // requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
-  uint64 RequestedAmount = 3; // @gotags: json:"requestAmount"
+  uint64 requested_amount = 3; // @gotags: json:"requestAmount"
   // sellers_send_address: the address the seller is selling and signing from
-  bytes SellersSendAddress = 4; // @gotags: json:"sellersSendAddress"
+  bytes address = 4; // @gotags: json:"sellersSendAddress"
 }
 
 // MessageDexLiquidityDeposit: deposits tokens to the liquidity pool in exchange for liquidity points
 message MessageDexLiquidityDeposit {
   // chain_id: the id of the committee that is responsible for the 'counter asset'
-  uint64 ChainId = 1; // @gotags: json:"chainID"
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // amount: the amount tokens, transferred to escrow
-  uint64 Amount = 2; // @gotags: json:"amount"
+  uint64 amount = 2; // @gotags: json:"amount"
   // sellers_send_address: the address the seller is selling and signing from
-  bytes Address = 3; // @gotags: json:"sellersSendAddress"
+  bytes address = 3; // @gotags: json:"sellersSendAddress"
 }
 
 // MessageDexLiquidityWithdraw: withdraw tokens from both liquidity pools in exchange for burning liquidity points
 message MessageDexLiquidityWithdraw {
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
-  uint64 ChainId = 1; // @gotags: json:"chainID"
+  uint64 chain_id = 1; // @gotags: json:"chainID"
   // percent: the percent of tokens to withdraw
-  uint64 Percent = 2; // @gotags: json:"percent"
+  uint64 percent = 2; // @gotags: json:"percent"
   // address: the address the LP is signing from
-  bytes Address = 3; // @gotags: json:"address"
+  bytes address = 3; // @gotags: json:"address"
 }

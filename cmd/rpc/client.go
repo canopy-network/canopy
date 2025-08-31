@@ -639,6 +639,61 @@ func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId string, chainId uint
 	return c.transactionRequest(TxDeleteOrderRouteName, txReq, submit)
 }
 
+func (c *Client) TxDexLimitOrder(from AddrOrNickname, amount, receiveAmount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLimitOrder{
+		Fee:               optFee,
+		Amount:            amount,
+		ReceiveAmount:     receiveAmount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLimitOrderRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityDeposit(from AddrOrNickname, amount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityDeposit{
+		Fee:               optFee,
+		Amount:            amount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityDepositRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityWithdraw(from AddrOrNickname, percent int, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityWithdraw{
+		Fee:               optFee,
+		Percent:           percent,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityWithdrawRouteName, txReq, submit)
+}
+
 func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	receiveHex, err := lib.NewHexBytesFromString(receiveAddress)
