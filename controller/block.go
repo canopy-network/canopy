@@ -75,7 +75,7 @@ func (c *Controller) ListenForBlock() {
 				return
 			}
 			// if not syncing - gossip the block
-			if !c.Syncing().Load() {
+			if !c.Syncing().Load() && !bytes.Equal(c.PublicKey, sender) {
 				// gossip the block to our peers
 				c.GossipBlock(qc, sender, blockMessage.Time, blockMessage.BftCoordinationMeta)
 				// signal a reset to the bft module

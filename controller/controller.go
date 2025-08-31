@@ -167,6 +167,7 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 			LastCommitTime: info.BlockTimeInfo.GetEstCommitTime(),
 		}}
 	} else {
+		c.log.Infof("Last Root Commit Time: %s", time.UnixMicro(int64(info.BlockTimeInfo.GetEstCommitTime())).Format("15:04:05"))
 		// signal to reset consensus
 		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, RootHeight: info.Height, BFTMeta: &lib.BFTCoordinationMeta{
 			LastCommitTime: info.BlockTimeInfo.GetEstCommitTime(),

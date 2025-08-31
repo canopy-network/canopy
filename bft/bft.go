@@ -165,7 +165,7 @@ func (b *BFT) Start() {
 					b.LastCommitTime = time.UnixMicro(int64(resetBFT.BFTMeta.GetLastCommitTime()))
 					resetOnRootHeight = resetBFT.BFTMeta.GetResetOnRootHeight()
 				} else {
-					if b.BeforeUpgradeHeight() { // TODO DEPRECATE (11)
+					if b.BeforeUpgradeHeight() { // TODO DEPRECATE (11) // TODO 2 outstanding issues (1) deadlock on CommmitCertificate causing 2 sec delay (2) `RESET BFT (ROOT_HEIGHT` never seems to have a processing time...
 						b.NewHeight(true)
 						b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
 					} else {
