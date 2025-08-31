@@ -3,6 +3,7 @@ package fsm
 import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"math"
 	"sort"
 	"strings"
 )
@@ -163,27 +164,27 @@ func (s *StateMachine) HandleDexBatchOrders(b *lib.DexBatch, blockHash []byte) (
 	sort.SliceStable(orders, func(i, j int) bool {
 		return orders[i].MapKey(blockHash) < orders[j].MapKey(blockHash) // TODO cache map key inside order structure
 	})
-	// calculate if orders are accepted
-	var deltaY, deltaX uint64
+	// working reserves
+	newX, newY := x, y
 	for _, order := range orders {
-		dx := deltaX + order.AmountForSale
+		dx := order.AmountForSale
 		if dx <= 0 {
 			continue
 		}
-		// recalculate to enforce a proportional, weighted influence on the price
-		dxWithFee := dx * 997 / 1000
-		// ΔY = y - k/(x + ΔX) - fee
-		dy := y - (k / (x + dxWithFee))
-		// calculate the distribution amount
-		amount := dy - deltaY
-		// if order is not satisfied - continue
-		if amount < order.RequestedAmount {
+		// Uniswap V2 formula
+		amountInWithFee := dx * 997
+		dy := (amountInWithFee * newY) / (newX*1000 + amountInWithFee)
+
+		if dy < order.RequestedAmount {
 			continue
 		}
-		// set order as accepted
-		accepted[order.MapKey(blockHash)] = amount
-		// set variables
-		deltaX, deltaY = dx, dy
+
+		// accept order
+		accepted[order.MapKey(blockHash)] = dy
+
+		// update pool reserves like Uniswap would
+		newX += dx
+		newY -= dy
 	}
 	// set success in the receipt
 	for i, order := range b.Orders {
@@ -205,7 +206,7 @@ func (s *StateMachine) HandleDexBatchOrders(b *lib.DexBatch, blockHash []byte) (
 		return nil, err
 	}
 	// update the virtual counter pool amount
-	b.PoolSize += deltaX
+	b.PoolSize = newX
 	// for each liquidity withdraws, move the funds from the liquidity pool to the account
 	if err = s.HandleBatchWithdraw(b); err != nil {
 		return nil, err
@@ -247,16 +248,15 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, counterPoolAmount
 		// setup dead address
 		deadAddr, _ := crypto.NewAddressFromString(strings.Repeat("dead", 10))
 		// calculate the initial liquidity points using L = √( x * y )
-		L = lib.IntSqrt(batch.PoolSize * counterPoolAmount)
+		L = uint64(math.Sqrt(float64(batch.PoolSize) * float64(counterPoolAmount)))
 		// add points to the dead address
 		if err = p.AddPoints(deadAddr.Bytes(), L); err != nil {
 			return err
 		}
 	}
 	// calculate dL as if it's one big deposit
-	// ΔL = L * ( √((x + deposit) * y) - √(x * y) ) / √(x * y)
-	sqrtXY := lib.IntSqrt(x * y)
-	totalDL := L * (lib.IntSqrt((x+totalDeposit)*y) - sqrtXY) / sqrtXY
+	// ΔL = L * ( √( (x+deposit) * y ) / √(x*y) - 1 )
+	totalDL := uint64(float64(L) * (math.Sqrt(float64((x+totalDeposit)*y))/math.Sqrt(float64(x*y)) - 1))
 	// pro-rata distribute the points
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share

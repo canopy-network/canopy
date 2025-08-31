@@ -381,9 +381,9 @@ func TestHandleDexBuyBatch(t *testing.T) {
 					Points:  100, // burned points remain
 				}, {
 					Address: newTestAddressBytes(t, 2),
-					Points:  54, // L=100 (current supply), x=71 (counter asset after withdraw), y=142 (local asset after withdraw), deposit=100
+					Points:  55, // L=100 (current supply), x=71 (counter asset after withdraw), y=142 (local asset after withdraw), deposit=100
 				}},
-				TotalPoolPoints: 154, // 100 + 54 = new total after deposit
+				TotalPoolPoints: 155, // 100 + 55 = new total after deposit
 			},
 			expectedAccounts: []*Account{{
 				Address: newTestAddressBytes(t, 1),
@@ -470,12 +470,12 @@ func TestHandleDexBuyBatch(t *testing.T) {
 					{
 						AmountForSale:   25,
 						RequestedAmount: 13,
-						Address:         newTestAddressBytes(t, 1),
+						Address:         newTestAddressBytes(t, 2),
 					},
 					{
 						AmountForSale:   25,
 						RequestedAmount: 13,
-						Address:         newTestAddressBytes(t, 2),
+						Address:         newTestAddressBytes(t, 1),
 					},
 				},
 				PoolSize: 100, // initial virtual size before deposit
@@ -493,10 +493,10 @@ func TestHandleDexBuyBatch(t *testing.T) {
 			},
 			expectedAccounts: []*Account{{
 				Address: newTestAddressBytes(t, 1),
-				Amount:  19,
+				Amount:  13,
 			}, {
 				Address: newTestAddressBytes(t, 2),
-				Amount:  13,
+				Amount:  19,
 			}},
 		},
 	}
