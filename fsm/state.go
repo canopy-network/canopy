@@ -509,7 +509,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		return nil, err
 	}
 	// get the block time info
-	blockTime, err := s.LoadBlockTime(height)
+	blockTime, err := s.LoadBlockTime(height - 1)
 	if err != nil {
 		return nil, err
 	}

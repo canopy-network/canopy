@@ -556,8 +556,8 @@ func (m *Metrics) UpdateAccount(address string, balance uint64) {
 
 // UpdateStoreMetrics() updates the store telemetry
 func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, startFlushTime time.Time) {
-	m.log.Infof("Store metrics: size:%v, entries:%v, time: %v flushTime:%v",
-		size, entries, time.Since(startTime).Round(time.Millisecond).Seconds(), time.Since(startFlushTime).Round(time.Millisecond).Seconds())
+	m.log.Infof("Store metrics: size:%v, entries:%v, time:%.2fs flushTime:%.2fs",
+		size, entries, time.Since(startTime).Seconds(), time.Since(startFlushTime).Seconds())
 	// exit if empty
 	if m == nil {
 		return
