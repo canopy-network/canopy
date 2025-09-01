@@ -201,16 +201,18 @@ type DexBatch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// committee: the id of the 'counter asset'
 	Committee uint64 `protobuf:"varint,1,opt,name=Committee,proto3" json:"committee"` // @gotags: json:"committee"
+	// receipt_hash: the hash of the counter chain batch that the receipts correspond to
+	ReceiptHash []byte `protobuf:"bytes,2,opt,name=receipt_hash,json=receiptHash,proto3" json:"receiptHash"` // @gotags: json:"receiptHash"
 	// orders: the list of dex limit orders
-	Orders []*DexLimitOrder `protobuf:"bytes,2,rep,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
+	Orders []*DexLimitOrder `protobuf:"bytes,3,rep,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
 	// deposits: the liquidity provider 'deposit' command
-	Deposits []*DexLiquidityDeposit `protobuf:"bytes,3,rep,name=deposits,proto3" json:"deposits,omitempty"`
+	Deposits []*DexLiquidityDeposit `protobuf:"bytes,4,rep,name=deposits,proto3" json:"deposits,omitempty"`
 	// withdraws: the liquidity provider 'withdraw' command
-	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,4,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
+	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
 	// poolSize: contains the current balance of the liquidity pool
-	PoolSize uint64 `protobuf:"varint,5,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
+	PoolSize uint64 `protobuf:"varint,6,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
 	// receipts: the list of order success status's
-	Receipts      []bool `protobuf:"varint,6,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
+	Receipts      []bool `protobuf:"varint,7,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -250,6 +252,13 @@ func (x *DexBatch) GetCommittee() uint64 {
 		return x.Committee
 	}
 	return 0
+}
+
+func (x *DexBatch) GetReceiptHash() []byte {
+	if x != nil {
+		return x.ReceiptHash
+	}
+	return nil
 }
 
 func (x *DexBatch) GetOrders() []*DexLimitOrder {
@@ -301,14 +310,15 @@ const file_dex_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +
 	"\x14DexLiquidityWithdraw\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
-	"\apercent\x18\x02 \x01(\x04R\apercent\"\x82\x02\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\"\xa5\x02\n" +
 	"\bDexBatch\x12\x1c\n" +
-	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12,\n" +
-	"\x06orders\x18\x02 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
-	"\bdeposits\x18\x03 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
-	"\twithdraws\x18\x04 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
-	"\tpool_size\x18\x05 \x01(\x04R\bpoolSize\x12\x1a\n" +
-	"\breceipts\x18\x06 \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12!\n" +
+	"\freceipt_hash\x18\x02 \x01(\fR\vreceiptHash\x12,\n" +
+	"\x06orders\x18\x03 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
+	"\bdeposits\x18\x04 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
+	"\twithdraws\x18\x05 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
+	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x12\x1a\n" +
+	"\breceipts\x18\a \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_dex_proto_rawDescOnce sync.Once

@@ -84,8 +84,13 @@ func TestHandleDexBatch(t *testing.T) {
 				sm.RCManager = mock
 			},
 			expectedLockedBatch: &lib.DexBatch{
-				Committee: 1,
-				PoolSize:  1000, // Should be updated to liquidity pool amount
+				Committee:   1,
+				ReceiptHash: bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing  
+				Orders:      []*lib.DexLimitOrder{},
+				Deposits:    []*lib.DexLiquidityDeposit{},
+				Withdraws:   []*lib.DexLiquidityWithdraw{},
+				PoolSize:    1000, // Should be updated to liquidity pool amount
+				Receipts:    []bool{},
 			},
 		},
 	}
@@ -499,6 +504,537 @@ func TestHandleDexBuyBatch(t *testing.T) {
 				Amount:  19,
 			}},
 		},
+		{
+			name:          "locked batch: no receipts",
+			detail:        "test handling a batch without receipts when locked",
+			errorContains: "the dex batch receipt doesn't correspond to the last batch",
+			chainId:       1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				Orders: []*lib.DexLimitOrder{
+					{
+						AmountForSale:   25,
+						RequestedAmount: 13,
+						Address:         newTestAddressBytes(t, 2),
+					},
+				},
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				liqPool.Amount = 100
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 2),
+					}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id: 1 + LiquidityPoolAddend, Amount: 100,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  0,
+			}},
+		},
+		{
+			name:          "locked batch: mismatch receipts",
+			detail:        "test handling a batch with mismatched when locked",
+			chainId:       1,
+			errorContains: "the dex batch receipt doesn't correspond to the last batch",
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				Orders: []*lib.DexLimitOrder{
+					{
+						AmountForSale:   25,
+						RequestedAmount: 13,
+						Address:         newTestAddressBytes(t, 2),
+					},
+				},
+				Receipts: []bool{true, false},
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				liqPool.Amount = 100
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 2),
+					}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id: 1 + LiquidityPoolAddend, Amount: 100,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  0,
+			}},
+		},
+		{
+			name:    "locked batch: 1 passed receipt",
+			detail:  "test handling a batch with 1 successful receipt",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				Orders:    nil,
+				Receipts:  []bool{true},
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 2),
+					}},
+				}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				holdPool, err := sm.GetPool(1 + HoldingPoolAddend)
+				require.NoError(t, err)
+				// initialize amounts
+				liqPool.Amount = 100
+				holdPool.Amount = 100
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetPool(holdPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 2),
+					}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend, Amount: 99},
+			expectedLiqPool: &Pool{
+				Id: 1 + LiquidityPoolAddend, Amount: 101,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  0,
+			}},
+		},
+		{
+			name:    "locked batch: 1 failed receipt",
+			detail:  "test handling a batch with 1 failed receipt",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				Orders:    nil,
+				Receipts:  []bool{false},
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 1),
+					}},
+				}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				holdPool, err := sm.GetPool(1 + HoldingPoolAddend)
+				require.NoError(t, err)
+				// initialize amounts
+				liqPool.Amount = 100
+				holdPool.Amount = 100
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetPool(holdPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Orders: []*lib.DexLimitOrder{{
+						AmountForSale:   1,
+						RequestedAmount: 1,
+						Address:         newTestAddressBytes(t, 1),
+					}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend, Amount: 99},
+			expectedLiqPool: &Pool{
+				Id: 1 + LiquidityPoolAddend, Amount: 100,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  1,
+			}},
+		},
+		{
+			name:    "locked batch: outbound liquidity deposit",
+			detail:  "test handling a batch with an outbound liquidity deposit",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				Orders:    nil,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{{
+						Address: newTestAddressBytes(t, 1),
+						Amount:  100,
+					}},
+				}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				holdPool, err := sm.GetPool(1 + HoldingPoolAddend)
+				require.NoError(t, err)
+				// initialize amounts
+				liqPool.Amount = 100
+				holdPool.Amount = 100
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetPool(holdPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{{
+						Address: newTestAddressBytes(t, 1),
+						Amount:  100,
+					}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend, Amount: 0},
+			expectedLiqPool: &Pool{
+				Id: 1 + LiquidityPoolAddend, Amount: 200,
+				Points: []*PoolPoints{
+					{
+						Address: deadAddr.Bytes(),
+						Points:  100,
+					},
+					{
+						Address: newTestAddressBytes(t, 1),
+						Points:  41,
+					},
+				},
+				TotalPoolPoints: 141,
+			},
+		},
+		{
+			name:    "locked batch: outbound multi-liquidity deposit",
+			detail:  "test handling a batch with outbound multi liquidity deposit",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{
+						{Address: newTestAddressBytes(t, 1), Amount: 100},
+						{Address: newTestAddressBytes(t, 2), Amount: 100}},
+				}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				holdPool, err := sm.GetPool(1 + HoldingPoolAddend)
+				require.NoError(t, err)
+				// init pools
+				holdPool.Amount = 200
+				liqPool.Amount = 100
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetPool(holdPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{
+						{Address: newTestAddressBytes(t, 1), Amount: 100},
+						{Address: newTestAddressBytes(t, 2), Amount: 100}},
+				}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id:     1 + LiquidityPoolAddend,
+				Amount: 300,
+				Points: []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
+				}, {
+					Address: newTestAddressBytes(t, 2),
+					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
+				}},
+				TotalPoolPoints: 100 + uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)-1), // rounding
+			},
+		},
+		{
+			name:    "locked batch: full withdraw",
+			detail:  "test handling a batch with outbound full liquidity withdrawal",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}}}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				// init pools
+				liqPool.Amount = 200
+				// init points
+				liqPool.TotalPoolPoints = 141
+				liqPool.Points = []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  41,
+				}}
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}}}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id:     1 + LiquidityPoolAddend,
+				Amount: 142,
+				Points: []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}},
+				TotalPoolPoints: 100,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  58, // 41/141 * 200
+			}},
+		},
+		{
+			name:    "locked batch: partial withdraw",
+			detail:  "test handling a batch with outbound partial liquidity withdrawal",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 25,
+					}}}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				// init pools
+				liqPool.Amount = 200
+				// init points
+				liqPool.TotalPoolPoints = 141
+				liqPool.Points = []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  41,
+				}}
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 25,
+					}}}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id:     1 + LiquidityPoolAddend,
+				Amount: 186,
+				Points: []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  31, // 41-FLOOR(41*.25)
+				}},
+				TotalPoolPoints: 131,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  14, // FLOOR(.25*41)/141 * 200
+			}},
+		},
+		{
+			name:    "locked batch: multi withdraw",
+			detail:  "test handling a batch with outbound multi liquidity withdrawal",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}, {
+						Address: newTestAddressBytes(t, 2),
+						Percent: 100,
+					}}}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				// init pools
+				liqPool.Amount = 300
+				// init points
+				liqPool.TotalPoolPoints = 172
+				liqPool.Points = []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  36,
+				}, {
+					Address: newTestAddressBytes(t, 2),
+					Points:  36,
+				}}
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}, {
+						Address: newTestAddressBytes(t, 2),
+						Percent: 100,
+					}}}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id:     1 + LiquidityPoolAddend,
+				Amount: 176, // 300 - 62*2
+				Points: []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}},
+				TotalPoolPoints: 100,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  62, // 36/172 * 300
+			}, {
+				Address: newTestAddressBytes(t, 1),
+				Amount:  62, // 36/172 * 300
+			}},
+		},
+		{
+			name:    "locked batch: withdraw and deposit",
+			detail:  "test handling a batch with outbound liquidity withdrawal and deposit",
+			chainId: 1,
+			buyBatch: &lib.DexBatch{
+				Committee: 1,
+				ReceiptHash: (&lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{{
+						Address: newTestAddressBytes(t, 2),
+						Amount:  100,
+					}},
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}}}).Hash(),
+				PoolSize: 100,
+			},
+			setupState: func(sm *StateMachine) {
+				// get pools
+				liqPool, err := sm.GetPool(1 + LiquidityPoolAddend)
+				require.NoError(t, err)
+				holdPool, err := sm.GetPool(1 + HoldingPoolAddend)
+				require.NoError(t, err)
+				// init pools
+				liqPool.Amount = 200
+				holdPool.Amount = 100
+				// init points
+				liqPool.TotalPoolPoints = 141
+				liqPool.Points = []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 1),
+					Points:  41,
+				}}
+				// set pools
+				require.NoError(t, sm.SetPool(liqPool))
+				require.NoError(t, sm.SetPool(holdPool))
+				// set locked batch
+				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
+					Committee: 1,
+					Deposits: []*lib.DexLiquidityDeposit{{
+						Address: newTestAddressBytes(t, 2),
+						Amount:  100,
+					}},
+					Withdraws: []*lib.DexLiquidityWithdraw{{
+						Address: newTestAddressBytes(t, 1),
+						Percent: 100,
+					}}}))
+			},
+			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
+			expectedLiqPool: &Pool{
+				Id:     1 + LiquidityPoolAddend,
+				Amount: 242,
+				Points: []*PoolPoints{{
+					Address: deadAddr.Bytes(),
+					Points:  100,
+				}, {
+					Address: newTestAddressBytes(t, 2),
+					Points:  31,
+					// Old √k = ⌊√(142*71)⌋ = 100
+					// New √k = ⌊√((142+100)71)⌋ = ⌊√(24271)⌋ = ⌊√17182⌋ = 131
+					// Minted LP = ⌊ L * (new√k − old√k) / old√k ⌋
+				},
+				},
+				TotalPoolPoints: 131,
+			},
+			expectedAccounts: []*Account{{
+				Address: newTestAddressBytes(t, 1),
+				Amount:  58, // 36/172 * 300
+			}},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -507,7 +1043,8 @@ func TestHandleDexBuyBatch(t *testing.T) {
 				test.setupState(&sm)
 			}
 			// execute the function call
-			err := sm.HandleDexBuyBatch(test.chainId, test.buyBatch)
+			err := sm.HandleRemoteDexBatch(test.buyBatch)
+			require.Equal(t, err != nil, test.errorContains != "")
 			if err != nil && test.errorContains != "" {
 				require.ErrorContains(t, err, test.errorContains)
 			}
@@ -539,408 +1076,33 @@ func TestHandleDexBuyBatch(t *testing.T) {
 	}
 }
 
-func TestHandleDexBatchReceipt(t *testing.T) {
+func TestRotateDexSellBatch(t *testing.T) {
 	tests := []struct {
 		name         string
 		detail       string
+		buyBatch     *lib.DexBatch
+		receipts     []bool
 		chainId      uint64
-		batch        *lib.DexBatch
-		setupState   func(StateMachine)
-		expectLocked bool
+		setupState   func(*StateMachine)
 		expectError  bool
-		errorString  string
+		errorMessage string
 	}{
 		{
-			name:    "no locked batch",
-			detail:  "test when there's no locked batch",
-			chainId: 1,
-			batch: &lib.DexBatch{
-				Committee: 1,
-				Receipts:  []bool{true},
-			},
-			expectLocked: false,
-			expectError:  false,
-		},
-		{
-			name:    "receipt mismatch",
-			detail:  "test mismatch between locked orders and receipts",
-			chainId: 1,
-			batch: &lib.DexBatch{
-				Committee: 1,
-				Receipts:  []bool{true, false}, // 2 receipts
-			},
-			setupState: func(sm StateMachine) {
-				lockedBatch := &lib.DexBatch{
-					Committee: 1,
-					Orders: []*lib.DexLimitOrder{
-						{
-							Address:         newTestAddressBytes(t),
-							AmountForSale:   100,
-							RequestedAmount: 50,
-						}, // Only 1 order
-					},
-				}
-				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), lockedBatch))
-			},
-			expectLocked: true,
+			name:         "nil buy batch",
+			detail:       "test when buy batch is nil (should return error)",
+			receipts:     []bool{true, false},
+			chainId:      1,
+			setupState:   func(sm *StateMachine) {},
 			expectError:  true,
-			errorString:  "mismatch",
+			errorMessage: "invalid input parameter",
 		},
-		{
-			name:    "successful processing",
-			detail:  "test successful receipt processing",
-			chainId: 1,
-			batch: &lib.DexBatch{
-				Committee: 1,
-				Receipts:  []bool{true, false},
-				PoolSize:  1000,
-			},
-			setupState: func(sm StateMachine) {
-				// Setup holding pool
-				holdingPool := &Pool{
-					Id:     sm.Config.ChainId + HoldingPoolAddend,
-					Amount: 300,
-				}
-				require.NoError(t, sm.SetPool(holdingPool))
-
-				// Setup liquidity pool
-				liquidityPool := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 1000,
-				}
-				require.NoError(t, sm.SetPool(liquidityPool))
-
-				// Setup locked batch
-				lockedBatch := &lib.DexBatch{
-					Committee: 1,
-					Orders: []*lib.DexLimitOrder{
-						{
-							Address:         newTestAddressBytes(t),
-							AmountForSale:   100,
-							RequestedAmount: 50,
-						},
-						{
-							Address:         newTestAddressBytes(t, 1),
-							AmountForSale:   200,
-							RequestedAmount: 60,
-						},
-					},
-				}
-				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), lockedBatch))
-			},
-			expectLocked: false,
-			expectError:  false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sm := newTestStateMachine(t)
-			if test.setupState != nil {
-				test.setupState(sm)
-			}
-
-			locked, err := sm.HandleDexBatchReceipt(test.chainId, test.batch)
-
-			require.Equal(t, test.expectLocked, locked)
-			require.Equal(t, test.expectError, err != nil, err)
-			if err != nil && test.errorString != "" {
-				require.ErrorContains(t, err, test.errorString)
-			}
-		})
-	}
-}
-
-func TestFindUCP(t *testing.T) {
-	tests := []struct {
-		name            string
-		detail          string
-		batch           *lib.DexBatch
-		setupState      func(StateMachine)
-		expectedSuccess []bool
-		expectError     bool
-		errorString     string
-	}{
-		{
-			name:   "invalid liquidity pool (k=0)",
-			detail: "test with zero liquidity causing k=0",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Orders: []*lib.DexLimitOrder{
-					{
-						Address:         newTestAddressBytes(t),
-						AmountForSale:   100,
-						RequestedAmount: 50,
-					},
-				},
-			},
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 0,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectError: true,
-			errorString: "invalid liquidity pool",
-		},
-		{
-			name:   "successful order matching",
-			detail: "test successful uniform clearing price calculation",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Orders: []*lib.DexLimitOrder{
-					{
-						Address:         newTestAddressBytes(t),
-						AmountForSale:   100,
-						RequestedAmount: 1, // Low price, should be accepted
-					},
-					{
-						Address:         newTestAddressBytes(t, 1),
-						AmountForSale:   50,
-						RequestedAmount: 1000, // High price, may not be accepted
-					},
-				},
-				PoolSize: 1000,
-			},
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 2000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectedSuccess: []bool{true, false},
-			expectError:     false,
-		},
-		{
-			name:   "empty orders",
-			detail: "test with no orders",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Orders:    []*lib.DexLimitOrder{},
-				PoolSize:  1000,
-			},
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 2000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectedSuccess: []bool{},
-			expectError:     false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sm := newTestStateMachine(t)
-			if test.setupState != nil {
-				test.setupState(sm)
-			}
-
-			success, err := sm.HandleDexBatchOrders(test.batch, nil)
-
-			require.Equal(t, test.expectError, err != nil, err)
-			if err != nil && test.errorString != "" {
-				require.ErrorContains(t, err, test.errorString)
-			}
-			if !test.expectError {
-				require.Equal(t, test.expectedSuccess, success)
-			}
-		})
-	}
-}
-
-func TestHandleBatchDeposit(t *testing.T) {
-	tests := []struct {
-		name              string
-		detail            string
-		batch             *lib.DexBatch
-		counterPoolAmount uint64
-		outbound          bool
-		setupState        func(StateMachine)
-		expectError       bool
-	}{
-		{
-			name:   "no deposits",
-			detail: "test with empty deposits",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Deposits:  []*lib.DexLiquidityDeposit{},
-				PoolSize:  1000,
-			},
-			counterPoolAmount: 2000,
-			outbound:          true,
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:     lib.CanopyChainId + LiquidityPoolAddend,
-					Amount: 1000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectError: false,
-		},
-		{
-			name:   "outbound deposits",
-			detail: "test outbound deposit processing",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Deposits: []*lib.DexLiquidityDeposit{
-					{
-						Address: newTestAddressBytes(t),
-						Amount:  100,
-					},
-					{
-						Address: newTestAddressBytes(t, 1),
-						Amount:  200,
-					},
-				},
-				PoolSize: 1000,
-			},
-			counterPoolAmount: 2000,
-			outbound:          true,
-			setupState: func(sm StateMachine) {
-				// Setup liquidity pool
-				pool := &Pool{
-					Id:              lib.CanopyChainId + LiquidityPoolAddend,
-					Amount:          1000,
-					TotalPoolPoints: 1000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-
-				// Setup holding pool
-				holdingPool := &Pool{
-					Id:     sm.Config.ChainId + HoldingPoolAddend,
-					Amount: 500,
-				}
-				require.NoError(t, sm.SetPool(holdingPool))
-			},
-			expectError: false,
-		},
-		{
-			name:   "inbound deposits",
-			detail: "test inbound deposit processing",
-			batch: &lib.DexBatch{
-				Committee: 1,
-				Deposits: []*lib.DexLiquidityDeposit{
-					{
-						Address: newTestAddressBytes(t),
-						Amount:  100,
-					},
-				},
-				PoolSize: 1000,
-			},
-			counterPoolAmount: 2000,
-			outbound:          false,
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:              1 + LiquidityPoolAddend,
-					Amount:          1000,
-					TotalPoolPoints: 1000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectError: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sm := newTestStateMachine(t)
-			if test.setupState != nil {
-				test.setupState(sm)
-			}
-
-			err := sm.HandleBatchDeposit(test.batch, test.counterPoolAmount, test.outbound)
-
-			require.Equal(t, test.expectError, err != nil, err)
-		})
-	}
-}
-
-func TestHandleBatchWithdraw(t *testing.T) {
-	tests := []struct {
-		name        string
-		detail      string
-		batch       *lib.DexBatch
-		setupState  func(StateMachine)
-		expectError bool
-	}{
-		{
-			name:   "no withdrawals",
-			detail: "test with empty withdrawals",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Withdraws: []*lib.DexLiquidityWithdraw{},
-				PoolSize:  1000,
-			},
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:     lib.CanopyChainId + LiquidityPoolAddend,
-					Amount: 1000,
-				}
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectError: false,
-		},
-		{
-			name:   "valid withdrawals",
-			detail: "test valid withdrawal processing",
-			batch: &lib.DexBatch{
-				Committee: lib.CanopyChainId,
-				Withdraws: []*lib.DexLiquidityWithdraw{
-					{
-						Address: newTestAddressBytes(t),
-						Percent: 50, // 50% withdrawal
-					},
-				},
-				PoolSize: 1000,
-			},
-			setupState: func(sm StateMachine) {
-				pool := &Pool{
-					Id:              lib.CanopyChainId + LiquidityPoolAddend,
-					Amount:          1000,
-					TotalPoolPoints: 1000,
-				}
-				// Add points for the address
-				require.NoError(t, pool.AddPoints(newTestAddressBytes(t), 100))
-				require.NoError(t, sm.SetPool(pool))
-			},
-			expectError: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sm := newTestStateMachine(t)
-			if test.setupState != nil {
-				test.setupState(sm)
-			}
-
-			err := sm.HandleBatchWithdraw(test.batch)
-
-			require.Equal(t, test.expectError, err != nil, err)
-		})
-	}
-}
-
-func TestRotateDexSellBatch(t *testing.T) {
-	tests := []struct {
-		name        string
-		detail      string
-		receipts    []bool
-		chainId     uint64
-		setupState  func(StateMachine)
-		expectError bool
-	}{
 		{
 			name:     "locked batch exists",
-			detail:   "test when locked batch still exists (should exit)",
+			detail:   "test when locked batch still exists (should exit early)",
+			buyBatch: &lib.DexBatch{Committee: 1},
 			receipts: []bool{true, false},
 			chainId:  1,
-			setupState: func(sm StateMachine) {
+			setupState: func(sm *StateMachine) {
 				// Create a locked batch that hasn't been processed
 				lockedBatch := &lib.DexBatch{
 					Committee: 1,
@@ -958,9 +1120,10 @@ func TestRotateDexSellBatch(t *testing.T) {
 		{
 			name:     "successful rotation",
 			detail:   "test successful batch rotation",
+			buyBatch: &lib.DexBatch{Committee: 1, PoolSize: 100},
 			receipts: []bool{true, false},
 			chainId:  1,
-			setupState: func(sm StateMachine) {
+			setupState: func(sm *StateMachine) {
 				// Create next batch to rotate
 				nextBatch := &lib.DexBatch{
 					Committee: 1,
@@ -986,18 +1149,98 @@ func TestRotateDexSellBatch(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name:     "no next batch to rotate",
+			detail:   "test when no next batch exists",
+			buyBatch: &lib.DexBatch{Committee: 1, PoolSize: 100},
+			receipts: []bool{},
+			chainId:  1,
+			setupState: func(sm *StateMachine) {
+				// Setup liquidity pool but no next batch
+				lPool := &Pool{
+					Id:     1 + LiquidityPoolAddend,
+					Amount: 1500,
+				}
+				require.NoError(t, sm.SetPool(lPool))
+			},
+			expectError: false, // Should create empty next batch
+		},
+		{
+			name:     "rotation with receipts",
+			detail:   "test rotation with receipts properly set",
+			buyBatch: &lib.DexBatch{Committee: 2, PoolSize: 500},
+			receipts: []bool{true, false, true},
+			chainId:  2,
+			setupState: func(sm *StateMachine) {
+				// Create next batch to rotate
+				nextBatch := &lib.DexBatch{
+					Committee: 2,
+					Orders: []*lib.DexLimitOrder{
+						{
+							Address:       newTestAddressBytes(t),
+							AmountForSale: 50,
+						},
+					},
+				}
+				require.NoError(t, sm.SetDexBatch(KeyForNextBatch(2), nextBatch))
+
+				// Setup liquidity pool
+				lPool := &Pool{
+					Id:     2 + LiquidityPoolAddend,
+					Amount: 800,
+				}
+				require.NoError(t, sm.SetPool(lPool))
+			},
+			expectError: false,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			sm := newTestStateMachine(t)
 			if test.setupState != nil {
-				test.setupState(sm)
+				test.setupState(&sm)
 			}
 
-			err := sm.RotateDexSellBatch(test.receipts, test.chainId)
+			err := sm.RotateDexSellBatch(test.buyBatch, test.receipts)
 
-			require.Equal(t, test.expectError, err != nil, err)
+			if test.expectError {
+				require.Error(t, err)
+				if test.errorMessage != "" {
+					require.ErrorContains(t, err, test.errorMessage)
+				}
+			} else {
+				require.NoError(t, err)
+
+				// verify that rotation worked correctly if we expect success
+				if test.buyBatch != nil && !test.expectError {
+					// check that locked batch state is appropriate
+					lockedBatch, err := sm.GetDexBatch(KeyForLockedBatch(test.buyBatch.Committee))
+					require.NoError(t, err)
+
+					if test.name == "locked batch exists" {
+						// function should return early, locked batch should still exist unchanged
+						require.False(t, lockedBatch.IsEmpty(), "locked batch should still exist")
+						// no need to check next batch since rotation shouldn't happen
+					} else {
+						// check that next batch was deleted
+						nextBatch, err := sm.GetDexBatch(KeyForNextBatch(test.buyBatch.Committee))
+						require.NoError(t, err)
+						require.True(t, nextBatch.IsEmpty(), "next batch should be empty after rotation")
+
+						// check that locked batch was set
+						require.False(t, lockedBatch.IsEmpty(), "locked batch should not be empty after rotation")
+
+						// verify receipts were set if provided
+						if len(test.receipts) > 0 {
+							require.Equal(t, test.receipts, lockedBatch.Receipts)
+						}
+
+						// verify receipt hash is set
+						require.Equal(t, test.buyBatch.Hash(), lockedBatch.ReceiptHash)
+					}
+				}
+			}
 		})
 	}
 }
@@ -1043,19 +1286,19 @@ func TestSetGetDexBatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sm := newTestStateMachine(t)
 
-			// Test SetDexBatch
+			// test SetDexBatch
 			err := sm.SetDexBatch(test.key, test.batch)
 			require.Equal(t, test.expectError, err != nil, err)
 
 			if !test.expectError {
-				// Test GetDexBatch
+				// test GetDexBatch
 				got, err := sm.GetDexBatch(test.key)
 				require.NoError(t, err)
 				require.NotNil(t, got)
 				require.Equal(t, test.batch.Committee, got.Committee)
 				require.Equal(t, len(test.batch.Orders), len(got.Orders))
 
-				// Compare orders
+				// compare orders
 				for i, order := range test.batch.Orders {
 					require.True(t, bytes.Equal(order.Address, got.Orders[i].Address))
 					require.Equal(t, order.AmountForSale, got.Orders[i].AmountForSale)

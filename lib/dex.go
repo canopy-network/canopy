@@ -4,10 +4,19 @@ import (
 	"bytes"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math"
+	"strings"
 )
 
 func (x *DexLimitOrder) MinAsk() float64 {
 	return float64(x.RequestedAmount) / float64(x.AmountForSale)
+}
+
+func (x *DexBatch) Hash() []byte {
+	if x.IsEmpty() {
+		return []byte(strings.Repeat("F", crypto.HashSize))
+	}
+	bz, _ := Marshal(x)
+	return crypto.Hash(bz)
 }
 
 func (x *DexLimitOrder) MapKey(blockHash []byte) string {
@@ -35,7 +44,7 @@ func (x *DexBatch) IsEmpty() bool {
 	if x == nil {
 		return true
 	}
-	return len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
+	return x.ReceiptHash == nil && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
 }
 
 func (x *DexBatch) EnsureNonNil() {

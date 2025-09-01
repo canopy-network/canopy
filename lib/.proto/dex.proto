@@ -78,14 +78,16 @@ message DexLiquidityWithdraw {
 message DexBatch {
   // committee: the id of the 'counter asset'
   uint64 Committee = 1; // @gotags: json:"committee"
+  // receipt_hash: the hash of the counter chain batch that the receipts correspond to
+  bytes receipt_hash = 2; // @gotags: json:"receiptHash"
   // orders: the list of dex limit orders
-  repeated DexLimitOrder orders = 2; // @gotags: json:"orders"
+  repeated DexLimitOrder orders = 3; // @gotags: json:"orders"
   // deposits: the liquidity provider 'deposit' command
-  repeated DexLiquidityDeposit deposits = 3;
+  repeated DexLiquidityDeposit deposits = 4;
   // withdraws: the liquidity provider 'withdraw' command
-  repeated DexLiquidityWithdraw withdraws = 4;
+  repeated DexLiquidityWithdraw withdraws = 5;
   // poolSize: contains the current balance of the liquidity pool
-  uint64 pool_size = 5; // @gotags: json:"poolSize"
+  uint64 pool_size = 6; // @gotags: json:"poolSize"
   // receipts: the list of order success status's
-  repeated bool receipts = 6;
+  repeated bool receipts = 7;
 }
