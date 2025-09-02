@@ -183,6 +183,8 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 
 // ValidateProposal() fully validates a proposal in the form of a quorum certificate and resets back to begin block state
 func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertificate, evidence *bft.ByzantineEvidence) (blockResult *lib.BlockResult, err lib.ErrorI) {
+	c.Mempool.L.Lock()
+	defer c.Mempool.L.Unlock()
 	// reset the mempool at the beginning of the function to preserve the state for CommitCertificate()
 	c.FSM.Reset()
 	// log the beginning of proposal validation
