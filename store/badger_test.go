@@ -22,8 +22,13 @@ func TestStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	newStore, err := db.NewReadOnly(db.Version() - 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	chainId := uint64(1)
-	it, err := db.RevIterator(fsm.CommitteePrefix(chainId))
+	it, err := newStore.RevIterator(fsm.CommitteePrefix(chainId))
 	if err != nil {
 		return
 	}
@@ -38,7 +43,7 @@ func TestStore(t *testing.T) {
 			t.Fatal(e)
 		}
 		// load the validator from the state using the address
-		val, e := GetValidator(db, address)
+		val, e := GetValidator(newStore, address)
 		if e != nil {
 			t.Fatal(e)
 		}
