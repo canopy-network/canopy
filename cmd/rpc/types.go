@@ -67,6 +67,11 @@ type heightAndIdRequest struct {
 	idRequest
 }
 
+type heightIdAndPointsRequest struct {
+	heightAndIdRequest
+	Points bool `json:"points"`
+}
+
 type keystoreRequest struct {
 	addressRequest
 	passwordRequest

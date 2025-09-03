@@ -88,13 +88,14 @@ func TestHandleDexBatch(t *testing.T) {
 				sm.RCManager = mock
 			},
 			expectedLockedBatch: &lib.DexBatch{
-				Committee:   1,
-				ReceiptHash: bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing
-				Orders:      []*lib.DexLimitOrder{},
-				Deposits:    []*lib.DexLiquidityDeposit{},
-				Withdraws:   []*lib.DexLiquidityWithdraw{},
-				PoolSize:    1000, // Should be updated to liquidity pool amount
-				Receipts:    []bool{},
+				Committee:    1,
+				ReceiptHash:  bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing
+				Orders:       []*lib.DexLimitOrder{},
+				Deposits:     []*lib.DexLiquidityDeposit{},
+				Withdraws:    []*lib.DexLiquidityWithdraw{},
+				PoolSize:     1000, // Should be updated to liquidity pool amount
+				Receipts:     []bool{},
+				LockedHeight: 2,
 			},
 		},
 	}
@@ -160,7 +161,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 100,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -192,7 +193,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 100,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  101,
 				}, {
@@ -224,7 +225,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				require.NoError(t, err)
 				liqPool.Amount = 200 // JOEY
 				liqPool.TotalPoolPoints = 141
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -237,7 +238,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 142, // 200 - 58
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}},
@@ -267,7 +268,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				require.NoError(t, err)
 				liqPool.Amount = 200
 				liqPool.TotalPoolPoints = 141
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -280,7 +281,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 186, // 200 - 14
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -317,7 +318,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				require.NoError(t, err)
 				liqPool.Amount = 300
 				liqPool.TotalPoolPoints = 172
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -333,7 +334,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 176, // 300 - 62*2
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}},
@@ -372,7 +373,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				require.NoError(t, err)
 				liqPool.Amount = 200
 				liqPool.TotalPoolPoints = 141 // Total LP points
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100, // burned LP points
 				}, {
@@ -385,7 +386,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 142, // pool after withdraw 41/141 ≈ 58 (200-58)
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100, // burned points remain
 				}, {
@@ -725,7 +726,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend, Amount: 0},
 			expectedLiqPool: &Pool{
 				Id: 1 + LiquidityPoolAddend, Amount: 200,
-				Points: []*PoolPoints{
+				Points: []*lib.PoolPoints{
 					{
 						Address: deadAddr.Bytes(),
 						Points:  100,
@@ -776,7 +777,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 300,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  101,
 				}, {
@@ -811,7 +812,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				liqPool.Amount = 200
 				// init points
 				liqPool.TotalPoolPoints = 141
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -832,7 +833,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 142,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}},
@@ -865,7 +866,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				liqPool.Amount = 200
 				// init points
 				liqPool.TotalPoolPoints = 141
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -886,7 +887,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 186,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -925,7 +926,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				liqPool.Amount = 300
 				// init points
 				liqPool.TotalPoolPoints = 172
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -952,7 +953,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 176, // 300 - 62*2
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}},
@@ -995,7 +996,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				holdPool.Amount = 100
 				// init points
 				liqPool.TotalPoolPoints = 141
-				liqPool.Points = []*PoolPoints{{
+				liqPool.Points = []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -1021,7 +1022,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
 				Amount: 242,
-				Points: []*PoolPoints{{
+				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
 				}, {
@@ -1118,7 +1119,7 @@ func TestDexDeposit(t *testing.T) {
 		}},
 	}
 	expected.EnsureNonNil()
-	require.EqualExportedValues(t, nextBatch, expected)
+	require.EqualExportedValues(t, expected, nextBatch)
 	accountBalance, err := chain2.GetAccountBalance(account1)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, accountBalance)
@@ -1142,7 +1143,8 @@ func TestDexDeposit(t *testing.T) {
 			Address: account1.Bytes(),
 			Amount:  depositAmount,
 		}},
-		PoolSize: initPoolSize,
+		PoolSize:     initPoolSize,
+		LockedHeight: 2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -1154,7 +1156,7 @@ func TestDexDeposit(t *testing.T) {
 	require.EqualExportedValues(t, &Pool{
 		Id:     chain2Id + LiquidityPoolAddend,
 		Amount: initPoolSize,
-		Points: []*PoolPoints{{
+		Points: []*lib.PoolPoints{{
 			Address: deadAddr.Bytes(),
 			Points:  100,
 		}, {
@@ -1168,9 +1170,10 @@ func TestDexDeposit(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:   chain2Id,
-		ReceiptHash: lockedBatch.Hash(),
-		PoolSize:    100,
+		Committee:    chain2Id,
+		ReceiptHash:  lockedBatch.Hash(),
+		PoolSize:     100,
+		LockedHeight: 2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -1186,7 +1189,7 @@ func TestDexDeposit(t *testing.T) {
 	require.EqualExportedValues(t, liquidityPool, &Pool{
 		Id:     chain1Id + LiquidityPoolAddend,
 		Amount: initPoolSize + depositAmount,
-		Points: []*PoolPoints{
+		Points: []*lib.PoolPoints{
 			{Address: deadAddr.Bytes(), Points: 100},
 			{Address: account1.Bytes(), Points: 41},
 		},
@@ -1211,7 +1214,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.NoError(t, chain1.SetPool(&Pool{
 		Id:     chain2Id + LiquidityPoolAddend,
 		Amount: 100,
-		Points: []*PoolPoints{
+		Points: []*lib.PoolPoints{
 			{Address: deadAddr.Bytes(), Points: 100},
 			{Address: account1.Bytes(), Points: 41},
 		},
@@ -1221,7 +1224,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.NoError(t, chain2.SetPool(&Pool{
 		Id:     chain1Id + LiquidityPoolAddend,
 		Amount: initPoolSize + depositAmount,
-		Points: []*PoolPoints{
+		Points: []*lib.PoolPoints{
 			{Address: deadAddr.Bytes(), Points: 100},
 			{Address: account1.Bytes(), Points: 41},
 		},
@@ -1265,8 +1268,9 @@ func TestDexWithdraw(t *testing.T) {
 			Address: account1.Bytes(),
 			Percent: 100,
 		}},
-		ReceiptHash: emptyBatch.Hash(),
-		PoolSize:    initPoolSize + depositAmount,
+		ReceiptHash:  emptyBatch.Hash(),
+		PoolSize:     initPoolSize + depositAmount,
+		LockedHeight: 2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -1278,7 +1282,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.EqualExportedValues(t, &Pool{
 		Id:              chain2Id + LiquidityPoolAddend,
 		Amount:          initPoolSize - expectedY,
-		Points:          []*PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
 		TotalPoolPoints: 100,
 	}, lPool)
 	accountBalance, err := chain1.GetAccountBalance(account1)
@@ -1289,9 +1293,10 @@ func TestDexWithdraw(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:   chain2Id,
-		ReceiptHash: lockedBatch.Hash(),
-		PoolSize:    initPoolSize - expectedY,
+		Committee:    chain2Id,
+		ReceiptHash:  lockedBatch.Hash(),
+		PoolSize:     initPoolSize - expectedY,
+		LockedHeight: 2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -1307,7 +1312,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.EqualExportedValues(t, liquidityPool, &Pool{
 		Id:              chain1Id + LiquidityPoolAddend,
 		Amount:          initPoolSize + depositAmount - expectedX,
-		Points:          []*PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
 		TotalPoolPoints: 100,
 	})
 	accountBalance, err = chain2.GetAccountBalance(account1)
@@ -1386,8 +1391,9 @@ func TestDexSwap(t *testing.T) {
 			AmountForSale:   25,
 			RequestedAmount: 19,
 		}},
-		ReceiptHash: emptyBatch.Hash(),
-		PoolSize:    initPoolSize,
+		ReceiptHash:  emptyBatch.Hash(),
+		PoolSize:     initPoolSize,
+		LockedHeight: 2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -1408,10 +1414,11 @@ func TestDexSwap(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:   chain2Id,
-		ReceiptHash: lockedBatch.Hash(),
-		Receipts:    []bool{true},
-		PoolSize:    initPoolSize - expectedY,
+		Committee:    chain2Id,
+		ReceiptHash:  lockedBatch.Hash(),
+		Receipts:     []bool{true},
+		PoolSize:     initPoolSize - expectedY,
+		LockedHeight: 2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -1772,7 +1779,7 @@ func (m *MockRCManager) GetOrder(rootChainId, height uint64, orderId string, cha
 	return &lib.SellOrder{}, nil
 }
 
-func (m *MockRCManager) GetDexBatch(rootChainId, height, committee uint64) (*lib.DexBatch, lib.ErrorI) {
+func (m *MockRCManager) GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*lib.DexBatch, lib.ErrorI) {
 	key := fmt.Sprintf("%d:%d:%d", rootChainId, height, committee)
 	if batch, exists := m.dexBatches[key]; exists {
 		return batch, nil

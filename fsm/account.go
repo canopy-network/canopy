@@ -322,6 +322,19 @@ func (s *StateMachine) PoolSub(id uint64, amountToSub uint64) lib.ErrorI {
 	return s.SetPool(pool)
 }
 
+// SetPoolPoints() updates the pool points with correct values
+func (s *StateMachine) SetPoolPoints(chainId uint64, points []*lib.PoolPoints, totalPoolPoints uint64) lib.ErrorI {
+	lPool, err := s.GetPool(chainId)
+	if err != nil {
+		return err
+	}
+	// update points
+	lPool.Points = points
+	lPool.TotalPoolPoints = totalPoolPoints
+	// set pool back
+	return s.SetPool(lPool)
+}
+
 // unmarshalPool() coverts bytes into a Pool structure
 func (s *StateMachine) unmarshalPool(bz []byte) (*Pool, lib.ErrorI) {
 	// create a new pool object reference to ensure no 'nil' pools are used
@@ -738,7 +751,7 @@ func (x *Pool) AddPoints(address []byte, points uint64) (err lib.ErrorI) {
 		}
 	}
 	// add to the points
-	x.Points = append(x.Points, &PoolPoints{Address: address, Points: points})
+	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
 	// exit
 	return
 }

@@ -289,12 +289,12 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 // DexBatch retrieves the 'locked' dex batch for a committee
 func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
 		if id == 0 {
 			return s.GetDexBatches(true)
 		}
 		// return the locked batch
-		return s.GetDexBatch(id, true)
+		return s.GetDexBatch(id, true, points) // points augmentation used for liveness safety mirrors
 	})
 }
 
@@ -588,6 +588,20 @@ func (s *Server) heightAndIdParams(w http.ResponseWriter, r *http.Request, callb
 	req := new(heightAndIdRequest)
 	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
 		p, err := callback(state, req.ID)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
+		return
+	})
+}
+
+// heightIdAndPointsParams is a helper function to execute a callback with a state machine, ID and points as parameters
+func (s *Server) heightIdAndPointsParams(w http.ResponseWriter, r *http.Request, callback func(*fsm.StateMachine, uint64, bool) (any, lib.ErrorI)) {
+	req := new(heightIdAndPointsRequest)
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req.ID, req.Points)
 		if err != nil {
 			write(w, err, http.StatusBadRequest)
 			return

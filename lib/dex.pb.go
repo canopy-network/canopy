@@ -209,10 +209,16 @@ type DexBatch struct {
 	Deposits []*DexLiquidityDeposit `protobuf:"bytes,4,rep,name=deposits,proto3" json:"deposits,omitempty"`
 	// withdraws: the liquidity provider 'withdraw' command
 	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
-	// poolSize: contains the current balance of the liquidity pool
+	// pool_size: contains the current balance of the liquidity pool
 	PoolSize uint64 `protobuf:"varint,6,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
+	// pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
+	PoolPoints []*PoolPoints `protobuf:"bytes,7,rep,name=pool_points,json=poolPoints,proto3" json:"poolPoints"` // @gotags: json:"poolPoints"
+	// total_pool_points: (typically omitted due to LP mirrored design)  - contains the current liquidity points of the pool
+	TotalPoolPoints uint64 `protobuf:"varint,8,opt,name=total_pool_points,json=totalPoolPoints,proto3" json:"totalPoolPoints"` // @gotags: json:"totalPoolPoints"
 	// receipts: the list of order success status's
-	Receipts      []bool `protobuf:"varint,7,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
+	Receipts []bool `protobuf:"varint,9,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
+	// locked_height: the height when the batch was locked
+	LockedHeight  uint64 `protobuf:"varint,10,opt,name=locked_height,json=lockedHeight,proto3" json:"locked_height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -289,11 +295,87 @@ func (x *DexBatch) GetPoolSize() uint64 {
 	return 0
 }
 
+func (x *DexBatch) GetPoolPoints() []*PoolPoints {
+	if x != nil {
+		return x.PoolPoints
+	}
+	return nil
+}
+
+func (x *DexBatch) GetTotalPoolPoints() uint64 {
+	if x != nil {
+		return x.TotalPoolPoints
+	}
+	return 0
+}
+
 func (x *DexBatch) GetReceipts() []bool {
 	if x != nil {
 		return x.Receipts
 	}
 	return nil
+}
+
+func (x *DexBatch) GetLockedHeight() uint64 {
+	if x != nil {
+		return x.LockedHeight
+	}
+	return 0
+}
+
+// PoolPoints represents an ownership 'share' of the pool
+type PoolPoints struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// address: the recipient address of the points
+	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	// points: the amount of points owned
+	Points        uint64 `protobuf:"varint,2,opt,name=points,proto3" json:"points"` // @gotags: json:"points"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolPoints) Reset() {
+	*x = PoolPoints{}
+	mi := &file_dex_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolPoints) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolPoints) ProtoMessage() {}
+
+func (x *PoolPoints) ProtoReflect() protoreflect.Message {
+	mi := &file_dex_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolPoints.ProtoReflect.Descriptor instead.
+func (*PoolPoints) Descriptor() ([]byte, []int) {
+	return file_dex_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PoolPoints) GetAddress() []byte {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *PoolPoints) GetPoints() uint64 {
+	if x != nil {
+		return x.Points
+	}
+	return 0
 }
 
 var File_dex_proto protoreflect.FileDescriptor
@@ -310,15 +392,24 @@ const file_dex_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +
 	"\x14DexLiquidityWithdraw\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
-	"\apercent\x18\x02 \x01(\x04R\apercent\"\xa5\x02\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\"\xaa\x03\n" +
 	"\bDexBatch\x12\x1c\n" +
 	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12!\n" +
 	"\freceipt_hash\x18\x02 \x01(\fR\vreceiptHash\x12,\n" +
 	"\x06orders\x18\x03 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
 	"\bdeposits\x18\x04 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
 	"\twithdraws\x18\x05 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
-	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x12\x1a\n" +
-	"\breceipts\x18\a \x03(\bR\breceiptsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x122\n" +
+	"\vpool_points\x18\a \x03(\v2\x11.types.PoolPointsR\n" +
+	"poolPoints\x12*\n" +
+	"\x11total_pool_points\x18\b \x01(\x04R\x0ftotalPoolPoints\x12\x1a\n" +
+	"\breceipts\x18\t \x03(\bR\breceipts\x12#\n" +
+	"\rlocked_height\x18\n" +
+	" \x01(\x04R\flockedHeight\">\n" +
+	"\n" +
+	"PoolPoints\x12\x18\n" +
+	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
+	"\x06points\x18\x02 \x01(\x04R\x06pointsB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_dex_proto_rawDescOnce sync.Once
@@ -332,22 +423,24 @@ func file_dex_proto_rawDescGZIP() []byte {
 	return file_dex_proto_rawDescData
 }
 
-var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_dex_proto_goTypes = []any{
 	(*DexLimitOrder)(nil),        // 0: types.DexLimitOrder
 	(*DexLiquidityDeposit)(nil),  // 1: types.DexLiquidityDeposit
 	(*DexLiquidityWithdraw)(nil), // 2: types.DexLiquidityWithdraw
 	(*DexBatch)(nil),             // 3: types.DexBatch
+	(*PoolPoints)(nil),           // 4: types.PoolPoints
 }
 var file_dex_proto_depIdxs = []int32{
 	0, // 0: types.DexBatch.orders:type_name -> types.DexLimitOrder
 	1, // 1: types.DexBatch.deposits:type_name -> types.DexLiquidityDeposit
 	2, // 2: types.DexBatch.withdraws:type_name -> types.DexLiquidityWithdraw
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 3: types.DexBatch.pool_points:type_name -> types.PoolPoints
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_dex_proto_init() }
@@ -361,7 +454,7 @@ func file_dex_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dex_proto_rawDesc), len(file_dex_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

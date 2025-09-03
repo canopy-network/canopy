@@ -108,7 +108,7 @@ type RCManagerI interface {
 	GetLotteryWinner(rootChainId, height, id uint64) (p *LotteryWinner, err ErrorI)           // get the delegate 'lottery winner' for a chain id
 	GetOrders(rootChainId, rootHeight, id uint64) (*OrderBook, ErrorI)                        // get the order book for a specific 'chain id'
 	GetOrder(rootChainId, height uint64, orderId string, chainId uint64) (*SellOrder, ErrorI) // get a specific order from the order book
-	GetDexBatch(rootChainId, height, committee uint64) (*DexBatch, ErrorI)                    // get the dex information from the root chain
+	GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*DexBatch, ErrorI)   // get the dex information from the root chain
 	IsValidDoubleSigner(rootChainId, height uint64, address string) (p *bool, err ErrorI)     // check if a double signer is valid for an address for a specific 'double sign height'
 	GetMinimumEvidenceHeight(rootChainId, rootHeight uint64) (*uint64, ErrorI)                // load the minimum height that evidence is valid
 	GetCheckpoint(rootChainId, height, id uint64) (blockHash HexBytes, i ErrorI)              // get a checkpoint at a height and chain id combination

@@ -3,6 +3,8 @@ package types;
 
 option go_package = "github.com/canopy-network/canopy/fsm";
 
+import "dex.proto";
+
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
 //
@@ -61,12 +63,4 @@ message Supply {
   repeated Pool committee_staked = 4; // @gotags: json:"committeeStaked"
   // committee_delegated_only: a list of committees and their 'delegated only' tokens, sorted by stake
   repeated Pool committee_delegated_only = 5; // @gotags: json:"committeeDelegatedOnly"
-}
-
-// PoolPoints represents an ownership 'share' of the pool
-message PoolPoints {
-  // address: the recipient address of the points
-  bytes address = 1; // @gotags: json:"address"
-  // points: the amount of points owned
-  uint64 points = 2; // @gotags: json:"points"
 }

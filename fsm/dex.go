@@ -24,7 +24,7 @@ func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, remoteBat
 			return
 		}
 		// get root chain dex batch
-		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootBuildHeight, s.Config.ChainId); err != nil {
+		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootBuildHeight, s.Config.ChainId, false); err != nil {
 			return
 		}
 	}
@@ -357,6 +357,8 @@ func (s *StateMachine) RotateDexSellBatch(remoteBatch *lib.DexBatch, chainId uin
 	nextSellBatch.PoolSize = lPool.Amount
 	// set the hash
 	nextSellBatch.ReceiptHash = remoteBatch.Hash()
+	// set the locked height
+	nextSellBatch.LockedHeight = s.Height()
 	// set receipts
 	if len(receipts) != 0 {
 		nextSellBatch.Receipts = receipts
@@ -381,7 +383,7 @@ func (s *StateMachine) SetDexBatch(key []byte, b *lib.DexBatch) (err lib.ErrorI)
 }
 
 // GetDexBatch() retrieves a sell batch from the state store
-func (s *StateMachine) GetDexBatch(chainId uint64, locked bool) (b *lib.DexBatch, err lib.ErrorI) {
+func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bool) (b *lib.DexBatch, err lib.ErrorI) {
 	var key []byte
 	if locked {
 		key = KeyForLockedBatch(chainId)
@@ -402,6 +404,19 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool) (b *lib.DexBatch
 	}
 	// populate the batch object with the bytes
 	err = lib.Unmarshal(bz, b)
+	// check if points should be attached
+	if len(withPoints) == 1 && withPoints[0] {
+		var lPool *Pool
+		// retrieve the liquidity pool from state
+		lPool, err = s.GetPool(chainId + LiquidityPoolAddend)
+		if err != nil {
+			return
+		}
+		// set the pool points
+		b.PoolPoints = lPool.Points
+		// set total pool points
+		b.TotalPoolPoints = lPool.TotalPoolPoints
+	}
 	// exit
 	return
 }

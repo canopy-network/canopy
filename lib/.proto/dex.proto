@@ -60,10 +60,10 @@ message DexLimitOrder {
 
 // DexLiquidityDeposit a liquidity deposit command
 message DexLiquidityDeposit {
-    // address: the address where the funds are deposited from
-    bytes address = 1;
-    // amount: the amount of the deposit
-    uint64 amount = 2;
+  // address: the address where the funds are deposited from
+  bytes address = 1;
+  // amount: the amount of the deposit
+  uint64 amount = 2;
 }
 
 // DexLiquidityWithdraw a liquidity withdraw command
@@ -86,8 +86,22 @@ message DexBatch {
   repeated DexLiquidityDeposit deposits = 4;
   // withdraws: the liquidity provider 'withdraw' command
   repeated DexLiquidityWithdraw withdraws = 5;
-  // poolSize: contains the current balance of the liquidity pool
+  // pool_size: contains the current balance of the liquidity pool
   uint64 pool_size = 6; // @gotags: json:"poolSize"
+  // pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
+  repeated PoolPoints pool_points = 7; // @gotags: json:"poolPoints"
+  // total_pool_points: (typically omitted due to LP mirrored design)  - contains the current liquidity points of the pool
+  uint64 total_pool_points = 8; // @gotags: json:"totalPoolPoints"
   // receipts: the list of order success status's
-  repeated bool receipts = 7;
+  repeated bool receipts = 9;
+  // locked_height: the height when the batch was locked
+  uint64 locked_height = 10;
+}
+
+// PoolPoints represents an ownership 'share' of the pool
+message PoolPoints {
+  // address: the recipient address of the points
+  bytes address = 1; // @gotags: json:"address"
+  // points: the amount of points owned
+  uint64 points = 2; // @gotags: json:"points"
 }

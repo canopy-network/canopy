@@ -206,9 +206,8 @@ func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.Erro
 	return
 }
 
-func (c *Client) DexBatch(height, chainId uint64) (p *lib.DexBatch, err lib.ErrorI) {
-	p = new(lib.DexBatch)
-	err = c.heightAndIdRequest(DexBatchRouteName, height, chainId, p)
+func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	err = c.heightIdAndPointsRequest(DexBatchRouteName, height, chainId, withPoints, p)
 	return
 }
 
@@ -974,6 +973,21 @@ func (c *Client) heightAndIdRequest(routeName string, height, id uint64, ptr any
 	bz, err := lib.MarshalJSON(heightAndIdRequest{
 		heightRequest: heightRequest{height},
 		idRequest:     idRequest{id},
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
+func (c *Client) heightIdAndPointsRequest(routeName string, height, id uint64, points bool, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(heightIdAndPointsRequest{
+		heightAndIdRequest: heightAndIdRequest{
+			heightRequest: heightRequest{height},
+			idRequest:     idRequest{id},
+		},
+		Points: points,
 	})
 	if err != nil {
 		return

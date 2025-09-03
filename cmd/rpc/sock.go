@@ -265,14 +265,14 @@ func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *
 }
 
 // GetDexBatch() queries a 'dex batch on the root chain
-func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64) (*lib.DexBatch, lib.ErrorI) {
+func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*lib.DexBatch, lib.ErrorI) {
 	// if the root chain id is the same as the info
 	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
-	return sub.DexBatch(height, committee)
+	return sub.DexBatch(height, committee, withPoints)
 }
 
 // SUBSCRIPTION CODE BELOW (OUTBOUND)

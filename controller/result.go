@@ -20,7 +20,7 @@ func (c *Controller) NewCertificateResults(
 	// handle swaps
 	c.HandleSwaps(fsm, blockResult, results, rcBuildHeight)
 	// handle dex
-	c.HandleDex(fsm, results)
+	c.HandleDex(fsm, results, rcBuildHeight)
 	// set slash recipients
 	c.CalculateSlashRecipients(results, evidence)
 	// set checkpoint
@@ -273,7 +273,7 @@ func (c *Controller) HandleRetired(fsm *fsm.StateMachine, results *lib.Certifica
 }
 
 // HandleDex() populates the certificate with 'dex' information
-func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateResult) {
+func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateResult, rcBuildHeight uint64) {
 	rcId, err := sm.GetRootChainId()
 	if err != nil {
 		c.log.Error(err.Error())
@@ -285,8 +285,32 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 		c.log.Error(err.Error())
 		return
 	}
-	// set batch in results if not empty
+	// check if 'locked' dex batch is non empty
 	if !batch.IsEmpty() {
-		results.DexBatch = batch
+		// calculate the 'blocks since' the lock
+		blksSince := c.FSM.Height() - batch.LockedHeight
+		// execute 'safety fallback' >= 15 heights
+		if (blksSince / 5) >= 3 {
+			// get the locked batch from the root chain
+			dexBatch, e := c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, true)
+			if e != nil {
+				c.log.Error(e.Error())
+				return
+			}
+			// drop the locked batch
+			if err = sm.SetDexBatch(fsm.KeyForLockedBatch(rcId), &lib.DexBatch{}); err != nil {
+				c.log.Error(err.Error())
+				return
+			}
+			// update the liquidity points to mirror the counter
+			if err = c.FSM.SetPoolPoints(rcId, dexBatch.GetPoolPoints(), dexBatch.GetTotalPoolPoints()); err != nil {
+				c.log.Error(err.Error())
+				return
+			}
+		}
+		// only send every 5 heights
+		if blksSince%5 == 0 {
+			results.DexBatch = batch
+		}
 	}
 }
