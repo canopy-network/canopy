@@ -1,0 +1,80 @@
+package store
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/canopy-network/canopy/fsm"
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+)
+
+func TestStore(t *testing.T) {
+	config := lib.Config{
+		StoreConfig: lib.StoreConfig{
+			CleanupBlockInterval: 200,
+			InMemory:             false,
+		},
+	}
+	db, err := NewStore(config, "canopy", nil, lib.NewDefaultLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chainId := uint64(1)
+	it, err := db.RevIterator(fsm.CommitteePrefix(chainId))
+	if err != nil {
+		return
+	}
+	defer it.Close()
+
+	start := time.Now()
+	MaxCommitteeSize := uint64(1_000_000_000)
+	i := uint64(0)
+	for ; it.Valid() && i < MaxCommitteeSize; func() { it.Next(); i++ }() {
+		address, e := fsm.AddressFromKey(it.Key())
+		if e != nil {
+			t.Fatal(e)
+		}
+		// load the validator from the state using the address
+		val, e := GetValidator(db, address)
+		if e != nil {
+			t.Fatal(e)
+		}
+		fmt.Printf("%d %s\n", i, lib.BytesToString(val.Address))
+	}
+	fmt.Printf("Count: %d Elapsed: %s\n", i, time.Since(start))
+}
+
+func GetValidator(store lib.StoreI, address crypto.AddressI) (*fsm.Validator, lib.ErrorI) {
+	// get the bytes from state using the key for a validator at a specific address
+	bz, err := store.Get(fsm.KeyForValidator(address))
+	if err != nil {
+		return nil, err
+	}
+	// if the bytes are empty, return 'validator doesn't exist'
+	if bz == nil {
+		return nil, fsm.ErrValidatorNotExists()
+	}
+	// convert the bytes into a validator object reference
+	val, err := unmarshalValidator(bz)
+	if err != nil {
+		return nil, err
+	}
+	// update the validator structure address
+	val.Address = address.Bytes()
+	// return the validator
+	return val, nil
+}
+
+func unmarshalValidator(bz []byte) (*fsm.Validator, lib.ErrorI) {
+	// create a new validator object reference to ensure a non-nil result
+	val := new(fsm.Validator)
+	// populate the object reference with validator bytes
+	if err := lib.Unmarshal(bz, val); err != nil {
+		return nil, err
+	}
+	// return the object ref
+	return val, nil
+}
