@@ -61,7 +61,14 @@ func TestHandleDexBatch(t *testing.T) {
 				})
 				sm.RCManager = mock
 			},
-			expectedLockedBatch: emptyDexBatch,
+			expectedLockedBatch: &lib.DexBatch{
+				Committee: 2,
+				Orders:    []*lib.DexLimitOrder{},
+				Deposits:  []*lib.DexLiquidityDeposit{},
+				Withdraws: []*lib.DexLiquidityWithdraw{},
+				PoolSize:  0,
+				Receipts:  []bool{},
+			},
 		},
 		{
 			name:            "overwrite with chainId == rootChainId",
@@ -85,7 +92,7 @@ func TestHandleDexBatch(t *testing.T) {
 			},
 			expectedLockedBatch: &lib.DexBatch{
 				Committee:   1,
-				ReceiptHash: bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing  
+				ReceiptHash: bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing
 				Orders:      []*lib.DexLimitOrder{},
 				Deposits:    []*lib.DexLiquidityDeposit{},
 				Withdraws:   []*lib.DexLiquidityWithdraw{},
@@ -105,14 +112,14 @@ func TestHandleDexBatch(t *testing.T) {
 				require.ErrorContains(t, err, test.errorContains)
 			}
 			// the actual locked batch
-			lockedBatch, getErr := sm.GetDexBatch(KeyForLockedBatch(test.chainId))
+			lockedBatch, getErr := sm.GetDexBatch(test.chainId, true)
 			require.NoError(t, getErr)
 			require.EqualExportedValues(t, test.expectedLockedBatch, lockedBatch)
 		})
 	}
 }
 
-func TestHandleDexBuyBatch(t *testing.T) {
+func TestHandleRemoteDexBatch(t *testing.T) {
 	tests := []struct {
 		name                string
 		detail              string
@@ -1043,14 +1050,14 @@ func TestHandleDexBuyBatch(t *testing.T) {
 				test.setupState(&sm)
 			}
 			// execute the function call
-			err := sm.HandleRemoteDexBatch(test.buyBatch)
+			err := sm.HandleRemoteDexBatch(test.buyBatch, test.chainId)
 			require.Equal(t, err != nil, test.errorContains != "")
 			if err != nil && test.errorContains != "" {
 				require.ErrorContains(t, err, test.errorContains)
 			}
 			// check expected locked batch
 			if test.expectedLockedBatch != nil {
-				lockedBatch, getErr := sm.GetDexBatch(KeyForLockedBatch(test.chainId))
+				lockedBatch, getErr := sm.GetDexBatch(test.chainId, true)
 				require.NoError(t, getErr)
 				require.EqualExportedValues(t, test.expectedLockedBatch, lockedBatch)
 			}
@@ -1076,6 +1083,356 @@ func TestHandleDexBuyBatch(t *testing.T) {
 	}
 }
 
+func TestDexDeposit(t *testing.T) {
+	const (
+		depositAmount, initPoolSize = uint64(100), uint64(100)
+		chain1Id, chain2Id          = uint64(1), uint64(2)
+	)
+
+	/* Basic setup */
+
+	// setup two chains (chain1 is the root chain)
+	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	// setup the account
+	account1 := newTestAddress(t, 1)
+	// setup chain1 state
+	require.NoError(t, chain1.PoolAdd(chain2Id+LiquidityPoolAddend, 100))
+	// setup chain2 state
+	require.NoError(t, chain2.AccountAdd(account1, depositAmount))
+	require.NoError(t, chain2.PoolAdd(chain1Id+LiquidityPoolAddend, 100))
+
+	/* Perform a full lifecycle liquidity deposit */
+
+	// send the liquidity deposit to chain 2
+	require.NoError(t, chain2.HandleMessageDexLiquidityDeposit(&MessageDexLiquidityDeposit{
+		ChainId: 1,
+		Amount:  depositAmount,
+		Address: account1.Bytes(),
+	}))
+
+	// Chain2: deposit added to the next batch and funds were moved to the holding pool
+	nextBatch, err := chain2.GetDexBatch(chain1Id, false)
+	require.NoError(t, err)
+	expected := &lib.DexBatch{
+		Committee: chain1Id,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: account1.Bytes(),
+			Amount:  depositAmount,
+		}},
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, nextBatch, expected)
+	accountBalance, err := chain2.GetAccountBalance(account1)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, accountBalance)
+	holdingPoolBalance, err := chain2.GetPoolBalance(chain1Id + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.EqualValues(t, depositAmount, holdingPoolBalance)
+
+	// Chain2: trigger 'handle batch' with an empty batch from Chain1 and ensure 'next batch' became 'locked'
+	emptyBatch := &lib.DexBatch{
+		Committee: chain2Id,
+		PoolSize:  initPoolSize,
+	}
+	emptyBatch.EnsureNonNil()
+	require.NoError(t, chain2.HandleRemoteDexBatch(emptyBatch, chain1Id))
+	lockedBatch, err := chain2.GetDexBatch(chain1Id, true)
+	require.NoError(t, err)
+	expected = &lib.DexBatch{
+		Committee:   chain1Id,
+		ReceiptHash: emptyBatch.Hash(),
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: account1.Bytes(),
+			Amount:  depositAmount,
+		}},
+		PoolSize: initPoolSize,
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, expected, lockedBatch)
+
+	// Chain1: trigger 'handle batch' with the 'locked batch' from Chain2 ensure the pool points were updated
+	require.NoError(t, chain1.HandleRemoteDexBatch(lockedBatch, chain2Id))
+	lPool, err := chain1.GetPool(chain2Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, &Pool{
+		Id:     chain2Id + LiquidityPoolAddend,
+		Amount: initPoolSize,
+		Points: []*PoolPoints{{
+			Address: deadAddr.Bytes(),
+			Points:  100,
+		}, {
+			Address: account1.Bytes(),
+			Points:  41,
+		}},
+		TotalPoolPoints: 141,
+	}, lPool)
+
+	// Chain1: confirm locked batch
+	locked, err := chain1.GetDexBatch(chain2Id, true)
+	require.NoError(t, err)
+	chain1LockedBatch := &lib.DexBatch{
+		Committee:   chain2Id,
+		ReceiptHash: lockedBatch.Hash(),
+		PoolSize:    100,
+	}
+	chain1LockedBatch.EnsureNonNil()
+	require.EqualExportedValues(t, chain1LockedBatch, locked)
+
+	// Chain2: complete the cycle by executing the deposit and issuing points
+	require.NoError(t, chain2.HandleRemoteDexBatch(chain1LockedBatch, chain1Id))
+
+	holdingPoolBalance, err = chain2.GetPoolBalance(chain1Id + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, holdingPoolBalance)
+	liquidityPool, err := chain2.GetPool(chain1Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, liquidityPool, &Pool{
+		Id:     chain1Id + LiquidityPoolAddend,
+		Amount: initPoolSize + depositAmount,
+		Points: []*PoolPoints{
+			{Address: deadAddr.Bytes(), Points: 100},
+			{Address: account1.Bytes(), Points: 41},
+		},
+		TotalPoolPoints: 141,
+	})
+}
+
+func TestDexWithdraw(t *testing.T) {
+	const (
+		depositAmount, initPoolSize = uint64(100), uint64(100)
+		expectedX, expectedY        = uint64(58), uint64(29)
+		chain1Id, chain2Id          = uint64(1), uint64(2)
+	)
+
+	/* Basic setup */
+
+	// setup two chains (chain1 is the root chain)
+	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	// setup the account
+	account1 := newTestAddress(t, 1)
+	// setup chain1 state
+	require.NoError(t, chain1.SetPool(&Pool{
+		Id:     chain2Id + LiquidityPoolAddend,
+		Amount: 100,
+		Points: []*PoolPoints{
+			{Address: deadAddr.Bytes(), Points: 100},
+			{Address: account1.Bytes(), Points: 41},
+		},
+		TotalPoolPoints: 141,
+	}))
+	// setup chain2 state
+	require.NoError(t, chain2.SetPool(&Pool{
+		Id:     chain1Id + LiquidityPoolAddend,
+		Amount: initPoolSize + depositAmount,
+		Points: []*PoolPoints{
+			{Address: deadAddr.Bytes(), Points: 100},
+			{Address: account1.Bytes(), Points: 41},
+		},
+		TotalPoolPoints: 141,
+	}))
+
+	/* Perform a full lifecycle liquidity withdraw */
+
+	// send the liquidity withdraw to chain 2
+	require.NoError(t, chain2.HandleMessageDexLiquidityWithdraw(&MessageDexLiquidityWithdraw{
+		ChainId: 1,
+		Percent: 100,
+		Address: account1.Bytes(),
+	}))
+
+	// Chain2: withdraw added to the next batch
+	nextBatch, err := chain2.GetDexBatch(chain1Id, false)
+	require.NoError(t, err)
+	expected := &lib.DexBatch{
+		Committee: chain1Id,
+		Withdraws: []*lib.DexLiquidityWithdraw{{
+			Address: account1.Bytes(),
+			Percent: 100,
+		}},
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, nextBatch, expected)
+
+	// Chain2: trigger 'handle batch' with an empty batch from Chain1 and ensure 'next batch' became 'locked'
+	emptyBatch := &lib.DexBatch{
+		Committee: chain2Id,
+		PoolSize:  initPoolSize,
+	}
+	emptyBatch.EnsureNonNil()
+	require.NoError(t, chain2.HandleRemoteDexBatch(emptyBatch, chain1Id))
+	lockedBatch, err := chain2.GetDexBatch(chain1Id, true)
+	require.NoError(t, err)
+	expected = &lib.DexBatch{
+		Committee: chain1Id,
+		Withdraws: []*lib.DexLiquidityWithdraw{{
+			Address: account1.Bytes(),
+			Percent: 100,
+		}},
+		ReceiptHash: emptyBatch.Hash(),
+		PoolSize:    initPoolSize + depositAmount,
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, expected, lockedBatch)
+
+	// Chain1: trigger 'handle batch' with the 'locked batch' from Chain2 ensure the pool points and account were updated
+	require.NoError(t, chain1.HandleRemoteDexBatch(lockedBatch, chain2Id))
+	lPool, err := chain1.GetPool(chain2Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, &Pool{
+		Id:              chain2Id + LiquidityPoolAddend,
+		Amount:          initPoolSize - expectedY,
+		Points:          []*PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		TotalPoolPoints: 100,
+	}, lPool)
+	accountBalance, err := chain1.GetAccountBalance(account1)
+	require.NoError(t, err)
+	require.EqualValues(t, expectedY, accountBalance)
+
+	// Chain1: confirm locked batch
+	locked, err := chain1.GetDexBatch(chain2Id, true)
+	require.NoError(t, err)
+	chain1LockedBatch := &lib.DexBatch{
+		Committee:   chain2Id,
+		ReceiptHash: lockedBatch.Hash(),
+		PoolSize:    initPoolSize - expectedY,
+	}
+	chain1LockedBatch.EnsureNonNil()
+	require.EqualExportedValues(t, chain1LockedBatch, locked)
+
+	// Chain2: complete the cycle by executing the deposit and issuing points
+	require.NoError(t, chain2.HandleRemoteDexBatch(chain1LockedBatch, chain1Id))
+
+	holdingPoolBalance, err := chain2.GetPoolBalance(chain1Id + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, holdingPoolBalance)
+	liquidityPool, err := chain2.GetPool(chain1Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, liquidityPool, &Pool{
+		Id:              chain1Id + LiquidityPoolAddend,
+		Amount:          initPoolSize + depositAmount - expectedX,
+		Points:          []*PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		TotalPoolPoints: 100,
+	})
+	accountBalance, err = chain2.GetAccountBalance(account1)
+	require.NoError(t, err)
+	require.EqualValues(t, expectedX, accountBalance)
+}
+
+func TestDexSwap(t *testing.T) {
+	const (
+		swapAmount, initPoolSize = uint64(25), uint64(100)
+		expectedX, expectedY     = swapAmount, 19
+		chain1Id, chain2Id       = uint64(1), uint64(2)
+	)
+
+	/* Basic setup */
+
+	// setup two chains (chain1 is the root chain)
+	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	// setup the account
+	account1 := newTestAddress(t, 1)
+	// setup chain2 state
+	require.NoError(t, chain2.SetPool(&Pool{
+		Id:     chain1Id + LiquidityPoolAddend,
+		Amount: initPoolSize,
+	}))
+	require.NoError(t, chain2.AccountAdd(account1, 25))
+	// setup chain1 state
+	require.NoError(t, chain1.SetPool(&Pool{
+		Id:     chain2Id + LiquidityPoolAddend,
+		Amount: initPoolSize,
+	}))
+
+	/* Perform a full lifecycle swap */
+
+	// send the order to chain 2
+	require.NoError(t, chain2.HandleMessageDexLimitOrder(&MessageDexLimitOrder{
+		ChainId:         1,
+		AmountForSale:   25,
+		RequestedAmount: 19,
+		Address:         account1.Bytes(),
+	}))
+
+	// Chain2: swap added to the next batch
+	nextBatch, err := chain2.GetDexBatch(chain1Id, false)
+	require.NoError(t, err)
+	expected := &lib.DexBatch{
+		Committee: chain1Id,
+		Orders: []*lib.DexLimitOrder{{
+			Address:         account1.Bytes(),
+			AmountForSale:   25,
+			RequestedAmount: 19,
+		}},
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, nextBatch, expected)
+	accountBalance, err := chain2.GetAccountBalance(account1)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, accountBalance)
+	holdingPoolBalance, err := chain2.GetPoolBalance(chain1Id + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.EqualValues(t, swapAmount, holdingPoolBalance)
+
+	// Chain2: trigger 'handle batch' with an empty batch from Chain1 and ensure 'next batch' became 'locked'
+	emptyBatch := &lib.DexBatch{
+		Committee: chain2Id,
+		PoolSize:  initPoolSize,
+	}
+	emptyBatch.EnsureNonNil()
+	require.NoError(t, chain2.HandleRemoteDexBatch(emptyBatch, chain1Id))
+	lockedBatch, err := chain2.GetDexBatch(chain1Id, true)
+	require.NoError(t, err)
+	expected = &lib.DexBatch{
+		Committee: chain1Id,
+		Orders: []*lib.DexLimitOrder{{
+			Address:         account1.Bytes(),
+			AmountForSale:   25,
+			RequestedAmount: 19,
+		}},
+		ReceiptHash: emptyBatch.Hash(),
+		PoolSize:    initPoolSize,
+	}
+	expected.EnsureNonNil()
+	require.EqualExportedValues(t, expected, lockedBatch)
+
+	// Chain1: trigger 'handle batch' with the 'locked batch' from Chain2 ensure the account was updated
+	require.NoError(t, chain1.HandleRemoteDexBatch(lockedBatch, chain2Id))
+	lPool, err := chain1.GetPool(chain2Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, &Pool{
+		Id:     chain2Id + LiquidityPoolAddend,
+		Amount: initPoolSize - expectedY,
+	}, lPool)
+	accountBalance, err = chain1.GetAccountBalance(account1)
+	require.NoError(t, err)
+	require.EqualValues(t, expectedY, accountBalance)
+
+	// Chain1: confirm locked batch
+	locked, err := chain1.GetDexBatch(chain2Id, true)
+	require.NoError(t, err)
+	chain1LockedBatch := &lib.DexBatch{
+		Committee:   chain2Id,
+		ReceiptHash: lockedBatch.Hash(),
+		Receipts:    []bool{true},
+		PoolSize:    initPoolSize - expectedY,
+	}
+	chain1LockedBatch.EnsureNonNil()
+	require.EqualExportedValues(t, chain1LockedBatch, locked)
+
+	// Chain2: complete the cycle by finalizing the swap
+	require.NoError(t, chain2.HandleRemoteDexBatch(chain1LockedBatch, chain1Id))
+
+	holdingPoolBalance, err = chain2.GetPoolBalance(chain1Id + HoldingPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, holdingPoolBalance)
+	liquidityPool, err := chain2.GetPool(chain1Id + LiquidityPoolAddend)
+	require.NoError(t, err)
+	require.EqualExportedValues(t, liquidityPool, &Pool{
+		Id:     chain1Id + LiquidityPoolAddend,
+		Amount: initPoolSize + expectedX,
+	})
+}
+
 func TestRotateDexSellBatch(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1087,15 +1444,6 @@ func TestRotateDexSellBatch(t *testing.T) {
 		expectError  bool
 		errorMessage string
 	}{
-		{
-			name:         "nil buy batch",
-			detail:       "test when buy batch is nil (should return error)",
-			receipts:     []bool{true, false},
-			chainId:      1,
-			setupState:   func(sm *StateMachine) {},
-			expectError:  true,
-			errorMessage: "invalid input parameter",
-		},
 		{
 			name:     "locked batch exists",
 			detail:   "test when locked batch still exists (should exit early)",
@@ -1202,7 +1550,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 				test.setupState(&sm)
 			}
 
-			err := sm.RotateDexSellBatch(test.buyBatch, test.receipts)
+			err := sm.RotateDexSellBatch(test.buyBatch, test.chainId, test.receipts)
 
 			if test.expectError {
 				require.Error(t, err)
@@ -1215,7 +1563,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 				// verify that rotation worked correctly if we expect success
 				if test.buyBatch != nil && !test.expectError {
 					// check that locked batch state is appropriate
-					lockedBatch, err := sm.GetDexBatch(KeyForLockedBatch(test.buyBatch.Committee))
+					lockedBatch, err := sm.GetDexBatch(test.buyBatch.Committee, true)
 					require.NoError(t, err)
 
 					if test.name == "locked batch exists" {
@@ -1224,7 +1572,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 						// no need to check next batch since rotation shouldn't happen
 					} else {
 						// check that next batch was deleted
-						nextBatch, err := sm.GetDexBatch(KeyForNextBatch(test.buyBatch.Committee))
+						nextBatch, err := sm.GetDexBatch(test.buyBatch.Committee, false)
 						require.NoError(t, err)
 						require.True(t, nextBatch.IsEmpty(), "next batch should be empty after rotation")
 
@@ -1292,7 +1640,7 @@ func TestSetGetDexBatch(t *testing.T) {
 
 			if !test.expectError {
 				// test GetDexBatch
-				got, err := sm.GetDexBatch(test.key)
+				got, err := sm.GetDexBatch(test.batch.Committee, false)
 				require.NoError(t, err)
 				require.NotNil(t, got)
 				require.Equal(t, test.batch.Committee, got.Committee)

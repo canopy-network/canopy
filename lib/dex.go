@@ -19,7 +19,7 @@ func (x *DexBatch) Hash() []byte {
 	return crypto.Hash(bz)
 }
 
-func (x *DexLimitOrder) MapKey(blockHash []byte) string {
+func (x *DexLimitOrder) Key(blockHash []byte) string {
 	bz, _ := Marshal(x)
 	return crypto.HashString(append(blockHash, bz...))
 }

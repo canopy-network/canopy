@@ -280,7 +280,7 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 		return
 	}
 	// set the dex batch based on the 'locked batch' for the root chain id
-	batch, err := sm.GetDexBatch(fsm.KeyForLockedBatch(rcId))
+	batch, err := sm.GetDexBatch(rcId, true)
 	if err != nil {
 		c.log.Error(err.Error())
 		return
