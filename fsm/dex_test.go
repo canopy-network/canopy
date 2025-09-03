@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/stretchr/testify/require"
 )
-
-var deadAddr, _ = crypto.NewAddressFromString(strings.Repeat("dead", 10))
 
 var emptyDexBatch = &lib.DexBatch{
 	Committee: 1,
@@ -197,7 +194,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Amount: 100,
 				Points: []*PoolPoints{{
 					Address: deadAddr.Bytes(),
-					Points:  100,
+					Points:  101,
 				}, {
 					Address: newTestAddressBytes(t, 1),
 					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
@@ -205,7 +202,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 					Address: newTestAddressBytes(t, 2),
 					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
 				}},
-				TotalPoolPoints: 100 + uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)-1), // rounding
+				TotalPoolPoints: 100 + uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)),
 			},
 		},
 		{
@@ -781,7 +778,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Amount: 300,
 				Points: []*PoolPoints{{
 					Address: deadAddr.Bytes(),
-					Points:  100,
+					Points:  101,
 				}, {
 					Address: newTestAddressBytes(t, 1),
 					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
@@ -789,7 +786,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 					Address: newTestAddressBytes(t, 2),
 					Points:  uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)) / 2,
 				}},
-				TotalPoolPoints: 100 + uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)-1), // rounding
+				TotalPoolPoints: 100 + uint64(float64(100)*(math.Sqrt(float64((300)*100))/math.Sqrt(float64(100*100))-1)),
 			},
 		},
 		{

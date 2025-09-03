@@ -527,8 +527,8 @@ func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidity
 	if err != nil {
 		return err
 	}
-	// hard limit ops to 10K per batch to prevent unchecked state growth
-	if len(batch.Deposits) >= 10_000 {
+	// hard limit ops to 5K per batch to prevent unchecked state growth
+	if len(batch.Deposits) >= 5_000 {
 		return ErrMaxDexBatchSize()
 	}
 	// move funds from user
@@ -555,8 +555,8 @@ func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidit
 	if err != nil {
 		return err
 	}
-	// hard limit ops to 10K per batch to prevent unchecked state growth
-	if len(batch.Withdraws) >= 10_000 {
+	// hard limit ops to 5K per batch to prevent unchecked state growth
+	if len(batch.Withdraws) >= 5_000 {
 		return ErrMaxDexBatchSize()
 	}
 	// get the liquidity pool

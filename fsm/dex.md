@@ -1,17 +1,45 @@
 ## dex.go - implements AMM style atomic swaps between root & nested chains
 --
-## Overview
+## 1. Overview
 
-This file is designed to facilitate a Uniswap V2 style AMM token swap
-between a root and a nested chain.
+`dex.go` implements a Uniswap-style AMM that works **across two blockchains**: a **Nested Chain (master)** and a **Root Chain (slave)**.
 
-The AMM executes **batched limit orders** and supports **one-sided liquidity deposits and withdrawals**.
+- Like Uniswap, liquidity providers deposit two tokens into a pool, and traders swap between them at prices set by the constant product rule (`x*y=k`).
+- Unlike Uniswap, swaps are **batched and mirrored across chains**.
+- The batching ensures both chains always agree on pool state and LP accounting.
 
-Batches are processed **atomically between chains** via receipts and a strict locking protocol, ensuring deterministic outcomes and correct LP point allocation.
+**Why this design?**
+- To enable trustless swaps across chains without drift.
+- To guarantee that liquidity and LP shares remain consistent no matter where orders are submitted.
+- To preserve the familiar economics of Uniswap V2, while adding deterministic, cross-chain finality.
 
-## 1. Core Idea: Uniswap AMM formula
+---
 
-At its heart, the Uniswap invariant is:
+## 2. How It Works
+
+- Both chains gather new commands in parallel (`Orders`, `Deposits`, `Withdraws`) into `NextBatch`.
+- Batches are only finalized once the counterparty confirms them with receipts.
+- Locks prevent overlapping work; receipts prove success or failure.
+
+**Cycle Summary:**
+1. Nested submits its `LockedBatch` to Root, including receipts proving the last Root batch was processed.
+2. Root checks receipts. If valid, it finalizes Nested’s batch and then locks its own new batch.
+3. Nested checks Root’s batch. If valid, it finalizes Root’s batch and then locks its own next batch.  
+   → Repeat cycle
+
+**Key properties:**
+- No batch is processed twice.
+- Both chains always agree on liquidity and LP points.
+- Failed or incomplete batches are retried or refunded.
+
+**Mental model:**  
+Think of it as two ledgers walking in lockstep. Each step forward requires both chains to say, “Yes, I’ve seen and agreed to your last move.”
+
+---
+
+## 3. Core AMM Logic
+
+Under the hood, swaps follow the exact Uniswap V2 formula:
 
 ```
 x * y = k
@@ -31,30 +59,30 @@ This is literally the **Uniswap V2 formula** with fee `0.3%`. Every swap still s
 
 ---
 
-## 2. Virtual Pool Mirrors Counterparty State
+## 4. Virtual Pool Mirrors Counterparty State
 
 - Each chain maintains a `virtualPool` based on the **other chain’s last `PoolSize`**.
 - When processing orders, it treats this as the effective reserve (`x`) for the “add” token.
 - Trades are applied **against local liquidity (`y`)**, but the invariant is computed against the mirrored counterparty pool.
 
-
 ---
 
-## 3. LP Points Are Standard Pro-Rata
+## 5. LP Points Are Standard Pro-Rata
 
 Liquidity addition/withdrawal follows the classic Uniswap V2 integer math:
 
 ```go
-ΔL = L * (√((x+d)*y) - √(x*y)) / √(x*y)
+// Geometric mean of the before and after states:
+ΔL = L * (√((x+d)*y) - √(x*y)) / √(x*y) 
 ```
 
 - LP points proportional to **square root of the pool product** (`√k`)
-- One-sided deposits work because counterparty’s pool size is included (`x` = remote PoolSize)
-- Withdrawals are proportional to **LP share**
+- 1-sided deposits work because counterparty’s pool size is included (`x` = remote PoolSize)
+- Withdrawals are 2-sided and proportional to **LP share**
 
 ---
 
-## 4. Batches Don’t Break Uniswap Logic
+## 6. Batches Don’t Break Uniswap Logic
 
 - Batches aggregate multiple orders → atomic execution, prevent reentrancy, ensure deterministic receipts.
 - Within a batch:
@@ -62,11 +90,9 @@ Liquidity addition/withdrawal follows the classic Uniswap V2 integer math:
     - Each trade updates `x` and `y` (virtual and local reserves)
     - `dY` computation is identical to Uniswap
 
-[x] Batching = different implementation, same economic outcome.
-
 ---
 
-## 5. Cross-Chain Receipts Ensure Determinism
+## 7. Cross-Chain Receipts Ensure Determinism
 
 - Nested reads Root’s locked batch and vice versa.
 - Trades only finalize after receipts → both sides see the same LP state.
@@ -74,7 +100,7 @@ Liquidity addition/withdrawal follows the classic Uniswap V2 integer math:
 
 ---
 
-## 6. Fees Are Applied Identically
+## 8. Fees Are Applied Identically
 
 ```go
 amountInWithFee = dX * 997
@@ -291,13 +317,6 @@ sequenceDiagram
 
 ---
 
-### Incomplete or Failed Batches
-- If a batch cannot be processed due to incomplete cross-chain receipts, processing is aborted and retried in the next trigger.
-- A batch may retry up to **3 times**, with each retry corresponding to **5 blocks**.
-- After holding a locked batch for 15 blocks without success, the batch is dropped and all orders are refunded.
-
----
-
 ### Order Processing
 - Orders within a batch are sorted pseudorandomly using the **hash of the previous block** on the processing chain.
 - All computations, including LP points and swaps, use **integer math with floor rounding**.
@@ -314,6 +333,9 @@ sequenceDiagram
 ---
 
 ### Cross-Chain Token Security
+- **Nested chain is the master**, Root chain is the slave.
+- Root only reads a Nested `certificateResultTx` after it has been submitted.
+- Nested will **not process a new batch** until the previous batch has been fully processed and receipts are confirmed.
 - Token movements are **secured using a HoldingPool**.
 - Tokens are moved from `HoldingPool` to `LiquidityPool` **only after cross-chain receipts confirm successful execution**, preventing double-spending or inconsistent states.
 
@@ -324,32 +346,16 @@ sequenceDiagram
 - Fees are **added to the liquidity pool** and accrue to LPs.
 - Basic transaction fees still apply, even for failed trades.
 
----
-
-### Pool Edge Cases
-- Batches or orders with zero pool reserves (`x == 0` or `y == 0`) are **rejected**.
-- Withdrawals also cannot proceed if reserves are zero.
 
 ---
 
-### Master/Slave Chain Semantics
-- **Nested chain is the master**, Root chain is the slave.
-- Root only reads a Nested `certificateResultTx` after it has been submitted.
-- Nested will **not process a new batch** until the previous batch has been fully processed and receipts are confirmed.
-
----
-
-### Timeouts & Refunds
-- Each batch retry corresponds to **5 blocks**.
-- Orders in a batch that ultimately fails after retries are **refunded to users**, with LPs absorbing any impact.
-
----
-
-## Cross-Chain Semantics
-
-- The chain maintains a virtual pool that is initialized by counterparty’s last advertised `PoolSize` and is maintained through each operation.
-- Inbound receipts finalize success/failure
-- Liquidity operations computed on updated virtual pool after trades
+### Liveness fallback
+- If a batch cannot be processed due to incomplete cross-chain receipts, processing is aborted and retried in the next trigger.
+- A batch may retry up to **3 times**, with each retry corresponding to **5 blocks**.
+- After holding a locked batch for 15 blocks without success, the batch is dropped and all orders are refunded.
+- Max batch size: 50,000 orders
+- Max liquidity commands: 5,000 deposits & 5,000 withdrawals
+- Min order amount: chain-specific dust threshold
 
 ---
 
@@ -360,15 +366,6 @@ sequenceDiagram
 - Orders pseudorandomly sorted by block hash
 - Withdrawals processed before deposits
 - Deterministic across both chains
-
----
-
-## Parameters (Defaults)
-
-- `f_taker = 0.003` (30 bps)
-- Block timeout: 5 blocks, max 3 retries
-- Max batch size: 10,000 orders
-- Min order amount: chain-specific dust threshold
 
 ---
 

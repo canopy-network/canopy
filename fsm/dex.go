@@ -216,7 +216,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 		return err
 	}
 	// sum deposits
-	var totalDeposit uint64
+	var totalDeposit, distributed uint64
 	for _, order := range batch.Deposits {
 		totalDeposit += order.Amount
 	}
@@ -230,8 +230,6 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	}
 	// if no liq points yet assigned - initialize to 'dead' address
 	if L == 0 {
-		// setup dead address
-		deadAddr, _ := crypto.NewAddressFromString(strings.Repeat("dead", 10))
 		// calculate the initial liquidity points using L = √( x * y )
 		L = lib.IntSqrt(x * y)
 		// add points to the dead address
@@ -249,6 +247,8 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share
 		share := totalDL * order.Amount / totalDeposit
+		// update distributed
+		distributed += share
 		// add points to pool
 		if err = p.AddPoints(order.Address, share); err != nil {
 			return err
@@ -260,6 +260,10 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 			}
 			p.Amount += order.Amount
 		}
+	}
+	// sink dust to the dead account
+	if err = p.AddPoints(deadAddr.Bytes(), totalDL-distributed); err != nil {
+		return err
 	}
 	// update the pool
 	return s.SetPool(p)
@@ -433,3 +437,5 @@ func (s *StateMachine) GetDexBatches(lockedBatch bool) (b []*lib.DexBatch, err l
 	// exit
 	return
 }
+
+var deadAddr, _ = crypto.NewAddressFromString(strings.Repeat("dead", 10))
