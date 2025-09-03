@@ -46,13 +46,12 @@ func TestStoreStream(t *testing.T) {
 	count := 0
 	stream.KeyToList = nil
 	stream.Send = func(buf *z.Buffer) error {
-		count++
 		kvList, err := badger.BufferToKVList(buf)
 		if err != nil {
 			return err
 		}
 
-		for i, kv := range kvList.GetKv() {
+		for _, kv := range kvList.GetKv() {
 			cleaned := bytes.TrimPrefix(kv.GetKey(), prefix)
 			address, err := fsm.AddressFromKey(cleaned)
 			if err != nil {
@@ -64,7 +63,7 @@ func TestStoreStream(t *testing.T) {
 				return err
 			}
 			count++
-			fmt.Printf("Validator [%d] %s\n", i, address.String())
+			// fmt.Printf("Validator [%d] %s\n", i, address.String())
 		}
 
 		return nil
@@ -122,17 +121,17 @@ func TestStore(t *testing.T) {
 	MaxCommitteeSize := uint64(1_000_000_000)
 	i := uint64(0)
 	for ; it.Valid() && i < MaxCommitteeSize; func() { it.Next(); i++ }() {
-		fmt.Println("Non stream Key:", lib.BytesToString(it.Key()))
+		// fmt.Println("Non stream Key:", lib.BytesToString(it.Key()))
 		address, e := fsm.AddressFromKey(it.Key())
 		if e != nil {
 			t.Fatal(e)
 		}
 		// load the validator from the state using the address
-		val, e := GetValidator(newStore, address)
+		_, e = GetValidator(newStore, address)
 		if e != nil {
 			t.Fatal(e)
 		}
-		fmt.Printf("%d %s\n", i, lib.BytesToString(val.Address))
+		// fmt.Printf("%d %s\n", i, lib.BytesToString(val.Address))
 	}
 	fmt.Printf("Count: %d Elapsed: %s\n", i, time.Since(start))
 }
