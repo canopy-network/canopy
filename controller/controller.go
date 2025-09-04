@@ -103,10 +103,15 @@ func (c *Controller) Start() {
 			if e != nil {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
-				// call mempool check
-				c.Mempool.CheckMempool()
-				// update the peer 'must connect'
-				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				// execute in a function call to allow defer
+				func() {
+					c.Mempool.L.Lock()
+					defer c.Mempool.L.Unlock()
+					// call mempool check
+					c.Mempool.CheckMempool()
+					// update the peer 'must connect'
+					c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				}()
 				// exit the loop
 				break
 			}
