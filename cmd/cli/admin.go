@@ -56,6 +56,9 @@ func init() {
 	adminCmd.AddCommand(txCreateOrderCmd)
 	adminCmd.AddCommand(txEditOrderCmd)
 	adminCmd.AddCommand(txDeleteOrderCmd)
+	adminCmd.AddCommand(txDexLimitOrderCmd)
+	adminCmd.AddCommand(txDexLiquidityDepositCmd)
+	adminCmd.AddCommand(txDexLiquidityWithdrawCmd)
 	adminCmd.AddCommand(txLockOrderCmd)
 	adminCmd.AddCommand(txStartPollCmd)
 	adminCmd.AddCommand(approveTxVotePoll)
@@ -236,11 +239,38 @@ var (
 	}
 
 	txDeleteOrderCmd = &cobra.Command{
-		Use:   "tx-delete-order <address or nickname> <order-id> <chain-id>--fee=10000 --simulate=true",
+		Use:   "tx-delete-order <address or nickname> <order-id> <chain-id> --fee=10000 --simulate=true",
 		Short: "delete an existing sell order - use the simulate flag to generate json only",
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxDeleteOrder(argGetAddrOrNickname(args[0]), args[1], uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLimitOrderCmd = &cobra.Command{
+		Use:   "tx-dex-limit-order <address or nickname> <amount> <receive-amount> <chain-id> --fee=10000 --simulate=true",
+		Short: "create a new dex limit order - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(4),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLimitOrder(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLiquidityDepositCmd = &cobra.Command{
+		Use:   "tx-dex-liquidity-deposit <address or nickname> <amount> <chain-id> --fee=10000 --simulate=true",
+		Short: "executes a dex liquidity deposit - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLiquidityDeposit(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), getPassword(), !sim, fee))
+		},
+	}
+
+	txDexLiquidityWithdrawCmd = &cobra.Command{
+		Use:   "tx-dex-liquidity-withdraw <address or nickname> <percent> <chain-id> --fee=10000 --simulate=true",
+		Short: "executes a dex liquidity withdraw - use the simulate flag to generate json only",
+		Args:  cobra.MinimumNArgs(3),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxDexLiquidityWithdraw(argGetAddrOrNickname(args[0]), argToInt(args[1]), uint64(argToInt(args[2])), getPassword(), !sim, fee))
 		},
 	}
 
