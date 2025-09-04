@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
-func TestStoreStream(t *testing.T) {
+func TestStreamStore(t *testing.T) {
 	config := lib.Config{
 		StoreConfig: lib.StoreConfig{
 			CleanupBlockInterval: 200,
@@ -35,16 +36,41 @@ func TestStoreStream(t *testing.T) {
 	chainId := uint64(1)
 
 	stream := db.DB().NewStreamAt(db.Version() - 2)
-	stream.NumGo = 2
+	stream.NumGo = runtime.NumCPU()
 	prefix := lib.Append([]byte(historicStatePrefix), fsm.CommitteePrefix(chainId))
 	stream.Prefix = prefix
-
-	stream.ChooseKey = func(item *badger.Item) bool {
-		return true
-	}
-
 	count := 0
+
+	stream.ChooseKey = nil
 	stream.KeyToList = nil
+	// stream.KeyToList = func(key []byte, itr *badger.Iterator) (*pb.KVList, error) {
+	// 	item := itr.Item()
+	// 	val, err := item.ValueCopy(nil)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	k := item.KeyCopy(nil)
+	// 	kv := &pb.KV{
+	// 		Key:   k,
+	// 		Value: val,
+	// 	}
+
+	// 	cleaned := bytes.TrimPrefix(kv.GetKey(), prefix)
+	// 	address, err := fsm.AddressFromKey(cleaned)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	// load the validator from the state using the address
+	// 	_, err = GetValidator(readOnlyStore, address)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	count++
+
+	// 	return &pb.KVList{
+	// 		Kv: []*pb.KV{kv},
+	// 	}, nil
+	// }
 	stream.Send = func(buf *z.Buffer) error {
 		kvList, err := badger.BufferToKVList(buf)
 		if err != nil {
@@ -111,7 +137,7 @@ func TestStore(t *testing.T) {
 	}
 
 	chainId := uint64(1)
-	it, err := newStore.RevIterator(fsm.CommitteePrefix(chainId))
+	it, err := newStore.Iterator(fsm.CommitteePrefix(chainId))
 	if err != nil {
 		return
 	}
