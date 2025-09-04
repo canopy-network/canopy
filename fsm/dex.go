@@ -308,9 +308,6 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		yShare := totalYWithdrawal * points / totalPointsToRemove
 		// calculate virtual share
 		xShare := totalXWithdraw * points / totalPointsToRemove
-		// update pools
-		*y -= yShare
-		batch.PoolSize -= xShare
 		// remove points from pool
 		if err = p.RemovePoints(addr, points); err != nil {
 			return err
@@ -320,13 +317,19 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 			if err = s.AccountAdd(crypto.NewAddress(addr), xShare); err != nil {
 				return err
 			}
-			p.Amount = batch.PoolSize
 		} else {
 			if err = s.AccountAdd(crypto.NewAddress(addr), yShare); err != nil {
 				return err
 			}
-			p.Amount = *y
 		}
+	}
+	// burn undistributed
+	*y -= totalYWithdrawal
+	batch.PoolSize -= totalXWithdraw
+	if local {
+		p.Amount = batch.PoolSize
+	} else {
+		p.Amount = *y
 	}
 	// set the pool in state
 	return s.SetPool(p)

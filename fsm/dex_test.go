@@ -333,7 +333,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 176, // 300 - 62*2
+				Amount: 175, // 300 - 62.5*2
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
@@ -952,7 +952,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 176, // 300 - 62*2
+				Amount: 175, // 300 - 62.5*2
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
