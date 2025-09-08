@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -324,6 +325,7 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	if s.LastValidatorSet != nil {
 		committee = s.LastValidatorSet[msg.Qc.Header.RootHeight+1][chainId]
 	}
+	fmt.Printf("cid: %d rh: %d CACHE ON handle: %v\n", chainId, msg.Qc.Header.RootHeight, s.LastValidatorSet)
 	if committee == nil {
 		// otherwise, retrieve it from the store
 		valSet, err := s.LoadCommittee(chainId, msg.Qc.Header.RootHeight)
