@@ -353,7 +353,7 @@ type txRequest struct {
 	Submit          bool            `json:"submit"`
 	ReceiveAmount   uint64          `json:"receiveAmount"`
 	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
-	Percent         int             `json:"percent"`
+	Percent         uint64          `json:"percent"`
 	OrderId         string          `json:"orderId"`
 	Memo            string          `json:"memo"`
 	PollJSON        json.RawMessage `json:"pollJSON"`

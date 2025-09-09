@@ -472,10 +472,10 @@ func NewDexLiquidityDeposit(from crypto.PrivateKeyI, amount, committeeId, networ
 }
 
 // NewDexLiquidityWithdraw() creates a DexLiquidityWithdraw object in the interface form of TransactionI
-func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent int, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent uint64, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(from, &MessageDexLiquidityWithdraw{
 		ChainId: committeeId,
-		Percent: uint64(percent),
+		Percent: percent,
 		Address: from.PublicKey().Address().Bytes(),
 	}, networkId, chainId, fee, height, memo)
 }

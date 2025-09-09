@@ -21,7 +21,7 @@ export default function FormInputs({ keygroup, account, validator, fields, show,
     const initialValues = fields.reduce((form, field) => {
       const value = field.defaultValue || "";
       form[field.label] =
-        field.type === "number" || field.type === "currency" ? sanitizeNumberInput(value.toString()) : value;
+        field.label !== "percent" && field.type === "number" || field.type === "currency" ? sanitizeNumberInput(value.toString()) : value;
       return form;
     }, {});
 

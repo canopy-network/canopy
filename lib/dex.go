@@ -2,15 +2,12 @@ package lib
 
 import (
 	"bytes"
+	"encoding/binary"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"math"
 	"strings"
 )
 
-func (x *DexLimitOrder) MinAsk() float64 {
-	return float64(x.RequestedAmount) / float64(x.AmountForSale)
-}
-
+// Hash() creates a hash representative of the dex batch
 func (x *DexBatch) Hash() []byte {
 	if x.IsEmpty() {
 		return []byte(strings.Repeat("F", crypto.HashSize))
@@ -19,15 +16,7 @@ func (x *DexBatch) Hash() []byte {
 	return crypto.Hash(bz)
 }
 
-func (x *DexLimitOrder) Key(blockHash []byte) string {
-	bz, _ := Marshal(x)
-	return crypto.HashString(append(blockHash, bz...))
-}
-
-func (x *DexLimitOrder) SurplusMetric() float64 {
-	return math.Pow(float64(x.AmountForSale), 2) / x.MinAsk()
-}
-
+// Copy() makes a deep copy of the limit order
 func (x *DexLimitOrder) Copy() *DexLimitOrder {
 	// defensive
 	if x == nil {
@@ -40,6 +29,7 @@ func (x *DexLimitOrder) Copy() *DexLimitOrder {
 	}
 }
 
+// IsEmpty() checks if a locked dex batch is 'logically' empty or not
 func (x *DexBatch) IsEmpty() bool {
 	if x == nil {
 		return true
@@ -47,6 +37,8 @@ func (x *DexBatch) IsEmpty() bool {
 	return x.ReceiptHash == nil && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
 }
 
+// EnsureNonNil() ensures the slices in the batch are not empty
+// NOTE: pool points is the exception because it's omitted unless remote locked batch is pulled due to liveness fallback
 func (x *DexBatch) EnsureNonNil() {
 	if x.Orders == nil {
 		x.Orders = []*DexLimitOrder{}
@@ -62,30 +54,44 @@ func (x *DexBatch) EnsureNonNil() {
 	}
 }
 
-func (x *DexBatch) CopyOrders() []*DexLimitOrder {
+// CopyOrders() creates 2 copies of the dex limit orders with hash keys
+func (x *DexBatch) CopyOrders(blockHash []byte) (cpy1 []*DexLimitOrderWithKey, cpy2 []*DexLimitOrderWithKey) {
 	if x == nil {
-		return nil
+		return nil, nil
 	}
-	orders := make([]*DexLimitOrder, len(x.Orders))
+	cpy1, cpy2 = make([]*DexLimitOrderWithKey, len(x.Orders)), make([]*DexLimitOrderWithKey, len(x.Orders))
 	for i, order := range x.Orders {
-		orders[i] = order.Copy()
+		// copy 1
+		cpy1[i] = &DexLimitOrderWithKey{DexLimitOrder: order.Copy()}
+		cpy1[i].HashKey(i, blockHash)
+		// copy 2
+		cpy2[i] = &DexLimitOrderWithKey{
+			DexLimitOrder: order.Copy(),
+			Key:           cpy1[i].Key,
+		}
 	}
-	return orders
+	return
 }
 
-func (x *DexLimitOrder) Equals(y *DexLimitOrder) bool {
-	// defensive
-	if x == nil || y == nil {
-		return false
-	}
-	// compare requested amounts
-	if x.RequestedAmount != y.RequestedAmount {
-		return false
-	}
-	// compare amount for sale
-	if x.AmountForSale != y.AmountForSale {
-		return false
-	}
-	// compare addresses
-	return bytes.Equal(x.Address, y.Address)
+type DexLimitOrderWithKey struct {
+	*DexLimitOrder
+	Key string
+}
+
+// Key() creates a 'HashKey' with a given block hash
+func (x *DexLimitOrderWithKey) HashKey(index int, blockHash []byte) string {
+	bz, _ := Marshal(x)
+
+	// convert index to 8-byte big-endian
+	idxBz := make([]byte, 8)
+	binary.BigEndian.PutUint64(idxBz, uint64(index))
+
+	// preallocate final slice: blockHash + idxBz + bz
+	data := make([]byte, 0, len(blockHash)+len(idxBz)+len(bz))
+	data = append(data, blockHash...)
+	data = append(data, idxBz...)
+	data = append(data, bz...)
+
+	x.Key = crypto.HashString(data)
+	return x.Key
 }

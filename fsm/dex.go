@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"math/big"
 	"sort"
 	"strings"
 )
@@ -149,11 +150,11 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 	if err != nil || prevBlk == nil || prevBlk.BlockHeader == nil {
 		return
 	}
-	// make a copy of the orders
-	orders, blockHash := remoteBatch.CopyOrders(), prevBlk.BlockHeader.Hash
-	// sort pseudorandomly
-	sort.Slice(orders, func(i, j int) bool {
-		return orders[i].Key(blockHash) < orders[j].Key(blockHash) // TODO cache map key inside order structure
+	// make 2 copies of the orders with hash keys
+	sorted, orders := remoteBatch.CopyOrders(prevBlk.BlockHeader.Hash)
+	// sort pseudorandomly by hash key
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Key < sorted[j].Key
 	})
 	// setup working reserves
 	x, y := &remoteBatch.PoolSize, distributePoolAmount
@@ -161,26 +162,24 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 		return nil, ErrInvalidLiquidityPool()
 	}
 	// for each order
-	for _, order := range orders {
+	for _, order := range sorted {
 		// set dX
 		dX := order.AmountForSale
-		// uniswap V2 formula
-		amountInWithFee := dX * 997
-		// calculate the new dY (out)
-		dY := (amountInWithFee * y) / (*x*1000 + amountInWithFee)
+		// dY = (dX * y) / (x + dX)
+		dY := SafeComputeDY(*x, y, dX)
 		// fail (below limit)
 		if dY < order.RequestedAmount {
 			continue
 		}
 		// success [map-key] -> output amount
-		accepted[order.Key(blockHash)] = dY
+		accepted[order.Key] = dY
 		// update pool reserves like uniswap would
 		*x, y = *x+dX, y-dY
 	}
 	var out uint64
 	// set success in the receipt
-	for i, order := range remoteBatch.Orders {
-		if out, success[i] = accepted[order.Key(blockHash)]; success[i] {
+	for i, order := range orders {
+		if out, success[i] = accepted[order.Key]; success[i] {
 			// distribute from pool
 			if err = s.PoolSub(chainId+LiquidityPoolAddend, out); err != nil {
 				return
@@ -231,7 +230,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// if no liq points yet assigned - initialize to 'dead' address
 	if L == 0 {
 		// calculate the initial liquidity points using L = √( x * y )
-		L = lib.IntSqrt(x * y)
+		L = lib.SqrtProductUint64(x, y)
 		// add points to the dead address
 		if err = p.AddPoints(deadAddr.Bytes(), L); err != nil {
 			return err
@@ -240,13 +239,14 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// calculate dL as if it's one big deposit
 	// using integer math and geometric mean of reserves:
 	// ΔL = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y)
-	oldK := x * y
-	newK := (x + totalDeposit) * y
-	totalDL := L * (lib.IntSqrt(newK) - lib.IntSqrt(oldK)) / lib.IntSqrt(oldK)
+	oldK := lib.SqrtProductUint64(x, y)
+	newK := lib.SqrtProductUint64(x+totalDeposit, y)
+	// L * (newK - oldK) / oldK
+	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// pro-rata distribute the points
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share
-		share := totalDL * order.Amount / totalDeposit
+		share := lib.SafeMulDiv(totalDL, order.Amount, totalDeposit)
 		// update distributed
 		distributed += share
 		// add points to pool
@@ -286,7 +286,10 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 			continue
 		}
 		// calculate the points to withdraw
-		pointsToRemove := initialPoints * w.Percent / 100
+		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		if e != nil {
+			return e
+		}
 		// increment the points to remove
 		withdraws[lib.BytesToString(w.Address)] += pointsToRemove
 		// update the total points to remove
@@ -297,17 +300,17 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		return nil
 	}
 	// total local reserve to withdraw
-	totalYWithdrawal := *y * totalPointsToRemove / p.TotalPoolPoints
+	totalYWithdrawal := lib.SafeMulDiv(*y, totalPointsToRemove, p.TotalPoolPoints)
 	// total remote reserve to withdraw
-	totalXWithdraw := batch.PoolSize * totalPointsToRemove / p.TotalPoolPoints
+	totalXWithdraw := lib.SafeMulDiv(batch.PoolSize, totalPointsToRemove, p.TotalPoolPoints)
 	// pro-rata distribute
 	for address, points := range withdraws {
 		// get address
 		addr, _ := lib.StringToBytes(address)
 		// calculate share
-		yShare := totalYWithdrawal * points / totalPointsToRemove
+		yShare := lib.SafeMulDiv(totalYWithdrawal, points, totalPointsToRemove)
 		// calculate virtual share
-		xShare := totalXWithdraw * points / totalPointsToRemove
+		xShare := lib.SafeMulDiv(totalXWithdraw, points, totalPointsToRemove)
 		// remove points from pool
 		if err = p.RemovePoints(addr, points); err != nil {
 			return err
@@ -454,6 +457,29 @@ func (s *StateMachine) GetDexBatches(lockedBatch bool) (b []*lib.DexBatch, err l
 	}
 	// exit
 	return
+}
+
+// SafeComputeDY() executes overflow protected uniswap V2 formula
+func SafeComputeDY(x, y, dX uint64) uint64 {
+	bx := new(big.Int).SetUint64(x)
+	by := new(big.Int).SetUint64(y)
+	bdX := new(big.Int).SetUint64(dX)
+
+	// amountInWithFee = dX * 997
+	amountInWithFee := new(big.Int).Mul(bdX, big.NewInt(997))
+
+	// numerator = amountInWithFee * y
+	numerator := new(big.Int).Mul(amountInWithFee, by)
+
+	// denominator = x*1000 + amountInWithFee
+	denominator := new(big.Int).Mul(bx, big.NewInt(1000))
+	denominator.Add(denominator, amountInWithFee)
+
+	// dY = numerator / denominator
+	dY := new(big.Int).Div(numerator, denominator)
+
+	// integer flooring
+	return dY.Uint64()
 }
 
 var deadAddr, _ = crypto.NewAddressFromString(strings.Repeat("dead", 10))

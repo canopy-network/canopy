@@ -125,6 +125,18 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
       minLength: 1,
       maxLength: 100,
     },
+    percent: {
+      placeholder: "percent of liquidity to withdraw",
+      defaultValue: 100,
+      tooltip: "the % of liquidity to withdraw",
+      label: "percent",
+      inputText: "percent",
+      feedback: "please choose a percent to withdraw",
+      required: true,
+      type: "number",
+      min: 1,
+      max: 100,
+    },
     orderId: {
       placeholder: "the id of the existing order",
       tooltip: "the unique identifier of the order",
@@ -333,6 +345,12 @@ export function getFormInputs(type, keyGroup, account, validator, keyStore) {
       return [a.account, a.chainId, a.orderId, a.data, a.amount, a.receiveAmount, a.receiveAddress, a.memo, a.fee, a.password];
     case "delete_order":
       return [a.account, a.chainId, a.orderId, a.memo, a.fee, a.password];
+    case "dex_limit_order":
+      return [a.account, a.chainId,  a.amount, a.receiveAmount, a.memo, a.fee, a.password];
+    case "dex_liquidity_deposit":
+      return [a.account, a.chainId,  a.amount, a.memo, a.fee, a.password];
+    case "dex_liquidity_withdrawal":
+      return [a.account, a.chainId,  a.percent, a.memo, a.fee, a.password];
     case "edit-stake":
       return [
         a.account,
@@ -680,6 +698,12 @@ export function getActionFee(action, params) {
       return params.editOrderFee;
     case "delete_order":
       return params.deleteOrderFee;
+    case "dex_limit_order":
+      return params.dexLimitOrderFee;
+    case "dex_liquidity_deposit":
+      return params.dexLiquidityDepositFee;
+    case "dex_liquidity_withdrawal":
+      return params.dexLiquidityWithdrawFee;
     case "edit-stake":
       return params.editStakeFee;
     case "change-param":
