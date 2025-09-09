@@ -38,6 +38,8 @@
 - /v1/query/tx-by-hash
 - /v1/query/order
 - /v1/query/orders
+- /v1/query/dex-batch
+- /v1/query/next-dex-batch
 - /v1/query/last-proposers
 - /v1/query/valid-double-signer
 - /v1/query/double-signers
@@ -73,6 +75,9 @@
 - /v1/admin/tx-create-order
 - /v1/admin/tx-edit-order
 - /v1/admin/tx-delete-order
+- /v1/admin/tx-dex-limit-order
+- /v1/admin/tx-dex-liquidity-deposit
+- /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
 - /v1/admin/subsidy
@@ -286,7 +291,10 @@ $ curl -X POST localhost:50002/v1/query/accounts \
 
 - **id**: `string` - the unique identifier
 - **amount**:`uint64` - the balance of funds the pool has in micro denomination
-
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 **Example**:
 
 ```
@@ -298,9 +306,16 @@ $ curl -X POST localhost:50002/v1/query/pool \
       }'
 
 > {
-      "id": "1",
-      "amount": 969
-  }
+  "id": "1",
+  "amount": 969,
+  "poolPoints": [
+    {
+      "address": "551f21e333012027b81701a35023efc88b864975",
+      "points": 100
+    }
+  ],
+  "totalPoolPoints": 100
+}
 ```
 
 ## Pools
@@ -322,6 +337,10 @@ $ curl -X POST localhost:50002/v1/query/pool \
 - **results**: `array` - the list of result objects
   - **id**: - `string` the unique identifier of the pool
   - **amount**: - `uint64` the balance of funds the pool has in micro denomination
+  - **poolPoints**: `array` - a list of pool points
+    - **address**: `hex-string` - the recipient address of the points
+    - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -344,7 +363,14 @@ $ curl -X POST localhost:50002/v1/query/pools \
     "results": [
       {
         "id": "1",
-        "amount": 969
+        "amount": 969,
+        "poolPoints": [
+          {
+            "address": "551f21e333012027b81701a35023efc88b864975",
+            "points": 100
+          }
+        ],
+        "totalPoolPoints": 100
       }
     ],
     "type": "pools",
@@ -2222,6 +2248,139 @@ $ curl -X POST localhost:50002/v1/query/orders \
 }
 ```
 
+## Dex Batch
+**Route:** `/v1/query/dex-batch`
+**Description**: view the locked dex batch for a committee or all dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+- **points**: `bool` - return all point holders for the liquidity pool and total points
+**Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **receipts**: `boolean array` - the list of order success status's
+```
+$ curl -X POST localhost:50002/v1/query/dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
+    "orders": [
+        {
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
+      }
+    ],
+    "totalPoolPoints": 100,
+    "poolSize": 5000000000000,
+    "receipts": [true, false, true]
+}
+```
+
+## Next Dex Batch
+**Route:** `/v1/query/next-dex-batch`
+**Description**: view the up-next dex batch for a committee or all upcoming dex batches
+**HTTP Method**: `POST`
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+  **Response**:
+- **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
+- **orders**: `dex limit order array` - the list of dex limit orders
+  - **amountForSale**: `uint64` - amount of asset for sale
+  - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
+  - **address**: `hex string` - the address where the funds are transferred from and to
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
+- **poolSize**: `uint64` - contains the current balance of the liquidity pool
+- **receipts**: `boolean array` - the list of order success status's
+```
+$ curl -X POST localhost:50002/v1/query/next-dex-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000,
+        "id": 1
+      }'
+> {
+    "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
+    "orders": [
+        {
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
+      }
+    ],
+    "poolSize": 5000000000000,
+    "receipts": [true, false, true]
+}
+```
+
 ## Pending Transactions (Mempool)
 
 **Route:** `/v1/query/pending`
@@ -3463,6 +3622,159 @@ $ curl -X POST http://localhost:50003/v1/admin/tx-delete-order \
   "signature": {
     "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
     "signature": "8043f0c6827aea8449a238811af800dec35cc78222cd3f3b0c830323c22902920f7b19d963d6ff76165bf3754f6dfb6504ddd20368b32169720880fd928e7ccbbfd628cd4c2c065c280fa51bc2d4b0b23d88fe9ffa6088b5d19e1b3e80463783"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Limit Order
+
+**Route:** `/v1/admin/tx-dex-limit-order`
+
+**Description**: generates/submits a DEX limit order transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to sell in smallest denomination
+- **receiveAmount**: `uint64` - the amount to receive in smallest denomination
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLimitOrder)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-limit-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "receiveAmount": 2000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLimitOrder",
+  "msg": {
+    "chainID": 1,
+    "amountForSale": 1000000,
+    "requestedAmount": 2000000,
+    "sellerReceiveAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Deposit
+
+**Route:** `/v1/admin/tx-dex-liquidity-deposit`
+
+**Description**: generates/submits a DEX liquidity deposit transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **amount**: `uint64` - the amount to deposit in smallest denomination
+- **committees**: `string` -  the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityDeposit)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-deposit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "amount": 1000000,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityDeposit",
+  "msg": {
+    "chainID": 1,
+    "amount": 1000000,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
+  },
+  "time": 1749644810582870,
+  "createdHeight": 196596,
+  "fee": 10000,
+  "networkID": 1,
+  "chainID": 1
+}
+```
+
+## Txn Dex Liquidity Withdraw
+
+**Route:** `/v1/admin/tx-dex-liquidity-withdraw`
+
+**Description**: generates/submits a DEX liquidity withdraw transaction
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the from address
+- **percent**: `int` - the percentage of liquidity to withdraw (1-100)
+- **committees**: `string` - the committee id of the counter asset
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or not (returns the tx-hash if true)
+- **password**: `string` - the password associated to decrypt the private key to sign the transaction
+
+**Response**: (See tx-by-hash and MessageDexLiquidityWithdraw)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-dex-liquidity-withdraw \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "percent": 50,
+    "committees":"1",
+    "fee":0,
+    "submit":false,
+    "password":"test"
+    }'
+  
+> {
+  "type": "dexLiquidityWithdraw",
+  "msg": {
+    "chainID": 1,
+    "percent": 50,
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  },
+  "signature": {
+    "publicKey": "83e91c8cf692365efd9a99a5efbd0afcc3d93a1e88e9bfe7d5219f9f5cf50cb785dd8c9727a1618a92100e28d47f7bf1",
+    "signature": "835dfa9e5a370233369d1e955620a1512f9a5c31702e718e52d6cc60f40a91a0f142ae8e35c1dadd3213b17f881fbe6413c64103e27a7336296d963daf9a6e91cc9625d470248db009a9cde63c55cb6f4282f96b936bde547756e85e9ed84bb5"
   },
   "time": 1749644810582870,
   "createdHeight": 196596,
