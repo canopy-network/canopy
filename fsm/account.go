@@ -715,7 +715,14 @@ type poolPoints struct {
 
 // MarshalJSON() is the json.Marshaller implementation for the Pool object
 func (x *Pool) MarshalJSON() ([]byte, error) {
-	return json.Marshal(pool{x.Id, x.Amount})
+	var pp []poolPoints
+	for _, point := range x.Points {
+		pp = append(pp, poolPoints{
+			Address: point.Address,
+			Points:  point.Points,
+		})
+	}
+	return json.Marshal(pool{x.Id, x.Amount, pp, x.TotalPoolPoints})
 }
 
 // UnmarshalJSON() is the json.Unmarshaler implementation for the Pool object
@@ -724,7 +731,19 @@ func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
 	if err = json.Unmarshal(bz, a); err != nil {
 		return err
 	}
-	x.Id, x.Amount = a.ID, a.Amount
+	var pp []*lib.PoolPoints
+	for _, point := range x.Points {
+		pp = append(pp, &lib.PoolPoints{
+			Address: point.Address,
+			Points:  point.Points,
+		})
+	}
+	*x = Pool{
+		Id:              a.ID,
+		Amount:          a.Amount,
+		Points:          pp,
+		TotalPoolPoints: a.TotalPoints,
+	}
 	return
 }
 
