@@ -301,12 +301,12 @@ func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.P
 // NextDexBatch retrieves the 'up-next' dex batch for a committee
 func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
 		if id == 0 {
 			return s.GetDexBatches(false)
 		}
 		// return the locked batch
-		return s.GetDexBatch(id, false)
+		return s.GetDexBatch(id, false, points)
 	})
 }
 

@@ -2260,6 +2260,7 @@ $ curl -X POST localhost:50002/v1/query/orders \
 - **points**: `bool` - return all point holders for the liquidity pool and total points
 **Response**:
 - **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
 - **orders**: `dex limit order array` - the list of dex limit orders
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
@@ -2285,6 +2286,7 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
       }'
 > {
     "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
     "orders": [
         {
             "amountForSale": 1000000000000,
@@ -2325,6 +2327,7 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
 - **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
   **Response**:
 - **committee**: `uint64` - the id of the 'counter asset'
+- **receiptHash**: `hex-string` - the hash of the counter batch this locked batch corresponds to
 - **orders**: `dex limit order array` - the list of dex limit orders
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
@@ -2335,6 +2338,10 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
 - **withdraws**: `dex withdraw array` - the list of dex limit orders
   - **percent**: `uint64` - the percent of liquidity being withdrawn
   - **address**: `hex string` - the address where the funds are transferred from
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 - **poolSize**: `uint64` - contains the current balance of the liquidity pool
 - **receipts**: `boolean array` - the list of order success status's
 ```
@@ -2346,6 +2353,7 @@ $ curl -X POST localhost:50002/v1/query/next-dex-batch \
       }'
 > {
     "committee": 1,
+    "receiptHash": "b5d54c39e66671c9731b9f471e585d8262cd4f54963f0c93082d8dcf334d4c78",
     "orders": [
         {
             "amountForSale": 1000000000000,
@@ -2358,12 +2366,17 @@ $ curl -X POST localhost:50002/v1/query/next-dex-batch \
             "amount": 1000000000000,
             "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
         }
-    ],
     "withdraws": [
         {
             "amount": 100,
             "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
         }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
+      }
     ],
     "poolSize": 5000000000000,
     "receipts": [true, false, true]

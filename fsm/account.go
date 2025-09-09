@@ -700,53 +700,6 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	return
 }
 
-// pool is the json.Marshaller and json.Unmarshaler implementation for the Pool object
-type pool struct {
-	ID          uint64       `json:"id"`
-	Amount      uint64       `json:"amount"`
-	PoolPoints  []poolPoints `json:"pool_points"`
-	TotalPoints uint64       `json:"total_points"`
-}
-
-type poolPoints struct {
-	Address lib.HexBytes `json:"address"`
-	Points  uint64       `json:"points"`
-}
-
-// MarshalJSON() is the json.Marshaller implementation for the Pool object
-func (x *Pool) MarshalJSON() ([]byte, error) {
-	var pp []poolPoints
-	for _, point := range x.Points {
-		pp = append(pp, poolPoints{
-			Address: point.Address,
-			Points:  point.Points,
-		})
-	}
-	return json.Marshal(pool{x.Id, x.Amount, pp, x.TotalPoolPoints})
-}
-
-// UnmarshalJSON() is the json.Unmarshaler implementation for the Pool object
-func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
-	a := new(pool)
-	if err = json.Unmarshal(bz, a); err != nil {
-		return err
-	}
-	var pp []*lib.PoolPoints
-	for _, point := range x.Points {
-		pp = append(pp, &lib.PoolPoints{
-			Address: point.Address,
-			Points:  point.Points,
-		})
-	}
-	*x = Pool{
-		Id:              a.ID,
-		Amount:          a.Amount,
-		Points:          pp,
-		TotalPoolPoints: a.TotalPoints,
-	}
-	return
-}
-
 // GetPointsFor() returns the amount of points an address has
 func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
 	// add to existing if found

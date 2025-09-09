@@ -207,13 +207,14 @@ func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.Erro
 }
 
 func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	p = new(lib.DexBatch)
 	err = c.heightIdAndPointsRequest(DexBatchRouteName, height, chainId, withPoints, p)
 	return
 }
 
-func (c *Client) NextDexBatch(height, chainId uint64) (p *lib.DexBatch, err lib.ErrorI) {
+func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
 	p = new(lib.DexBatch)
-	err = c.heightAndIdRequest(NextDexBatchRouteName, height, chainId, p)
+	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
 	return
 }
 

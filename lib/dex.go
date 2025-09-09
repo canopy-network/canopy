@@ -177,3 +177,79 @@ func (x *DexLiquidityWithdraw) UnmarshalJSON(b []byte) (err error) {
 	}
 	return
 }
+
+type dexBatch struct {
+	Committee       uint64                  `json:"committee"`
+	ReceiptHash     HexBytes                `json:"receiptHash"`
+	Orders          []*DexLimitOrder        `json:"orders"`
+	Deposits        []*DexLiquidityDeposit  `json:"deposits,omitempty"`
+	Withdraws       []*DexLiquidityWithdraw `json:"withdraws,omitempty"`
+	PoolSize        uint64                  `json:"poolSize"`
+	PoolPoints      []*PoolPoints           `json:"poolPoints"`
+	TotalPoolPoints uint64                  `json:"totalPoolPoints"`
+	Receipts        []bool                  `json:"receipts,omitempty"`
+	LockedHeight    uint64                  `json:"locked_height,omitempty"`
+}
+
+// MarshalJSON() implements the json.Marshal interface for dex batch
+func (x DexBatch) MarshalJSON() ([]byte, error) {
+	return json.Marshal(dexBatch{
+		Committee:       x.Committee,
+		ReceiptHash:     x.ReceiptHash,
+		Orders:          x.Orders,
+		Deposits:        x.Deposits,
+		Withdraws:       x.Withdraws,
+		PoolSize:        x.PoolSize,
+		PoolPoints:      x.PoolPoints,
+		TotalPoolPoints: x.TotalPoolPoints,
+		Receipts:        x.Receipts,
+		LockedHeight:    x.LockedHeight,
+	})
+}
+
+// UnmarshalJSON() implements the json.Unmarshaller interface for dex batch
+func (x *DexBatch) UnmarshalJSON(b []byte) (err error) {
+	d := new(dexBatch)
+	if err = json.Unmarshal(b, d); err != nil {
+		return err
+	}
+	*x = DexBatch{
+		Committee:       d.Committee,
+		ReceiptHash:     d.ReceiptHash,
+		Orders:          d.Orders,
+		Deposits:        d.Deposits,
+		Withdraws:       d.Withdraws,
+		PoolSize:        d.PoolSize,
+		PoolPoints:      d.PoolPoints,
+		TotalPoolPoints: d.TotalPoolPoints,
+		Receipts:        d.Receipts,
+		LockedHeight:    d.LockedHeight,
+	}
+	return
+}
+
+type poolPoints struct {
+	Address HexBytes `json:"address"`
+	Points  uint64   `json:"points"`
+}
+
+// MarshalJSON() is the json.Marshaller implementation for the PoolPoints object
+func (x PoolPoints) MarshalJSON() ([]byte, error) {
+	return json.Marshal(poolPoints{
+		Address: x.Address,
+		Points:  x.Points,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the PoolPoints object
+func (x *PoolPoints) UnmarshalJSON(bz []byte) (err error) {
+	a := new(poolPoints)
+	if err = json.Unmarshal(bz, a); err != nil {
+		return err
+	}
+	*x = PoolPoints{
+		Address: a.Address,
+		Points:  a.Points,
+	}
+	return
+}

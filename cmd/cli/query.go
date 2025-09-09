@@ -64,6 +64,8 @@ func init() {
 	queryCmd.AddCommand(delegateLotteryCmd)
 	queryCmd.AddCommand(rootChainInfoCmd)
 	queryCmd.AddCommand(validatorSetCmd)
+	queryCmd.AddCommand(dexBatchCmd)
+	queryCmd.AddCommand(nextDexBatchCmd)
 }
 
 var (
@@ -392,6 +394,26 @@ var (
 			writeToConsole(client.ValidatorSet(height, uint64(argToInt(args[0]))))
 		},
 	}
+
+	dexBatchCmd = &cobra.Command{
+		Use:   "dex-batch <chain-id> <with-points> --height=1",
+		Short: "query the locked dex batch at a certain height",
+		Long:  "query the locked dex batch at a certain height",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.DexBatch(height, uint64(argToInt(args[0])), argToBool(args[1])))
+		},
+	}
+
+	nextDexBatchCmd = &cobra.Command{
+		Use:   "next-dex-batch <chain-id> <with-points> --height=1",
+		Short: "query the next dex batch at a certain height",
+		Long:  "query the next dex batch at a certain height",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.NextDexBatch(height, uint64(argToInt(args[0])), argToBool(args[1])))
+		},
+	}
 )
 
 func getPoolArgs(args []string) (h uint64, id uint64) {
@@ -439,4 +461,12 @@ func argToInt(arg string) int {
 		l.Fatal(err.Error())
 	}
 	return i
+}
+
+func argToBool(arg string) bool {
+	value, err := strconv.ParseBool(arg)
+	if err != nil {
+		l.Fatal(err.Error())
+	}
+	return value
 }
