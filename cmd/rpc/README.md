@@ -293,7 +293,10 @@ $ curl -X POST localhost:50002/v1/query/accounts \
 
 - **id**: `string` - the unique identifier
 - **amount**:`uint64` - the balance of funds the pool has in micro denomination
-
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 **Example**:
 
 ```
@@ -305,9 +308,16 @@ $ curl -X POST localhost:50002/v1/query/pool \
       }'
 
 > {
-      "id": "1",
-      "amount": 969
-  }
+  "id": "1",
+  "amount": 969,
+  "poolPoints": [
+    {
+      "address": "551f21e333012027b81701a35023efc88b864975",
+      "points": 100
+    }
+  ],
+  "totalPoolPoints": 100
+}
 ```
 
 ## Pools
@@ -329,6 +339,10 @@ $ curl -X POST localhost:50002/v1/query/pool \
 - **results**: `array` - the list of result objects
   - **id**: - `string` the unique identifier of the pool
   - **amount**: - `uint64` the balance of funds the pool has in micro denomination
+  - **poolPoints**: `array` - a list of pool points
+    - **address**: `hex-string` - the recipient address of the points
+    - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 - **type**: `string` - the type of results
 - **count**: `int` - length of results
 - **totalPages**: `int` - number of pages
@@ -351,7 +365,14 @@ $ curl -X POST localhost:50002/v1/query/pools \
     "results": [
       {
         "id": "1",
-        "amount": 969
+        "amount": 969,
+        "poolPoints": [
+          {
+            "address": "551f21e333012027b81701a35023efc88b864975",
+            "points": 100
+          }
+        ],
+        "totalPoolPoints": 100
       }
     ],
     "type": "pools",
@@ -2236,12 +2257,23 @@ $ curl -X POST localhost:50002/v1/query/orders \
 **Request**:
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+- **points**: `bool` - return all point holders for the liquidity pool and total points
 **Response**:
 - **committee**: `uint64` - the id of the 'counter asset'
 - **orders**: `dex limit order array` - the list of dex limit orders
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
   - **address**: `hex string` - the address where the funds are transferred from and to
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
+- **poolPoints**: `array` - a list of pool points
+  - **address**: `hex-string` - the recipient address of the points
+  - **points**: `uint64` the amount of points owned
+- **totalPoolPoints**: `uint64` - the sum of all pool points
 - **poolSize**: `uint64` - contains the current balance of the liquidity pool
 - **receipts**: `boolean array` - the list of order success status's
 ```
@@ -2260,6 +2292,25 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
             "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
         }
     ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "poolPoints": [
+      {
+        "address": "551f21e333012027b81701a35023efc88b864975",
+        "points": 100
+      }
+    ],
+    "totalPoolPoints": 100,
     "poolSize": 5000000000000,
     "receipts": [true, false, true]
 }
@@ -2272,12 +2323,18 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
 **Request**:
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
-**Response**:
+  **Response**:
 - **committee**: `uint64` - the id of the 'counter asset'
 - **orders**: `dex limit order array` - the list of dex limit orders
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
   - **address**: `hex string` - the address where the funds are transferred from and to
+- **deposits**: `dex deposit array` - the list of dex limit orders
+  - **amount**: `uint64` - amount of asset being deposited
+  - **address**: `hex string` - the address where the funds are transferred from
+- **withdraws**: `dex withdraw array` - the list of dex limit orders
+  - **percent**: `uint64` - the percent of liquidity being withdrawn
+  - **address**: `hex string` - the address where the funds are transferred from
 - **poolSize**: `uint64` - contains the current balance of the liquidity pool
 - **receipts**: `boolean array` - the list of order success status's
 ```
@@ -2291,13 +2348,25 @@ $ curl -X POST localhost:50002/v1/query/next-dex-batch \
     "committee": 1,
     "orders": [
         {
-            "amountForSale": 2000000000000,
-            "requestedAmount": 4000000000000,
-            "address": "602c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "deposits": [
+        {
+            "amount": 1000000000000,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+        }
+    ],
+    "withdraws": [
+        {
+            "amount": 100,
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
         }
     ],
     "poolSize": 5000000000000,
-    "receipts": [true, true, false]
+    "receipts": [true, false, true]
 }
 ```
 

@@ -702,8 +702,15 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 
 // pool is the json.Marshaller and json.Unmarshaler implementation for the Pool object
 type pool struct {
-	ID     uint64 `json:"id"`
-	Amount uint64 `json:"amount"`
+	ID          uint64       `json:"id"`
+	Amount      uint64       `json:"amount"`
+	PoolPoints  []poolPoints `json:"pool_points"`
+	TotalPoints uint64       `json:"total_points"`
+}
+
+type poolPoints struct {
+	Address lib.HexBytes `json:"address"`
+	Points  uint64       `json:"points"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Pool object

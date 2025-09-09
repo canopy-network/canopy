@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"strings"
 )
@@ -94,4 +95,85 @@ func (x *DexLimitOrderWithKey) HashKey(index int, blockHash []byte) string {
 
 	x.Key = crypto.HashString(data)
 	return x.Key
+}
+
+type dexLimitOrder struct {
+	AmountForSale   uint64   `json:"amountForSale"`
+	RequestedAmount uint64   `json:"requestedAmount"`
+	Address         HexBytes `json:"address"`
+}
+
+// MarshalJSON() implements the json.Marshal interface for DexLimitOrder
+func (x DexLimitOrder) MarshalJSON() ([]byte, error) {
+	return json.Marshal(dexLimitOrder{
+		AmountForSale:   x.AmountForSale,
+		RequestedAmount: x.RequestedAmount,
+		Address:         x.Address,
+	})
+}
+
+// UnmarshalJSON() implements the json.Unmarshaller interface for DexLimitOrder
+func (x *DexLimitOrder) UnmarshalJSON(b []byte) (err error) {
+	d := new(dexLimitOrder)
+	if err = json.Unmarshal(b, d); err != nil {
+		return err
+	}
+	*x = DexLimitOrder{
+		AmountForSale:   d.AmountForSale,
+		RequestedAmount: d.RequestedAmount,
+		Address:         d.Address,
+	}
+	return
+}
+
+type dexLiquidityDeposit struct {
+	Amount  uint64   `json:"amount"`
+	Address HexBytes `json:"address"`
+}
+
+// MarshalJSON() implements the json.Marshal interface for DexLiquidityDeposit
+func (x DexLiquidityDeposit) MarshalJSON() ([]byte, error) {
+	return json.Marshal(dexLiquidityDeposit{
+		Amount:  x.Amount,
+		Address: x.Address,
+	})
+}
+
+// UnmarshalJSON() implements the json.Unmarshaller interface for DexLiquidityDeposit
+func (x *DexLiquidityDeposit) UnmarshalJSON(b []byte) (err error) {
+	d := new(dexLiquidityDeposit)
+	if err = json.Unmarshal(b, d); err != nil {
+		return err
+	}
+	*x = DexLiquidityDeposit{
+		Amount:  d.Amount,
+		Address: d.Address,
+	}
+	return
+}
+
+type dexLiquidityWithdraw struct {
+	Percent uint64   `json:"percent"`
+	Address HexBytes `json:"address"`
+}
+
+// MarshalJSON() implements the json.Marshal interface for dexLiquidityWithdraw
+func (x DexLiquidityWithdraw) MarshalJSON() ([]byte, error) {
+	return json.Marshal(dexLiquidityWithdraw{
+		Percent: x.Percent,
+		Address: x.Address,
+	})
+}
+
+// UnmarshalJSON() implements the json.Unmarshaller interface for dexLiquidityWithdraw
+func (x *DexLiquidityWithdraw) UnmarshalJSON(b []byte) (err error) {
+	d := new(dexLiquidityWithdraw)
+	if err = json.Unmarshal(b, d); err != nil {
+		return err
+	}
+	*x = DexLiquidityWithdraw{
+		Percent: d.Percent,
+		Address: d.Address,
+	}
+	return
 }
