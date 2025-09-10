@@ -270,3 +270,7 @@ func ErrInvalidERC20Tx(err error) lib.ErrorI {
 func ErrNotEmpty() lib.ErrorI {
 	return lib.NewError(lib.CodeErrNotEmpty, lib.StateMachineModule, "a field that should be empty isn't")
 }
+
+func ErrEventTypeEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeEventTypeEmpty, lib.StateMachineModule, "event type is empty")
+}

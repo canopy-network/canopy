@@ -55,24 +55,32 @@ type WIndexerI interface {
 	DeleteTxsForHeight(height uint64) ErrorI                       // deletes all transactions for a height
 	DeleteBlockForHeight(height uint64) ErrorI                     // deletes a block and transaction data for a height
 	DeleteQCForHeight(height uint64) ErrorI                        // deletes a certificate for a height
+	IndexReward(blockHeight, amount uint64, address []byte) ErrorI
+	IndexSlash(blockHeight uint64, address []byte) ErrorI
+	IndexAutomaticPause(blockHeight uint64, address []byte) ErrorI
+	IndexAutomaticUnstaking(blockHeight uint64, address []byte) ErrorI
+	IndexAutomaticUnstake(blockHeight uint64, address []byte) ErrorI
 }
 
 // RIndexerI defines the read interface for the indexing operations
 type RIndexerI interface {
-	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                  // get the tx by the Transaction hash
-	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)              // get Transactions for a height
-	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)    // get Transactions for a sender
-	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Transactions for a recipient
-	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                            // get a block by hash
-	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                        // get a block by height
-	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                  // get a block by height without transactions
-	GetBlocks(p PageParams) (*Page, ErrorI)                                                       // get a page of blocks within the page params
-	GetQCByHeight(height uint64) (*QuorumCertificate, ErrorI)                                     // get certificate for a height
-	GetDoubleSigners() ([]*DoubleSigner, ErrorI)                                                  // all double signers in the indexer
-	IsValidDoubleSigner(address []byte, height uint64) (bool, ErrorI)                             // get if the DoubleSigner is already set for a height
-	GetCheckpoint(chainId, height uint64) (blockHash HexBytes, err ErrorI)                        // get the checkpoint block hash for a certain committee and height combination
-	GetMostRecentCheckpoint(chainId uint64) (checkpoint *Checkpoint, err ErrorI)                  // get the most recent checkpoint for a committee
-	GetAllCheckpoints(chainId uint64) (checkpoints []*Checkpoint, err ErrorI)                     // export all checkpoints for a committee
+	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                   // get the tx by the Transaction hash
+	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)               // get Transactions for a height
+	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)     // get Transactions for a sender
+	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)  // get Transactions for a recipient
+	GetEventsByBlockHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)       // get Events for a block height
+	GetEventsByAddress(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Events for an address
+	GetEventsByType(eventType EventType, newestToOldest bool, p PageParams) (*Page, ErrorI)        // get Events for an event type
+	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                             // get a block by hash
+	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                         // get a block by height
+	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                   // get a block by height without transactions
+	GetBlocks(p PageParams) (*Page, ErrorI)                                                        // get a page of blocks within the page params
+	GetQCByHeight(height uint64) (*QuorumCertificate, ErrorI)                                      // get certificate for a height
+	GetDoubleSigners() ([]*DoubleSigner, ErrorI)                                                   // all double signers in the indexer
+	IsValidDoubleSigner(address []byte, height uint64) (bool, ErrorI)                              // get if the DoubleSigner is already set for a height
+	GetCheckpoint(chainId, height uint64) (blockHash HexBytes, err ErrorI)                         // get the checkpoint block hash for a certain committee and height combination
+	GetMostRecentCheckpoint(chainId uint64) (checkpoint *Checkpoint, err ErrorI)                   // get the most recent checkpoint for a committee
+	GetAllCheckpoints(chainId uint64) (checkpoints []*Checkpoint, err ErrorI)                      // export all checkpoints for a committee
 }
 
 // WStoreI defines an interface for basic write operations

@@ -226,6 +226,7 @@ const (
 	CodeInsufficientSupply        ErrorCode = 56
 	CodeUnknownMsgName            ErrorCode = 57
 	CodeUnknownPageable           ErrorCode = 58
+	CodeEventTypeEmpty            ErrorCode = 59
 
 	CodeInvalidBlockRange        ErrorCode = 60
 	CodeInvalidPublicKey         ErrorCode = 61
