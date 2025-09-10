@@ -1,9 +1,10 @@
 package fsm
 
 import (
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 /* This file contains logic regarding byzantine actor handling and bond slashes */
@@ -260,7 +261,14 @@ func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI
 	// calculate the future unstaking height
 	unstakingHeight := s.Height() + unstakingBlocks
 	// set the validator as unstaking
-	return s.SetValidatorUnstaking(address, validator, unstakingHeight)
+	err = s.SetValidatorUnstaking(address, validator, unstakingHeight)
+	if err != nil {
+		return err
+	}
+	// cast the store to ensure the proper store type to complete this operation
+	storeI := s.Store().(lib.StoreI)
+	// index unstaking event
+	return storeI.IndexAutomaticUnstaking(s.Height(), address.Bytes())
 }
 
 // SlashValidators() burns a specified percentage of multiple validator's staked tokens
@@ -346,7 +354,14 @@ func (s *StateMachine) SlashValidator(address []byte, chainId, percent uint64, p
 		return e
 	}
 	// update the validator
-	return s.SetValidator(validator)
+	err = s.SetValidator(validator)
+	if err != nil {
+		return err
+	}
+	// cast the store to ensure the proper store type to complete this operation
+	storeI := s.Store().(lib.StoreI)
+	// index slash event
+	return storeI.IndexSlash(s.Height(), validator.Address)
 }
 
 // LoadMinimumEvidenceHeight() loads the minimum height the evidence must be to still be usable

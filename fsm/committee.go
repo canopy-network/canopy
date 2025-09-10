@@ -119,6 +119,8 @@ func (s *StateMachine) GetSubsidizedCommittees() (paidIDs []uint64, err lib.Erro
 
 // DistributeCommitteeRewards() distributes the committee mint based on the PaymentPercents from the result of the QuorumCertificate
 func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
+	// cast the store to ensure the proper store type to complete this operation
+	storeI := s.Store().(lib.StoreI)
 	// retrieve the necessary parameters
 	paramsVal, err := s.GetParamsVal()
 	if err != nil {
@@ -148,6 +150,10 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 			distributed, er := s.DistributeCommitteeReward(stub, rewardPool.Amount, data.NumberOfSamples, paramsVal)
 			if er != nil {
 				return er
+			}
+			err = storeI.IndexReward(s.Height(), distributed, stub.Address)
+			if err != nil {
+				return err
 			}
 			totalDistributed += distributed
 		}

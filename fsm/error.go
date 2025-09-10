@@ -290,3 +290,7 @@ func ErrMaxDexBatchSize() lib.ErrorI {
 func ErrInvalidInput() lib.ErrorI {
 	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid input parameter")
 }
+
+func ErrEventTypeEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeEventTypeEmpty, lib.StateMachineModule, "event type is empty")
+}

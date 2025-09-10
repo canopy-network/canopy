@@ -1,10 +1,11 @@
 package fsm
 
 import (
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"time"
 )
 
 /* This file contains transaction handling logic - for the payload handling check message.go */

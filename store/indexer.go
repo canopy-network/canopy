@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -15,15 +16,20 @@ import (
 var _ lib.RWIndexerI = &Indexer{}
 
 var (
-	txHashPrefix       = []byte{1} // store key prefix for transaction by hash
-	txHeightPrefix     = []byte{2} // store key prefix for transactions by height
-	txSenderPrefix     = []byte{3} // store key prefix for transactions from sender
-	txRecipientPrefix  = []byte{4} // store key prefix for transaction by recipient
-	blockHashPrefix    = []byte{5} // store key prefix for block by hash
-	blockHeightPrefix  = []byte{6} // store key prefix for block by height
-	qcHeightPrefix     = []byte{7} // store key prefix for quorum certificate by height
-	doubleSignerPrefix = []byte{8} // store key prefix for double signers by height
-	checkPointPrefix   = []byte{9} // store key prefix for checkpoints for committee chains
+	txHashPrefix           = []byte{1}  // store key prefix for transaction by hash
+	txHeightPrefix         = []byte{2}  // store key prefix for transactions by height
+	txSenderPrefix         = []byte{3}  // store key prefix for transactions from sender
+	txRecipientPrefix      = []byte{4}  // store key prefix for transaction by recipient
+	blockHashPrefix        = []byte{5}  // store key prefix for block by hash
+	blockHeightPrefix      = []byte{6}  // store key prefix for block by height
+	qcHeightPrefix         = []byte{7}  // store key prefix for quorum certificate by height
+	doubleSignerPrefix     = []byte{8}  // store key prefix for double signers by height
+	checkPointPrefix       = []byte{9}  // store key prefix for checkpoints for committee chains
+	eventAddressPrefix     = []byte{10} // store key prefix for events by address
+	eventBlockHeightPrefix = []byte{11} // store key prefix for events by block height
+	eventBlockHashPrefix   = []byte{12} // store key prefix for events by block hash
+	eventTypePrefix        = []byte{13} // store key prefix for events by type
+	eventHashPrefix        = []byte{14} // store key prefix for events by event hash (concept just used for indexing)
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -622,3 +628,174 @@ func (t *Indexer) decodeBigEndian(b []byte) uint64 {
 }
 
 func (t *Indexer) setDB(db *Txn) { t.db = db }
+
+func (t *Indexer) IndexReward(blockHeight, amount uint64, address []byte) lib.ErrorI {
+	// convert the message to any
+	a, err := lib.NewAny(&lib.EventReward{
+		Amount: amount,
+	})
+	if err != nil {
+		return err
+	}
+	return t.indexEvent(blockHeight, address, lib.EventTypeReward, a)
+}
+
+func (t *Indexer) IndexSlash(blockHeight uint64, address []byte) lib.ErrorI {
+	// convert the message to any
+	a, err := lib.NewAny(&lib.EventSlash{})
+	if err != nil {
+		return err
+	}
+	return t.indexEvent(blockHeight, address, lib.EventTypeSlash, a)
+}
+
+func (t *Indexer) IndexAutomaticPause(blockHeight uint64, address []byte) lib.ErrorI {
+	// convert the message to any
+	a, err := lib.NewAny(&lib.EventAutoPause{})
+	if err != nil {
+		return err
+	}
+	return t.indexEvent(blockHeight, address, lib.EventTypeAutomaticPause, a)
+}
+
+func (t *Indexer) IndexAutomaticUnstaking(blockHeight uint64, address []byte) lib.ErrorI {
+	// convert the message to any
+	a, err := lib.NewAny(&lib.EventAutoUnstaking{})
+	if err != nil {
+		return err
+	}
+	return t.indexEvent(blockHeight, address, lib.EventTypeAutomaticUnstaking, a)
+}
+
+func (t *Indexer) IndexAutomaticUnstake(blockHeight uint64, address []byte) lib.ErrorI {
+	// convert the message to any
+	a, err := lib.NewAny(&lib.EventAutoUnstake{})
+	if err != nil {
+		return err
+	}
+	return t.indexEvent(blockHeight, address, lib.EventTypeAutomaticUnstake, a)
+}
+
+func (t *Indexer) indexEvent(blockHeight uint64, address []byte, eventType lib.EventType, a *anypb.Any) lib.ErrorI {
+	// convert the event to bytes
+	bz, err := lib.Marshal(&lib.Event{
+		EventType:   string(eventType),
+		Msg:         a,
+		BlockHeight: blockHeight,
+		// BlockHash:   blockHash,
+		Address: address,
+	})
+	if err != nil {
+		return err
+	}
+	// do initial unique hash indexing
+	eventHash, err := t.indexEventByHash(bz)
+	if err != nil {
+		return err
+	}
+	// then index by the rest of the fields
+	err = t.indexEventByAddress(address, eventHash)
+	if err != nil {
+		return err
+	}
+	err = t.indexEventByBlockHeight(blockHeight, eventHash)
+	if err != nil {
+		return err
+	}
+	// err = t.indexEventByBlockHash(blockHash, eventHash)
+	// if err != nil {
+	// 	return err
+	// }
+	err = t.indexEventByType([]byte(eventType), eventHash)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *Indexer) indexEventByHash(bz []byte) (hashKey []byte, err lib.ErrorI) {
+	hash := crypto.Hash(bz)
+	k := t.eventBlockHashKey(hash)
+	return k, t.db.Set(k, bz)
+}
+
+func (t *Indexer) eventHashKey(blockHash []byte) []byte {
+	return t.key(eventHashPrefix, blockHash, nil)
+}
+
+func (t *Indexer) indexEventByBlockHash(blockHash, bz []byte) (err lib.ErrorI) {
+	k := t.eventBlockHashKey(blockHash)
+	return t.db.Set(k, bz)
+}
+
+func (t *Indexer) eventBlockHashKey(blockHash []byte) []byte {
+	return t.key(eventBlockHashPrefix, blockHash, nil)
+}
+
+func (t *Indexer) indexEventByAddress(address, bz []byte) (err lib.ErrorI) {
+	k := t.eventAddressKey(address)
+	return t.db.Set(k, bz)
+}
+
+func (t *Indexer) eventAddressKey(address []byte) []byte {
+	return t.key(eventAddressPrefix, address, nil)
+}
+
+func (t *Indexer) indexEventByBlockHeight(blockHeight uint64, bz []byte) (err lib.ErrorI) {
+	k := t.eventBlockHeightKey(blockHeight)
+	return t.db.Set(k, bz)
+}
+
+func (t *Indexer) eventBlockHeightKey(blockHeight uint64) []byte {
+	return t.key(eventBlockHeightPrefix, t.encodeBigEndian(blockHeight), nil)
+}
+
+func (t *Indexer) indexEventByType(eventType, bz []byte) (err lib.ErrorI) {
+	k := t.eventTypeKey(eventType)
+	return t.db.Set(k, bz)
+}
+
+func (t *Indexer) eventTypeKey(eventType []byte) []byte {
+	return t.key(eventTypePrefix, eventType, nil)
+}
+
+// GetEventsByAddress() returns a slice of events ordered by height and index for an address
+func (t *Indexer) GetEventsByAddress(address crypto.AddressI, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventAddressKey(address.Bytes()), newestToOldest, p)
+}
+
+// GetEventsByBlockHeight() returns a slice of events ordered by height and index for a block height
+func (t *Indexer) GetEventsByBlockHeight(blockHeight uint64, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventBlockHeightKey(blockHeight), newestToOldest, p)
+}
+
+// GetEventsByType() returns a slice of events ordered by height and index for an event type
+func (t *Indexer) GetEventsByType(eventType lib.EventType, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventTypeKey([]byte(eventType)), newestToOldest, p)
+}
+
+// getEvents() returns a page of events in sorted order by block height
+func (t *Indexer) getEvents(prefix []byte, newestToOldest bool, p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
+	events, page := make(lib.Events, 0), lib.NewPage(p, "events-page")
+	err = page.Load(prefix, newestToOldest, &events, t.db, func(_, b []byte) (e lib.ErrorI) {
+		tx, e := t.getEvent(b)
+		if e == nil {
+			events = append(events, tx)
+		}
+		return
+	})
+	return
+}
+
+// getEvent() gets the event bytes from the DB and converts it into Event object
+func (t *Indexer) getEvent(key []byte) (*lib.Event, lib.ErrorI) {
+	bz, err := t.db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	ptr := new(lib.Event)
+	if err = lib.Unmarshal(bz, ptr); err != nil {
+		return nil, err
+	}
+	return ptr, nil
+}

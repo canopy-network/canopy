@@ -250,6 +250,7 @@ const (
 	CodeOrderNotFound             ErrorCode = 74
 	CodePointHolderNotFound       ErrorCode = 75
 	CodeMaxDexBatchSize           ErrorCode = 103
+	CodeEventTypeEmpty            ErrorCode = 104
 
 	CodeMinimumOrderSize     ErrorCode = 76
 	CodeOrderLocked          ErrorCode = 77

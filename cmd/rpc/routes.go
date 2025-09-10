@@ -41,6 +41,9 @@ const (
 	TxsBySenderRoutePath           = "/v1/query/txs-by-sender"
 	TxsByRecRoutePath              = "/v1/query/txs-by-rec"
 	TxByHashRoutePath              = "/v1/query/tx-by-hash"
+	EventsByBlockHeightRoutePath   = "/v1/query/events-by-block-height"
+	EventsByAddressRoutePath       = "/v1/query/events-by-address"
+	EventsByTypeRoutePath          = "/v1/query/events-by-type"
 	OrderRoutePath                 = "/v1/query/order"
 	OrdersRoutePath                = "/v1/query/orders"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
@@ -136,6 +139,9 @@ const (
 	TxsBySenderRouteName           = "txs-by-sender"
 	TxsByRecRouteName              = "txs-by-rec"
 	TxByHashRouteName              = "tx-by-hash"
+	EventsByBlockHeightRouteName   = "events-by-block-height"
+	EventsByAddressRouteName       = "events-by-address"
+	EventsByTypeRouteName          = "events-by-type"
 	PendingRouteName               = "pending"
 	FailedTxRouteName              = "failed-txs"
 	ProposalsRouteName             = "proposals"
@@ -236,6 +242,9 @@ var routePaths = routes{
 	TxsBySenderRouteName:           {Method: http.MethodPost, Path: TxsBySenderRoutePath},
 	TxsByRecRouteName:              {Method: http.MethodPost, Path: TxsByRecRoutePath},
 	TxByHashRouteName:              {Method: http.MethodPost, Path: TxByHashRoutePath},
+	EventsByBlockHeightRouteName:   {Method: http.MethodPost, Path: EventsByBlockHeightRoutePath},
+	EventsByAddressRouteName:       {Method: http.MethodPost, Path: EventsByAddressRoutePath},
+	EventsByTypeRouteName:          {Method: http.MethodPost, Path: EventsByTypeRoutePath},
 	OrderRouteName:                 {Method: http.MethodPost, Path: OrderRoutePath},
 	OrdersRouteName:                {Method: http.MethodPost, Path: OrdersRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
@@ -335,6 +344,9 @@ func createRouter(s *Server) *httprouter.Router {
 		TxsByHeightRouteName:           s.TransactionsByHeight,
 		TxsBySenderRouteName:           s.TransactionsBySender,
 		TxsByRecRouteName:              s.TransactionsByRecipient,
+		EventsByBlockHeightRouteName:   s.EventsByHeight,
+		EventsByAddressRouteName:       s.EventsByAddress,
+		EventsByTypeRouteName:          s.EventsByType,
 		TxByHashRouteName:              s.TransactionByHash,
 		OrderRouteName:                 s.Order,
 		OrdersRouteName:                s.Orders,

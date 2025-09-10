@@ -51,6 +51,11 @@ type paginatedAddressRequest struct {
 	lib.PageParams
 }
 
+type paginatedEventTypeRequest struct {
+	eventTypeRequest
+	lib.PageParams
+}
+
 type paginatedHeightRequest struct {
 	heightRequest
 	lib.PageParams
@@ -139,6 +144,10 @@ type hashRequest struct {
 
 type addressRequest struct {
 	Address lib.HexBytes `json:"address"`
+}
+
+type eventTypeRequest struct {
+	EventType string `json:"eventType"`
 }
 
 type committeesRequest struct {

@@ -405,6 +405,30 @@ func (s *Server) TransactionsByHeight(w http.ResponseWriter, r *http.Request, _ 
 	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetTxsByHeight(h, true, p) })
 }
 
+// EventsByHeight response with the events at block height h
+func (s *Server) EventsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByBlockHeight(h, true, p)
+	})
+}
+
+// EventsByAddress response with the events of address a
+func (s *Server) EventsByAddress(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.addrIndexer(w, r, func(s lib.StoreI, a crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByAddress(a, true, p)
+	})
+}
+
+// EventsByType response with the events of type t
+func (s *Server) EventsByType(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.eventTypeIndexer(w, r, func(s lib.StoreI, t lib.EventType, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByType(t, true, p)
+	})
+}
+
 // Pending responds with a page of unconfirmed mempool transactions
 func (s *Server) Pending(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
@@ -755,6 +779,29 @@ func (s *Server) addrIndexer(w http.ResponseWriter, r *http.Request, callback fu
 		return
 	}
 	p, err := callback(st, crypto.NewAddressFromBytes(req.Address), req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	write(w, p, http.StatusOK)
+}
+
+// eventTypeIndexer is a helper function to abstract common workflows around a callback requiring an event type and page parameterse
+func (s *Server) eventTypeIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, t lib.EventType, p lib.PageParams) (any, lib.ErrorI)) {
+	req := new(paginatedEventTypeRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	defer st.Discard()
+	if req.EventType == "" {
+		write(w, fsm.ErrEventTypeEmpty(), http.StatusBadRequest)
+		return
+	}
+	p, err := callback(st, lib.EventType(req.EventType), req.PageParams)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
