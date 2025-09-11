@@ -30,7 +30,7 @@ import (
 const (
 	repoName         = "canopy"
 	snapshotFilename = "snapshot.tar.gz"
-	waitTime         = 30 * time.Minute
+	waitTime         = 30 * time.Second
 )
 
 var ()
@@ -205,7 +205,7 @@ func HandleUpdateCheck() {
 					if i != 0 {
 						// Add random delay between 1-30 minutes before updating
 						minutes := rand.Intn(30) + 1
-						duration := time.Duration(minutes) * time.Minute
+						duration := time.Duration(minutes) * time.Second
 
 						log.Printf("Waiting for %v before uploading...\n", duration)
 						time.Sleep(duration)
@@ -279,7 +279,7 @@ func runAutoUpdate(config lib.Config) {
 		binPath = "./cli"
 	}
 	if repoOwner == "" {
-		repoOwner = "canopy-network"
+		repoOwner = "rem1niscence"
 	}
 
 	if !config.AutoUpdate {
