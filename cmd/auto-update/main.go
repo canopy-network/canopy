@@ -38,7 +38,7 @@ var ()
 // global variables for managing the auto-update process
 var (
 	binPath   = envOrDefault("BIN_PATH", "./cli")
-	repoOwner = envOrDefault("REPO_OWNER", "canopy-network")
+	repoOwner = envOrDefault("REPO_OWNER", "rem1niscence")
 
 	config lib.Config
 
