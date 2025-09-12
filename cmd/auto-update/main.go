@@ -197,6 +197,19 @@ func HandleUpdateCheck() {
 
 			log.Println("NEW DOWNLOAD DONE")
 
+			// check whether the new version requires a snapshot update
+			var snapshotPath string
+			var snapshotErr error
+			if _, ok := snapshotVersion[curRelease]; ok {
+				log.Printf("New version %s requires snapshot update, installing...", curRelease)
+				snapshotPath, snapshotErr = HandleNewSnapshot(config)
+				if snapshotErr != nil {
+					log.Printf("Failed to install snapshot: %v", snapshotErr)
+				} else {
+					log.Printf("snapshot successfully downloaded at: %s", snapshotPath)
+				}
+			}
+
 			if !newVersionAlreadyFound.Load() {
 				newVersionAlreadyFound.Store(true)
 				go func() {
@@ -224,19 +237,18 @@ func HandleUpdateCheck() {
 						}
 
 						log.Println("SENT KILL SIGNAL in routine of check updates")
+
+						if snapshotPath != "" {
+							log.Printf("replacing current database with new snapshot")
+							if err := replaceSnapshot(snapshotPath, config); err != nil {
+								log.Printf("Failed to replace snapshot: %v", err)
+							} else {
+								log.Printf("replaced current database with new snapshot")
+							}
+						}
+
 						<-notifyEndRun
 						log.Println("KILLED OLD PROCESS in routine of check updates")
-					}
-
-					// check whether the new version requires a snapshot update
-					if _, ok := snapshotVersion[curRelease]; ok {
-						log.Printf("New version %s requires snapshot update, installing...", curRelease)
-						// Perform snapshot update logic here
-						if err := HandleNewSnapshot(config); err != nil {
-							log.Printf("Failed to install snapshot: %v", err)
-						} else {
-							log.Printf("Successfully installed new snapshot at version %s", curRelease)
-						}
 					}
 
 					notifyStartRun <- struct{}{}
@@ -423,58 +435,66 @@ func runBinary() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func HandleNewSnapshot(config lib.Config) error {
+// HandleNewSnapshot handles the download and installation of a new snapshot for the given config
+func HandleNewSnapshot(config lib.Config) (string, error) {
 	// check if a snapshot is available for the chain ID
 	url, ok := snapshotURLs[config.ChainId]
 	if !ok {
-		return fmt.Errorf("no snapshot available for chain ID %d", config.ChainId)
+		return "", fmt.Errorf("no snapshot available for chain ID %d", config.ChainId)
 	}
-	// remove any previous dangling backup
-	dbDir := filepath.Join(cli.DataDir, config.DBName)
-	backupDBDir := dbDir + ".backup"
-	if err := os.RemoveAll(backupDBDir); err != nil {
-		return err
+	dbPath := filepath.Join(cli.DataDir, config.DBName)
+	backupPath := dbPath + ".backup"
+	snapshotPath := dbPath + ".snapshot"
+	// remove any previous dangling files
+	if err := os.RemoveAll(backupPath); err != nil {
+		return "", err
 	}
-	// rename the current database directory as a backup
-	if err := os.Rename(dbDir, backupDBDir); err != nil {
-		return err
+	if err := os.RemoveAll(snapshotPath); err != nil {
+		return "", err
 	}
-	log.Printf("backup canopy folder done")
-	defer func() {
-		// restore the backup if an error occurs
-		if err != nil {
-			log.Printf("snapshot install failed, restoring backup")
-			os.Rename(dbDir, backupDBDir)
-			return
-		}
-		// otherwise, delete the backup
-		os.RemoveAll(backupDBDir)
-	}()
 	var err error
 	// create a temporary file to store the snapshot
-	path, file, err := createFile(filepath.Join(cli.DataDir, config.DBName, snapshotFilename))
+	snapshotFile, file, err := createFile(filepath.Join(snapshotPath, snapshotFilename))
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer file.Close()
 	// download the snapshot file
 	log.Printf("downloading snapshot file...")
 	if err := downloadToFile(file, url); err != nil {
-		return err
+		return "", err
 	}
-	defer func() {
-		// delete the snapshot file
-		if err := os.Remove(path); err != nil {
-			log.Printf("failed to remove snapshot file: %v", err)
-		}
-	}()
 	log.Printf("snapshot file downloaded")
 	// decompress the snapshot file in the same directory
 	log.Printf("decompressing snapshot file...")
-	if err := decompressCMD(context.Background(), path, filepath.Dir(path)); err != nil {
-		return err
+	if err := decompressCMD(context.Background(), snapshotFile, snapshotPath); err != nil {
+		return "", err
 	}
 	log.Printf("decompressed snapshot file")
+	// remove the temporary file
+	_ = os.Remove(snapshotFile)
+	return snapshotPath, nil
+}
+
+func replaceSnapshot(snapshotPath string, config lib.Config) (err error) {
+	dbPath := filepath.Join(cli.DataDir, config.DBName)
+	backupPath := dbPath + ".backup"
+	// rename the current database file to a backup
+	if err = os.Rename(dbPath, backupPath); err != nil && err != os.ErrNotExist {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			// restore backup file
+			os.Rename(backupPath, dbPath)
+		}
+		// remove the snapshot file
+		os.RemoveAll(snapshotPath)
+	}()
+	// rename the snapshot file to the database file
+	if err = os.Rename(snapshotPath, dbPath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -525,45 +545,16 @@ func decompressCMD(ctx context.Context, sourceFile, targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get absolute target path: %w", err)
 	}
-
 	// ensure target directory exists
 	if err := os.MkdirAll(absTarget, 0755); err != nil {
 		return fmt.Errorf("failed to create target directory: %w", err)
 	}
-
-	// construct the commands: pigz -dc source | tar -C target -xv
-	pigzCmd := exec.CommandContext(ctx, "pigz", "-dc", absSource)
-	tarCmd := exec.CommandContext(ctx, "tar", "-C", absTarget, "-xv")
-
-	// create the pipeline
-	pipe, err := pigzCmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create pipe: %w", err)
-	}
-
-	tarCmd.Stdin = pipe
-	pigzCmd.Stderr = os.Stderr
+	// use tar with built-in gzip decompression: tar -C target -xzvf source
+	tarCmd := exec.CommandContext(ctx, "tar", "-C", absTarget, "-xzvf", absSource)
 	tarCmd.Stderr = os.Stderr
-
-	// start both commands
-	if err := tarCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start tar: %w", err)
-	}
-
-	if err := pigzCmd.Start(); err != nil {
-		return fmt.Errorf("failed to start pigz: %w", err)
-	}
-
-	// wait for completion
-	if err := pigzCmd.Wait(); err != nil {
-		return fmt.Errorf("pigz command failed: %w", err)
-	}
-
-	pipe.Close()
-
-	if err := tarCmd.Wait(); err != nil {
+	// run the command
+	if err := tarCmd.Run(); err != nil {
 		return fmt.Errorf("tar command failed: %w", err)
 	}
-
 	return nil
 }
