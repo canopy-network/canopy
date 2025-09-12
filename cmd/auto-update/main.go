@@ -446,13 +446,12 @@ func HandleNewSnapshot(config lib.Config) (snapshotPath string, err error) {
 	backupPath := dbPath + ".backup"
 	snapshotPath = dbPath + ".snapshot"
 	// remove any previous dangling files
-	if err := os.RemoveAll(backupPath); err != nil {
+	if err = os.RemoveAll(backupPath); err != nil {
 		return "", err
 	}
-	if err := os.RemoveAll(snapshotPath); err != nil {
+	if err = os.RemoveAll(snapshotPath); err != nil {
 		return "", err
 	}
-	var err error
 	// create a temporary file to store the snapshot
 	snapshotFile, file, err := createFile(filepath.Join(snapshotPath, snapshotFilename))
 	if err != nil {
