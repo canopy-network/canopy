@@ -436,7 +436,7 @@ func runBinary() (*exec.Cmd, error) {
 }
 
 // HandleNewSnapshot handles the download and installation of a new snapshot for the given config
-func HandleNewSnapshot(config lib.Config) (string, error) {
+func HandleNewSnapshot(config lib.Config) (snapshotPath string, err error) {
 	// check if a snapshot is available for the chain ID
 	url, ok := snapshotURLs[config.ChainId]
 	if !ok {
@@ -444,7 +444,7 @@ func HandleNewSnapshot(config lib.Config) (string, error) {
 	}
 	dbPath := filepath.Join(cli.DataDir, config.DBName)
 	backupPath := dbPath + ".backup"
-	snapshotPath := dbPath + ".snapshot"
+	snapshotPath = dbPath + ".snapshot"
 	// remove any previous dangling files
 	if err := os.RemoveAll(backupPath); err != nil {
 		return "", err
@@ -458,21 +458,29 @@ func HandleNewSnapshot(config lib.Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer func() {
+		if err != nil {
+			// remove the snapshot directory in case of error
+			os.RemoveAll(snapshotPath)
+		}
+	}()
 	defer file.Close()
 	// download the snapshot file
 	log.Printf("downloading snapshot file...")
-	if err := downloadToFile(file, url); err != nil {
+	if err = downloadToFile(file, url); err != nil {
 		return "", err
 	}
 	log.Printf("snapshot file downloaded")
 	// decompress the snapshot file in the same directory
 	log.Printf("decompressing snapshot file...")
-	if err := decompressCMD(context.Background(), snapshotFile, snapshotPath); err != nil {
+	if err = decompressCMD(context.Background(), snapshotFile, snapshotPath); err != nil {
 		return "", err
 	}
 	log.Printf("decompressed snapshot file")
-	// remove the temporary file
-	_ = os.Remove(snapshotFile)
+	// remove the temporary snapshot file
+	if err = os.Remove(snapshotFile); err != nil {
+		return "", err
+	}
 	return snapshotPath, nil
 }
 
