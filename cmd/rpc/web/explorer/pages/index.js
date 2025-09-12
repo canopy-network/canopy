@@ -196,7 +196,7 @@ export default function Home() {
       if (!currentState.tableLoading && !autoRefreshingRef.current && timeSinceUserAction > 2000) {
         refreshCurrentTable();
       }
-    }, 4000);
+    }, 1);
     return () => clearInterval(interval);
   }, []);
   if (state.loading || !state.cardData.blocks) {

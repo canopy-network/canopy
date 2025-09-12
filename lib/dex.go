@@ -8,10 +8,14 @@ import (
 	"strings"
 )
 
+var (
+	EmptyReceiptsHash = []byte(strings.Repeat("F", crypto.HashSize))
+)
+
 // Hash() creates a hash representative of the dex batch
 func (x *DexBatch) Hash() []byte {
 	if x.IsEmpty() {
-		return []byte(strings.Repeat("F", crypto.HashSize))
+		return bytes.Clone(EmptyReceiptsHash)
 	}
 	bz, _ := Marshal(x)
 	return crypto.Hash(bz)
@@ -35,7 +39,7 @@ func (x *DexBatch) IsEmpty() bool {
 	if x == nil {
 		return true
 	}
-	return x.ReceiptHash == nil && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
+	return len(x.ReceiptHash) == 0 && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
 }
 
 // EnsureNonNil() ensures the slices in the batch are not empty

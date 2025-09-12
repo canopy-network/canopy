@@ -13,9 +13,9 @@ import (
    not to be confused with 1 way order book swaps implemented in swap.go */
 
 // HandleDexBatch() initiates the 'dex' lifecycle
-func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
-	// exit without handling as the 'rootBuildHeight' explicitly not set
-	if rootBuildHeight == 0 {
+func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
+	// exit without handling as the 'rootHeight' explicitly not set
+	if rootHeight == 0 {
 		return
 	}
 	// handle 'self certificate' as a trigger to get dex data from the root chain
@@ -25,7 +25,7 @@ func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, remoteBat
 			return
 		}
 		// get root chain dex batch
-		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootBuildHeight, s.Config.ChainId, false); err != nil {
+		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootHeight, s.Config.ChainId, false); err != nil {
 			return
 		}
 	}
@@ -65,22 +65,29 @@ func (s *StateMachine) HandleDexBatch(rootBuildHeight, chainId uint64, remoteBat
 //	- set `LockedBatch = NextBatch`
 //	- Reset `NextBatch`
 func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId uint64) (err lib.ErrorI) {
+	var receipts []bool
 	// exit if dex data is empty
 	if remoteBatch == nil {
 		return
 	}
-	// handle the batch receipt - this function manages atomicity of the dex operations
-	locked, err := s.HandleDexBatchReceipt(remoteBatch, chainId)
-	if err != nil || locked {
-		return
-	}
-	// process batch - save receipts to state machine
-	receipts, err := s.HandleDexBatchOrders(remoteBatch, chainId)
-	if err != nil {
-		return
+	// if the remote batch is empty, set an empty receipt hash
+	if remoteBatch.IsEmpty() {
+		remoteBatch.ReceiptHash = bytes.Clone(lib.EmptyReceiptsHash)
+	} else {
+		var locked bool
+		// handle the batch receipt - this function manages atomicity of the dex operations
+		locked, err = s.HandleDexBatchReceipt(remoteBatch, chainId)
+		if err != nil || locked {
+			return
+		}
+		// process batch - save receipts to state machine
+		receipts, err = s.HandleDexBatchOrders(remoteBatch, chainId)
+		if err != nil {
+			return
+		}
 	}
 	// set the 'next batch' as 'locked batch' in state with receipts and pool size
-	return s.RotateDexSellBatch(remoteBatch, chainId, receipts)
+	return s.RotateDexBatches(remoteBatch, chainId, receipts)
 }
 
 // HandleDexBatchReceipt() handles a 'receipt' for a 'sell batch' and 'locked' liquidity commands
@@ -97,7 +104,7 @@ func (s *StateMachine) HandleDexBatchReceipt(remoteBatch *lib.DexBatch, chainId 
 	}
 	// ensure receipt not mismatch
 	if !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts) {
-		return true, ErrMismatchDexBatchReceipt()
+		return true, nil
 	}
 	// for each order, move the funds in the holding pool depending on the success or failure
 	for i, order := range localBatch.Orders {
@@ -338,11 +345,11 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	return s.SetPool(p)
 }
 
-// RotateDexSellBatch() sets 'next batch' as 'locked batch' and deletes reference for 'next batch'
+// RotateDexBatches() sets 'next batch' as 'locked batch' and deletes reference for 'next batch'
 // (1) checks if locked batch is processed yet - if not exit
 // (2) sets the upcoming 'sell' batch as 'last' sell batch
 // (3) returns the upcoming 'sell' batch to be sent to the root
-func (s *StateMachine) RotateDexSellBatch(remoteBatch *lib.DexBatch, chainId uint64, receipts []bool) (err lib.ErrorI) {
+func (s *StateMachine) RotateDexBatches(remoteBatch *lib.DexBatch, chainId uint64, receipts []bool) (err lib.ErrorI) {
 	// get locked sell batch
 	lockedBatch, err := s.GetDexBatch(chainId, true)
 	// exit with error or nil if last sell batch not yet processed by root (atomic protection)
@@ -390,6 +397,7 @@ func (s *StateMachine) SetDexBatch(key []byte, b *lib.DexBatch) (err lib.ErrorI)
 
 // GetDexBatch() retrieves a sell batch from the state store
 func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bool) (b *lib.DexBatch, err lib.ErrorI) {
+	var lPool *Pool
 	var key []byte
 	if locked {
 		key = KeyForLockedBatch(chainId)
@@ -401,8 +409,13 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bo
 	if err != nil {
 		return
 	}
+	// retrieve the liquidity pool from state
+	lPool, err = s.GetPool(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return
+	}
 	// create a new batch object reference to ensure no 'nil' batches are used
-	b = &lib.DexBatch{Committee: chainId}
+	b = &lib.DexBatch{Committee: chainId, PoolSize: lPool.Amount}
 	defer b.EnsureNonNil()
 	// check for nil bytes
 	if len(bz) == 0 {
@@ -412,12 +425,6 @@ func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bo
 	err = lib.Unmarshal(bz, b)
 	// check if points should be attached
 	if len(withPoints) == 1 && withPoints[0] {
-		var lPool *Pool
-		// retrieve the liquidity pool from state
-		lPool, err = s.GetPool(chainId + LiquidityPoolAddend)
-		if err != nil {
-			return
-		}
 		// set the pool points
 		b.PoolPoints = lPool.Points
 		// set total pool points

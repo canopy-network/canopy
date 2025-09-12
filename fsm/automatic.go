@@ -139,10 +139,11 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	results, chainId := qc.Results, qc.Header.ChainId
 	// handle dex action ordered by the quorum
-	var rootBuildHeight uint64
-	// rootBuildHeight = qc.Header.RootBuildHeight TODO
-	if err = s.HandleDexBatch(rootBuildHeight, qc.Header.ChainId, results.DexBatch); err != nil {
-		return err
+	// if handling a QC from another chain
+	if committee == nil || qc.Header.ChainId != s.Config.ChainId {
+		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, results.DexBatch); err != nil {
+			s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
+		}
 	}
 	// handle the token swaps ordered by the quorum
 	s.HandleCommitteeSwaps(results.Orders, chainId)

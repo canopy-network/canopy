@@ -243,7 +243,7 @@ function newDexLiquidityWithdrawRequest(address, chainId, percent, memo, fee, su
   return JSON.stringify({
     address: address,
     committees: chainId.toString(),
-    percent: percent,
+    percent: Number(percent),
     memo: memo,
     fee: fee,
     submit: submit,
@@ -648,8 +648,8 @@ export async function TxDexLimitOrder(
       receiveAmount,
       memo,
       fee,
-      password,
       submit,
+      password,
     ),
   );
 }
@@ -665,15 +665,15 @@ export async function TxDexLiquidityDeposit(
 ) {
   return POST(
     adminRPCURL,
-    txDexLimitOrder,
+    txDexLiquidityDeposit,
     newDexLiquidityDepositRequest(
       address,
       chainId,
       amount,
       memo,
       fee,
-      password,
       submit,
+      password,
     ),
   );
 }
@@ -689,15 +689,15 @@ export async function TxDexLiquidityWithdrawal(
 ) {
   return POST(
     adminRPCURL,
-    txDexLimitOrder,
+    txDexLiquidityWithdraw,
     newDexLiquidityWithdrawRequest(
       address,
       chainId,
       percent,
       memo,
       fee,
-      password,
       submit,
+      password,
     ),
   );
 }

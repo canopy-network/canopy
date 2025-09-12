@@ -2244,7 +2244,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 				test.setupState(&sm)
 			}
 
-			err := sm.RotateDexSellBatch(test.buyBatch, test.chainId, test.receipts)
+			err := sm.RotateDexBatches(test.buyBatch, test.chainId, test.receipts)
 
 			if test.expectError {
 				require.Error(t, err)

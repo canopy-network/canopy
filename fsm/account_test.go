@@ -10,6 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestT(t *testing.T) {
+	fmt.Println(lib.MarshalJSONIndentString(Pool{
+		Id:     1 + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+	fmt.Println(lib.MarshalJSONIndentString(Pool{
+		Id:     2 + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+}
+
 func TestSetGetAccount(t *testing.T) {
 	tests := []struct {
 		name     string
