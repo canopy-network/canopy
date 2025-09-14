@@ -1,8 +1,6 @@
 module github.com/canopy-network/canopy
 
-go 1.23.0
-
-toolchain go1.24.2
+go 1.23.9
 
 require (
 	filippo.io/edwards25519 v1.1.0
@@ -16,6 +14,7 @@ require (
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/fatih/color v1.17.0
 	github.com/google/btree v1.1.3
+	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/julienschmidt/httprouter v1.3.0

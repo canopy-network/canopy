@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -227,23 +228,25 @@ type StoreConfig struct {
 func DefaultDataDirPath() string {
 	// get the user home
 	home, err := os.UserHomeDir()
+	// home, err := os.Getwd()
 	// if unable to get the user home
 	if err != nil {
 		// fatal error
 		panic(err)
 	}
 	// exit with full default data directory path
+	// return filepath.Join(home, "canopy_2")
 	return filepath.Join(home, ".canopy")
 }
 
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:          DefaultDataDirPath(), // use the default data dir path
-		DBName:               "canopy",             // 'canopy' database name
-		IndexByAccount:       true,                 // index transactions by account
-		InMemory:             false,                // persist to disk, not memory
-		CleanupBlockInterval: 200,                  // clean every 200 blocks
+		DataDirPath:          DefaultDataDirPath(),         // use the default data dir path
+		DBName:               "canopy",                     // 'canopy' database name
+		IndexByAccount:       true,                         // index transactions by account
+		InMemory:             false,                        // persist to disk, not memory
+		CleanupBlockInterval: uint64(rand.Intn(101) + 100), // clean every 100-200 blocks (random)
 	}
 }
 

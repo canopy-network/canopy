@@ -18,11 +18,12 @@ var _ bft.Controller = new(Controller)
 
 // Controller acts as the 'manager' of the modules of the application
 type Controller struct {
-	Address    []byte             // self address
-	PublicKey  []byte             // self public key
-	PrivateKey crypto.PrivateKeyI // self private key
-	Config     lib.Config         // node configuration
-	Metrics    *lib.Metrics       // telemetry
+	Address          []byte                                  // self address
+	PublicKey        []byte                                  // self public key
+	PrivateKey       crypto.PrivateKeyI                      // self private key
+	Config           lib.Config                              // node configuration
+	Metrics          *lib.Metrics                            // telemetry
+	LastValidatorSet map[uint64]map[uint64]*lib.ValidatorSet // cache [height][chainID] -> set
 
 	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
 	Mempool   *Mempool          // the in memory list of pending transactions
@@ -54,23 +55,26 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// create the controller
 	controller = &Controller{
-		Address:    address.Bytes(),
-		PublicKey:  valKey.PublicKey().Bytes(),
-		PrivateKey: valKey,
-		Config:     c,
-		Metrics:    metrics,
-		FSM:        fsm,
-		Mempool:    mempool,
-		Consensus:  nil,
-		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:  &atomic.Bool{},
-		log:        l,
-		Mutex:      &sync.Mutex{},
+		Address:          address.Bytes(),
+		PublicKey:        valKey.PublicKey().Bytes(),
+		PrivateKey:       valKey,
+		Config:           c,
+		Metrics:          metrics,
+		FSM:              fsm,
+		Mempool:          mempool,
+		Consensus:        nil,
+		P2P:              p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:        &atomic.Bool{},
+		LastValidatorSet: make(map[uint64]map[uint64]*lib.ValidatorSet),
+		log:              l,
+		Mutex:            &sync.Mutex{},
 	}
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// initialize the mempool controller
 	mempool.controller = controller
+	// add the last validator set reference to the FSM
+	fsm.LastValidatorSet = controller.LastValidatorSet
 	// if an error occurred initializing the bft module
 	if err != nil {
 		// exit with error
@@ -94,6 +98,21 @@ func (c *Controller) Start() {
 		c.log.Warnf("Attempting to connect to the root-chain")
 		// set a timer to go off once per second
 		t := time.NewTicker(time.Second)
+		// pre save the validator sets from previous and current heights
+		lastValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight()-1)
+		if err != nil {
+			c.log.Fatal(err.Error())
+		}
+		currValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight())
+		if err != nil {
+			c.log.Fatal(err.Error())
+		}
+		c.LastValidatorSet[c.ChainHeight()] = map[uint64]*lib.ValidatorSet{
+			c.Config.ChainId: &lastValSet,
+		}
+		c.LastValidatorSet[c.ChainHeight()+1] = map[uint64]*lib.ValidatorSet{
+			c.Config.ChainId: &currValSet,
+		}
 		// once function completes, stop the timer
 		defer t.Stop()
 		// each time the timer fires

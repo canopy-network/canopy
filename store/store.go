@@ -199,14 +199,12 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if e := s.writer.Flush(); e != nil {
 		return nil, ErrCommitDB(e)
 	}
-	// Trigger eviction of LSS deleted keys
 	// check if the current version is a multiple of the cleanup block interval
 	if s.Version()%s.config.StoreConfig.CleanupBlockInterval == 0 {
-		go func() {
-			if err := s.Evict(); err != nil {
-				s.log.Errorf("failed to evict LSS deleted keys: %s", err)
-			}
-		}()
+		// trigger eviction of LSS deleted keys
+		if err := s.Evict(); err != nil {
+			s.log.Errorf("failed to evict LSS deleted keys: %s", err)
+		}
 	}
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(size, entries, time.Time{}, startTime)
@@ -379,39 +377,42 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 }
 
 // Evict deletes all entries marked for eviction.
-// BadgerDB GC's behavior is undocumented which may lead to unexpected behavior.
-// This eviction process is a workaround to guarantee the deletion of entries marked for
-// deletion or eviction. It works as follows:
-// 1. Create a trigger key and write it to the database.
-// 2. Mark entries for eviction with the correct meta bits.
-// 3. Set discard timestamp to enable BadgerDB GC.
-// 4. Drop the trigger prefix to force eviction processing.
-// 5. Clean up by resetting discard timestamp and deleting trigger key.
+// It is done by backing up the LSS store, discarding all the entries with
+// that prefix and restoring again the backup with none of the deleted keys.
+// This is done to ensure that the LSS keys are consistently deleted
 func (s *Store) Evict() lib.ErrorI {
+	now := time.Now()
 	s.log.Debugf("Eviction process started at height %d", s.Version())
-	// evict LSS deleted keys, part of the workaround for previously set keys for deletion
-	triggerEvict := fmt.Appendf(nil, "zzz/trigger_key_%s", lib.RandSlice(evictRandKeySize))
-	writer := s.db.NewWriteBatchAt(lssVersion)
-	if err := writer.Set(triggerEvict, nil); err != nil {
-		return ErrStoreSet(err)
-	}
-	if err := writer.Flush(); err != nil {
+	// backup the LSS store
+	lssBackup, err := s.GetItems(lssVersion, []byte(latestStatePrefix), true)
+	if err != nil {
 		return ErrCommitDB(err)
 	}
-	// set discard timestamp, before marking entries for eviction
+	// set discard timestamp, before evicting entries
 	s.db.SetDiscardTs(lssVersion)
-	// drop the trigger to force eviction
-	if err := s.db.DropPrefix(triggerEvict); err != nil {
-		return ErrCommitDB(err)
-	}
 	// reset discard timestamp after eviction
 	defer s.db.SetDiscardTs(0)
-	// flatten the DB to optimize the storage layout
-	if err := s.db.Flatten(1); err != nil {
+	// drop the entire LSS prefix to force eviction processing
+	if err := s.db.DropPrefix([]byte(latestStatePrefix)); err != nil {
 		return ErrCommitDB(err)
 	}
-	// ValueLogGC temporarily disabled due to increased memory usage
-	// TODO: Re-enable ValueLogGC after optimizing memory usage
+	// restore the LSS store without the deleted keys
+	writer := s.db.NewWriteBatchAt(lssVersion)
+	for _, entry := range lssBackup {
+		if err := writer.SetEntryAt(entry, lssVersion); err != nil {
+			return ErrStoreSet(err)
+		}
+	}
+	// commit the LSS restore
+	if err := writer.Flush(); err != nil {
+		return ErrFlushBatch(err)
+	}
+	// ValueLogGC and Flatten temporarily disabled due to increased memory usage
+	// TODO: Re-enable ValueLogGC and Flatten after optimizing memory usage
+	// flatten the DB to optimize the storage layout
+	// if err := s.db.Flatten(1); err != nil {
+	// 	return ErrCommitDB(err)
+	// }
 	// run GC to clean up unused data
 	// if err := s.db.RunValueLogGC(valueLogGCDiscardRation); err != nil &&
 	// 	err != badger.ErrNoRewrite {
@@ -419,7 +420,7 @@ func (s *Store) Evict() lib.ErrorI {
 	// }
 	// log the results
 	total, deleted := s.keyCount(lssVersion, []byte(latestStatePrefix), true)
-	s.log.Debugf("Eviction process finished. Removed %d keys, %d total keys", deleted, total)
+	s.log.Debugf("Eviction process finished. current deleted %d keys, %d total keys elapsed: %s", deleted, total, time.Since(now))
 	return nil
 }
 
@@ -450,6 +451,44 @@ func (s *Store) keyCount(version uint64, prefix []byte, noDiscardBit bool) (coun
 	}
 	// return the counts
 	return count, deleted
+}
+
+// GetItems returns all items in the store with the given version and prefix.
+func (s *Store) GetItems(version uint64, prefix []byte, skipDeleted bool) ([]*badger.Entry, error) {
+	// create the items slice
+	items := make([]*badger.Entry, 0)
+	// create a new transaction at the specified version
+	txn := s.db.NewTransactionAt(version, false)
+	defer txn.Discard()
+	// create a new iterator for the transaction on the given prefix
+	it := txn.NewIterator(badger.IteratorOptions{
+		Prefix:      prefix,
+		AllVersions: true,
+	})
+	// close the iterator when done
+	defer it.Close()
+	// iterate over the items
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		// check if the item is deleted or expired
+		if skipDeleted && item.IsDeletedOrExpired() {
+			continue
+		}
+		value, err := item.ValueCopy(nil)
+		if err != nil {
+			return nil, ErrReadBytes(err)
+		}
+		// copy the item's key, value, and metadata
+		newItem := &badger.Entry{
+			Key:   item.KeyCopy(nil),
+			Value: value,
+		}
+		setMeta(newItem, getItemMeta(item))
+		// append the item to the items slice
+		items = append(items, newItem)
+	}
+	// return the items
+	return items, nil
 }
 
 // getLatestCommitID() retrieves the latest CommitID from the database
