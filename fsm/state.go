@@ -421,7 +421,7 @@ func (s *StateMachine) LoadBlockTime(height uint64) (time *lib.BlockTimeInfo, e 
 	// retrieve the block
 	blk, err := s.LoadBlock(height)
 	if err != nil {
-		return
+		return nil, err
 	}
 	// check for nil block
 	if blk == nil || blk.BlockHeader == nil {

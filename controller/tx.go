@@ -114,14 +114,9 @@ func (c *Controller) CheckMempool() {
 				defer func() { resetProposalConfig() }()
 				// reset the mempool
 				c.Mempool.FSM.Reset()
-				// calculate rc build height
-				ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()
-				if err != nil {
-					c.log.Error(err.Error())
-				}
 				// if ownRoot
-				if ownRoot {
-					rcBuildHeight = c.Mempool.FSM.Height()
+				if ownRoot, _ := c.Mempool.FSM.LoadIsOwnRoot(); ownRoot {
+					rcBuildHeight = c.Mempool.FSM.Height() - 1
 				}
 				// check the mempool to cache a proposal block and validate the mempool itself
 				c.Mempool.CheckMempool(rcBuildHeight)

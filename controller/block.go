@@ -76,10 +76,8 @@ func (c *Controller) ListenForBlock() {
 			}
 			// if not syncing - gossip the block
 			if !c.Syncing().Load() {
-				if !bytes.Equal(c.PublicKey, sender) {
-					// gossip the block to our peers
-					c.GossipBlock(qc, sender, blockMessage.Time, blockMessage.BftCoordinationMeta)
-				}
+				// gossip the block to our peers
+				c.GossipBlock(qc, sender, blockMessage.Time, blockMessage.BftCoordinationMeta)
 				// signal a reset to the bft module
 				c.Consensus.ResetBFT <- bft.ResetBFT{BFTMeta: blockMessage.BftCoordinationMeta}
 			}
@@ -284,10 +282,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// send the certificate results transaction on behalf of the quorum
 		c.SendCertificateResultsTx(qc)
 	}
+	// get the root chain height
 	rcBuildHeight := c.RootChainHeight()
-	if rcBuildHeight == 0 {
-		c.log.Error("Root Chain Height == 0")
-	}
 	// create an error group to run the commit and mempool update in parallel
 	eg := errgroup.Group{}
 	eg.Go(func() error {
@@ -341,14 +337,9 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 			// exit with error
 			return err
 		}
-		// calculate rc build height
-		ownRoot, err := c.Mempool.FSM.LoadIsOwnRoot()
-		if err != nil {
-			c.log.Error(err.Error())
-		}
-		// if ownRoot
-		if ownRoot {
-			rcBuildHeight = c.Mempool.FSM.Height()
+		// if self is root
+		if ownRoot, _ := c.Mempool.FSM.LoadIsOwnRoot(); ownRoot {
+			rcBuildHeight = c.Mempool.FSM.Height() - 1
 		}
 		// check the mempool to cache a proposal block and validate the mempool itself
 		c.Mempool.CheckMempool(rcBuildHeight)

@@ -814,6 +814,7 @@ func checkChainId(i uint64) lib.ErrorI {
 	return nil
 }
 
+// checkUnknown() checks a proto message for unknown fields
 func checkUnknown(m proto.Message) lib.ErrorI {
 	if m == nil {
 		return lib.ErrEmptyMessage()
