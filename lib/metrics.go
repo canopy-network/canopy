@@ -560,8 +560,6 @@ func (m *Metrics) UpdateStoreMetrics(size, entries int64, startTime time.Time, s
 	if m == nil {
 		return
 	}
-	m.log.Infof("Store metrics: size:%v, entries:%v, time:%.2fs flushTime:%.2fs",
-		size, entries, time.Since(startTime).Seconds(), time.Since(startFlushTime).Seconds())
 	// update the partition metrics
 	if !startTime.IsZero() {
 		// updates the size in bytes

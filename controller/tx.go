@@ -99,9 +99,6 @@ func (c *Controller) CheckMempool() {
 		// get root chain height
 		c.Lock()
 		rcBuildHeight := c.RootChainHeight()
-		if rcBuildHeight == 0 {
-			c.log.Error("Root Chain Height == 0")
-		}
 		c.Unlock()
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte

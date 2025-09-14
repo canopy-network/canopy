@@ -324,20 +324,12 @@ func (c *Controller) ResetFSM() { c.FSM.Reset() }
 
 // RootChainHeight() returns the height of the canopy root-chain
 func (c *Controller) RootChainHeight() uint64 {
-	chainId, err := c.FSM.GetRootChainId()
-	if err != nil {
-		c.log.Error(err.Error())
-	}
+	chainId, _ := c.FSM.GetRootChainId()
 	return c.RCManager.GetHeight(chainId)
 }
 
 // ChainHeight() returns the height of this target chain
 func (c *Controller) ChainHeight() uint64 { return c.FSM.Height() }
-
-// BlockTime() returns block time information about this chain
-func (c *Controller) BlockTime(h uint64) (*lib.BlockTimeInfo, lib.ErrorI) {
-	return c.FSM.LoadBlockTime(h)
-}
 
 // emptyInbox() discards all unread messages for a specific topic
 func (c *Controller) emptyInbox(topic lib.Topic) {
