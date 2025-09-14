@@ -289,26 +289,10 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 	if !batch.IsEmpty() {
 		// calculate the 'blocks since' the lock
 		blksSince := c.FSM.Height() - batch.LockedHeight
-		// execute 'safety fallback' >= 15 heights
-		if (blksSince / 5) >= 3 {
-			// get the locked batch from the root chain
-			dexBatch, e := c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, true)
-			if e != nil {
-				c.log.Error(e.Error())
-				return
-			}
-			// drop the locked batch
-			if err = sm.SetDexBatch(fsm.KeyForLockedBatch(rcId), &lib.DexBatch{}); err != nil {
-				c.log.Error(err.Error())
-				return
-			}
-			// update the liquidity points to mirror the counter
-			if err = c.FSM.SetPoolPoints(rcId, dexBatch.GetPoolPoints(), dexBatch.GetTotalPoolPoints()); err != nil {
-				c.log.Error(err.Error())
-				return
-			}
-		}
 		// only send every 5 heights
+		if c.Config.ChainId != 1 && c.FSM.Height() >= 10 && c.FSM.Height() < 27 {
+			return
+		}
 		if blksSince%5 == 0 {
 			results.DexBatch = batch
 		}

@@ -834,6 +834,9 @@ func SqrtProductUint64(x, y uint64) uint64 {
 
 // SafeMulDiv computes (a * b) / c safely using big.Int.
 func SafeMulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
 	bigA := new(big.Int).SetUint64(a)
 	bigB := new(big.Int).SetUint64(b)
 	bigC := new(big.Int).SetUint64(c)

@@ -20,13 +20,28 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 	}
 	// handle 'self certificate' as a trigger to get dex data from the root chain
 	if chainId == s.Config.ChainId {
+		var localBatch *lib.DexBatch
 		// set 'chain id' as the root chain
 		if chainId, err = s.GetRootChainId(); err != nil {
 			return
 		}
-		// get root chain dex batch
-		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootHeight, s.Config.ChainId, false); err != nil {
+		// get the local locked dex batch
+		localBatch, err = s.GetDexBatch(chainId, true)
+		if err != nil {
 			return
+		}
+		// if should execute the liveness fallback protocol
+		livenessFallback := !localBatch.IsEmpty() && (s.Height()-localBatch.LockedHeight) >= 15
+		// get root chain dex batch
+		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootHeight, s.Config.ChainId, livenessFallback); err != nil {
+			return
+		}
+		// if executing the liveness fallback
+		if livenessFallback {
+			// handle the liveness fallback
+			if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
+				return
+			}
 		}
 	}
 	// handle the remote dex batch
@@ -47,8 +62,8 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 //	- Else If Fail → refund from `HoldingPool` → seller
 //
 //	2. Process local LockedBatch Liquidity
-//	- Withdraw: burn points, distribute tokens pro-rata
-//	- Deposit: pro-rata distribute liquidity points using the included virtualPoolSize
+//	- Withdraw: burn points, distribute tokens
+//	- Deposit: distribute liquidity points using the included virtualPoolSize
 //
 //	3. Process Inbound Sell Orders
 //	- For each orders sorted pseudorandomly:
@@ -247,10 +262,13 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// using integer math and geometric mean of reserves:
 	// ΔL = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y)
 	oldK := lib.SqrtProductUint64(x, y)
+	if oldK == 0 {
+		return ErrInvalidLiquidityPool()
+	}
 	newK := lib.SqrtProductUint64(x+totalDeposit, y)
 	// L * (newK - oldK) / oldK
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
-	// pro-rata distribute the points
+	// distribute the points
 	for _, order := range batch.Deposits {
 		// calculate pro-rate share
 		share := lib.SafeMulDiv(totalDL, order.Amount, totalDeposit)
@@ -294,23 +312,20 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		}
 		// calculate the points to withdraw
 		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
-		if e != nil {
-			return e
-		}
 		// increment the points to remove
 		withdraws[lib.BytesToString(w.Address)] += pointsToRemove
 		// update the total points to remove
 		totalPointsToRemove += pointsToRemove
 	}
 	// if nothing to withdraw
-	if totalPointsToRemove == 0 {
+	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
 		return nil
 	}
 	// total local reserve to withdraw
 	totalYWithdrawal := lib.SafeMulDiv(*y, totalPointsToRemove, p.TotalPoolPoints)
 	// total remote reserve to withdraw
 	totalXWithdraw := lib.SafeMulDiv(batch.PoolSize, totalPointsToRemove, p.TotalPoolPoints)
-	// pro-rata distribute
+	// distribute tokens
 	for address, points := range withdraws {
 		// get address
 		addr, _ := lib.StringToBytes(address)
@@ -382,6 +397,42 @@ func (s *StateMachine) RotateDexBatches(remoteBatch *lib.DexBatch, chainId uint6
 	}
 	// set the upcoming sell batch as 'last'
 	return s.SetDexBatch(KeyForLockedBatch(chainId), nextSellBatch)
+}
+
+// HandleLivenessFallback() refunds orders, liquidity deposits, and mirrors the root chain's liquidity points
+func (s *StateMachine) HandleLivenessFallback(rcId uint64, localBatch, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
+	s.log.Warnf("Dex liveness fallback: refunding orders and dropping locked batch")
+	// define a convenience function
+	refund := func(address []byte, amount uint64) (e lib.ErrorI) {
+		if e = s.PoolSub(rcId+HoldingPoolAddend, amount); e != nil {
+			return e
+		}
+		if e = s.AccountAdd(crypto.NewAddress(address), amount); e != nil {
+			return e
+		}
+		return
+	}
+	// refund all orders
+	for _, order := range localBatch.Orders {
+		if err = refund(order.Address, order.AmountForSale); err != nil {
+			return
+		}
+	}
+	// refund the liquidity deposits
+	for _, deposit := range localBatch.Deposits {
+		if err = refund(deposit.Address, deposit.Amount); err != nil {
+			return
+		}
+	}
+	// update the liquidity points to mirror the counter
+	if err = s.SetPoolPoints(rcId+LiquidityPoolAddend, remoteBatch.GetPoolPoints(), remoteBatch.GetTotalPoolPoints()); err != nil {
+		return
+	}
+	// drop the locked batch
+	if err = s.SetDexBatch(KeyForLockedBatch(rcId), &lib.DexBatch{}); err != nil {
+		return
+	}
+	return
 }
 
 // HELPERS BELOW
