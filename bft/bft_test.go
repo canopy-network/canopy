@@ -5,6 +5,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
+	"math"
 	"testing"
 	"time"
 )
@@ -712,15 +713,15 @@ func TestPacemaker(t *testing.T) {
 		{
 			name:                   "no peer pacemaker votes",
 			detail:                 "no peer pacemaker votes received, simply increment round",
-			expectedPacemakerRound: 1,
-			expectedRootHeight:     0,
+			expectedPacemakerRound: 3,
+			expectedRootHeight:     3,
 			numPeerVals:            0,
 		},
 		{
 			name:                   "received 1 peer pacemaker vote",
 			detail:                 "peer pacemaker votes received, no +2/3, less voting power than self",
-			expectedPacemakerRound: 1,
-			expectedRootHeight:     0,
+			expectedPacemakerRound: 3,
+			expectedRootHeight:     3,
 			numPeerVals:            1,
 		},
 		{
@@ -935,7 +936,7 @@ func TestGetPhaseWaitTime(t *testing.T) {
 			detail:           "the wait time for round interrupt phase",
 			phase:            Propose,
 			round:            3,
-			expectedWaitTime: time.Duration(lib.DefaultConfig().ProposeTimeoutMS) * time.Millisecond * (6 + 1),
+			expectedWaitTime: (time.Duration(lib.DefaultConfig().ProposeTimeoutMS) + time.Duration(int(math.Pow(float64(2), float64(3)))*1000)) * time.Millisecond,
 		},
 	}
 	for _, test := range tests {
