@@ -1,9 +1,13 @@
 package store
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math"
 	"testing"
+	"time"
 
+	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
@@ -79,7 +83,7 @@ func TestIteratorCommitAndPrefixed(t *testing.T) {
 
 func testStore(t *testing.T) (*Store, *badger.DB, func()) {
 	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR))
+		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
 	require.NoError(t, err)
 	store, err := NewStoreWithDB(lib.DefaultConfig(), db, nil, lib.NewDefaultLogger())
 	require.NoError(t, err)
@@ -143,4 +147,136 @@ func TestDoublyNestedTxn(t *testing.T) {
 	value, err = store.Get([]byte("doublyNested"))
 	require.NoError(t, err)
 	require.Equal(t, []byte("doublyNested"), value)
+}
+
+// BadgerDB forced key deletion test
+
+const (
+	NumKeys   = 100_000
+	KeySize   = units.KB
+	ValueSize = units.KB
+)
+
+type KVPair struct {
+	Key   []byte
+	Value []byte
+}
+
+// // ----------------------------------------------------------------------------------------------------------------
+// // BadgerDB garbage collector behavior is not well documented leading to many open issues in their repository
+// // However, here is our current understanding based on experimentation
+// // ----------------------------------------------------------------------------------------------------------------
+// // 1. Manual Keep (Protection)
+// //    - `badgerNoDiscardBit` prevents automatic GC of a key version.
+// //    - However, it can be manually superseded by a manual removal
+// //
+// // 2. Manual Remove (Explicit Deletion or Pruning)
+// //    - Deleting a key at a higher ts removes earlier versions once `discardTs >= ts`.
+// //    - Setting `badgerDiscardEarlierVersions` is similar, except it retains the current version.
+// //
+// // 3. Auto Remove – Tombstones
+// //    - Deleted keys (tombstoned) <= `discardTs` are automatically purged unless protected by `badgerNoDiscardBit`
+// //
+// // 4. Auto Remove – Set Entries
+// //    - For non-deleted (live) keys, Badger retains the number of versions to retain is defined by `KeepNumVersions`.
+// //    - Older versions exceeding this count are automatically eligible for GC.
+// //
+// //   Note:
+// // - The first GC pass after updating `discardTs` and flushing memtable is deterministic
+// // - Subsequent GC runs are probabilistic, depending on reclaimable space and value log thresholds
+// // ----------------------------------------------------------------------------------------------------------------
+// // Bits source: https://github.com/hypermodeinc/badger/blob/85389e88bf308c1dc271383b77b67f4ef4a85194/value.go#L37
+func TestBadgerDBForcedDeletion(t *testing.T) {
+	// cleanup
+	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	require.NoError(t, err)
+	// IMPORTANT
+	// create a slice to hold keys and values
+	kvs := make([]KVPair, NumKeys)
+	// create a write batch to simulate lss store
+	lssWriter := db.NewWriteBatchAt(math.MaxUint64)
+	for i := range NumKeys {
+		kvs[i] = RandKeyValue(t)
+	}
+	// write to latest store
+	for i := range NumKeys {
+		require.NoError(t, lssWriter.Set(kvs[i].Key, kvs[i].Value))
+	}
+	// HACK (ONLY WAY TO DO IT!)
+	triggerEvict := []byte("some_random_trigger_key_")
+	require.NoError(t, lssWriter.Set(triggerEvict, nil))
+	// flush the batch
+	require.NoError(t, lssWriter.Flush())
+	// start benchmark
+	s := time.Now()
+	// create a new write batch to simulate lss store
+	lssWriter = db.NewWriteBatchAt(math.MaxUint64)
+	// delete 50%
+	for i := range NumKeys / 2 {
+		//require.NoError(t, lssWriter.Delete(triggerEvict)) // this also works but we do deletes simlar to below
+		e := &badger.Entry{Key: kvs[i].Key}
+		setMeta(e, badgerDeleteBit|badgerNoDiscardBit)
+		require.NoError(t, lssWriter.SetEntryAt(e, math.MaxUint64))
+	}
+	require.NoError(t, lssWriter.Flush())
+	// EVICTION LOGIC - Two-phase approach to handle badgerNoDiscardBit
+	// Phase 1: Clear badgerNoDiscardBit from deleted entries to allow eviction
+	// NOTE: This may NOT work on long running db instances that
+	// have already been LSM flattened
+	clearNoDiscardBitFromDeletedEntries(t, db, kvs[:NumKeys/2])
+	// Phase 2: Standard eviction logic
+	db.SetDiscardTs(math.MaxUint64)
+	require.NoError(t, db.DropPrefix(triggerEvict))
+	db.SetDiscardTs(0)
+	// create a reader to checkout the status of the database
+	tx := db.NewTransactionAt(math.MaxUint64, false)
+	defer tx.Discard()
+	// return all versions to not pseudo-skip 'tombstoned keys'
+	it := tx.NewIterator(badger.IteratorOptions{AllVersions: true})
+	defer it.Close()
+	// measure count
+	count := 0
+	countDeleted := 0
+	for it.Rewind(); it.Valid(); it.Next() {
+		count++
+		if it.Item().IsDeletedOrExpired() {
+			countDeleted++
+		}
+	}
+	require.Equal(t, NumKeys/2, count)
+	// finish benchmark
+	t.Log("Total time:", time.Since(s), "with", count, "keys")
+	// ensure safe to write again even at a lower version
+	// create a new write batch to simulate lss store
+	lssWriter = db.NewWriteBatchAt(1)
+	// delete 50%
+	for i := range NumKeys / 2 {
+		require.NoError(t, lssWriter.Set(kvs[i].Key, kvs[i].Value))
+	}
+	require.NoError(t, lssWriter.Flush())
+}
+
+// clearNoDiscardBitFromDeletedEntries clears the badgerNoDiscardBit from entries that are marked for deletion
+// This allows them to be properly garbage collected during the eviction process
+func clearNoDiscardBitFromDeletedEntries(t *testing.T, db *badger.DB, deletedKeys []KVPair) {
+	// create a new write batch to modify the entries
+	lssWriter := db.NewWriteBatchAt(math.MaxUint64)
+
+	// directly rewrite the deleted entries with only badgerDeleteBit (no badgerNoDiscardBit)
+	for _, kv := range deletedKeys {
+		e := &badger.Entry{Key: kv.Key}
+		// set only the delete bit, removing the no-discard bit protection
+		setMeta(e, badgerDeleteBit)
+		require.NoError(t, lssWriter.SetEntryAt(e, math.MaxUint64))
+	}
+
+	// flush the changes
+	require.NoError(t, lssWriter.Flush())
+}
+
+func RandKeyValue(t *testing.T) KVPair {
+	k, v := make([]byte, KeySize), make([]byte, ValueSize)
+	rand.Read(k)
+	rand.Read(v)
+	return KVPair{k, v}
 }

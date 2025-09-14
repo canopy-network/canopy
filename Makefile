@@ -32,11 +32,11 @@ build/canopy-full: build/wallet build/explorer build/canopy
 
 ## build/wallet: build the canopy's wallet project
 build/wallet:
-	WALLET_BASE_PATH=$$WALLET_BASE_PATH npm install --prefix $(WALLET_DIR) && npm run build --prefix $(WALLET_DIR)
+	npm install --prefix $(WALLET_DIR) && npm run build --prefix $(WALLET_DIR)
 
 ## build/explorer: build the canopy's explorer project
 build/explorer:
-	EXPLORER_BASE_PATH=$$EXPLORER_BASE_PATH npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
+	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
 
 # ==================================================================================== #
 # TESTING

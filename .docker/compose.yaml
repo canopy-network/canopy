@@ -4,9 +4,6 @@ services:
     build:
       context: ..
       dockerfile: .docker/Dockerfile
-      args:
-        EXPLORER_BASE_PATH: ""
-        WALLET_BASE_PATH: ""
     ports:
       - 50000:50000 # Wallet
       - 50001:50001 # Explorer
@@ -31,9 +28,6 @@ services:
     build:
       context: ..
       dockerfile: .docker/Dockerfile
-      args:
-        EXPLORER_BASE_PATH: ""
-        WALLET_BASE_PATH: ""
     ports:
       - 40000:40000 # Wallet
       - 40001:40001 # Explorer

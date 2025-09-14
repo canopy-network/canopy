@@ -27,6 +27,7 @@ export default function Navigation({ openModal }) {
                 type="search"
                 className="main-input nav-bar-search me-2"
                 placeholder="search by address, hash, or height"
+                style={{ backgroundImage: 'url("./search.png")' }}
                 onChange={(e) => {
                   setQuery(e.target.value);
                 }}
@@ -34,10 +35,18 @@ export default function Navigation({ openModal }) {
             </Form>
           </div>
           <a href={urls.discord}>
-            <div id="nav-social-icon1" className="nav-social-icon justify-content-end" />
+            <div 
+              id="nav-social-icon1" 
+              className="nav-social-icon justify-content-end"
+              style={{ backgroundImage: 'url("./discord-filled.png")' }}
+            />
           </a>
           <a href={urls.x}>
-            <div id="nav-social-icon2" className="nav-social-icon justify-content-end" />
+            <div 
+              id="nav-social-icon2" 
+              className="nav-social-icon justify-content-end"
+              style={{ backgroundImage: 'url("./twitter.png")' }}
+            />
           </a>
         </Container>
       </Navbar>

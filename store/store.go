@@ -13,14 +13,16 @@ import (
 )
 
 const (
-	latestStatePrefix     = "s/"           // prefix designated for the LatestStateStore where the most recent blobs of state data are held
-	historicStatePrefix   = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
-	stateCommitmentPrefix = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
-	indexerPrefix         = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
-	stateCommitIDPrefix   = "x/"           // prefix designated for the commit ID (height and state merkle root)
-	lastCommitIDPrefix    = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
-	maxKeyBytes           = 256            // maximum size of a key
-	lssVersion            = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
+	latestStatePrefix       = "s/"           // prefix designated for the LatestStateStore where the most recent blobs of state data are held
+	historicStatePrefix     = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
+	stateCommitmentPrefix   = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
+	indexerPrefix           = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
+	stateCommitIDPrefix     = "x/"           // prefix designated for the commit ID (height and state merkle root)
+	lastCommitIDPrefix      = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
+	maxKeyBytes             = 256            // maximum size of a key
+	lssVersion              = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
+	evictRandKeySize        = 64             // size of the random key used for eviction
+	valueLogGCDiscardRation = 0.5            // discard ratio for value log GC
 )
 
 var _ lib.StoreI = &Store{} // enforce the Store interface
@@ -71,6 +73,9 @@ type Store struct {
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
 func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, lib.ErrorI) {
+	if config.StoreConfig.CleanupBlockInterval == 0 {
+		config.StoreConfig.CleanupBlockInterval = 1
+	}
 	if config.StoreConfig.InMemory {
 		return NewStoreInMemory(l)
 	}
@@ -93,7 +98,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 
 // NewStoreInMemory() creates a new instance of a mem DB
 func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
+	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
@@ -193,6 +198,15 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	if e := s.writer.Flush(); e != nil {
 		return nil, ErrCommitDB(e)
+	}
+	// Trigger eviction of LSS deleted keys
+	// check if the current version is a multiple of the cleanup block interval
+	if s.Version()%s.config.StoreConfig.CleanupBlockInterval == 0 {
+		go func() {
+			if err := s.Evict(); err != nil {
+				s.log.Errorf("failed to evict LSS deleted keys: %s", err)
+			}
+		}()
 	}
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(size, entries, time.Time{}, startTime)
@@ -362,6 +376,80 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 		return ErrCommitDB(e)
 	}
 	return nil
+}
+
+// Evict deletes all entries marked for eviction.
+// BadgerDB GC's behavior is undocumented which may lead to unexpected behavior.
+// This eviction process is a workaround to guarantee the deletion of entries marked for
+// deletion or eviction. It works as follows:
+// 1. Create a trigger key and write it to the database.
+// 2. Mark entries for eviction with the correct meta bits.
+// 3. Set discard timestamp to enable BadgerDB GC.
+// 4. Drop the trigger prefix to force eviction processing.
+// 5. Clean up by resetting discard timestamp and deleting trigger key.
+func (s *Store) Evict() lib.ErrorI {
+	s.log.Debugf("Eviction process started at height %d", s.Version())
+	// evict LSS deleted keys, part of the workaround for previously set keys for deletion
+	triggerEvict := fmt.Appendf(nil, "zzz/trigger_key_%s", lib.RandSlice(evictRandKeySize))
+	writer := s.db.NewWriteBatchAt(lssVersion)
+	if err := writer.Set(triggerEvict, nil); err != nil {
+		return ErrStoreSet(err)
+	}
+	if err := writer.Flush(); err != nil {
+		return ErrCommitDB(err)
+	}
+	// set discard timestamp, before marking entries for eviction
+	s.db.SetDiscardTs(lssVersion)
+	// drop the trigger to force eviction
+	if err := s.db.DropPrefix(triggerEvict); err != nil {
+		return ErrCommitDB(err)
+	}
+	// reset discard timestamp after eviction
+	defer s.db.SetDiscardTs(0)
+	// flatten the DB to optimize the storage layout
+	if err := s.db.Flatten(1); err != nil {
+		return ErrCommitDB(err)
+	}
+	// ValueLogGC temporarily disabled due to increased memory usage
+	// TODO: Re-enable ValueLogGC after optimizing memory usage
+	// run GC to clean up unused data
+	// if err := s.db.RunValueLogGC(valueLogGCDiscardRation); err != nil &&
+	// 	err != badger.ErrNoRewrite {
+	// 	return ErrCommitDB(err)
+	// }
+	// log the results
+	total, deleted := s.keyCount(lssVersion, []byte(latestStatePrefix), true)
+	s.log.Debugf("Eviction process finished. Removed %d keys, %d total keys", deleted, total)
+	return nil
+}
+
+// keyCount counts the number of total keys and those marked for deletion within a version/prefix
+func (s *Store) keyCount(version uint64, prefix []byte, noDiscardBit bool) (count, deleted uint64) {
+	// create a new transaction at the specified version
+	txn := s.db.NewTransactionAt(version, false)
+	defer txn.Discard()
+	// create a new iterator for the transaction on the given prefix
+	it := txn.NewIterator(badger.IteratorOptions{
+		Prefix:      prefix,
+		AllVersions: true,
+	})
+	defer it.Close()
+	for it.Rewind(); it.Valid(); it.Next() {
+		count++
+		if it.Item().IsDeletedOrExpired() {
+			deleted++
+			item := it.Item()
+			deleteBit := entryItemIsDelete(item)
+			discardBit := entryItemIsDoNotDiscard(item)
+			// check if a no discard bit is set to key that should be deleted
+			if discardBit && noDiscardBit {
+				s.log.Warnf("discard bit found, key=%s size=%d delete=%t",
+					lib.BytesToString(item.KeyCopy(nil)), item.EstimatedSize(), deleteBit)
+			}
+		}
+	}
+	// return the counts
+	return count, deleted
 }
 
 // getLatestCommitID() retrieves the latest CommitID from the database

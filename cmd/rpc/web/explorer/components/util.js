@@ -3,6 +3,7 @@ import { Tooltip, OverlayTrigger, Pagination } from "react-bootstrap";
 
 // cnpyConversionRate sets the conversion rate between CNPY and uCNPY
 export const cnpyConversionRate = 1_000_000;
+export const defaultNetAddress = "tcp://delegating";
 
 // toCNPY converts a uCNPY amount to CNPY
 export function toCNPY(uCNPY) {

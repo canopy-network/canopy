@@ -318,6 +318,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 				continue
 			}
 			// publish root chain information
+			// set the timestamp
 			go c.RCManager.Publish(id, info)
 		}
 		// exit
