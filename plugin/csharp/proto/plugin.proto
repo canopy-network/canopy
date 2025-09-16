@@ -1,0 +1,201 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+import "proto/tx.proto";
+
+// FSMToPlugin is the outbound message to the plugin from the main FSM (fsm -> plugin)
+message FSMToPlugin {
+  // id: the unique ID of the request
+  uint64 id = 1;
+  // payload: the payload of the message
+  oneof payload {
+    // config: the response to the plugin config message
+    PluginFSMConfig config = 2;
+    // genesis: request to execute genesis logic on the plugin
+    PluginGenesisRequest genesis = 3;
+    // begin: request to execute 'begin block' logic on the plugin
+    PluginBeginRequest begin = 4;
+    // check: request to execute minimum logic to validate the transaction
+    PluginCheckRequest check = 5;
+    // deliver: request to execute 'deliver tx' logic on the plugin
+    PluginDeliverRequest deliver = 6;
+    // end: request to execute 'end block' logic on the plugin
+    PluginEndRequest end = 7;
+    // state_read: response with read state data
+    PluginStateReadResponse state_read = 8;
+    // state_write: acknowledgment of write operation
+    PluginStateWriteResponse state_write = 9;
+    // error: any error returned by the FSM
+    PluginError error = 99;
+  }
+}
+
+// PluginToFSM is the outbound message from the plugin to the FSM (plugin -> fsm)
+message PluginToFSM {
+  // id: the unique ID of the request
+  uint64 id = 1;
+  // payload: the payload of the message
+  oneof payload {
+    // config: the request to initialize the plugin
+    PluginConfig config = 2;
+    // genesis: response to the genesis request
+    PluginGenesisResponse genesis = 3;
+    // begin: response to the begin block request
+    PluginBeginResponse begin = 4;
+    // check: response to the check tx request
+    PluginCheckResponse check = 5;
+    // deliver: response to the deliver tx request
+    PluginDeliverResponse deliver = 6;
+    // end: response to the end block request
+    PluginEndResponse end = 7;
+    // state_read: request to read plugin state from the FSM
+    PluginStateReadRequest state_read = 8;
+    // state_write: request to write plugin state to the FSM
+    PluginStateWriteRequest state_write = 9;
+  }
+}
+
+// PluginConfig is the identity information of the plugin that is communicated to the fsm
+message PluginConfig {
+  // name: the name of the plugin
+  string name = 1;
+  // id: the unique identifier of the plugin
+  uint64 id = 2;
+  // version: the version of the plugin
+  uint64 version = 3;
+  // supported_transactions: a list of custom transaction names that are supported
+  repeated string supported_transactions = 4;
+}
+
+// PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
+message PluginFSMConfig {PluginConfig config = 1;}
+
+// Core block lifecycle messages
+
+// PluginGenesisRequest carries genesis JSON data for initialization
+message PluginGenesisRequest {bytes genesis_json = 1;}
+
+// PluginGenesisResponse acknowledges genesis execution completion
+message PluginGenesisResponse {PluginError error = 99;}
+
+// PluginBeginRequest signals start of a new block
+message PluginBeginRequest {}
+
+// PluginBeginResponse acknowledges begin block execution
+message PluginBeginResponse {PluginError error = 99;}
+
+// PluginCheckRequest carries a transaction to be checked
+message PluginCheckRequest {Transaction tx = 1;}
+
+// PluginCheckResponse acknowledges transaction check
+message PluginCheckResponse {
+  // authorized_signers: addresses who are authorized to sign the transaction
+  repeated bytes authorized_signers = 1; // @gotags: json:"authorizedSigners"
+  // recipient: address of the recipient of the transaction (nil if not applicable)
+  bytes recipient = 2;
+  // error: an error occurred when checking the transaction
+  PluginError error = 99;
+}
+
+// PluginDeliverRequest carries a transaction to be processed
+message PluginDeliverRequest {Transaction tx = 1;}
+
+// PluginDeliverResponse acknowledges transaction delivery
+message PluginDeliverResponse {PluginError error = 99;}
+
+// PluginEndRequest signals end of the current block
+message PluginEndRequest { bytes proposer_address = 1; }
+
+// PluginEndResponse acknowledges end block execution
+message PluginEndResponse {PluginError error = 99;}
+
+// PluginError carries error details from plugin or FSM
+message PluginError {
+  uint64 code = 1; // error code
+  string module = 2; // error module
+  string msg = 3; // error message
+}
+
+// Plugin State Read Interface
+
+// PluginStateReadRequest allows batching multiple key or range reads in one call
+message PluginStateReadRequest {
+  // keys: explicit keys to read
+  repeated PluginKeyRead keys = 1;
+  // ranges: key ranges to iterate over and read
+  repeated PluginRangeRead ranges = 2;
+}
+
+// PluginKeyRead requests a single key read, identified by query_id
+message PluginKeyRead {
+  // query_id to correlate requests and responses
+  uint64 query_id = 1; // @gotags: json:"queryId"
+  // key to read from state
+  bytes key = 2;
+}
+
+// PluginRangeRead requests an iteration over a key range with optional limits and direction
+message PluginRangeRead {
+  // query_id to correlate requests and responses
+  uint64 query_id = 1; // @gotags: json:"queryId"
+  // prefix: the prefix to iterate over
+  bytes prefix = 2;
+  // limit: maximum number of entries to return
+  uint64 limit = 3;
+  // reverse: whether to iterate in reverse order
+  bool reverse = 4;
+}
+
+// PluginStateReadResponse returns the results for the read requests
+message PluginStateReadResponse {
+  // results hold multiple query results matching requests by query_id
+  repeated PluginReadResult results = 1;
+  // error: if an error occurred during the request execution
+  PluginError error = 99;
+}
+
+// PluginReadResult holds the result entries for a specific read query
+message PluginReadResult {
+  // query_id: matching the original read request
+  uint64 query_id = 1; // @gotags: json:"queryId"
+  // entries: returned for this query
+  repeated PluginStateEntry entries = 2;
+}
+
+// Plugin State Write Interface
+
+// PluginStateWriteRequest batches multiple set and delete operations in one call
+message PluginStateWriteRequest {
+  // sets: keys and values to write to state
+  repeated PluginSetOp sets = 1;
+  // deletes: keys to remove from state
+  repeated PluginDeleteOp deletes = 2;
+}
+
+// PluginStateWriteResponse acknowledges successful write operations
+message PluginStateWriteResponse {
+  // error: if an error occurred during the request execution
+  PluginError error = 99;
+}
+
+// PluginSetOp represents a key/value pair to set in state
+message PluginSetOp {
+  // key: is the 'key' associated with the value in the KV pair for the set op
+  bytes key = 1;
+  // key: is the 'value' associated with the value in the KV pair for the set op
+  bytes value = 2;
+}
+
+// PluginDeleteOp represents a key to delete from state
+message PluginDeleteOp {
+  // key: is the 'key' associated with the value in the KV pair for the delete op
+  bytes key = 1;
+}
+
+// PluginStateEntry represents a key/value pair returned in read results
+message PluginStateEntry {
+  // key: is the 'key' associated with the value in the KV pair for the 'get' op
+  bytes key = 1;
+  // value: is the 'value' associated with the value in the KV pair for the 'get' op
+  bytes value = 2;
+}

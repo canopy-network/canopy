@@ -1,0 +1,16 @@
+{
+  "chainId": 1,
+  "name": "canopy",
+  "symbol": "CNPY",
+  "website": "https://canopynetwork.org",
+  "logoURI": "https://",
+  "bannerURI": "https://",
+  "explorerLogoURI": "https://",
+  "walletLogoURI": "https://",
+  "color1Hex": "#2c9b5a",
+  "color2Hex": "#16502e",
+  "description": "Canopy is a recursive, progressive-sovereignty framework for blockchains",
+  "consensusPreset": 1,
+  "initialMintPerBlock": 80000000,
+  "blocksPerHalvening": 3150000
+}

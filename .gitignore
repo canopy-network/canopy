@@ -36,3 +36,5 @@ vendor
 cmd/web/explorer/.idea
 **/.DS_Store
 /cmd/tps/data
+
+CLAUDE.md
