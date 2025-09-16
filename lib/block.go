@@ -192,6 +192,11 @@ func (x *Block) Check(networkID, chainId uint64) ErrorI {
 		// exit with nil error
 		return ErrNilBlock()
 	}
+	// check for unknown fields
+	//if codec.HasUnknown(x) { TODO add once block structure is stable
+	//	// exit with unknown fields error
+	//	return ErrUnknownFields()
+	//}
 	// check the header
 	return x.BlockHeader.Check(networkID, chainId)
 }

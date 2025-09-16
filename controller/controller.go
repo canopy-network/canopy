@@ -123,7 +123,7 @@ func (c *Controller) Start() {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
 				// call mempool check
-				c.Mempool.CheckMempool()
+				c.Mempool.CheckMempool(rootChainInfo.Height)
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
 				// exit the loop
@@ -179,19 +179,16 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
-	// set timestamp if included
-	var timestamp time.Time
-	// if timestamp is not 0
-	if info.Timestamp != 0 {
-		timestamp = time.UnixMicro(int64(info.Timestamp))
-	}
+	// setup the bft coordination meta
+	bftMeta := &lib.BFTCoordinationMeta{LastCommitTime: info.BlockTimeInfo.GetEstCommitTime()}
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
+		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, RootHeight: info.Height, BFTMeta: bftMeta}
 	} else {
+		c.log.Infof("Last Root Commit Time: %s", time.UnixMicro(int64(info.BlockTimeInfo.GetEstCommitTime())).Format("15:04:05"))
 		// signal to reset consensus
-		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
+		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, RootHeight: info.Height, BFTMeta: bftMeta}
 	}
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)
@@ -205,6 +202,12 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
+}
+
+// LoadRootBlockTime() gets the root chain block timing information
+func (c *Controller) LoadRootBlockTime() (*lib.BlockTimeInfo, lib.ErrorI) {
+	activeRootChainId, _ := c.FSM.GetRootChainId()
+	return c.RCManager.BlockTime(activeRootChainId, 0)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
@@ -273,6 +276,19 @@ func (c *Controller) LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (
 	return c.RCManager.GetMinimumEvidenceHeight(rootChainId, rootHeight)
 }
 
+// LastBFTCommitTime() returns the estimated next CommitTime()
+func (c *Controller) LastBFTCommitTime() uint64 {
+	blockTime := time.Duration(c.Config.BlockTimeMS()) * time.Millisecond
+	lastCommitTime := c.Consensus.LastCommitTime
+	c.log.Infof("Last BFT commit time: %s", lastCommitTime.Format("15:04:05"))
+	if time.Since(lastCommitTime) > blockTime*2 || time.Until(lastCommitTime) > blockTime*2 {
+		c.log.Warnf("Last BFT commit time out of range (%s), using time.Now(%s)",
+			lastCommitTime.Format("15:04:05"), time.Now().Format("15:04:05"))
+		return uint64(time.Now().UnixMicro())
+	}
+	return uint64(lastCommitTime.UnixMicro())
+}
+
 // LoadMaxBlockSize() gets the max block size from the state
 func (c *Controller) LoadMaxBlockSize() int {
 	// load the maximum block size from the nested chain FSM
@@ -284,34 +300,6 @@ func (c *Controller) LoadMaxBlockSize() int {
 	}
 	// return the max block size as set by the governance param
 	return int(params.BlockSize)
-}
-
-// LoadLastCommitTime() gets a timestamp from the most recent Quorum Block
-func (c *Controller) LoadLastCommitTime(height uint64) time.Time {
-	// load the certificate (and block) from the indexer
-	cert, err := c.FSM.LoadCertificate(height)
-	if err != nil {
-		c.log.Error(err.Error())
-		return time.Time{}
-	}
-	// create a new object reference (to ensure a non-nil result)
-	block := new(lib.Block)
-	// populate the object reference with bytes
-	if err = lib.Unmarshal(cert.Block, block); err != nil {
-		// log the error
-		c.log.Error(err.Error())
-		// exit with empty time
-		return time.Time{}
-	}
-	// ensure the block isn't nil
-	if block.BlockHeader == nil {
-		// log the error
-		c.log.Error("Last block synced is nil")
-		// exit with empty time
-		return time.Time{}
-	}
-	// return the last block time
-	return time.UnixMicro(int64(block.BlockHeader.Time))
 }
 
 // LoadProposerKeys() gets the last root-chainId proposer keys

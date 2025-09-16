@@ -35,6 +35,7 @@ const (
 	StateDiffGetRoutePath          = "/v1/query/state-diff"
 	CertByHeightRoutePath          = "/v1/query/cert-by-height"
 	BlockByHeightRoutePath         = "/v1/query/block-by-height"
+	BlockTimeRoutePath             = "/v1/query/block-time"
 	BlocksRoutePath                = "/v1/query/blocks"
 	BlockByHashRoutePath           = "/v1/query/block-by-hash"
 	TxsByHeightRoutePath           = "/v1/query/txs-by-height"
@@ -127,6 +128,7 @@ const (
 	BlocksRouteName                = "blocks"
 	BlockByHeightRouteName         = "block-by-height"
 	BlockByHashRouteName           = "block-by-hash"
+	BlockTimeRouteName             = "block-time"
 	TxsByHeightRouteName           = "txs-by-height"
 	TxsBySenderRouteName           = "txs-by-sender"
 	TxsByRecRouteName              = "txs-by-rec"
@@ -222,6 +224,7 @@ var routePaths = routes{
 	BlockByHeightRouteName:         {Method: http.MethodPost, Path: BlockByHeightRoutePath},
 	BlocksRouteName:                {Method: http.MethodPost, Path: BlocksRoutePath},
 	BlockByHashRouteName:           {Method: http.MethodPost, Path: BlockByHashRoutePath},
+	BlockTimeRouteName:             {Method: http.MethodPost, Path: BlockTimeRoutePath},
 	TxsByHeightRouteName:           {Method: http.MethodPost, Path: TxsByHeightRoutePath},
 	TxsBySenderRouteName:           {Method: http.MethodPost, Path: TxsBySenderRoutePath},
 	TxsByRecRouteName:              {Method: http.MethodPost, Path: TxsByRecRoutePath},
@@ -317,6 +320,7 @@ func createRouter(s *Server) *httprouter.Router {
 		BlockByHeightRouteName:         s.BlockByHeight,
 		BlocksRouteName:                s.Blocks,
 		BlockByHashRouteName:           s.BlockByHash,
+		BlockTimeRouteName:             s.BlockTime,
 		TxsByHeightRouteName:           s.TransactionsByHeight,
 		TxsBySenderRouteName:           s.TransactionsBySender,
 		TxsByRecRouteName:              s.TransactionsByRecipient,

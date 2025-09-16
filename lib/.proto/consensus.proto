@@ -105,6 +105,8 @@ message View {
   // executed sequentially to achieve consensus on the next block.
   // ELECTION->ELECTION-VOTE->PROPOSE->PROPOSE-VOTE->PRECOMMIT->PRECOMMIT-VOTE->COMMIT->COMMIT-PROCESS
   Phase phase = 6;
+  // the root height the block was built on
+  uint64 root_build_height = 7; // @gotags: json:"rootBuildHeight"
 }
 
 // An Aggregate Signature is a single, compact signature created by combining multiple individual signatures from
@@ -166,6 +168,20 @@ message RootChainInfo {
   LotteryWinner lottery_winner = 5; // @gotags: json:"lotteryWinner"
   // orders: the swap order book from the 'root chain' for the 'nested chain'
   OrderBook orders = 6; // @gotags: json:"orders"
-  // timestamp: a timestamp of when the notification should cause a reset
-  uint64 timestamp = 7;
+  // block_time_info: the block timining information about the root chain
+  BlockTimeInfo block_time_info = 7; // @gotags: json:"blockTimeInfo"
+}
+
+// BlockTimeInfo: describes the block time info
+message BlockTimeInfo {
+  // height: the block height
+  uint64 height = 1; // @gotags: json:"height"
+  // build_time: the unix micro timestamp of building the block
+  uint64 build_time = 2; // @gotags: json:"buildTime"
+  // est_commit_time: the unix micro estimated timestamp of commit time of a block
+  uint64 est_commit_time = 3; // @gotags: json:"estCommitTime"
+  // est_next_block: the unix micro estimated timestamp of when the next block should occur
+  uint64 est_next_block_time = 4; // @gotags: json:"estNextBlockTime"
+  // block_frequency_ms: the block time in milliseconds
+  uint64 block_frequency_ms = 5; // @gotags: json:"blockTimeMS"
 }

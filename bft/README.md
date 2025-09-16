@@ -136,6 +136,47 @@ Key aspects of Safety and Liveness Mechanisms:
 - Practical liveness guarantees under realistic network conditions
 - Resistance to various Byzantine attack vectors
 
+### Nested Problem A – Split at NEW_HEIGHT (Round 0)
+If a root chain notification arrives right as the nested chain transitions to `NEW_HEIGHT`, the validator set can split 50%/50% at **Round 0**.
+
+**Proposed Solution:**
+- Let the **previous leader** decide whether to issue a *"reset on Round 0 for rHeight X"* command inside the last certificate.
+- This ensures a single, authoritative decision and consistent behavior for all validators.
+
+**Why this is needed:**
+- If each validator makes this decision individually, a notification arriving exactly at a border can produce inconsistent outcomes.
+
+**Note**
+- Requires knowing the **root block time** so the leader can make the decision predictably.
+
+---
+
+### Nested Problem B – Split at NEW_ROUND (Round > 0)
+When advancing to the next round, there may be no reliable leader to coordinate a reset.
+- If the root chain notification arrives while half the validators have already switched to the new round and the other half haven’t, the set can split on **root height and root info**.
+
+**Proposed Solution – Use pacemaker messages for coordination:**
+
+1. **Read pacemaker messages**
+    - Identify the largest voting-power group (“faction”) that agrees on `(RootHeight X, Round Y)`.
+
+2. **Choose a root height**
+    - If your voting power is higher than the largest faction you see → keep your own `RootHeight`.
+    - Otherwise → adopt the majority’s `RootHeight`.
+
+3. **Broadcast your decision**
+    - Send your `(RootHeight, Round)` vote to all validators.
+    - Sleep for **2 seconds**.
+
+4. **Periodic majority check**
+    - Every 2 seconds, check if there’s a **≥2/3 majority** for a specific `(RootHeight, Round)`.
+    - If yes → proceed.
+    - If not, keep checking until either a majority is reached or **10 seconds** have passed.
+
+5. **Advance with the agreed majority**
+    - Move to the **highest round** that has a ≥2/3 majority.
+    - Adopt the `RootHeight` that the largest 'faction' supports — even if it’s different from what you originally voted.
+
 ## Security Mechanisms
 
 Canopy employs innovative security mechanisms to ensure the reliability and stability of its nested chains. The NestBFT consensus algorithm provides robust protection against various attack vectors through its carefully designed phases and cryptographic techniques.
