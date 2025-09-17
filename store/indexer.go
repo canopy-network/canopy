@@ -3,8 +3,9 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
-	"golang.org/x/sync/errgroup"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -39,14 +40,16 @@ type Indexer struct {
 // IndexBlock() turns the block into bytes, indexes the block by hash and height
 // and then indexes the transactions
 func (t *Indexer) IndexBlock(b *lib.BlockResult) lib.ErrorI {
+	bz, err := lib.Marshal(b.BlockHeader)
+	if err != nil {
+		return err
+	}
+	// set meta stats for the block
+	b.Meta = &lib.BlockResultMeta{Size: uint64(len(bz))}
 	blockCache.Add(b.BlockHeader.Height, b)
 	var eg errgroup.Group
 	// index block header in its own goroutine
 	eg.Go(func() error {
-		bz, err := lib.Marshal(b.BlockHeader)
-		if err != nil {
-			return err
-		}
 		hashKey, err := t.indexBlockByHash(b.BlockHeader.Hash, bz)
 		if err != nil {
 			return err

@@ -168,7 +168,9 @@ $ curl -X POST localhost:50002/v1/tx \
 
 **Request**: `null`
 
-**Response**: `uint64` - the number of the next block
+**Response**:
+
+- **height**: `uint64` - the number of the next block
 
 **Example:**:
 
