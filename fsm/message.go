@@ -498,6 +498,10 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 	if err != nil {
 		return err
 	}
+	// ensure there's some liquidity in the pool
+	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
+		return ErrInvalidLiquidityPool()
+	}
 	// hard limit orders to 50K per batch to prevent unchecked state growth
 	if len(batch.Orders) >= 50_000 {
 		return ErrMaxDexBatchSize()
@@ -527,6 +531,10 @@ func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidity
 	if err != nil {
 		return err
 	}
+	// ensure there's some liquidity in the pool
+	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
+		return ErrInvalidLiquidityPool()
+	}
 	// hard limit ops to 5K per batch to prevent unchecked state growth
 	if len(batch.Deposits) >= 5_000 {
 		return ErrMaxDexBatchSize()
@@ -554,6 +562,10 @@ func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidit
 	batch, err := s.GetDexBatch(msg.ChainId, false)
 	if err != nil {
 		return err
+	}
+	// ensure there's some liquidity in the pool
+	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
+		return ErrInvalidLiquidityPool()
 	}
 	// hard limit ops to 5K per batch to prevent unchecked state growth
 	if len(batch.Withdraws) >= 5_000 {
