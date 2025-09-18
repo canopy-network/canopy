@@ -392,11 +392,14 @@ func (s *Store) Evict() lib.ErrorI {
 	s.db.SetDiscardTs(lssVersion)
 	// reset discard timestamp after eviction
 	defer s.db.SetDiscardTs(0)
+	start := time.Now()
 	// drop the entire LSS prefix to force eviction processing
 	if err := s.db.DropPrefix([]byte(latestStatePrefix)); err != nil {
 		return ErrCommitDB(err)
 	}
+	s.log.Warnf("Drop Prefix Took: %2fs", time.Since(start).Seconds())
 	// restore the LSS store without the deleted keys
+	start = time.Now()
 	writer := s.db.NewWriteBatchAt(lssVersion)
 	for _, entry := range lssBackup {
 		if err := writer.SetEntryAt(entry, lssVersion); err != nil {
@@ -407,6 +410,7 @@ func (s *Store) Evict() lib.ErrorI {
 	if err := writer.Flush(); err != nil {
 		return ErrFlushBatch(err)
 	}
+	s.log.Warnf("Reset LSS Took: %2fs for %d items", time.Since(start).Seconds(), len(lssBackup))
 	// ValueLogGC and Flatten temporarily disabled due to increased memory usage
 	// TODO: Re-enable ValueLogGC and Flatten after optimizing memory usage
 	// flatten the DB to optimize the storage layout
@@ -455,6 +459,7 @@ func (s *Store) keyCount(version uint64, prefix []byte, noDiscardBit bool) (coun
 
 // GetItems returns all items in the store with the given version and prefix.
 func (s *Store) GetItems(version uint64, prefix []byte, skipDeleted bool) ([]*badger.Entry, error) {
+	defer lib.TimeTrack(s.log, time.Now())
 	// create the items slice
 	items := make([]*badger.Entry, 0)
 	// create a new transaction at the specified version
