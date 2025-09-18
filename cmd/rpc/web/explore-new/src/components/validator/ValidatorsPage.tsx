@@ -31,9 +31,10 @@ interface Validator {
 const ValidatorsPage: React.FC = () => {
     const [validators, setValidators] = useState<Validator[]>([])
     const [loading, setLoading] = useState(true)
+    const [currentPage, setCurrentPage] = useState(1)
 
-    // Hook para obtener datos de validators
-    const { data: validatorsData, isLoading } = useValidators(1)
+    // Hook para obtener datos de validators con paginación
+    const { data: validatorsData, isLoading } = useValidators(currentPage)
 
     // Hook para obtener datos de bloques para calcular blocks produced
     const { data: blocksData } = useBlocks(1)
@@ -160,11 +161,16 @@ const ValidatorsPage: React.FC = () => {
 
     const totalValidators = validatorsData?.totalCount || 0
 
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page)
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
         >
             <ValidatorsFilters
@@ -174,6 +180,9 @@ const ValidatorsPage: React.FC = () => {
             <ValidatorsTable
                 validators={validators}
                 loading={loading || isLoading}
+                totalCount={totalValidators}
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
             />
         </motion.div>
     )

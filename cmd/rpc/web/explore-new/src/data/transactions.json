@@ -1,0 +1,72 @@
+{
+  "page": {
+    "title": "Transactions",
+    "description": "Explore all transactions on the Canopy network",
+    "currentBlock": "Current Block:",
+    "totalTransactions": "Total:",
+    "transactionsUnit": "transactions"
+  },
+  "navigation": {
+    "blockchain": "Blockchain",
+    "staking": "Staking",
+    "governance": "Governance",
+    "analytics": "Analytics"
+  },
+  "search": {
+    "placeholder": "Search blocks, transactions, addresses..."
+  },
+  "filters": {
+    "allTransactions": "All Transactions",
+    "lastHour": "Last Hour",
+    "last24h": "Last 24h",
+    "lastWeek": "Last Week",
+    "liveUpdates": "Live Updates"
+  },
+  "table": {
+    "title": "Transactions List",
+    "headers": {
+      "hash": "Hash",
+      "type": "Type",
+      "from": "From",
+      "to": "To",
+      "amount": "Amount",
+      "fee": "Fee",
+      "status": "Status",
+      "age": "Age"
+    },
+    "units": {
+      "cnpy": "CNPY",
+      "seconds": "s",
+      "secsAgo": "secs ago",
+      "minAgo": "min ago",
+      "hoursAgo": "hours ago"
+    },
+    "pagination": {
+      "showing": "Showing",
+      "to": "to",
+      "of": "of",
+      "entries": "entries",
+      "previous": "Previous",
+      "next": "Next"
+    }
+  },
+  "actions": {
+    "viewTransaction": "View Transaction",
+    "viewBlock": "View Block",
+    "copyHash": "Copy Hash"
+  },
+  "status": {
+    "success": "Success",
+    "failed": "Failed",
+    "pending": "Pending"
+  },
+  "types": {
+    "transfer": "Transfer",
+    "stake": "Stake",
+    "unstake": "Unstake",
+    "swap": "Swap",
+    "governance": "Governance",
+    "delegate": "Delegate",
+    "undelegate": "Undelegate"
+  }
+}

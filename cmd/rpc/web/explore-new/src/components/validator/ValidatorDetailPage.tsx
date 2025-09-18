@@ -274,7 +274,8 @@ const ValidatorDetailPage: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
         >
             {/* Breadcrumb */}

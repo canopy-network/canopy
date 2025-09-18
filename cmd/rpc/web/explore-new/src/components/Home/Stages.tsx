@@ -4,14 +4,14 @@ import { useCardData, useAccounts, useTransactions } from '../../hooks/useApi'
 import { useQuery } from '@tanstack/react-query'
 import { Accounts } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
-import stagesConfig from '../../data/stages.json'
 
-interface Stage {
+interface StageCardProps {
     title: string
     subtitle?: React.ReactNode
     data: string
     isProgressBar: boolean
     icon: React.ReactNode
+    metric: string // Añadido para el key y diferenciación
 }
 
 const Stages = () => {
@@ -116,35 +116,23 @@ const Stages = () => {
         return toCNPY(Number(d) || 0)
     }, [cardData])
 
-    const stages: Stage[] = (stagesConfig as any[]).map((cfg) => {
-        switch (cfg.metric) {
-            case 'stakingPercent':
-                return { title: cfg.title, data: `${stakingPercent.toFixed(1)}%`, isProgressBar: true, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'cnpyStakingDelta':
-                return { title: cfg.title, data: `+${convertNumber(delegatedOnlyCNPY)}`, isProgressBar: false, subtitle: <p className="text-sm text-primary">delegated only (Δ)</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'totalSupply':
-                return { title: cfg.title, data: convertNumber(totalSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'liquidSupply':
-                return { title: cfg.title, data: convertNumber(liquidSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'blocks':
-                return {
-                    title: cfg.title, data: latestBlockHeight.toString(), isProgressBar: false, subtitle: (
-                        <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
-                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
-                            Live
-                        </span>
-                    ), icon: <i className={`${cfg.icon} text-primary`}></i>
-                }
-            case 'totalStake':
-                return { title: cfg.title, data: convertNumber(totalStakeCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'accounts':
-                return { title: cfg.title, data: convertNumber(totalAccounts), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            case 'txs':
-                return { title: cfg.title, data: convertNumber(totalTxs), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>, icon: <i className={`${cfg.icon} text-primary`}></i> }
-            default:
-                return { title: cfg.title, data: '0', isProgressBar: false, icon: <i className={`${cfg.icon} text-primary`}></i> }
-        }
-    })
+    const stages: StageCardProps[] = [
+        { title: 'Staking %', data: `${stakingPercent.toFixed(1)}%`, isProgressBar: true, icon: <i className="fa-solid fa-chart-pie text-primary"></i>, metric: 'stakingPercent' },
+        { title: 'CNPY Staking', data: `+${convertNumber(delegatedOnlyCNPY)}`, isProgressBar: false, subtitle: <p className="text-sm text-primary">delta</p>, icon: <i className="fa-solid fa-coins text-primary"></i>, metric: 'cnpyStakingDelta' },
+        { title: 'Total Supply', data: convertNumber(totalSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-wallet text-primary"></i>, metric: 'totalSupply' },
+        { title: 'Liquid Supply', data: convertNumber(liquidSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-droplet text-primary"></i>, metric: 'liquidSupply' },
+        {
+            title: 'Blocks', data: latestBlockHeight.toString(), isProgressBar: false, subtitle: (
+                <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
+                    Live
+                </span>
+            ), icon: <i className="fa-solid fa-cube text-primary"></i>, metric: 'blocks'
+        },
+        { title: 'Total Stake', data: convertNumber(totalStakeCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-lock text-primary"></i>, metric: 'totalStake' },
+        { title: 'Total Accounts', data: convertNumber(totalAccounts), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>, icon: <i className="fa-solid fa-users text-primary"></i>, metric: 'accounts' },
+        { title: 'Total Txs', data: convertNumber(totalTxs), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>, icon: <i className="fa-solid fa-arrow-right-arrow-left text-primary"></i>, metric: 'txs' },
+    ]
 
     const AnimatedNumber: React.FC<{ value: string, active: boolean }> = ({ value, active }) => {
         const [display, setDisplay] = React.useState<string>(value)
@@ -198,7 +186,7 @@ const Stages = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {stages.map((stage, index) => (
                     <motion.article
-                        key={stage.title}
+                        key={stage.metric}
                         initial={{ opacity: 0, y: 10, scale: 0.98 }}
                         whileInView={{ opacity: 1, y: 0, scale: 1 }}
                         viewport={{ amount: 0.6 }}

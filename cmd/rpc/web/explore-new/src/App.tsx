@@ -6,20 +6,22 @@ import Footer from './components/Footer'
 import HomePage from './pages/Home'
 import BlocksPage from './components/block/BlocksPage'
 import BlockDetailPage from './components/block/BlockDetailPage'
+import TransactionsPage from './components/transaction/TransactionsPage'
+import TransactionDetailPage from './components/transaction/TransactionDetailPage'
 import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
-
 
 
 function AnimatedRoutes() {
   const location = useLocation()
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="popLayout" initial={false}>
       <Routes location={location} key={location.pathname}>
         <Route index element={<HomePage />} />
         <Route path="/blocks" element={<BlocksPage />} />
         <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
-        <Route path="/transactions" element={<HomePage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
         <Route path="/validators" element={<ValidatorsPage />} />
         <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
         <Route path="/accounts" element={<HomePage />} />

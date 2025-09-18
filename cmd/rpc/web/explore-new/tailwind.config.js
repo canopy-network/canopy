@@ -16,6 +16,7 @@ export default {
                 red: "#EF4444",
                 navbar: "#14151C",
                 back: "#9CA3AF",
+                input: '#2B2C38'
             },
         },
     },
@@ -29,5 +30,6 @@ export default {
         'bg-red',
         'bg-navbar',
         'bg-back',
+        'bg-input',
     ],
 }

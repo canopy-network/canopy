@@ -18,11 +18,12 @@ interface Block {
 
 const BlocksPage: React.FC = () => {
     const [activeFilter, setActiveFilter] = useState('all')
+    const [currentPage, setCurrentPage] = useState(1)
     const [blocks, setBlocks] = useState<Block[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Hook para obtener datos de bloques
-    const { data: blocksData, isLoading } = useBlocks(1)
+    // Hook para obtener datos de bloques con paginación
+    const { data: blocksData, isLoading } = useBlocks(currentPage)
 
     // Normalizar datos de bloques
     const normalizeBlocks = (payload: any): Block[] => {
@@ -119,11 +120,16 @@ const BlocksPage: React.FC = () => {
 
     const totalBlocks = blocksData?.totalCount || 0
 
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page)
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
         >
             <BlocksFilters
@@ -135,6 +141,9 @@ const BlocksPage: React.FC = () => {
             <BlocksTable
                 blocks={blocks}
                 loading={loading || isLoading}
+                totalCount={totalBlocks}
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
             />
         </motion.div>
     )
