@@ -14,11 +14,34 @@ var (
 
 // Hash() creates a hash representative of the dex batch
 func (x *DexBatch) Hash() []byte {
-	if x.IsEmpty() {
+	if x == nil {
 		return bytes.Clone(EmptyReceiptsHash)
 	}
-	bz, _ := Marshal(x)
+	if x.IsEmpty() {
+		x.ReceiptHash = bytes.Clone(EmptyReceiptsHash)
+	}
+	bz, _ := Marshal(x.Copy())
 	return crypto.Hash(bz)
+}
+
+// Copy() returns a copy, omitting non-critical information
+func (x *DexBatch) Copy() *DexBatch {
+	if x == nil {
+		return nil
+	}
+	return &DexBatch{
+		Committee:   x.Committee,
+		ReceiptHash: x.ReceiptHash,
+		Orders:      x.Orders,
+		Deposits:    x.Deposits,
+		Withdraws:   x.Withdraws,
+		PoolSize:    x.PoolSize,
+		//CounterPoolSize: 0,
+		//PoolPoints:      nil,
+		//TotalPoolPoints: 0,
+		Receipts:     x.Receipts,
+		LockedHeight: x.LockedHeight,
+	}
 }
 
 // Copy() makes a deep copy of the limit order
@@ -55,7 +78,7 @@ func (x *DexBatch) EnsureNonNil() {
 		x.Withdraws = []*DexLiquidityWithdraw{}
 	}
 	if x.Receipts == nil {
-		x.Receipts = []bool{}
+		x.Receipts = []uint64{}
 	}
 }
 
@@ -188,15 +211,17 @@ type dexBatch struct {
 	Orders          []*DexLimitOrder        `json:"orders"`
 	Deposits        []*DexLiquidityDeposit  `json:"deposits,omitempty"`
 	Withdraws       []*DexLiquidityWithdraw `json:"withdraws,omitempty"`
+	CounterPoolSize uint64                  `json:"counterPoolSize"`
 	PoolSize        uint64                  `json:"poolSize"`
 	PoolPoints      []*PoolPoints           `json:"poolPoints"`
 	TotalPoolPoints uint64                  `json:"totalPoolPoints"`
-	Receipts        []bool                  `json:"receipts,omitempty"`
+	Receipts        []uint64                `json:"receipts,omitempty"`
 	LockedHeight    uint64                  `json:"locked_height,omitempty"`
 }
 
 // MarshalJSON() implements the json.Marshal interface for dex batch
 func (x DexBatch) MarshalJSON() ([]byte, error) {
+	x.EnsureNonNil()
 	return json.Marshal(dexBatch{
 		Committee:       x.Committee,
 		ReceiptHash:     x.ReceiptHash,
@@ -204,6 +229,7 @@ func (x DexBatch) MarshalJSON() ([]byte, error) {
 		Deposits:        x.Deposits,
 		Withdraws:       x.Withdraws,
 		PoolSize:        x.PoolSize,
+		CounterPoolSize: x.CounterPoolSize,
 		PoolPoints:      x.PoolPoints,
 		TotalPoolPoints: x.TotalPoolPoints,
 		Receipts:        x.Receipts,
@@ -223,12 +249,14 @@ func (x *DexBatch) UnmarshalJSON(b []byte) (err error) {
 		Orders:          d.Orders,
 		Deposits:        d.Deposits,
 		Withdraws:       d.Withdraws,
+		CounterPoolSize: d.CounterPoolSize,
 		PoolSize:        d.PoolSize,
 		PoolPoints:      d.PoolPoints,
 		TotalPoolPoints: d.TotalPoolPoints,
 		Receipts:        d.Receipts,
 		LockedHeight:    d.LockedHeight,
 	}
+	x.EnsureNonNil()
 	return
 }
 
@@ -256,4 +284,13 @@ func (x *PoolPoints) UnmarshalJSON(bz []byte) (err error) {
 		Points:  a.Points,
 	}
 	return
+}
+
+// DexPrice implements a structure to represent the dex price
+type DexPrice struct {
+	LocalChainId  uint64 `json:"chainId"`
+	RemoteChainId uint64 `json:"remoteChainId"`
+	LocalPool     uint64 `json:"localPool"`
+	RemotePool    uint64 `json:"remotePool"`
+	E6ScaledPrice uint64 `json:"e6ScaledPrice"`
 }

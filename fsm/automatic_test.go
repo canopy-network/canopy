@@ -2,12 +2,11 @@ package fsm
 
 import (
 	"fmt"
-	"math"
-	"testing"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
+	"math"
+	"testing"
 )
 
 func TestBeginBlock(t *testing.T) {
@@ -123,10 +122,9 @@ func TestBeginBlock(t *testing.T) {
 			if test.isGenesis {
 				sm.height = 1
 			}
-			// get last validator set for begin block
 			// ensure expected error on function call
-			valSet, _ := sm.LoadCommittee(lib.CanopyChainId, sm.Height()-1)
-			require.Equal(t, test.error, sm.BeginBlock(&valSet))
+			_, err = sm.BeginBlock()
+			require.Equal(t, test.error, err)
 			if test.error != nil {
 				return
 			}
@@ -282,7 +280,8 @@ func TestEndBlock(t *testing.T) {
 			}()
 
 			// STEP 1) run function call and check for expected error
-			func() { require.Equal(t, test.error, sm.EndBlock(proposerAddress, 0)) }()
+			_, err := sm.EndBlock(proposerAddress, 0)
+			func() { require.Equal(t, test.error, err) }()
 
 			// STEP 2) validate the update of addresses who proposed the block
 			func() {
@@ -603,9 +602,9 @@ func (s *StateMachine) calculateRewardPerCommittee(t *testing.T, numberOfSubsidi
 	govParams, err := s.GetParamsGov()
 	require.NoError(t, err)
 	// calculate the number of halvenings
-	halvings := float64(s.height / s.Config.BlocksPerHalvening)
+	halvings := float64(s.height / uint64(BlocksPerHalvening))
 	// each halving, the reward is divided by 2
-	totalMintAmount := uint64(float64(s.Config.InitialMintPerBlock) / (math.Pow(2, halvings)))
+	totalMintAmount := uint64(float64(InitialTokensPerBlock) / (math.Pow(2, halvings)))
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut

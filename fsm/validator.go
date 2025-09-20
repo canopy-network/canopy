@@ -333,10 +333,8 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 		if err != nil {
 			return err
 		}
-		// cast the store to ensure the proper store type to complete this operation
-		storeI := s.Store().(lib.StoreI)
-		// index unstake event
-		return storeI.IndexAutomaticUnstake(s.Height(), addr.Bytes())
+		// add finish unstake event
+		return s.EventFinishUnstaking(addr.Bytes())
 	}
 	// for each unstaking key at this height
 	if err := s.IterateAndExecute(UnstakingPrefix(s.Height()), callback); err != nil {
@@ -374,11 +372,8 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 			// move on to the next iteration
 			continue
 		}
-		// cast the store to ensure the proper store type to complete this operation
-		storeI := s.Store().(lib.StoreI)
 		// index pause event
-		err = storeI.IndexAutomaticPause(s.Height(), addr)
-		if err != nil {
+		if err = s.EventAutoPause(addr); err != nil {
 			// log error
 			s.log.Debugf("can't index pause validator %s with err %s", lib.BytesToString(addr), err.Error())
 			// move on to the next iteration

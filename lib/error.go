@@ -249,16 +249,13 @@ const (
 	CodeZeroPointHolder           ErrorCode = 73
 	CodeOrderNotFound             ErrorCode = 74
 	CodePointHolderNotFound       ErrorCode = 75
-	CodeMaxDexBatchSize           ErrorCode = 103
-	CodeEventTypeEmpty            ErrorCode = 104
-
-	CodeMinimumOrderSize     ErrorCode = 76
-	CodeOrderLocked          ErrorCode = 77
-	CodeInvalidLockOrder     ErrorCode = 78
-	CodeDuplicateLockOrder   ErrorCode = 79
-	CodeInvalidBuyerDeadline ErrorCode = 80
-	CodeInvalidCloseOrder    ErrorCode = 81
-
+	CodeMinimumOrderSize          ErrorCode = 76
+	CodeOrderLocked               ErrorCode = 77
+	CodeInvalidLockOrder          ErrorCode = 78
+	CodeDuplicateLockOrder        ErrorCode = 79
+	CodeInvalidBuyerDeadline      ErrorCode = 80
+	CodeInvalidCloseOrder         ErrorCode = 81
+	CodeEmptyEventsTracker        ErrorCode = 82
 	CodeInvalidCheckpoint         ErrorCode = 83
 	CodeInvalidSellOrder          ErrorCode = 84
 	CodeStartPollHeight           ErrorCode = 85
@@ -279,6 +276,8 @@ const (
 	CodeUnexpectedPluginToFSM     ErrorCode = 100
 	CodePluginTimeout             ErrorCode = 101
 	CodeStakeBelowMinimum         ErrorCode = 102
+	CodeMaxDexBatchSize           ErrorCode = 103
+	CodeEventTypeEmpty            ErrorCode = 104
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -878,4 +877,8 @@ func ErrPointHolderNotFound() ErrorI {
 
 func ErrZeroLiquidityPool() ErrorI {
 	return NewError(CodeZeroPointHolder, StateMachineModule, "pool cannot have zero points after allocated")
+}
+
+func ErrEmptyEventsTracker() ErrorI {
+	return NewError(CodeEmptyEventsTracker, StateMachineModule, "events tracker nil")
 }

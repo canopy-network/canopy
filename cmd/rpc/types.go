@@ -51,15 +51,15 @@ type paginatedAddressRequest struct {
 	lib.PageParams
 }
 
-type paginatedEventTypeRequest struct {
-	eventTypeRequest
-	lib.PageParams
-}
-
 type paginatedHeightRequest struct {
 	heightRequest
 	lib.PageParams
 	lib.ValidatorFilters
+}
+
+type paginatedIdRequest struct {
+	idRequest
+	lib.PageParams
 }
 
 type heightAndAddressRequest struct {

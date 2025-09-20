@@ -277,7 +277,7 @@ func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoint
 
 // SUBSCRIPTION CODE BELOW (OUTBOUND)
 
-// RCSubscription (Root Chain Subscription) implements an efficient subscription to root chain info
+// RCSubscription (TransactionRoot Chain Subscription) implements an efficient subscription to root chain info
 type RCSubscription struct {
 	chainId uint64             // the chain id of the subscription
 	Info    *lib.RootChainInfo // root-chain info cached from the publisher
@@ -422,7 +422,7 @@ func (r *RCSubscription) Stop(err error) {
 
 // SUBSCRIBER CODE BELOW (INBOUND)
 
-// RCSubscriber (Root Chain Subscriber) implements an efficient publishing service to nested chain subscribers
+// RCSubscriber (TransactionRoot Chain Subscriber) implements an efficient publishing service to nested chain subscribers
 type RCSubscriber struct {
 	chainId uint64          // the chain id of the publisher
 	manager *RCManager      // a reference to the manager of the ws clients

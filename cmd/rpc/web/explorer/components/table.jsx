@@ -128,7 +128,7 @@ function convertGovernanceParams(v) {
   return ["consensus", "validator", "fee", "governance"].flatMap((space) =>
     Object.entries(value[space] || {}).map(([k, v]) => ({
       ParamName: k,
-      ParamValue: toCNPYParams.includes(k) ? toCNPY(v) : v,
+      ParamValue: toCNPYParams.includes(k) ? toCNPY(v || 0) : v,
       ParamSpace: space,
     })),
   );

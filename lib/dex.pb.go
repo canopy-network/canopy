@@ -211,14 +211,16 @@ type DexBatch struct {
 	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
 	// pool_size: contains the current balance of the liquidity pool
 	PoolSize uint64 `protobuf:"varint,6,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
+	// counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain
+	CounterPoolSize uint64 `protobuf:"varint,7,opt,name=counter_pool_size,json=counterPoolSize,proto3" json:"counterPoolSize"` // @gotags: json:"counterPoolSize"
 	// pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
-	PoolPoints []*PoolPoints `protobuf:"bytes,7,rep,name=pool_points,json=poolPoints,proto3" json:"poolPoints"` // @gotags: json:"poolPoints"
+	PoolPoints []*PoolPoints `protobuf:"bytes,8,rep,name=pool_points,json=poolPoints,proto3" json:"poolPoints"` // @gotags: json:"poolPoints"
 	// total_pool_points: (typically omitted due to LP mirrored design)  - contains the current liquidity points of the pool
-	TotalPoolPoints uint64 `protobuf:"varint,8,opt,name=total_pool_points,json=totalPoolPoints,proto3" json:"totalPoolPoints"` // @gotags: json:"totalPoolPoints"
-	// receipts: the list of order success status's
-	Receipts []bool `protobuf:"varint,9,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
+	TotalPoolPoints uint64 `protobuf:"varint,9,opt,name=total_pool_points,json=totalPoolPoints,proto3" json:"totalPoolPoints"` // @gotags: json:"totalPoolPoints"
+	// receipts: the amount distributed (dY) for each order <0 is fail>
+	Receipts []uint64 `protobuf:"varint,10,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
 	// locked_height: the height when the batch was locked
-	LockedHeight  uint64 `protobuf:"varint,10,opt,name=locked_height,json=lockedHeight,proto3" json:"locked_height,omitempty"`
+	LockedHeight  uint64 `protobuf:"varint,11,opt,name=locked_height,json=lockedHeight,proto3" json:"locked_height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -295,6 +297,13 @@ func (x *DexBatch) GetPoolSize() uint64 {
 	return 0
 }
 
+func (x *DexBatch) GetCounterPoolSize() uint64 {
+	if x != nil {
+		return x.CounterPoolSize
+	}
+	return 0
+}
+
 func (x *DexBatch) GetPoolPoints() []*PoolPoints {
 	if x != nil {
 		return x.PoolPoints
@@ -309,7 +318,7 @@ func (x *DexBatch) GetTotalPoolPoints() uint64 {
 	return 0
 }
 
-func (x *DexBatch) GetReceipts() []bool {
+func (x *DexBatch) GetReceipts() []uint64 {
 	if x != nil {
 		return x.Receipts
 	}
@@ -392,20 +401,21 @@ const file_dex_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +
 	"\x14DexLiquidityWithdraw\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
-	"\apercent\x18\x02 \x01(\x04R\apercent\"\xaa\x03\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\"\xd6\x03\n" +
 	"\bDexBatch\x12\x1c\n" +
 	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12!\n" +
 	"\freceipt_hash\x18\x02 \x01(\fR\vreceiptHash\x12,\n" +
 	"\x06orders\x18\x03 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
 	"\bdeposits\x18\x04 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
 	"\twithdraws\x18\x05 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
-	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x122\n" +
-	"\vpool_points\x18\a \x03(\v2\x11.types.PoolPointsR\n" +
+	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x12*\n" +
+	"\x11counter_pool_size\x18\a \x01(\x04R\x0fcounterPoolSize\x122\n" +
+	"\vpool_points\x18\b \x03(\v2\x11.types.PoolPointsR\n" +
 	"poolPoints\x12*\n" +
-	"\x11total_pool_points\x18\b \x01(\x04R\x0ftotalPoolPoints\x12\x1a\n" +
-	"\breceipts\x18\t \x03(\bR\breceipts\x12#\n" +
-	"\rlocked_height\x18\n" +
-	" \x01(\x04R\flockedHeight\">\n" +
+	"\x11total_pool_points\x18\t \x01(\x04R\x0ftotalPoolPoints\x12\x1a\n" +
+	"\breceipts\x18\n" +
+	" \x03(\x04R\breceipts\x12#\n" +
+	"\rlocked_height\x18\v \x01(\x04R\flockedHeight\">\n" +
 	"\n" +
 	"PoolPoints\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +

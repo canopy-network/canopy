@@ -38,6 +38,7 @@ func init() {
 	RegisteredPageables[TxResultsPageName] = new(TxResults)      // preregister the page type for unmarshalling
 	RegisteredPageables[PendingResultsPageName] = new(TxResults) // preregister the page type for unmarshalling
 	RegisteredPageables[FailedTxsPageName] = new(FailedTxs)      // preregister the page type for unmarshalling
+	RegisteredPageables[EventsPageName] = new(Events)            // preregister the page type for unmarshalling
 }
 
 // Page is a pagination wrapper over a slice of data

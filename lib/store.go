@@ -55,11 +55,6 @@ type WIndexerI interface {
 	DeleteTxsForHeight(height uint64) ErrorI                       // deletes all transactions for a height
 	DeleteBlockForHeight(height uint64) ErrorI                     // deletes a block and transaction data for a height
 	DeleteQCForHeight(height uint64) ErrorI                        // deletes a certificate for a height
-	IndexReward(blockHeight, amount uint64, address []byte) ErrorI
-	IndexSlash(blockHeight uint64, address []byte) ErrorI
-	IndexAutomaticPause(blockHeight uint64, address []byte) ErrorI
-	IndexAutomaticUnstaking(blockHeight uint64, address []byte) ErrorI
-	IndexAutomaticUnstake(blockHeight uint64, address []byte) ErrorI
 }
 
 // RIndexerI defines the read interface for the indexing operations
@@ -70,7 +65,7 @@ type RIndexerI interface {
 	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)  // get Transactions for a recipient
 	GetEventsByBlockHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)       // get Events for a block height
 	GetEventsByAddress(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Events for an address
-	GetEventsByType(eventType EventType, newestToOldest bool, p PageParams) (*Page, ErrorI)        // get Events for an event type
+	GetEventsByChainId(chainId uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)          // get Events for an event type
 	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                             // get a block by hash
 	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                         // get a block by height
 	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                   // get a block by height without transactions

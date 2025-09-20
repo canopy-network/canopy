@@ -53,7 +53,7 @@ providing four main components for managing blockchain-related data.
    which are essential for blockchain operation.
 
 4. CommitIDStore: This is a smaller abstraction that isolates the 'CommitID' structures, which
-   consist of two fields: Version, representing the height or version number, and Root, the root
+   consist of two fields: Version, representing the height or version number, and TransactionRoot, the root
    hash of the StateCommitStore corresponding to that version. This separation aids in managing
    the state versioning process.
 

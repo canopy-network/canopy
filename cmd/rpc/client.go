@@ -55,6 +55,24 @@ func (c *Client) Blocks(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	return
 }
 
+func (c *Client) EventsByHeight(height uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedHeightRequest(EventsByHeightRouteName, height, params, p)
+	return
+}
+
+func (c *Client) EventsByAddress(address string, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedAddrRequest(EventsByAddressRouteName, address, params, p)
+	return
+}
+
+func (c *Client) EventsByChainId(id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedIdRequest(EventsByChainRouteName, id, params, p)
+	return
+}
+
 func (c *Client) Pending(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	p = new(lib.Page)
 	err = c.paginatedAddrRequest(PendingRouteName, "", params, p)
@@ -203,6 +221,12 @@ func (c *Client) Order(height uint64, orderId string, chainId uint64) (p *lib.Se
 func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.ErrorI) {
 	p = new(lib.OrderBooks)
 	err = c.heightAndIdRequest(OrdersRouteName, height, chainId, p)
+	return
+}
+
+func (c *Client) DexPrice(height, chainId uint64) (p *lib.DexPrice, err lib.ErrorI) {
+	p = new(lib.DexPrice)
+	err = c.heightAndIdRequest(DexPriceRouteName, height, chainId, p)
 	return
 }
 
@@ -897,6 +921,20 @@ func (c *Client) paginatedHeightRequest(routeName string, height uint64, p lib.P
 		heightRequest:    heightRequest{height},
 		PageParams:       p,
 		ValidatorFilters: vf,
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
+func (c *Client) paginatedIdRequest(routeName string, id uint64, p lib.PageParams, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(paginatedIdRequest{
+		idRequest: idRequest{
+			ID: id,
+		},
+		PageParams: p,
 	})
 	if err != nil {
 		return

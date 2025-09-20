@@ -289,12 +289,8 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 	if !batch.IsEmpty() {
 		// calculate the 'blocks since' the lock
 		blksSince := c.FSM.Height() - batch.LockedHeight
-		// only send every 5 heights
-		if c.Config.ChainId != 1 && c.FSM.Height() >= 10 && c.FSM.Height() < 27 {
-			return
-		}
 		if blksSince%5 == 0 {
-			results.DexBatch = batch
+			results.DexBatch = batch.Copy()
 		}
 	}
 }

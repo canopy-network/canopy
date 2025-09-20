@@ -3,12 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/canopy-network/canopy/bft"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/canopy-network/canopy/bft"
 
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -221,7 +220,7 @@ func (m *Mempool) CheckMempool() {
 		Transactions: m.GetTransactions(math.MaxUint64), // get all transactions in mempool - but apply block will only keep 'max-block' amount
 	}
 	// capture the tentative block result using a new object reference
-	blockResult, oversized, failed := new(lib.BlockResult), make([]*lib.TxResult, 0), make([]*lib.FailedTx, 0)
+	blockResult, result := new(lib.BlockResult), new(lib.ApplyBlockResults)
 	// setup a context with cancel
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
@@ -229,14 +228,13 @@ func (m *Mempool) CheckMempool() {
 	// get RC build height
 	rcBuildHeight := m.controller.RootChainHeight()
 	// apply the block against the state machine and populate the resulting merkle `roots` in the block header
-	lastVs := m.controller.LastValidatorSet[m.FSM.Height()][m.controller.Config.ChainId]
-	block.BlockHeader, blockResult.Transactions, oversized, failed, err = m.FSM.ApplyBlock(ctx, block, lastVs, rcBuildHeight, true)
+	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, rcBuildHeight, true)
 	if err != nil {
 		m.log.Warnf("Check Mempool error: %s", err.Error())
 		return
 	}
 	// set the block result block header
-	blockResult.BlockHeader = block.BlockHeader
+	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
@@ -256,7 +254,7 @@ func (m *Mempool) CheckMempool() {
 	// create a cache of failed tx bytes to evict from the mempool
 	var failedTxBz [][]byte
 	// mark as failed in the cache
-	for _, tx := range failed {
+	for _, tx := range result.Failed {
 		// cache failed txs for RPC display
 		m.cachedFailedTxs.Add(tx)
 		// save the bytes
@@ -265,21 +263,21 @@ func (m *Mempool) CheckMempool() {
 	// evict all invalid transactions from the mempool
 	m.DeleteTransaction(failedTxBz...)
 	// log a warning
-	if len(failed) != 0 {
-		m.log.Warnf("Removed failed %d txs from mempool", len(failed))
+	if len(result.Failed) != 0 {
+		m.log.Warnf("Removed failed %d txs from mempool", len(result.Failed))
 	}
 	// reset the RPC cached results
 	m.cachedResults = nil
 	// add results to cache
-	for _, result := range blockResult.Transactions {
+	for _, tx := range blockResult.Transactions {
 		// cache the results
-		m.cachedResults = append(m.cachedResults, result)
+		m.cachedResults = append(m.cachedResults, tx)
 	}
 	// add results to cache
-	for _, result := range oversized {
+	for _, o := range result.Oversized {
 		// cache the results
-		result.Index = uint64(len(m.cachedResults))
-		m.cachedResults = append(m.cachedResults, result)
+		o.Index = uint64(len(m.cachedResults))
+		m.cachedResults = append(m.cachedResults, o)
 	}
 	m.log.Info("Done checking mempool")
 	// update the mempool metrics

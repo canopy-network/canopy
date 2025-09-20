@@ -41,11 +41,12 @@ const (
 	TxsBySenderRoutePath           = "/v1/query/txs-by-sender"
 	TxsByRecRoutePath              = "/v1/query/txs-by-rec"
 	TxByHashRoutePath              = "/v1/query/tx-by-hash"
-	EventsByBlockHeightRoutePath   = "/v1/query/events-by-block-height"
+	EventsByHeightRoutePath        = "/v1/query/events-by-height"
 	EventsByAddressRoutePath       = "/v1/query/events-by-address"
-	EventsByTypeRoutePath          = "/v1/query/events-by-type"
+	EventsByChainRoutePath         = "/v1/query/events-by-chain"
 	OrderRoutePath                 = "/v1/query/order"
 	OrdersRoutePath                = "/v1/query/orders"
+	DexPriceRoutePath              = "/v1/query/dex-price"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
 	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
@@ -139,15 +140,16 @@ const (
 	TxsBySenderRouteName           = "txs-by-sender"
 	TxsByRecRouteName              = "txs-by-rec"
 	TxByHashRouteName              = "tx-by-hash"
-	EventsByBlockHeightRouteName   = "events-by-block-height"
+	EventsByHeightRouteName        = "events-by-height"
 	EventsByAddressRouteName       = "events-by-address"
-	EventsByTypeRouteName          = "events-by-type"
+	EventsByChainRouteName         = "events-by-chain"
 	PendingRouteName               = "pending"
 	FailedTxRouteName              = "failed-txs"
 	ProposalsRouteName             = "proposals"
 	PollRouteName                  = "poll"
 	OrderRouteName                 = "order"
 	OrdersRouteName                = "orders"
+	DexPriceRouteName              = "dex-price"
 	DexBatchRouteName              = "dex-batch"
 	NextDexBatchRouteName          = "next-dex-batch"
 	LastProposersRouteName         = "last-proposers"
@@ -242,11 +244,12 @@ var routePaths = routes{
 	TxsBySenderRouteName:           {Method: http.MethodPost, Path: TxsBySenderRoutePath},
 	TxsByRecRouteName:              {Method: http.MethodPost, Path: TxsByRecRoutePath},
 	TxByHashRouteName:              {Method: http.MethodPost, Path: TxByHashRoutePath},
-	EventsByBlockHeightRouteName:   {Method: http.MethodPost, Path: EventsByBlockHeightRoutePath},
+	EventsByHeightRouteName:        {Method: http.MethodPost, Path: EventsByHeightRoutePath},
 	EventsByAddressRouteName:       {Method: http.MethodPost, Path: EventsByAddressRoutePath},
-	EventsByTypeRouteName:          {Method: http.MethodPost, Path: EventsByTypeRoutePath},
+	EventsByChainRouteName:         {Method: http.MethodPost, Path: EventsByChainRoutePath},
 	OrderRouteName:                 {Method: http.MethodPost, Path: OrderRoutePath},
 	OrdersRouteName:                {Method: http.MethodPost, Path: OrdersRoutePath},
+	DexPriceRouteName:              {Method: http.MethodPost, Path: DexPriceRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
 	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
@@ -344,12 +347,13 @@ func createRouter(s *Server) *httprouter.Router {
 		TxsByHeightRouteName:           s.TransactionsByHeight,
 		TxsBySenderRouteName:           s.TransactionsBySender,
 		TxsByRecRouteName:              s.TransactionsByRecipient,
-		EventsByBlockHeightRouteName:   s.EventsByHeight,
+		EventsByHeightRouteName:        s.EventsByHeight,
 		EventsByAddressRouteName:       s.EventsByAddress,
-		EventsByTypeRouteName:          s.EventsByType,
+		EventsByChainRouteName:         s.EventsByChain,
 		TxByHashRouteName:              s.TransactionByHash,
 		OrderRouteName:                 s.Order,
 		OrdersRouteName:                s.Orders,
+		DexPriceRouteName:              s.DexPrice,
 		DexBatchRouteName:              s.DexBatch,
 		NextDexBatchRouteName:          s.NextDexBatch,
 		LastProposersRouteName:         s.LastProposers,

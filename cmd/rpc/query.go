@@ -286,6 +286,18 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	})
 }
 
+// DexPrice retrieves the latest dex price for a committee
+func (s *Server) DexPrice(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexPrices()
+		}
+		// return the dex price
+		return s.GetDexPrice(id)
+	})
+}
+
 // DexBatch retrieves the 'locked' dex batch for a committee
 func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
@@ -421,11 +433,11 @@ func (s *Server) EventsByAddress(w http.ResponseWriter, r *http.Request, _ httpr
 	})
 }
 
-// EventsByType response with the events of type t
-func (s *Server) EventsByType(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// EventsByChain response with the events for a certain chain id
+func (s *Server) EventsByChain(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.eventTypeIndexer(w, r, func(s lib.StoreI, t lib.EventType, p lib.PageParams) (any, lib.ErrorI) {
-		return s.GetEventsByType(t, true, p)
+	s.idIndexer(w, r, func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByChainId(id, true, p)
 	})
 }
 
@@ -695,6 +707,31 @@ func (s *Server) heightIndexer(w http.ResponseWriter, r *http.Request, callback 
 	write(w, p, http.StatusOK)
 }
 
+// idIndexer is a helper function to abstract common workflows around a callback requiring id and page params
+func (s *Server) idIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI)) {
+	// Initialize a new paginatedHeightRequest
+	req := new(paginatedIdRequest)
+	// Attempt to unmarshal the request into the req object
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// Set up the store for the request context
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	// Ensure that the store is discarded safely after processing
+	defer st.Discard()
+	// Execute callback with store, height, and pagination parameters
+	p, err := callback(st, req.ID, req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	// Write the successful result to the response
+	write(w, p, http.StatusOK)
+}
+
 // heightAndAddrIndexer is a helper function to abstract common workflows around a callback requiring height and address parameters
 func (s *Server) heightAndAddrIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, h uint64, address lib.HexBytes) (any, lib.ErrorI)) {
 	req := new(heightAndAddressRequest)
@@ -779,29 +816,6 @@ func (s *Server) addrIndexer(w http.ResponseWriter, r *http.Request, callback fu
 		return
 	}
 	p, err := callback(st, crypto.NewAddressFromBytes(req.Address), req.PageParams)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-	write(w, p, http.StatusOK)
-}
-
-// eventTypeIndexer is a helper function to abstract common workflows around a callback requiring an event type and page parameterse
-func (s *Server) eventTypeIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, t lib.EventType, p lib.PageParams) (any, lib.ErrorI)) {
-	req := new(paginatedEventTypeRequest)
-	if ok := unmarshal(w, r, req); !ok {
-		return
-	}
-	st, ok := s.setupStore(w)
-	if !ok {
-		return
-	}
-	defer st.Discard()
-	if req.EventType == "" {
-		write(w, fsm.ErrEventTypeEmpty(), http.StatusBadRequest)
-		return
-	}
-	p, err := callback(st, lib.EventType(req.EventType), req.PageParams)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return

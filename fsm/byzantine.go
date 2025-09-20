@@ -265,10 +265,8 @@ func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI
 	if err != nil {
 		return err
 	}
-	// cast the store to ensure the proper store type to complete this operation
-	storeI := s.Store().(lib.StoreI)
-	// index unstaking event
-	return storeI.IndexAutomaticUnstaking(s.Height(), address.Bytes())
+	// add begin unstaking event
+	return s.EventAutoBeginUnstaking(address.Bytes())
 }
 
 // SlashValidators() burns a specified percentage of multiple validator's staked tokens
@@ -358,10 +356,8 @@ func (s *StateMachine) SlashValidator(address []byte, chainId, percent uint64, p
 	if err != nil {
 		return err
 	}
-	// cast the store to ensure the proper store type to complete this operation
-	storeI := s.Store().(lib.StoreI)
-	// index slash event
-	return storeI.IndexSlash(s.Height(), validator.Address)
+	// add slash event
+	return s.EventSlash(validator.Address, slashAmount)
 }
 
 // LoadMinimumEvidenceHeight() loads the minimum height the evidence must be to still be usable

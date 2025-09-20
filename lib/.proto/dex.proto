@@ -88,14 +88,16 @@ message DexBatch {
   repeated DexLiquidityWithdraw withdraws = 5;
   // pool_size: contains the current balance of the liquidity pool
   uint64 pool_size = 6; // @gotags: json:"poolSize"
+  // counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain
+  uint64 counter_pool_size = 7;  // @gotags: json:"counterPoolSize"
   // pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
-  repeated PoolPoints pool_points = 7; // @gotags: json:"poolPoints"
+  repeated PoolPoints pool_points = 8; // @gotags: json:"poolPoints"
   // total_pool_points: (typically omitted due to LP mirrored design)  - contains the current liquidity points of the pool
-  uint64 total_pool_points = 8; // @gotags: json:"totalPoolPoints"
-  // receipts: the list of order success status's
-  repeated bool receipts = 9;
+  uint64 total_pool_points = 9; // @gotags: json:"totalPoolPoints"
+  // receipts: the amount distributed (dY) for each order <0 is fail>
+  repeated uint64 receipts = 10;
   // locked_height: the height when the batch was locked
-  uint64 locked_height = 10;
+  uint64 locked_height = 11;
 }
 
 // PoolPoints represents an ownership 'share' of the pool

@@ -23,6 +23,7 @@ const (
 	TxResultsPageName      = "tx-results-page"      // the name of a page of transactions
 	PendingResultsPageName = "pending-results-page" //  the name of a page of mempool pending transactions
 	FailedTxsPageName      = "failed-txs-page"      // the name of a page of failed transactions
+	EventsPageName         = "events-page"
 )
 
 // Messages must be pre-registered for Transaction JSON unmarshalling
@@ -329,6 +330,60 @@ func (x *TxResult) UnmarshalJSON(jsonBytes []byte) (err error) {
 	}
 	// exit
 	return
+}
+
+// APPLY TXS RESULTS CODE BELOW
+
+// ApplyBlockResults() represents the information returned by the ApplyTransactions function
+type ApplyBlockResults struct {
+	// included
+	Txs       [][]byte    // the bytes of the transactions 'included' in the block
+	Results   []*TxResult // the results of the transactions 'included' in the block
+	ResultsBz [][]byte    // the bytes of the transaction results 'included' in the block
+	Events    []*Event    // the events of the transactions 'included' in the block
+	TxRoot    []byte      // the root of the 'included' transaction results
+	Count     int         // the count of transactions 'included' in the block
+	BlockSize uint64      // the size of the current block
+	LargestTx uint64      // the size of the largest transaction (for metrics)
+	// excluded
+	Oversized []*TxResult // the results of the transactions 'excluded' from the block due to block size
+	Failed    []*FailedTx // the results of the failed transactions 'excluded' from the block
+}
+
+// Add() adds a valid transaction to the results
+func (a *ApplyBlockResults) Add(tx, txResult []byte, result *TxResult, events []*Event, oversized bool) {
+	if oversized {
+		a.Oversized = append(a.Oversized, result)
+		return
+	}
+	a.Results = append(a.Results, result)
+	a.Events = append(a.Events, events...)
+	a.Txs = append(a.Txs, tx)
+	a.ResultsBz = append(a.ResultsBz, txResult)
+	a.Count++
+	txSize := uint64(len(tx))
+	a.BlockSize += txSize
+	if txSize > a.LargestTx {
+		a.LargestTx = txSize
+	}
+}
+
+// AddFailed() adds a failed transaction to the results
+func (a *ApplyBlockResults) AddFailed(f *FailedTx) {
+	a.Failed = append(a.Failed, f)
+}
+
+// AddEvent() adds a failed transaction to the results
+func (a *ApplyBlockResults) AddEvent(e ...*Event) {
+	a.Events = append(a.Events, e...)
+}
+
+// TransactionRoot() returns the transaction results root
+func (a *ApplyBlockResults) TransactionRoot() (root []byte, err ErrorI) {
+	if a.TxRoot == nil {
+		a.TxRoot, _, err = MerkleTree(a.ResultsBz)
+	}
+	return a.TxRoot, err
 }
 
 // SIGNATURE CODE BELOW

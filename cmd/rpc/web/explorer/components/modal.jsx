@@ -24,11 +24,15 @@ function convertCardData(state, v) {
     return value;
   }
   if (value.dexBatch) {
+    const successfulReceipts = value.dexBatch.receipts?.filter(amount => amount > 0).length || 0;
+    const totalReceipts = value.dexBatch.receipts?.length || 0;
     return {
       Committee: value.dexBatch.Committee || value.dexBatch.committee,
       Orders: value.dexBatch.orders?.length || 0,
       PoolSize: toCNPY(value.dexBatch.pool_size || value.dexBatch.poolSize || 0),
+      CounterPoolSize: toCNPY(value.dexBatch.counter_pool_size || value.dexBatch.counterPoolSize || 0),
       LockedHeight: value.dexBatch.locked_height || value.dexBatch.lockedHeight || "null",
+      Receipts: `${successfulReceipts}/${totalReceipts}`,
     };
   }
   return value.block
@@ -133,7 +137,13 @@ function convertTabData(state, v, tab) {
         return v.dexBatch.withdraws || [];
       case 3: // Pool Points
         return v.dexBatch.poolPoints || v.dexBatch.pool_points || [];
-      case 4: // Raw
+      case 4: // Receipts
+        return v.dexBatch.receipts?.map((amount, index) => ({
+          OrderIndex: index,
+          DistributedAmount: formatLocaleNumber(amount, 0, 6),
+          Status: amount > 0 ? "Success" : "Failed"
+        })) || [];
+      case 5: // Raw
       default:
         return v.dexBatch;
     }
@@ -163,7 +173,8 @@ function getTabTitle(state, data, tab) {
       case 1: return "Deposits";
       case 2: return "Withdrawals";
       case 3: return "Pool Points";
-      case 4: return "Raw";
+      case 4: return "Receipts";
+      case 5: return "Raw";
       default: return "Raw";
     }
   }
@@ -211,7 +222,7 @@ export default function DetailModal({ state, setState }) {
       return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderBasicTable(tab) : renderJSONViewer(tab);
     }
     if ("dexBatch" in data) {
-      return tab === 4 ? renderJSONViewer(tab) : renderDexBatchList(tab);
+      return tab === 5 ? renderJSONViewer(tab) : renderDexBatchList(tab);
     }
     if ("validator" in data && !state.modalState.accOnly) {
       return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderTableButton() : renderJSONViewer(tab);
@@ -472,7 +483,7 @@ export default function DetailModal({ state, setState }) {
         </CardGroup>
         {/* TABS */}
         <Tabs defaultActiveKey="0" id="modal-tab" className="mb-3" fill>
-          {[...Array("dexBatch" in data ? 5 : 3)].map((_, i) => (
+          {[...Array("dexBatch" in data ? 6 : 3)].map((_, i) => (
             <Tab key={i} tabClassName="rb-tab" eventKey={i} title={getTabTitle(state, data, i)}>
               {renderTab(i)}
             </Tab>

@@ -19,7 +19,7 @@ var emptyDexBatch = &lib.DexBatch{
 	Deposits:  []*lib.DexLiquidityDeposit{},
 	Withdraws: []*lib.DexLiquidityWithdraw{},
 	PoolSize:  0,
-	Receipts:  []bool{},
+	Receipts:  []uint64{},
 }
 
 func TestHandleDexBatch(t *testing.T) {
@@ -66,7 +66,7 @@ func TestHandleDexBatch(t *testing.T) {
 				Deposits:  []*lib.DexLiquidityDeposit{},
 				Withdraws: []*lib.DexLiquidityWithdraw{},
 				PoolSize:  0,
-				Receipts:  []bool{},
+				Receipts:  []uint64{},
 			},
 		},
 		{
@@ -89,16 +89,28 @@ func TestHandleDexBatch(t *testing.T) {
 				})
 				sm.RCManager = mock
 			},
-			expectedLockedBatch: &lib.DexBatch{
-				Committee:    1,
-				ReceiptHash:  bytes.Repeat([]byte{0x46}, 32), // Hash gets populated with 'F' characters during processing
-				Orders:       []*lib.DexLimitOrder{},
-				Deposits:     []*lib.DexLiquidityDeposit{},
-				Withdraws:    []*lib.DexLiquidityWithdraw{},
-				PoolSize:     1000, // Should be updated to liquidity pool amount
-				Receipts:     []bool{},
-				LockedHeight: 2,
-			},
+			expectedLockedBatch: func() *lib.DexBatch {
+				remoteBatch := &lib.DexBatch{
+					Committee:    1,
+					ReceiptHash:  lib.EmptyReceiptsHash,
+					Orders:       []*lib.DexLimitOrder{},
+					Deposits:     []*lib.DexLiquidityDeposit{},
+					Withdraws:    []*lib.DexLiquidityWithdraw{},
+					PoolSize:     1000,
+					LockedHeight: 0,
+				}
+				return &lib.DexBatch{
+					Committee:       1,
+					ReceiptHash:     remoteBatch.Hash(),
+					Orders:          []*lib.DexLimitOrder{},
+					Deposits:        []*lib.DexLiquidityDeposit{},
+					Withdraws:       []*lib.DexLiquidityWithdraw{},
+					PoolSize:        1000,
+					CounterPoolSize: 1000,
+					Receipts:        []uint64{},
+					LockedHeight:    2,
+				}
+			}(),
 		},
 	}
 	for _, test := range tests {
@@ -564,7 +576,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 						Address:         newTestAddressBytes(t, 2),
 					},
 				},
-				Receipts: []bool{true, false},
+				Receipts: []uint64{1, 0},
 				PoolSize: 100,
 			},
 			setupState: func(sm *StateMachine) {
@@ -597,7 +609,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
 				Orders:    nil,
-				Receipts:  []bool{true},
+				Receipts:  []uint64{1},
 				ReceiptHash: (&lib.DexBatch{
 					Committee: 1,
 					Orders: []*lib.DexLimitOrder{{
@@ -646,7 +658,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
 				Orders:    nil,
-				Receipts:  []bool{false},
+				Receipts:  []uint64{0},
 				ReceiptHash: (&lib.DexBatch{
 					Committee: 1,
 					Orders: []*lib.DexLimitOrder{{
@@ -1781,6 +1793,7 @@ func TestDexDeposit(t *testing.T) {
 
 	// setup two chains (chain1 is the root chain)
 	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	chain2.Config.ChainId = chain2Id
 	// setup the account
 	account1 := newTestAddress(t, 1)
 	// setup chain1 state
@@ -1807,6 +1820,7 @@ func TestDexDeposit(t *testing.T) {
 			Address: account1.Bytes(),
 			Amount:  depositAmount,
 		}},
+		PoolSize: initPoolSize,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, nextBatch)
@@ -1833,8 +1847,9 @@ func TestDexDeposit(t *testing.T) {
 			Address: account1.Bytes(),
 			Amount:  depositAmount,
 		}},
-		PoolSize:     initPoolSize,
-		LockedHeight: 2,
+		CounterPoolSize: initPoolSize,
+		PoolSize:        initPoolSize,
+		LockedHeight:    2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -1860,10 +1875,11 @@ func TestDexDeposit(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:    chain2Id,
-		ReceiptHash:  lockedBatch.Hash(),
-		PoolSize:     100,
-		LockedHeight: 2,
+		Committee:       chain2Id,
+		ReceiptHash:     lockedBatch.Hash(),
+		CounterPoolSize: initPoolSize + depositAmount,
+		PoolSize:        100,
+		LockedHeight:    2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -1898,6 +1914,7 @@ func TestDexWithdraw(t *testing.T) {
 
 	// setup two chains (chain1 is the root chain)
 	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	chain2.Config.ChainId = chain2Id
 	// setup the account
 	account1 := newTestAddress(t, 1)
 	// setup chain1 state
@@ -1939,6 +1956,7 @@ func TestDexWithdraw(t *testing.T) {
 			Address: account1.Bytes(),
 			Percent: 100,
 		}},
+		PoolSize: depositAmount + initPoolSize,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, nextBatch, expected)
@@ -1958,9 +1976,10 @@ func TestDexWithdraw(t *testing.T) {
 			Address: account1.Bytes(),
 			Percent: 100,
 		}},
-		ReceiptHash:  emptyBatch.Hash(),
-		PoolSize:     initPoolSize + depositAmount,
-		LockedHeight: 2,
+		ReceiptHash:     emptyBatch.Hash(),
+		CounterPoolSize: initPoolSize,
+		PoolSize:        initPoolSize + depositAmount,
+		LockedHeight:    2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -1983,10 +2002,11 @@ func TestDexWithdraw(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:    chain2Id,
-		ReceiptHash:  lockedBatch.Hash(),
-		PoolSize:     initPoolSize - expectedY,
-		LockedHeight: 2,
+		Committee:       chain2Id,
+		ReceiptHash:     lockedBatch.Hash(),
+		PoolSize:        initPoolSize - expectedY,
+		CounterPoolSize: initPoolSize + depositAmount - expectedX,
+		LockedHeight:    2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -2021,6 +2041,7 @@ func TestDexSwap(t *testing.T) {
 
 	// setup two chains (chain1 is the root chain)
 	chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
+	chain2.Config.ChainId = chain2Id
 	// setup the account
 	account1 := newTestAddress(t, 1)
 	// setup chain2 state
@@ -2055,6 +2076,7 @@ func TestDexSwap(t *testing.T) {
 			AmountForSale:   25,
 			RequestedAmount: 19,
 		}},
+		PoolSize: 100,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, nextBatch, expected)
@@ -2081,9 +2103,10 @@ func TestDexSwap(t *testing.T) {
 			AmountForSale:   25,
 			RequestedAmount: 19,
 		}},
-		ReceiptHash:  emptyBatch.Hash(),
-		PoolSize:     initPoolSize,
-		LockedHeight: 2,
+		ReceiptHash:     emptyBatch.Hash(),
+		CounterPoolSize: initPoolSize,
+		PoolSize:        initPoolSize,
+		LockedHeight:    2,
 	}
 	expected.EnsureNonNil()
 	require.EqualExportedValues(t, expected, lockedBatch)
@@ -2104,11 +2127,12 @@ func TestDexSwap(t *testing.T) {
 	locked, err := chain1.GetDexBatch(chain2Id, true)
 	require.NoError(t, err)
 	chain1LockedBatch := &lib.DexBatch{
-		Committee:    chain2Id,
-		ReceiptHash:  lockedBatch.Hash(),
-		Receipts:     []bool{true},
-		PoolSize:     initPoolSize - expectedY,
-		LockedHeight: 2,
+		Committee:       chain2Id,
+		ReceiptHash:     lockedBatch.Hash(),
+		Receipts:        []uint64{expectedY},
+		CounterPoolSize: initPoolSize + expectedX,
+		PoolSize:        initPoolSize - expectedY,
+		LockedHeight:    2,
 	}
 	chain1LockedBatch.EnsureNonNil()
 	require.EqualExportedValues(t, chain1LockedBatch, locked)
@@ -2132,7 +2156,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 		name         string
 		detail       string
 		buyBatch     *lib.DexBatch
-		receipts     []bool
+		receipts     []uint64
 		chainId      uint64
 		setupState   func(*StateMachine)
 		expectError  bool
@@ -2142,7 +2166,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 			name:     "locked batch exists",
 			detail:   "test when locked batch still exists (should exit early)",
 			buyBatch: &lib.DexBatch{Committee: 1},
-			receipts: []bool{true, false},
+			receipts: []uint64{1, 0},
 			chainId:  1,
 			setupState: func(sm *StateMachine) {
 				// Create a locked batch that hasn't been processed
@@ -2163,7 +2187,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 			name:     "successful rotation",
 			detail:   "test successful batch rotation",
 			buyBatch: &lib.DexBatch{Committee: 1, PoolSize: 100},
-			receipts: []bool{true, false},
+			receipts: []uint64{1, 0},
 			chainId:  1,
 			setupState: func(sm *StateMachine) {
 				// Create next batch to rotate
@@ -2195,7 +2219,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 			name:     "no next batch to rotate",
 			detail:   "test when no next batch exists",
 			buyBatch: &lib.DexBatch{Committee: 1, PoolSize: 100},
-			receipts: []bool{},
+			receipts: []uint64{},
 			chainId:  1,
 			setupState: func(sm *StateMachine) {
 				// Setup liquidity pool but no next batch
@@ -2211,7 +2235,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 			name:     "rotation with receipts",
 			detail:   "test rotation with receipts properly set",
 			buyBatch: &lib.DexBatch{Committee: 2, PoolSize: 500},
-			receipts: []bool{true, false, true},
+			receipts: []uint64{1, 0, 1},
 			chainId:  2,
 			setupState: func(sm *StateMachine) {
 				// Create next batch to rotate
@@ -2244,7 +2268,7 @@ func TestRotateDexSellBatch(t *testing.T) {
 				test.setupState(&sm)
 			}
 
-			err := sm.RotateDexBatches(test.buyBatch, test.chainId, test.receipts)
+			err := sm.RotateDexBatches(test.buyBatch.Hash(), test.buyBatch.PoolSize, test.chainId, test.receipts)
 
 			if test.expectError {
 				require.Error(t, err)
@@ -2439,7 +2463,7 @@ func TestDexValidation(t *testing.T) {
 
 		// initialize chains
 		chain1, chain2 := newTestStateMachine(t), newTestStateMachine(t)
-
+		chain2.Config.ChainId = chain2Id
 		// setup accounts
 		accounts := []crypto.AddressI{
 			newTestAddress(t, 0),

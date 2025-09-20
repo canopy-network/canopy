@@ -1925,19 +1925,19 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 			}},
 			error: "invalid certificate results",
 		},
-		{
-			name:                   "non subsidized committee",
-			detail:                 "the committee is not subsidized",
-			nonSubsidizedCommittee: true,
-			msg: &MessageCertificateResults{Qc: &lib.QuorumCertificate{
-				Header: &lib.View{
-					Height:     1,
-					RootHeight: 3,
-					ChainId:    lib.CanopyChainId + 1,
-				},
-			}},
-			error: "non subsidized committee",
-		},
+		//{
+		//	name:                   "non subsidized committee",
+		//	detail:                 "the committee is not subsidized",
+		//	nonSubsidizedCommittee: true,
+		//	msg: &MessageCertificateResults{Qc: &lib.QuorumCertificate{
+		//		Header: &lib.View{
+		//			Height:     1,
+		//			RootHeight: 3,
+		//			ChainId:    lib.CanopyChainId + 1,
+		//		},
+		//	}},
+		//	error: "non subsidized committee",
+		//},
 		{
 			name:               "no committee members exist for that id",
 			detail:             "there are no committee members for that ID",

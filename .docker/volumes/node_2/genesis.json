@@ -14,27 +14,25 @@
       "amount": 1000000
     }
   ],
+  "pools": [
+    {
+      "id": 32768,
+      "amount": 100,
+      "poolPoints": null,
+      "totalPoolPoints": 0
+    }
+  ],
   "nonSigners": null,
   "validators": [
     {
       "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
       "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
       "committees": [
-        1
+        1,2
       ],
       "netAddress": "tcp://node-1",
       "stakedAmount": 1000000000,
       "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
-    },
-    {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
-      "committees": [
-        1
-      ],
-      "netAddress": "tcp://node-2",
-      "stakedAmount": 1000000000,
-      "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
     }
   ],
   "params": {

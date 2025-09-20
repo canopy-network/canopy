@@ -159,9 +159,9 @@ func TestApplyBlock(t *testing.T) {
 				NumTxs:                1,
 				TotalTxs:              1,
 				TotalVdfIterations:    0,
-				Hash:                  []byte{0xfa, 0x62, 0x55, 0x55, 0xb3, 0x27, 0xc8, 0x1e, 0x68, 0x50, 0x36, 0x77, 0x4c, 0xb2, 0xa9, 0x1d, 0x8e, 0x76, 0x28, 0xeb, 0x11, 0x42, 0xd3, 0xd0, 0xac, 0x56, 0x7b, 0x28, 0xd7, 0xa, 0x9d, 0xf2},
+				Hash:                  []byte{0x38, 0xca, 0x5c, 0xa8, 0x7, 0xd0, 0xb2, 0xd1, 0xf5, 0x2, 0x9, 0xe5, 0x35, 0x34, 0x67, 0x53, 0x3b, 0x70, 0x5c, 0xbb, 0x13, 0xf1, 0xb8, 0x67, 0xc7, 0xc6, 0xf5, 0xe, 0x97, 0x82, 0x7a, 0x8a},
 				LastBlockHash:         []byte{0x26, 0x46, 0xe, 0xd3, 0x76, 0x17, 0x95, 0x7c, 0x96, 0xd9, 0xab, 0xf5, 0x94, 0xa1, 0xac, 0x86, 0x5a, 0x43, 0x11, 0x2, 0xfc, 0x38, 0x77, 0x71, 0xa8, 0xc7, 0x6d, 0xa0, 0x2e, 0x6f, 0x1, 0xe8},
-				StateRoot:             []byte{0xb6, 0x92, 0xd8, 0x6c, 0x39, 0x2e, 0x39, 0x87, 0x2a, 0xfa, 0x27, 0x17, 0x43, 0x59, 0x57, 0xc4, 0x88, 0x50, 0xd9, 0x6b, 0x9d, 0x27, 0x1b, 0xef, 0xc1, 0xea, 0x46, 0x10, 0x96, 0x5c, 0x11, 0x1b},
+				StateRoot:             []byte{0xa9, 0x9b, 0x54, 0x96, 0xc7, 0x75, 0xd2, 0x48, 0x85, 0x4, 0x63, 0x9d, 0xba, 0xc9, 0x85, 0x15, 0x48, 0x90, 0x31, 0xea, 0x7b, 0xba, 0xa6, 0x4c, 0xa2, 0x52, 0xcc, 0xed, 0xa2, 0x19, 0xa2, 0xaa},
 				TransactionRoot:       []byte{0x7f, 0x1, 0x75, 0x98, 0x49, 0x5, 0x73, 0x43, 0xb7, 0xb7, 0xea, 0x6c, 0x55, 0x84, 0x91, 0xe7, 0x7d, 0x51, 0xf4, 0x8a, 0x3, 0x3a, 0xe6, 0x9e, 0x4, 0x6, 0x58, 0x8a, 0xfb, 0x63, 0xde, 0x25},
 				ValidatorRoot:         []byte{0x24, 0xa5, 0xf1, 0x5d, 0xdd, 0x13, 0xdd, 0x75, 0x33, 0x2a, 0xe4, 0xf6, 0x2b, 0x3f, 0xa, 0x8c, 0xdf, 0x90, 0x1d, 0x9f, 0xaa, 0xb0, 0x5d, 0xae, 0x7a, 0x47, 0xa7, 0x59, 0x98, 0x64, 0xb3, 0x7c},
 				NextValidatorRoot:     []byte{0x24, 0xa5, 0xf1, 0x5d, 0xdd, 0x13, 0xdd, 0x75, 0x33, 0x2a, 0xe4, 0xf6, 0x2b, 0x3f, 0xa, 0x8c, 0xdf, 0x90, 0x1d, 0x9f, 0xaa, 0xb0, 0x5d, 0xae, 0x7a, 0x47, 0xa7, 0x59, 0x98, 0x64, 0xb3, 0x7c},
@@ -263,13 +263,11 @@ func TestApplyBlock(t *testing.T) {
 				// set the protocol version to not trigger an error
 				sm.ProtocolVersion = 1
 			}
-			// load the last block validator set
-			valSet, _ := sm.LoadCommittee(lib.CanopyChainId, sm.Height()-1)
 			// execute the function call
-			header, txResults, _, failed, e := sm.ApplyBlock(context.Background(), test.block, &valSet, 0, false)
+			header, result, e := sm.ApplyBlock(context.Background(), test.block, 0, false)
 			// validate the expected error
-			require.Equal(t, test.error != "", e != nil || len(failed) != 0, e)
-			if len(failed) != 0 {
+			require.Equal(t, test.error != "", e != nil || len(result.Failed) != 0, e)
+			if result != nil && len(result.Failed) != 0 {
 				return
 			}
 			if e != nil {
@@ -279,7 +277,7 @@ func TestApplyBlock(t *testing.T) {
 			// validate got vs expected block header
 			require.EqualExportedValues(t, test.expectedHeader, header)
 			// validate got vs expected tx results
-			require.EqualExportedValues(t, test.expectedResults, txResults[0])
+			require.EqualExportedValues(t, test.expectedResults, result.Results[0])
 		})
 	}
 }
@@ -321,7 +319,8 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		Config: lib.Config{
 			MainConfig: lib.DefaultMainConfig(),
 		},
-		log: log,
+		events: new(lib.EventsTracker),
+		log:    log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 		},
@@ -431,382 +430,4 @@ func newTestQC(t *testing.T, params testQCParams) (qc *lib.QuorumCertificate) {
 		Bitmap:    justification.Bitmap(),
 	}
 	return
-}
-
-func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
-	tests := []struct {
-		name                        string
-		detail                      string
-		initialValidatorMinStake    uint64
-		initialDelegateMinStake     uint64
-		newValidatorMinStake        uint64
-		newDelegateMinStake         uint64
-		validators                  []*Validator
-		expectedUnstakingValidators []int // indices of validators that should be unstaking
-	}{
-		{
-			name:                     "increase validator minimum stake",
-			detail:                   "when validator minimum stake increases, validators below new minimum should be set to unstaking",
-			initialValidatorMinStake: 1000,
-			initialDelegateMinStake:  500,
-			newValidatorMinStake:     5000,
-			newDelegateMinStake:      500,
-			validators: []*Validator{
-				// validator with stake below new minimum - should be set to unstaking
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 3000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 0),
-					Delegate:     false,
-				},
-				// validator with stake above new minimum - should NOT be unstaking
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 10000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 1),
-					Delegate:     false,
-				},
-				// validator already unstaking - should remain unstaking but height should not change
-				{
-					Address:         newTestAddressBytes(t, 2),
-					PublicKey:       newTestPublicKeyBytes(t, 2),
-					StakedAmount:    2000,
-					Committees:      []uint64{lib.CanopyChainId},
-					Output:          newTestAddressBytes(t, 2),
-					Delegate:        false,
-					UnstakingHeight: 100,
-				},
-				// delegate should not be affected by validator minimum
-				{
-					Address:      newTestAddressBytes(t, 3),
-					PublicKey:    newTestPublicKeyBytes(t, 3),
-					StakedAmount: 3000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 3),
-					Delegate:     true,
-				},
-			},
-			expectedUnstakingValidators: []int{0}, // only first validator should be newly unstaking
-		},
-		{
-			name:                     "increase delegate minimum stake",
-			detail:                   "when delegate minimum stake increases, delegates below new minimum should be set to unstaking",
-			initialValidatorMinStake: 1000,
-			initialDelegateMinStake:  500,
-			newValidatorMinStake:     1000,
-			newDelegateMinStake:      3000,
-			validators: []*Validator{
-				// delegate with stake below new minimum - should be set to unstaking
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 1500,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 0),
-					Delegate:     true,
-				},
-				// delegate with stake above new minimum - should NOT be unstaking
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 5000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 1),
-					Delegate:     true,
-				},
-				// delegate already unstaking - should remain unstaking but height should not change
-				{
-					Address:         newTestAddressBytes(t, 2),
-					PublicKey:       newTestPublicKeyBytes(t, 2),
-					StakedAmount:    2000,
-					Committees:      []uint64{lib.CanopyChainId},
-					Output:          newTestAddressBytes(t, 2),
-					Delegate:        true,
-					UnstakingHeight: 100,
-				},
-				// validator should not be affected by delegate minimum
-				{
-					Address:      newTestAddressBytes(t, 3),
-					PublicKey:    newTestPublicKeyBytes(t, 3),
-					StakedAmount: 1500,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 3),
-					Delegate:     false,
-				},
-			},
-			expectedUnstakingValidators: []int{0}, // only first delegate should be newly unstaking
-		},
-		{
-			name:                     "increase both validator and delegate minimum stake",
-			detail:                   "when both minimums increase, both validators and delegates below new minimums should be set to unstaking",
-			initialValidatorMinStake: 1000,
-			initialDelegateMinStake:  500,
-			newValidatorMinStake:     5000,
-			newDelegateMinStake:      3000,
-			validators: []*Validator{
-				// validator below new minimum
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 3000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 0),
-					Delegate:     false,
-				},
-				// delegate below new minimum
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 1),
-					Delegate:     true,
-				},
-				// validator above new minimum
-				{
-					Address:      newTestAddressBytes(t, 2),
-					PublicKey:    newTestPublicKeyBytes(t, 2),
-					StakedAmount: 10000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 2),
-					Delegate:     false,
-				},
-				// delegate above new minimum
-				{
-					Address:      newTestAddressBytes(t, 3),
-					PublicKey:    newTestPublicKeyBytes(t, 3),
-					StakedAmount: 5000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 3),
-					Delegate:     true,
-				},
-			},
-			expectedUnstakingValidators: []int{0, 1}, // first validator and first delegate should be unstaking
-		},
-		{
-			name:                     "no increase in minimum stake",
-			detail:                   "when minimum stakes remain the same or decrease, no validators should be set to unstaking",
-			initialValidatorMinStake: 5000,
-			initialDelegateMinStake:  3000,
-			newValidatorMinStake:     4000, // decreased
-			newDelegateMinStake:      3000, // same
-			validators: []*Validator{
-				// validator meeting initial minimum and above new minimum
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 6000,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 0),
-					Delegate:     false,
-				},
-				// delegate meeting initial minimum and same as new minimum
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 3500,
-					Committees:   []uint64{lib.CanopyChainId},
-					Output:       newTestAddressBytes(t, 1),
-					Delegate:     true,
-				},
-			},
-			expectedUnstakingValidators: []int{}, // no validators should be newly unstaking
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// create a state machine instance with default parameters
-			sm := newTestStateMachine(t)
-
-			// set initial parameters with initial minimum stakes
-			params := DefaultParams()
-			params.Validator.MinimumStakeForValidators = test.initialValidatorMinStake
-			params.Validator.MinimumStakeForDelegates = test.initialDelegateMinStake
-			require.NoError(t, sm.SetParams(params))
-
-			// set up validators in state (they meet the initial minimum stakes)
-			supply := &Supply{}
-			require.NoError(t, sm.SetValidators(test.validators, supply))
-			require.NoError(t, sm.SetSupply(supply))
-
-			// use the actual UpdateParam function (this is what happens in production via HandleMessageChangeParameter)
-			// this stores pendingParamUpdate which is processed in EndBlock
-			err := sm.UpdateParam("val", ParamMinimumStakeForValidators, &lib.UInt64Wrapper{Value: test.newValidatorMinStake})
-			require.NoError(t, err)
-
-			err = sm.UpdateParam("val", ParamMinimumStakeForDelegates, &lib.UInt64Wrapper{Value: test.newDelegateMinStake})
-			require.NoError(t, err)
-
-			// get the updated params to verify and for unstaking height calculation
-			updatedParams, err := sm.GetParams()
-			require.NoError(t, err)
-
-			// verify the expected validators are unstaking
-			for i, validator := range test.validators {
-				addr := crypto.NewAddressFromBytes(validator.Address)
-				updatedValidator, err := sm.GetValidator(addr)
-				require.NoError(t, err)
-
-				// check if this validator was expected to be set to unstaking
-				shouldBeUnstaking := false
-				for _, expectedIdx := range test.expectedUnstakingValidators {
-					if expectedIdx == i {
-						shouldBeUnstaking = true
-						break
-					}
-				}
-
-				// if the validator was already unstaking before, it should still be unstaking with the same height
-				if validator.UnstakingHeight != 0 {
-					require.Equal(t, validator.UnstakingHeight, updatedValidator.UnstakingHeight,
-						"validator %d: already unstaking validator should keep same unstaking height", i)
-				} else if shouldBeUnstaking {
-					// validator should be newly set to unstaking
-					require.NotEqual(t, uint64(0), updatedValidator.UnstakingHeight,
-						"validator %d: should be set to unstaking", i)
-
-					// verify the unstaking height is calculated correctly
-					var expectedUnstakingBlocks uint64
-					if !validator.Delegate {
-						expectedUnstakingBlocks = updatedParams.Validator.UnstakingBlocks
-					} else {
-						expectedUnstakingBlocks = updatedParams.Validator.DelegateUnstakingBlocks
-					}
-					expectedUnstakingHeight := sm.Height() + expectedUnstakingBlocks
-					require.Equal(t, expectedUnstakingHeight, updatedValidator.UnstakingHeight,
-						"validator %d: unstaking height should be current height + unstaking blocks", i)
-				} else {
-					// validator should NOT be unstaking
-					require.Equal(t, uint64(0), updatedValidator.UnstakingHeight,
-						"validator %d: should NOT be set to unstaking", i)
-				}
-			}
-		})
-	}
-}
-
-func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) {
-	// This test simulates the complete production flow including message handling
-	// create a state machine instance with default parameters
-	sm := newTestStateMachine(t)
-
-	// set initial parameters with low minimum stakes
-	initialValidatorMinStake := uint64(1000)
-	initialDelegateMinStake := uint64(500)
-	params := DefaultParams()
-	params.Validator.MinimumStakeForValidators = initialValidatorMinStake
-	params.Validator.MinimumStakeForDelegates = initialDelegateMinStake
-	require.NoError(t, sm.SetParams(params))
-
-	// create validators: some will be below the new minimum, some above
-	validators := []*Validator{
-		// validator with 3000 stake - will be below new minimum of 5000
-		{
-			Address:      newTestAddressBytes(t, 0),
-			PublicKey:    newTestPublicKeyBytes(t, 0),
-			StakedAmount: 3000,
-			Committees:   []uint64{lib.CanopyChainId},
-			Output:       newTestAddressBytes(t, 0),
-			Delegate:     false,
-		},
-		// validator with 10000 stake - above new minimum
-		{
-			Address:      newTestAddressBytes(t, 1),
-			PublicKey:    newTestPublicKeyBytes(t, 1),
-			StakedAmount: 10000,
-			Committees:   []uint64{lib.CanopyChainId},
-			Output:       newTestAddressBytes(t, 1),
-			Delegate:     false,
-		},
-		// delegate with 1500 stake - will be below new minimum of 3000
-		{
-			Address:      newTestAddressBytes(t, 2),
-			PublicKey:    newTestPublicKeyBytes(t, 2),
-			StakedAmount: 1500,
-			Committees:   []uint64{lib.CanopyChainId},
-			Output:       newTestAddressBytes(t, 2),
-			Delegate:     true,
-		},
-		// delegate with 5000 stake - above new minimum
-		{
-			Address:      newTestAddressBytes(t, 3),
-			PublicKey:    newTestPublicKeyBytes(t, 3),
-			StakedAmount: 5000,
-			Committees:   []uint64{lib.CanopyChainId},
-			Output:       newTestAddressBytes(t, 3),
-			Delegate:     true,
-		},
-	}
-
-	// set up validators in state
-	supply := &Supply{}
-	require.NoError(t, sm.SetValidators(validators, supply))
-	require.NoError(t, sm.SetSupply(supply))
-
-	// create parameter change messages (simulating what happens in production)
-	newValidatorMinStake := uint64(5000)
-	newDelegateMinStake := uint64(3000)
-
-	// create MessageChangeParameter for validator minimum stake
-	validatorMinStakeAny, err := lib.NewAny(&lib.UInt64Wrapper{Value: newValidatorMinStake})
-	require.NoError(t, err)
-	validatorMinStakeMsg := &MessageChangeParameter{
-		ParameterSpace: "val",
-		ParameterKey:   ParamMinimumStakeForValidators,
-		ParameterValue: validatorMinStakeAny,
-		StartHeight:    1,
-		EndHeight:      10,
-		Signer:         newTestAddressBytes(t, 0),
-	}
-
-	// create MessageChangeParameter for delegate minimum stake
-	delegateMinStakeAny, err := lib.NewAny(&lib.UInt64Wrapper{Value: newDelegateMinStake})
-	require.NoError(t, err)
-	delegateMinStakeMsg := &MessageChangeParameter{
-		ParameterSpace: "val",
-		ParameterKey:   ParamMinimumStakeForDelegates,
-		ParameterValue: delegateMinStakeAny,
-		StartHeight:    1,
-		EndHeight:      10,
-		Signer:         newTestAddressBytes(t, 0),
-	}
-
-	// handle the messages (this is the real production flow)
-	require.NoError(t, sm.HandleMessageChangeParameter(validatorMinStakeMsg))
-	require.NoError(t, sm.HandleMessageChangeParameter(delegateMinStakeMsg))
-
-	// get the updated params
-	updatedParams, err := sm.GetParams()
-	require.NoError(t, err)
-	require.Equal(t, newValidatorMinStake, updatedParams.Validator.MinimumStakeForValidators)
-	require.Equal(t, newDelegateMinStake, updatedParams.Validator.MinimumStakeForDelegates)
-
-	// verify validator 0 (3000 stake, below 5000 minimum) is now unstaking
-	val0, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[0].Address))
-	require.NoError(t, err)
-	require.NotEqual(t, uint64(0), val0.UnstakingHeight, "validator 0 should be unstaking")
-	expectedUnstakingHeight0 := sm.Height() + updatedParams.Validator.UnstakingBlocks
-	require.Equal(t, expectedUnstakingHeight0, val0.UnstakingHeight, "validator 0 should have correct unstaking height")
-
-	// verify validator 1 (10000 stake, above 5000 minimum) is NOT unstaking
-	val1, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[1].Address))
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), val1.UnstakingHeight, "validator 1 should NOT be unstaking")
-
-	// verify delegate 2 (1500 stake, below 3000 minimum) is now unstaking
-	val2, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[2].Address))
-	require.NoError(t, err)
-	require.NotEqual(t, uint64(0), val2.UnstakingHeight, "delegate 2 should be unstaking")
-	expectedUnstakingHeight2 := sm.Height() + updatedParams.Validator.DelegateUnstakingBlocks
-	require.Equal(t, expectedUnstakingHeight2, val2.UnstakingHeight, "delegate 2 should have correct unstaking height")
-
-	// verify delegate 3 (5000 stake, above 3000 minimum) is NOT unstaking
-	val3, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[3].Address))
-	require.NoError(t, err)
-	require.Equal(t, uint64(0), val3.UnstakingHeight, "delegate 3 should NOT be unstaking")
 }

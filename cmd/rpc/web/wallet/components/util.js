@@ -685,37 +685,38 @@ export async function retryWithDelay(fn, onFailure, retries = 8, delayMs = 1000,
 
 // getActionFee() returns the fee for a given action based on the params
 export function getActionFee(action, params) {
+  if (!params) return 0;
   switch (action) {
     case "send":
-      return params.sendFee;
+      return params.sendFee || 0;
     case "stake":
-      return params.stakeFee;
+      return params.stakeFee || 0;
     case "create_order":
-      return params.createOrderFee;
+      return params.createOrderFee || 0;
     case "close_order":
-      return params.closeOrderFee;
+      return params.closeOrderFee || 0;
     case "edit_order":
-      return params.editOrderFee;
+      return params.editOrderFee || 0;
     case "delete_order":
-      return params.deleteOrderFee;
+      return params.deleteOrderFee || 0;
     case "dex_limit_order":
-      return params.dexLimitOrderFee;
+      return params.dexLimitOrderFee || 0;
     case "dex_liquidity_deposit":
-      return params.dexLiquidityDepositFee;
+      return params.dexLiquidityDepositFee || 0;
     case "dex_liquidity_withdrawal":
-      return params.dexLiquidityWithdrawFee;
+      return params.dexLiquidityWithdrawFee || 0;
     case "edit-stake":
-      return params.editStakeFee;
+      return params.editStakeFee || 0;
     case "change-param":
-      return params.changeParamFee;
+      return params.changeParamFee || 0;
     case "dao-transfer":
-      return params.daoTransferFee;
+      return params.daoTransferFee || 0;
     case "pause":
-      return params.pauseFee;
+      return params.pauseFee || 0;
     case "unpause":
-      return params.unpauseFee;
+      return params.unpauseFee || 0;
     case "unstake":
-      return params.unstakeFee;
+      return params.unstakeFee || 0;
     default:
       return 0;
   }
