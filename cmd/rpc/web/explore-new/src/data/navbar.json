@@ -2,20 +2,32 @@
   "home": {
     "title": "Canopy",
     "root": [
-      { "label": "Blockchain", "path": "/blocks", "children": [
-        { "label": "Blocks", "path": "/blocks" },
-        { "label": "Transactions", "path": "/transactions" },
-        { "label": "Validators", "path": "/validators" }
-      ]},
-      { "label": "Staking", "path": "/staking", "children": [
-        { "label": "Stakers", "path": "/staking" },
-        { "label": "Delegations", "path": "/staking/delegations" }
-      ]},
-      { "label": "Analytics", "path": "/analytics", "children": [
-        { "label": "Overview", "path": "/analytics" },
-        { "label": "Gas", "path": "/analytics/gas" }
-      ]}
+      {
+        "label": "Blockchain",
+        "path": "/blocks",
+        "children": [
+          { "label": "Blocks", "path": "/blocks" },
+          { "label": "Transactions", "path": "/transactions" },
+          { "label": "Validators", "path": "/validators" }
+        ]
+      },
+      {
+        "label": "Staking",
+        "path": "/staking",
+        "children": [
+          { "label": "Stakers", "path": "/staking" },
+          { "label": "Delegations", "path": "/staking/delegations" },
+          { "label": "Token Swaps", "path": "/token-swaps" }
+        ]
+      },
+      {
+        "label": "Analytics",
+        "path": "/analytics",
+        "children": [
+          { "label": "Network Analytics", "path": "/analytics" },
+          { "label": "Gas Analytics", "path": "/analytics/gas" }
+        ]
+      }
     ]
   }
 }
-

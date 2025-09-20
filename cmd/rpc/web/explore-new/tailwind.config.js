@@ -11,6 +11,7 @@ export default {
             },
             colors: {
                 primary: "#4ADE80",
+                'primary-light': "#86EFAC", // Un tono más claro para el borde
                 card: "#22232E",
                 background: "#1A1B23",
                 red: "#EF4444",
@@ -26,6 +27,7 @@ export default {
         'bg-card',
         'text-primary',
         'bg-primary',
+        'border-primary-light',
         'text-red',
         'bg-red',
         'bg-navbar',

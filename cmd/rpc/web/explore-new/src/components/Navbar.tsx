@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import React from 'react'
 import menuConfig from '../data/navbar.json'
@@ -7,6 +7,8 @@ import { useBlocks } from '../hooks/useApi'
 
 const Navbar = () => {
     const location = useLocation()
+    const navigate = useNavigate()
+    const [searchTerm, setSearchTerm] = React.useState('')
 
     // Configuración de menú por ruta, con dropdowns y submenús
     type MenuLink = { label: string, path: string }
@@ -165,7 +167,27 @@ const Navbar = () => {
                         </button>
                     </div>
                     <div className="flex items-center space-x-2 relative w-2/12">
-                        <input type="text" placeholder="Search blocks, transactions, addresses..." className="bg-card  rounded-md p-2 text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40 pr-12 w-full" />
+                        <input
+                            type="text"
+                            placeholder="Search blocks, transactions, addresses..."
+                            className="bg-card rounded-md p-2 text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40 pr-12 w-full"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                                    if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
+                                        navigate('/token-swaps');
+                                        setSearchTerm(''); // Limpiar el input después de la búsqueda
+                                    } else {
+                                        // Aquí se podría implementar una lógica de búsqueda general o un toast de error
+                                        console.log("Búsqueda general para: ", searchTerm);
+                                        // Por ahora, simplemente limpiar el término de búsqueda si no es para swaps
+                                        setSearchTerm('');
+                                    }
+                                }
+                            }}
+                        />
                         <i className="fa-solid fa-magnifying-glass absolute right-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
                     </div>
                 </div>

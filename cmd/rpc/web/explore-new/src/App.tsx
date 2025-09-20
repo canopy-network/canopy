@@ -10,6 +10,8 @@ import TransactionsPage from './components/transaction/TransactionsPage'
 import TransactionDetailPage from './components/transaction/TransactionDetailPage'
 import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
+import NetworkAnalyticsPage from './components/analytics/NetworkAnalyticsPage'
+import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
 
 
 function AnimatedRoutes() {
@@ -24,6 +26,8 @@ function AnimatedRoutes() {
         <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
         <Route path="/validators" element={<ValidatorsPage />} />
         <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
+        <Route path="/analytics" element={<NetworkAnalyticsPage />} />
+        <Route path="/token-swaps" element={<TokenSwapsPage />} />
         <Route path="/accounts" element={<HomePage />} />
         <Route path="/governance" element={<HomePage />} />
         <Route path="/orders" element={<HomePage />} />
