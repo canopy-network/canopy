@@ -287,8 +287,10 @@ type BlockResult struct {
 	BlockHeader *BlockHeader `protobuf:"bytes,1,opt,name=block_header,json=blockHeader,proto3" json:"blockHeader"` // @gotags: json:"blockHeader"
 	// transactions: is a batch of transaction results in this block
 	Transactions []*TxResult `protobuf:"bytes,2,rep,name=transactions,proto3" json:"transactions,omitempty"`
+	// events: the events associated with the block
+	Events []*Event `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
 	// meta: is non-essential metadata about the processing of this block
-	Meta          *BlockResultMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
+	Meta          *BlockResultMeta `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -333,6 +335,13 @@ func (x *BlockResult) GetBlockHeader() *BlockHeader {
 func (x *BlockResult) GetTransactions() []*TxResult {
 	if x != nil {
 		return x.Transactions
+	}
+	return nil
+}
+
+func (x *BlockResult) GetEvents() []*Event {
+	if x != nil {
+		return x.Events
 	}
 	return nil
 }
@@ -403,7 +412,7 @@ var File_block_proto protoreflect.FileDescriptor
 
 const file_block_proto_rawDesc = "" +
 	"\n" +
-	"\vblock.proto\x12\x05types\x1a\btx.proto\x1a\x11certificate.proto\x1a\fcrypto.proto\"\xb8\x04\n" +
+	"\vblock.proto\x12\x05types\x1a\btx.proto\x1a\x11certificate.proto\x1a\fcrypto.proto\x1a\vevent.proto\"\xb8\x04\n" +
 	"\vBlockHeader\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x12\n" +
 	"\x04hash\x18\x02 \x01(\fR\x04hash\x12\x1d\n" +
@@ -426,11 +435,12 @@ const file_block_proto_rawDesc = "" +
 	"\x17last_quorum_certificate\x18\x0f \x01(\v2\x18.types.QuorumCertificateR\x15lastQuorumCertificate\"b\n" +
 	"\x05Block\x125\n" +
 	"\fblock_header\x18\x01 \x01(\v2\x12.types.BlockHeaderR\vblockHeader\x12\"\n" +
-	"\ftransactions\x18\x02 \x03(\fR\ftransactions\"\xa5\x01\n" +
+	"\ftransactions\x18\x02 \x03(\fR\ftransactions\"\xcb\x01\n" +
 	"\vBlockResult\x125\n" +
 	"\fblock_header\x18\x01 \x01(\v2\x12.types.BlockHeaderR\vblockHeader\x123\n" +
-	"\ftransactions\x18\x02 \x03(\v2\x0f.types.TxResultR\ftransactions\x12*\n" +
-	"\x04meta\x18\x03 \x01(\v2\x16.types.BlockResultMetaR\x04meta\"9\n" +
+	"\ftransactions\x18\x02 \x03(\v2\x0f.types.TxResultR\ftransactions\x12$\n" +
+	"\x06events\x18\x03 \x03(\v2\f.types.EventR\x06events\x12*\n" +
+	"\x04meta\x18\x04 \x01(\v2\x16.types.BlockResultMetaR\x04meta\"9\n" +
 	"\x0fBlockResultMeta\x12\x12\n" +
 	"\x04size\x18\x01 \x01(\x04R\x04size\x12\x12\n" +
 	"\x04took\x18\x02 \x01(\x04R\x04tookB&Z$github.com/canopy-network/canopy/libb\x06proto3"
@@ -456,6 +466,7 @@ var file_block_proto_goTypes = []any{
 	(*crypto.VDF)(nil),        // 4: types.VDF
 	(*QuorumCertificate)(nil), // 5: types.QuorumCertificate
 	(*TxResult)(nil),          // 6: types.TxResult
+	(*Event)(nil),             // 7: types.Event
 }
 var file_block_proto_depIdxs = []int32{
 	4, // 0: types.BlockHeader.vdf:type_name -> types.VDF
@@ -463,12 +474,13 @@ var file_block_proto_depIdxs = []int32{
 	0, // 2: types.Block.block_header:type_name -> types.BlockHeader
 	0, // 3: types.BlockResult.block_header:type_name -> types.BlockHeader
 	6, // 4: types.BlockResult.transactions:type_name -> types.TxResult
-	3, // 5: types.BlockResult.meta:type_name -> types.BlockResultMeta
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 5: types.BlockResult.events:type_name -> types.Event
+	3, // 6: types.BlockResult.meta:type_name -> types.BlockResultMeta
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_block_proto_init() }
@@ -478,6 +490,7 @@ func file_block_proto_init() {
 	}
 	file_tx_proto_init()
 	file_certificate_proto_init()
+	file_event_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
