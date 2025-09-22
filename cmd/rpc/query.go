@@ -39,7 +39,9 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 func (s *Server) Height(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	// Create a read-only state for the latest block and write the height
 	s.readOnlyState(0, func(state *fsm.StateMachine) lib.ErrorI {
-		write(w, state.Height(), http.StatusOK)
+		write(w, &lib.HeightResult{
+			Height: state.Height(),
+		}, http.StatusOK)
 		return nil
 	})
 }
