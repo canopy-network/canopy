@@ -9,7 +9,7 @@ interface StakingTrendsProps {
 const StakingTrends: React.FC<StakingTrendsProps> = ({ timeFilter, loading }) => {
     // Generar datos simulados para las tendencias de staking
     const generateStakingData = () => {
-        // Como no hay un hook de API para esto, devolvemos un array vacío
+        // Since there's no API hook for this, we return an empty array
         return []
     }
 
@@ -113,7 +113,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ timeFilter, loading }) =>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
                 {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7 // Ajustado para mostrar 7 días en el filtro 7D
+                    const numLabelsToShow = 7 // Adjusted to show 7 days in the 7D filter
                     const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
                     if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
                         return <span key={index}>{label}</span>

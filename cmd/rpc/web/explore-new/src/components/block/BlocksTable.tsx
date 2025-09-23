@@ -1,6 +1,7 @@
 import React from 'react'
 import blocksTexts from '../../data/blocks.json'
 import { Link } from 'react-router-dom'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface Block {
     height: number
@@ -71,7 +72,12 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
             <div className="bg-green-300/10 rounded-full py-0.5 px-1">
                 <i className="fa-solid fa-cube text-primary text-xs"></i>
             </div>
-            <Link to={`/block/${block.height}`} className="font-mono text-primary">{block.height.toLocaleString()}</Link>
+            <Link to={`/block/${block.height}`} className="font-mono text-primary">
+                <AnimatedNumber 
+                    value={block.height} 
+                    className="text-primary"
+                />
+            </Link>
         </div>,
 
         // Timestamp
@@ -97,18 +103,45 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         // Transactions
         <div className="flex justify-center items-center">
             <span className={`inline-flex justify-center items-center px-2 py-1 rounded-full text-xs  font-medium ${getTransactionColor(block.transactions || 0)}`}>
-                {block.transactions || 'N/A'}
+                {typeof block.transactions === 'number' ? (
+                    <AnimatedNumber 
+                        value={block.transactions} 
+                        className="text-xs"
+                    />
+                ) : (
+                    block.transactions || 'N/A'
+                )}
             </span>
         </div>,
 
         // Gas Price
         <span className="text-gray-300 text-sm">
-            {formatGasPrice(block.gasPrice)}
+            {typeof block.gasPrice === 'number' ? (
+                <>
+                    <AnimatedNumber 
+                        value={block.gasPrice} 
+                        format={{ maximumFractionDigits: 4 }}
+                        className="text-gray-300"
+                    /> {blocksTexts.table.units.cnpy}
+                </>
+            ) : (
+                formatGasPrice(block.gasPrice)
+            )}
         </span>,
 
         // Block Time
         <span className="text-gray-300 text-sm">
-            {formatBlockTime(block.blockTime)}
+            {typeof block.blockTime === 'number' ? (
+                <>
+                    <AnimatedNumber 
+                        value={block.blockTime} 
+                        format={{ maximumFractionDigits: 2 }}
+                        className="text-gray-300"
+                    />{blocksTexts.table.units.seconds}
+                </>
+            ) : (
+                formatBlockTime(block.blockTime)
+            )}
         </span>
     ])
 
@@ -224,7 +257,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
                         </button>
                     </div>
                     <div>
-                        Showing {totalCount === 0 ? 0 : startIdx + 1} to {endIdx} of {totalCount.toLocaleString()} entries
+                        Showing {totalCount === 0 ? 0 : startIdx + 1} to {endIdx} of <AnimatedNumber value={totalCount} /> entries
                     </div>
                 </div>
             )}

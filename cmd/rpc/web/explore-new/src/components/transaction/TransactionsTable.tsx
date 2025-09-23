@@ -2,6 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import transactionsTexts from '../../data/transactions.json'
 import TableCard from '../Home/TableCard'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface Transaction {
     hash: string
@@ -21,7 +22,7 @@ interface TransactionsTableProps {
     totalCount?: number
     currentPage?: number
     onPageChange?: (page: number) => void
-    // Props para la sección Show/Export
+    // Props for Show/Export section
     showEntriesSelector?: boolean
     entriesPerPageOptions?: number[]
     currentEntriesPerPage?: number
@@ -137,12 +138,32 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
         // Amount
         <span className="text-white text-sm font-medium">
-            {formatAmount(transaction.amount)}
+            {typeof transaction.amount === 'number' ? (
+                <>
+                    <AnimatedNumber 
+                        value={transaction.amount} 
+                        format={{ maximumFractionDigits: 4 }}
+                        className="text-white"
+                    /> {transactionsTexts.table.units.cnpy}
+                </>
+            ) : (
+                formatAmount(transaction.amount)
+            )}
         </span>,
 
         // Fee
         <span className="text-gray-300 text-sm">
-            {formatFee(transaction.fee)}
+            {typeof transaction.fee === 'number' ? (
+                <>
+                    <AnimatedNumber 
+                        value={transaction.fee} 
+                        format={{ maximumFractionDigits: 4 }}
+                        className="text-gray-300"
+                    /> {transactionsTexts.table.units.cnpy}
+                </>
+            ) : (
+                formatFee(transaction.fee)
+            )}
         </span>,
 
         // Status
@@ -170,7 +191,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             currentPage={currentPage}
             onPageChange={onPageChange}
             loading={loading}
-            spacing={4} // Usamos un spacing de 4 para que coincida con el diseño de la imagen.
+            spacing={4} // We use spacing of 4 to match the image design.
             showEntriesSelector={showEntriesSelector}
             entriesPerPageOptions={entriesPerPageOptions}
             currentEntriesPerPage={currentEntriesPerPage}

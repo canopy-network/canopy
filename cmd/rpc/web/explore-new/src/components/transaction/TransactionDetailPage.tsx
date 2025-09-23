@@ -9,7 +9,7 @@ const TransactionDetailPage: React.FC = () => {
     const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState<'decoded' | 'raw'>('decoded')
 
-    // Usar el hook real para obtener datos de la transacción
+    // Use the real hook to get transaction data
     const { data: transactionData, isLoading, error } = useTxByHash(transactionHash || '')
 
     const truncate = (str: string, n: number = 12) => {
@@ -59,12 +59,12 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     const handlePreviousTx = () => {
-        // Aquí iría la lógica para obtener la transacción anterior
+        // Here would go the logic to get the previous transaction
         navigate(-1)
     }
 
     const handleNextTx = () => {
-        // Aquí iría la lógica para obtener la siguiente transacción
+        // Here would go the logic to get the next transaction
         navigate(-1)
     }
 

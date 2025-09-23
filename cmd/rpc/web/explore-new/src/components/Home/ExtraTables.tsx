@@ -2,6 +2,7 @@ import React from 'react'
 import TableCard from './TableCard'
 import { useTransactions, useValidators } from '../../hooks/useApi'
 import Logo from '../Logo'
+import AnimatedNumber from '../AnimatedNumber'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
@@ -28,7 +29,12 @@ const ExtraTables: React.FC = () => {
             const powerPct = totalStake > 0 ? (stake / totalStake) * 100 : 0
             const clampedPct = Math.max(0, Math.min(100, powerPct))
             return [
-                <span className="text-gray-400">{idx + 1}</span>,
+                <span className="text-gray-400">
+                    <AnimatedNumber 
+                        value={idx + 1} 
+                        className="text-gray-400"
+                    />
+                </span>,
                 <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary">
                         {(String(address)[0] || 'V').toUpperCase()}
@@ -36,12 +42,30 @@ const ExtraTables: React.FC = () => {
                     <span>{truncate(String(address), 16)}</span>
                 </div>,
                 <span className="text-gray-300">N/A</span>,
-                <span className="text-gray-200">{chainsStaked || 'N/A'}</span>,
+                <span className="text-gray-200">
+                    {typeof chainsStaked === 'number' ? (
+                        <AnimatedNumber 
+                            value={chainsStaked} 
+                            className="text-gray-200"
+                        />
+                    ) : (
+                        chainsStaked || 'N/A'
+                    )}
+                </span>,
                 <span className="text-gray-300">N/A</span>,
                 <span className="text-gray-300">N/A</span>,
                 <span className="text-gray-300">N/A</span>,
                 <span className="text-gray-300">N/A</span>,
-                <span className="text-gray-200">{stake ? stake.toLocaleString() : 'N/A'}</span>,
+                <span className="text-gray-200">
+                    {typeof stake === 'number' ? (
+                        <AnimatedNumber 
+                            value={stake} 
+                            className="text-gray-200"
+                        />
+                    ) : (
+                        stake ? stake.toLocaleString() : 'N/A'
+                    )}
+                </span>,
                 <div className="flex items-center gap-2">
                     <div className="w-24 sm:w-32 h-3 bg-gray-700/60 rounded-full overflow-hidden">
                         <div className="h-3 bg-primary transition-[width] duration-500 ease-out" style={{ width: `${clampedPct}%` }}></div>
@@ -101,12 +125,33 @@ const ExtraTables: React.FC = () => {
                     const amount = (amountRaw != null && amountRaw !== '') ? amountRaw : 'N/A'
                     const hash = t.txHash || t.hash || 'N/A'
                     return [
-                        <span className="text-gray-400">{ago}</span>,
+                        <span className="text-gray-400">
+                            {mins != null && isFinite(mins) ? (
+                                <>
+                                    <AnimatedNumber 
+                                        value={mins} 
+                                        className="text-gray-400"
+                                    /> min ago
+                                </>
+                            ) : (
+                                ago
+                            )}
+                        </span>,
                         <span className="bg-green-300/10 text-primary rounded-full px-2 py-1 text-xs">{action || 'N/A'}</span>,
                         <div className="flex items-center gap-2"><Logo size={16} className="rounded-full bg-primary" /><span>{String(chain)}</span></div>,
                         <span>{truncate(String(from))}</span>,
                         <span>{truncate(String(to))}</span>,
-                        <span className="text-primary">{amount}</span>,
+                        <span className="text-primary">
+                            {typeof amount === 'number' ? (
+                                <AnimatedNumber 
+                                    value={amount} 
+                                    format={{ maximumFractionDigits: 4 }}
+                                    className="text-primary"
+                                />
+                            ) : (
+                                amount
+                            )}
+                        </span>,
                         <span className="text-gray-400">{truncate(String(hash))}</span>,
                     ]
                 })}

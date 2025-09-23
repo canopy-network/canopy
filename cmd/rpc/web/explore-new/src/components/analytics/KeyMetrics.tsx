@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface NetworkMetrics {
     networkUptime: number
@@ -49,7 +50,12 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading }) => {
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Network Uptime</span>
                         <span className="text-sm font-medium text-primary">
-                            {metrics.networkUptime.toFixed(2)}%
+                            <AnimatedNumber 
+                                value={metrics.networkUptime} 
+                                format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                                suffix="%"
+                                className="text-primary"
+                            />
                             <span className="text-xs text-orange-400 ml-1">(SIM)</span>
                         </span>
                     </div>
@@ -66,7 +72,12 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading }) => {
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Avg. Transaction Fee (7d)</span>
                         <span className="text-sm font-medium text-white">
-                            {metrics.avgTransactionFee} CNPY
+                            <AnimatedNumber 
+                                value={metrics.avgTransactionFee} 
+                                format={{ maximumFractionDigits: 4 }}
+                                suffix=" CNPY"
+                                className="text-white"
+                            />
                             <span className="text-xs text-orange-400 ml-1">(SIM)</span>
                         </span>
                     </div>
@@ -83,7 +94,12 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading }) => {
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Total Value Locked (TVL)</span>
                         <span className="text-sm font-medium text-white">
-                            {metrics.totalValueLocked.toFixed(2)}M CNPY
+                            <AnimatedNumber 
+                                value={metrics.totalValueLocked} 
+                                format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                                suffix="M CNPY"
+                                className="text-white"
+                            />
                         </span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
@@ -99,7 +115,10 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading }) => {
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Something Else</span>
                         <span className="text-sm font-medium text-white">
-                            {Math.floor(Math.random() * 5000) + 10000}
+                            <AnimatedNumber 
+                                value={Math.floor(Math.random() * 5000) + 10000} 
+                                className="text-white"
+                            />
                             <span className="text-xs text-orange-400 ml-1">(SIM)</span>
                         </span>
                     </div>

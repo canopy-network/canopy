@@ -56,11 +56,11 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
 
                 {/* Right Side - Export and Refresh */}
                 <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors">
+                    <button type="button" className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors">
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}
                     </button>
-                    <button className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors">
+                    <button type="button" className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors">
                         <i className="fa-solid fa-refresh text-xs"></i>
                         {validatorsTexts.filters.refresh}
                     </button>

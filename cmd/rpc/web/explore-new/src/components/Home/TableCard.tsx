@@ -1,13 +1,14 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import AnimatedNumber from '../AnimatedNumber'
 
 export interface TableColumn {
     label: string
 }
 
 export interface TableCardProps {
-    title?: string
+    title?: string | React.ReactNode
     live?: boolean
     columns: TableColumn[]
     rows: Array<React.ReactNode[]>
@@ -15,17 +16,21 @@ export interface TableCardProps {
     loading?: boolean
     paginate?: boolean
     pageSize?: number
-    totalCount?: number // Añadido para manejar la paginación de la API
-    currentPage?: number // Añadido para manejar la paginación de la API
-    onPageChange?: (page: number) => void // Añadido para manejar la paginación de la API
+    totalCount?: number // Added to handle API pagination
+    currentPage?: number // Added to handle API pagination
+    onPageChange?: (page: number) => void // Added to handle API pagination
     spacing?: number
-    // Nuevas props para la sección Show/Export
+    // New props for Show/Export section
     showEntriesSelector?: boolean
     entriesPerPageOptions?: number[]
     currentEntriesPerPage?: number
     onEntriesPerPageChange?: (value: number) => void
     showExportButton?: boolean
     onExportButtonClick?: () => void
+    tableClassName?: string
+    theadClassName?: string
+    tbodyClassName?: string
+    className?: string
 }
 
 const TableCard: React.FC<TableCardProps> = ({
@@ -36,7 +41,7 @@ const TableCard: React.FC<TableCardProps> = ({
     viewAllPath,
     loading = false,
     paginate = false,
-    pageSize = 10, // Default a 10 para coincidir con la paginación de la API
+    pageSize = 10, // Default to 10 to match API pagination
     totalCount: propTotalCount = 0,
     currentPage: propCurrentPage = 1,
     onPageChange: propOnPageChange,
@@ -47,18 +52,22 @@ const TableCard: React.FC<TableCardProps> = ({
     currentEntriesPerPage = 10,
     onEntriesPerPageChange,
     showExportButton = false,
-    onExportButtonClick
+    onExportButtonClick,
+    tableClassName,
+    theadClassName,
+    tbodyClassName,
+    className
 }) => {
-    // Paginación interna para cuando no se provee paginación externa
+    // Internal pagination for when external pagination is not provided
     const [internalPage, setInternalPage] = React.useState(1)
 
     const isExternalPagination = propOnPageChange !== undefined && propTotalCount !== undefined && propCurrentPage !== undefined
 
-    // Usar la página actual de props si es paginación externa, de lo contrario la página interna
+    // Use current page from props if external pagination, otherwise internal page
     const currentPaginatedPage = isExternalPagination ? propCurrentPage : internalPage
-    // Usar el total de elementos de props si es paginación externa, de lo contrario el tamaño de rows
+    // Use total items from props if external pagination, otherwise rows length
     const totalItems = isExternalPagination ? propTotalCount : rows.length
-    // Usar el tamaño de página de props si es paginación externa, de lo contrario el pageSize interno o 5 si no se especifica
+    // Use page size from props if external pagination, otherwise internal pageSize or 5 if not specified
     const effectivePageSize = isExternalPagination ? currentEntriesPerPage : pageSize
 
     const totalPages = React.useMemo(() => {
@@ -114,7 +123,7 @@ const TableCard: React.FC<TableCardProps> = ({
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             viewport={{ amount: 0.5 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="rounded-xl border border-gray-800/60 bg-card shadow-xl p-5"
+            className={` p-5 ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
         >
             {title && (
                 <div className="flex items-center justify-between mb-4">
@@ -160,8 +169,8 @@ const TableCard: React.FC<TableCardProps> = ({
             )}
 
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-800/70">
-                    <thead>
+                <table className={`min-w-full divide-y divide-gray-400/20 ${tableClassName}`}>
+                    <thead className={theadClassName}>
                         <tr>
                             {columns.map((c) => (
                                 <th key={c.label} className="px-2 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider">
@@ -170,7 +179,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             ))}
                         </tr>
                     </thead>
-                    <motion.tbody layout className={`divide-y divide-gray-400/20`}>
+                    <motion.tbody layout className={`divide-y divide-gray-400/20 ${tbodyClassName}`}>
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={`s-${i}`} className="animate-pulse">
@@ -214,14 +223,14 @@ const TableCard: React.FC<TableCardProps> = ({
                             return (
                                 <React.Fragment key={p}>
                                     {needDots && <span className="px-1">…</span>}
-                                    <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}>{p}</button>
+                                    <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
                                 </React.Fragment>
                             )
                         })}
-                        <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                        <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
                     </div>
                     <div>
-                        Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of {totalItems.toLocaleString()} entries
+                        Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
                     </div>
                 </div>
             )}

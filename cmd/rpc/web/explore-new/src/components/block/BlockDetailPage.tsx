@@ -5,7 +5,7 @@ import BlockDetailHeader from './BlockDetailHeader'
 import BlockDetailInfo from './BlockDetailInfo'
 import BlockTransactions from './BlockTransactions'
 import BlockSidebar from './BlockSidebar'
-import { useBlocks } from '../../hooks/useApi'
+import { useBlockByHeight } from '../../hooks/useApi'
 
 interface Block {
     height: number
@@ -18,6 +18,14 @@ interface Block {
     totalTransactionFees: number
     blockHash: string
     parentHash: string
+    proposerAddress: string
+    stateRoot: string
+    transactionRoot: string
+    validatorRoot: string
+    nextValidatorRoot: string
+    networkID: number
+    totalTxs: number
+    totalVDFIterations: number
 }
 
 interface Transaction {
@@ -26,6 +34,10 @@ interface Transaction {
     to: string
     value: number
     fee: number
+    messageType: string
+    height: number
+    sender: string
+    txHash: string
 }
 
 const BlockDetailPage: React.FC = () => {
@@ -35,48 +47,61 @@ const BlockDetailPage: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Hook para obtener datos de bloques
-    const { data: blocksData } = useBlocks(1)
+    // Hook to get specific block data by height
+    const { data: blockData, isLoading } = useBlockByHeight(parseInt(blockHeight || '0'))
 
-    // Simular datos del bloque (en una app real, esto vendría de una API específica)
+    // Procesar datos del bloque cuando se obtienen
     useEffect(() => {
-        if (blocksData && blockHeight) {
-            const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || []
-            const foundBlock = blocksList.find((b: any) => b.blockHeader?.height === parseInt(blockHeight))
+        if (blockData && blockHeight) {
+            const blockHeader = blockData.blockHeader
+            const blockTransactions = blockData.transactions || []
+            const meta = blockData.meta || {}
 
-            if (foundBlock) {
-                const blockHeader = foundBlock.blockHeader
-                const blockTransactions = foundBlock.transactions || []
-
-                // Crear objeto del bloque
+            if (blockHeader) {
+                // Crear objeto del bloque con datos reales
                 const blockInfo: Block = {
                     height: blockHeader.height,
-                    builderName: `Canopy Validator #${Math.floor(Math.random() * 10) + 1}`,
+                    builderName: `Validator ${blockHeader.proposerAddress.slice(0, 8)}...`,
                     status: 'confirmed',
-                    blockReward: 12.5,
+                    blockReward: 12.5, // This value could come from reward results
                     timestamp: new Date(blockHeader.time / 1000).toISOString(),
-                    size: 248576,
+                    size: meta.size || 0,
                     transactionCount: blockHeader.numTxs || blockTransactions.length,
-                    totalTransactionFees: 3.55,
+                    totalTransactionFees: 0, // Calcular basado en las transacciones reales
                     blockHash: blockHeader.hash,
-                    parentHash: blockHeader.lastBlockHash
+                    parentHash: blockHeader.lastBlockHash,
+                    proposerAddress: blockHeader.proposerAddress,
+                    stateRoot: blockHeader.stateRoot,
+                    transactionRoot: blockHeader.transactionRoot,
+                    validatorRoot: blockHeader.validatorRoot,
+                    nextValidatorRoot: blockHeader.nextValidatorRoot,
+                    networkID: blockHeader.networkID,
+                    totalTxs: blockHeader.totalTxs,
+                    totalVDFIterations: blockHeader.totalVDFIterations
                 }
 
-                // Crear transacciones de ejemplo
-                const sampleTransactions: Transaction[] = blockTransactions.slice(0, 3).map((tx: any, index: number) => ({
-                    hash: tx.txHash || `0x${Math.random().toString(16).substr(2, 40)}`,
-                    from: tx.sender || `0x${Math.random().toString(16).substr(2, 20)}`,
-                    to: `0x${Math.random().toString(16).substr(2, 20)}`,
-                    value: Math.random() * 100 + 1,
-                    fee: 0.025
+                // Procesar transacciones reales
+                const realTransactions: Transaction[] = blockTransactions.map((tx: any) => ({
+                    hash: tx.txHash,
+                    from: tx.sender,
+                    to: tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents?.[0]?.address || 'N/A',
+                    value: 0, // Las transacciones de certificado no tienen valor directo
+                    fee: 0, // Las transacciones de certificado no tienen fee directo
+                    messageType: tx.messageType,
+                    height: tx.height,
+                    sender: tx.sender,
+                    txHash: tx.txHash
                 }))
 
                 setBlock(blockInfo)
-                setTransactions(sampleTransactions)
+                setTransactions(realTransactions)
             }
             setLoading(false)
+        } else if (!isLoading && blockHeight) {
+            // If no data and not loading, block doesn't exist
+            setLoading(false)
         }
-    }, [blocksData, blockHeight])
+    }, [blockData, blockHeight, isLoading])
 
     const handlePreviousBlock = () => {
         if (block) {
@@ -105,7 +130,7 @@ const BlockDetailPage: React.FC = () => {
         }
     }
 
-    if (loading) {
+    if (loading || isLoading) {
         return (
             <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
                 <div className="animate-pulse">
@@ -185,11 +210,6 @@ const BlockDetailPage: React.FC = () => {
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
                     <BlockDetailInfo block={block} />
-                    <BlockTransactions
-                        transactions={transactions}
-                        totalTransactions={block.transactionCount}
-                        showingCount={transactions.length}
-                    />
                 </div>
 
                 {/* Sidebar */}
@@ -198,6 +218,12 @@ const BlockDetailPage: React.FC = () => {
                         blockStats={blockStats}
                         networkInfo={networkInfo}
                         validatorInfo={validatorInfo}
+                    />
+                </div>
+                <div className='lg:col-span-3'>
+                    <BlockTransactions
+                        transactions={transactions}
+                        totalTransactions={block.transactionCount}
                     />
                 </div>
             </div>

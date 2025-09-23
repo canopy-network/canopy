@@ -11,7 +11,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
     // Usar datos reales de transacciones para categorizar por tipo
     const getTransactionTypeData = () => {
         if (!transactionsData?.results || !Array.isArray(transactionsData.results)) {
-            // Devolver un array de objetos con total 0 si no hay datos reales o no son válidos
+            // Return an array of objects with total 0 if there's no real data or it's not valid
             const days = timeFilter === '24H' ? 24 : timeFilter === '7D' ? 7 : timeFilter === '30D' ? 30 : 90
             return Array.from({ length: days }, (_, i) => ({
                 day: i + 1,
@@ -27,7 +27,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
         const daysOrHours = timeFilter === '24H' ? 24 : timeFilter === '7D' ? 7 : timeFilter === '30D' ? 30 : 90
         const categorizedByPeriod: { [key: string]: { transfers: number, staking: number, governance: number, other: number } } = {}
 
-        // Inicializar todas las categorías a 0 para cada período
+        // Initialize all categories to 0 for each period
         for (let i = 0; i < daysOrHours; i++) {
             categorizedByPeriod[i] = { transfers: 0, staking: 0, governance: 0, other: 0 }
         }
@@ -42,7 +42,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
 
         realTransactions.forEach((tx: any) => {
             const txTime = tx.time / 1000 // Convertir de microsegundos a milisegundos
-            const timeDiff = endTime - txTime // Diferencia en milisegundos desde el final del período
+            const timeDiff = endTime - txTime // Difference in milliseconds from the end of the period
 
             let periodIndex = -1
             if (timeFilter === '24H') {
@@ -210,7 +210,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
                 {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7 // Ajustado para mostrar 7 días en el filtro 7D
+                    const numLabelsToShow = 7 // Adjusted to show 7 days in the 7D filter
                     const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
                     if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
                         return <span key={index}>{label}</span>

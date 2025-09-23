@@ -44,7 +44,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
-        // Aquí podrías agregar una notificación de éxito
+        // Here you could add a success notification
         toast.success('Address copied to clipboard', {
             duration: 2000,
             position: 'top-right',
@@ -52,6 +52,14 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                 background: '#1A1B23',
                 color: '#4ADE80',
             },
+        })
+    }
+
+    const shareToSocialMedia = (url: string) => {
+        navigator.share({
+            title: 'Share this validator',
+            text: 'Share this validator',
+            url: url
         })
     }
 
@@ -125,8 +133,10 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 {validatorDetailTexts.header.actions.delegate}
                             </span>
                         </button>
-                        <button className="flex items-start gap-2 bg-gray-700/50 border border-gray-600 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-600/50 transition-colors">
-                            <i className="fa-solid fa-share text-sm"></i>
+                        <button type="button" onClick={() => {
+                            shareToSocialMedia(window.location.href)
+                        }} className="flex items-start gap-2 bg-input border border-gray-800/60 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors">
+                            <i className="fa-solid fa-share text-sm translate-y-1"></i>
                             <span className="text-sm font-medium">
                                 {validatorDetailTexts.header.actions.share}
                             </span>

@@ -1,0 +1,33 @@
+{
+  "page": {
+    "title": "Staking",
+    "description": "Explore governance proposals and network supply information"
+  },
+  "tabs": {
+    "governance": "Governance",
+    "supply": "Supply"
+  },
+  "governance": {
+    "title": "Governance Proposals",
+    "description": "Active and past governance proposals",
+    "table": {
+      "headers": {
+        "id": "ID",
+        "title": "Title",
+        "status": "Status",
+        "votingPower": "Voting Power",
+        "endTime": "End Time"
+      }
+    }
+  },
+  "supply": {
+    "title": "Network Supply",
+    "description": "Total supply and staking information",
+    "metrics": {
+      "totalSupply": "Total Supply",
+      "stakedSupply": "Staked Supply",
+      "liquidSupply": "Liquid Supply",
+      "stakingRatio": "Staking Ratio"
+    }
+  }
+}

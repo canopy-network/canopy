@@ -22,7 +22,7 @@ const BlocksPage: React.FC = () => {
     const [blocks, setBlocks] = useState<Block[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Hook para obtener datos de bloques con paginación
+    // Hook to get blocks data with pagination
     const { data: blocksData, isLoading } = useBlocks(currentPage)
 
     // Normalizar datos de bloques
@@ -41,7 +41,7 @@ const BlocksPage: React.FC = () => {
             const hash = blockHeader.hash || 'N/A'
             const producer = blockHeader.proposerAddress || 'N/A'
             const transactions = blockHeader.numTxs || block.transactions?.length || 0
-            const gasPrice = 0.025 // Valor por defecto ya que no está en los datos
+            const gasPrice = 0.025 // Default value since it's not in the data
             const blockTime = 6.2 // Valor por defecto
 
             // Calcular edad
@@ -89,7 +89,7 @@ const BlocksPage: React.FC = () => {
         }
     }, [blocksData])
 
-    // Efecto para simular actualización en tiempo real
+    // Effect to simulate real-time updates
     useEffect(() => {
         const interval = setInterval(() => {
             setBlocks(prevBlocks =>

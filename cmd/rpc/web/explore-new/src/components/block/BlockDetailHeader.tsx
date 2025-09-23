@@ -1,6 +1,5 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import blockDetailTexts from '../../data/blockDetail.json'
 
 interface BlockDetailHeaderProps {
@@ -26,14 +25,14 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
         <div className="mb-8">
             {/* Breadcrumb */}
             <nav className="flex items-center space-x-2 text-sm text-gray-400 mb-4">
-                <Link to="/" className="hover:text-primary transition-colors">
+                <Link to="/" className="text-primary transition-colors">
                     {blockDetailTexts.page.breadcrumb.home}
                 </Link>
-                <span>›</span>
-                <Link to="/blocks" className="hover:text-primary transition-colors">
+                <i className="fa-solid fa-chevron-right"></i>
+                <Link to="/blocks" className="text-primary transition-colors">
                     {blockDetailTexts.page.breadcrumb.blocks}
                 </Link>
-                <span>›</span>
+                <i className="fa-solid fa-chevron-right"></i>
                 <span className="text-white">Block #{blockHeight.toLocaleString()}</span>
             </nav>
 
@@ -41,8 +40,8 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                            <i className="fa-solid fa-cube text-black text-sm"></i>
+                        <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
+                            <i className="fa-solid fa-cube text-white text-2xl"></i>
                         </div>
                         <div>
                             <h1 className="text-4xl font-bold text-white">

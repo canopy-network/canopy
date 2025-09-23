@@ -88,12 +88,12 @@ const TokenSwapsPage: React.FC = () => {
     }, []);
 
     const handleApplyFilters = (newFilters: any) => {
-        // Aquí se aplicaría la lógica de filtrado real con los datos de la API
+        // Here would be applied the real filtering logic with API data
         console.log("Applying filters:", newFilters);
     };
 
     const handleResetFilters = () => {
-        // Aquí se resetearían los filtros de la API
+        // Here would be reset the API filters
         console.log("Resetting filters");
     };
 

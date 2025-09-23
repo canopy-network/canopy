@@ -4,14 +4,20 @@ import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import HomePage from './pages/Home'
+import SearchPage from './pages/Search'
 import BlocksPage from './components/block/BlocksPage'
 import BlockDetailPage from './components/block/BlockDetailPage'
 import TransactionsPage from './components/transaction/TransactionsPage'
 import TransactionDetailPage from './components/transaction/TransactionDetailPage'
 import ValidatorsPage from './components/validator/ValidatorsPage'
 import ValidatorDetailPage from './components/validator/ValidatorDetailPage'
+import AccountsPage from './components/account/AccountsPage'
+import AccountDetailPage from './components/account/AccountDetailPage'
 import NetworkAnalyticsPage from './components/analytics/NetworkAnalyticsPage'
 import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
+import StakingPage from './components/staking/StakingPage'
+import GovernancePage from './components/staking/GovernancePage'
+import SupplyPage from './components/staking/SupplyPage'
 
 
 function AnimatedRoutes() {
@@ -20,15 +26,20 @@ function AnimatedRoutes() {
     <AnimatePresence mode="popLayout" initial={false}>
       <Routes location={location} key={location.pathname}>
         <Route index element={<HomePage />} />
+        <Route path="/search" element={<SearchPage />} />
         <Route path="/blocks" element={<BlocksPage />} />
         <Route path="/block/:blockHeight" element={<BlockDetailPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
         <Route path="/validators" element={<ValidatorsPage />} />
         <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/account/:address" element={<AccountDetailPage />} />
         <Route path="/analytics" element={<NetworkAnalyticsPage />} />
         <Route path="/token-swaps" element={<TokenSwapsPage />} />
-        <Route path="/accounts" element={<HomePage />} />
+        <Route path="/staking" element={<StakingPage />} />
+        <Route path="/staking/governance" element={<GovernancePage />} />
+        <Route path="/staking/supply" element={<SupplyPage />} />
         <Route path="/governance" element={<HomePage />} />
         <Route path="/orders" element={<HomePage />} />
       </Routes>

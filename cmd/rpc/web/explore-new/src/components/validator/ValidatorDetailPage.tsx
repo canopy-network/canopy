@@ -58,20 +58,20 @@ const ValidatorDetailPage: React.FC = () => {
     const [validator, setValidator] = useState<ValidatorDetail | null>(null)
     const [loading, setLoading] = useState(true)
 
-    // Hook para obtener datos del validador específico
+    // Hook to get specific validator data
     const { data: validatorData, isLoading } = useValidator(0, validatorAddress || '')
 
-    // Hook para obtener datos de bloques para calcular blocks produced
+    // Hook to get blocks data to calculate blocks produced
     const { data: blocksData } = useBlocks(1)
 
-    // Función para generar nombre del validador (simulado)
+    // Function to generate validator name (simulated)
     const generateValidatorName = (address: string): string => {
         const names = [
             'PierTwo', 'CanopyGuard', 'GreenNode', 'EcoValidator', 'ForestKeeper',
             'TreeValidator', 'LeafNode', 'BranchGuard', 'RootValidator', 'SeedKeeper'
         ]
 
-        // Crear hash simple del address para obtener índice consistente
+        // Create simple hash from address to get consistent index
         let hash = 0
         for (let i = 0; i < address.length; i++) {
             const char = address.charCodeAt(i)
@@ -82,7 +82,7 @@ const ValidatorDetailPage: React.FC = () => {
         return names[Math.abs(hash) % names.length]
     }
 
-    // Función para contar bloques producidos por validador
+    // Function to count blocks produced by validator
     const countBlocksByValidator = (validatorAddress: string, blocks: any[]) => {
         if (!blocks || !Array.isArray(blocks)) return 0
         return blocks.filter((block: any) => {
@@ -91,7 +91,7 @@ const ValidatorDetailPage: React.FC = () => {
         }).length
     }
 
-    // Función para generar datos simulados de cadenas anidadas
+    // Function to generate simulated nested chains data
     const generateNestedChains = (totalStake: number) => {
         const chains = [
             {
@@ -100,7 +100,7 @@ const ValidatorDetailPage: React.FC = () => {
                 delegated: Math.floor(totalStake * 0.6),
                 percentage: 60.0,
                 icon: 'fa-solid fa-leaf',
-                color: 'bg-green-300/10 text-primary'
+                color: 'bg-green-300/10 text-primary text-lg'
             },
             {
                 name: validatorDetailTexts.stakeByChains.chains.ethereumRestaking,
@@ -108,7 +108,7 @@ const ValidatorDetailPage: React.FC = () => {
                 delegated: Math.floor(totalStake * 0.267),
                 percentage: 26.7,
                 icon: 'fa-brands fa-ethereum',
-                color: 'bg-blue-300/10 text-blue-500'
+                color: 'bg-blue-300/10 text-blue-500 text-lg'
             },
             {
                 name: validatorDetailTexts.stakeByChains.chains.bitcoinBridge,
@@ -116,7 +116,7 @@ const ValidatorDetailPage: React.FC = () => {
                 delegated: Math.floor(totalStake * 0.1),
                 percentage: 10.0,
                 icon: 'fa-brands fa-bitcoin',
-                color: 'bg-orange-300/10 text-orange-500'
+                color: 'bg-yellow-600/10 text-yellow-400 text-lg'
             },
             {
                 name: validatorDetailTexts.stakeByChains.chains.solanaAVS,
@@ -124,13 +124,13 @@ const ValidatorDetailPage: React.FC = () => {
                 delegated: Math.floor(totalStake * 0.034),
                 percentage: 3.4,
                 icon: 'fa-solid fa-circle-nodes',
-                color: 'bg-purple-300/10 text-purple-500'
+                color: 'bg-purple-300/10 text-purple-500 text-lg'
             }
         ]
         return chains
     }
 
-    // Función para generar historial de recompensas (simulado)
+    // Function to generate rewards history (simulated)
     const generateRewardsHistory = () => {
         const blockRewards = [
             {
@@ -163,8 +163,8 @@ const ValidatorDetailPage: React.FC = () => {
                 timestamp: '5 mins ago',
                 reward: 8.45,
                 type: 'Tag',
-                icon: 'fa-solid fa-gem',
-                color: 'bg-blue-500'
+                icon: 'fa-brands fa-ethereum text-blue-500',
+                color: 'bg-blue-500/30 text-blue-500'
             },
             {
                 chain: 'Fred Chain',
@@ -172,8 +172,8 @@ const ValidatorDetailPage: React.FC = () => {
                 timestamp: '12 mins ago',
                 reward: 3.22,
                 type: 'Tag',
-                icon: 'fa-solid fa-circle',
-                color: 'bg-orange-500'
+                icon: 'fa-brands fa-bitcoin text-orange-500',
+                color: 'bg-orange-500/30 text-orange-500'
             },
             {
                 chain: 'Swag Chain',
@@ -181,8 +181,8 @@ const ValidatorDetailPage: React.FC = () => {
                 timestamp: '18 mins ago',
                 reward: 1.89,
                 type: 'Tag',
-                icon: 'fa-solid fa-hexagon',
-                color: 'bg-purple-500'
+                icon: 'fa-solid fa-circle-nodes text-purple-500',
+                color: 'bg-purple-500/30 text-purple-500'
             }
         ]
 
@@ -201,22 +201,22 @@ const ValidatorDetailPage: React.FC = () => {
             const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || []
             const blocksProduced = countBlocksByValidator(validatorAddress, Array.isArray(blocksList) ? blocksList : [])
 
-            // Extraer datos reales del validador
+            // Extract real validator data
             const stakedAmount = validatorData.stakedAmount || 0
             const totalStake = stakedAmount
 
-            // Calcular métricas (algunas simuladas)
-            const networkShare = 2.87 // Simulado
-            const apy = 12.4 // Simulado
-            const uptime = 99.8 // Simulado
-            const rank = 1 // Simulado
+            // Calculate metrics (some simulated)
+            const networkShare = 2.87 // Simulated
+            const apy = 12.4 // Simulated
+            const uptime = 99.8 // Simulated
+            const rank = 1 // Simulated
 
             const validatorDetail: ValidatorDetail = {
                 address: validatorAddress,
                 name: validatorAddress,
-                status: 'active', // Simulado
+                status: 'active', // Simulated
                 rank,
-                stakeWeight: 30, // Simulado
+                stakeWeight: 30, // Simulated
                 totalStake,
                 networkShare,
                 apy,

@@ -10,7 +10,7 @@ const Navbar = () => {
     const navigate = useNavigate()
     const [searchTerm, setSearchTerm] = React.useState('')
 
-    // Configuración de menú por ruta, con dropdowns y submenús
+    // Menu configuration by route, with dropdowns and submenus
     type MenuLink = { label: string, path: string }
     type MenuItem = { label: string, path?: string, children?: MenuLink[] }
     type RouteMenu = { title: string, root: MenuItem[], secondary?: MenuItem[] }
@@ -43,7 +43,7 @@ const Navbar = () => {
     const handleClose = () => setOpenIndex(null)
     const handleToggle = (index: number) => setOpenIndex(prev => prev === index ? null : index)
     const navRef = React.useRef<HTMLDivElement | null>(null)
-    // Estado para dropdowns en móvil (accordion)
+    // State for mobile dropdowns (accordion)
     const [mobileOpenIndex, setMobileOpenIndex] = React.useState<number | null>(null)
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
     const blocks = useBlocks(1)
@@ -178,12 +178,11 @@ const Navbar = () => {
                                     const lowerCaseSearchTerm = searchTerm.toLowerCase();
                                     if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
                                         navigate('/token-swaps');
-                                        setSearchTerm(''); // Limpiar el input después de la búsqueda
-                                    } else {
-                                        // Aquí se podría implementar una lógica de búsqueda general o un toast de error
-                                        console.log("Búsqueda general para: ", searchTerm);
-                                        // Por ahora, simplemente limpiar el término de búsqueda si no es para swaps
-                                        setSearchTerm('');
+                                        setSearchTerm(''); // Clear input after search
+                                    } else if (searchTerm.trim()) {
+                                        // Navigate to search page with the term
+                                        navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+                                        setSearchTerm(''); // Clear input after search
                                     }
                                 }
                             }}

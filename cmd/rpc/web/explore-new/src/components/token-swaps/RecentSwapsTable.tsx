@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import AnimatedNumber from '../AnimatedNumber';
 
 interface Swap {
     hash: string;
@@ -40,7 +41,7 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading }) =
             className="bg-card p-6 rounded-xl border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-white">Recent Swaps <span className="text-gray-500 text-sm">(3,847 total swaps)</span></h3>
+                <h3 className="text-lg font-semibold text-white">Recent Swaps <span className="text-gray-500 text-sm">(<AnimatedNumber value={3847} /> total swaps)</span></h3>
                 <button className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 text-sm">
                     <i className="fas fa-sort mr-2"></i>Sort
                 </button>
@@ -71,7 +72,12 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading }) =
                                         {swap.action}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-primary">{swap.block}</td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-primary">
+                                    <AnimatedNumber 
+                                        value={swap.block} 
+                                        className="text-primary"
+                                    />
+                                </td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.age}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.fromAddress}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.toAddress}</td>

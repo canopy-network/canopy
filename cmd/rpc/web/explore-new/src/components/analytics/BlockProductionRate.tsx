@@ -8,10 +8,10 @@ interface BlockProductionRateProps {
 }
 
 const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ timeFilter, loading, blocksData }) => {
-    // Usar datos reales de bloques cuando estén disponibles
+    // Use real block data when available
     const getBlockData = () => {
         if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length <= 1) {
-            return [] // Devolver un array vacío si no hay datos reales o no son válidos/suficientes
+            return [] // Return empty array if no real data or invalid/insufficient
         }
 
         const realBlocks = blocksData.results
@@ -19,7 +19,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ timeFilter, l
         const dataByPeriod: number[] = new Array(daysOrHours).fill(0)
 
         const now = new Date()
-        // Ajustar el tiempo de referencia al final del período actual para un cálculo consistente
+        // Adjust reference time to end of current period for consistent calculation
         if (timeFilter === '24H') {
             now.setMinutes(59, 59, 999)
         } else {
@@ -30,18 +30,18 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ timeFilter, l
         realBlocks.forEach((block: any) => {
             // Convertir de microsegundos a milisegundos
             const blockTime = block.blockHeader.time / 1000
-            const timeDiff = endTime - blockTime // Diferencia en milisegundos desde el final del período
+            const timeDiff = endTime - blockTime // Difference in milliseconds from end of period
 
             let periodIndex = -1
             if (timeFilter === '24H') {
                 const hoursDiff = Math.floor(timeDiff / (60 * 60 * 1000))
                 if (hoursDiff >= 0 && hoursDiff < daysOrHours) {
-                    periodIndex = daysOrHours - 1 - hoursDiff // 0 para la hora más antigua, daysOrHours-1 para la más reciente
+                    periodIndex = daysOrHours - 1 - hoursDiff // 0 for oldest hour, daysOrHours-1 for most recent
                 }
             } else { // 7D, 30D, 3M
                 const daysDiff = Math.floor(timeDiff / (24 * 60 * 60 * 1000))
                 if (daysDiff >= 0 && daysDiff < daysOrHours) {
-                    periodIndex = daysOrHours - 1 - daysDiff // 0 para el día más antiguo, daysOrHours-1 para el más reciente
+                    periodIndex = daysOrHours - 1 - daysDiff // 0 for oldest day, daysOrHours-1 for most recent
                 }
             }
 
@@ -154,7 +154,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ timeFilter, l
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
                 {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7 // Ajustado para mostrar 7 días en el filtro 7D
+                    const numLabelsToShow = 7 // Adjusted to show 7 days in 7D filter
                     const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
                     if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
                         return <span key={index}>{label}</span>

@@ -70,7 +70,7 @@ interface Transaction {
     status: 'success' | 'failed' | 'pending'
     age: string
     blockHeight?: number
-    date?: number // Timestamp en milisegundos para cálculos
+    date?: number // Timestamp in milliseconds for calculations
 }
 
 const TransactionsPage: React.FC = () => {
@@ -78,7 +78,7 @@ const TransactionsPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
 
-    // Hook para obtener datos de transacciones con paginación
+    // Hook to get transactions data with pagination
     const { data: transactionsData, isLoading } = useTransactions(currentPage, 0)
 
     // Normalizar datos de transacciones
@@ -90,7 +90,7 @@ const TransactionsPage: React.FC = () => {
         if (!Array.isArray(transactionsList)) return []
 
         return transactionsList.map((tx: any) => {
-            // Extraer datos de la transacción
+            // Extract transaction data
             const hash = tx.txHash || tx.hash || 'N/A'
             const type = tx.type || 'Transfer'
             const from = tx.sender || tx.from || 'N/A'
@@ -147,7 +147,7 @@ const TransactionsPage: React.FC = () => {
         }
     }, [transactionsData])
 
-    // Efecto para simular actualización en tiempo real
+    // Effect to simulate real-time updates
     useEffect(() => {
         const interval = setInterval(() => {
             setTransactions(prevTransactions =>
@@ -186,11 +186,11 @@ const TransactionsPage: React.FC = () => {
     const [amountRangeValue, setAmountRangeValue] = useState(0) // Un solo estado para el valor del slider
     const [addressSearch, setAddressSearch] = useState('')
 
-    // Estado para el selector de entradas por página
+    // State for entries per page selector
     const [entriesPerPage, setEntriesPerPage] = useState(10)
 
     const transactionsToday = React.useMemo(() => {
-        // Contar transacciones en las últimas 24h usando la propiedad `date`
+        // Count transactions in the last 24h using the `date` property
         const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
         const filteredTxs = transactions.filter(tx => {
             return (tx.date || 0) >= twentyFourHoursAgo
@@ -204,7 +204,7 @@ const TransactionsPage: React.FC = () => {
         return (totalFees / transactions.length).toFixed(4)
     }, [transactions])
 
-    const peakTPS = 1246 // Valor fijo según la imagen
+    const peakTPS = 1246 // Fixed value according to the image
 
     const overviewCards: OverviewCardProps[] = [
         {
@@ -254,20 +254,20 @@ const TransactionsPage: React.FC = () => {
     }
 
     const handleApplyFilters = () => {
-        // Aquí iría la lógica para aplicar los filtros a la API
+        // Here would go the logic to apply filters to the API
         console.log('Aplicando filtros:', { transactionType, fromDate, toDate, statusFilter, amountRangeValue, addressSearch })
     }
 
-    // Función para cambiar las entradas por página
+    // Function to change entries per page
     const handleEntriesPerPageChange = (value: number) => {
         setEntriesPerPage(value)
-        setCurrentPage(1) // Resetear a la primera página cuando cambian las entradas por página
+        setCurrentPage(1) // Reset to first page when entries per page changes
     }
 
-    // Función para manejar la exportación
+    // Function to handle export
     const handleExportTransactions = () => {
-        console.log('Exportando transacciones...')
-        // Aquí iría la lógica para la exportación de datos
+        console.log('Exporting transactions...')
+        // Here would go the logic for data export
     }
 
     const filters: FilterProps[] = [
@@ -303,7 +303,7 @@ const TransactionsPage: React.FC = () => {
             value: amountRangeValue,
             onChange: setAmountRangeValue,
             min: 0,
-            max: 1000, // Ajustado para un rango más manejable y luego se manejará 1000+ visualmente
+            max: 1000, // Adjusted for a more manageable range and then 1000+ will be handled visually
             step: 1,
             displayLabels: [
                 { value: 0, label: '0 CNPY' },

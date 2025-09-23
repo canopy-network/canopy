@@ -26,7 +26,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     const [activeTimeFilter, setActiveTimeFilter] = useState('7D')
     const [startDate, setStartDate] = useState<Date | null>(() => {
         const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6) // -6 para incluir el día actual
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6) // -6 to include current day
         return sevenDaysAgo
     })
     const [endDate, setEndDate] = useState<Date | null>(() => new Date())
@@ -56,7 +56,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     const { data: pendingData, isLoading: pendingLoading } = usePending(1)
     const { data: paramsData, isLoading: paramsLoading } = useParams()
 
-    // Actualizar métricas cuando cambian los datos REALES
+    // Update metrics when REAL data changes
     useEffect(() => {
         if (cardData && supplyData && validatorsData && pendingData && paramsData) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
@@ -87,13 +87,13 @@ const NetworkAnalyticsPage: React.FC = () => {
                 blockSize: blockSize / 1000000,
                 networkVersion: networkVersion, // protocolVersion de la API
                 avgTransactionFee: sendFee / 1000000, // Convertir de wei a CNPY
-                // Los siguientes siguen siendo simulados porque no están en la API:
+                // The following remain simulated because they're not in the API:
                 // networkUptime: 99.98 (SIMULADO)
             }))
         }
     }, [cardData, supplyData, validatorsData, pendingData, paramsData, blocksData])
 
-    // Actualización en tiempo real solo para datos simulados
+    // Real-time update only for simulated data
     useEffect(() => {
         const interval = setInterval(() => {
             setMetrics(prev => ({
@@ -111,7 +111,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     }
 
     const handleExportData = () => {
-        // Implementar exportación de datos
+        // Implement data export
         console.log('Exportando datos de analytics...')
     }
 

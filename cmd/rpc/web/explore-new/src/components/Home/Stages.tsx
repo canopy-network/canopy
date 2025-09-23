@@ -1,9 +1,10 @@
 import React from 'react'
-import { motion, animate } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useCardData, useAccounts, useTransactions } from '../../hooks/useApi'
 import { useQuery } from '@tanstack/react-query'
 import { Accounts } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface StageCardProps {
     title: string
@@ -11,7 +12,7 @@ interface StageCardProps {
     data: string
     isProgressBar: boolean
     icon: React.ReactNode
-    metric: string // Añadido para el key y diferenciación
+    metric: string // Added for key and differentiation
 }
 
 const Stages = () => {
@@ -26,7 +27,7 @@ const Stages = () => {
         return Number(height) || 0
     }, [cardData])
 
-    // Estimar altura límite para últimas 24h usando tiempos de los bloques recuperados
+    // Estimate height limit for last 24h using recovered block times
     const heightCutoff24h: number = React.useMemo(() => {
         const list = (cardData as any)?.blocks
         const arr = list?.blocks || list?.list || list?.data || []
@@ -39,7 +40,7 @@ const Stages = () => {
         const t2 = Number(last?.blockHeader?.time ?? last?.time ?? 0)
         const dh = Math.max(1, Math.abs(h1 - h2))
         const dtRaw = Math.abs(t1 - t2)
-        // heurística para convertir a segundos según magnitud
+        // heuristic to convert to seconds according to magnitude
         const dtSec = dtRaw > 1e12 ? dtRaw / 1e9 : dtRaw > 1e9 ? dtRaw / 1e9 : dtRaw > 1e6 ? dtRaw / 1e6 : dtRaw > 1e3 ? dtRaw / 1e3 : Math.max(1, dtRaw)
         const blocksPerSecond = dh / dtSec
         const blocksIn24h = Math.max(1, Math.round(blocksPerSecond * 86400))
@@ -134,38 +135,16 @@ const Stages = () => {
         { title: 'Total Txs', data: convertNumber(totalTxs), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>, icon: <i className="fa-solid fa-arrow-right-arrow-left text-primary"></i>, metric: 'txs' },
     ]
 
-    const AnimatedNumber: React.FC<{ value: string, active: boolean }> = ({ value, active }) => {
-        const [display, setDisplay] = React.useState<string>(value)
-
-        React.useEffect(() => {
-            if (!active) return
-            const match = value.match(/^(?<prefix>[+\- ]?)(?<num>[0-9][0-9,]*\.?[0-9]*)(?<suffix>\s*[a-zA-Z%]*)?$/)
-            if (!match || !match.groups) {
-                setDisplay(value)
-                return
-            }
-            const prefix = match.groups.prefix ?? ''
-            const rawNum = (match.groups.num ?? '0').replace(/,/g, '')
-            const suffix = match.groups.suffix ?? ''
-            const decimals = (rawNum.split('.')[1]?.length ?? 0)
-            const target = parseFloat(rawNum)
-            const controls = animate(0, target, {
-                duration: 0.9,
-                ease: 'easeOut',
-                onUpdate: (v) => {
-                    const formatted = Number(v) >= 1000000
-                        ? String(convertNumber(Number(v)))
-                        : Number(v).toLocaleString('en-US', {
-                            minimumFractionDigits: decimals,
-                            maximumFractionDigits: decimals,
-                        })
-                    setDisplay(`${prefix}${formatted}${suffix}`)
-                }
-            })
-            return () => controls.stop()
-        }, [active, value])
-
-        return <span>{display}</span>
+    const parseNumberFromString = (value: string): { number: number, prefix: string, suffix: string } => {
+        const match = value.match(/^(?<prefix>[+\- ]?)(?<num>[0-9][0-9,]*\.?[0-9]*)(?<suffix>\s*[a-zA-Z%]*)?$/)
+        if (!match || !match.groups) {
+            return { number: 0, prefix: '', suffix: '' }
+        }
+        const prefix = match.groups.prefix ?? ''
+        const rawNum = (match.groups.num ?? '0').replace(/,/g, '')
+        const suffix = match.groups.suffix ?? ''
+        const number = parseFloat(rawNum)
+        return { number, prefix, suffix }
     }
 
     const [activated, setActivated] = React.useState<Set<number>>(new Set())
@@ -203,7 +182,20 @@ const Stages = () => {
 
                         <div className="mt-3">
                             <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
-                                <AnimatedNumber value={stage.data} active={activated.has(index)} />
+                                {(() => {
+                                    const { number, prefix, suffix } = parseNumberFromString(stage.data)
+                                    return (
+                                        <>
+                                            {prefix}
+                                            <AnimatedNumber 
+                                                value={number} 
+                                                format={{ maximumFractionDigits: 2 }}
+                                                className="text-white"
+                                            />
+                                            {suffix}
+                                        </>
+                                    )
+                                })()}
                             </div>
                         </div>
 

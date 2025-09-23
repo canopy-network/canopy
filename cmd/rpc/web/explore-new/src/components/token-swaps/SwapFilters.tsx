@@ -6,16 +6,16 @@ interface SwapFiltersProps {
 }
 
 const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilters }) => {
-    // Aquí irán los estados para los valores de los filtros
+    // Here will go the states for filter values
 
     const handleApply = () => {
-        // Lógica para aplicar los filtros
+        // Logic to apply filters
         console.log("Aplicando filtros");
         onApplyFilters({}); // Pasar los filtros actuales
     };
 
     const handleReset = () => {
-        // Lógica para resetear los filtros
+        // Logic to reset filters
         console.log("Reseteando filtros");
         onResetFilters();
     };

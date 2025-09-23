@@ -33,20 +33,20 @@ const ValidatorsPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
 
-    // Hook para obtener datos de validators con paginación
+    // Hook to get validators data with pagination
     const { data: validatorsData, isLoading } = useValidators(currentPage)
 
-    // Hook para obtener datos de bloques para calcular blocks produced
+    // Hook to get blocks data to calculate blocks produced
     const { data: blocksData } = useBlocks(1)
 
-    // Función para obtener nombre del validator desde la API
+    // Function to get validator name from API
     const getValidatorName = (validator: any): string => {
-        // Usar netAddress como nombre principal (más legible)
+        // Use netAddress as main name (more readable)
         if (validator.netAddress && validator.netAddress !== 'N/A') {
             return validator.netAddress
         }
 
-        // Fallback a address si no hay netAddress
+        // Fallback to address if no netAddress
         if (validator.address && validator.address !== 'N/A') {
             return validator.address
         }
@@ -54,7 +54,7 @@ const ValidatorsPage: React.FC = () => {
         return 'Unknown Validator'
     }
 
-    // Función para contar bloques producidos por validator
+    // Function to count blocks produced by validator
     const countBlocksByValidator = (validatorAddress: string, blocks: any[]) => {
         if (!blocks || !Array.isArray(blocks)) return 0
         return blocks.filter((block: any) => {
@@ -138,7 +138,7 @@ const ValidatorsPage: React.FC = () => {
         }
     }, [validatorsData, blocksData])
 
-    // Efecto para actualizar datos dinámicos cada segundo
+    // Effect to update dynamic data every second
     useEffect(() => {
         const interval = setInterval(() => {
             setValidators((prevValidators) =>

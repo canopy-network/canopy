@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface ValidatorWeightsProps {
     validatorsData: any
@@ -7,7 +8,7 @@ interface ValidatorWeightsProps {
 }
 
 const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loading }) => {
-    // Calcular distribución de eficiencia de validators
+    // Calculate validator efficiency distribution
     const calculateEfficiencyDistribution = () => {
         if (!validatorsData?.results) {
             return [
@@ -21,7 +22,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
         const validators = validatorsData.results
         const totalStake = validators.reduce((sum: number, v: any) => sum + (v.stakedAmount || 0), 0)
 
-        // Simular distribución basada en stake
+        // Simulate distribution based on stake
         const highEfficiency = validators.filter((v: any) => (v.stakedAmount || 0) > totalStake * 0.1).length
         const mediumEfficiency = validators.filter((v: any) => {
             const stake = v.stakedAmount || 0
