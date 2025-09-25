@@ -135,7 +135,14 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
             transition={{ duration: 0.3, delay: 0.5 }}
             className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
-            <h3 className="text-lg font-semibold text-white mb-4">Breakdown by category</h3>
+            <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                    Transaction Types
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">
+                    Breakdown by category
+                </p>
+            </div>
 
             <div className="h-32 relative">
                 <svg className="w-full h-full" viewBox="0 0 300 120">
@@ -153,7 +160,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ timeFilter, loading
                         const x = (index * barWidth) + 10
                         const barHeight = (day.total / maxTotal) * 100
 
-                        let currentY = 110
+                        const currentY = 110
 
                         return (
                             <g key={index}>

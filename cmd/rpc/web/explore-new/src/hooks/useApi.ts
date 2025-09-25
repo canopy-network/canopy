@@ -307,3 +307,54 @@ export const useTableData = (page: number, category: number, committee?: number)
         staleTime: 30000,
     });
 };
+
+// Hook for Analytics - Get multiple pages of blocks for transaction analysis
+export const useBlocksForAnalytics = (numPages: number = 10) => {
+    return useQuery({
+        queryKey: ['blocksForAnalytics', numPages],
+        queryFn: async () => {
+            const allBlocks: any[] = []
+            
+            // Fetch multiple pages of blocks
+            for (let page = 1; page <= numPages; page++) {
+                try {
+                    const response = await fetch('http://localhost:50002/v1/query/blocks', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            perPage: 100, // Max per page
+                            pageNumber: page
+                        })
+                    })
+                    
+                    if (!response.ok) {
+                        console.error(`Failed to fetch blocks page ${page}`)
+                        break
+                    }
+                    
+                    const data = await response.json()
+                    if (data.results && Array.isArray(data.results)) {
+                        allBlocks.push(...data.results)
+                    }
+                    
+                    // If we got less than 100 blocks, we've reached the end
+                    if (data.results.length < 100) {
+                        break
+                    }
+                } catch (error) {
+                    console.error(`Error fetching blocks page ${page}:`, error)
+                    break
+                }
+            }
+            
+            return {
+                results: allBlocks,
+                totalCount: allBlocks.length
+            }
+        },
+        staleTime: 60000, // Cache for 1 minute
+        refetchInterval: 300000, // Refetch every 5 minutes
+    });
+};

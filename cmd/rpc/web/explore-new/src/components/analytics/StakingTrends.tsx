@@ -60,10 +60,14 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ timeFilter, loading }) =>
             transition={{ duration: 0.3, delay: 0.6 }}
             className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
-            <h3 className="text-lg font-semibold text-white mb-4">
-                Average rewards over time
-                {/* ELIMINADO: Ya no se muestra la etiqueta (SIM) */}
-            </h3>
+            <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                    Staking Trends
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">
+                    Average rewards over time
+                </p>
+            </div>
 
             <div className="h-32 relative">
                 <svg className="w-full h-full" viewBox="0 0 300 120">

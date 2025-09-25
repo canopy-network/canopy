@@ -115,7 +115,16 @@ const TransactionsPage: React.FC = () => {
             const hash = tx.txHash || tx.hash || 'N/A'
             const type = tx.messageType || tx.type || 'send'
             const from = tx.sender || tx.from || 'N/A'
-            const to = tx.recipient || tx.to || 'N/A'
+            // Handle different transaction types for "To" field
+            let to = tx.recipient || tx.to || 'N/A'
+            
+            // For certificateResults, extract from reward recipients
+            if (type === 'certificateResults' && tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
+                const recipients = tx.transaction.msg.qc.results.rewardRecipients.paymentPercents
+                if (recipients.length > 0) {
+                    to = recipients[0].address || 'N/A'
+                }
+            }
             const amount = tx.amount || tx.value || 0
             const fee = tx.fee || 0.025 // Valor por defecto
             const status = tx.status || 'success'

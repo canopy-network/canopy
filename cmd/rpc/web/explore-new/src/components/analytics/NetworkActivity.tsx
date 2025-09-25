@@ -1,36 +1,42 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 
 interface NetworkActivityProps {
     timeFilter: string
     loading: boolean
-    transactionsData: any
+    blocksData: any
 }
 
-const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, transactionsData }) => {
-    // Use real transaction data when available
+const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, blocksData }) => {
+    const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; date: string } | null>(null)
+    // Use real block data to calculate transactions per day
     const getTransactionData = () => {
-        if (!transactionsData?.results || !Array.isArray(transactionsData.results)) {
+        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+            console.log('No blocks data available')
             return [] // Return empty array if no real data or invalid
         }
 
-        const realTransactions = transactionsData.results
+        const realBlocks = blocksData.results
         const daysOrHours = timeFilter === '24H' ? 24 : timeFilter === '7D' ? 7 : timeFilter === '30D' ? 30 : 90
         const dataByPeriod: number[] = new Array(daysOrHours).fill(0)
 
-        const now = new Date()
-        // Adjust reference time to end of current period for consistent calculation
-        if (timeFilter === '24H') {
-            now.setMinutes(59, 59, 999)
-        } else {
-            now.setHours(23, 59, 59, 999)
-        }
-        const endTime = now.getTime() // Tiempo de referencia en milisegundos
+        // Use the most recent block time as reference instead of current time
+        const mostRecentBlock = realBlocks[0] // Assuming blocks are ordered by height (newest first)
+        const mostRecentBlockTime = mostRecentBlock?.blockHeader?.time / 1000 // Convert to milliseconds
 
-        realTransactions.forEach((tx: any) => {
+        if (!mostRecentBlockTime) {
+            return []
+        }
+
+        const endTime = mostRecentBlockTime // Use most recent block time as reference
+
+        realBlocks.forEach((block: any) => {
+            const blockHeader = block.blockHeader
+            if (!blockHeader) return
+
             // Convertir de microsegundos a milisegundos
-            const txTime = tx.time / 1000
-            const timeDiff = endTime - txTime // Difference in milliseconds from end of period
+            const blockTime = blockHeader.time / 1000
+            const timeDiff = endTime - blockTime // Difference in milliseconds from end of period
 
             let periodIndex = -1
             if (timeFilter === '24H') {
@@ -46,15 +52,19 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
             }
 
             if (periodIndex !== -1 && periodIndex < daysOrHours) {
-                dataByPeriod[periodIndex]++
+                // Add the number of transactions in this block
+                dataByPeriod[periodIndex] += (blockHeader.numTxs || 0)
             }
         })
+
         return dataByPeriod
     }
 
     const transactionData = getTransactionData()
-    const maxValue = Math.max(...transactionData, 0) // Asegurar que maxValue no sea negativo si todos son 0
-    const minValue = Math.min(...transactionData, 0) // Asegurar que minValue no sea negativo si todos son 0
+    const maxValue = Math.max(...transactionData, 1) // Mínimo 1 para evitar división por cero
+    const minValue = Math.min(...transactionData, 0) // Mínimo 0
+    const range = maxValue - minValue || 1 // Evitar división por cero
+
 
     const getDates = (filter: string) => {
         const today = new Date()
@@ -102,10 +112,14 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
             transition={{ duration: 0.3, delay: 0.1 }}
             className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
-            <h3 className="text-lg font-semibold text-white mb-4">
-                Transactions per day
-                {/* ELIMINADO: Ya no se muestra la etiqueta (SIM) */}
-            </h3>
+            <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                    Network Activity
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">
+                    Transactions per day
+                </p>
+            </div>
 
             <div className="h-32 relative">
                 <svg className="w-full h-full" viewBox="0 0 300 120">
@@ -123,27 +137,59 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
                         stroke="#4ADE80"
                         strokeWidth="2"
                         points={transactionData.map((value, index) => {
-                            const x = (index / (transactionData.length - 1)) * 280 + 10
-                            const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
-                            return `${x},${y}`
+                            const x = (index / Math.max(transactionData.length - 1, 1)) * 280 + 10
+                            const y = 110 - ((value - minValue) / range) * 100
+                            // Asegurar que x e y no sean NaN
+                            const safeX = isNaN(x) ? 10 : x
+                            const safeY = isNaN(y) ? 110 : y
+                            return `${safeX},${safeY}`
                         }).join(' ')}
                     />
 
                     {/* Data points */}
                     {transactionData.map((value, index) => {
-                        const x = (index / (transactionData.length - 1)) * 280 + 10
-                        const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
+                        const x = (index / Math.max(transactionData.length - 1, 1)) * 280 + 10
+                        const y = 110 - ((value - minValue) / range) * 100
+                        // Asegurar que x e y no sean NaN
+                        const safeX = isNaN(x) ? 10 : x
+                        const safeY = isNaN(y) ? 110 : y
+                        const date = dateLabels[index] || `Day ${index + 1}`
+                        
                         return (
                             <circle
                                 key={index}
-                                cx={x}
-                                cy={y}
-                                r="2"
+                                cx={safeX}
+                                cy={safeY}
+                                r="4"
                                 fill="#4ADE80"
+                                className="cursor-pointer transition-all duration-200 hover:r-6"
+                                onMouseEnter={() => setHoveredPoint({
+                                    index,
+                                    x: safeX,
+                                    y: safeY,
+                                    value,
+                                    date
+                                })}
+                                onMouseLeave={() => setHoveredPoint(null)}
                             />
                         )
                     })}
                 </svg>
+
+                {/* Tooltip */}
+                {hoveredPoint && (
+                    <div
+                        className="absolute bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white shadow-lg z-10 pointer-events-none"
+                        style={{
+                            left: `${(hoveredPoint.x / 300) * 100}%`,
+                            top: `${(hoveredPoint.y / 120) * 100}%`,
+                            transform: 'translate(-50%, -120%)'
+                        }}
+                    >
+                        <div className="font-semibold">{hoveredPoint.date}</div>
+                        <div className="text-green-400">{hoveredPoint.value.toLocaleString()} transactions</div>
+                    </div>
+                )}
 
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-400">

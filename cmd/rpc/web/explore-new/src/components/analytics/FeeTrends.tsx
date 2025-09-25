@@ -50,7 +50,14 @@ const FeeTrends: React.FC<FeeTrendsProps> = ({ timeFilter, loading }) => {
             transition={{ duration: 0.3, delay: 0.7 }}
             className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
-            <h3 className="text-lg font-semibold text-white mb-4">Average Fee Over Time</h3>
+            <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                    Fee Trends
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">
+                    Average Fee Over Time
+                </p>
+            </div>
 
             {/* Placeholder content - no chart as shown in the image */}
             <div className="h-32 flex flex-col justify-center items-center text-center">

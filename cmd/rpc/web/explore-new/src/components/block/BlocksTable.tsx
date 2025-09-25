@@ -2,6 +2,7 @@ import React from 'react'
 import blocksTexts from '../../data/blocks.json'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 interface Block {
     height: number
@@ -41,9 +42,25 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         }
     }
 
-    const formatAge = (age: string) => {
-        if (!age || age === 'N/A') return 'N/A'
-        return age
+    const formatAge = (timestamp: string) => {
+        if (!timestamp || timestamp === 'N/A') return 'N/A'
+        
+        try {
+            let date: Date
+            if (typeof timestamp === 'string') {
+                date = parseISO(timestamp)
+            } else {
+                date = new Date(timestamp)
+            }
+
+            if (isValid(date)) {
+                return formatDistanceToNow(date, { addSuffix: true })
+            }
+        } catch (error) {
+            // Fallback to original age if available
+        }
+        
+        return 'N/A'
     }
 
     const formatGasPrice = (price: number) => {
@@ -87,7 +104,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
 
         // Age
         <span className="text-gray-400 text-sm">
-            {formatAge(block.age)}
+            {formatAge(block.timestamp)}
         </span>,
 
         // Block Hash

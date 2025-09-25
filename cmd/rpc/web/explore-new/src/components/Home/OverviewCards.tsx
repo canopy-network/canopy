@@ -130,7 +130,31 @@ const OverviewCards: React.FC = () => {
                             const hash = b.blockHeader?.hash || b.hash || ''
                             const txCount = b.txCount ?? b.numTxs ?? (b.transactions?.length ?? 0)
                             const btime = b.blockHeader?.time || b.time || b.timestamp
-                            const mins = btime ? `${Math.floor((Date.now() - (Number(btime) / 1000)) / 60000)} mins` : '-'
+                            
+                            // Format time using date-fns
+                            let timeAgo = '-'
+                            if (btime) {
+                                try {
+                                    let date: Date
+                                    if (typeof btime === 'number') {
+                                        if (btime > 1e12) {
+                                            date = new Date(btime / 1000)
+                                        } else {
+                                            date = new Date(btime * 1000)
+                                        }
+                                    } else if (typeof btime === 'string') {
+                                        date = parseISO(btime)
+                                    } else {
+                                        date = new Date(btime)
+                                    }
+
+                                    if (isValid(date)) {
+                                        timeAgo = formatDistanceToNow(date, { addSuffix: true })
+                                    }
+                                } catch (error) {
+                                    timeAgo = '-'
+                                }
+                            }
                             return [
                                 <Link to={`/blocks/${height}`} className="text-gray-200 flex items-center gap-2">
                                     <div className="bg-green-300/10 rounded-full py-0.5 px-1">
@@ -158,7 +182,7 @@ const OverviewCards: React.FC = () => {
                                         txCount
                                     )}
                                 </span>,
-                                <span className="text-gray-400">{mins}</span>,
+                                <span className="text-gray-400">{timeAgo}</span>,
                             ]
                         })}
                     />

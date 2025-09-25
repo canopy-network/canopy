@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { useCardData, useSupply, useValidators, useBlocks, useTransactions, usePending, useParams } from '../../hooks/useApi'
+import { useCardData, useSupply, useValidators, useBlocks, useTransactionsWithRealPagination, useBlocksForAnalytics, usePending, useParams } from '../../hooks/useApi'
 import AnalyticsFilters from './AnalyticsFilters'
 import KeyMetrics from './KeyMetrics'
 import NetworkActivity from './NetworkActivity'
@@ -52,7 +52,8 @@ const NetworkAnalyticsPage: React.FC = () => {
     const { data: supplyData, isLoading: supplyLoading } = useSupply()
     const { data: validatorsData, isLoading: validatorsLoading } = useValidators(1)
     const { data: blocksData, isLoading: blocksLoading } = useBlocks(1)
-    const { data: transactionsData, isLoading: transactionsLoading } = useTransactions(1)
+    const { data: analyticsBlocksData } = useBlocksForAnalytics(10) // Get 10 pages of blocks for analytics
+    const { data: transactionsData, isLoading: transactionsLoading } = useTransactionsWithRealPagination(1, 50) // Get more transactions for analytics
     const { data: pendingData, isLoading: pendingLoading } = usePending(1)
     const { data: paramsData, isLoading: paramsLoading } = useParams()
 
@@ -181,7 +182,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                 {/* Second Column - 3 cards */}
                 <div className="space-y-6">
                     {/* Network Activity */}
-                    <NetworkActivity timeFilter={activeTimeFilter} loading={isLoading} transactionsData={transactionsData} />
+                    <NetworkActivity timeFilter={activeTimeFilter} loading={isLoading} blocksData={analyticsBlocksData} />
 
                     {/* Validator Weights */}
                     <ValidatorWeights validatorsData={validatorsData} loading={validatorsLoading} />

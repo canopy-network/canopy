@@ -137,7 +137,11 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
         // To
         <span className="text-gray-400 font-mono text-sm">
-            {truncate(transaction.to, 12)}
+            {transaction.to === 'N/A' ? (
+                <span className="text-gray-500">N/A</span>
+            ) : (
+                truncate(transaction.to, 12)
+            )}
         </span>,
 
         // Amount
@@ -148,7 +152,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                         value={transaction.amount}
                         format={{ maximumFractionDigits: 4 }}
                         className="text-white"
-                    /> {transactionsTexts.table.units.cnpy}
+                    />&nbsp; {transactionsTexts.table.units.cnpy}
                 </>
             ) : (
                 formatAmount(transaction.amount)
