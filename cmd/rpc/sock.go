@@ -262,6 +262,17 @@ func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *
 	return sub.Transaction(tx)
 }
 
+// Transaction() executes a transaction on the root chain
+func (r *RCManager) BlockTime(rootChainId, height uint64) (blockTime *lib.BlockTimeInfo, err lib.ErrorI) {
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
+	if !found {
+		// exit with 'not subscribed' error
+		return nil, lib.ErrNotSubscribed()
+	}
+	return sub.BlockTime(height)
+}
+
 // SUBSCRIPTION CODE BELOW (OUTBOUND)
 
 // RCSubscription (Root Chain Subscription) implements an efficient subscription to root chain info

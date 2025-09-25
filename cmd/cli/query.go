@@ -48,6 +48,7 @@ func init() {
 	queryCmd.AddCommand(certCmd)
 	queryCmd.AddCommand(blkByHeightCmd)
 	queryCmd.AddCommand(blkByHashCmd)
+	queryCmd.AddCommand(blkTimeCmd)
 	queryCmd.AddCommand(blocksCmd)
 	queryCmd.AddCommand(txsByHeightCmd)
 	queryCmd.AddCommand(txsBySenderCmd)
@@ -248,6 +249,14 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.BlockByHash(args[0]))
+		},
+	}
+
+	blkTimeCmd = &cobra.Command{
+		Use:   "block-time --height=1",
+		Short: "query the information about the block time",
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.BlockTime(height))
 		},
 	}
 

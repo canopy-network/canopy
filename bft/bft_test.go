@@ -5,6 +5,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
+	"math"
 	"testing"
 	"time"
 )
@@ -692,8 +693,8 @@ func TestRoundInterrupt(t *testing.T) {
 		require.EqualExportedValues(t, msg.Qc.Header, &lib.View{
 			NetworkId:  lib.CanopyMainnetNetworkId,
 			Height:     1,
-			Round:      0,
-			RootHeight: 1,
+			Round:      1,
+			RootHeight: 0,
 			ChainId:    lib.CanopyChainId,
 			Phase:      RoundInterrupt,
 		})
@@ -705,42 +706,40 @@ func TestPacemaker(t *testing.T) {
 	tests := []struct {
 		name                   string
 		detail                 string
-		hasPeerPacemakerVotes  bool
-		has13MajVote           bool
+		numPeerVals            int
 		expectedPacemakerRound uint64
+		expectedRootHeight     uint64
 	}{
 		{
 			name:                   "no peer pacemaker votes",
 			detail:                 "no peer pacemaker votes received, simply increment round",
-			expectedPacemakerRound: 1,
+			expectedPacemakerRound: 3,
+			expectedRootHeight:     3,
+			numPeerVals:            0,
 		},
 		{
-			name:                   "received peer pacemaker votes",
-			detail:                 "peer pacemaker votes received, highest +2/3 at round 1",
-			hasPeerPacemakerVotes:  true,
-			expectedPacemakerRound: 1,
+			name:                   "received 1 peer pacemaker vote",
+			detail:                 "peer pacemaker votes received, no +2/3, less voting power than self",
+			expectedPacemakerRound: 3,
+			expectedRootHeight:     3,
+			numPeerVals:            1,
 		},
 		{
 			name:                   "received peer pacemaker votes which caused a round fast forward",
 			detail:                 "peer pacemaker votes received, highest +2/3 at round 3",
-			hasPeerPacemakerVotes:  true,
-			has13MajVote:           true,
 			expectedPacemakerRound: 3,
+			expectedRootHeight:     3,
+			numPeerVals:            3,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// setup
-			numValidators := 1
-			if test.has13MajVote {
-				numValidators = 2
-			}
-			c := newTestConsensus(t, Propose, numValidators)
-			if test.hasPeerPacemakerVotes {
-				c.simPacemakerPhase(t)
-			}
+			voters := test.numPeerVals + 1
+			c := newTestConsensus(t, Propose, voters)
+			c.simPacemakerPhase(t)
 			c.bft.Pacemaker()
 			require.Equal(t, test.expectedPacemakerRound, c.bft.Round)
+			require.Equal(t, test.expectedRootHeight, c.bft.RootHeight)
 		})
 	}
 }
@@ -850,7 +849,7 @@ func TestNewRound(t *testing.T) {
 			c.simPrecommitPhase(t, 0)
 			c.simCommitPhase(t, 0, 0)
 			c.simPacemakerPhase(t)
-			eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound, paceLen := 4, 1, false, 1, false, 1, false, uint64(0), 3
+			eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound, paceLen := 4, 1, false, 1, false, 1, false, uint64(0), 4
 			if test.newRound || test.newHeight {
 				eleLen, evVoteLen, propNil, propVoteLen, precNil, precVoteLen, comNil, expRound = 0, 0, true, 0, true, 0, true, 1
 			}
@@ -937,7 +936,7 @@ func TestGetPhaseWaitTime(t *testing.T) {
 			detail:           "the wait time for round interrupt phase",
 			phase:            Propose,
 			round:            3,
-			expectedWaitTime: time.Duration(lib.DefaultConfig().ProposeTimeoutMS) * time.Millisecond * (6 + 1),
+			expectedWaitTime: (time.Duration(lib.DefaultConfig().ProposeTimeoutMS) + time.Duration(int(math.Pow(float64(2), float64(3)))*1000)) * time.Millisecond,
 		},
 	}
 	for _, test := range tests {

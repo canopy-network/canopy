@@ -33,6 +33,10 @@ func (x *QuorumCertificate) CheckBasic() ErrorI {
 		// exit with empty qc error
 		return ErrEmptyQuorumCertificate()
 	}
+	// check for unknown fields
+	//if codec.HasUnknown(x) { TODO add once QC structure is stable
+	//	return ErrUnknownFields()
+	//}
 	// sanity check the view of the QC
 	if err := x.Header.CheckBasic(); err != nil {
 		// exit with error
@@ -149,7 +153,7 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 	}
 	// don't accept any blocks below the local height
 	if height > block.BlockHeader.Height {
-		return nil, ErrWrongBlockHeight(block.BlockHeader.Height, height+1)
+		return nil, ErrWrongBlockHeight(block.BlockHeader.Height, height)
 	}
 	// new height notified error
 	if height < block.BlockHeader.Height {

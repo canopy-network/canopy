@@ -100,7 +100,20 @@ message BlockMessage {
   // block_and_certificate: is the actual block and the super-majority signed quorum certificate that justifies it
   QuorumCertificate BlockAndCertificate = 4; // @gotags: json:"blockAndCertificate"
   // timestamp: optional timestamp to help coordinate new height
-  uint64 time = 5;
+  uint64 time = 5; // @gotags: json:"time"
+  // bft_coordination_meta: coordination info from the last leader enabling in-sync handling of the next height
+  BFTCoordinationMeta bft_coordination_meta = 6; // @gotags: json:"bftCoordinationMeta"
+}
+
+// BFTCoordinationMeta is information from the last leader that enables proper coordination of the next height
+message BFTCoordinationMeta {
+  // last_commit_time: optional timestamp to help coordinate new height (with last commit time)
+  uint64 last_commit_time = 1; // @gotags: json:"time"
+  // reset_on_root_height: 0 for no reset, else will reset if ROUND=0 and ROOT_HEIGHT=reset_on_root_height
+  // If a root chain notification arrives right as the nested chain transitions to NEW_HEIGHT, the validator set can split 50%/50% at Round 0
+  // Let the previous leader decide whether to issue a "reset on Round 0 for rHeight X" command inside the last certificate.
+  // If each validator makes this decision individually, a notification arriving exactly at a border can produce inconsistent outcomes.
+  uint64 reset_on_root_height = 2; // @gotags: json:"resetOnRootHeight"
 }
 
 // TxMessage is a p2p message payload that is an inbound transaction to be processed by the blockchain's FSM and saved
