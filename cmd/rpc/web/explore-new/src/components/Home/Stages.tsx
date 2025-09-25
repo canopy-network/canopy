@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { useCardData, useAccounts, useTransactions } from '../../hooks/useApi'
+import { useCardData, useAccounts, useTransactionsWithRealPagination, useTransactions } from '../../hooks/useApi'
 import { useQuery } from '@tanstack/react-query'
 import { Accounts } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
@@ -81,8 +81,8 @@ const Stages = () => {
 
     // extra datasets for totals
     const { data: accountsPage } = useAccounts(1)
-    const { data: txsPage } = useTransactions(1, 0)
-    const { data: txs24hPage } = useTransactions(1, heightCutoff24h)
+    const { data: txsPage } = useTransactionsWithRealPagination(1, 10) // Usar paginación real
+    const { data: txs24hPage } = useTransactions(1, 0) // Usar txs-by-height para transacciones recientes
     const { data: accounts24hPage } = useQuery({
         queryKey: ['accounts24h', heightCutoff24h],
         queryFn: () => Accounts(1, heightCutoff24h),

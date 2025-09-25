@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useTransactions } from '../../hooks/useApi'
+import { useTransactionsWithRealPagination, useTransactions } from '../../hooks/useApi'
 import transactionsTexts from '../../data/transactions.json'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 interface OverviewCardProps {
     title: string
@@ -78,8 +79,28 @@ const TransactionsPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
 
-    // Hook to get transactions data with pagination
-    const { data: transactionsData, isLoading } = useTransactions(currentPage, 0)
+    // Estados para los filtros
+    const [transactionType, setTransactionType] = useState('All Types')
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
+    const [statusFilter, setStatusFilter] = useState<'success' | 'failed' | 'pending' | 'all'>('all')
+    const [amountRangeValue, setAmountRangeValue] = useState(0)
+    const [addressSearch, setAddressSearch] = useState('')
+    const [entriesPerPage, setEntriesPerPage] = useState(10)
+
+    // Crear objeto de filtros para la API
+    const apiFilters = {
+        type: transactionType !== 'All Types' ? transactionType : undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        address: addressSearch || undefined,
+        minAmount: amountRangeValue > 0 ? amountRangeValue : undefined,
+        maxAmount: amountRangeValue >= 1000 ? undefined : amountRangeValue
+    }
+
+    // Hook to get all transactions data with real pagination
+    const { data: transactionsData, isLoading } = useTransactionsWithRealPagination(currentPage, entriesPerPage, apiFilters)
 
     // Normalizar datos de transacciones
     const normalizeTransactions = (payload: any): Transaction[] => {
@@ -92,7 +113,7 @@ const TransactionsPage: React.FC = () => {
         return transactionsList.map((tx: any) => {
             // Extract transaction data
             const hash = tx.txHash || tx.hash || 'N/A'
-            const type = tx.type || 'Transfer'
+            const type = tx.messageType || tx.type || 'send'
             const from = tx.sender || tx.from || 'N/A'
             const to = tx.recipient || tx.to || 'N/A'
             const amount = tx.amount || tx.value || 0
@@ -102,24 +123,33 @@ const TransactionsPage: React.FC = () => {
 
             let age = 'N/A'
             let transactionDate: number | undefined
-            if (tx.timestamp || tx.time) {
-                const now = Date.now()
-                const txTime = typeof tx.timestamp === 'number' ?
-                    (tx.timestamp > 1e12 ? tx.timestamp / 1000 : tx.timestamp) :
-                    new Date(tx.timestamp || tx.time).getTime()
-                transactionDate = txTime
 
-                const diffMs = now - txTime
-                const diffSecs = Math.floor(diffMs / 1000)
-                const diffMins = Math.floor(diffSecs / 60)
-                const diffHours = Math.floor(diffMins / 60)
-
-                if (diffSecs < 60) {
-                    age = `${diffSecs} ${transactionsTexts.table.units.secsAgo}`
-                } else if (diffMins < 60) {
-                    age = `${diffMins} ${transactionsTexts.table.units.minAgo}`
-                } else {
-                    age = `${diffHours} ${transactionsTexts.table.units.hoursAgo}`
+            // Usar blockTime si está disponible, sino timestamp o time
+            const timeSource = tx.blockTime || tx.timestamp || tx.time
+            if (timeSource) {
+                try {
+                    // Handle different timestamp formats
+                    let date: Date
+                    if (typeof timeSource === 'number') {
+                        // If timestamp is in microseconds (Canopy format)
+                        if (timeSource > 1e12) {
+                            date = new Date(timeSource / 1000)
+                        } else {
+                            date = new Date(timeSource * 1000)
+                        }
+                    } else if (typeof timeSource === 'string') {
+                        date = parseISO(timeSource)
+                    } else {
+                        date = new Date(timeSource)
+                    }
+                    
+                    if (isValid(date)) {
+                        transactionDate = date.getTime()
+                        age = formatDistanceToNow(date, { addSuffix: true })
+                    }
+                } catch (error) {
+                    console.error('Error calculating age:', error)
+                    age = 'N/A'
                 }
             }
 
@@ -147,56 +177,30 @@ const TransactionsPage: React.FC = () => {
         }
     }, [transactionsData])
 
-    // Effect to simulate real-time updates
+    // Efecto para resetear página cuando cambian los filtros
     useEffect(() => {
-        const interval = setInterval(() => {
-            setTransactions(prevTransactions =>
-                prevTransactions.map(tx => {
-                    // Simular cambios en el tiempo de edad
-                    const now = Date.now()
-                    const txTime = now - Math.random() * 300000 // Últimos 5 minutos
-                    const diffMs = now - txTime
-                    const diffSecs = Math.floor(diffMs / 1000)
-                    const diffMins = Math.floor(diffSecs / 60)
+        setCurrentPage(1)
+    }, [transactionType, fromDate, toDate, statusFilter, amountRangeValue, addressSearch])
 
-                    let newAge = 'N/A'
-                    if (diffSecs < 60) {
-                        newAge = `${diffSecs} ${transactionsTexts.table.units.secsAgo}`
-                    } else if (diffMins < 60) {
-                        newAge = `${diffMins} ${transactionsTexts.table.units.minAgo}`
-                    } else {
-                        newAge = `${Math.floor(diffMins / 60)} ${transactionsTexts.table.units.hoursAgo}`
-                    }
-
-                    return { ...tx, age: newAge, date: txTime }
-                })
-            )
-        }, 1000)
-
-        return () => clearInterval(interval)
-    }, [])
 
     const totalTransactions = transactionsData?.totalCount || 0
 
-    // Estados para los filtros
-    const [transactionType, setTransactionType] = useState('All Types')
-    const [fromDate, setFromDate] = useState('')
-    const [toDate, setToDate] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'success' | 'failed' | 'pending' | 'all'>('all')
-    const [amountRangeValue, setAmountRangeValue] = useState(0) // Un solo estado para el valor del slider
-    const [addressSearch, setAddressSearch] = useState('')
-
-    // State for entries per page selector
-    const [entriesPerPage, setEntriesPerPage] = useState(10)
-
+    // Get transactions from the last 24 hours using txs-by-height
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
+    const { data: todayTransactionsData } = useTransactions(1, 0) // Get recent transactions
+    
     const transactionsToday = React.useMemo(() => {
-        // Count transactions in the last 24h using the `date` property
-        const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
+        if (todayTransactionsData?.totalCount) {
+            // Use the total count from the API if available
+            return todayTransactionsData.totalCount
+        }
+        
+        // Fallback: count transactions in the last 24h using the `date` property
         const filteredTxs = transactions.filter(tx => {
             return (tx.date || 0) >= twentyFourHoursAgo
         })
         return filteredTxs.length
-    }, [transactions])
+    }, [todayTransactionsData, transactions, twentyFourHoursAgo])
 
     const averageFee = React.useMemo(() => {
         if (transactions.length === 0) return 0
@@ -251,10 +255,13 @@ const TransactionsPage: React.FC = () => {
         setStatusFilter('all')
         setAmountRangeValue(0)
         setAddressSearch('')
+        setCurrentPage(1) // Reset page when filters are reset
     }
 
     const handleApplyFilters = () => {
         // Here would go the logic to apply filters to the API
+        // We need to reset the page to 1 when filters are applied
+        setCurrentPage(1)
         console.log('Aplicando filtros:', { transactionType, fromDate, toDate, statusFilter, amountRangeValue, addressSearch })
     }
 
@@ -266,15 +273,39 @@ const TransactionsPage: React.FC = () => {
 
     // Function to handle export
     const handleExportTransactions = () => {
-        console.log('Exporting transactions...')
-        // Here would go the logic for data export
+        console.log('Exporting transactions...', transactions)
+        // Crear CSV con las transacciones filtradas
+        const csvContent = [
+            ['Hash', 'Type', 'From', 'To', 'Amount', 'Fee', 'Status', 'Age', 'Block Height'].join(','),
+            ...transactions.map(tx => [
+                tx.hash,
+                tx.type,
+                tx.from,
+                tx.to,
+                tx.amount,
+                tx.fee,
+                tx.status,
+                tx.age,
+                tx.blockHeight
+            ].join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
     }
 
-    const filters: FilterProps[] = [
+    const filterConfigs: FilterProps[] = [
         {
             type: 'select',
             label: 'Transaction Type',
-            options: ['All Types', 'Transfer', 'Stake', 'Unstake', 'Swap'],
+            options: ['All Types', 'send', 'stake', 'edit-stake', 'unstake', 'pause', 'unpause', 'changeParameter', 'daoTransfer', 'certificateResults', 'subsidy', 'createOrder', 'editOrder', 'deleteOrder'],
             value: transactionType,
             onChange: setTransactionType,
         },
@@ -367,13 +398,13 @@ const TransactionsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Transaction Type Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filters[0].label}</label>
+                        <label className="text-gray-400 text-sm">{filterConfigs[0].label}</label>
                         <select
                             className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
-                            value={(filters[0] as SelectFilter).value}
-                            onChange={(e) => (filters[0] as SelectFilter).onChange(e.target.value)}
+                            value={(filterConfigs[0] as SelectFilter).value}
+                            onChange={(e) => (filterConfigs[0] as SelectFilter).onChange(e.target.value)}
                         >
-                            {(filters[0] as SelectFilter).options.map((option, idx) => (
+                            {(filterConfigs[0] as SelectFilter).options.map((option, idx) => (
                                 <option key={idx} value={option}>{option}</option>
                             ))}
                         </select>
@@ -381,36 +412,36 @@ const TransactionsPage: React.FC = () => {
 
                     {/* Date/Time Range Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filters[1].label}</label>
+                        <label className="text-gray-400 text-sm">{filterConfigs[1].label}</label>
                         <div className="grid grid-cols-2 gap-2">
                             <input
                                 type="date"
                                 className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
                                 placeholder="From Date"
-                                value={(filters[1] as DateRangeFilter).fromDate}
-                                onChange={(e) => (filters[1] as DateRangeFilter).onFromDateChange(e.target.value)}
+                                value={(filterConfigs[1] as DateRangeFilter).fromDate}
+                                onChange={(e) => (filterConfigs[1] as DateRangeFilter).onFromDateChange(e.target.value)}
                             />
                             <input
                                 type="date"
                                 className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
                                 placeholder="To Date"
-                                value={(filters[1] as DateRangeFilter).toDate}
-                                onChange={(e) => (filters[1] as DateRangeFilter).onToDateChange(e.target.value)}
+                                value={(filterConfigs[1] as DateRangeFilter).toDate}
+                                onChange={(e) => (filterConfigs[1] as DateRangeFilter).onToDateChange(e.target.value)}
                             />
                         </div>
                     </div>
 
                     {/* Status Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filters[2].label}</label>
+                        <label className="text-gray-400 text-sm">{filterConfigs[2].label}</label>
                         <div className="flex flex-wrap justify-between items-center gap-2">
                             <div className="flex flex-wrap gap-2">
-                                {(filters[2] as StatusFilter).options.map((option, idx) => (
+                                {(filterConfigs[2] as StatusFilter).options.map((option, idx) => (
                                     <button
                                         key={idx}
-                                        onClick={() => (filters[2] as StatusFilter).onStatusChange(option.status)}
+                                        onClick={() => (filterConfigs[2] as StatusFilter).onStatusChange(option.status)}
                                         className={`px-2 py-1.5 text-xs rounded-md pr-2.5
-                                            ${(filters[2] as StatusFilter).selectedStatus === option.status
+                                            ${(filterConfigs[2] as StatusFilter).selectedStatus === option.status
                                                 ? option.status === 'success'
                                                     ? 'bg-green-500/30 text-primary border border-green-500/50'
                                                     : option.status === 'failed'
@@ -427,62 +458,47 @@ const TransactionsPage: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={handleResetFilters} className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded text-gray-300">
-                                    Reset
-                                </button>
-                                <button onClick={handleApplyFilters} className="px-3 py-1 text-sm bg-primary hover:bg-primary/90 rounded text-black inline-flex items-center gap-2">
-                                    <i className="fa-solid fa-filter text-xs"></i>Apply Filters
-                                </button>
-                            </div>
+
                         </div>
                     </div>
 
                     {/* Amount Range Filter */}
                     <div className="flex flex-col gap-2 col-span-1 md:col-span-2">
-                        <label className="text-gray-400 text-sm">{filters[3].label}</label>
+                        <label className="text-gray-400 text-sm">{filterConfigs[3].label}</label>
                         <div className="relative pt-4">
                             <input
                                 type="range"
-                                min={(filters[3] as AmountRangeFilter).min}
-                                max={(filters[3] as AmountRangeFilter).max}
-                                step={(filters[3] as AmountRangeFilter).step}
-                                value={(filters[3] as AmountRangeFilter).value}
-                                onChange={(e) => (filters[3] as AmountRangeFilter).onChange(Number(e.target.value))}
+                                min={(filterConfigs[3] as AmountRangeFilter).min}
+                                max={(filterConfigs[3] as AmountRangeFilter).max}
+                                step={(filterConfigs[3] as AmountRangeFilter).step}
+                                value={(filterConfigs[3] as AmountRangeFilter).value}
+                                onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
                                 className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
-                                style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filters[3] as AmountRangeFilter).value - (filters[3] as AmountRangeFilter).min) / ((filters[3] as AmountRangeFilter).max - (filters[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filters[3] as AmountRangeFilter).value - (filters[3] as AmountRangeFilter).min) / ((filters[3] as AmountRangeFilter).max - (filters[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
+                                style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
                             />
                             <div className="flex justify-between text-xs text-gray-400 mt-2">
-                                {(filters[3] as AmountRangeFilter).displayLabels.map((label, idx) => (
+                                {(filterConfigs[3] as AmountRangeFilter).displayLabels.map((label, idx) => (
                                     <span
                                         key={idx}
-                                        className={`${label.value === (filters[3] as AmountRangeFilter).value ? 'text-white font-semibold' : ''}`}
+                                        className={`${label.value === (filterConfigs[3] as AmountRangeFilter).value ? 'text-white font-semibold' : ''}`}
                                     >
                                         {label.label}
                                     </span>
                                 ))}
                             </div>
                         </div>
-                        <div className="flex items-center justify-end gap-2 mt-4">
-                            <button onClick={handleResetFilters} className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded text-gray-300">
-                                Reset
-                            </button>
-                            <button onClick={handleApplyFilters} className="px-3 py-1 text-sm bg-primary hover:bg-primary/90 rounded text-black inline-flex items-center gap-2">
-                                <i className="fa-solid fa-filter text-xs"></i>Apply Filters
-                            </button>
-                        </div>
                     </div>
 
                     {/* Address Search Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filters[4].label}</label>
+                        <label className="text-gray-400 text-sm">{filterConfigs[4].label}</label>
                         <div className="relative">
                             <input
                                 type="text"
-                                placeholder={(filters[4] as SearchFilter).placeholder}
+                                placeholder={(filterConfigs[4] as SearchFilter).placeholder}
                                 className="w-full px-3 py-2 pl-10 bg-input border border-gray-800/80 rounded-md text-white"
-                                value={(filters[4] as SearchFilter).value}
-                                onChange={(e) => (filters[4] as SearchFilter).onChange(e.target.value)}
+                                value={(filterConfigs[4] as SearchFilter).value}
+                                onChange={(e) => (filterConfigs[4] as SearchFilter).onChange(e.target.value)}
                             />
                             <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
                         </div>
@@ -505,7 +521,6 @@ const TransactionsPage: React.FC = () => {
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
                 showEntriesSelector={true}
-                entriesPerPageOptions={[10, 25, 50, 100]}
                 currentEntriesPerPage={entriesPerPage}
                 onEntriesPerPageChange={handleEntriesPerPageChange}
                 showExportButton={true}

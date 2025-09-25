@@ -87,6 +87,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                 return 'fa-solid fa-user-check'
             case 'undelegate':
                 return 'fa-solid fa-user-times'
+            case 'certificateresults':
+                return 'fa-solid fa-arrow-right-arrow-left'
             default:
                 return 'fa-solid fa-circle'
         }
@@ -108,6 +110,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                 return 'bg-cyan-500/20 text-cyan-400'
             case 'undelegate':
                 return 'bg-pink-500/20 text-pink-400'
+            case 'certificateresults':
+                return 'bg-green-500/20 text-primary'
             default:
                 return 'bg-gray-500/20 text-gray-400'
         }
@@ -140,8 +144,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         <span className="text-white text-sm font-medium">
             {typeof transaction.amount === 'number' ? (
                 <>
-                    <AnimatedNumber 
-                        value={transaction.amount} 
+                    <AnimatedNumber
+                        value={transaction.amount}
                         format={{ maximumFractionDigits: 4 }}
                         className="text-white"
                     /> {transactionsTexts.table.units.cnpy}
@@ -155,8 +159,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         <span className="text-gray-300 text-sm">
             {typeof transaction.fee === 'number' ? (
                 <>
-                    <AnimatedNumber 
-                        value={transaction.fee} 
+                    <AnimatedNumber
+                        value={transaction.fee}
                         format={{ maximumFractionDigits: 4 }}
                         className="text-gray-300"
                     /> {transactionsTexts.table.units.cnpy}
@@ -191,6 +195,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             currentPage={currentPage}
             onPageChange={onPageChange}
             loading={loading}
+            paginate={true} // Habilitar paginación
             spacing={4} // We use spacing of 4 to match the image design.
             showEntriesSelector={showEntriesSelector}
             entriesPerPageOptions={entriesPerPageOptions}

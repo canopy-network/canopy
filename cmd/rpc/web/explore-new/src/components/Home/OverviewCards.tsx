@@ -1,15 +1,16 @@
 import React from 'react'
 import TableCard from './TableCard'
 import config from '../../data/overview.json'
-import { useTransactions, useBlocks, useOrders } from '../../hooks/useApi'
+import { useBlocks, useOrders, useTransactionsWithRealPagination } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
 const OverviewCards: React.FC = () => {
     // Data hooks
-    const { data: txsPage } = useTransactions(1, 0)
+    const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
     const { data: blocksPage } = useBlocks(1)
     const chainId = typeof window !== 'undefined' && (window as any).__CONFIG__ ? Number((window as any).__CONFIG__.chainId) : 1
     const { data: ordersPage } = useOrders(chainId)
@@ -38,25 +39,79 @@ const OverviewCards: React.FC = () => {
                         columns={[{ label: 'From' }, { label: 'To' }, { label: 'Amount' }, { label: 'Time' }]}
                         rows={txs.slice(0, 5).map((t: any) => {
                             const from = t.sender || t.from || t.source || ''
-                            const to = t.recipient || t.to || t.destination || ''
-                            const amount = t.amount ?? t.value ?? t.fee ?? '-'
+                            
+                            // Handle different transaction types for "To" field
+                            let to = ''
+                            if (t.messageType === 'certificateResults' && t.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
+                                // For certificateResults, show the first reward recipient
+                                const recipients = t.transaction.msg.qc.results.rewardRecipients.paymentPercents
+                                if (recipients.length > 0) {
+                                    to = recipients[0].address || ''
+                                }
+                            } else {
+                                // For other transaction types
+                                to = t.recipient || t.to || t.destination || ''
+                            }
+                            
+                            const amount = t.amount ?? t.value ?? t.fee ?? 0
+
+                            // Format time using date-fns
                             const timestamp = t.time || t.timestamp || t.blockTime
-                            const mins = timestamp ? `${Math.floor((Date.now() - (Number(timestamp) / 1000)) / 60000)} mins` : '-'
+                            let timeAgo = '-'
+                            if (timestamp) {
+                                try {
+                                    let date: Date
+                                    if (typeof timestamp === 'number') {
+                                        if (timestamp > 1e12) {
+                                            date = new Date(timestamp / 1000)
+                                        } else {
+                                            date = new Date(timestamp * 1000)
+                                        }
+                                    } else if (typeof timestamp === 'string') {
+                                        date = parseISO(timestamp)
+                                    } else {
+                                        date = new Date(timestamp)
+                                    }
+
+                                    if (isValid(date)) {
+                                        timeAgo = formatDistanceToNow(date, { addSuffix: true })
+                                    }
+                                } catch (error) {
+                                    timeAgo = '-'
+                                }
+                            }
+
+                            // Get first 2 characters for the circle
+                            const fromInitials = from ? from.slice(0, 2).toUpperCase() : 'N/A'
+                            const toInitials = to ? to.slice(0, 2).toUpperCase() : 'N/A'
+                            
+                            // Show "N/A" if no data available
+                            const displayTo = to || 'N/A'
+                            const displayFrom = from || 'N/A'
+
                             return [
-                                <Link to={`/validator/${from}`} className="text-gray-200 flex items-center gap-2">{truncate(String(from))}</Link>,
-                                <span>{truncate(String(to))}</span>,
-                                <span className="text-primary">
-                                    {typeof amount === 'number' ? (
-                                        <AnimatedNumber
-                                            value={amount}
-                                            format={{ maximumFractionDigits: 4 }}
-                                            className="text-primary"
-                                        />
+                                <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
+                                        {fromInitials}
+                                    </div>
+                                    <span className="text-white">{truncate(String(displayFrom), 8)}</span>
+                                </div>,
+                                <div className="flex items-center gap-2">
+                                    {to ? (
+                                        <>
+                                            <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
+                                                {toInitials}
+                                            </div>
+                                            <span className="text-white">{truncate(String(displayTo), 8)}</span>
+                                        </>
                                     ) : (
-                                        amount
+                                        <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
                                     )}
+                                </div>,
+                                <span className="text-green-400">
+                                    {typeof amount === 'number' ? amount.toFixed(3) : amount}
                                 </span>,
-                                <span className="text-gray-400">{mins}</span>,
+                                <span className="text-white">{timeAgo}</span>,
                             ]
                         })}
                     />

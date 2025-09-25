@@ -119,9 +119,8 @@ const TableCard: React.FC<TableCardProps> = ({
 
     return (
         <motion.section
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            initial={{ opacity: 1, y: 10, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ amount: 0.5 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className={` p-5 ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
         >

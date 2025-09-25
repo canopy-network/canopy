@@ -115,6 +115,283 @@ export function Transactions(page: number, height: number) {
     return POST(rpcURL, pageHeightReq(page, height), txsByHeightPath);
 }
 
+// Función optimizada para obtener transacciones con paginación real
+export async function getTransactionsWithRealPagination(page: number, perPage: number = 10, filters?: {
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+    status?: string;
+    address?: string;
+    minAmount?: number;
+    maxAmount?: number;
+}) {
+    try {
+        // Get the total number of transactions
+        const totalTransactionCount = await getTotalTransactionCount();
+        
+        // If there are no filters, use a more direct approach
+        if (!filters || Object.values(filters).every(v => !v)) {
+            // Get blocks sequentially to cover the pagination
+            const startIndex = (page - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            
+            let allTransactions: any[] = [];
+            let currentBlockPage = 1;
+            const maxPages = 50; // Limit to avoid too many requests
+            
+            while (allTransactions.length < endIndex && currentBlockPage <= maxPages) {
+                const blocksResponse = await Blocks(currentBlockPage, 0);
+                const blocks = blocksResponse?.results || blocksResponse?.blocks || [];
+                
+                if (!Array.isArray(blocks) || blocks.length === 0) break;
+                
+                for (const block of blocks) {
+                    if (block.transactions && Array.isArray(block.transactions)) {
+                        const blockTransactions = block.transactions.map((tx: any) => ({
+                            ...tx,
+                            blockHeight: block.blockHeader?.height || block.height,
+                            blockHash: block.blockHeader?.hash || block.hash,
+                            blockTime: block.blockHeader?.time || block.time,
+                            blockNumber: block.blockHeader?.height || block.height
+                        }));
+                        allTransactions = allTransactions.concat(blockTransactions);
+                        
+                        // If we have enough transactions, exit
+                        if (allTransactions.length >= endIndex) break;
+                    }
+                }
+                
+                currentBlockPage++;
+            }
+            
+            // Ordenar por tiempo (más recientes primero)
+            allTransactions.sort((a, b) => {
+                const timeA = a.blockTime || a.time || a.timestamp || 0;
+                const timeB = b.blockTime || b.time || b.timestamp || 0;
+                return timeB - timeA;
+            });
+            
+            // Aplicar paginación
+            const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
+            
+            return {
+                results: paginatedTransactions,
+                totalCount: totalTransactionCount,
+                pageNumber: page,
+                perPage: perPage,
+                totalPages: Math.ceil(totalTransactionCount / perPage),
+                hasMore: endIndex < totalTransactionCount
+            };
+        }
+        
+        // If there are filters, use the previous method
+        return await AllTransactions(page, perPage, filters);
+        
+    } catch (error) {
+        console.error('Error fetching transactions with real pagination:', error);
+        return { results: [], totalCount: 0, pageNumber: page, perPage, totalPages: 0, hasMore: false };
+    }
+}
+
+// New function to get total transaction count
+// Cache para el conteo total de transacciones
+let totalTransactionCountCache: { count: number; timestamp: number } | null = null;
+const CACHE_DURATION = 30000; // 30 segundos
+
+export async function getTotalTransactionCount(): Promise<number> {
+    try {
+        // Verificar cache
+        if (totalTransactionCountCache && 
+            (Date.now() - totalTransactionCountCache.timestamp) < CACHE_DURATION) {
+            return totalTransactionCountCache.count;
+        }
+        
+        // Get information from the latest block to know the total number of transactions
+        const latestBlocksResponse = await Blocks(1, 0);
+        const latestBlock = latestBlocksResponse?.results?.[0] || latestBlocksResponse?.blocks?.[0];
+        
+        let totalCount = 0;
+        
+        if (latestBlock?.blockHeader?.totalTxs) {
+            totalCount = latestBlock.blockHeader.totalTxs;
+        } else {
+            // Fallback: get transactions from multiple pages of blocks
+            let currentPage = 1;
+            const maxPages = 10; // Limit to avoid too many requests
+            
+            while (currentPage <= maxPages) {
+                const blocksResponse = await Blocks(currentPage, 0);
+                const blocks = blocksResponse?.results || blocksResponse?.blocks || [];
+                
+                if (!Array.isArray(blocks) || blocks.length === 0) break;
+                
+                for (const block of blocks) {
+                    if (block.transactions && Array.isArray(block.transactions)) {
+                        totalCount += block.transactions.length;
+                    }
+                }
+                
+                currentPage++;
+            }
+        }
+        
+        // Actualizar cache
+        totalTransactionCountCache = {
+            count: totalCount,
+            timestamp: Date.now()
+        };
+        
+        return totalCount;
+    } catch (error) {
+        console.error('Error getting total transaction count:', error);
+        return totalTransactionCountCache?.count || 0;
+    }
+}
+
+// new function to get transactions from multiple blocks
+export async function AllTransactions(page: number, perPage: number = 10, filters?: {
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+    status?: string;
+    address?: string;
+    minAmount?: number;
+    maxAmount?: number;
+}) {
+    try {
+        // Obtener el conteo total de transacciones
+        const totalTransactionCount = await getTotalTransactionCount();
+        
+        // Calcular cuántos bloques necesitamos obtener para cubrir la paginación
+        // Asumimos un promedio de transacciones por bloque para optimizar
+        const estimatedTxsPerBlock = 1; // Ajustar según la realidad de tu blockchain
+        const blocksNeeded = Math.ceil((page * perPage) / estimatedTxsPerBlock) + 5; // Buffer extra
+        
+        // Obtener múltiples páginas de bloques para asegurar suficientes transacciones
+        let allTransactions: any[] = [];
+        let currentBlockPage = 1;
+        const maxBlockPages = Math.min(blocksNeeded, 20); // Limitar para rendimiento
+        
+        while (currentBlockPage <= maxBlockPages && allTransactions.length < (page * perPage)) {
+            const blocksResponse = await Blocks(currentBlockPage, 0);
+            const blocks = blocksResponse?.results || blocksResponse?.blocks || blocksResponse?.list || [];
+            
+            if (!Array.isArray(blocks) || blocks.length === 0) break;
+
+            for (const block of blocks) {
+                if (block.transactions && Array.isArray(block.transactions)) {
+                    // add block information to each transaction
+                    const blockTransactions = block.transactions.map((tx: any) => ({
+                        ...tx,
+                        blockHeight: block.blockHeader?.height || block.height,
+                        blockHash: block.blockHeader?.hash || block.hash,
+                        blockTime: block.blockHeader?.time || block.time,
+                        blockNumber: block.blockHeader?.height || block.height
+                    }));
+                    allTransactions = allTransactions.concat(blockTransactions);
+                }
+            }
+            
+            currentBlockPage++;
+        }
+
+        // apply filters if provided
+        if (filters) {
+            allTransactions = allTransactions.filter(tx => {
+                // Filtro por tipo
+                if (filters.type && filters.type !== 'All Types') {
+                    const txType = tx.messageType || tx.type || 'send';
+                    if (txType.toLowerCase() !== filters.type.toLowerCase()) {
+                        return false;
+                    }
+                }
+
+                // filter by address (sender or recipient)
+                if (filters.address) {
+                    const address = filters.address.toLowerCase();
+                    const sender = (tx.sender || tx.from || '').toLowerCase();
+                    const recipient = (tx.recipient || tx.to || '').toLowerCase();
+                    const hash = (tx.txHash || tx.hash || '').toLowerCase();
+
+                    if (!sender.includes(address) && !recipient.includes(address) && !hash.includes(address)) {
+                        return false;
+                    }
+                }
+
+                // filter by date range
+                if (filters.fromDate || filters.toDate) {
+                    const txTime = tx.blockTime || tx.time || tx.timestamp;
+                    if (txTime) {
+                        const txDate = new Date(txTime > 1e12 ? txTime / 1000 : txTime);
+
+                        if (filters.fromDate) {
+                            const fromDate = new Date(filters.fromDate);
+                            if (txDate < fromDate) return false;
+                        }
+
+                        if (filters.toDate) {
+                            const toDate = new Date(filters.toDate);
+                            toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+                            if (txDate > toDate) return false;
+                        }
+                    }
+                }
+
+                // filter by amount range
+                if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
+                    const amount = tx.amount || tx.value || 0;
+
+                    if (filters.minAmount !== undefined && amount < filters.minAmount) {
+                        return false;
+                    }
+
+                    if (filters.maxAmount !== undefined && amount > filters.maxAmount) {
+                        return false;
+                    }
+                }
+
+                // filter by status
+                if (filters.status && filters.status !== 'all') {
+                    const txStatus = tx.status || 'success';
+                    if (txStatus !== filters.status) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+        }
+
+        // Ordenar por tiempo (más recientes primero)
+        allTransactions.sort((a, b) => {
+            const timeA = a.blockTime || a.time || a.timestamp || 0;
+            const timeB = b.blockTime || b.time || b.timestamp || 0;
+            return timeB - timeA;
+        });
+
+        // Aplicar paginación
+        const startIndex = (page - 1) * perPage;
+        const endIndex = startIndex + perPage;
+        const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
+
+        // Usar el conteo total real si no hay filtros, sino usar el conteo filtrado
+        const finalTotalCount = filters ? allTransactions.length : totalTransactionCount;
+
+        return {
+            results: paginatedTransactions,
+            totalCount: finalTotalCount,
+            pageNumber: page,
+            perPage: perPage,
+            totalPages: Math.ceil(finalTotalCount / perPage),
+            hasMore: endIndex < finalTotalCount
+        };
+
+    } catch (error) {
+        console.error('Error fetching all transactions:', error);
+        return { results: [], totalCount: 0, pageNumber: page, perPage, totalPages: 0, hasMore: false };
+    }
+}
+
 export function Accounts(page: number, _: number) {
     return POST(rpcURL, pageHeightReq(page, 0), accountsPath);
 }
@@ -136,7 +413,7 @@ export function Account(height: number, address: string) {
 }
 
 export async function AccountWithTxs(height: number, address: string, page: number) {
-    let result: any = {};
+    const result: any = {};
     result.account = await Account(height, address);
     result.sent_transactions = await TransactionsBySender(page, address);
     result.rec_transactions = await TransactionsByRec(page, address);
@@ -226,7 +503,7 @@ export async function getModalData(query: string | number, page: number) {
 }
 
 export async function getCardData() {
-    let cardData: any = {};
+    const cardData: any = {};
     cardData.blocks = await Blocks(1, 0);
     cardData.canopyCommittee = await Committee(1, chainId);
     cardData.supply = await Supply(0, 0);

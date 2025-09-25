@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
     Blocks,
     Transactions,
+    AllTransactions,
+    getTransactionsWithRealPagination,
     Accounts,
     Validators,
     Committee,
@@ -29,6 +31,8 @@ import {
 export const queryKeys = {
     blocks: (page: number) => ['blocks', page],
     transactions: (page: number, height: number) => ['transactions', page, height],
+    allTransactions: (page: number, perPage: number, filters?: any) => ['allTransactions', page, perPage, filters],
+    realPaginationTransactions: (page: number, perPage: number, filters?: any) => ['realPaginationTransactions', page, perPage, filters],
     accounts: (page: number) => ['accounts', page],
     validators: (page: number) => ['validators', page],
     committee: (page: number, chainId: number) => ['committee', page, chainId],
@@ -67,6 +71,42 @@ export const useTransactions = (page: number, height: number = 0) => {
         queryKey: queryKeys.transactions(page, height),
         queryFn: () => Transactions(page, height),
         staleTime: 30000,
+    });
+};
+
+// Hook para todas las transacciones con filtros
+export const useAllTransactions = (page: number, perPage: number = 10, filters?: {
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+    status?: string;
+    address?: string;
+    minAmount?: number;
+    maxAmount?: number;
+}) => {
+    return useQuery({
+        queryKey: queryKeys.allTransactions(page, perPage, filters),
+        queryFn: () => AllTransactions(page, perPage, filters),
+        staleTime: 30000,
+        enabled: true,
+    });
+};
+
+// Hook para transacciones con paginación real (recomendado)
+export const useTransactionsWithRealPagination = (page: number, perPage: number = 10, filters?: {
+    type?: string;
+    fromDate?: string;
+    toDate?: string;
+    status?: string;
+    address?: string;
+    minAmount?: number;
+    maxAmount?: number;
+}) => {
+    return useQuery({
+        queryKey: queryKeys.realPaginationTransactions(page, perPage, filters),
+        queryFn: () => getTransactionsWithRealPagination(page, perPage, filters),
+        staleTime: 30000,
+        enabled: true,
     });
 };
 
