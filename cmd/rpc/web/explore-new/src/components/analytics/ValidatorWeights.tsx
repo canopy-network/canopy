@@ -1,6 +1,5 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import AnimatedNumber from '../AnimatedNumber'
 
 interface ValidatorWeightsProps {
     validatorsData: any
@@ -8,57 +7,82 @@ interface ValidatorWeightsProps {
 }
 
 const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loading }) => {
-    // Calculate validator efficiency distribution
-    const calculateEfficiencyDistribution = () => {
-        if (!validatorsData?.results) {
-            return [
-                { label: 'High Efficiency', value: 65, color: '#4ade80' },
-                { label: 'Medium Efficiency', value: 25, color: '#3b82f6' },
-                { label: 'Low Efficiency', value: 8, color: '#f59e0b' },
-                { label: 'Very Low', value: 2, color: '#ef4444' }
-            ]
+    // Calculate real validator distribution based on actual data
+    const calculateValidatorDistribution = () => {
+        if (!validatorsData?.results || !Array.isArray(validatorsData.results)) {
+            return []
         }
 
         const validators = validatorsData.results
-        const totalStake = validators.reduce((sum: number, v: any) => sum + (v.stakedAmount || 0), 0)
+        const totalValidators = validators.length
 
-        // Simulate distribution based on stake
-        const highEfficiency = validators.filter((v: any) => (v.stakedAmount || 0) > totalStake * 0.1).length
-        const mediumEfficiency = validators.filter((v: any) => {
-            const stake = v.stakedAmount || 0
-            return stake > totalStake * 0.05 && stake <= totalStake * 0.1
-        }).length
-        const lowEfficiency = validators.filter((v: any) => {
-            const stake = v.stakedAmount || 0
-            return stake > totalStake * 0.01 && stake <= totalStake * 0.05
-        }).length
-        const veryLow = validators.length - highEfficiency - mediumEfficiency - lowEfficiency
+        if (totalValidators === 0) {
+            return []
+        }
 
-        return [
-            {
-                label: 'High Efficiency',
-                value: Math.round((highEfficiency / validators.length) * 100),
-                color: '#4ADE80'
-            },
-            {
-                label: 'Medium Efficiency',
-                value: Math.round((mediumEfficiency / validators.length) * 100),
-                color: '#3b82f6'
-            },
-            {
-                label: 'Low Efficiency',
-                value: Math.round((lowEfficiency / validators.length) * 100),
-                color: '#f59e0b'
-            },
-            {
-                label: 'Very Low',
-                value: Math.round((veryLow / validators.length) * 100),
-                color: '#ef4444'
-            }
-        ]
+        // Categorize validators based on real data
+        const activeValidators = validators.filter((v: any) => 
+            !v.unstakingHeight || v.unstakingHeight === 0
+        )
+        const pausedValidators = validators.filter((v: any) => 
+            v.maxPausedHeight && v.maxPausedHeight > 0
+        )
+        const unstakingValidators = validators.filter((v: any) => 
+            v.unstakingHeight && v.unstakingHeight > 0
+        )
+        const delegateValidators = validators.filter((v: any) => 
+            v.delegate === true
+        )
+
+        // Calculate percentages
+        const activePercent = Math.round((activeValidators.length / totalValidators) * 100)
+        const pausedPercent = Math.round((pausedValidators.length / totalValidators) * 100)
+        const unstakingPercent = Math.round((unstakingValidators.length / totalValidators) * 100)
+        const delegatePercent = Math.round((delegateValidators.length / totalValidators) * 100)
+
+        // Create distribution array with real data
+        const distribution = []
+        
+        if (activePercent > 0) {
+            distribution.push({
+                label: 'Active',
+                value: activePercent,
+                color: '#4ADE80',
+                count: activeValidators.length
+            })
+        }
+        
+        if (delegatePercent > 0) {
+            distribution.push({
+                label: 'Delegates',
+                value: delegatePercent,
+                color: '#3b82f6',
+                count: delegateValidators.length
+            })
+        }
+        
+        if (pausedPercent > 0) {
+            distribution.push({
+                label: 'Paused',
+                value: pausedPercent,
+                color: '#f59e0b',
+                count: pausedValidators.length
+            })
+        }
+        
+        if (unstakingPercent > 0) {
+            distribution.push({
+                label: 'Unstaking',
+                value: unstakingPercent,
+                color: '#ef4444',
+                count: unstakingValidators.length
+            })
+        }
+
+        return distribution
     }
 
-    const efficiencyData = calculateEfficiencyDistribution()
+    const validatorData = calculateValidatorDistribution()
 
     if (loading) {
         return (
@@ -71,6 +95,24 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
         )
     }
 
+    // If no real data, show empty state
+    if (validatorData.length === 0) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.4 }}
+                className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            >
+                <h3 className="text-lg font-semibold text-white mb-1">Validator Weights</h3>
+                <p className="text-sm text-gray-400 mb-4">Distribution by status</p>
+                <div className="h-32 flex items-center justify-center">
+                    <p className="text-gray-500 text-sm">No validator data available</p>
+                </div>
+            </motion.div>
+        )
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -79,17 +121,17 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
             className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
         >
             <h3 className="text-lg font-semibold text-white mb-1">Validator Weights</h3>
-            <p className="text-sm text-gray-400 mb-4">Distribution by efficiency</p>
+            <p className="text-sm text-gray-400 mb-4">Distribution by status</p>
 
             <div className="flex items-center justify-center">
                 <div className="relative w-48 h-48">
                     <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
-                        {efficiencyData.map((segment, index) => {
+                        {validatorData.map((segment, index) => {
                             const radius = 40
                             const circumference = 2 * Math.PI * radius
                             const strokeDasharray = circumference
                             const strokeDashoffset = circumference - (segment.value / 100) * circumference
-                            const rotation = efficiencyData.slice(0, index).reduce((sum, s) => sum + (s.value / 100) * 360, 0)
+                            const rotation = validatorData.slice(0, index).reduce((sum, s) => sum + (s.value / 100) * 360, 0)
 
                             return (
                                 <g key={segment.label}>
@@ -118,7 +160,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                                         transform={`rotate(${rotation} 50 50)`}
                                         className="cursor-pointer"
                                     >
-                                        <title>{segment.label}: {segment.value}%</title>
+                                        <title>{segment.label}: {segment.value}% ({segment.count} validators)</title>
                                     </circle>
                                 </g>
                             )
@@ -127,6 +169,15 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                 </div>
             </div>
 
+            {/* Legend */}
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                {validatorData.map((segment, index) => (
+                    <div key={index} className="flex items-center">
+                        <div className="w-3 h-3 rounded mr-2" style={{ backgroundColor: segment.color }}></div>
+                        <span className="text-gray-400">{segment.label} ({segment.count})</span>
+                    </div>
+                ))}
+            </div>
         </motion.div>
     )
 }

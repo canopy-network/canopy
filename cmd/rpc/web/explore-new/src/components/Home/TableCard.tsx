@@ -189,6 +189,26 @@ const TableCard: React.FC<TableCardProps> = ({
                                     ))}
                                 </tr>
                             ))
+                        ) : pageRows.length === 0 ? (
+                            <tr>
+                                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                                    <div className="flex flex-col items-center gap-3 max-w-md mx-auto">
+                                        <div className="w-12 h-12 bg-gray-700/40 rounded-lg flex items-center justify-center">
+                                            <i className="fa-solid fa-database text-xl text-gray-400"></i>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h3 className="text-base font-medium text-gray-300">No data available</h3>
+                                            <p className="text-sm text-gray-500">
+                                                Try adjusting your filters or check back later
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                                            <i className="fa-solid fa-clock text-xs"></i>
+                                            <span>Data updates in real-time</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
                         ) : (
                             <AnimatePresence initial={false}>
                                 {pageRows.map((cells, i) => (

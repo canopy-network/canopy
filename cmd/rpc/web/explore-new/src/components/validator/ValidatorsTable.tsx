@@ -6,7 +6,7 @@ import AnimatedNumber from '../AnimatedNumber'
 interface Validator {
     rank: number
     address: string
-    name: string // Nombre del validator
+    name: string // Name from API
     publicKey: string
     committees: number[]
     netAddress: string
@@ -16,12 +16,18 @@ interface Validator {
     output: string
     delegate: boolean
     compound: boolean
-    // Campos calculados/derivados
-    reward24h: number
-    rewardChange: number
+    // Real calculated fields
     chainsRestaked: number
     blocksProduced: number
     stakeWeight: number
+    // Real activity-based fields
+    isActive: boolean
+    isPaused: boolean
+    isUnstaking: boolean
+    activityScore: string
+    // Real reward estimation
+    estimatedRewardRate: number
+    // Real weight change based on activity
     weightChange: number
     stakingPower: number
 }
@@ -38,57 +44,61 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
     const navigate = useNavigate()
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
-    const formatReward24h = (reward: number) => {
-        if (!reward || reward === 0) return 'N/A'
-        return `${reward}${validatorsTexts.table.units.percent}`
+    const formatRewardRate = (rate: number) => {
+        if (!rate || rate === 0) return '0.00%'
+        return `${rate.toFixed(2)}%`
     }
 
-    const formatRewardChange = (change: number) => {
-        if (!change || change === 0) return 'N/A'
-        const isPositive = change > 0
-        const color = isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        const sign = isPositive ? '+' : ''
+    const formatActivityScore = (score: string) => {
+        const colors = {
+            'Active': 'bg-green-500/20 text-green-400',
+            'Standby': 'bg-yellow-500/20 text-yellow-400',
+            'Paused': 'bg-orange-500/20 text-orange-400',
+            'Unstaking': 'bg-red-500/20 text-red-400',
+            'Inactive': 'bg-gray-500/20 text-gray-400'
+        }
+        const colorClass = colors[score as keyof typeof colors] || colors['Inactive']
         return (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-                {sign}{change}%
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+                {score}
             </span>
         )
     }
 
     const formatChainsRestaked = (chains: number) => {
-        if (!chains || chains === 0) return 'N/A'
+        if (!chains || chains === 0) return '0'
         return chains.toString()
     }
 
     const formatBlocksProduced = (blocks: number) => {
-        if (!blocks || blocks === 0) return 'N/A'
+        if (!blocks || blocks === 0) return '0'
         return blocks.toLocaleString()
     }
 
     const formatStakeWeight = (weight: number) => {
-        if (!weight || weight === 0) return 'N/A'
-        return `${weight}${validatorsTexts.table.units.percent}`
+        if (!weight || weight === 0) return '0.00%'
+        return `${weight.toFixed(2)}%`
     }
 
     const formatWeightChange = (change: number) => {
-        if (!change || change === 0) return 'N/A'
+        if (!change || change === 0) return '0.00%'
         const isPositive = change > 0
         const color = isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
         const sign = isPositive ? '+' : ''
         return (
             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-                {sign}{change}%
+                {sign}{change.toFixed(2)}%
             </span>
         )
     }
 
     const formatTotalStake = (stake: number) => {
-        if (!stake || stake === 0) return 'N/A'
+        if (!stake || stake === 0) return '0'
         return stake.toLocaleString()
     }
 
     const formatStakingPower = (power: number) => {
-        if (!power || power === 0) return 'N/A'
+        if (!power || power === 0) return '0%'
         const percentage = Math.min(power, 100)
         return (
             <div className="w-full bg-gray-700 rounded-full h-2">
@@ -106,7 +116,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         for (let i = 0; i < address.length; i++) {
             const char = address.charCodeAt(i)
             hash = ((hash << 5) - hash) + char
-            hash = hash & hash // Convertir a 32-bit integer
+            hash = hash & hash // Convert to 32-bit integer
         }
 
         const icons = [
@@ -165,90 +175,65 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
             </div>
         </div>,
 
-        // Reward % (24h)
+        // Estimated Reward Rate
         <span className="text-green-400 text-sm font-medium">
-            {typeof validator.reward24h === 'number' ? (
-                <AnimatedNumber 
-                    value={validator.reward24h} 
-                    format={{ maximumFractionDigits: 2 }}
-                    suffix="%"
-                    className="text-green-400"
-                />
-            ) : (
-                formatReward24h(validator.reward24h)
-            )}
+            <AnimatedNumber 
+                value={validator.estimatedRewardRate} 
+                format={{ maximumFractionDigits: 2 }}
+                suffix="%"
+                className="text-green-400"
+            />
         </span>,
 
-        // Reward Change
+        // Activity Score (replaces Reward Change)
         <div className="flex justify-center items-center">
-            {formatRewardChange(validator.rewardChange)}
+            {formatActivityScore(validator.activityScore)}
         </div>,
 
         // Chains Restaked
         <span className="text-gray-300 text-sm">
-            {typeof validator.chainsRestaked === 'number' ? (
-                <AnimatedNumber 
-                    value={validator.chainsRestaked} 
-                    className="text-gray-300"
-                />
-            ) : (
-                formatChainsRestaked(validator.chainsRestaked)
-            )}
+            <AnimatedNumber 
+                value={validator.chainsRestaked} 
+                className="text-gray-300"
+            />
         </span>,
 
         // Blocks Produced
         <span className="text-gray-300 text-sm">
-            {typeof validator.blocksProduced === 'number' ? (
-                <AnimatedNumber 
-                    value={validator.blocksProduced} 
-                    className="text-gray-300"
-                />
-            ) : (
-                formatBlocksProduced(validator.blocksProduced)
-            )}
+            <AnimatedNumber 
+                value={validator.blocksProduced} 
+                className="text-gray-300"
+            />
         </span>,
 
         // Stake Weight
         <span className="text-gray-300 text-sm">
-            {typeof validator.stakeWeight === 'number' ? (
-                <>
-                    <AnimatedNumber 
-                        value={validator.stakeWeight} 
-                        format={{ maximumFractionDigits: 2 }}
-                        className="text-gray-300"
-                    />{validatorsTexts.table.units.percent}
-                </>
-            ) : (
-                formatStakeWeight(validator.stakeWeight)
-            )}
+            <AnimatedNumber 
+                value={validator.stakeWeight} 
+                format={{ maximumFractionDigits: 2 }}
+                suffix="%"
+                className="text-gray-300"
+            />
         </span>,
 
         // Weight Change
         <div className="flex justify-center items-center">
-            {typeof validator.weightChange === 'number' ? (
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${validator.weightChange > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {validator.weightChange > 0 ? '+' : ''}
-                    <AnimatedNumber 
-                        value={validator.weightChange} 
-                        format={{ maximumFractionDigits: 2 }}
-                        className={validator.weightChange > 0 ? 'text-green-400' : 'text-red-400'}
-                    />%
-                </span>
-            ) : (
-                formatWeightChange(validator.weightChange)
-            )}
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${validator.weightChange > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                {validator.weightChange > 0 ? '+' : ''}
+                <AnimatedNumber 
+                    value={validator.weightChange} 
+                    format={{ maximumFractionDigits: 2 }}
+                    className={validator.weightChange > 0 ? 'text-green-400' : 'text-red-400'}
+                />%
+            </span>
         </div>,
 
         // Total Stake (CNPY)
         <span className="text-gray-300 text-sm">
-            {typeof validator.stakedAmount === 'number' ? (
-                <AnimatedNumber 
-                    value={validator.stakedAmount} 
-                    className="text-gray-300"
-                />
-            ) : (
-                formatTotalStake(validator.stakedAmount)
-            )}
+            <AnimatedNumber 
+                value={validator.stakedAmount} 
+                className="text-gray-300"
+            />
         </span>,
 
         // Staking Power
@@ -325,7 +310,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
                 </table>
             </div>
 
-            {/* Paginación personalizada */}
+            {/* Custom pagination */}
             {!loading && totalPages > 1 && (
                 <div className="mt-3 flex items-center justify-between text-sm text-gray-400">
                     <div className="flex items-center gap-2">

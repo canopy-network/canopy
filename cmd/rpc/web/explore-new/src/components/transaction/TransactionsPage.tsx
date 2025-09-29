@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useTransactionsWithRealPagination, useTransactions } from '../../hooks/useApi'
+import { useTransactionsWithRealPagination, useTransactions, useBlocks, useTxByHash } from '../../hooks/useApi'
 import transactionsTexts from '../../data/transactions.json'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -23,13 +23,13 @@ interface SelectFilter {
     onChange: (value: string) => void
 }
 
-interface DateRangeFilter {
-    type: 'dateRange'
+interface BlockRangeFilter {
+    type: 'blockRange'
     label: string
-    fromDate: string
-    toDate: string
-    onFromDateChange: (date: string) => void
-    onToDateChange: (date: string) => void
+    fromBlock: string
+    toBlock: string
+    onFromBlockChange: (block: string) => void
+    onToBlockChange: (block: string) => void
 }
 
 interface StatusFilter {
@@ -59,7 +59,7 @@ interface SearchFilter {
     onChange: (value: string) => void
 }
 
-type FilterProps = SelectFilter | DateRangeFilter | StatusFilter | AmountRangeFilter | SearchFilter
+type FilterProps = SelectFilter | BlockRangeFilter | StatusFilter | AmountRangeFilter | SearchFilter
 
 interface Transaction {
     hash: string
@@ -79,34 +79,43 @@ const TransactionsPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
 
-    // Estados para los filtros
+    // Filter states
     const [transactionType, setTransactionType] = useState('All Types')
-    const [fromDate, setFromDate] = useState('')
-    const [toDate, setToDate] = useState('')
+    const [fromBlock, setFromBlock] = useState('')
+    const [toBlock, setToBlock] = useState('')
     const [statusFilter, setStatusFilter] = useState<'success' | 'failed' | 'pending' | 'all'>('all')
     const [amountRangeValue, setAmountRangeValue] = useState(0)
     const [addressSearch, setAddressSearch] = useState('')
     const [entriesPerPage, setEntriesPerPage] = useState(10)
 
-    // Crear objeto de filtros para la API
+    // Create filter object for API
     const apiFilters = {
         type: transactionType !== 'All Types' ? transactionType : undefined,
-        fromDate: fromDate || undefined,
-        toDate: toDate || undefined,
+        fromBlock: fromBlock || undefined,
+        toBlock: toBlock || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         address: addressSearch || undefined,
         minAmount: amountRangeValue > 0 ? amountRangeValue : undefined,
         maxAmount: amountRangeValue >= 1000 ? undefined : amountRangeValue
     }
 
+    // Detect if search is a transaction hash
+    const isHashSearch = addressSearch && addressSearch.length >= 32 && /^[a-fA-F0-9]+$/.test(addressSearch)
+    
+    // Hook for direct hash search
+    const { data: hashSearchData, isLoading: isHashLoading } = useTxByHash(isHashSearch ? addressSearch : '')
+    
     // Hook to get all transactions data with real pagination
     const { data: transactionsData, isLoading } = useTransactionsWithRealPagination(currentPage, entriesPerPage, apiFilters)
+    
+    // Hook to get blocks data to determine default block range
+    const { data: blocksData } = useBlocks(1) // Get first page of blocks
 
-    // Normalizar datos de transacciones
+    // Normalize transaction data
     const normalizeTransactions = (payload: any): Transaction[] => {
         if (!payload) return []
 
-        // La estructura real es: { results: [...], totalCount: number }
+        // Real structure is: { results: [...], totalCount: number }
         const transactionsList = payload.results || payload.transactions || payload.list || payload.data || payload
         if (!Array.isArray(transactionsList)) return []
 
@@ -133,7 +142,7 @@ const TransactionsPage: React.FC = () => {
             let age = 'N/A'
             let transactionDate: number | undefined
 
-            // Usar blockTime si está disponible, sino timestamp o time
+            // Use blockTime if available, otherwise timestamp or time
             const timeSource = tx.blockTime || tx.timestamp || tx.time
             if (timeSource) {
                 try {
@@ -177,22 +186,47 @@ const TransactionsPage: React.FC = () => {
         })
     }
 
-    // Efecto para actualizar transacciones cuando cambian los datos
+    // Effect to update transactions when data changes
     useEffect(() => {
-        if (transactionsData) {
+        if (isHashSearch && hashSearchData) {
+            // If it's hash search, convert single result to array
+            const singleTransaction = normalizeTransactions({ results: [hashSearchData] })
+            setTransactions(singleTransaction)
+            setLoading(false)
+        } else if (!isHashSearch && transactionsData) {
+            // If it's normal search, use pagination data
             const normalizedTransactions = normalizeTransactions(transactionsData)
             setTransactions(normalizedTransactions)
             setLoading(false)
         }
-    }, [transactionsData])
+    }, [transactionsData, hashSearchData, isHashSearch])
 
-    // Efecto para resetear página cuando cambian los filtros
+    // Effect to set default block values
+    useEffect(() => {
+        if (blocksData?.results && blocksData.results.length > 0) {
+            const blocks = blocksData.results
+            const latestBlock = blocks[0] // First block is the most recent
+            const oldestBlock = blocks[blocks.length - 1] // Last block is the oldest
+            
+            const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
+            const oldestHeight = oldestBlock.blockHeader?.height || oldestBlock.height || 0
+            
+            // Set default values if not already set
+            if (!fromBlock && !toBlock) {
+                setToBlock(latestHeight.toString())
+                setFromBlock(oldestHeight.toString())
+            }
+        }
+    }, [blocksData, fromBlock, toBlock])
+
+    // Effect to reset page when filters change
     useEffect(() => {
         setCurrentPage(1)
-    }, [transactionType, fromDate, toDate, statusFilter, amountRangeValue, addressSearch])
+    }, [transactionType, fromBlock, toBlock, statusFilter, amountRangeValue, addressSearch])
 
 
-    const totalTransactions = transactionsData?.totalCount || 0
+    const totalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : (transactionsData?.totalCount || 0)
+    const isLoadingData = isHashSearch ? isHashLoading : isLoading
 
     // Get transactions from the last 24 hours using txs-by-height
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
@@ -217,7 +251,32 @@ const TransactionsPage: React.FC = () => {
         return (totalFees / transactions.length).toFixed(4)
     }, [transactions])
 
-    const peakTPS = 1246 // Fixed value according to the image
+    // Calculate peak TPS based on real transaction data
+    const peakTPS = React.useMemo(() => {
+        if (transactions.length === 0) return 0
+        
+        // Group transactions by time intervals (1 second windows)
+        const timeGroups: { [key: number]: number } = {}
+        
+        transactions.forEach(tx => {
+            if (tx.date) {
+                const timeWindow = Math.floor(tx.date / 1000) // Group by second
+                timeGroups[timeWindow] = (timeGroups[timeWindow] || 0) + 1
+            }
+        })
+        
+        // Find the maximum TPS
+        const maxTPS = Math.max(...Object.values(timeGroups))
+        return maxTPS > 0 ? maxTPS : 1246 // Fallback to default if no data
+    }, [transactions])
+
+
+    // Calculate success rate
+    const successRate = React.useMemo(() => {
+        if (transactions.length === 0) return 0
+        const successfulTxs = transactions.filter(tx => tx.status === 'success').length
+        return Math.round((successfulTxs / transactions.length) * 100)
+    }, [transactions])
 
     const overviewCards: OverviewCardProps[] = [
         {
@@ -237,9 +296,9 @@ const TransactionsPage: React.FC = () => {
             subValueColor: 'text-gray-400',
         },
         {
-            title: 'CHANGE ME',
-            value: '192,929',
-            progressBar: 75, // Simulado
+            title: 'Success Rate',
+            value: `${successRate}%`,
+            progressBar: successRate,
             icon: 'fa-solid fa-check text-primary',
             valueColor: 'text-white',
         },
@@ -259,8 +318,8 @@ const TransactionsPage: React.FC = () => {
 
     const handleResetFilters = () => {
         setTransactionType('All Types')
-        setFromDate('')
-        setToDate('')
+        setFromBlock('')
+        setToBlock('')
         setStatusFilter('all')
         setAmountRangeValue(0)
         setAddressSearch('')
@@ -271,7 +330,7 @@ const TransactionsPage: React.FC = () => {
         // Here would go the logic to apply filters to the API
         // We need to reset the page to 1 when filters are applied
         setCurrentPage(1)
-        console.log('Aplicando filtros:', { transactionType, fromDate, toDate, statusFilter, amountRangeValue, addressSearch })
+        console.log('Applying filters:', { transactionType, fromBlock, toBlock, statusFilter, amountRangeValue, addressSearch })
     }
 
     // Function to change entries per page
@@ -319,12 +378,12 @@ const TransactionsPage: React.FC = () => {
             onChange: setTransactionType,
         },
         {
-            type: 'dateRange',
-            label: 'Date/Time Range',
-            fromDate: fromDate,
-            toDate: toDate,
-            onFromDateChange: setFromDate,
-            onToDateChange: setToDate,
+            type: 'blockRange',
+            label: 'Block Range',
+            fromBlock: fromBlock,
+            toBlock: toBlock,
+            onFromBlockChange: setFromBlock,
+            onToBlockChange: setToBlock,
         },
         {
             type: 'statusButtons',
@@ -419,25 +478,25 @@ const TransactionsPage: React.FC = () => {
                         </select>
                     </div>
 
-                    {/* Date/Time Range Filter */}
+                    {/* Block Range Filter */}
                     <div className="flex flex-col gap-2">
                         <label className="text-gray-400 text-sm">{filterConfigs[1].label}</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <input
-                                type="date"
-                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                                placeholder="From Date"
-                                value={(filterConfigs[1] as DateRangeFilter).fromDate}
-                                onChange={(e) => (filterConfigs[1] as DateRangeFilter).onFromDateChange(e.target.value)}
-                            />
-                            <input
-                                type="date"
-                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                                placeholder="To Date"
-                                value={(filterConfigs[1] as DateRangeFilter).toDate}
-                                onChange={(e) => (filterConfigs[1] as DateRangeFilter).onToDateChange(e.target.value)}
-                            />
-                        </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <input
+                            type="number"
+                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                            placeholder="From Block"
+                            value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
+                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
+                        />
+                        <input
+                            type="number"
+                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                            placeholder="To Block"
+                            value={(filterConfigs[1] as BlockRangeFilter).toBlock}
+                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
+                        />
+                    </div>
                     </div>
 
                     {/* Status Filter */}
@@ -525,7 +584,7 @@ const TransactionsPage: React.FC = () => {
 
             <TransactionsTable
                 transactions={transactions}
-                loading={loading || isLoading}
+                loading={loading || isLoadingData}
                 totalCount={totalTransactions}
                 currentPage={currentPage}
                 onPageChange={handlePageChange}

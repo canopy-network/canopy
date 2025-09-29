@@ -44,7 +44,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
 
     const formatAge = (timestamp: string) => {
         if (!timestamp || timestamp === 'N/A') return 'N/A'
-        
+
         try {
             let date: Date
             if (typeof timestamp === 'string') {
@@ -59,7 +59,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         } catch (error) {
             // Fallback to original age if available
         }
-        
+
         return 'N/A'
     }
 
@@ -90,8 +90,8 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
                 <i className="fa-solid fa-cube text-primary text-xs"></i>
             </div>
             <Link to={`/block/${block.height}`} className="font-mono text-primary">
-                <AnimatedNumber 
-                    value={block.height} 
+                <AnimatedNumber
+                    value={block.height}
                     className="text-primary"
                 />
             </Link>
@@ -121,8 +121,8 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         <div className="flex justify-center items-center">
             <span className={`inline-flex justify-center items-center px-2 py-1 rounded-full text-xs  font-medium ${getTransactionColor(block.transactions || 0)}`}>
                 {typeof block.transactions === 'number' ? (
-                    <AnimatedNumber 
-                        value={block.transactions} 
+                    <AnimatedNumber
+                        value={block.transactions}
                         className="text-xs"
                     />
                 ) : (
@@ -135,8 +135,8 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         <span className="text-gray-300 text-sm">
             {typeof block.gasPrice === 'number' ? (
                 <>
-                    <AnimatedNumber 
-                        value={block.gasPrice} 
+                    <AnimatedNumber
+                        value={block.gasPrice}
                         format={{ maximumFractionDigits: 4 }}
                         className="text-gray-300"
                     /> {blocksTexts.table.units.cnpy}
@@ -150,8 +150,8 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         <span className="text-gray-300 text-sm">
             {typeof block.blockTime === 'number' ? (
                 <>
-                    <AnimatedNumber 
-                        value={block.blockTime} 
+                    <AnimatedNumber
+                        value={block.blockTime}
                         format={{ maximumFractionDigits: 2 }}
                         className="text-gray-300"
                     />{blocksTexts.table.units.seconds}
@@ -226,6 +226,31 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
                                     ))}
                                 </tr>
                             ))
+                        ) : rows.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="px-2 py-8 text-center">
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="relative">
+                                            <div className="w-16 h-16 bg-gray-700/30 rounded-full flex items-center justify-center">
+                                                <i className="fa-solid fa-cube text-2xl text-gray-400"></i>
+                                            </div>
+                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-gray-600/50 rounded-full flex items-center justify-center">
+                                                <i className="fa-solid fa-search text-xs text-gray-500"></i>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h3 className="text-lg font-medium text-gray-300">No blocks found</h3>
+                                            <p className="text-sm text-gray-500 max-w-sm">
+                                                There are no blocks available at the moment. Try adjusting your filters or check back later.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                                            <i className="fa-solid fa-info-circle"></i>
+                                            <span>Blocks are generated every ~6 seconds</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
                         ) : (
                             rows.map((cells, i) => (
                                 <tr key={i} className="hover:bg-gray-800/30">

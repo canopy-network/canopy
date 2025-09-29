@@ -5,12 +5,16 @@ interface BlocksFiltersProps {
     activeFilter: string
     onFilterChange: (filter: string) => void
     totalBlocks: number
+    sortBy: string
+    onSortChange: (sort: string) => void
 }
 
 const BlocksFilters: React.FC<BlocksFiltersProps> = ({
     activeFilter,
     onFilterChange,
-    totalBlocks
+    totalBlocks,
+    sortBy,
+    onSortChange
 }) => {
     const filters = [
         { key: 'all', label: blocksTexts.filters.allBlocks },
@@ -19,11 +23,18 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
         { key: 'week', label: blocksTexts.filters.lastWeek }
     ]
 
+    const sortOptions = [
+        { key: 'height', label: 'Sort by Height' },
+        { key: 'timestamp', label: 'Sort by Time' },
+        { key: 'transactions', label: 'Sort by Transactions' },
+        { key: 'producer', label: 'Sort by Producer' }
+    ]
+
     return (
         <div className="mb-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-                <div >
+                <div>
                     <h1 className="text-3xl font-bold text-white">
                         {blocksTexts.page.title}
                     </h1>
@@ -56,10 +67,11 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                         <button
                             key={filter.key}
                             onClick={() => onFilterChange(filter.key)}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeFilter === filter.key
-                                ? 'bg-primary text-black'
-                                : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
-                                }`}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                                activeFilter === filter.key
+                                    ? 'bg-primary text-black'
+                                    : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+                            }`}
                         >
                             {filter.label}
                         </button>
@@ -69,8 +81,16 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                 {/* Sort and Filter Controls */}
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <select className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
-                            <option>{blocksTexts.table.controls.sortBy}</option>
+                        <select 
+                            value={sortBy}
+                            onChange={(e) => onSortChange(e.target.value)}
+                            className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        >
+                            {sortOptions.map((option) => (
+                                <option key={option.key} value={option.key}>
+                                    {option.label}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <button className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors">
@@ -79,7 +99,6 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                     </button>
                 </div>
             </div>
-
         </div>
     )
 }

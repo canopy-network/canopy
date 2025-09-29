@@ -23,13 +23,9 @@ interface NetworkMetrics {
 }
 
 const NetworkAnalyticsPage: React.FC = () => {
-    const [activeTimeFilter, setActiveTimeFilter] = useState('7D')
-    const [startDate, setStartDate] = useState<Date | null>(() => {
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6) // -6 to include current day
-        return sevenDaysAgo
-    })
-    const [endDate, setEndDate] = useState<Date | null>(() => new Date())
+    const [fromBlock, setFromBlock] = useState('')
+    const [toBlock, setToBlock] = useState('')
+    const [isExporting, setIsExporting] = useState(false)
     const [metrics, setMetrics] = useState<NetworkMetrics>({
         networkUptime: 99.98,
         avgTransactionFee: 0.0023,
@@ -41,12 +37,6 @@ const NetworkAnalyticsPage: React.FC = () => {
         networkVersion: 'v1.2.4'
     })
 
-    const handleDateChange = (dates: [Date | null, Date | null]) => {
-        const [start, end] = dates
-        setStartDate(start)
-        setEndDate(end)
-    }
-
     // Hooks para obtener datos REALES
     const { data: cardData, isLoading: cardLoading } = useCardData()
     const { data: supplyData, isLoading: supplyLoading } = useSupply()
@@ -56,6 +46,22 @@ const NetworkAnalyticsPage: React.FC = () => {
     const { data: transactionsData, isLoading: transactionsLoading } = useTransactionsWithRealPagination(1, 50) // Get more transactions for analytics
     const { data: pendingData, isLoading: pendingLoading } = usePending(1)
     const { data: paramsData, isLoading: paramsLoading } = useParams()
+
+    // Set default block range values based on current blocks (max 100 blocks)
+    useEffect(() => {
+        if (blocksData?.results && blocksData.results.length > 0) {
+            const blocks = blocksData.results
+            const latestBlock = blocks[0] // First block is the most recent
+            const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
+            
+            // Set default values if not already set (max 100 blocks)
+            if (!fromBlock && !toBlock) {
+                const maxBlocks = Math.min(100, latestHeight + 1) // Don't exceed available blocks
+                setToBlock(latestHeight.toString())
+                setFromBlock(Math.max(0, latestHeight - maxBlocks + 1).toString())
+            }
+        }
+    }, [blocksData, fromBlock, toBlock])
 
     // Update metrics when REAL data changes
     useEffect(() => {
@@ -107,13 +113,176 @@ const NetworkAnalyticsPage: React.FC = () => {
         return () => clearInterval(interval)
     }, [])
 
-    const handleTimeFilterChange = (filter: string) => {
-        setActiveTimeFilter(filter)
-    }
+    // Export analytics data to Excel
+    const handleExportData = async () => {
+        setIsExporting(true)
+        
+        try {
+            // Check if we have any data to export
+            if (!validatorsData && !supplyData && !blocksData && !transactionsData && !pendingData && !paramsData) {
+                console.warn('No data available for export')
+                alert('No data available for export. Please wait for data to load.')
+                return
+            }
+            
+            const exportData = []
 
-    const handleExportData = () => {
-        // Implement data export
-        console.log('Exportando datos de analytics...')
+        // 1. Key Metrics
+        exportData.push(['KEY METRICS', '', '', ''])
+        exportData.push(['Metric', 'Value', 'Unit', 'Source'])
+        exportData.push(['Network Uptime', metrics.networkUptime.toFixed(2), '%', 'Calculated'])
+        exportData.push(['Average Transaction Fee', metrics.avgTransactionFee.toFixed(6), 'CNPY', 'API (params.fee.sendFee)'])
+        exportData.push(['Total Value Locked', metrics.totalValueLocked.toFixed(2), 'M CNPY', 'API (supply.staked)'])
+        exportData.push(['Active Validators', metrics.validatorCount, 'Count', 'API (validators.results.length)'])
+        exportData.push(['Block Time', metrics.blockTime.toFixed(1), 'Seconds', 'Calculated from blocks'])
+        exportData.push(['Block Size', metrics.blockSize.toFixed(2), 'MB', 'API (params.consensus.blockSize)'])
+        exportData.push(['Pending Transactions', metrics.pendingTransactions, 'Count', 'API (pending.totalCount)'])
+        exportData.push(['Network Version', metrics.networkVersion, 'Version', 'API (params.consensus.protocolVersion)'])
+        exportData.push(['', '', '', ''])
+
+        // 2. Validators Data
+        if (validatorsData?.results) {
+            exportData.push(['VALIDATORS DATA', '', '', ''])
+            exportData.push(['Address', 'Staked Amount', 'Chains', 'Delegate', 'Unstaking Height', 'Max Paused Height'])
+            validatorsData.results.forEach((validator: any) => {
+                exportData.push([
+                    validator.address || 'N/A',
+                    validator.stakedAmount || 0,
+                    Array.isArray(validator.committees) ? validator.committees.length : 0,
+                    validator.delegate ? 'Yes' : 'No',
+                    validator.unstakingHeight || 0,
+                    validator.maxPausedHeight || 0
+                ])
+            })
+            exportData.push(['', '', '', '', '', ''])
+        }
+
+        // 3. Supply Data
+        if (supplyData) {
+            exportData.push(['SUPPLY DATA', '', '', ''])
+            exportData.push(['Metric', 'Value', 'Unit', 'Source'])
+            exportData.push(['Total Supply', supplyData.totalSupply || 0, 'CNPY', 'API'])
+            exportData.push(['Staked Supply', supplyData.staked || supplyData.stakedSupply || 0, 'CNPY', 'API'])
+            exportData.push(['Circulating Supply', supplyData.circulatingSupply || 0, 'CNPY', 'API'])
+            exportData.push(['', '', '', ''])
+        }
+
+        // 4. Fee Parameters
+        if (paramsData?.fee) {
+            exportData.push(['FEE PARAMETERS', '', '', ''])
+            exportData.push(['Fee Type', 'Value', 'Unit', 'Source'])
+            exportData.push(['Send Fee', paramsData.fee.sendFee || 0, 'Micro CNPY', 'API'])
+            exportData.push(['Stake Fee', paramsData.fee.stakeFee || 0, 'Micro CNPY', 'API'])
+            exportData.push(['Edit Stake Fee', paramsData.fee.editStakeFee || 0, 'Micro CNPY', 'API'])
+            exportData.push(['Unstake Fee', paramsData.fee.unstakeFee || 0, 'Micro CNPY', 'API'])
+            exportData.push(['Governance Fee', paramsData.fee.governanceFee || 0, 'Micro CNPY', 'API'])
+            exportData.push(['', '', '', ''])
+        }
+
+        // 5. Recent Blocks (limited to 50)
+        if (blocksData?.results && blocksData.results.length > 0) {
+            exportData.push(['RECENT BLOCKS', '', '', '', '', ''])
+            exportData.push(['Height', 'Hash', 'Time', 'Proposer', 'Total Transactions', 'Block Size'])
+            blocksData.results.slice(0, 50).forEach((block: any) => {
+                const blockHeader = block.blockHeader || block
+                
+                // Validate and format timestamp
+                let formattedTime = 'N/A'
+                if (blockHeader.time && blockHeader.time > 0) {
+                    try {
+                        const timestamp = blockHeader.time / 1000000 // Convert from microseconds to milliseconds
+                        const date = new Date(timestamp)
+                        if (!isNaN(date.getTime())) {
+                            formattedTime = date.toISOString()
+                        }
+                    } catch (error) {
+                        console.warn('Invalid timestamp for block:', blockHeader.height, blockHeader.time)
+                    }
+                }
+                
+                exportData.push([
+                    blockHeader.height || 'N/A',
+                    blockHeader.hash || 'N/A',
+                    formattedTime,
+                    blockHeader.proposer || blockHeader.proposerAddress || 'N/A',
+                    blockHeader.totalTxs || 0,
+                    blockHeader.blockSize || 0
+                ])
+            })
+            exportData.push(['', '', '', '', '', ''])
+        }
+
+        // 6. Recent Transactions (limited to 100)
+        if (transactionsData?.results && transactionsData.results.length > 0) {
+            exportData.push(['RECENT TRANSACTIONS', '', '', '', '', ''])
+            exportData.push(['Hash', 'Message Type', 'Sender', 'Recipient', 'Amount', 'Fee', 'Time'])
+            transactionsData.results.slice(0, 100).forEach((tx: any) => {
+                // Validate and format timestamp
+                let formattedTime = 'N/A'
+                if (tx.time && tx.time > 0) {
+                    try {
+                        const timestamp = tx.time / 1000000 // Convert from microseconds to milliseconds
+                        const date = new Date(timestamp)
+                        if (!isNaN(date.getTime())) {
+                            formattedTime = date.toISOString()
+                        }
+                    } catch (error) {
+                        console.warn('Invalid timestamp for transaction:', tx.txHash || tx.hash, tx.time)
+                    }
+                }
+                
+                exportData.push([
+                    tx.txHash || tx.hash || 'N/A',
+                    tx.messageType || 'N/A',
+                    tx.sender || 'N/A',
+                    tx.recipient || tx.to || 'N/A',
+                    tx.amount || tx.value || 0,
+                    tx.fee || 0,
+                    formattedTime
+                ])
+            })
+            exportData.push(['', '', '', '', '', '', ''])
+        }
+
+        // 7. Pending Transactions
+        if (pendingData?.results && pendingData.results.length > 0) {
+            exportData.push(['PENDING TRANSACTIONS', '', '', '', '', ''])
+            exportData.push(['Hash', 'Message Type', 'Sender', 'Recipient', 'Amount', 'Fee'])
+            pendingData.results.forEach((tx: any) => {
+                exportData.push([
+                    tx.txHash || tx.hash || 'N/A',
+                    tx.messageType || 'N/A',
+                    tx.sender || 'N/A',
+                    tx.recipient || tx.to || 'N/A',
+                    tx.amount || tx.value || 0,
+                    tx.fee || 0
+                ])
+            })
+        }
+
+        // Create CSV content
+        const csvContent = exportData.map(row => 
+            row.map(cell => `"${cell}"`).join(',')
+        ).join('\n')
+
+            // Create and download file
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+            const link = document.createElement('a')
+            const url = URL.createObjectURL(blob)
+            link.setAttribute('href', url)
+            link.setAttribute('download', `canopy_analytics_export_${new Date().toISOString().split('T')[0]}.csv`)
+            link.style.visibility = 'hidden'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            
+            // Clean up URL object
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error('Error exporting data:', error)
+        } finally {
+            setIsExporting(false)
+        }
     }
 
     const handleRefresh = () => {
@@ -145,27 +314,42 @@ const NetworkAnalyticsPage: React.FC = () => {
                     <div className="flex items-center space-x-4 mt-4 sm:mt-0">
                         <button
                             onClick={handleExportData}
-                            className="px-4 py-2 bg-card cursor-pointer hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
+                            disabled={isExporting}
+                            className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm transition-colors ${
+                                isExporting 
+                                    ? 'bg-gray-600/50 border-gray-500 text-gray-400 cursor-not-allowed' 
+                                    : 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600/50'
+                            }`}
                         >
-                            <i className="fas fa-file-export mr-2"></i> Export Data
+                            {isExporting ? (
+                                <>
+                                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                                    Exporting...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="fa-solid fa-download text-xs"></i>
+                                    Export Data
+                                </>
+                            )}
                         </button>
                         <button
                             onClick={handleRefresh}
-                            className="px-4 py-2 bg-primary cursor-pointer hover:bg-primary/90 text-black rounded-lg transition-colors duration-200"
+                            className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
                         >
-                            <i className="fas fa-refresh mr-2"></i> Refresh
+                            <i className="fa-solid fa-refresh text-xs"></i>
+                            Refresh
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Time Filters */}
+            {/* Block Range Filters */}
             <AnalyticsFilters
-                activeFilter={activeTimeFilter}
-                onFilterChange={handleTimeFilterChange}
-                startDate={startDate}
-                endDate={endDate}
-                onDateChange={handleDateChange}
+                fromBlock={fromBlock}
+                toBlock={toBlock}
+                onFromBlockChange={setFromBlock}
+                onToBlockChange={setToBlock}
             />
 
             {/* Analytics Grid - 3 columns layout */}
@@ -173,7 +357,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                 {/* First Column - 2 cards */}
                 <div className="space-y-6">
                     {/* Key Metrics */}
-                    <KeyMetrics metrics={metrics} loading={isLoading} />
+                    <KeyMetrics metrics={metrics} loading={isLoading} supplyData={supplyData} validatorsData={validatorsData} paramsData={paramsData} pendingData={pendingData} />
 
                     {/* Chain Status */}
                     <ChainStatus metrics={metrics} loading={isLoading} />
@@ -182,25 +366,25 @@ const NetworkAnalyticsPage: React.FC = () => {
                 {/* Second Column - 3 cards */}
                 <div className="space-y-6">
                     {/* Network Activity */}
-                    <NetworkActivity timeFilter={activeTimeFilter} loading={isLoading} blocksData={analyticsBlocksData} />
+                    <NetworkActivity fromBlock={fromBlock} toBlock={toBlock} loading={isLoading} blocksData={analyticsBlocksData} />
 
                     {/* Validator Weights */}
                     <ValidatorWeights validatorsData={validatorsData} loading={validatorsLoading} />
 
                     {/* Staking Trends */}
-                    <StakingTrends timeFilter={activeTimeFilter} loading={isLoading} />
+                    <StakingTrends fromBlock={fromBlock} toBlock={toBlock} loading={isLoading} validatorsData={validatorsData} />
                 </div>
 
                 {/* Third Column - 3 cards */}
                 <div className="space-y-6">
                     {/* Block Production Rate */}
-                    <BlockProductionRate timeFilter={activeTimeFilter} loading={isLoading} blocksData={blocksData} />
+                    <BlockProductionRate fromBlock={fromBlock} toBlock={toBlock} loading={isLoading} blocksData={blocksData} />
 
                     {/* Transaction Types */}
-                    <TransactionTypes timeFilter={activeTimeFilter} loading={isLoading} transactionsData={transactionsData} />
+                    <TransactionTypes fromBlock={fromBlock} toBlock={toBlock} loading={isLoading} transactionsData={transactionsData} />
 
                     {/* Fee Trends */}
-                    <FeeTrends timeFilter={activeTimeFilter} loading={isLoading} />
+                    <FeeTrends fromBlock={fromBlock} toBlock={toBlock} loading={isLoading} paramsData={paramsData} transactionsData={transactionsData} />
                 </div>
             </div>
         </motion.div>

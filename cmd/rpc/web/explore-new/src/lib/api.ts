@@ -34,6 +34,7 @@ const validatorPath = "/v1/query/validator";
 const paramsPath = "/v1/query/params";
 const supplyPath = "/v1/query/supply";
 const ordersPath = "/v1/query/orders";
+const orderPath = "/v1/query/order";
 const configPath = "/v1/admin/config";
 
 // HTTP Methods
@@ -107,8 +108,8 @@ function validatorsReq(page: number, height: number, committee: number) {
 }
 
 // API Calls
-export function Blocks(page: number, _: number) {
-    return POST(rpcURL, pageHeightReq(page, 0), blocksPath);
+export function Blocks(page: number, perPage: number = 10) {
+    return POST(rpcURL, JSON.stringify({ pageNumber: page, perPage: perPage }), blocksPath);
 }
 
 export function Transactions(page: number, height: number) {
@@ -462,6 +463,10 @@ export function EcoParams(chain_id: number) {
 
 export function Orders(chain_id: number) {
     return POST(rpcURL, heightAndIDRequest(0, chain_id), ordersPath);
+}
+
+export function Order(chain_id: number, order_id: string, height: number = 0) {
+    return POST(rpcURL, JSON.stringify({ chainId: chain_id, orderId: order_id, height: height }), orderPath);
 }
 
 export function Config() {

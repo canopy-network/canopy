@@ -1,12 +1,10 @@
 @import "tailwindcss";
 
-/* Tipografía base Roboto Flex (Material 3) */
+/* Global typography - DM Sans only */
 html,
 body,
 #root {
-  font-family: "Roboto Flex", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", Arial,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-family: "DM Sans", sans-serif;
 }
 
 /* Colores personalizados explícitos */

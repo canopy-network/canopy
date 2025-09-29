@@ -24,7 +24,8 @@ import {
     Config,
     getModalData,
     getCardData,
-    getTableData
+    getTableData,
+    Order
 } from '../lib/api';
 
 // Query Keys
@@ -57,10 +58,10 @@ export const queryKeys = {
 };
 
 // Hooks for Blocks
-export const useBlocks = (page: number) => {
+export const useBlocks = (page: number, perPage: number = 10) => {
     return useQuery({
         queryKey: queryKeys.blocks(page),
-        queryFn: () => Blocks(page, 0),
+        queryFn: () => Blocks(page, perPage),
         staleTime: 30000, // 30 seconds
     });
 };
@@ -262,14 +263,6 @@ export const useEcoParams = (chainId: number) => {
     });
 };
 
-// Hooks for Orders
-export const useOrders = (chainId: number) => {
-    return useQuery({
-        queryKey: queryKeys.orders(chainId),
-        queryFn: () => Orders(chainId),
-        staleTime: 30000,
-    });
-};
 
 // Hooks for Config
 export const useConfig = () => {
@@ -356,5 +349,37 @@ export const useBlocksForAnalytics = (numPages: number = 10) => {
         },
         staleTime: 60000, // Cache for 1 minute
         refetchInterval: 300000, // Refetch every 5 minutes
+    });
+};
+
+// Hook for fetching orders (swaps)
+export const useOrders = (chainId: number = 1) => {
+    return useQuery({
+        queryKey: ['orders', chainId],
+        queryFn: async () => {
+            const response = await Orders(chainId);
+            if (!response.ok) {
+                throw new Error('Failed to fetch orders');
+            }
+            return response.json();
+        },
+        staleTime: 30000, // Cache for 30 seconds
+        refetchInterval: 60000, // Refetch every minute
+    });
+};
+
+// Hook for fetching a specific order
+export const useOrder = (chainId: number, orderId: string, height: number = 0) => {
+    return useQuery({
+        queryKey: ['order', chainId, orderId, height],
+        queryFn: async () => {
+            const response = await Order(chainId, orderId, height);
+            if (!response.ok) {
+                throw new Error('Failed to fetch order');
+            }
+            return response.json();
+        },
+        enabled: !!orderId, // Only run if orderId is provided
+        staleTime: 30000, // Cache for 30 seconds
     });
 };

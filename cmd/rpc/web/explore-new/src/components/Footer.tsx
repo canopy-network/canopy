@@ -9,9 +9,7 @@ const Footer: React.FC = () => {
                 <div className="flex items-center justify-between">
                     {/* Left side - Logo and Copyright */}
                     <div className="flex items-center gap-3">
-                    <div className='w-8 h-8 bg-primary rounded-lg flex items-center justify-center'>
-                                <i className="fa-solid fa-leaf text-card text-lg"></i>
-                            </div>
+                        <Logo size={140} showText={false} />
                         <span className="text-gray-400 text-sm">
                             © {new Date().getFullYear()} Canopy Block Explorer. All rights reserved.
                         </span>

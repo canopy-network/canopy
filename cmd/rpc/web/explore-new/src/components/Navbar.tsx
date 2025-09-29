@@ -17,15 +17,15 @@ const Navbar = () => {
 
     const MENUS_BY_ROUTE: Record<string, RouteMenu> = {
         '/': {
-            title: (menuConfig as any)?.home?.title || 'Canopy',
+            title: (menuConfig as any)?.home?.title || '',
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
         '/blocks': {
-            title: 'Canopy Blocks Explorer',
+            title: 'Blocks Explorer',
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
         '/transactions': {
-            title: 'Canopy Transactions Explorer',
+            title: 'Transactions Explorer',
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
     }
@@ -76,10 +76,8 @@ const Navbar = () => {
                 <div className="flex justify-between h-16">
                     {/* Logo */}
                     <div className="flex items-center">
-                        <Link to="/" className="flex items-center space-x-2">
-                            <div className='w-8 h-8 bg-primary rounded-md flex items-center justify-center'>
-                                <i className="fa-solid fa-leaf text-card text-lg"></i>
-                            </div>
+                        <Link to="/" className="flex items-center space-x-3">
+                            <Logo size={180} showText={false} />
                             <motion.span
                                 whileHover={{ scale: 1.03 }}
                                 className="font-semibold text-white text-2xl flex items-center gap-1"

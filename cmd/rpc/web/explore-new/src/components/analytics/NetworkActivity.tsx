@@ -2,14 +2,15 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 
 interface NetworkActivityProps {
-    timeFilter: string
+    fromBlock: string
+    toBlock: string
     loading: boolean
     blocksData: any
 }
 
-const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, blocksData }) => {
-    const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; date: string } | null>(null)
-    // Use real block data to calculate transactions per day
+const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, loading, blocksData }) => {
+    const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; blockLabel: string } | null>(null)
+    // Use real block data filtered by block range
     const getTransactionData = () => {
         if (!blocksData?.results || !Array.isArray(blocksData.results)) {
             console.log('No blocks data available')
@@ -17,47 +18,32 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
         }
 
         const realBlocks = blocksData.results
-        const daysOrHours = timeFilter === '24H' ? 24 : timeFilter === '7D' ? 7 : timeFilter === '30D' ? 30 : 90
-        const dataByPeriod: number[] = new Array(daysOrHours).fill(0)
+        const fromBlockNum = parseInt(fromBlock) || 0
+        const toBlockNum = parseInt(toBlock) || 0
 
-        // Use the most recent block time as reference instead of current time
-        const mostRecentBlock = realBlocks[0] // Assuming blocks are ordered by height (newest first)
-        const mostRecentBlockTime = mostRecentBlock?.blockHeader?.time / 1000 // Convert to milliseconds
+        // Filter blocks by the specified range
+        const filteredBlocks = realBlocks.filter((block: any) => {
+            const blockHeight = block.blockHeader?.height || block.height || 0
+            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
+        })
 
-        if (!mostRecentBlockTime) {
+        if (filteredBlocks.length === 0) {
             return []
         }
 
-        const endTime = mostRecentBlockTime // Use most recent block time as reference
-
-        realBlocks.forEach((block: any) => {
-            const blockHeader = block.blockHeader
-            if (!blockHeader) return
-
-            // Convertir de microsegundos a milisegundos
-            const blockTime = blockHeader.time / 1000
-            const timeDiff = endTime - blockTime // Difference in milliseconds from end of period
-
-            let periodIndex = -1
-            if (timeFilter === '24H') {
-                const hoursDiff = Math.floor(timeDiff / (60 * 60 * 1000))
-                if (hoursDiff >= 0 && hoursDiff < daysOrHours) {
-                    periodIndex = daysOrHours - 1 - hoursDiff // 0 for oldest hour, daysOrHours-1 for most recent
-                }
-            } else { // 7D, 30D, 3M
-                const daysDiff = Math.floor(timeDiff / (24 * 60 * 60 * 1000))
-                if (daysDiff >= 0 && daysDiff < daysOrHours) {
-                    periodIndex = daysOrHours - 1 - daysDiff // 0 for oldest day, daysOrHours-1 for most recent
-                }
-            }
-
-            if (periodIndex !== -1 && periodIndex < daysOrHours) {
-                // Add the number of transactions in this block
-                dataByPeriod[periodIndex] += (blockHeader.numTxs || 0)
-            }
+        // Sort blocks by height (oldest first for proper chart display)
+        filteredBlocks.sort((a: any, b: any) => {
+            const heightA = a.blockHeader?.height || a.height || 0
+            const heightB = b.blockHeader?.height || b.height || 0
+            return heightA - heightB
         })
 
-        return dataByPeriod
+        // Create data array with transaction counts per block
+        const dataByBlock = filteredBlocks.map((block: any) => {
+            return block.transactions?.length || block.blockHeader?.numTxs || 0
+        })
+
+        return dataByBlock
     }
 
     const transactionData = getTransactionData()
@@ -66,31 +52,38 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
     const range = maxValue - minValue || 1 // Evitar división por cero
 
 
-    const getDates = (filter: string) => {
-        const today = new Date()
-        const dates: string[] = []
-
-        if (filter === '24H') {
-            // For 24 hours, show hours
-            for (let i = 23; i >= 0; i--) {
-                const date = new Date(today.getTime() - i * 60 * 60 * 1000)
-                dates.push(date.getHours().toString().padStart(2, '0') + ':00')
-            }
-        } else {
-            let numDays = 0
-            if (filter === '7D') numDays = 7
-            else if (filter === '30D') numDays = 30
-            else if (filter === '3M') numDays = 90
-
-            for (let i = numDays - 1; i >= 0; i--) {
-                const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
-                dates.push(date.toLocaleString('en-US', { month: 'short', day: 'numeric' }))
-            }
+    const getBlockLabels = () => {
+        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+            return []
         }
-        return dates
+
+        const realBlocks = blocksData.results
+        const fromBlockNum = parseInt(fromBlock) || 0
+        const toBlockNum = parseInt(toBlock) || 0
+
+        // Filter blocks by the specified range
+        const filteredBlocks = realBlocks.filter((block: any) => {
+            const blockHeight = block.blockHeader?.height || block.height || 0
+            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
+        })
+
+        // Sort blocks by height (oldest first for proper chart display)
+        filteredBlocks.sort((a: any, b: any) => {
+            const heightA = a.blockHeader?.height || a.height || 0
+            const heightB = b.blockHeader?.height || b.height || 0
+            return heightA - heightB
+        })
+
+        // Create labels with block heights
+        const blockLabels = filteredBlocks.map((block: any) => {
+            const blockHeight = block.blockHeader?.height || block.height || 0
+            return `#${blockHeight}`
+        })
+
+        return blockLabels
     }
 
-    const dateLabels = getDates(timeFilter)
+    const blockLabels = getBlockLabels()
 
     // REMOVED: No simulation flag is used anymore
 
@@ -153,7 +146,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
                         // Asegurar que x e y no sean NaN
                         const safeX = isNaN(x) ? 10 : x
                         const safeY = isNaN(y) ? 110 : y
-                        const date = dateLabels[index] || `Day ${index + 1}`
+                        const blockLabel = blockLabels[index] || `Block ${index + 1}`
                         
                         return (
                             <circle
@@ -168,7 +161,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
                                     x: safeX,
                                     y: safeY,
                                     value,
-                                    date
+                                    blockLabel
                                 })}
                                 onMouseLeave={() => setHoveredPoint(null)}
                             />
@@ -186,7 +179,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
                             transform: 'translate(-50%, -120%)'
                         }}
                     >
-                        <div className="font-semibold">{hoveredPoint.date}</div>
+                        <div className="font-semibold">{hoveredPoint.blockLabel}</div>
                         <div className="text-green-400">{hoveredPoint.value.toLocaleString()} transactions</div>
                     </div>
                 )}
@@ -200,10 +193,10 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ timeFilter, loading, 
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7 // Adjusted to show 7 days in 7D filter
-                    const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
-                    if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
+                {blockLabels.map((label, index) => {
+                    const numLabelsToShow = Math.min(7, blockLabels.length) // Show up to 7 block labels
+                    const interval = Math.floor(blockLabels.length / (numLabelsToShow - 1))
+                    if (blockLabels.length <= numLabelsToShow || index % interval === 0) {
                         return <span key={index}>{label}</span>
                     }
                     return null

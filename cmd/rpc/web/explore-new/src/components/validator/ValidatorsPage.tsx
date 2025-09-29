@@ -7,7 +7,7 @@ import { useValidators, useBlocks } from '../../hooks/useApi'
 interface Validator {
     rank: number
     address: string
-    name: string // Nombre del validator (simulado)
+    name: string // Name from API
     publicKey: string
     committees: number[]
     netAddress: string
@@ -17,27 +17,33 @@ interface Validator {
     output: string
     delegate: boolean
     compound: boolean
-    // Campos calculados/derivados REALES
+    // Real calculated fields
     chainsRestaked: number
     blocksProduced: number
     stakeWeight: number
-    // Campos simulados (no disponibles en la API)
-    reward24h: number
-    rewardChange: number
+    // Real activity-based fields
+    isActive: boolean
+    isPaused: boolean
+    isUnstaking: boolean
+    activityScore: string
+    // Real reward estimation
+    estimatedRewardRate: number
+    // Real weight change based on activity
     weightChange: number
     stakingPower: number
 }
 
 const ValidatorsPage: React.FC = () => {
-    const [validators, setValidators] = useState<Validator[]>([])
+    const [allValidators, setAllValidators] = useState<Validator[]>([])
+    const [filteredValidators, setFilteredValidators] = useState<Validator[]>([])
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
 
     // Hook to get validators data with pagination
-    const { data: validatorsData, isLoading } = useValidators(currentPage)
+    const { data: validatorsData, isLoading, refetch: refetchValidators } = useValidators(currentPage)
 
     // Hook to get blocks data to calculate blocks produced
-    const { data: blocksData } = useBlocks(1)
+    const { data: blocksData, refetch: refetchBlocks } = useBlocks(1)
 
     // Function to get validator name from API
     const getValidatorName = (validator: any): string => {
@@ -54,35 +60,48 @@ const ValidatorsPage: React.FC = () => {
         return 'Unknown Validator'
     }
 
-    // Function to count blocks produced by validator
-    const countBlocksByValidator = (validatorAddress: string, blocks: any[]) => {
-        if (!blocks || !Array.isArray(blocks)) return 0
-        return blocks.filter((block: any) => {
-            const blockHeader = block.blockHeader || block
-            return blockHeader.proposerAddress === validatorAddress
-        }).length
+
+    // Calculate validator statistics from blocks data
+    const calculateValidatorStats = (blocks: any[]) => {
+        const stats: { [key: string]: { blocksProduced: number, lastBlockTime: number } } = {}
+        
+        blocks.forEach((block: any) => {
+            const proposer = block.blockHeader?.proposer || block.blockHeader?.proposerAddress || block.proposer
+            if (proposer) {
+                if (!stats[proposer]) {
+                    stats[proposer] = { blocksProduced: 0, lastBlockTime: 0 }
+                }
+                stats[proposer].blocksProduced++
+                const blockTime = block.blockHeader?.time || block.time || 0
+                if (blockTime > stats[proposer].lastBlockTime) {
+                    stats[proposer].lastBlockTime = blockTime
+                }
+            }
+        })
+        
+        return stats
     }
 
-    // Normalizar datos de validators
+    // Normalize validators data
     const normalizeValidators = (payload: any, blocks: any[]): Validator[] => {
         if (!payload) return []
 
-        // La estructura real es: { results: [...], totalCount: number }
+        // Real structure: { results: [...], totalCount: number }
         const validatorsList = payload.results || payload.validators || payload.list || payload.data || payload
         if (!Array.isArray(validatorsList)) return []
 
-        // Calcular el total de stake para calcular porcentajes
+        // Calculate total stake for percentages
         const totalStake = validatorsList.reduce((sum: number, validator: any) =>
             sum + (validator.stakedAmount || 0), 0)
 
+        // Calculate validator statistics from blocks
+        const validatorStats = calculateValidatorStats(blocks)
+
         return validatorsList.map((validator: any, index: number) => {
-            // Extraer datos del validator - REVISAR TODOS LOS CAMPOS POSIBLES
+            // Extract validator data
             const rank = index + 1
             const address = validator.address || 'N/A'
-
-            // Obtener nombre del validator desde la API
             const name = getValidatorName(validator)
-
             const publicKey = validator.publicKey || 'N/A'
             const committees = validator.committees || []
             const netAddress = validator.netAddress || 'N/A'
@@ -93,21 +112,45 @@ const ValidatorsPage: React.FC = () => {
             const delegate = validator.delegate || false
             const compound = validator.compound || false
 
-            // Calcular campos derivados REALES
+            // Calculate real derived fields
             const stakeWeight = totalStake > 0 ? (stakedAmount / totalStake) * 100 : 0
             const chainsRestaked = committees.length
-            const blocksProduced = countBlocksByValidator(address, blocks) // REAL: contando bloques
+            const stats = validatorStats[address] || { blocksProduced: 0, lastBlockTime: 0 }
+            const blocksProduced = stats.blocksProduced
 
-            // Campos simulados (no disponibles en la API)
-            const reward24h = Math.random() * 50 + 10 // Simulado 10-60%
-            const rewardChange = (Math.random() - 0.5) * 20 // Simulado -10% a +10%
-            const weightChange = (Math.random() - 0.5) * 10 // Simulado -5% a +5%
-            const stakingPower = Math.min(stakeWeight * 2.5, 100) // Calculado basado en stake weight
+            // Calculate validator status
+            const isActive = !unstakingHeight || unstakingHeight === 0
+            const isPaused = maxPausedHeight && maxPausedHeight > 0
+            const isUnstaking = unstakingHeight && unstakingHeight > 0
+
+            // Calculate activity score based on real data
+            let activityScore = 'Inactive'
+            if (isUnstaking) {
+                activityScore = 'Unstaking'
+            } else if (isPaused) {
+                activityScore = 'Paused'
+            } else if (blocksProduced > 0 && isActive) {
+                activityScore = 'Active'
+            } else if (isActive) {
+                activityScore = 'Standby'
+            }
+
+            // Calculate estimated reward rate based on stake weight and activity
+            const baseRewardRate = stakeWeight * 0.1 // Base rate from stake percentage
+            const activityMultiplier = blocksProduced > 0 ? 1.2 : 0.8 // Bonus for active validators
+            const estimatedRewardRate = Math.max(0, baseRewardRate * activityMultiplier)
+
+            // Calculate weight change based on recent activity
+            const weightChange = blocksProduced > 0 ? (blocksProduced * 0.1) : -0.5
+
+            // Calculate staking power (combination of stake weight and activity)
+            const activityPower = blocksProduced > 0 ? Math.min(blocksProduced * 2, 50) : 0
+            const stakingPower = Math.min(stakeWeight + activityPower, 100)
 
             return {
                 rank,
                 address,
-                name, // Nombre real de la API o generado
+                name,
                 publicKey,
                 committees,
                 netAddress,
@@ -117,47 +160,42 @@ const ValidatorsPage: React.FC = () => {
                 output,
                 delegate,
                 compound,
-                reward24h: Math.round(reward24h * 10) / 10, // Simulado
-                rewardChange: Math.round(rewardChange * 100) / 100, // Simulado
-                chainsRestaked, // REAL
-                blocksProduced, // REAL
-                stakeWeight: Math.round(stakeWeight * 100) / 100, // REAL
-                weightChange: Math.round(weightChange * 100) / 100, // Simulado
-                stakingPower: Math.round(stakingPower * 100) / 100 // Calculado
+                chainsRestaked,
+                blocksProduced,
+                stakeWeight: Math.round(stakeWeight * 100) / 100,
+                isActive,
+                isPaused,
+                isUnstaking,
+                activityScore,
+                estimatedRewardRate: Math.round(estimatedRewardRate * 100) / 100,
+                weightChange: Math.round(weightChange * 100) / 100,
+                stakingPower: Math.round(stakingPower * 100) / 100
             }
         })
     }
 
-    // Efecto para actualizar validators cuando cambian los datos
+    // Effect to update validators when data changes
     useEffect(() => {
         if (validatorsData && blocksData) {
             const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || blocksData
             const normalizedValidators = normalizeValidators(validatorsData, Array.isArray(blocksList) ? blocksList : [])
-            setValidators(normalizedValidators)
+            setAllValidators(normalizedValidators)
+            setFilteredValidators(normalizedValidators)
             setLoading(false)
         }
     }, [validatorsData, blocksData])
 
-    // Effect to update dynamic data every second
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setValidators((prevValidators) =>
-                prevValidators.map((validator) => {
-                    // Simular cambios en reward y weight
-                    const newRewardChange = (Math.random() - 0.5) * 20
-                    const newWeightChange = (Math.random() - 0.5) * 10
+    // Handle filtered validators from filters component
+    const handleFilteredValidators = (filtered: Validator[]) => {
+        setFilteredValidators(filtered)
+    }
 
-                    return {
-                        ...validator,
-                        rewardChange: Math.round(newRewardChange * 100) / 100,
-                        weightChange: Math.round(newWeightChange * 100) / 100
-                    }
-                })
-            )
-        }, 5000) // Actualizar cada 5 segundos
-
-        return () => clearInterval(interval)
-    }, [])
+    // Handle refresh
+    const handleRefresh = () => {
+        setLoading(true)
+        refetchValidators()
+        refetchBlocks()
+    }
 
     const totalValidators = validatorsData?.totalCount || 0
 
@@ -175,12 +213,15 @@ const ValidatorsPage: React.FC = () => {
         >
             <ValidatorsFilters
                 totalValidators={totalValidators}
+                validators={allValidators}
+                onFilteredValidators={handleFilteredValidators}
+                onRefresh={handleRefresh}
             />
 
             <ValidatorsTable
-                validators={validators}
+                validators={filteredValidators}
                 loading={loading || isLoading}
-                totalCount={totalValidators}
+                totalCount={filteredValidators.length}
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
             />

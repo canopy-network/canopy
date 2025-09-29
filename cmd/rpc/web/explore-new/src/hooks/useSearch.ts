@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useBlocks, useTransactions, useValidators } from './useApi'
+import { useBlocks, useTransactions, useValidators, useTxByHash } from './useApi'
 import { getModalData } from '../lib/api'
 
 interface SearchResult {
@@ -23,9 +23,13 @@ export const useSearch = (searchTerm: string) => {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
+    // Detect if search term is a transaction hash
+    const isHashSearch = searchTerm && searchTerm.length >= 32 && /^[a-fA-F0-9]+$/.test(searchTerm)
+    
     const { data: blocksData } = useBlocks(1)
     const { data: transactionsData } = useTransactions(1, 0)
     const { data: validatorsData } = useValidators(1)
+    const { data: hashSearchData } = useTxByHash(isHashSearch ? searchTerm : '')
 
     const searchInData = async (term: string) => {
         if (!term.trim()) {
@@ -44,6 +48,17 @@ export const useSearch = (searchTerm: string) => {
                 transactions: [],
                 addresses: [],
                 validators: []
+            }
+
+            // If it's a hash search, use direct hash search result
+            if (isHashSearch && hashSearchData) {
+                searchResults.transactions.push({
+                    type: 'transaction' as const,
+                    id: hashSearchData.txHash || hashSearchData.hash || term,
+                    title: 'Transaction',
+                    subtitle: `Hash: ${term.slice(0, 16)}...`,
+                    data: hashSearchData
+                })
             }
 
             // First try direct API search for specific addresses
@@ -97,8 +112,9 @@ export const useSearch = (searchTerm: string) => {
                 }
             }
 
-            // Local search in loaded data (as fallback)
-            // Search in blocks
+            // Local search in loaded data (as fallback) - only if not hash search
+            if (!isHashSearch) {
+                // Search in blocks
             if (blocksData?.results) {
                 const blocks = blocksData.results.filter((block: any) => {
                     const height = block.blockHeader?.height ?? block.height
@@ -211,6 +227,7 @@ export const useSearch = (searchTerm: string) => {
                     }
                 }))
             }
+            } // End of !isHashSearch condition
 
             // Remove duplicates and prioritize results by type
             const deduplicatedResults = {
@@ -247,7 +264,7 @@ export const useSearch = (searchTerm: string) => {
 
         return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchTerm, blocksData, transactionsData, validatorsData])
+    }, [searchTerm, blocksData, transactionsData, validatorsData, hashSearchData, isHashSearch])
 
     return {
         results,

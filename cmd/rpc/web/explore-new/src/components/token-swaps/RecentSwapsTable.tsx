@@ -1,6 +1,6 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import AnimatedNumber from '../AnimatedNumber';
+import TableCard from '../Home/TableCard';
 
 interface Swap {
     hash: string;
@@ -12,6 +12,9 @@ interface Swap {
     toAddress: string;
     exchangeRate: string;
     amount: string;
+    orderId: string;
+    committee: number;
+    status: 'Active' | 'Locked' | 'Completed';
 }
 
 interface RecentSwapsTableProps {
@@ -20,75 +23,76 @@ interface RecentSwapsTableProps {
 }
 
 const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading }) => {
-    if (loading) {
-        return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
-                <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/3 mb-4"></div>
-                    <div className="h-10 bg-gray-700 rounded mb-2"></div>
-                    <div className="h-10 bg-gray-700 rounded mb-2"></div>
-                    <div className="h-10 bg-gray-700 rounded"></div>
-                </div>
-            </div>
-        );
-    }
+    // Define table columns
+    const columns = [
+        { label: 'Hash', key: 'hash' },
+        { label: 'Asset Pair', key: 'assetPair' },
+        { label: 'Action', key: 'action' },
+        { label: 'Block', key: 'block' },
+        { label: 'Age', key: 'age' },
+        { label: 'From Address', key: 'fromAddress' },
+        { label: 'To Address', key: 'toAddress' },
+        { label: 'Exchange Rate', key: 'exchangeRate' },
+        { label: 'Amount', key: 'amount' },
+        { label: 'Status', key: 'status' }
+    ];
+
+    // Transform swaps data to table rows
+    const rows = swaps.map((swap) => [
+        // Hash
+        <span className="text-primary font-mono text-sm">{swap.hash}</span>,
+        
+        // Asset Pair
+        <span className="text-gray-300 text-sm">{swap.assetPair}</span>,
+        
+        // Action
+        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            swap.action === 'Buy CNPY' ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-400'
+        }`}>
+            {swap.action}
+        </span>,
+        
+        // Block
+        <AnimatedNumber 
+            value={swap.block} 
+            className="text-primary text-sm"
+        />,
+        
+        // Age
+        <span className="text-gray-300 text-sm">{swap.age}</span>,
+        
+        // From Address
+        <span className="text-gray-300 font-mono text-sm">{swap.fromAddress}</span>,
+        
+        // To Address
+        <span className="text-gray-300 font-mono text-sm">{swap.toAddress}</span>,
+        
+        // Exchange Rate
+        <span className="text-gray-300 text-sm">{swap.exchangeRate}</span>,
+        
+        // Amount
+        <span className={`text-sm ${swap.amount.startsWith('+') ? 'text-primary' : 'text-red-400'}`}>
+            {swap.amount}
+        </span>,
+        
+        // Status
+        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            swap.status === 'Active' ? 'bg-green-500/20 text-green-400' :
+            swap.status === 'Locked' ? 'bg-yellow-500/20 text-yellow-400' :
+            'bg-gray-500/20 text-gray-400'
+        }`}>
+            {swap.status}
+        </span>
+    ]);
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-            className="bg-card p-6 rounded-xl border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
-        >
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-white">Recent Swaps <span className="text-gray-500 text-sm">(<AnimatedNumber value={3847} /> total swaps)</span></h3>
-                <button className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 text-sm">
-                    <i className="fas fa-sort mr-2"></i>Sort
-                </button>
-            </div>
-
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
-                    <thead>
-                        <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hash</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Asset Pair</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Action</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Block</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Age</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From Address</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">To Address</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Exchange Rate</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800">
-                        {swaps.map((swap, index) => (
-                            <tr key={index}>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-primary">{swap.hash}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.assetPair}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${swap.action === 'Buy CNPY' ? 'bg-primary/20 text-primary' : 'bg-red/20 text-red'}`}>
-                                        {swap.action}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-primary">
-                                    <AnimatedNumber 
-                                        value={swap.block} 
-                                        className="text-primary"
-                                    />
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.age}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.fromAddress}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.toAddress}</td>
-                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{swap.exchangeRate}</td>
-                                <td className={`px-4 py-3 whitespace-nowrap text-sm ${swap.amount.startsWith('+') ? 'text-primary' : 'text-red'}`}>{swap.amount}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </motion.div>
+        <TableCard
+            title="Recent Swaps"
+            columns={columns}
+            rows={rows}
+            loading={loading}
+            paginate={false}
+        />
     );
 };
 

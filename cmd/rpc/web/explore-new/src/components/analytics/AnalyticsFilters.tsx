@@ -1,80 +1,86 @@
 import React from 'react'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
 
 interface AnalyticsFiltersProps {
-    activeFilter: string
-    onFilterChange: (filter: string) => void
-    startDate: Date | null
-    endDate: Date | null
-    onDateChange: (dates: [Date | null, Date | null]) => void
+    fromBlock: string
+    toBlock: string
+    onFromBlockChange: (block: string) => void
+    onToBlockChange: (block: string) => void
 }
 
-const timeFilters = [
-    { key: '24H', label: '24H' },
-    { key: '7D', label: '7D' },
-    { key: '30D', label: '30D' },
-    { key: '90D', label: '90D' },
-    { key: '1Y', label: '1Y' },
-    { key: 'All', label: 'All' }
+const blockRangeFilters = [
+    { key: '10', label: '10 Blocks' },
+    { key: '25', label: '25 Blocks' },
+    { key: '50', label: '50 Blocks' },
+    { key: '100', label: '100 Blocks' },
+    { key: 'custom', label: 'Custom Range' }
 ]
 
 const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
-    activeFilter,
-    onFilterChange,
-    startDate,
-    endDate,
-    onDateChange
+    fromBlock,
+    toBlock,
+    onFromBlockChange,
+    onToBlockChange
 }) => {
+    const handleBlockRangeSelect = (range: string) => {
+        if (range === 'custom') return
+        
+        const blockCount = parseInt(range)
+        const currentToBlock = parseInt(toBlock) || 0
+        const newFromBlock = Math.max(0, currentToBlock - blockCount + 1)
+        
+        onFromBlockChange(newFromBlock.toString())
+    }
+
     return (
         <div className="flex items-center justify-between flex-col lg:flex-row gap-4 lg:gap-0 space-x-2 mb-8 bg-card border border-gray-800/30 hover:border-gray-800/50 rounded-xl p-4">
             <div className="flex items-center space-x-2">
-                {timeFilters.map((filter) => (
+                {blockRangeFilters.map((filter) => (
                     <button
                         key={filter.key}
-                        onClick={() => onFilterChange(filter.key)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${activeFilter === filter.key
-                            ? 'bg-primary text-black'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
+                        onClick={() => handleBlockRangeSelect(filter.key)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                            filter.key === 'custom' 
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
                     >
                         {filter.label}
                     </button>
                 ))}
             </div>
-            <div>
-                <DatePicker
-                    selected={startDate}
-                    onChange={onDateChange}
-                    startDate={startDate}
-                    endDate={endDate}
-                    selectsRange
-                    customInput={
-                        <div className="text-sm text-gray-400 bg-input rounded-lg px-4 py-2 cursor-pointer">
-                            {(startDate && endDate)
-                                ? `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                                : 'Select Date Range'}
-                            <i className="fas fa-calendar-alt ml-2"></i>
-                        </div>
-                    }
-                    popperClassName="analytics-datepicker-popper"
-                    calendarClassName="bg-card text-white rounded-lg border border-gray-700 shadow-lg"
-                    dayClassName={(date) => {
-                        const isStartDate = startDate && date.toDateString() === startDate.toDateString();
-                        const isEndDate = endDate && date.toDateString() === endDate.toDateString();
-                        const isInRange = startDate && endDate && date > startDate && date < endDate;
-
-                        if (isStartDate) {
-                            return "bg-primary text-gray-300 rounded border border-primary-light"; // Clase para el startDate con borde
-                        } else if (isEndDate || isInRange) {
-                            return "bg-primary text-gray-300 rounded";
-                        }
-                        return "text-white hover:bg-gray-700 rounded";
-                    }}
-                    monthClassName={() => "text-white"}
-                    weekDayClassName={() => "text-gray-400"}
-                    className="w-full"
-                />
+            <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-xs">From</span>
+                <div className="flex flex-col gap-1">
+                    <input
+                        type="number"
+                        className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
+                        placeholder={fromBlock || "From"}
+                        value=""
+                        onChange={(e) => onFromBlockChange(e.target.value)}
+                        onFocus={(e) => {
+                            if (!e.target.value && fromBlock) {
+                                e.target.value = fromBlock;
+                            }
+                        }}
+                        min="0"
+                    />
+                </div>
+                <span className="text-gray-400 text-xs">To</span>
+                <div className="flex flex-col gap-1">
+                    <input
+                        type="number"
+                        className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
+                        placeholder={toBlock || "To"}
+                        value=""
+                        onChange={(e) => onToBlockChange(e.target.value)}
+                        onFocus={(e) => {
+                            if (!e.target.value && toBlock) {
+                                e.target.value = toBlock;
+                            }
+                        }}
+                        min="0"
+                    />
+                </div>
             </div>
         </div>
     )
