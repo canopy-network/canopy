@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import BlocksFilters from './BlocksFilters'
-import BlocksTable from './BlocksTable'
+import BlocksTableWithManifest from './BlocksTableWithManifest'
 import { useBlocks } from '../../hooks/useApi'
 import blocksTexts from '../../data/blocks.json'
 
@@ -239,12 +239,11 @@ const BlocksPage: React.FC = () => {
                 onSortChange={handleSortChange}
             />
 
-            <BlocksTable
-                blocks={filteredBlocks}
-                loading={loading || isLoading}
-                totalCount={totalFilteredBlocks}
+            <BlocksTableWithManifest
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
+                totalCount={totalFilteredBlocks}
+                loading={loading || isLoading}
             />
         </motion.div>
     )

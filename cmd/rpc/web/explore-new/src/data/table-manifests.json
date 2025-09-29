@@ -1,0 +1,693 @@
+{
+  "version": "1.0.0",
+  "tables": {
+    "blocks": {
+      "title": "Blocks",
+      "columns": [
+        {
+          "key": "height",
+          "label": "Block Height",
+          "type": "number",
+          "format": "animated",
+          "link": "/block/{{value}}",
+          "icon": "cube",
+          "color": "primary"
+        },
+        {
+          "key": "timestamp",
+          "label": "Timestamp",
+          "type": "datetime",
+          "format": "YYYY-MM-DD HH:mm:ss"
+        },
+        {
+          "key": "age",
+          "label": "Age",
+          "type": "relative-time",
+          "format": "ago"
+        },
+        {
+          "key": "hash",
+          "label": "Block Hash",
+          "type": "hash",
+          "format": "truncate",
+          "truncate": 12,
+          "color": "text-gray-400"
+        },
+        {
+          "key": "producer",
+          "label": "Block Producer",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 12,
+          "color": "text-gray-400"
+        },
+        {
+          "key": "transactions",
+          "label": "Transactions",
+          "type": "number",
+          "format": "badge",
+          "colorMapping": {
+            "low": {
+              "max": 50,
+              "color": "blue"
+            },
+            "medium": {
+              "max": 150,
+              "color": "green"
+            },
+            "high": {
+              "max": 999999,
+              "color": "orange"
+            }
+          }
+        },
+        {
+          "key": "gasPrice",
+          "label": "Gas Price",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 4
+        },
+        {
+          "key": "blockTime",
+          "label": "Block Time",
+          "type": "number",
+          "format": "duration",
+          "suffix": "s",
+          "decimals": 2
+        }
+      ],
+      "filters": {
+        "enabled": true,
+        "fields": [
+          {
+            "key": "timeRange",
+            "type": "select",
+            "label": "Time Range",
+            "options": [
+              {
+                "value": "all",
+                "label": "All Blocks"
+              },
+              {
+                "value": "hour",
+                "label": "Last Hour"
+              },
+              {
+                "value": "24h",
+                "label": "Last 24h"
+              },
+              {
+                "value": "week",
+                "label": "Last Week"
+              }
+            ]
+          },
+          {
+            "key": "sortBy",
+            "type": "select",
+            "label": "Sort By",
+            "options": [
+              {
+                "value": "height",
+                "label": "Height"
+              },
+              {
+                "value": "timestamp",
+                "label": "Timestamp"
+              },
+              {
+                "value": "transactions",
+                "label": "Transactions"
+              },
+              {
+                "value": "producer",
+                "label": "Producer"
+              }
+            ]
+          }
+        ]
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 10,
+        "showTotal": true
+      }
+    },
+    "transactions": {
+      "title": "Transactions",
+      "columns": [
+        {
+          "key": "hash",
+          "label": "Hash",
+          "type": "hash",
+          "format": "truncate",
+          "truncate": 12,
+          "link": "/transaction/{{value}}",
+          "color": "primary"
+        },
+        {
+          "key": "type",
+          "label": "Type",
+          "type": "text",
+          "format": "badge",
+          "colorMapping": {
+            "send": {
+              "color": "blue"
+            },
+            "stake": {
+              "color": "green"
+            },
+            "governance": {
+              "color": "purple"
+            },
+            "certificateResults": {
+              "color": "orange"
+            }
+          }
+        },
+        {
+          "key": "from",
+          "label": "From",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 12
+        },
+        {
+          "key": "to",
+          "label": "To",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 12
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 6
+        },
+        {
+          "key": "fee",
+          "label": "Fee",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 6
+        },
+        {
+          "key": "block",
+          "label": "Block",
+          "type": "number",
+          "format": "animated",
+          "link": "/block/{{value}}",
+          "color": "primary"
+        },
+        {
+          "key": "age",
+          "label": "Age",
+          "type": "relative-time",
+          "format": "ago"
+        }
+      ],
+      "filters": {
+        "enabled": true,
+        "fields": [
+          {
+            "key": "type",
+            "type": "select",
+            "label": "Transaction Type",
+            "options": [
+              {
+                "value": "all",
+                "label": "All Types"
+              },
+              {
+                "value": "send",
+                "label": "Send"
+              },
+              {
+                "value": "stake",
+                "label": "Stake"
+              },
+              {
+                "value": "governance",
+                "label": "Governance"
+              },
+              {
+                "value": "certificateResults",
+                "label": "Certificate Results"
+              }
+            ]
+          },
+          {
+            "key": "timeRange",
+            "type": "select",
+            "label": "Time Range",
+            "options": [
+              {
+                "value": "all",
+                "label": "All Time"
+              },
+              {
+                "value": "hour",
+                "label": "Last Hour"
+              },
+              {
+                "value": "24h",
+                "label": "Last 24h"
+              },
+              {
+                "value": "week",
+                "label": "Last Week"
+              }
+            ]
+          }
+        ]
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 10,
+        "showTotal": true
+      }
+    },
+    "validators": {
+      "title": "Validators",
+      "columns": [
+        {
+          "key": "rank",
+          "label": "Rank",
+          "type": "number",
+          "format": "badge",
+          "color": "primary"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "type": "text",
+          "format": "truncate",
+          "truncate": 20,
+          "link": "/validator/{{address}}"
+        },
+        {
+          "key": "address",
+          "label": "Address",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 12
+        },
+        {
+          "key": "stakedAmount",
+          "label": "Staked Amount",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 2
+        },
+        {
+          "key": "stakeWeight",
+          "label": "Stake Weight",
+          "type": "number",
+          "format": "percentage",
+          "suffix": "%",
+          "decimals": 2
+        },
+        {
+          "key": "estimatedRewardRate",
+          "label": "Reward Rate",
+          "type": "number",
+          "format": "percentage",
+          "suffix": "%",
+          "decimals": 2
+        },
+        {
+          "key": "activityScore",
+          "label": "Activity",
+          "type": "text",
+          "format": "badge",
+          "colorMapping": {
+            "Active": {
+              "color": "green"
+            },
+            "Standby": {
+              "color": "yellow"
+            },
+            "Paused": {
+              "color": "orange"
+            },
+            "Unstaking": {
+              "color": "red"
+            },
+            "Inactive": {
+              "color": "gray"
+            }
+          }
+        },
+        {
+          "key": "blocksProduced",
+          "label": "Blocks",
+          "type": "number",
+          "format": "animated"
+        }
+      ],
+      "filters": {
+        "enabled": true,
+        "fields": [
+          {
+            "key": "status",
+            "type": "select",
+            "label": "Status",
+            "options": [
+              {
+                "value": "all",
+                "label": "All"
+              },
+              {
+                "value": "active",
+                "label": "Active"
+              },
+              {
+                "value": "standby",
+                "label": "Standby"
+              },
+              {
+                "value": "paused",
+                "label": "Paused"
+              },
+              {
+                "value": "unstaking",
+                "label": "Unstaking"
+              },
+              {
+                "value": "inactive",
+                "label": "Inactive"
+              },
+              {
+                "value": "delegates",
+                "label": "Delegates"
+              }
+            ]
+          },
+          {
+            "key": "sortBy",
+            "type": "select",
+            "label": "Sort By",
+            "options": [
+              {
+                "value": "stake",
+                "label": "Stake"
+              },
+              {
+                "value": "blocks",
+                "label": "Blocks"
+              },
+              {
+                "value": "rewardRate",
+                "label": "Reward Rate"
+              },
+              {
+                "value": "chains",
+                "label": "Chains"
+              },
+              {
+                "value": "weight",
+                "label": "Weight"
+              },
+              {
+                "value": "power",
+                "label": "Power"
+              },
+              {
+                "value": "name",
+                "label": "Name"
+              },
+              {
+                "value": "rank",
+                "label": "Rank"
+              }
+            ]
+          },
+          {
+            "key": "minStake",
+            "type": "range",
+            "label": "Min Stake",
+            "min": 0,
+            "max": 1000000,
+            "step": 1000,
+            "suffix": " CNPY"
+          },
+          {
+            "key": "addressSearch",
+            "type": "text",
+            "label": "Search Address",
+            "placeholder": "Enter validator address..."
+          }
+        ]
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 10,
+        "showTotal": true
+      }
+    },
+    "accounts": {
+      "title": "Accounts",
+      "columns": [
+        {
+          "key": "address",
+          "label": "Address",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 12,
+          "link": "/account/{{value}}",
+          "color": "primary"
+        },
+        {
+          "key": "balance",
+          "label": "Balance",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 6
+        },
+        {
+          "key": "staked",
+          "label": "Staked",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 6
+        },
+        {
+          "key": "unstaking",
+          "label": "Unstaking",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 6
+        },
+        {
+          "key": "transactions",
+          "label": "Transactions",
+          "type": "number",
+          "format": "animated"
+        },
+        {
+          "key": "lastActivity",
+          "label": "Last Activity",
+          "type": "relative-time",
+          "format": "ago"
+        }
+      ],
+      "filters": {
+        "enabled": true,
+        "fields": [
+          {
+            "key": "balanceRange",
+            "type": "range",
+            "label": "Balance Range",
+            "min": 0,
+            "max": 1000000,
+            "step": 1000,
+            "suffix": " CNPY"
+          },
+          {
+            "key": "hasStake",
+            "type": "select",
+            "label": "Has Stake",
+            "options": [
+              {
+                "value": "all",
+                "label": "All"
+              },
+              {
+                "value": "yes",
+                "label": "Yes"
+              },
+              {
+                "value": "no",
+                "label": "No"
+              }
+            ]
+          }
+        ]
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 10,
+        "showTotal": true
+      }
+    },
+    "home-validators": {
+      "title": "Validator Ranking",
+      "columns": [
+        {
+          "key": "rank",
+          "label": "Rank",
+          "type": "number",
+          "format": "badge",
+          "color": "primary"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "type": "text",
+          "format": "truncate",
+          "truncate": 15
+        },
+        {
+          "key": "rewards",
+          "label": "Rewards %",
+          "type": "number",
+          "format": "percentage",
+          "suffix": "%",
+          "decimals": 2
+        },
+        {
+          "key": "change24h",
+          "label": "24h Change",
+          "type": "text",
+          "format": "badge",
+          "colorMapping": {
+            "Active": {
+              "color": "green"
+            },
+            "Inactive": {
+              "color": "red"
+            }
+          }
+        },
+        {
+          "key": "blocksProduced",
+          "label": "Blocks Produced",
+          "type": "number",
+          "format": "animated"
+        },
+        {
+          "key": "totalWeight",
+          "label": "Total Weight",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 2
+        },
+        {
+          "key": "weightChange",
+          "label": "Weight Δ",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 2,
+          "colorMapping": {
+            "positive": {
+              "color": "green"
+            },
+            "negative": {
+              "color": "red"
+            }
+          }
+        }
+      ],
+      "filters": {
+        "enabled": false
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 5,
+        "showTotal": false
+      }
+    },
+    "home-transactions": {
+      "title": "Recent Transactions",
+      "columns": [
+        {
+          "key": "hash",
+          "label": "Hash",
+          "type": "hash",
+          "format": "truncate",
+          "truncate": 8,
+          "link": "/transaction/{{value}}",
+          "color": "primary"
+        },
+        {
+          "key": "type",
+          "label": "Type",
+          "type": "text",
+          "format": "badge",
+          "colorMapping": {
+            "send": {
+              "color": "blue"
+            },
+            "stake": {
+              "color": "green"
+            },
+            "governance": {
+              "color": "purple"
+            },
+            "certificateResults": {
+              "color": "orange"
+            }
+          }
+        },
+        {
+          "key": "from",
+          "label": "From",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 8
+        },
+        {
+          "key": "to",
+          "label": "To",
+          "type": "address",
+          "format": "truncate",
+          "truncate": 8
+        },
+        {
+          "key": "amount",
+          "label": "Amount",
+          "type": "number",
+          "format": "currency",
+          "suffix": " CNPY",
+          "decimals": 2
+        },
+        {
+          "key": "age",
+          "label": "Age",
+          "type": "relative-time",
+          "format": "ago"
+        }
+      ],
+      "filters": {
+        "enabled": false
+      },
+      "pagination": {
+        "enabled": true,
+        "pageSize": 5,
+        "showTotal": false
+      }
+    }
+  }
+}

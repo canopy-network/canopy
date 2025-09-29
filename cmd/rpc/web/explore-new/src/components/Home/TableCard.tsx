@@ -2,6 +2,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
+import { useTableManifest, formatCellValue, type ColumnManifest } from '../../hooks/useTableManifest'
 
 export interface TableColumn {
     label: string
@@ -26,6 +27,10 @@ export interface TableCardProps {
     currentEntriesPerPage?: number
     onEntriesPerPageChange?: (value: number) => void
     showExportButton?: boolean
+    // New props for manifest-based configuration
+    manifestKey?: string
+    data?: any[]
+    columnManifests?: ColumnManifest[]
     onExportButtonClick?: () => void
     tableClassName?: string
     theadClassName?: string
@@ -56,17 +61,35 @@ const TableCard: React.FC<TableCardProps> = ({
     tableClassName,
     theadClassName,
     tbodyClassName,
-    className
+    className,
+    // New manifest props
+    manifestKey,
+    data = [],
+    columnManifests = []
 }) => {
     // Internal pagination for when external pagination is not provided
     const [internalPage, setInternalPage] = React.useState(1)
 
     const isExternalPagination = propOnPageChange !== undefined && propTotalCount !== undefined && propCurrentPage !== undefined
 
+    // Use manifest if provided
+    const manifest = useTableManifest(manifestKey || '')
+    const manifestColumns = manifest?.columns || columnManifests
+    const useManifest = manifestKey && manifestColumns.length > 0
+
+    // Generate rows from data if using manifest
+    const manifestRows = useManifest && data.length > 0 ? data.map(item => 
+        manifestColumns.map(col => formatCellValue(item[col.key], col, item))
+    ) : rows
+
+    // Use manifest columns if available
+    const finalColumns = useManifest ? manifestColumns.map(col => ({ label: col.label, key: col.key })) : columns
+    const finalRows = useManifest ? manifestRows : rows
+
     // Use current page from props if external pagination, otherwise internal page
     const currentPaginatedPage = isExternalPagination ? propCurrentPage : internalPage
     // Use total items from props if external pagination, otherwise rows length
-    const totalItems = isExternalPagination ? propTotalCount : rows.length
+    const totalItems = isExternalPagination ? propTotalCount : finalRows.length
     // Use page size from props if external pagination, otherwise internal pageSize or 5 if not specified
     const effectivePageSize = isExternalPagination ? currentEntriesPerPage : pageSize
 
@@ -82,7 +105,7 @@ const TableCard: React.FC<TableCardProps> = ({
 
     const startIdx = isExternalPagination ? (propCurrentPage - 1) * effectivePageSize : (internalPage - 1) * effectivePageSize
     const endIdx = isExternalPagination ? startIdx + effectivePageSize : startIdx + effectivePageSize
-    const pageRows = React.useMemo(() => isExternalPagination ? rows : rows.slice(startIdx, endIdx), [rows, startIdx, endIdx, isExternalPagination])
+    const pageRows = React.useMemo(() => isExternalPagination ? finalRows : finalRows.slice(startIdx, endIdx), [finalRows, startIdx, endIdx, isExternalPagination])
 
     const goToPage = (p: number) => {
         if (isExternalPagination && propOnPageChange) {
@@ -171,7 +194,7 @@ const TableCard: React.FC<TableCardProps> = ({
                 <table className={`min-w-full divide-y divide-gray-400/20 ${tableClassName}`}>
                     <thead className={theadClassName}>
                         <tr>
-                            {columns.map((c) => (
+                            {finalColumns.map((c) => (
                                 <th key={c.label} className="px-2 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider">
                                     {c.label}
                                 </th>
@@ -182,7 +205,7 @@ const TableCard: React.FC<TableCardProps> = ({
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={`s-${i}`} className="animate-pulse">
-                                    {columns.map((_, j) => (
+                                    {finalColumns.map((_, j) => (
                                         <td key={j} className="px-2 py-3">
                                             <div className="h-3 w-20 sm:w-32 bg-gray-700/60 rounded"></div>
                                         </td>
@@ -191,7 +214,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             ))
                         ) : pageRows.length === 0 ? (
                             <tr>
-                                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                                <td colSpan={finalColumns.length} className="px-4 py-12 text-center">
                                     <div className="flex flex-col items-center gap-3 max-w-md mx-auto">
                                         <div className="w-12 h-12 bg-gray-700/40 rounded-lg flex items-center justify-center">
                                             <i className="fa-solid fa-database text-xl text-gray-400"></i>
