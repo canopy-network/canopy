@@ -18,20 +18,36 @@ A modern React application built with Vite, TypeScript, Tailwind CSS, React Hook
 
 - Node.js (version 18 or higher)
 - npm or yarn
+- Canopy blockchain node running on port 50001
 
 ### Installation
 
-1. Install dependencies:
+1. Clone the repository and navigate to the project directory:
+```bash
+cd cmd/rpc/web/explore-new
+```
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Start the development server:
+3. Ensure your Canopy blockchain node is running on port 50001:
+```bash
+# Your Canopy node should be accessible at:
+# http://localhost:50001
+```
+
+4. Start the development server:
 ```bash
 npm run dev
 ```
 
-3. Open your browser and navigate to `http://localhost:5173`
+5. Open your browser and navigate to `http://localhost:5173`
+
+### Quick Setup
+
+The application will automatically connect to your Canopy node at `http://localhost:50001`. If your node is running on a different port, you can configure it by setting `window.__CONFIG__` in your HTML or modifying the API configuration.
 
 ### Available Scripts
 
@@ -45,15 +61,72 @@ npm run dev
 
 ```
 src/
-├── components/     # Reusable components
-├── hooks/         # Custom React hooks (including React Query hooks)
-├── lib/           # API functions and utilities
-├── types/         # TypeScript type definitions
-├── utils/         # Utility functions
-├── App.tsx        # Main application component
-├── main.tsx       # Application entry point
-└── index.css      # Global styles with Tailwind
+├── components/           # Reusable components
+│   ├── analytics/       # Analytics dashboard components
+│   │   ├── AnalyticsFilters.tsx
+│   │   ├── BlockProductionRate.tsx
+│   │   ├── FeeTrends.tsx
+│   │   ├── KeyMetrics.tsx
+│   │   ├── NetworkActivity.tsx
+│   │   ├── NetworkAnalyticsPage.tsx
+│   │   ├── StakingTrends.tsx
+│   │   ├── TransactionTypes.tsx
+│   │   └── ValidatorWeights.tsx
+│   ├── block/          # Block-related components
+│   │   ├── BlockTransactions.tsx
+│   │   ├── BlocksFilters.tsx
+│   │   ├── BlocksPage.tsx
+│   │   └── BlocksTable.tsx
+│   ├── Home/           # Home page components
+│   │   ├── ExtraTables.tsx
+│   │   ├── HomePage.tsx
+│   │   └── TableCard.tsx
+│   ├── transaction/    # Transaction components
+│   │   ├── TransactionsPage.tsx
+│   │   └── TransactionsTable.tsx
+│   ├── validator/      # Validator components
+│   │   ├── ValidatorsFilters.tsx
+│   │   ├── ValidatorsPage.tsx
+│   │   └── ValidatorsTable.tsx
+│   ├── token-swaps/    # Token swap components
+│   │   ├── RecentSwapsTable.tsx
+│   │   ├── SwapFilters.tsx
+│   │   └── TokenSwapsPage.tsx
+│   ├── common/         # Shared UI components
+│   │   ├── Footer.tsx
+│   │   ├── Logo.tsx
+│   │   └── Navbar.tsx
+│   └── ui/            # Basic UI components
+│       ├── AnimatedNumber.tsx
+│       ├── LoadingSpinner.tsx
+│       └── SearchInput.tsx
+├── hooks/             # Custom React hooks
+│   ├── useApi.ts      # React Query hooks for API calls
+│   └── useSearch.ts   # Search functionality hook
+├── lib/               # API functions and utilities
+│   └── api.ts         # All API endpoint functions
+├── types/             # TypeScript type definitions
+│   ├── api.ts         # API response types
+│   └── common.ts      # Common type definitions
+├── data/              # Static data and configurations
+│   ├── blocks.json    # Block-related text content
+│   ├── navbar.json    # Navigation menu configuration
+│   └── transactions.json # Transaction-related text content
+├── App.tsx            # Main application component
+├── main.tsx           # Application entry point
+└── index.css          # Global styles with Tailwind
 ```
+
+### Component Mapping
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **Analytics** | Dashboard with network metrics and charts | `/analytics` |
+| **Blocks** | Block explorer with filtering and pagination | `/blocks` |
+| **Transactions** | Transaction history and details | `/transactions` |
+| **Validators** | Validator information and ranking | `/validators` |
+| **Token Swaps** | Token swap orders and trading | `/token-swaps` |
+| **Home** | Main dashboard with overview tables | `/` |
 
 ## API Integration
 
@@ -126,7 +199,7 @@ This project uses:
 
 The application automatically configures API endpoints based on the environment:
 - Default RPC URL: `http://localhost:50002`
-- Default Admin RPC URL: `http://localhost:50003`
+- Default Admin RPC URL: `http://localhost:50002`
 - Default Chain ID: `1`
 
 You can override these settings by setting `window.__CONFIG__` in your HTML.
