@@ -1,0 +1,508 @@
+{
+  "version": "1",
+  "actions": [
+    {
+      "id": "Send",
+      "label": "Send",
+      "icon": "send",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-send",
+        "method": "POST",
+        "payload": {
+          "from": "{{account.address}}",
+          "to": "{{form.to}}",
+          "amount": "{{form.amount}}",
+          "denom": "{{chain.denom.base}}",
+          "memo": "{{form.memo}}"
+        }
+      },
+      "fees": {
+        "use": "default",
+        "denom": "{{chain.denom.base}}"
+      },
+      "form": {
+        "layout": {
+          "grid": { "cols": 12, "gap": 4 },
+          "aside": { "show": false }
+        },
+        "fields": [
+          {
+            "name": "to",
+            "label": "Recipient",
+            "type": "address",
+            "format": "evm",
+            "required": true,
+            "placeholder": "0x...",
+            "colSpan": 12,
+            "rules": {
+              "address": "evm",
+              "message": "Enter a valid EVM address"
+            },
+            "help": "Destination EVM address"
+          },
+          {
+            "name": "amount",
+            "label": "Amount",
+            "type": "number",
+            "required": true,
+            "colSpan": 12,
+            "suffix": "{{chain.denom.symbol}}",
+            "rules": { "gt": 0, "min": 0.000001 },
+            "help": "Must be greater than 0"
+          },
+          {
+            "name": "memo",
+            "label": "Memo",
+            "type": "text",
+            "placeholder": "Optional note",
+            "colSpan": 12,
+            "rules": { "regex": "^.{0,140}$", "message": "Max 140 characters" },
+            "help": "Max 140 characters"
+          }
+        ]
+      },
+      "confirm": {
+        "title": "Confirm Send",
+        "ctaLabel": "Send",
+        "showPayload": true,
+        "payloadSource": "rpc.payload",
+        "summary": [
+          { "label": "From", "value": "{{account.address}}" },
+          { "label": "To", "value": "{{form.to}}" },
+          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
+          { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
+        ]
+      },
+      "success": {
+        "message": "Sent {{form.amount}} {{chain.denom.symbol}} to {{form.to}}",
+        "links": [
+          { "label": "View Tx", "href": "/tx/{{result.hash}}" }
+        ]
+      }
+    },
+    {
+      "id": "Stake",
+      "label": "Stake",
+      "kind": "tx",
+      "flow": "wizard",
+      "rpc": {
+        "base": "admin",
+        "path": "/staking/stake",
+        "method": "POST",
+        "payload": {
+          "address": "{{form.address}}",
+          "amount": "{{form.amount}}",
+          "stakeType": "{{form.stakeType}}",
+          "autocompound": "{{form.autocompound}}",
+          "memo": "{{form.memo}}",
+          "password": "{{session.password}}",
+          "submit": true
+        }
+      },
+      "fees": {
+        "use": "custom",
+        "denom": "{{chain.denom.base}}",
+        "refreshMs": 30000,
+        "providers": [
+          {
+            "type": "query",
+            "base": "rpc",
+            "path": "/v1/query/params",
+            "method": "POST",
+            "encoding": "text",
+            "body": "{\"height\":0,\"address\":\"\"}",
+            "selector": "fee.stakeFee"
+          }
+        ],
+        "buckets": {
+          "avg": { "multiplier": 1.0, "default": true }
+        }
+      },
+      "steps": [
+        {
+          "id": "basic",
+          "title": "Basic Setup",
+          "form": {
+            "layout": { "grid": { "cols": 12, "gap": 4 }, "aside": { "show": true, "width": 5 } },
+            "fields": [
+              {
+                "name": "address",
+                "label": "Address to Use",
+                "type": "select",
+                "colSpan": 12,
+                "options": [
+                  { "label": "Primary (8,234.56 CNPY)", "value": "0xYourAddress" }
+                ]
+              },
+              {
+                "name": "stakeType",
+                "label": "Stake Type",
+                "type": "select",
+                "colSpan": 12,
+                "options": [
+                  { "label": "Validation", "value": "validator" },
+                  { "label": "Delegation", "value": "delegation" }
+                ]
+              },
+              {
+                "name": "amount",
+                "label": "Stake Amount",
+                "type": "number",
+                "suffix": "{{chain.denom.symbol}}",
+                "colSpan": 12,
+                "rules": { "gt": 0 }
+              },
+              {
+                "name": "autocompound",
+                "label": "Autocompound",
+                "type": "select",
+                "colSpan": 12,
+                "options": [
+                  { "label": "ON", "value": "on" },
+                  { "label": "OFF", "value": "off" }
+                ],
+                "help": "Automatically restake rewards"
+              }
+            ]
+          },
+          "aside": { "widget": "currentStakes" }
+        },
+        {
+          "id": "chains",
+          "title": "Chain Selection",
+          "form": {
+            "layout": { "grid": { "cols": 12, "gap": 4 } },
+            "fields": [
+              {
+                "name": "chainId",
+                "label": "Select Chain",
+                "type": "select",
+                "colSpan": 12,
+                "options": [
+                  { "label": "Polkadot", "value": "polkadot" },
+                  { "label": "Kusama", "value": "kusama" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "options",
+          "title": "Advanced Options",
+          "form": {
+            "layout": { "grid": { "cols": 12, "gap": 4 } },
+            "fields": [
+              {
+                "name": "rewardAddress",
+                "label": "Reward Address",
+                "type": "address",
+                "format": "evm",
+                "placeholder": "0x...",
+                "colSpan": 12,
+                "rules": { "address": "evm" }
+              },
+              {
+                "name": "memo",
+                "label": "Memo",
+                "type": "text",
+                "placeholder": "Optional",
+                "colSpan": 12
+              }
+            ]
+          }
+        }
+      ],
+      "confirm": {
+        "title": "Confirm Stake",
+        "ctaLabel": "Confirm Stake",
+        "showPayload": true,
+        "payloadSource": "rpc.payload",
+        "summary": [
+          { "label": "Address", "value": "{{form.address}}" },
+          { "label": "Stake Type", "value": "{{form.stakeType}}" },
+          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" }
+        ]
+      },
+      "success": {
+        "message": "Staked {{form.amount}} {{chain.denom.symbol}}",
+        "links": []
+      }
+    },
+    {
+      "id": "KeyManagement",
+      "label": "Key Management",
+      "icon": "key",
+      "kind": "page",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/keystore",
+        "method": "GET"
+      },
+      "actions": [
+        {
+          "id": "CreateNewKey",
+          "label": "Create New Key",
+          "icon": "plus",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/keystore-new-key",
+            "method": "POST",
+            "payload": {
+              "nickname": "{{form.walletName}}",
+              "password": "{{form.password}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": { "cols": 12, "gap": 4 },
+              "aside": { "show": false }
+            },
+            "fields": [
+              {
+                "name": "walletName",
+                "label": "Wallet Name",
+                "type": "text",
+                "required": true,
+                "placeholder": "Primary Wallet",
+                "colSpan": 12,
+                "rules": {
+                  "minLength": 3,
+                  "maxLength": 50,
+                  "message": "Wallet name must be between 3 and 50 characters"
+                }
+              },
+              {
+                "name": "password",
+                "label": "Password",
+                "type": "password",
+                "required": true,
+                "placeholder": "Enter a strong password",
+                "colSpan": 12,
+                "rules": {
+                  "minLength": 8,
+                  "message": "Password must be at least 8 characters long"
+                }
+              }
+            ]
+          },
+          "confirm": {
+            "title": "Create New Wallet",
+            "ctaLabel": "Create Wallet",
+            "showPayload": false,
+            "summary": [
+              { "label": "Wallet Name", "value": "{{form.walletName}}" }
+            ]
+          },
+          "success": {
+            "message": "New wallet '{{form.walletName}}' created successfully",
+            "links": []
+          }
+        },
+        {
+          "id": "ImportWallet",
+          "label": "Import Wallet",
+          "icon": "download",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/keystore-import-raw",
+            "method": "POST",
+            "payload": {
+              "nickname": "{{form.walletName}}",
+              "password": "{{form.password}}",
+              "privateKey": "{{form.privateKey}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": { "cols": 12, "gap": 4 },
+              "aside": { "show": false }
+            },
+            "fields": [
+              {
+                "name": "privateKey",
+                "label": "Private Key",
+                "type": "password",
+                "required": true,
+                "placeholder": "Enter your private key...",
+                "colSpan": 12,
+                "rules": {
+                  "minLength": 64,
+                  "message": "Private key must be 64 characters long"
+                }
+              },
+              {
+                "name": "walletName",
+                "label": "Wallet Name",
+                "type": "text",
+                "required": true,
+                "placeholder": "Imported Wallet",
+                "colSpan": 12,
+                "rules": {
+                  "minLength": 3,
+                  "maxLength": 50,
+                  "message": "Wallet name must be between 3 and 50 characters"
+                }
+              },
+              {
+                "name": "password",
+                "label": "Wallet Password",
+                "type": "password",
+                "required": true,
+                "placeholder": "Password",
+                "colSpan": 12,
+                "rules": {
+                  "minLength": 8,
+                  "message": "Password must be at least 8 characters long"
+                }
+              },
+              {
+                "name": "confirmPassword",
+                "label": "Confirm Password",
+                "type": "password",
+                "required": true,
+                "placeholder": "Confirm your password",
+                "colSpan": 12,
+                "rules": {
+                  "match": "{{form.password}}",
+                  "message": "Passwords do not match"
+                }
+              }
+            ]
+          },
+          "confirm": {
+            "title": "Import Wallet",
+            "ctaLabel": "Import Wallet",
+            "showPayload": false,
+            "summary": [
+              { "label": "Wallet Name", "value": "{{form.walletName}}" },
+              { "label": "Private Key", "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}" }
+            ]
+          },
+          "success": {
+            "message": "Wallet '{{form.walletName}}' imported successfully",
+            "links": []
+          }
+        },
+        {
+          "id": "DeleteWallet",
+          "label": "Delete Wallet",
+          "icon": "trash",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/keystore-delete",
+            "method": "POST",
+            "payload": {
+              "nickname": "{{form.walletName}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": { "cols": 12, "gap": 4 },
+              "aside": { "show": false }
+            },
+            "fields": [
+              {
+                "name": "walletName",
+                "label": "Select Wallet to Delete",
+                "type": "select",
+                "required": true,
+                "colSpan": 12,
+                "options": "{{accounts}}",
+                "optionLabel": "nickname",
+                "optionValue": "nickname"
+              },
+              {
+                "name": "confirmation",
+                "label": "Type 'DELETE' to confirm",
+                "type": "text",
+                "required": true,
+                "placeholder": "DELETE",
+                "colSpan": 12,
+                "rules": {
+                  "match": "DELETE",
+                  "message": "You must type 'DELETE' to confirm"
+                }
+              }
+            ]
+          },
+          "confirm": {
+            "title": "Delete Wallet",
+            "ctaLabel": "Delete Wallet",
+            "showPayload": false,
+            "summary": [
+              { "label": "Wallet to Delete", "value": "{{form.walletName}}" }
+            ]
+          },
+          "success": {
+            "message": "Wallet '{{form.walletName}}' deleted successfully",
+            "links": []
+          }
+        },
+        {
+          "id": "DownloadKeyfile",
+          "label": "Download Keyfile",
+          "icon": "download",
+          "kind": "action",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/keystore-get",
+            "method": "POST",
+            "payload": {
+              "nickname": "{{form.walletName}}",
+              "password": "{{form.password}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": { "cols": 12, "gap": 4 },
+              "aside": { "show": false }
+            },
+            "fields": [
+              {
+                "name": "walletName",
+                "label": "Select Wallet",
+                "type": "select",
+                "required": true,
+                "colSpan": 12,
+                "options": "{{accounts}}",
+                "optionLabel": "nickname",
+                "optionValue": "nickname"
+              },
+              {
+                "name": "password",
+                "label": "Wallet Password",
+                "type": "password",
+                "required": true,
+                "placeholder": "Enter wallet password",
+                "colSpan": 12
+              }
+            ]
+          },
+          "confirm": {
+            "title": "Download Keyfile",
+            "ctaLabel": "Download",
+            "showPayload": false,
+            "summary": [
+              { "label": "Wallet", "value": "{{form.walletName}}" }
+            ]
+          },
+          "success": {
+            "message": "Keyfile for '{{form.walletName}}' downloaded successfully",
+            "links": []
+          }
+        }
+      ]
+    }
+  ]
+}

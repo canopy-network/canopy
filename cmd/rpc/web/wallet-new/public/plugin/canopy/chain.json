@@ -1,0 +1,60 @@
+{
+  "version": "1",
+  "chainId": "1",
+  "displayName": "Canopy",
+  "denom": {
+    "base": "ucnpy",
+    "symbol": "CNPY",
+    "decimals": 6
+  },
+  "rpc": {
+    "base": "http://localhost:50002",
+    "admin": "http://localhost:50003"
+  },
+  "address": {
+    "format": "evm"
+  },
+  "params": {
+    "sources": [
+      {
+        "id": "networkParams",
+        "base": "rpc",
+        "path": "/v1/query/params",
+        "method": "POST",
+        "encoding": "text",
+        "body": "{\"height\":0,\"address\":\"\"}"
+      }
+    ],
+    "refresh": {
+      "staleTimeMs": 3000,
+      "refetchIntervalMs": 3000
+    }
+  },
+  "fees": {
+    "denom": "{{chain.denom.base}}",
+    "refreshMs": 30000,
+    "providers": [
+      {
+        "type": "query",
+        "base": "rpc",
+        "path": "/v1/query/params",
+        "method": "POST",
+        "encoding": "text",
+        "body": "{\"height\":0,\"address\":\"\"}",
+        "selector": "fee.sendFee"
+      }
+    ],
+    "buckets": {
+      "avg": {
+        "multiplier": 1.0,
+        "default": true
+      }
+    }
+  },
+  "features": ["staking", "gov"],
+  "session": {
+    "unlockTimeoutSec": 900,
+    "rePromptSensitive": false,
+    "persistAcrossTabs": false
+  }
+}

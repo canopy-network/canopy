@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #22d3a6;
+}
+
+html,
+body,
+#root {
+  font-family: "DM Sans", sans-serif;
+}
