@@ -5,7 +5,16 @@ import { Toaster } from 'react-hot-toast'
 import App from './app/App'
 import './index.css'
 
-const qc = new QueryClient()
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchInterval: 20000, // 20 seconds
+      refetchIntervalInBackground: true, // Continue to refetch in background
+      staleTime: 10000, // Data is considered stale after 10 seconds
+      refetchOnWindowFocus: true, // Update when the window regains focus
+    },
+  },
+})
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>

@@ -22,13 +22,17 @@ export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
 
   const chainQ = useQuery({
     queryKey: ['chain', base],
-    queryFn: () => fetchJson<ChainConfig>(`${base}/chain.json`)
+    queryFn: () => fetchJson<ChainConfig>(`${base}/chain.json`),
+    // Use the global refetch configuration every 20s
+    // The configuration data may change, so it's good to update it
   })
 
   const manifestQ = useQuery({
     queryKey: ['manifest', base],
     enabled: !!chainQ.data,
-    queryFn: () => fetchJson<Manifest>(`${base}/manifest.json`)
+    queryFn: () => fetchJson<Manifest>(`${base}/manifest.json`),
+    // Use the global refetch configuration every 20s
+    // The manifest can change dynamically
   })
 
   // tiny bridge for places where global ctx is handy (e.g., validators)

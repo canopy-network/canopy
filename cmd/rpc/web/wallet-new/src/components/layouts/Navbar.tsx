@@ -4,10 +4,12 @@ import { motion } from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useTotalStage } from "@/hooks/useTotalStage";
 import { getAbbreviateAmount } from "@/helpers/chain";
+import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
 import { KeyManagement } from '@/components/pages/KeyManagement';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 
 export const Navbar = (): JSX.Element => {
@@ -21,6 +23,8 @@ export const Navbar = (): JSX.Element => {
         deleteAccount,
         refetch
     } = useAccounts();
+
+    const { data: totalStage, isLoading: stageLoading } = useTotalStage();
 
     const [showKeyManagement, setShowKeyManagement] = useState(false);
 
@@ -65,9 +69,6 @@ export const Navbar = (): JSX.Element => {
             animate="visible"
             variants={containerVariants}
         >
-            {/* Top blue line indicator */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500"></div>
-
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-8">
                     {/* Logo */}
@@ -84,22 +85,33 @@ export const Navbar = (): JSX.Element => {
                         </Link>
                     </motion.div>
 
-                    {/* Tokens Portfolio */}
+                    {/* Total Stage Portfolio */}
                     <motion.div
-                        className="flex items-center gap-2 bg-[#2a2b35] px-3 py-1 rounded-full"
+                        className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full"
                         variants={itemVariants}
                         whileHover={{ scale: 1.05, backgroundColor: "#323340" }}
                         transition={{ duration: 0.2 }}
                     >
-                        <span className="text-gray-400 text-sm">Total Tokens</span>
-                        <motion.span
+                        <span className="text-gray-400 text-sm">Total Stage</span>
+                        <motion.div
                             className="text-[#6fe3b4] font-semibold text-sm"
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.3, duration: 0.4 }}
                         >
-                            {getAbbreviateAmount(127_800)}
-                        </motion.span>
+                            {stageLoading ? (
+                                '...'
+                            ) : (
+                                <AnimatedNumber
+                                    value={totalStage ? totalStage / 1000000 : 0}
+                                    format={{
+                                        notation: 'compact',
+                                        maximumFractionDigits: 1
+                                    }}
+                                    className="text-[#6fe3b4] font-semibold text-sm"
+                                />
+                            )}
+                        </motion.div>
                         <span className="text-[#6fe3b4] font-semibold text-sm">CNPY</span>
                     </motion.div>
 
@@ -109,13 +121,15 @@ export const Navbar = (): JSX.Element => {
                         className="flex items-center gap-6"
                         variants={itemVariants}
                     >
-                        {['Dashboard', 'Portfolio', 'Staking', 'Governance', 'Monitoring'].map((item, index) => (
-                            <motion.button
-                                key={item}
-                                className={`text-sm font-medium transition-colors ${item === 'Dashboard'
-                                    ? 'text-primary border-b-2 border-primary pb-1'
-                                    : 'text-text-muted hover:text-text-primary'
-                                    }`}
+                        {[
+                            { name: 'Dashboard', path: '/' },
+                            { name: 'Portfolio', path: '/portfolio' },
+                            { name: 'Staking', path: '/staking' },
+                            { name: 'Governance', path: '/governance' },
+                            { name: 'Monitoring', path: '/monitoring' }
+                        ].map((item, index) => (
+                            <motion.div
+                                key={item.name}
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.1 * index, duration: 0.3 }}
@@ -126,8 +140,18 @@ export const Navbar = (): JSX.Element => {
                                 }}
                                 whileTap={{ scale: 0.95 }}
                             >
-                                {item}
-                            </motion.button>
+                                <NavLink
+                                    to={item.path}
+                                    className={({ isActive }) =>
+                                        `text-sm font-medium transition-colors ${isActive
+                                            ? 'text-primary border-b-2 border-primary pb-1'
+                                            : 'text-text-muted hover:text-text-primary'
+                                        }`
+                                    }
+                                >
+                                    {item.name}
+                                </NavLink>
+                            </motion.div>
                         ))}
                     </motion.nav>
                 </div>
@@ -162,12 +186,12 @@ export const Navbar = (): JSX.Element => {
                                     </svg>
                                 </div>
                             </SelectTrigger>
-                            <SelectContent className="bg-primary-foreground border-[#3a3b45]">
+                            <SelectContent className="bg-bg-secondary border-bg-accent">
                                 {accounts.map((account) => (
-                                    <SelectItem key={account.id} value={account.id} className="text-white hover:bg-[#3a3b45]">
+                                    <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
                                         <div className="flex items-center gap-3 w-full">
                                             <div className="flex flex-col items-start flex-1">
-                                                <span className="text-sm font-medium text-white">
+                                                <span className="text-sm font-medium text-white hover:text-black">
                                                     {account.address.slice(0, 4)}...{account.address.slice(-4)} ({account.nickname})
                                                 </span>
                                             </div>
@@ -182,7 +206,7 @@ export const Navbar = (): JSX.Element => {
                                     </SelectItem>
                                 ))}
                                 {accounts.length === 0 && !loading && (
-                                    <div className="p-2 text-center text-gray-400 text-sm">
+                                    <div className="p-2 text-center text-text-muted text-sm">
                                         No accounts available
                                     </div>
                                 )}

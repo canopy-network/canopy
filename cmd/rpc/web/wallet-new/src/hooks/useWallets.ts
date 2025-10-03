@@ -22,8 +22,8 @@ export function useWallets() {
     const query = useQuery({
         queryKey: QK.WALLETS,
         queryFn: fetchWallets,
-        staleTime: 60_000,
-        refetchOnWindowFocus: false,
+        // Use the global refetch configuration every 20s
+        // staleTime and refetchOnWindowFocus are inherited from the global configuration
     });
 
     const activeWallet = query.data?.find(w => w.isActive);
