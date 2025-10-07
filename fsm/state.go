@@ -79,24 +79,13 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.ErrorI) {
 	// set height to the latest version and store to the passed store
 	s.height, s.store = store.Version(), store
-	// DEBUG: Log initialization
-	fmt.Printf("\n=== DEBUG: FSM Initialize at height/version %d ===\n", s.height)
-	fmt.Printf("DEBUG: Store pointer: %p, type: %T\n", s.store, s.store)
-	
+
 	// if height is genesis
 	if s.height == 0 {
 		// then initialize from a genesis file
 		return true, s.NewFromGenesisFile()
 	}
-	
-	// DEBUG: Check validators after loading from existing state
-	debugVals, _ := s.GetValidators()
-	fmt.Printf("DEBUG: After Initialize (non-genesis), GetValidators returned %d validators\n", len(debugVals))
-	if len(debugVals) > 0 {
-		fmt.Printf("DEBUG: First validator: Address=%x, Stake=%d\n", debugVals[0].Address, debugVals[0].StakedAmount)
-	}
-	fmt.Printf("=== DEBUG: FSM Initialize END ===\n\n")
-	
+
 	// load the previous block
 	blk, e := s.LoadBlock(s.Height() - 1)
 	if e != nil {

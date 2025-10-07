@@ -202,7 +202,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 		p, _ = s.GetCommitteeMembers(s.Config.ChainId)
 	} else {
 		// else get the delegates
-		p, _ = s.GetAllDelegates(id)
+		p, _ = s.GetTopDelegates(id)
 	}
 	// get the validator params from state
 	valParams, err := s.GetParamsVal()
@@ -450,7 +450,7 @@ func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err
 	}
 	// if param is set to 0 all delegates should be returned
 	if params.MaximumDelegatesPerCommittee == 0 {
-		return s.GetTopDelegates(chainId)
+		return s.GetAllDelegates(chainId)
 	}
 	// iterate from highest stake to lowest
 	it, err := s.RevIterator(DelegatePrefix(chainId))
