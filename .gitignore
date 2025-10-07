@@ -37,3 +37,4 @@ cmd/web/explorer/.idea
 **/.DS_Store
 /cmd/tps/data
 keystore.json
+.docker/volumes/node_1/keystore.json
