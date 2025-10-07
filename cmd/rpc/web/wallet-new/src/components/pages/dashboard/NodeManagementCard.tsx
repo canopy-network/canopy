@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useValidators } from '@/hooks/useValidators';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useMultipleBlockProducerData } from '@/hooks/useBlockProducerData';
+import { useManifest } from '@/hooks/useManifest';
 import { PauseUnpauseModal } from '@/components/ui/PauseUnpauseModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { AlertModal } from '@/components/ui/AlertModal';
@@ -10,6 +11,7 @@ import { AlertModal } from '@/components/ui/AlertModal';
 export const NodeManagementCard = (): JSX.Element => {
     const { data: validators = [], isLoading, error } = useValidators();
     const { accounts } = useAccounts();
+    const { getText } = useManifest();
     
     // Get validator addresses for block producer data
     const validatorAddresses = validators.map(v => v.address);
@@ -86,18 +88,22 @@ export const NodeManagementCard = (): JSX.Element => {
     };
 
     const getStatus = (validator: any) => {
-        if (validator.unstaking) return 'Unstaking';
-        if (validator.paused) return 'Paused';
-        return 'Staked';
+        if (validator.unstaking) return getText('ui.nodeManagement.status.unstaking', 'Unstaking');
+        if (validator.paused) return getText('ui.nodeManagement.status.paused', 'Paused');
+        return getText('ui.nodeManagement.status.staked', 'Staked');
     };
 
     const getStatusColor = (status: string) => {
+        const stakedText = getText('ui.nodeManagement.status.staked', 'Staked');
+        const unstakingText = getText('ui.nodeManagement.status.unstaking', 'Unstaking');
+        const pausedText = getText('ui.nodeManagement.status.paused', 'Paused');
+        
         switch (status) {
-            case 'Staked':
+            case stakedText:
                 return 'bg-green-500/20 text-green-400';
-            case 'Unstaking':
+            case unstakingText:
                 return 'bg-orange-500/20 text-orange-400';
-            case 'Paused':
+            case pausedText:
                 return 'bg-red-500/20 text-red-400';
             default:
                 return 'bg-gray-500/20 text-gray-400';
@@ -143,8 +149,8 @@ export const NodeManagementCard = (): JSX.Element => {
         if (pausedValidators.length === 0) {
             setAlertModal({
                 isOpen: true,
-                title: 'No Paused Validators',
-                message: 'There are no paused validators to resume.',
+                title: getText('ui.nodeManagement.alerts.noPausedValidators.title', 'No Paused Validators'),
+                message: getText('ui.nodeManagement.alerts.noPausedValidators.message', 'There are no paused validators to resume.'),
                 type: 'info'
             });
             return;
@@ -158,8 +164,8 @@ export const NodeManagementCard = (): JSX.Element => {
 
         setConfirmModal({
             isOpen: true,
-            title: 'Resume Validators',
-            message: `Resume ${pausedValidators.length} paused validator(s)?\n\nValidators: ${validatorList}`,
+            title: getText('ui.nodeManagement.confirm.resumeValidators.title', 'Resume Validators'),
+            message: getText('ui.nodeManagement.confirm.resumeValidators.message', `Resume ${pausedValidators.length} paused validator(s)?\n\nValidators: ${validatorList}`),
             type: 'warning',
             onConfirm: () => {
                 // Open modal for the first paused validator
@@ -195,8 +201,8 @@ export const NodeManagementCard = (): JSX.Element => {
         if (activeValidators.length === 0) {
             setAlertModal({
                 isOpen: true,
-                title: 'No Validators Found',
-                message: 'There are no validators to pause.',
+                title: getText('ui.nodeManagement.alerts.noValidatorsFound.title', 'No Validators Found'),
+                message: getText('ui.nodeManagement.alerts.noValidatorsFound.message', 'There are no validators to pause.'),
                 type: 'info'
             });
             return;
@@ -210,8 +216,8 @@ export const NodeManagementCard = (): JSX.Element => {
 
         setConfirmModal({
             isOpen: true,
-            title: 'Pause Validators',
-            message: `Pause ${activeValidators.length} validator(s)?\n\nValidators: ${validatorList}`,
+            title: getText('ui.nodeManagement.confirm.pauseValidators.title', 'Pause Validators'),
+            message: getText('ui.nodeManagement.confirm.pauseValidators.message', `Pause ${activeValidators.length} validator(s)?\n\nValidators: ${validatorList}`),
             type: 'warning',
             onConfirm: () => {
                 // Prepare all validators for bulk action
@@ -223,7 +229,6 @@ export const NodeManagementCard = (): JSX.Element => {
                     };
                 });
 
-                console.log('Opening modal for bulk pause action with validators:', allValidatorsForModal);
 
                 setModalState({
                     isOpen: true,
@@ -234,14 +239,6 @@ export const NodeManagementCard = (): JSX.Element => {
                     isBulkAction: true
                 });
 
-                console.log('Modal state set for bulk action:', {
-                    isOpen: true,
-                    validatorAddress: activeValidators[0].address,
-                    validatorNickname: allValidatorsForModal[0].nickname,
-                    action: 'pause',
-                    allValidators: allValidatorsForModal,
-                    isBulkAction: true
-                });
             }
         });
     };
@@ -347,7 +344,7 @@ export const NodeManagementCard = (): JSX.Element => {
                 transition={{ duration: 0.5, delay: 0.5 }}
             >
                 <div className="flex items-center justify-center h-full">
-                    <div className="text-text-muted">Loading validators...</div>
+                    <div className="text-text-muted">{getText('ui.nodeManagement.loading', 'Loading validators...')}</div>
                 </div>
             </motion.div>
         );
@@ -362,7 +359,7 @@ export const NodeManagementCard = (): JSX.Element => {
                 transition={{ duration: 0.5, delay: 0.5 }}
             >
                 <div className="flex items-center justify-center h-full">
-                    <div className="text-red-400">Error loading validators</div>
+                    <div className="text-red-400">{getText('ui.nodeManagement.error', 'Error loading validators')}</div>
                 </div>
             </motion.div>
         );
@@ -377,21 +374,21 @@ export const NodeManagementCard = (): JSX.Element => {
         >
             {/* Header with action buttons */}
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-text-primary text-lg font-semibold">Node Management</h3>
+                <h3 className="text-text-primary text-lg font-semibold">{getText('ui.nodeManagement.title', 'Node Management')}</h3>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={handleResumeAll}
                         className="flex items-center gap-2 px-3 py-2.5 bg-primary hover:bg-primary/90 text-muted rounded-lg text-sm font-medium transition-colors"
                     >
                         <i className="fa-solid fa-play text-xs"></i>
-                        Resume All
+                        {getText('ui.nodeManagement.buttons.resumeAll', 'Resume All')}
                     </button>
                     <button
                         onClick={handlePauseAll}
                         className="flex items-center gap-2 px-3 py-2.5 bg-muted hover:bg-muted/90 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                         <i className="fa-solid fa-pause text-xs"></i>
-                        Pause All
+                        {getText('ui.nodeManagement.buttons.pauseAll', 'Pause All')}
                     </button>
                 </div>
             </div>
@@ -401,14 +398,14 @@ export const NodeManagementCard = (): JSX.Element => {
                 <table className="w-full">
                     <thead>
                         <tr className="border-b border-bg-accent">
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Address</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Stake Amount</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Status</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Blocks Produced</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Rewards (24 hrs)</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Stake Weight</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Weight Change</th>
-                            <th className="text-left text-text-muted text-sm font-medium pb-3">Actions</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.address', 'Address')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.stakeAmount', 'Stake Amount')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.status', 'Status')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.blocksProduced', 'Blocks Produced')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.rewards24h', 'Rewards (24 hrs)')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.stakeWeight', 'Stake Weight')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.weightChange', 'Weight Change')}</th>
+                            <th className="text-left text-text-muted text-sm font-medium pb-3">{getText('ui.nodeManagement.headers.actions', 'Actions')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -497,7 +494,7 @@ export const NodeManagementCard = (): JSX.Element => {
                         }) : (
                             <tr>
                                 <td colSpan={8} className="text-center py-8 text-text-muted">
-                                    No validators found
+                                    {getText('ui.nodeManagement.noValidators', 'No validators found')}
                                 </td>
                             </tr>
                         )}

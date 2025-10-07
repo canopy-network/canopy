@@ -1,5 +1,236 @@
 {
   "version": "1",
+  "ui": {
+    "tabs": {
+      "send": "Send",
+      "receive": "Receive", 
+      "stake": "Stake",
+      "swap": "Swap"
+    },
+    "modals": {
+      "password": {
+        "title": "Enter Password",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Enter your password",
+        "cancel": "Cancel",
+        "confirm": "Confirm"
+      },
+      "success": {
+        "title": "Transaction Successful!",
+        "message": "Your transaction has been sent successfully"
+      },
+      "alerts": {
+        "missingInformation": "Missing Information",
+        "invalidRecipient": "Invalid Recipient",
+        "insufficientBalance": "Insufficient Balance",
+        "passwordRequired": "Password Required",
+        "accountNotFound": "Account Not Found",
+        "signerNotFound": "Signer Not Found",
+        "transactionFailed": "Transaction Failed"
+      }
+    },
+    "common": {
+      "max": "MAX",
+      "available": "Available",
+      "uCNPY": "uCNPY",
+      "balance": "Balance"
+    },
+    "allAddresses": {
+      "title": "All Addresses",
+      "seeAll": "See All",
+      "loading": "Loading addresses...",
+      "noAddresses": "No addresses found",
+      "status": {
+        "staked": "Staked",
+        "unstaking": "Unstaking",
+        "liquid": "Liquid",
+        "delegated": "Delegated"
+      }
+    },
+    "quickActions": {
+      "title": "Quick Actions"
+    },
+    "totalBalance": {
+      "title": "Total Balance (All Addresses)",
+      "loading24h": "Loading 24h change...",
+      "change24h": "24h change",
+      "noData": "No historical data"
+    },
+    "stakedBalance": {
+      "title": "Staked Balance (All addresses)",
+      "loadingChart": "Loading chart...",
+      "noData": "No staking data",
+      "chartError": "Chart error"
+    },
+    "recentTransactions": {
+      "title": "Recent Transactions",
+      "live": "Live",
+      "loading": "Loading transactions...",
+      "error": "Error loading transactions",
+      "noTransactions": "No transactions found",
+      "seeAll": "See All",
+      "viewExplorer": "View on Explorer",
+      "headers": {
+        "time": "Time",
+        "action": "Action",
+        "amount": "Amount",
+        "status": "Status"
+      },
+      "types": {
+        "send": "Send",
+        "receive": "Receive",
+        "stake": "Stake",
+        "unstake": "Unstake",
+        "delegate": "Delegate",
+        "transaction": "Transaction"
+      },
+      "status": {
+        "confirmed": "Confirmed",
+        "open": "Open",
+        "pending": "Pending"
+      }
+    },
+    "nodeManagement": {
+      "title": "Node Management",
+      "loading": "Loading validators...",
+      "error": "Error loading validators",
+      "noValidators": "No validators found",
+      "buttons": {
+        "resumeAll": "Resume All",
+        "pauseAll": "Pause All"
+      },
+      "headers": {
+        "address": "Address",
+        "stakeAmount": "Stake Amount",
+        "status": "Status",
+        "blocksProduced": "Blocks Produced",
+        "rewards24h": "Rewards (24 hrs)",
+        "stakeWeight": "Stake Weight",
+        "weightChange": "Weight Change",
+        "actions": "Actions"
+      },
+      "status": {
+        "staked": "Staked",
+        "unstaking": "Unstaking",
+        "paused": "Paused"
+      },
+      "alerts": {
+        "noPausedValidators": {
+          "title": "No Paused Validators",
+          "message": "There are no paused validators to resume."
+        },
+        "noValidatorsFound": {
+          "title": "No Validators Found",
+          "message": "There are no validators to pause."
+        }
+      },
+      "confirm": {
+        "resumeValidators": {
+          "title": "Resume Validators",
+          "message": "Resume {count} paused validator(s)?\n\nValidators: {list}"
+        },
+        "pauseValidators": {
+          "title": "Pause Validators",
+          "message": "Pause {count} validator(s)?\n\nValidators: {list}"
+        }
+      }
+    },
+    "keyManagement": {
+      "title": "Key Management",
+      "subtitle": "Manage your wallet keys and security settings",
+      "downloadKeys": "Download Keys"
+    },
+    "currentWallet": {
+      "title": "Current Wallet",
+      "fields": {
+        "walletName": "Wallet Name",
+        "walletAddress": "Wallet Address",
+        "publicKey": "Public Key"
+      },
+      "placeholders": {
+        "selectWallet": "Select wallet"
+      },
+      "buttons": {
+        "downloadKeyfile": "Download Keyfile",
+        "revealPrivateKeys": "Reveal Private Keys"
+      },
+      "toasts": {
+        "downloadSuccess": "Keyfile download functionality would be implemented here",
+        "noAccountSelected": "No active account selected",
+        "keysHidden": "Private keys hidden",
+        "keysRevealed": "Private keys revealed",
+        "copied": "Copied to clipboard"
+      },
+      "confirm": {
+        "revealKeys": "Are you sure you want to reveal your private keys? This is a security risk."
+      },
+      "securityWarning": {
+        "title": "Security Warning",
+        "message": "Never share your private keys. Anyone with access to them can control your funds."
+      }
+    },
+    "importWallet": {
+      "title": "Import Wallet",
+      "tabs": {
+        "key": "Key",
+        "keystore": "Keystore"
+      },
+      "fields": {
+        "privateKey": "Private Key",
+        "walletPassword": "Wallet Password",
+        "confirmPassword": "Confirm Password",
+        "keystoreFile": "Keystore File",
+        "keystorePassword": "Keystore Password",
+        "walletName": "Wallet Name"
+      },
+      "placeholders": {
+        "privateKey": "Enter your private key...",
+        "password": "Password",
+        "confirmPassword": "Confirm your password....",
+        "keystorePassword": "Enter keystore password",
+        "walletName": "Imported Wallet"
+      },
+      "buttons": {
+        "importWallet": "Import Wallet",
+        "importKeystore": "Import Keystore"
+      },
+      "errors": {
+        "privateKeyRequired": "Please enter a private key",
+        "passwordRequired": "Please enter a password",
+        "passwordsDoNotMatch": "Passwords do not match",
+        "importError": "Error importing wallet: {error}"
+      },
+      "loading": "Importing wallet...",
+      "success": "Wallet imported successfully",
+      "defaultName": "Imported Wallet",
+      "securityWarning": {
+        "title": "Import Security Warning",
+        "message": "Only import wallets from trusted sources. Verify all information before proceeding."
+      }
+    },
+    "newKey": {
+      "title": "New Key",
+      "fields": {
+        "password": "Password",
+        "walletName": "Wallet Name"
+      },
+      "placeholders": {
+        "password": "Password",
+        "walletName": "Primary Wallet"
+      },
+      "buttons": {
+        "createWallet": "Create Wallet"
+      },
+      "errors": {
+        "passwordRequired": "Please enter a password",
+        "walletNameRequired": "Please enter a wallet name",
+        "passwordTooShort": "Password must be at least 8 characters long",
+        "createError": "Error creating wallet: {error}"
+      },
+      "loading": "Creating wallet...",
+      "success": "Wallet created successfully"
+    }
+  },
   "actions": [
     {
       "id": "Send",
@@ -75,6 +306,36 @@
           { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
           { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
         ]
+      },
+      "ui": {
+        "networkFee": {
+          "title": "Network Fee",
+          "estimatedFee": "Estimated Fee:",
+          "estimatedTime": "Estimated Time:",
+          "feeAmount": "0.01 CNPY",
+          "timeAmount": "~20 seconds"
+        },
+        "buttons": {
+          "sendTransaction": "Send Transaction",
+          "processing": "Processing...",
+          "paste": "Paste",
+          "max": "Max",
+          "chooseFromAddressBook": "Choose from Address Book"
+        },
+        "fields": {
+          "toAddress": "To Address",
+          "chain": "Chain",
+          "asset": "Asset",
+          "amount": "Amount",
+          "memo": "Memo"
+        },
+        "placeholders": {
+          "toAddress": "Enter recipient address",
+          "memo": "Optional note attached with the transaction"
+        },
+        "labels": {
+          "usdApprox": "≈ $0.00 USD"
+        }
       },
       "success": {
         "message": "Sent {{form.amount}} {{chain.denom.symbol}} to {{form.to}}",
@@ -226,9 +487,221 @@
           { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" }
         ]
       },
+      "ui": {
+        "networkFee": {
+          "title": "Network Fee",
+          "estimatedFee": "Estimated Fee:",
+          "estimatedTime": "Estimated Time:",
+          "feeAmount": "0.01 CNPY",
+          "timeAmount": "~20 seconds"
+        },
+        "buttons": {
+          "generateTransaction": "Generate Transaction",
+          "processing": "Processing..."
+        },
+        "fields": {
+          "account": "account",
+          "delegate": "delegate",
+          "committees": "committees",
+          "netAddress": "net-addr",
+          "amount": "amount",
+          "withdrawal": "withdrawal",
+          "output": "output",
+          "signer": "signer",
+          "memo": "memo"
+        },
+        "placeholders": {
+          "netAddress": "url of the node",
+          "amount": "1,000.000000",
+          "output": "02cd4e5eb53ea665702042a6ed6d31d61605",
+          "memo": "opt: note attached with the transaction"
+        },
+        "help": {
+          "committees": "Number of committees to stake for",
+          "withdrawal": "Early withdrawal rewards for 20% penalty"
+        }
+      },
       "success": {
         "message": "Staked {{form.amount}} {{chain.denom.symbol}}",
         "links": []
+      }
+    },
+    {
+      "id": "Receive",
+      "label": "Receive",
+      "icon": "qrcode",
+      "kind": "page",
+      "flow": "single",
+      "form": {
+        "layout": {
+          "grid": { "cols": 12, "gap": 4 },
+          "aside": { "show": false }
+        },
+        "fields": [
+          {
+            "name": "account",
+            "label": "Select Account to Receive",
+            "type": "select",
+            "colSpan": 12,
+            "options": "{{accounts}}",
+            "optionLabel": "nickname",
+            "optionValue": "nickname"
+          }
+        ]
+      },
+      "ui": {
+        "title": "Receive Funds",
+        "subtitle": "Share this QR code or address with the sender",
+        "instructions": [
+          "Share this QR code or address with the sender",
+          "Make sure the sender uses the correct network (Canopy Mainnet)",
+          "Transactions typically take ~20 seconds to confirm"
+        ],
+        "buttons": {
+          "copyAddress": "Copy Address",
+          "downloadQR": "Download QR"
+        }
+      }
+    },
+    {
+      "id": "Swap",
+      "label": "Swap",
+      "icon": "exchange-alt",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-create-order",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "chainId": "{{form.chainId}}",
+          "data": "{{form.data}}",
+          "sellAmount": "{{form.amount}}",
+          "receiveAmount": "{{form.receiveAmount}}",
+          "receiveAddress": "{{form.receiveAddress}}",
+          "memo": "{{form.memo}}",
+          "fee": "{{fees.effective}}",
+          "password": "{{session.password}}",
+          "submit": true
+        }
+      },
+      "fees": {
+        "use": "default",
+        "denom": "{{chain.denom.base}}"
+      },
+      "form": {
+        "layout": {
+          "grid": { "cols": 12, "gap": 4 },
+          "aside": { "show": false }
+        },
+        "fields": [
+          {
+            "name": "account",
+            "label": "account",
+            "type": "select",
+            "colSpan": 6,
+            "options": "{{accounts}}",
+            "optionLabel": "nickname",
+            "optionValue": "nickname",
+            "required": true
+          },
+          {
+            "name": "chainId",
+            "label": "commit-Id",
+            "type": "text",
+            "colSpan": 6,
+            "placeholder": "the id of the committee / counter asset",
+            "required": true,
+            "help": "the unique identifier of the committee / counter asset"
+          },
+          {
+            "name": "data",
+            "label": "data",
+            "type": "text",
+            "colSpan": 6,
+            "placeholder": "optional hex data for sub-asset id",
+            "help": "optional generic hex data that allows special operations on the buyer side"
+          },
+          {
+            "name": "amount",
+            "label": "amount",
+            "type": "number",
+            "colSpan": 6,
+            "placeholder": "amount value for the tx in CNPY",
+            "suffix": "{{chain.denom.symbol}}",
+            "required": true,
+            "rules": { "gt": 0, "min": 0.000001 },
+            "help": "the amount of currency being sent / sold"
+          },
+          {
+            "name": "receiveAmount",
+            "label": "rec-amount",
+            "type": "number",
+            "colSpan": 6,
+            "placeholder": "amount of counter asset to receive",
+            "required": true,
+            "rules": { "gt": 0, "min": 0.000001 },
+            "help": "the amount of counter asset being received"
+          },
+          {
+            "name": "receiveAddress",
+            "label": "rec-addr",
+            "type": "address",
+            "colSpan": 6,
+            "placeholder": "the address where the counter asset will be sent",
+            "required": true,
+            "rules": {
+              "minLength": 40,
+              "maxLength": 40,
+              "message": "Address must be 40 characters long"
+            },
+            "help": "the address where the counter asset will be sent"
+          },
+          {
+            "name": "memo",
+            "label": "memo",
+            "type": "textarea",
+            "colSpan": 12,
+            "placeholder": "opt: note attached with the transaction",
+            "rows": 3,
+            "rules": { "maxLength": 200 },
+            "help": "optional note attached with the transaction"
+          }
+        ]
+      },
+      "ui": {
+        "networkFee": {
+          "title": "Network Fee",
+          "estimatedFee": "Estimated Fee:",
+          "estimatedTime": "Estimated Time:",
+          "feeAmount": "0.01 CNPY",
+          "timeAmount": "~20 seconds"
+        },
+        "buttons": {
+          "createOrder": "Create Order",
+          "processing": "Processing..."
+        }
+      },
+      "confirm": {
+        "title": "Confirm Create Order",
+        "ctaLabel": "Create Order",
+        "showPayload": true,
+        "payloadSource": "rpc.payload",
+        "summary": [
+          { "label": "From", "value": "{{account.address}}" },
+          { "label": "Chain ID", "value": "{{form.chainId}}" },
+          { "label": "Sell Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
+          { "label": "Receive Amount", "value": "{{form.receiveAmount}}" },
+          { "label": "Receive Address", "value": "{{form.receiveAddress}}" },
+          { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
+        ]
+      },
+      "success": {
+        "message": "Order created successfully",
+        "links": [
+          { "label": "View Order", "href": "/orders/{{result.orderId}}" }
+        ]
       }
     },
     {

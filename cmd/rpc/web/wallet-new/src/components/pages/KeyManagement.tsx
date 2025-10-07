@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useManifest } from '@/hooks/useManifest';
 import { CurrentWallet } from './key-management/CurrentWallet';
 import { ImportWallet } from './key-management/ImportWallet';
 import { NewKey } from './key-management/NewKey';
@@ -9,6 +10,7 @@ import { NewKey } from './key-management/NewKey';
 
 
 export const KeyManagement = (): JSX.Element => {
+    const { getText } = useManifest();
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -31,12 +33,12 @@ export const KeyManagement = (): JSX.Element => {
                         transition={{ duration: 0.4 }}
                         className="mb-8"
                     >
-                        <h1 className="text-3xl font-bold text-white mb-2">Key Management</h1>
-                        <p className="text-gray-400">Manage your wallet keys and security settings</p>
+                        <h1 className="text-3xl font-bold text-white mb-2">{getText('ui.keyManagement.title', 'Key Management')}</h1>
+                        <p className="text-gray-400">{getText('ui.keyManagement.subtitle', 'Manage your wallet keys and security settings')}</p>
                     </motion.div>
                     <Button className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
                         <Download className="w-4 h-4 mr-2" />
-                        Download Keys
+                        {getText('ui.keyManagement.downloadKeys', 'Download Keys')}
                     </Button>
                 </div>
 

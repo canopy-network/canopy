@@ -50,6 +50,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
   const [success, setSuccess] = useState(false);
   const [selectedValidators, setSelectedValidators] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
+  const isInitialized = React.useRef(false);
   const [alertModal, setAlertModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -108,14 +109,33 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
   // Initialize selected validators when modal opens
   React.useEffect(() => {
-    if (isBulkAction && sortedValidators.length > 0) {
-      setSelectedValidators(sortedValidators.map(v => v.address));
-      setSelectAll(true);
-    } else {
-      setSelectedValidators([validatorAddress]);
-      setSelectAll(false);
+    if (!isOpen) {
+      isInitialized.current = false;
+      return;
     }
-  }, [isBulkAction, sortedValidators, validatorAddress]);
+
+    if (!isInitialized.current) {
+      if (isBulkAction && allValidators && allValidators.length > 0) {
+        setSelectedValidators(allValidators.map(v => v.address));
+        setSelectAll(true);
+      } else if (validatorAddress) {
+        setSelectedValidators([validatorAddress]);
+        setSelectAll(false);
+      }
+      isInitialized.current = true;
+    }
+  }, [isOpen, isBulkAction, allValidators, validatorAddress]);
+
+  // Reset state when modal closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      setSelectedValidators([]);
+      setSelectAll(false);
+      setSuccess(false);
+      setError(null);
+      setIsLoading(false);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,14 +223,16 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        onClick={onClose}
-      >
+    <AnimatePresence mode="wait">
+      {isOpen && (
+        <motion.div
+          key="pause-unpause-modal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={onClose}
+        >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -428,16 +450,17 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
             </form>
           )}
         </motion.div>
-      </motion.div>
 
-      {/* Alert Modal */}
-      <AlertModal
-        isOpen={alertModal.isOpen}
-        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
-        title={alertModal.title}
-        message={alertModal.message}
-        type={alertModal.type}
-      />
+        {/* Alert Modal */}
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+      </motion.div>
+      )}
     </AnimatePresence>
   );
 };

@@ -3,10 +3,12 @@ import { motion } from 'framer-motion';
 import { FileText, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useManifest } from '@/hooks/useManifest';
 import { Button } from '@/components/ui/Button';
 
 export const ImportWallet = (): JSX.Element => {
     const { createNewAccount } = useAccounts();
+    const { getText } = useManifest();
 
     const [showPrivateKey, setShowPrivateKey] = useState(false);
     const [activeTab, setActiveTab] = useState<'key' | 'keystore'>('key');
@@ -27,30 +29,30 @@ export const ImportWallet = (): JSX.Element => {
 
     const handleImportWallet = async () => {
         if (!importForm.privateKey) {
-            toast.error('Please enter a private key');
+            toast.error(getText('ui.importWallet.errors.privateKeyRequired', 'Please enter a private key'));
             return;
         }
 
         if (!importForm.password) {
-            toast.error('Please enter a password');
+            toast.error(getText('ui.importWallet.errors.passwordRequired', 'Please enter a password'));
             return;
         }
 
         if (importForm.password !== importForm.confirmPassword) {
-            toast.error('Passwords do not match');
+            toast.error(getText('ui.importWallet.errors.passwordsDoNotMatch', 'Passwords do not match'));
             return;
         }
 
-        const loadingToast = toast.loading('Importing wallet...');
+        const loadingToast = toast.loading(getText('ui.importWallet.loading', 'Importing wallet...'));
 
         try {
             // Here you would implement the import functionality
             // For now, we'll create a new account with the provided name
-            await createNewAccount(importForm.password, 'Imported Wallet');
-            toast.success('Wallet imported successfully', { id: loadingToast });
+            await createNewAccount(importForm.password, getText('ui.importWallet.defaultName', 'Imported Wallet'));
+            toast.success(getText('ui.importWallet.success', 'Wallet imported successfully'), { id: loadingToast });
             setImportForm({ privateKey: '', password: '', confirmPassword: '' });
         } catch (error) {
-            toast.error(`Error importing wallet: ${error}`, { id: loadingToast });
+            toast.error(getText('ui.importWallet.errors.importError', `Error importing wallet: ${error}`), { id: loadingToast });
         }
     };
 
@@ -60,7 +62,7 @@ export const ImportWallet = (): JSX.Element => {
             className="bg-bg-secondary rounded-lg p-6 border border-bg-accent w-full"
         >
             <div className="flex items-center gap-2 mb-6">
-                <h2 className="text-xl font-bold text-white">Import Wallet</h2>
+                <h2 className="text-xl font-bold text-white">{getText('ui.importWallet.title', 'Import Wallet')}</h2>
             </div>
 
             <div className="flex gap-2 mb-6 lg:w-6/12 w-full justify-between">
@@ -71,7 +73,7 @@ export const ImportWallet = (): JSX.Element => {
                         : 'text-gray-400'
                         }`}
                 >
-                    Key
+                    {getText('ui.importWallet.tabs.key', 'Key')}
                 </button>
                 <button
                     onClick={() => setActiveTab('keystore')}
@@ -80,7 +82,7 @@ export const ImportWallet = (): JSX.Element => {
                         : 'text-gray-400 '
                         }`}
                 >
-                    Keystore
+                    {getText('ui.importWallet.tabs.keystore', 'Keystore')}
                 </button>
             </div>
 
@@ -88,12 +90,12 @@ export const ImportWallet = (): JSX.Element => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Private Key
+                            {getText('ui.importWallet.fields.privateKey', 'Private Key')}
                         </label>
                         <div className="relative">
                             <input
                                 type="password"
-                                placeholder="Enter your private key..."
+                                placeholder={getText('ui.importWallet.placeholders.privateKey', 'Enter your private key...')}
                                 value={importForm.privateKey}
                                 onChange={(e) => setImportForm({ ...importForm, privateKey: e.target.value })}
                                 className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10 placeholder:font-mono"
@@ -109,11 +111,11 @@ export const ImportWallet = (): JSX.Element => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Wallet Password
+                            {getText('ui.importWallet.fields.walletPassword', 'Wallet Password')}
                         </label>
                         <input
                             type="password"
-                            placeholder="Password"
+                            placeholder={getText('ui.importWallet.placeholders.password', 'Password')}
                             value={importForm.password}
                             onChange={(e) => setImportForm({ ...importForm, password: e.target.value })}
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
@@ -122,11 +124,11 @@ export const ImportWallet = (): JSX.Element => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Confirm Password
+                            {getText('ui.importWallet.fields.confirmPassword', 'Confirm Password')}
                         </label>
                         <input
                             type="password"
-                            placeholder="Confirm your password...."
+                            placeholder={getText('ui.importWallet.placeholders.confirmPassword', 'Confirm your password....')}
                             value={importForm.confirmPassword}
                             onChange={(e) => setImportForm({ ...importForm, confirmPassword: e.target.value })}
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
@@ -137,9 +139,9 @@ export const ImportWallet = (): JSX.Element => {
                         <div className="flex items-start gap-3">
                             <i className="fa-solid fa-triangle-exclamation text-red-500 text-md translate-y-1"></i>
                             <div>
-                                <h4 className="text-red-400 font-medium mb-1">Import Security Warning</h4>
+                                <h4 className="text-red-400 font-medium mb-1">{getText('ui.importWallet.securityWarning.title', 'Import Security Warning')}</h4>
                                 <p className="text-red-300 text-sm">
-                                    Only import wallets from trusted sources. Verify all information before proceeding.
+                                    {getText('ui.importWallet.securityWarning.message', 'Only import wallets from trusted sources. Verify all information before proceeding.')}
                                 </p>
                             </div>
                         </div>
@@ -149,7 +151,7 @@ export const ImportWallet = (): JSX.Element => {
                         onClick={handleImportWallet}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-medium"
                     >
-                        Import Wallet
+                        {getText('ui.importWallet.buttons.importWallet', 'Import Wallet')}
                     </Button>
                 </div>
             )}
@@ -158,7 +160,7 @@ export const ImportWallet = (): JSX.Element => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Keystore File
+                            {getText('ui.importWallet.fields.keystoreFile', 'Keystore File')}
                         </label>
                         <input
                             type="file"
@@ -169,22 +171,22 @@ export const ImportWallet = (): JSX.Element => {
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Keystore Password
+                            {getText('ui.importWallet.fields.keystorePassword', 'Keystore Password')}
                         </label>
                         <input
                             type="password"
-                            placeholder="Enter keystore password"
+                            placeholder={getText('ui.importWallet.placeholders.keystorePassword', 'Enter keystore password')}
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
                         />
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Wallet Name
+                            {getText('ui.importWallet.fields.walletName', 'Wallet Name')}
                         </label>
                         <input
                             type="text"
-                            placeholder="Imported Wallet"
+                            placeholder={getText('ui.importWallet.placeholders.walletName', 'Imported Wallet')}
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
                         />
                     </div>
@@ -193,9 +195,9 @@ export const ImportWallet = (): JSX.Element => {
                         <div className="flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5" />
                             <div>
-                                <h4 className="text-red-400 font-medium mb-1">Import Security Warning</h4>
+                                <h4 className="text-red-400 font-medium mb-1">{getText('ui.importWallet.securityWarning.title', 'Import Security Warning')}</h4>
                                 <p className="text-red-300 text-sm">
-                                    Only import wallets from trusted sources. Verify all information before proceeding.
+                                    {getText('ui.importWallet.securityWarning.message', 'Only import wallets from trusted sources. Verify all information before proceeding.')}
                                 </p>
                             </div>
                         </div>
@@ -205,7 +207,7 @@ export const ImportWallet = (): JSX.Element => {
                         onClick={handleImportWallet}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-medium"
                     >
-                        Import Keystore
+                        {getText('ui.importWallet.buttons.importKeystore', 'Import Keystore')}
                     </Button>
                 </div>
             )}

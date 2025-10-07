@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAccountData } from '@/hooks/useAccountData';
+import { useManifest } from '@/hooks/useManifest';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 export const StakedBalanceCard = () => {
     const { totalStaked, stakingData, loading } = useAccountData();
+    const { getText } = useManifest();
     const [hasAnimated, setHasAnimated] = useState(false);
 
     // Calculate total rewards from all staking data
@@ -24,7 +26,7 @@ export const StakedBalanceCard = () => {
 
             {/* Title */}
             <h3 className="text-text-muted text-sm font-medium mb-4">
-                Staked Balance (All addresses)
+                {getText('ui.stakedBalance.title', 'Staked Balance (All addresses)')}
             </h3>
 
             {/* Balance */}
@@ -90,7 +92,7 @@ export const StakedBalanceCard = () => {
                         if (loading) {
                             return (
                                 <div className="flex items-center justify-center h-full">
-                                    <div className="text-text-muted text-sm">Loading chart...</div>
+                                    <div className="text-text-muted text-sm">{getText('ui.stakedBalance.loadingChart', 'Loading chart...')}</div>
                                 </div>
                             );
                         }
@@ -189,7 +191,7 @@ export const StakedBalanceCard = () => {
                         } else {
                             return (
                                 <div className="flex items-center justify-center h-full">
-                                    <div className="text-text-muted text-sm">No staking data</div>
+                                    <div className="text-text-muted text-sm">{getText('ui.stakedBalance.noData', 'No staking data')}</div>
                                 </div>
                             );
                         }
@@ -197,7 +199,7 @@ export const StakedBalanceCard = () => {
                         console.error('Error rendering chart:', error);
                         return (
                             <div className="flex items-center justify-center h-full">
-                                <div className="text-status-error text-sm">Chart error</div>
+                                <div className="text-status-error text-sm">{getText('ui.stakedBalance.chartError', 'Chart error')}</div>
                             </div>
                         );
                     }

@@ -355,3 +355,105 @@ export async function AccountWithTxs(height: number, address: string, nickname: 
 
   return result;
 }
+
+// Create Order Transaction
+export async function TxCreateOrder(
+  address: string,
+  chainId: string,
+  data: string,
+  sellAmount: number,
+  receiveAmount: number,
+  receiveAddress: string,
+  memo: string,
+  fee: number,
+  password: string,
+  submit: boolean,
+) {
+  const response = await fetch(`${adminRPCURL}${txCreateOrder}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      address,
+      chainId,
+      data,
+      sellAmount,
+      receiveAmount,
+      receiveAddress,
+      memo,
+      fee,
+      password,
+      submit,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to create order");
+  }
+
+  return await response.json();
+}
+
+// Lock Order Transaction
+export async function TxLockOrder(
+  address: string,
+  buyersReceiveAddress: string,
+  orderId: string,
+  fee: number,
+  password: string,
+  submit: boolean,
+) {
+  const response = await fetch(`${adminRPCURL}${txLockOrder}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      address,
+      buyersReceiveAddress,
+      orderId,
+      fee,
+      password,
+      submit,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to lock order");
+  }
+
+  return await response.json();
+}
+
+// Close Order Transaction
+export async function TxCloseOrder(
+  address: string,
+  orderId: string,
+  fee: number,
+  password: string,
+  submit: boolean,
+) {
+  const response = await fetch(`${adminRPCURL}${txCloseOrder}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      address,
+      orderId,
+      fee,
+      password,
+      submit,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to close order");
+  }
+
+  return await response.json();
+}

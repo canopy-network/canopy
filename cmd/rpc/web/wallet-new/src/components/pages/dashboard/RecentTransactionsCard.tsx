@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useManifest } from '@/hooks/useManifest';
 
 export const RecentTransactionsCard = () => {
     const { data: transactions = [], isLoading, error } = useTransactions();
+    const { getText } = useManifest();
 
     const formatTime = (timestamp: number) => {
         const now = Date.now();
@@ -28,20 +30,24 @@ export const RecentTransactionsCard = () => {
     };
 
     const getTransactionType = (transaction: any) => {
-        if (transaction.type === 'MessageSend') return 'Send';
-        if (transaction.type === 'MessageStake') return 'Stake';
-        if (transaction.type === 'MessageUnstake') return 'Unstake';
-        if (transaction.type === 'MessageDelegate') return 'Delegate';
-        return 'Transaction';
+        if (transaction.type === 'MessageSend') return getText('ui.recentTransactions.types.send', 'Send');
+        if (transaction.type === 'MessageStake') return getText('ui.recentTransactions.types.stake', 'Stake');
+        if (transaction.type === 'MessageUnstake') return getText('ui.recentTransactions.types.unstake', 'Unstake');
+        if (transaction.type === 'MessageDelegate') return getText('ui.recentTransactions.types.delegate', 'Delegate');
+        return getText('ui.recentTransactions.types.transaction', 'Transaction');
     };
 
     const getStatusColor = (status: string) => {
+        const confirmedText = getText('ui.recentTransactions.status.confirmed', 'Confirmed');
+        const openText = getText('ui.recentTransactions.status.open', 'Open');
+        const pendingText = getText('ui.recentTransactions.status.pending', 'Pending');
+        
         switch (status) {
-            case 'Confirmed':
+            case confirmedText:
                 return 'bg-green-500/20 text-green-400';
-            case 'Open':
+            case openText:
                 return 'bg-red-500/20 text-red-400';
-            case 'Pending':
+            case pendingText:
                 return 'bg-yellow-500/20 text-yellow-400';
             default:
                 return 'bg-gray-500/20 text-gray-400';
@@ -49,16 +55,22 @@ export const RecentTransactionsCard = () => {
     };
 
     const getActionIcon = (action: string) => {
+        const sendText = getText('ui.recentTransactions.types.send', 'Send');
+        const receiveText = getText('ui.recentTransactions.types.receive', 'Receive');
+        const stakeText = getText('ui.recentTransactions.types.stake', 'Stake');
+        const unstakeText = getText('ui.recentTransactions.types.unstake', 'Unstake');
+        const delegateText = getText('ui.recentTransactions.types.delegate', 'Delegate');
+        
         switch (action) {
-            case 'Send':
+            case sendText:
                 return 'fa-solid fa-paper-plane text-text-primary';
-            case 'Receive':
+            case receiveText:
                 return 'fa-solid fa-download text-text-primary';
-            case 'Stake':
+            case stakeText:
                 return 'fa-solid fa-lock text-text-primary';
-            case 'Unstake':
+            case unstakeText:
                 return 'fa-solid fa-unlock text-text-primary';
-            case 'Delegate':
+            case delegateText:
                 return 'fa-solid fa-handshake text-text-primary';
             default:
                 return 'fa-solid fa-circle text-text-primary';
@@ -70,7 +82,7 @@ export const RecentTransactionsCard = () => {
         time: formatTime(tx.time),
         action: getTransactionType(tx.transaction),
         amount: tx.transaction.amount ? formatAmount(tx.transaction.amount, tx.transaction.type) : '0.00 CNPY',
-        status: tx.status || 'Confirmed', // Use status from API or default to confirmed
+        status: tx.status || getText('ui.recentTransactions.status.confirmed', 'Confirmed'), // Use status from API or default to confirmed
         hash: tx.hash.substring(0, 10) + '...' + tx.hash.substring(tx.hash.length - 4)
     }));
 
@@ -83,7 +95,7 @@ export const RecentTransactionsCard = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
             >
                 <div className="flex items-center justify-center h-full">
-                    <div className="text-text-muted">Loading transactions...</div>
+                    <div className="text-text-muted">{getText('ui.recentTransactions.loading', 'Loading transactions...')}</div>
                 </div>
             </motion.div>
         );
@@ -98,7 +110,7 @@ export const RecentTransactionsCard = () => {
                 transition={{ duration: 0.5, delay: 0.3 }}
             >
                 <div className="flex items-center justify-center h-full">
-                    <div className="text-red-400">Error loading transactions</div>
+                    <div className="text-red-400">{getText('ui.recentTransactions.error', 'Error loading transactions')}</div>
                 </div>
             </motion.div>
         );
@@ -115,20 +127,20 @@ export const RecentTransactionsCard = () => {
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                     <h3 className="text-text-primary text-lg font-semibold">
-                        Recent Transactions
+                        {getText('ui.recentTransactions.title', 'Recent Transactions')}
                     </h3>
                     <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs font-medium">
-                        Live
+                        {getText('ui.recentTransactions.live', 'Live')}
                     </span>
                 </div>
             </div>
 
             {/* Table Header */}
             <div className="grid grid-cols-4 gap-4 mb-4 text-text-muted text-sm font-medium">
-                <div>Time</div>
-                <div>Action</div>
-                <div>Amount</div>
-                <div>Status</div>
+                <div>{getText('ui.recentTransactions.headers.time', 'Time')}</div>
+                <div>{getText('ui.recentTransactions.headers.action', 'Action')}</div>
+                <div>{getText('ui.recentTransactions.headers.amount', 'Amount')}</div>
+                <div>{getText('ui.recentTransactions.headers.status', 'Status')}</div>
             </div>
 
             {/* Transactions Table */}
@@ -172,14 +184,14 @@ export const RecentTransactionsCard = () => {
                                 href="#" 
                                 className="text-primary hover:text-primary/80 text-xs font-medium flex items-center gap-1 transition-colors"
                             >
-                                View on Explorer
+                                {getText('ui.recentTransactions.viewExplorer', 'View on Explorer')}
                                 <i className="fa-solid fa-arrow-right text-xs"></i>
                             </a>
                         </div>
                     </motion.div>
                 )) : (
                     <div className="text-center py-8 text-text-muted">
-                        No transactions found
+                        {getText('ui.recentTransactions.noTransactions', 'No transactions found')}
                     </div>
                 )}
             </div>
@@ -190,7 +202,7 @@ export const RecentTransactionsCard = () => {
                     href="#" 
                     className="text-primary hover:text-primary/80 text-sm font-medium transition-colors"
                 >
-                    See All
+                    {getText('ui.recentTransactions.seeAll', 'See All')}
                 </a>
             </div>
         </motion.div>

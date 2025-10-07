@@ -1,43 +1,51 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { SendModal } from '@/components/ui/SendModal';
+import { useManifest } from '@/hooks/useManifest';
 
 interface QuickActionsCardProps {
     manifest?: any;
 }
 
 export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
+    const { getText } = useManifest();
+    const [sendModalOpen, setSendModalOpen] = useState(false);
+    const [receiveModalOpen, setReceiveModalOpen] = useState(false);
+    const [stakeModalOpen, setStakeModalOpen] = useState(false);
+    const [swapModalOpen, setSwapModalOpen] = useState(false);
+
     const actions = [
         {
             id: 'send',
-            label: 'Send',
+            label: getText('ui.tabs.send', 'Send'),
             icon: "fa-solid fa-paper-plane text-muted text-2xl",
             color: 'bg-primary hover:bg-primary/90 text-muted',
             textColor: 'text-muted',
-            action: () => console.log('Send clicked')
+            action: () => setSendModalOpen(true)
         },
         {
             id: 'receive',
-            label: 'Receive',
+            label: getText('ui.tabs.receive', 'Receive'),
             icon: "fa-solid fa-qrcode text-primary text-2xl",
             color: 'bg-bg-tertiary hover:bg-bg-accent',
             textColor: 'text-white',
-            action: () => console.log('Receive clicked')
+            action: () => setReceiveModalOpen(true)
         },
         {
             id: 'stake',
-            label: 'Stake',
+            label: getText('ui.tabs.stake', 'Stake'),
             icon: "fa-solid fa-lock text-primary text-2xl",
             color: 'bg-bg-tertiary hover:bg-bg-accent',
             textColor: 'text-white',
-            action: () => console.log('Stake clicked')
+            action: () => setStakeModalOpen(true)
         },
         {
             id: 'swap',
-            label: 'Swap',
-            icon: "fa-solid fa-left-right text-primary text-2xl",
+            label: getText('ui.tabs.swap', 'Swap'),
+            icon: "fa-solid fa-exchange-alt text-primary text-2xl",
             color: 'bg-bg-tertiary hover:bg-bg-accent',
             textColor: 'text-white',
-            action: () => console.log('Swap clicked')
+            action: () => setSwapModalOpen(true)
         }
     ];
 
@@ -50,7 +58,7 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
         >
             {/* Title */}
             <h3 className="text-text-muted text-sm font-medium mb-6">
-                Quick Actions
+                {getText('ui.quickActions.title', 'Quick Actions')}
             </h3>
 
             {/* Actions Grid */}
@@ -81,6 +89,33 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
                     );
                 })}
             </div>
+
+            {/* Send Modal */}
+            <SendModal
+                isOpen={sendModalOpen}
+                onClose={() => setSendModalOpen(false)}
+            />
+
+            {/* Receive Modal */}
+            <SendModal
+                isOpen={receiveModalOpen}
+                onClose={() => setReceiveModalOpen(false)}
+                defaultTab="receive"
+            />
+
+                    {/* Stake Modal */}
+                    <SendModal
+                        isOpen={stakeModalOpen}
+                        onClose={() => setStakeModalOpen(false)}
+                        defaultTab="stake"
+                    />
+
+                    {/* Swap Modal */}
+                    <SendModal
+                        isOpen={swapModalOpen}
+                        onClose={() => setSwapModalOpen(false)}
+                        defaultTab="swap"
+                    />
         </motion.div>
     );
 };

@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
+import { useManifest } from '@/hooks/useManifest';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 export const TotalBalanceCard = () => {
     const { totalBalance, loading } = useAccountData();
     const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
+    const { getText } = useManifest();
     const [hasAnimated, setHasAnimated] = useState(false);
 
     return (
@@ -24,7 +26,7 @@ export const TotalBalanceCard = () => {
 
             {/* Title */}
             <h3 className="text-text-secondary text-xl font-sans font-medium mb-4">
-                Total Balance (All Addresses)
+                {getText('ui.totalBalance.title', 'Total Balance (All Addresses)')}
             </h3>
 
             {/* Balance */}
@@ -81,7 +83,7 @@ export const TotalBalanceCard = () => {
             {/* 24h Change */}
             <div className="flex items-center gap-2 mb-4">
                 {historyLoading ? (
-                    <span className="text-sm text-text-muted">Loading 24h change...</span>
+                    <span className="text-sm text-text-muted">{getText('ui.totalBalance.loading24h', 'Loading 24h change...')}</span>
                 ) : historyData ? (
                     <span className={`text-sm flex items-center gap-1 ${historyData.changePercentage >= 0 ? 'text-primary' : 'text-status-error'
                         }`}>
@@ -100,10 +102,10 @@ export const TotalBalanceCard = () => {
                             }}
                         />
                         %
-                        <span className="text-sm text-text-muted ml-1">24h change</span>
+                        <span className="text-sm text-text-muted ml-1">{getText('ui.totalBalance.change24h', '24h change')}</span>
                     </span>
                 ) : (
-                    <span className="text-sm text-text-muted">No historical data</span>
+                    <span className="text-sm text-text-muted">{getText('ui.totalBalance.noData', 'No historical data')}</span>
                 )}
             </div>
 

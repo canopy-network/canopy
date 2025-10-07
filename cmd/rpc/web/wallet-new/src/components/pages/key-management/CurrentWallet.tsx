@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Shield, Copy, Eye, EyeOff, Download, Key, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useManifest } from '@/hooks/useManifest';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 
@@ -12,6 +13,7 @@ export const CurrentWallet = (): JSX.Element => {
         activeAccount,
         switchAccount
     } = useAccounts();
+    const { getText } = useManifest();
 
     const [showPrivateKey, setShowPrivateKey] = useState(false);
 
@@ -27,22 +29,22 @@ export const CurrentWallet = (): JSX.Element => {
     const handleDownloadKeyfile = () => {
         if (activeAccount) {
             // Implement keyfile download functionality
-            toast.success('Keyfile download functionality would be implemented here');
+            toast.success(getText('ui.currentWallet.toasts.downloadSuccess', 'Keyfile download functionality would be implemented here'));
         } else {
-            toast.error('No active account selected');
+            toast.error(getText('ui.currentWallet.toasts.noAccountSelected', 'No active account selected'));
         }
     };
 
     const handleRevealPrivateKeys = () => {
-        if (confirm('Are you sure you want to reveal your private keys? This is a security risk.')) {
+        if (confirm(getText('ui.currentWallet.confirm.revealKeys', 'Are you sure you want to reveal your private keys? This is a security risk.'))) {
             setShowPrivateKey(!showPrivateKey);
-            toast.success(showPrivateKey ? 'Private keys hidden' : 'Private keys revealed');
+            toast.success(showPrivateKey ? getText('ui.currentWallet.toasts.keysHidden', 'Private keys hidden') : getText('ui.currentWallet.toasts.keysRevealed', 'Private keys revealed'));
         }
     };
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        toast.success('Copied to clipboard');
+        toast.success(getText('ui.currentWallet.toasts.copied', 'Copied to clipboard'));
     };
 
     return (
@@ -51,18 +53,18 @@ export const CurrentWallet = (): JSX.Element => {
             className="bg-bg-secondary rounded-lg p-6 border border-bg-accent"
         >
             <div className="flex items-center justify-between gap-2 mb-6">
-                <h2 className="text-xl font-bold text-white">Current Wallet</h2>
+                <h2 className="text-xl font-bold text-white">{getText('ui.currentWallet.title', 'Current Wallet')}</h2>
                 <i className="fa-solid fa-shield-halved text-primary text-2xl"></i>
             </div>
 
             <div className="space-y-5">
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Wallet Name
+                        {getText('ui.currentWallet.fields.walletName', 'Wallet Name')}
                     </label>
                     <Select value={activeAccount?.id || ''} onValueChange={switchAccount}>
                         <SelectTrigger className="w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg">
-                            <SelectValue placeholder="Select wallet" />
+                            <SelectValue placeholder={getText('ui.currentWallet.placeholders.selectWallet', 'Select wallet')} />
                         </SelectTrigger>
                         <SelectContent className="bg-bg-tertiary border-bg-accent">
                             {accounts.map((account) => (
@@ -76,7 +78,7 @@ export const CurrentWallet = (): JSX.Element => {
 
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Wallet Address
+                        {getText('ui.currentWallet.fields.walletAddress', 'Wallet Address')}
                     </label>
                     <div className="relative flex items-center justify-between gap-2">
                         <input
@@ -96,7 +98,7 @@ export const CurrentWallet = (): JSX.Element => {
 
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Public Key
+                        {getText('ui.currentWallet.fields.publicKey', 'Public Key')}
                     </label>
                     <div className="relative flex items-center justify-between gap-2">
                         <input
@@ -120,7 +122,7 @@ export const CurrentWallet = (): JSX.Element => {
                         className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 py-3"
                     >
                         <Download className="w-4 h-4 mr-2" />
-                        Download Keyfile
+                        {getText('ui.currentWallet.buttons.downloadKeyfile', 'Download Keyfile')}
                     </Button>
                     <Button
                         onClick={handleRevealPrivateKeys}
@@ -128,7 +130,7 @@ export const CurrentWallet = (): JSX.Element => {
                         className="flex-1 py-3"
                     >
                         <Key className="w-4 h-4 mr-2" />
-                        Reveal Private Keys
+                        {getText('ui.currentWallet.buttons.revealPrivateKeys', 'Reveal Private Keys')}
                     </Button>
                 </div>
 
@@ -136,9 +138,9 @@ export const CurrentWallet = (): JSX.Element => {
                     <div className="flex items-start gap-3">
                         <i className="fa-solid fa-triangle-exclamation text-red-500 text-md translate-y-1"></i>
                         <div>
-                            <h4 className="text-red-400 font-medium mb-1">Security Warning</h4>
+                            <h4 className="text-red-400 font-medium mb-1">{getText('ui.currentWallet.securityWarning.title', 'Security Warning')}</h4>
                             <p className="text-red-300 text-sm">
-                                Never share your private keys. Anyone with access to them can control your funds.
+                                {getText('ui.currentWallet.securityWarning.message', 'Never share your private keys. Anyone with access to them can control your funds.')}
                             </p>
                         </div>
                     </div>

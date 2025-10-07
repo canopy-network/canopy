@@ -2,10 +2,13 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useAccountData } from '@/hooks/useAccountData';
+import { useManifest } from '@/hooks/useManifest';
+import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 export const AllAddressesCard = () => {
     const { accounts, loading: accountsLoading } = useAccounts();
     const { balances, stakingData, loading: dataLoading } = useAccountData();
+    const { getText } = useManifest();
 
     const formatAddress = (address: string) => {
         return address.substring(0, 6) + '...' + address.substring(address.length - 4);
@@ -19,31 +22,36 @@ export const AllAddressesCard = () => {
         // Check if this address has staking data
         const stakingInfo = stakingData.find(data => data.address === address);
         if (stakingInfo && stakingInfo.staked > 0) {
-            return 'Staked';
+            return getText('ui.allAddresses.status.staked', 'Staked');
         }
-        return 'Liquid';
+        return getText('ui.allAddresses.status.liquid', 'Liquid');
     };
 
     const getAccountIcon = (index: number) => {
         const icons = [
             { icon: 'fa-solid fa-wallet', bg: 'bg-gradient-to-r from-primary/80 to-primary/40' },
             { icon: 'fa-solid fa-layer-group', bg: 'bg-gradient-to-r from-blue-500/80 to-blue-500/40' },
-            { icon: 'fa-solid fa-left-right', bg: 'bg-gradient-to-r  from-purple-500/80 to-purple-500/40' },
-            { icon: 'fa-solid fa-shield-check', bg: 'bg-gradient-to-r from-green-500/80 to-green-500/40' },
-            { icon: 'fa-solid fa-box', bg: 'bg-red-500' }
+            { icon: 'fa-solid fa-exchange-alt', bg: 'bg-gradient-to-r from-purple-500/80 to-purple-500/40' },
+            { icon: 'fa-solid fa-circle', bg: 'bg-gradient-to-r from-green-500/80 to-green-500/40' },
+            { icon: 'fa-solid fa-box', bg: 'bg-gradient-to-r from-red-500/80 to-red-500/40' }
         ];
         return icons[index % icons.length];
     };
 
     const getStatusColor = (status: string) => {
+        const stakedText = getText('ui.allAddresses.status.staked', 'Staked');
+        const unstakingText = getText('ui.allAddresses.status.unstaking', 'Unstaking');
+        const liquidText = getText('ui.allAddresses.status.liquid', 'Liquid');
+        const delegatedText = getText('ui.allAddresses.status.delegated', 'Delegated');
+
         switch (status) {
-            case 'Staked':
+            case stakedText:
                 return 'bg-primary/20 text-primary';
-            case 'Unstaking':
+            case unstakingText:
                 return 'bg-orange-500/20 text-orange-400';
-            case 'Liquid':
+            case liquidText:
                 return 'bg-gray-500/20 text-gray-400';
-            case 'Delegated':
+            case delegatedText:
                 return 'bg-primary/20 text-primary';
             default:
                 return 'bg-gray-500/20 text-gray-400';
@@ -83,7 +91,7 @@ export const AllAddressesCard = () => {
                 transition={{ duration: 0.5, delay: 0.4 }}
             >
                 <div className="flex items-center justify-center h-full">
-                    <div className="text-text-muted">Loading addresses...</div>
+                    <div className="text-text-muted">{getText('ui.allAddresses.loading', 'Loading addresses...')}</div>
                 </div>
             </motion.div>
         );
@@ -99,13 +107,13 @@ export const AllAddressesCard = () => {
             {/* Title with See All link */}
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-text-primary text-lg font-semibold">
-                    All Addresses
+                    {getText('ui.allAddresses.title', 'All Addresses')}
                 </h3>
                 <a
                     href="#"
                     className="text-text-muted hover:text-primary/80 text-sm font-medium transition-colors"
                 >
-                    See All
+                    {getText('ui.allAddresses.seeAll', 'See All')}
                 </a>
             </div>
 
@@ -129,15 +137,30 @@ export const AllAddressesCard = () => {
                             <div className="text-text-primary text-sm font-medium mb-1">
                                 {address.address}
                             </div>
-                            <div className="text-text-muted text-xs">
-                                {address.balance}
+                            <div className="text-text-muted text-xs flex items-center gap-1">
+                                <AnimatedNumber
+                                    value={parseFloat(address.totalValue)}
+                                    format={{
+                                        notation: 'standard',
+                                        maximumFractionDigits: 2
+                                    }}
+                                    className="text-text-muted text-xs"
+                                />
+                                <span>CNPY</span>
                             </div>
                         </div>
 
                         {/* Balance and Value */}
                         <div className="text-right flex-shrink-0">
                             <div className="text-text-primary text-sm font-medium">
-                                {address.totalValue}
+                                <AnimatedNumber
+                                    value={parseFloat(address.totalValue)}
+                                    format={{
+                                        notation: 'standard',
+                                        maximumFractionDigits: 2
+                                    }}
+                                    className="text-text-primary text-sm font-medium"
+                                />
                             </div>
                             <div className={`text-xs font-medium ${getChangeColor(address.change)}`}>
                                 {address.change}
@@ -153,7 +176,7 @@ export const AllAddressesCard = () => {
                     </motion.div>
                 )) : (
                     <div className="text-center py-8 text-text-muted">
-                        No addresses found
+                        {getText('ui.allAddresses.noAddresses', 'No addresses found')}
                     </div>
                 )}
             </div>
