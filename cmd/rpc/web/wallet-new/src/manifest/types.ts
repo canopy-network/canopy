@@ -55,6 +55,7 @@ export type ChainConfig = {
       encoding?: 'json'|'text'
       body?: any
     }[]
+    avgBlockTimeSec?: number
     refresh?: { staleTimeMs?: number; refetchIntervalMs?: number }
   }
   gas?: { price?: string; simulate?: boolean }
@@ -130,6 +131,11 @@ export type Action = {
     payloadTemplate?: any
   }
   success?: { message?: string; links?: { label: string; href: string }[] }
+  requiresFeature?: string
+  hidden?: boolean
+  tags: string[];
+  priority?: number;
+  order?: number;
 }
 
-export type Manifest = { version: string; actions: Action[] }
+export type Manifest = { version: string; actions: Action[], ui?: {quickActions?: {max?: number}} }

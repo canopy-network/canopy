@@ -1,6 +1,6 @@
 import { useQueries } from '@tanstack/react-query'
 import type { ChainConfig } from './types'
-import { template } from '../core/templater'
+import { template } from '@/core/templater'
 
 export function useNodeParams(chain?: ChainConfig) {
   const sources = chain?.params?.sources ?? []

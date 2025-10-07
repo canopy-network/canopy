@@ -1,17 +1,40 @@
 // ActionRunner.tsx
 import React from 'react'
-import { useConfig } from '../app/providers/ConfigProvider'
+import { useConfig } from '@/app/providers/ConfigProvider'
 import FormRenderer from './FormRenderer'
 import Confirm from './Confirm'
 import Result from './Result'
 import WizardRunner from './WizardRunner'
-import { template } from '../core/templater'
-import { useResolvedFee } from '../core/fees'
-import { useSession, attachIdleRenew } from '../state/session'
+import { template } from '@/core/templater'
+import { useResolvedFee } from '@/core/fees'
+import { useSession, attachIdleRenew } from '@/state/session'
 import UnlockModal from '../components/UnlockModal'
 import useDebouncedValue from "../core/useDebouncedValue";
+import { getFieldsFromAction, normalizeFormForAction, buildPayloadFromAction, buildConfirmSummary } from '@/core/actionForm'
+
 
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
+
+function normalizeForm(action: any, form: Record<string, any>) {
+    const out: Record<string, any> = {...form};
+    const fields = action?.form?.fields ?? [];
+    const isNumName = (n: string) => ['amount', 'receiveAmount', 'fee', 'gas', 'gasPrice'].includes(n);
+    const asNum = (v: any) => {
+        if (v === '' || v == null) return v;
+        const s = String(v).replace(/,/g, '');
+        const n = Number(s);
+        return Number.isNaN(n) ? v : n;
+    };
+    const asBool = (v: any) => v === true || v === 'true' || v === 1 || v === '1';
+
+    for (const f of fields) {
+        const name = f.name;
+        if (!(name in out)) continue;
+        if (f.type === 'number' || isNumName(name)) out[name] = asNum(out[name]);
+        if (['delegate', 'earlyWithdrawal', 'submit'].includes(name)) out[name] = asBool(out[name]);
+    }
+    return out;
+}
 
 
 export default function ActionRunner({ actionId }: { actionId: string }) {
@@ -20,6 +43,8 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
         () => manifest?.actions.find((a) => a.id === actionId),
         [manifest, actionId]
     )
+
+    const fields = React.useMemo(() => getFieldsFromAction(action), [action])
 
     const [stage, setStage] = React.useState<Stage>('form')
     const [form, setForm] = React.useState<Record<string, any>>({})
@@ -43,21 +68,21 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
 
     const onSubmit = React.useCallback(() => setStage('confirm'), [])
 
+
+    const normForm = React.useMemo(() => normalizeFormForAction(action as any, debouncedForm), [action, debouncedForm])
     const payload = React.useMemo(
-        () => template(action?.rpc.payload ?? {}, {
-            form,
+        () => buildPayloadFromAction(action as any, {
+            form: normForm,
             chain,
-            session: { password: session.password },
+            session: {password: session.password},
+            fees: {effective: fee?.amount}
         }),
-        [action?.rpc.payload, form, chain, session.password]
+        [action, normForm, chain, session.password, fee?.amount]
     )
 
     const confirmSummary = React.useMemo(
-        () => (action?.confirm?.summary ?? []).map((s) => ({
-            label: s.label,
-            value: template(s.value, { form, chain, fees: { effective: fee?.amount } }),
-        })),
-        [action?.confirm?.summary, form, chain, fee?.amount]
+        () => buildConfirmSummary(action as any, {form: normForm, chain, fees: {effective: fee?.amount}}),
+        [action, normForm, chain, fee?.amount]
     )
 
     const host = React.useMemo(() => {
@@ -104,11 +129,7 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
                     <>
                         {stage === 'form' && (
                             <div className="space-y-4">
-                                {action!.form?.fields ? (
-                                    <FormRenderer fields={action!.form?.fields ?? []} value={form} onChange={onFormChange} />
-                                ) : (
-                                    <div>No form for this action</div>
-                                )}
+                                <FormRenderer fields={fields} value={form} onChange={onFormChange} />
 
                                 {/* Línea de fee sin flicker: mantenemos el último valor mientras “isFetching” */}
                                 <div className="flex items-center justify-between">

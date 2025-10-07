@@ -4,231 +4,302 @@
     {
       "id": "Send",
       "label": "Send",
-      "icon": "send",
+      "icon": "Send",
       "kind": "tx",
-      "flow": "single",
+      "tags": ["quick", "dashboard"],
+      "priority": 100,
+      "utilType": "send",
       "rpc": {
         "base": "admin",
         "path": "/v1/admin/tx-send",
         "method": "POST",
         "payload": {
-          "from": "{{account.address}}",
-          "to": "{{form.to}}",
+          "address": "{{account.address}}",
+          "pubKey": "",
+          "committees": "",
+          "netAddress": "",
           "amount": "{{form.amount}}",
-          "denom": "{{chain.denom.base}}",
-          "memo": "{{form.memo}}"
+          "delegate": false,
+          "earlyWithdrawal": false,
+          "output": "{{form.recipient}}",
+          "signer": "",
+          "memo": "{{form.memo}}",
+          "fee": "{{form.fee}}",
+          "submit": true,
+          "password": "{{form.password}}"
         }
-      },
-      "fees": {
-        "use": "default",
-        "denom": "{{chain.denom.base}}"
-      },
-      "form": {
-        "layout": {
-          "grid": { "cols": 12, "gap": 4 },
-          "aside": { "show": false }
-        },
-        "fields": [
-          {
-            "name": "to",
-            "label": "Recipient",
-            "type": "address",
-            "format": "evm",
-            "required": true,
-            "placeholder": "0x...",
-            "colSpan": 12,
-            "rules": {
-              "address": "evm",
-              "message": "Enter a valid EVM address"
-            },
-            "help": "Destination EVM address"
-          },
-          {
-            "name": "amount",
-            "label": "Amount",
-            "type": "number",
-            "required": true,
-            "colSpan": 12,
-            "suffix": "{{chain.denom.symbol}}",
-            "rules": { "gt": 0, "min": 0.000001 },
-            "help": "Must be greater than 0"
-          },
-          {
-            "name": "memo",
-            "label": "Memo",
-            "type": "text",
-            "placeholder": "Optional note",
-            "colSpan": 12,
-            "rules": { "regex": "^.{0,140}$", "message": "Max 140 characters" },
-            "help": "Max 140 characters"
-          }
-        ]
-      },
-      "confirm": {
-        "title": "Confirm Send",
-        "ctaLabel": "Send",
-        "showPayload": true,
-        "payloadSource": "rpc.payload",
-        "summary": [
-          { "label": "From", "value": "{{account.address}}" },
-          { "label": "To", "value": "{{form.to}}" },
-          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
-          { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
-        ]
-      },
-      "success": {
-        "message": "Sent {{form.amount}} {{chain.denom.symbol}} to {{form.to}}",
-        "links": [
-          { "label": "View Tx", "href": "/tx/{{result.hash}}" }
-        ]
       }
     },
     {
       "id": "Stake",
       "label": "Stake",
+      "icon": "Lock",
       "kind": "tx",
-      "flow": "wizard",
+      "tags": ["quick"],
+      "priority": 90,
+      "requiresFeature": "staking",
+      "utilType": "stake",
       "rpc": {
         "base": "admin",
-        "path": "/staking/stake",
+        "path": "/v1/admin/tx-stake",
         "method": "POST",
         "payload": {
-          "address": "{{form.address}}",
+          "address": "{{account.address}}",
+          "pubKey": "",
+          "committees": "{{form.committees}}",
+          "netAddress": "{{form.net_address}}",
           "amount": "{{form.amount}}",
-          "stakeType": "{{form.stakeType}}",
-          "autocompound": "{{form.autocompound}}",
+          "delegate": "{{form.delegate}}",
+          "earlyWithdrawal": "{{form.earlyWithdrawal}}",
+          "output": "{{form.output}}",
+          "signer": "{{form.signer}}",
           "memo": "{{form.memo}}",
-          "password": "{{session.password}}",
-          "submit": true
+          "fee": "{{form.fee}}",
+          "submit": true,
+          "password": "{{form.password}}"
+        }
+      }
+    },
+    {
+      "id": "Swap",
+      "label": "Swap",
+      "icon": "Replace",
+      "kind": "tx",
+      "tags": ["quick"],
+      "priority": 70,
+      "utilType": "create_order",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-create-order",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "chainId": "{{form.chainId}}",
+          "data": "{{form.data}}",
+          "amount": "{{form.amount}}",
+          "receiveAmount": "{{form.receiveAmount}}",
+          "receiveAddress": "{{form.receiveAddress}}",
+          "memo": "{{form.memo}}",
+          "fee": "{{form.fee}}",
+          "submit": true,
+          "password": "{{form.password}}"
+        }
+      }
+    },
+    {
+      "id": "Receive",
+      "label": "Receive",
+      "icon": "Plus",
+      "kind": "tx",
+      "tags": ["quick"],
+      "priority": 60,
+      "utilType": "create_order"
+    },
+
+    {
+      "id": "EditStake",
+      "label": "Edit Stake",
+      "icon": "Pencil",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-edit-stake",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "committees": "{{form.committees}}",
+          "netAddress": "{{form.netAddress}}",
+          "amount": "{{form.amount}}",
+          "earlyWithdrawal": "{{form.earlyWithdrawal}}",
+          "output": "",
+          "signer": "",
+          "memo": "{{form.memo}}",
+          "fee": "{{fees.effective}}",
+          "submit": true,
+          "password": "{{session.password}}"
         }
       },
-      "fees": {
-        "use": "custom",
-        "denom": "{{chain.denom.base}}",
-        "refreshMs": 30000,
-        "providers": [
+      "form": {
+        "layout": {
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          }
+        },
+        "fields": [
           {
-            "type": "query",
-            "base": "rpc",
-            "path": "/v1/query/params",
-            "method": "POST",
-            "encoding": "text",
-            "body": "{\"height\":0,\"address\":\"\"}",
-            "selector": "fee.stakeFee"
-          }
-        ],
-        "buckets": {
-          "avg": { "multiplier": 1.0, "default": true }
-        }
-      },
-      "steps": [
-        {
-          "id": "basic",
-          "title": "Basic Setup",
-          "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 }, "aside": { "show": true, "width": 5 } },
-            "fields": [
-              {
-                "name": "address",
-                "label": "Address to Use",
-                "type": "select",
-                "colSpan": 12,
-                "options": [
-                  { "label": "Primary (8,234.56 CNPY)", "value": "0xYourAddress" }
-                ]
-              },
-              {
-                "name": "stakeType",
-                "label": "Stake Type",
-                "type": "select",
-                "colSpan": 12,
-                "options": [
-                  { "label": "Validation", "value": "validator" },
-                  { "label": "Delegation", "value": "delegation" }
-                ]
-              },
-              {
-                "name": "amount",
-                "label": "Stake Amount",
-                "type": "number",
-                "suffix": "{{chain.denom.symbol}}",
-                "colSpan": 12,
-                "rules": { "gt": 0 }
-              },
-              {
-                "name": "autocompound",
-                "label": "Autocompound",
-                "type": "select",
-                "colSpan": 12,
-                "options": [
-                  { "label": "ON", "value": "on" },
-                  { "label": "OFF", "value": "off" }
-                ],
-                "help": "Automatically restake rewards"
-              }
-            ]
+            "name": "committees",
+            "label": "Committees",
+            "type": "text",
+            "colSpan": 12
           },
-          "aside": { "widget": "currentStakes" }
-        },
-        {
-          "id": "chains",
-          "title": "Chain Selection",
-          "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 } },
-            "fields": [
+          {
+            "name": "netAddress",
+            "label": "Net Address",
+            "type": "text",
+            "colSpan": 12
+          },
+          {
+            "name": "amount",
+            "label": "Amount (Δ)",
+            "type": "number",
+            "suffix": "{{chain.denom.symbol}}",
+            "colSpan": 12
+          },
+          {
+            "name": "earlyWithdrawal",
+            "label": "Early Withdrawal (true/false)",
+            "type": "select",
+            "options": [
               {
-                "name": "chainId",
-                "label": "Select Chain",
-                "type": "select",
-                "colSpan": 12,
-                "options": [
-                  { "label": "Polkadot", "value": "polkadot" },
-                  { "label": "Kusama", "value": "kusama" }
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "id": "options",
-          "title": "Advanced Options",
-          "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 } },
-            "fields": [
-              {
-                "name": "rewardAddress",
-                "label": "Reward Address",
-                "type": "address",
-                "format": "evm",
-                "placeholder": "0x...",
-                "colSpan": 12,
-                "rules": { "address": "evm" }
+                "label": "true",
+                "value": "true"
               },
               {
-                "name": "memo",
-                "label": "Memo",
-                "type": "text",
-                "placeholder": "Optional",
-                "colSpan": 12
+                "label": "false",
+                "value": "false"
               }
-            ]
+            ],
+            "colSpan": 12
+          },
+          {
+            "name": "memo",
+            "label": "Memo",
+            "type": "text",
+            "colSpan": 12
           }
-        }
-      ],
-      "confirm": {
-        "title": "Confirm Stake",
-        "ctaLabel": "Confirm Stake",
-        "showPayload": true,
-        "payloadSource": "rpc.payload",
-        "summary": [
-          { "label": "Address", "value": "{{form.address}}" },
-          { "label": "Stake Type", "value": "{{form.stakeType}}" },
-          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" }
         ]
+      }
+    },
+    {
+      "id": "Unstake",
+      "label": "Unstake",
+      "icon": "Unlock",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unstake",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "pubKey": "",
+          "committees": "",
+          "netAddress": "",
+          "amount": 0,
+          "delegate": false,
+          "earlyWithdrawal": false,
+          "output": "",
+          "signer": "",
+          "memo": "{{form.memo}}",
+          "fee": "{{fees.effective}}",
+          "submit": true,
+          "password": "{{session.password}}"
+        }
       },
-      "success": {
-        "message": "Staked {{form.amount}} {{chain.denom.symbol}}",
-        "links": []
+      "form": {
+        "layout": {
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          }
+        },
+        "fields": [
+          {
+            "name": "memo",
+            "label": "Memo",
+            "type": "text",
+            "placeholder": "Optional",
+            "colSpan": 12
+          }
+        ]
+      }
+    },
+    {
+      "id": "PauseValidator",
+      "label": "Pause Validator",
+      "icon": "Pause",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-pause",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "pubKey": "",
+          "committees": "",
+          "netAddress": "",
+          "amount": 0,
+          "delegate": false,
+          "earlyWithdrawal": false,
+          "output": "",
+          "signer": "",
+          "memo": "{{form.memo}}",
+          "fee": "{{fees.effective}}",
+          "submit": true,
+          "password": "{{session.password}}"
+        }
+      },
+      "form": {
+        "layout": {
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          }
+        },
+        "fields": [
+          {
+            "name": "memo",
+            "label": "Memo",
+            "type": "text",
+            "placeholder": "Optional"
+          }
+        ]
+      }
+    },
+    {
+      "id": "UnpauseValidator",
+      "label": "Unpause Validator",
+      "icon": "Play",
+      "kind": "tx",
+      "flow": "single",
+      "rpc": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unpause",
+        "method": "POST",
+        "payload": {
+          "address": "{{account.address}}",
+          "pubKey": "",
+          "committees": "",
+          "netAddress": "",
+          "amount": 0,
+          "delegate": false,
+          "earlyWithdrawal": false,
+          "output": "",
+          "signer": "",
+          "memo": "{{form.memo}}",
+          "fee": "{{fees.effective}}",
+          "submit": true,
+          "password": "{{session.password}}"
+        }
+      },
+      "form": {
+        "layout": {
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          }
+        },
+        "fields": [
+          {
+            "name": "memo",
+            "label": "Memo",
+            "type": "text",
+            "placeholder": "Optional"
+          }
+        ]
       }
     },
     {
@@ -246,7 +317,7 @@
         {
           "id": "CreateNewKey",
           "label": "Create New Key",
-          "icon": "plus",
+          "icon": "Plus",
           "kind": "tx",
           "flow": "single",
           "rpc": {
@@ -260,8 +331,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -296,7 +372,10 @@
             "ctaLabel": "Create Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet Name", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet Name",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {
@@ -322,8 +401,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -382,8 +466,14 @@
             "ctaLabel": "Import Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet Name", "value": "{{form.walletName}}" },
-              { "label": "Private Key", "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}" }
+              {
+                "label": "Wallet Name",
+                "value": "{{form.walletName}}"
+              },
+              {
+                "label": "Private Key",
+                "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}"
+              }
             ]
           },
           "success": {
@@ -407,8 +497,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -440,7 +535,10 @@
             "ctaLabel": "Delete Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet to Delete", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet to Delete",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {
@@ -465,8 +563,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -494,7 +597,10 @@
             "ctaLabel": "Download",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {

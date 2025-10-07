@@ -2,13 +2,13 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useManifest } from '@/hooks/useManifest';
 import { useAccountData } from '@/hooks/useAccountData';
-import { TotalBalanceCard } from './dashboard/TotalBalanceCard';
-import { StakedBalanceCard } from './dashboard/StakedBalanceCard';
-import { QuickActionsCard } from './dashboard/QuickActionsCard';
-import { RecentTransactionsCard } from './dashboard/RecentTransactionsCard';
-import { AllAddressesCard } from './dashboard/AllAddressesCard';
-import { NodeManagementCard } from './dashboard/NodeManagementCard';
-import { ErrorBoundary } from '../ErrorBoundary';
+import { TotalBalanceCard } from '@/components/dashboard/TotalBalanceCard';
+import { StakedBalanceCard } from '@/components/dashboard/StakedBalanceCard';
+import { QuickActionsCard } from '@/components/dashboard/QuickActionsCard';
+import { AllAddressesCard } from '@/components/dashboard/AllAddressesCard';
+import { NodeManagementCard } from '@/components/dashboard/NodeManagementCard';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import {RecentTransactionsCard} from "@/components/dashboard/RecentTransactionsCard";
 
 export const Dashboard = () => {
     const { manifest, loading: manifestLoading } = useManifest();
@@ -64,18 +64,18 @@ export const Dashboard = () => {
                         </div>
                         <div className="lg:w-80 w-full">
                             <ErrorBoundary>
-                                <QuickActionsCard manifest={manifest} />
+                                <QuickActionsCard />
                             </ErrorBoundary>
                         </div>
                     </div>
 
                     {/* Middle Section - Transactions and Addresses */}
                     <div className="flex flex-col lg:flex-row gap-6 mb-8 w-full">
-                        <div className="flex-1 w-9/12">
-                            <ErrorBoundary>
-                                <RecentTransactionsCard />
-                            </ErrorBoundary>
-                        </div>
+                        {/*<div className="flex-1 w-9/12">*/}
+                        {/*    <ErrorBoundary>*/}
+                        {/*        <RecentTransactionsCard />*/}
+                        {/*    </ErrorBoundary>*/}
+                        {/*</div>*/}
                         <div className="w-3/12">
                             <ErrorBoundary>
                                 <AllAddressesCard />

@@ -2,8 +2,8 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import MainLayout from '../components/layouts/MainLayout'
 
-import Dashboard from '../components/pages/Dashboard'
-import { KeyManagement } from '@/components/pages/KeyManagement'
+import Dashboard from '@/app/pages/Dashboard'
+import { KeyManagement } from '@/app/pages/KeyManagement'
 
 // Placeholder components for the new routes
 const Portfolio = () => <div className="min-h-screen bg-bg-primary flex items-center justify-center"><div className="text-white text-xl">Portfolio - Próximamente</div></div>

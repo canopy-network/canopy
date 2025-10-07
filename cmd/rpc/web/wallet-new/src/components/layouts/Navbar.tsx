@@ -8,7 +8,7 @@ import { useTotalStage } from "@/hooks/useTotalStage";
 import { getAbbreviateAmount } from "@/helpers/chain";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
-import { KeyManagement } from '@/components/pages/KeyManagement';
+import { KeyManagement } from '@/app/pages/KeyManagement';
 import { Link, NavLink } from 'react-router-dom';
 
 

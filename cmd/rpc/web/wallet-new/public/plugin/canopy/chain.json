@@ -14,6 +14,82 @@
   "address": {
     "format": "evm"
   },
+  "ds": {
+    "height": {
+      "source": { "base": "rpc", "path": "/v1/query/height", "method": "POST" },
+      "selector": "",
+      "coerce": { "response": { "": "int" } }
+
+    },
+    "account": {
+      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" , "encoding": "text"},
+      "body": { "height": 0, "address": "{{account.address}}" },
+      "coerce": { "body": { "height": "number" } },
+      "selector": "amount"
+    },
+    "accountByHeight": {
+      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST",
+        "encoding": "text"
+      },
+      "body": { "height": "{{height}}", "address": "{{address}}" },
+      "coerce": { "ctx": { "height": "number" }, "body": { "height": "number" }, "response": { "amount": "number" }},
+      "selector": "amount"
+    },
+
+    "txs": {
+      "sent": {
+        "source": { "base": "rpc", "path": "/v1/query/txs-by-sender", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": {
+            "items": "results",
+            "totalPages": "paging.totalPages"
+          },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      },
+
+      "received": {
+        "source": { "base": "rpc", "path": "/v1/query/txs-by-rec", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      }
+    },
+
+    "activity": {
+      "all": {
+        "source": { "base": "rpc", "path": "/v1/query/activity", "method": "POST" },
+        "body": { "cursor": "{{cursor}}", "limit": "{{limit}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "cursor",
+          "param": { "cursor": "cursor", "limit": "limit" },
+          "response": { "items": "items", "nextCursor": "next" },
+          "defaults": { "limit": 50 }
+        }
+      }
+    },
+    "params": {
+      "source": { "base": "rpc", "path": "/v1/query/params", "method": "POST", "encoding": "text" },
+      "body": "{\"height\":0,\"address\":\"\"}"
+    },
+    "gov": {
+      "proposals": {
+        "source": { "base": "rpc", "path": "/v1/gov/proposals", "method": "GET" },
+        "selector": "proposals"
+      }
+    }
+  },
   "params": {
     "sources": [
       {
@@ -25,6 +101,7 @@
         "body": "{\"height\":0,\"address\":\"\"}"
       }
     ],
+    "avgBlockTimeSec": 30,
     "refresh": {
       "staleTimeMs": 3000,
       "refetchIntervalMs": 3000

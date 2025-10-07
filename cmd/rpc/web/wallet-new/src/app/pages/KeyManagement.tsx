@@ -2,9 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { CurrentWallet } from './key-management/CurrentWallet';
-import { ImportWallet } from './key-management/ImportWallet';
-import { NewKey } from './key-management/NewKey';
+import { CurrentWallet } from '@/components/key-management/CurrentWallet';
+import { ImportWallet } from '@/components/key-management/ImportWallet';
+import { NewKey } from '@/components/key-management/NewKey';
 
 
 

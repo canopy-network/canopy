@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
-import { useEmbeddedConfig } from '../../manifest/loader'
-import { useNodeParams } from '../../manifest/params'
-import type { ChainConfig, Manifest } from '../../manifest/types'
+import { useEmbeddedConfig } from '@/manifest/loader'
+import { useNodeParams } from '@/manifest/params'
+import type { ChainConfig, Manifest } from '@/manifest/types'
 
 type Ctx = {
   chain?: ChainConfig
