@@ -1,8 +1,6 @@
 package fsm
 
 import (
-	"fmt"
-
 	"github.com/canopy-network/canopy/lib"
 )
 
