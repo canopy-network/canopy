@@ -275,6 +275,7 @@ const (
 	CodeInvalidPluginRespId       ErrorCode = 99
 	CodeUnexpectedPluginToFSM     ErrorCode = 100
 	CodePluginTimeout             ErrorCode = 101
+	CodeStakeBelowMinimum         ErrorCode = 102
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"

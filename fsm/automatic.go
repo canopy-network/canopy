@@ -1,6 +1,8 @@
 package fsm
 
 import (
+	"fmt"
+
 	"github.com/canopy-network/canopy/lib"
 )
 
@@ -70,6 +72,16 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 	// delete validators who are finishing unstaking
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
+	}
+	// FIX FOR TRANSACTION ISOLATION BUG:
+	// If a parameter was updated during this block, enforce the new minimums now
+	// that all transactions have been committed and we have full state visibility
+	if s.pendingParamUpdate != nil {
+		if err = s.ConformStateToParamUpdate(s.pendingParamUpdate); err != nil {
+			return err
+		}
+		// clear the pending update after processing
+		s.pendingParamUpdate = nil
 	}
 	// execute plugin end block
 	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{Height: s.Height(), ProposerAddress: proposerAddress})
