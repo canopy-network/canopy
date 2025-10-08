@@ -463,6 +463,7 @@ func ErrNewHeight() ErrorI {
 }
 
 func ErrWrongRootHeight() ErrorI {
+	PrintStackTrace()
 	return NewError(CodeRootHeight, ConsensusModule, "wrong root height")
 }
 
