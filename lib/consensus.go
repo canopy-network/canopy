@@ -434,7 +434,8 @@ func (x *View) Check(view *View, enforceHeights bool) ErrorI {
 	}
 	// if enforcing heights, ensure root height is correct
 	if enforceHeights && x.RootHeight != view.RootHeight {
-		// exit with wrong root height error
+		// exit with wrong root height
+		fmt.Println("wrong root height", "expected", view.RootHeight, "got", x.RootHeight)
 		return ErrWrongRootHeight()
 	}
 	// exit
