@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/drand/kyber"
@@ -733,6 +734,7 @@ type PseudorandomParams struct {
 
 // WeightedPseudorandom() generates an index for the 'token' that the winner has in their stake
 func WeightedPseudorandom(p *PseudorandomParams) (publicKey crypto.PublicKeyI) {
+	defer TimeTrack(NewDefaultLogger(), time.Now())
 	// convert the seed data to a 16 byte hash, so it may fit in a uint64 type
 	seed := FormatInputIntoSeed(p.LastProposerAddresses, p.RootHeight, p.Height, p.Round)[:16]
 	// convert the seedBytes into a uint64 number

@@ -4,6 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
+	"time"
 )
 
 /*
@@ -64,6 +65,7 @@ func Sortition(p *SortitionParams) (out []byte, vrf *lib.Signature, isCandidate 
 
 // VerifyCandidate verifies that a remote peer is in fact a Leader Candidate by running the IsCandidate function using the provided VRF out
 func VerifyCandidate(p *SortitionVerifyParams) (out []byte, isCandidate bool) {
+	defer lib.TimeTrack(lib.NewDefaultLogger(), time.Now())
 	if p == nil {
 		return nil, false
 	}
@@ -79,6 +81,7 @@ func VerifyCandidate(p *SortitionVerifyParams) (out []byte, isCandidate bool) {
 
 // sortition() determines if IsCandidate using the hash of the VRF and calculates the expected candidates
 func sortition(votingPower, totalPower, totalValidators uint64, signature []byte) (out []byte, isCandidate bool) {
+	defer lib.TimeTrack(lib.NewDefaultLogger(), time.Now())
 	out = crypto.Hash(signature)
 	isCandidate = IsCandidate(votingPower, totalPower, expectedCandidates(totalValidators), out)
 	return
@@ -131,6 +134,7 @@ func VRF(lastNProposers [][]byte, rootHeight, height, round uint64, privateKey c
 // - Creates a candidacy cutoff point for a Validator based on their stake (more stake = higher chance of being a Candidate)
 // - Checks if number(vrfOut) is below the cutoff
 func IsCandidate(votingPower, totalVotingPower, expectedCandidates uint64, vrfOut []byte) bool {
+	defer lib.TimeTrack(lib.NewDefaultLogger(), time.Now())
 	// safety checks
 	if totalVotingPower == 0 || expectedCandidates == 0 {
 		return false
@@ -145,6 +149,7 @@ func IsCandidate(votingPower, totalVotingPower, expectedCandidates uint64, vrfOu
 
 // expectedCandidates() returns the number of expected candidates based on the committee size within the defined limits
 func expectedCandidates(totalValidators uint64) uint64 {
+	defer lib.TimeTrack(lib.NewDefaultLogger(), time.Now())
 	candidates := lib.Uint64Percentage(totalValidators, percentOfValidatorsAsCandidates)
 	if candidates < minCandidates {
 		return minCandidates
