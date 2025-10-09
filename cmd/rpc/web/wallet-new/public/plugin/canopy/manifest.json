@@ -3,7 +3,7 @@
   "ui": {
     "tabs": {
       "send": "Send",
-      "receive": "Receive", 
+      "receive": "Receive",
       "stake": "Stake",
       "swap": "Swap"
     },
@@ -37,14 +37,43 @@
     },
     "allAddresses": {
       "title": "All Addresses",
+      "subtitle": "Manage and monitor all your blockchain addresses across different networks",
       "seeAll": "See All",
       "loading": "Loading addresses...",
       "noAddresses": "No addresses found",
+      "searchPlaceholder": "Search addresses...",
+      "allNetworks": "All Networks",
+      "canopyMainnet": "Canopy Mainnet",
+      "totalTokens": "Total Tokens",
+      "keyManagement": "Key Management",
+      "totalBalance": "Total Balance",
+      "totalStaked": "Total Staked",
+      "activeAddresses": "Active Addresses",
+      "allValidatorsSynced": "All Validators Synced",
+      "addressPortfolio": "Address Portfolio",
+      "live": "Live",
+      "loadingAccounts": "Loading accounts...",
+      "tableHeaders": {
+        "address": "Address",
+        "totalBalance": "Total Balance",
+        "staked": "Staked",
+        "liquid": "Liquid",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "addressTypes": {
+        "primary": "Primary Address",
+        "staking": "Staking Address",
+        "trading": "Trading Address",
+        "validator": "Validator Address",
+        "treasury": "Treasury Address"
+      },
       "status": {
         "staked": "Staked",
         "unstaking": "Unstaking",
         "liquid": "Liquid",
-        "delegated": "Delegated"
+        "delegated": "Delegated",
+        "notStaked": "Not Staked"
       }
     },
     "quickActions": {
@@ -256,8 +285,13 @@
       },
       "form": {
         "layout": {
-          "grid": { "cols": 12, "gap": 4 },
-          "aside": { "show": false }
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          },
+          "aside": {
+            "show": false
+          }
         },
         "fields": [
           {
@@ -281,7 +315,10 @@
             "required": true,
             "colSpan": 12,
             "suffix": "{{chain.denom.symbol}}",
-            "rules": { "gt": 0, "min": 0.000001 },
+            "rules": {
+              "gt": 0,
+              "min": 0.000001
+            },
             "help": "Must be greater than 0"
           },
           {
@@ -290,7 +327,10 @@
             "type": "text",
             "placeholder": "Optional note",
             "colSpan": 12,
-            "rules": { "regex": "^.{0,140}$", "message": "Max 140 characters" },
+            "rules": {
+              "regex": "^.{0,140}$",
+              "message": "Max 140 characters"
+            },
             "help": "Max 140 characters"
           }
         ]
@@ -301,10 +341,22 @@
         "showPayload": true,
         "payloadSource": "rpc.payload",
         "summary": [
-          { "label": "From", "value": "{{account.address}}" },
-          { "label": "To", "value": "{{form.to}}" },
-          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
-          { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
+          {
+            "label": "From",
+            "value": "{{account.address}}"
+          },
+          {
+            "label": "To",
+            "value": "{{form.to}}"
+          },
+          {
+            "label": "Amount",
+            "value": "{{form.amount}} {{chain.denom.symbol}}"
+          },
+          {
+            "label": "Fee",
+            "value": "{{fees.effective}} {{chain.denom.symbol}}"
+          }
         ]
       },
       "ui": {
@@ -340,7 +392,10 @@
       "success": {
         "message": "Sent {{form.amount}} {{chain.denom.symbol}} to {{form.to}}",
         "links": [
-          { "label": "View Tx", "href": "/tx/{{result.hash}}" }
+          {
+            "label": "View Tx",
+            "href": "/tx/{{result.hash}}"
+          }
         ]
       }
     },
@@ -379,7 +434,10 @@
           }
         ],
         "buckets": {
-          "avg": { "multiplier": 1.0, "default": true }
+          "avg": {
+            "multiplier": 1.0,
+            "default": true
+          }
         }
       },
       "steps": [
@@ -387,7 +445,16 @@
           "id": "basic",
           "title": "Basic Setup",
           "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 }, "aside": { "show": true, "width": 5 } },
+            "layout": {
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": true,
+                "width": 5
+              }
+            },
             "fields": [
               {
                 "name": "address",
@@ -395,7 +462,10 @@
                 "type": "select",
                 "colSpan": 12,
                 "options": [
-                  { "label": "Primary (8,234.56 CNPY)", "value": "0xYourAddress" }
+                  {
+                    "label": "Primary (8,234.56 CNPY)",
+                    "value": "0xYourAddress"
+                  }
                 ]
               },
               {
@@ -404,8 +474,14 @@
                 "type": "select",
                 "colSpan": 12,
                 "options": [
-                  { "label": "Validation", "value": "validator" },
-                  { "label": "Delegation", "value": "delegation" }
+                  {
+                    "label": "Validation",
+                    "value": "validator"
+                  },
+                  {
+                    "label": "Delegation",
+                    "value": "delegation"
+                  }
                 ]
               },
               {
@@ -414,7 +490,9 @@
                 "type": "number",
                 "suffix": "{{chain.denom.symbol}}",
                 "colSpan": 12,
-                "rules": { "gt": 0 }
+                "rules": {
+                  "gt": 0
+                }
               },
               {
                 "name": "autocompound",
@@ -422,20 +500,33 @@
                 "type": "select",
                 "colSpan": 12,
                 "options": [
-                  { "label": "ON", "value": "on" },
-                  { "label": "OFF", "value": "off" }
+                  {
+                    "label": "ON",
+                    "value": "on"
+                  },
+                  {
+                    "label": "OFF",
+                    "value": "off"
+                  }
                 ],
                 "help": "Automatically restake rewards"
               }
             ]
           },
-          "aside": { "widget": "currentStakes" }
+          "aside": {
+            "widget": "currentStakes"
+          }
         },
         {
           "id": "chains",
           "title": "Chain Selection",
           "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 } },
+            "layout": {
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              }
+            },
             "fields": [
               {
                 "name": "chainId",
@@ -443,8 +534,14 @@
                 "type": "select",
                 "colSpan": 12,
                 "options": [
-                  { "label": "Polkadot", "value": "polkadot" },
-                  { "label": "Kusama", "value": "kusama" }
+                  {
+                    "label": "Polkadot",
+                    "value": "polkadot"
+                  },
+                  {
+                    "label": "Kusama",
+                    "value": "kusama"
+                  }
                 ]
               }
             ]
@@ -454,7 +551,12 @@
           "id": "options",
           "title": "Advanced Options",
           "form": {
-            "layout": { "grid": { "cols": 12, "gap": 4 } },
+            "layout": {
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              }
+            },
             "fields": [
               {
                 "name": "rewardAddress",
@@ -463,7 +565,9 @@
                 "format": "evm",
                 "placeholder": "0x...",
                 "colSpan": 12,
-                "rules": { "address": "evm" }
+                "rules": {
+                  "address": "evm"
+                }
               },
               {
                 "name": "memo",
@@ -482,9 +586,18 @@
         "showPayload": true,
         "payloadSource": "rpc.payload",
         "summary": [
-          { "label": "Address", "value": "{{form.address}}" },
-          { "label": "Stake Type", "value": "{{form.stakeType}}" },
-          { "label": "Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" }
+          {
+            "label": "Address",
+            "value": "{{form.address}}"
+          },
+          {
+            "label": "Stake Type",
+            "value": "{{form.stakeType}}"
+          },
+          {
+            "label": "Amount",
+            "value": "{{form.amount}} {{chain.denom.symbol}}"
+          }
         ]
       },
       "ui": {
@@ -534,8 +647,13 @@
       "flow": "single",
       "form": {
         "layout": {
-          "grid": { "cols": 12, "gap": 4 },
-          "aside": { "show": false }
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          },
+          "aside": {
+            "show": false
+          }
         },
         "fields": [
           {
@@ -592,8 +710,13 @@
       },
       "form": {
         "layout": {
-          "grid": { "cols": 12, "gap": 4 },
-          "aside": { "show": false }
+          "grid": {
+            "cols": 12,
+            "gap": 4
+          },
+          "aside": {
+            "show": false
+          }
         },
         "fields": [
           {
@@ -631,7 +754,10 @@
             "placeholder": "amount value for the tx in CNPY",
             "suffix": "{{chain.denom.symbol}}",
             "required": true,
-            "rules": { "gt": 0, "min": 0.000001 },
+            "rules": {
+              "gt": 0,
+              "min": 0.000001
+            },
             "help": "the amount of currency being sent / sold"
           },
           {
@@ -641,7 +767,10 @@
             "colSpan": 6,
             "placeholder": "amount of counter asset to receive",
             "required": true,
-            "rules": { "gt": 0, "min": 0.000001 },
+            "rules": {
+              "gt": 0,
+              "min": 0.000001
+            },
             "help": "the amount of counter asset being received"
           },
           {
@@ -665,7 +794,9 @@
             "colSpan": 12,
             "placeholder": "opt: note attached with the transaction",
             "rows": 3,
-            "rules": { "maxLength": 200 },
+            "rules": {
+              "maxLength": 200
+            },
             "help": "optional note attached with the transaction"
           }
         ]
@@ -689,18 +820,39 @@
         "showPayload": true,
         "payloadSource": "rpc.payload",
         "summary": [
-          { "label": "From", "value": "{{account.address}}" },
-          { "label": "Chain ID", "value": "{{form.chainId}}" },
-          { "label": "Sell Amount", "value": "{{form.amount}} {{chain.denom.symbol}}" },
-          { "label": "Receive Amount", "value": "{{form.receiveAmount}}" },
-          { "label": "Receive Address", "value": "{{form.receiveAddress}}" },
-          { "label": "Fee", "value": "{{fees.effective}} {{chain.denom.symbol}}" }
+          {
+            "label": "From",
+            "value": "{{account.address}}"
+          },
+          {
+            "label": "Chain ID",
+            "value": "{{form.chainId}}"
+          },
+          {
+            "label": "Sell Amount",
+            "value": "{{form.amount}} {{chain.denom.symbol}}"
+          },
+          {
+            "label": "Receive Amount",
+            "value": "{{form.receiveAmount}}"
+          },
+          {
+            "label": "Receive Address",
+            "value": "{{form.receiveAddress}}"
+          },
+          {
+            "label": "Fee",
+            "value": "{{fees.effective}} {{chain.denom.symbol}}"
+          }
         ]
       },
       "success": {
         "message": "Order created successfully",
         "links": [
-          { "label": "View Order", "href": "/orders/{{result.orderId}}" }
+          {
+            "label": "View Order",
+            "href": "/orders/{{result.orderId}}"
+          }
         ]
       }
     },
@@ -733,8 +885,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -769,7 +926,10 @@
             "ctaLabel": "Create Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet Name", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet Name",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {
@@ -795,8 +955,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -855,8 +1020,14 @@
             "ctaLabel": "Import Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet Name", "value": "{{form.walletName}}" },
-              { "label": "Private Key", "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}" }
+              {
+                "label": "Wallet Name",
+                "value": "{{form.walletName}}"
+              },
+              {
+                "label": "Private Key",
+                "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}"
+              }
             ]
           },
           "success": {
@@ -880,8 +1051,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -913,7 +1089,10 @@
             "ctaLabel": "Delete Wallet",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet to Delete", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet to Delete",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {
@@ -938,8 +1117,13 @@
           },
           "form": {
             "layout": {
-              "grid": { "cols": 12, "gap": 4 },
-              "aside": { "show": false }
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              },
+              "aside": {
+                "show": false
+              }
             },
             "fields": [
               {
@@ -967,7 +1151,10 @@
             "ctaLabel": "Download",
             "showPayload": false,
             "summary": [
-              { "label": "Wallet", "value": "{{form.walletName}}" }
+              {
+                "label": "Wallet",
+                "value": "{{form.walletName}}"
+              }
             ]
           },
           "success": {

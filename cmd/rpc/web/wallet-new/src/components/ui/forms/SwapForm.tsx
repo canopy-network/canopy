@@ -52,7 +52,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             <select
                                 value={formData.account}
                                 onChange={(e) => onInputChange('account', e.target.value)}
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
                                 required
                             >
                                 {accounts.map((account) => (
@@ -75,7 +75,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             value={formData.chainId}
                             onChange={(e) => onInputChange('chainId', e.target.value)}
                             placeholder={getActionText('Swap', 'form.fields.chainId.placeholder', 'the id of the committee / counter asset')}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                             required
                         />
                     </div>
@@ -90,7 +90,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             value={formData.data}
                             onChange={(e) => onInputChange('data', e.target.value)}
                             placeholder={getActionText('Swap', 'form.fields.data.placeholder', 'optional hex data for sub-asset id')}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                         />
                     </div>
 
@@ -107,7 +107,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                                 placeholder={getActionText('Swap', 'form.fields.amount.placeholder', 'amount value for the tx in CNPY')}
                                 step="0.000001"
                                 min="0"
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
                                 required
                             />
                             <button
@@ -140,7 +140,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             placeholder={getActionText('Swap', 'form.fields.receiveAmount.placeholder', 'amount of counter asset to receive')}
                             step="0.000001"
                             min="0"
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                             required
                         />
                     </div>
@@ -155,7 +155,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             value={formData.receiveAddress}
                             onChange={(e) => onInputChange('receiveAddress', e.target.value)}
                             placeholder={getActionText('Swap', 'form.fields.receiveAddress.placeholder', 'the address where the counter asset will be sent')}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                             required
                             minLength={40}
                             maxLength={40}
@@ -173,7 +173,7 @@ export const SwapForm: React.FC<SwapFormProps> = ({
                             placeholder={getActionText('Swap', 'form.fields.memo.placeholder', 'opt: note attached with the transaction')}
                             maxLength={200}
                             rows={3}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
                         />
                     </div>
                 </div>

@@ -24,8 +24,8 @@ module.exports = {
         // Background Colors
         bg: {
           primary: '#1a1b23',
-          secondary: '#22232e',
-          tertiary: '#2b2c38',
+          secondary: '#2A2B35',
+          tertiary: '#2A2B35',
           accent: '#2a2b35',
         },
         // Text Colors

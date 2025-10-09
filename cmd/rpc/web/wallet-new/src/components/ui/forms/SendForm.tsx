@@ -51,7 +51,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                                 value={formData.recipient}
                                 onChange={(e) => onInputChange('recipient', e.target.value)}
                                 placeholder="Enter recipient address"
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-20"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-20"
                                 required
                                 minLength={40}
                                 maxLength={40}
@@ -81,7 +81,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                             <select
                                 value={formData.account}
                                 onChange={(e) => onInputChange('account', e.target.value)}
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
                                 required
                             >
                                 {accounts.map((account) => (
@@ -100,7 +100,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                             Asset
                         </label>
                         <div className="relative">
-                            <select className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none">
+                            <select className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none">
                                 <option value="cnpy">CNPY (Balance: {formattedBalance})</option>
                             </select>
                             <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-text-muted"></i>
@@ -120,7 +120,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                                 placeholder="0.00"
                                 step="0.000001"
                                 min="0"
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
                                 required
                             />
                             <button
@@ -147,7 +147,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                             placeholder="Optional note attached with the transaction"
                             maxLength={200}
                             rows={3}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
                         />
                     </div>
                 </div>

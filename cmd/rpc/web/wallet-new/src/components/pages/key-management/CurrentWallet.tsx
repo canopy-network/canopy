@@ -63,7 +63,7 @@ export const CurrentWallet = (): JSX.Element => {
                         {getText('ui.currentWallet.fields.walletName', 'Wallet Name')}
                     </label>
                     <Select value={activeAccount?.id || ''} onValueChange={switchAccount}>
-                        <SelectTrigger className="w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg">
+                        <SelectTrigger className="w-full bg-bg-tertiary border border-gray-600 text-white h-11 rounded-lg">
                             <SelectValue placeholder={getText('ui.currentWallet.placeholders.selectWallet', 'Select wallet')} />
                         </SelectTrigger>
                         <SelectContent className="bg-bg-tertiary border-bg-accent">
@@ -85,7 +85,7 @@ export const CurrentWallet = (): JSX.Element => {
                             type="text"
                             value={activeAccount?.address || ''}
                             readOnly
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2.5 text-white pr-10"
                         />
                         <button
                             onClick={() => copyToClipboard(activeAccount?.address || '')}
@@ -105,7 +105,7 @@ export const CurrentWallet = (): JSX.Element => {
                             type={showPrivateKey ? 'text' : 'password'}
                             value={activeAccount?.publicKey || ''}
                             readOnly
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2.5 text-white pr-10"
                         />
                         <button
                             onClick={() => setShowPrivateKey(!showPrivateKey)}

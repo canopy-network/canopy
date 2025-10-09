@@ -98,7 +98,7 @@ export const ImportWallet = (): JSX.Element => {
                                 placeholder={getText('ui.importWallet.placeholders.privateKey', 'Enter your private key...')}
                                 value={importForm.privateKey}
                                 onChange={(e) => setImportForm({ ...importForm, privateKey: e.target.value })}
-                                className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10 placeholder:font-mono"
+                                className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2.5 text-white pr-10 placeholder:font-mono"
                             />
                             <button
                                 onClick={() => setShowPrivateKey(!showPrivateKey)}
@@ -118,7 +118,7 @@ export const ImportWallet = (): JSX.Element => {
                             placeholder={getText('ui.importWallet.placeholders.password', 'Password')}
                             value={importForm.password}
                             onChange={(e) => setImportForm({ ...importForm, password: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2.5 text-white"
                         />
                     </div>
 
@@ -131,7 +131,7 @@ export const ImportWallet = (): JSX.Element => {
                             placeholder={getText('ui.importWallet.placeholders.confirmPassword', 'Confirm your password....')}
                             value={importForm.confirmPassword}
                             onChange={(e) => setImportForm({ ...importForm, confirmPassword: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2.5 text-white"
                         />
                     </div>
 
@@ -165,7 +165,7 @@ export const ImportWallet = (): JSX.Element => {
                         <input
                             type="file"
                             accept=".json"
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                         />
                     </div>
 

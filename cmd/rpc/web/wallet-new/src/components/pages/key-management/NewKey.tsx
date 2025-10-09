@@ -71,7 +71,7 @@ export const NewKey = (): JSX.Element => {
                             placeholder={getText('ui.newKey.placeholders.password', 'Password')}
                             value={newKeyForm.password}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2 text-white"
                         />
                     </div>
 
@@ -84,7 +84,7 @@ export const NewKey = (): JSX.Element => {
                             placeholder={getText('ui.newKey.placeholders.walletName', 'Primary Wallet')}
                             value={newKeyForm.walletName}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, walletName: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-bg-tertiary border border-gray-600 rounded-lg px-3 py-2 text-white"
                         />
                     </div>
                 </div>

@@ -54,7 +54,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                             <select
                                 value={formData.account}
                                 onChange={(e) => onInputChange('account', e.target.value)}
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
                                 required
                             >
                                 {accounts.map((account) => (
@@ -90,7 +90,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                                 value={formData.committees}
                                 onChange={(e) => onInputChange('committees', e.target.value)}
                                 min="1"
-                                className="flex-1 px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-center"
+                                className="flex-1 px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors text-center"
                                 required
                             />
                             <button
@@ -122,7 +122,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                                 placeholder="1,000.000000"
                                 step="0.000001"
                                 min="0"
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors pr-16"
                                 required
                             />
                             <button
@@ -153,7 +153,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                             value={formData.netAddress}
                             onChange={(e) => onInputChange('netAddress', e.target.value)}
                             placeholder="url of the node"
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                             required
                         />
                     </div>
@@ -168,7 +168,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                             value={formData.output}
                             onChange={(e) => onInputChange('output', e.target.value)}
                             placeholder="02cd4e5eb53ea665702042a6ed6d31d61605"
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                         />
                     </div>
 
@@ -181,7 +181,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                             <select
                                 value={formData.signer}
                                 onChange={(e) => onInputChange('signer', e.target.value)}
-                                className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
+                                className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
                                 required
                             >
                                 {accounts.map((account) => (
@@ -249,7 +249,7 @@ export const StakeForm: React.FC<StakeFormProps> = ({
                             placeholder="opt: note attached with the transaction"
                             maxLength={200}
                             rows={3}
-                            className="w-full px-3 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
+                            className="w-full px-3 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors resize-none"
                         />
                     </div>
                 </div>

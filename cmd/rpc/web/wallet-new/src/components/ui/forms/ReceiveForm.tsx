@@ -39,7 +39,7 @@ export const ReceiveForm: React.FC<ReceiveFormProps> = ({
                         <select
                             value={formData.account}
                             onChange={(e) => onInputChange('account', e.target.value)}
-                            className="w-full px-4 py-3 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
+                            className="w-full px-4 py-3 bg-bg-tertiary border border-gray-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors appearance-none"
                             required
                         >
                             {accounts.map((account) => (

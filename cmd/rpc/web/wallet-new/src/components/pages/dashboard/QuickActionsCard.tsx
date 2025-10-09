@@ -27,7 +27,7 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
             id: 'receive',
             label: getText('ui.tabs.receive', 'Receive'),
             icon: "fa-solid fa-qrcode text-primary text-2xl",
-            color: 'bg-bg-tertiary hover:bg-bg-accent',
+            color: 'bg-gray-600/10 hover:bg-gray-600/20',
             textColor: 'text-white',
             action: () => setReceiveModalOpen(true)
         },
@@ -35,7 +35,7 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
             id: 'stake',
             label: getText('ui.tabs.stake', 'Stake'),
             icon: "fa-solid fa-lock text-primary text-2xl",
-            color: 'bg-bg-tertiary hover:bg-bg-accent',
+            color: 'bg-gray-600/10 hover:bg-gray-600/20',
             textColor: 'text-white',
             action: () => setStakeModalOpen(true)
         },
@@ -43,7 +43,7 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
             id: 'swap',
             label: getText('ui.tabs.swap', 'Swap'),
             icon: "fa-solid fa-exchange-alt text-primary text-2xl",
-            color: 'bg-bg-tertiary hover:bg-bg-accent',
+            color: 'bg-gray-600/10 hover:bg-gray-600/20',
             textColor: 'text-white',
             action: () => setSwapModalOpen(true)
         }
@@ -103,19 +103,19 @@ export const QuickActionsCard = ({ manifest }: QuickActionsCardProps) => {
                 defaultTab="receive"
             />
 
-                    {/* Stake Modal */}
-                    <SendModal
-                        isOpen={stakeModalOpen}
-                        onClose={() => setStakeModalOpen(false)}
-                        defaultTab="stake"
-                    />
+            {/* Stake Modal */}
+            <SendModal
+                isOpen={stakeModalOpen}
+                onClose={() => setStakeModalOpen(false)}
+                defaultTab="stake"
+            />
 
-                    {/* Swap Modal */}
-                    <SendModal
-                        isOpen={swapModalOpen}
-                        onClose={() => setSwapModalOpen(false)}
-                        defaultTab="swap"
-                    />
+            {/* Swap Modal */}
+            <SendModal
+                isOpen={swapModalOpen}
+                onClose={() => setSwapModalOpen(false)}
+                defaultTab="swap"
+            />
         </motion.div>
     );
 };

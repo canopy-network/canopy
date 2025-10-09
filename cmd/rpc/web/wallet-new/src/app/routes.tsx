@@ -4,6 +4,7 @@ import MainLayout from '../components/layouts/MainLayout'
 
 import Dashboard from '../components/pages/Dashboard'
 import { KeyManagement } from '@/components/pages/KeyManagement'
+import { Accounts } from '@/components/pages/Accounts'
 
 // Placeholder components for the new routes
 const Portfolio = () => <div className="min-h-screen bg-bg-primary flex items-center justify-center"><div className="text-white text-xl">Portfolio - Próximamente</div></div>
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
         element: <MainLayout />,           // tu layout con <Outlet/>
         children: [
             { path: '/', element: <Dashboard /> },
+            { path: '/accounts', element: <Accounts /> },
             { path: '/portfolio', element: <Portfolio /> },
             { path: '/staking', element: <Staking /> },
             { path: '/governance', element: <Governance /> },
