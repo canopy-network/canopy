@@ -418,7 +418,6 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	// check if parseDataForOrders found an order
 	if tx.order == nil {
 		// dev output
-		p.logger.Warnf("Transaction had no Canopy order, %s", string(tx.tx.Data()))
 		// no orders found, no processing required
 		return nil
 	}
