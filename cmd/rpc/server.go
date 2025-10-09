@@ -36,7 +36,7 @@ const (
 	ApplicationJSON = "application/json; charset=utf-8"
 
 	walletStaticDir   = "web/wallet/out"
-	explorerStaticDir = "web/explorer/out"
+	explorerStaticDir = "web/explorer-new/out"
 )
 
 // Server represents a Canopy RPC server with configuration options.

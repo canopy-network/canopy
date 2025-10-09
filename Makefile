@@ -3,6 +3,7 @@ GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
 WALLET_DIR := ./cmd/rpc/web/wallet
 EXPLORER_DIR := ./cmd/rpc/web/explorer
+EXPLORER_NEW_DIR := ./cmd/rpc/web/explorer-new
 DOCKER_DIR := ./.docker/compose.yaml
 
 # ==================================================================================== #
@@ -16,7 +17,7 @@ help:
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 # Targets, this is a list of all available commands which can be executed using the make command.
-.PHONY: build/canopy build/canopy-full build/wallet build/explorer test/all dev/deps docker/up \
+.PHONY: build/canopy build/canopy-full build/wallet build/explorer build/explorer-new test/all dev/deps docker/up \
 	docker/down docker/build docker/up-fast docker/down docker/logs
 
 # ==================================================================================== #
@@ -37,6 +38,10 @@ build/wallet:
 ## build/explorer: build the canopy's explorer project
 build/explorer:
 	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
+
+## build/explorer-new: build the canopy's new explorer project
+build/explorer-new:
+	npm install --prefix $(EXPLORER_NEW_DIR) && npm run build --prefix $(EXPLORER_NEW_DIR)
 
 # ==================================================================================== #
 # TESTING
