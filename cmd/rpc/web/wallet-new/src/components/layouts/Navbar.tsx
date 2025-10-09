@@ -1,32 +1,24 @@
 import React, { useState } from 'react';
-import { Key, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
+import {  Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
-import { Button } from "@/components/ui/Button";
-import { useAccounts } from "@/hooks/useAccounts";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/Select";
+import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useTotalStage } from "@/hooks/useTotalStage";
-import { getAbbreviateAmount } from "@/helpers/chain";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
-import { KeyManagement } from '@/app/pages/KeyManagement';
 import { Link, NavLink } from 'react-router-dom';
 
 
 export const Navbar = (): JSX.Element => {
     const {
         accounts,
-        activeAccount,
         loading,
-        error,
+        error: hasErrorInAccounts,
         switchAccount,
-        createNewAccount,
-        deleteAccount,
-        refetch
+        selectedAccount
     } = useAccounts();
 
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
-
-    const [showKeyManagement, setShowKeyManagement] = useState(false);
 
     const containerVariants = {
         hidden: { opacity: 0, y: -20 },
@@ -169,15 +161,15 @@ export const Navbar = (): JSX.Element => {
                         className="flex items-center gap-2"
                     >
                         <Select
-                            value={activeAccount?.id || ''}
+                            value={selectedAccount?.id || ''}
                             onValueChange={switchAccount}
                         >
                             <SelectTrigger className="w-64 bg-muted border-[#3a3b45] text-white rounded-lg px-4 py-3 h-11">
                                 <div className="flex items-center justify-between w-full">
                                     <span className="text-sm font-medium">
                                         {loading ? 'Loading...' :
-                                            activeAccount?.address ?
-                                                `${activeAccount.address.slice(0, 4)}...${activeAccount.address.slice(-4)} (${activeAccount.nickname})` :
+                                            selectedAccount?.address ?
+                                                `${ selectedAccount.address.slice(0, 4)}...${selectedAccount?.address.slice(-4)} (${selectedAccount?.nickname})` :
                                                 'Select an account'
                                         }
                                     </span>
@@ -205,7 +197,7 @@ export const Navbar = (): JSX.Element => {
                                         </div>
                                     </SelectItem>
                                 ))}
-                                {accounts.length === 0 && !loading && (
+                                {(accounts.length === 0 && !loading || hasErrorInAccounts) && (
                                     <div className="p-2 text-center text-text-muted text-sm">
                                         No accounts available
                                     </div>

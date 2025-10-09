@@ -53,14 +53,13 @@ export function useBalanceHistory() {
                 Promise.all(previousPromises),
             ])
 
-            console.log('currentBalances', currentBalances)
 
 
             const currentTotal  = currentBalances.reduce((sum: any, v: any) => sum + (v || 0), 0)
             const previousTotal = previousBalances.reduce((sum: any, v: any) => sum + (v || 0), 0)
             const change24h = currentTotal - previousTotal
             const changePercentage = previousTotal > 0 ? (change24h / previousTotal) * 100 : 0
-            const progressPercentage = Math.min(Math.abs(changePercentage) * 10, 100)
+            const progressPercentage = Math.min(Math.abs(changePercentage), 100)
 
             return { current: currentTotal, previous24h: previousTotal, change24h, changePercentage, progressPercentage }
         }

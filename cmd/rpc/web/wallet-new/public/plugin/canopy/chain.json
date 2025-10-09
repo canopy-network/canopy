@@ -25,7 +25,7 @@
       "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" , "encoding": "text"},
       "body": { "height": 0, "address": "{{account.address}}" },
       "coerce": { "body": { "height": "number" } },
-      "selector": "amount"
+      "selector": ""
     },
     "accountByHeight": {
       "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST",
@@ -35,7 +35,24 @@
       "coerce": { "ctx": { "height": "number" }, "body": { "height": "number" }, "response": { "amount": "number" }},
       "selector": "amount"
     },
-
+    "keystore": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore", "method": "GET" },
+      "selector": ""
+    },
+    "keystoreNewKey": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-new-key", "method": "POST" },
+      "body": { "nickname": "{{nickname}}", "password": "{{password}}" }
+    },
+    "keystoreDelete": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
+      "body": { "nickname": "{{nickname}}" }
+    },
+    "validators": {
+      "source": { "base": "rpc", "path": "/v1/query/validators", "method": "POST" },
+      "body": { "height": 0, "pageNumber": 1, "perPage": 1000 },
+      "coerce": { "body": { "height": "int" } },
+      "selector": "results"
+    },
     "txs": {
       "sent": {
         "source": { "base": "rpc", "path": "/v1/query/txs-by-sender", "method": "POST" },
@@ -101,7 +118,7 @@
         "body": "{\"height\":0,\"address\":\"\"}"
       }
     ],
-    "avgBlockTimeSec": 30,
+    "avgBlockTimeSec": 20,
     "refresh": {
       "staleTimeMs": 3000,
       "refetchIntervalMs": 3000

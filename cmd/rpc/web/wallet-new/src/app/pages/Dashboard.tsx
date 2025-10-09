@@ -11,7 +11,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {RecentTransactionsCard} from "@/components/dashboard/RecentTransactionsCard";
 
 export const Dashboard = () => {
-    const { manifest, loading: manifestLoading } = useManifest();
+    const { loading: manifestLoading } = useManifest();
     const { loading: dataLoading, error } = useAccountData();
 
     const containerVariants = {
@@ -71,12 +71,12 @@ export const Dashboard = () => {
 
                     {/* Middle Section - Transactions and Addresses */}
                     <div className="flex flex-col lg:flex-row gap-6 mb-8 w-full">
-                        {/*<div className="flex-1 w-9/12">*/}
-                        {/*    <ErrorBoundary>*/}
-                        {/*        <RecentTransactionsCard />*/}
-                        {/*    </ErrorBoundary>*/}
-                        {/*</div>*/}
-                        <div className="w-3/12">
+                        <div className="flex-1 lg:w-9/12">
+                            <ErrorBoundary>
+                                <RecentTransactionsCard />
+                            </ErrorBoundary>
+                        </div>
+                        <div className="lg:w-3/12 ">
                             <ErrorBoundary>
                                 <AllAddressesCard />
                             </ErrorBoundary>

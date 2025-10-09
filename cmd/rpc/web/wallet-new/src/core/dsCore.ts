@@ -82,6 +82,12 @@ export const applyCoerce = (obj: any, spec?: Record<string,string>) => {
     return out
 }
 
+export const hasDsKey = (chain: any, key: string) => {
+    const read = (root: any) => key.split('.').reduce((a, k) => a?.[k], root)
+    return Boolean(read(chain?.ds) ?? read(chain?.metrics))
+}
+
+
 /* ---------------- resolver & URL ---------------- */
 export function resolveLeaf(chain: ChainLike, key: string): DsLeaf | null {
     const read = (root:any) => key.split('.').reduce((a,k)=>a?.[k], root)

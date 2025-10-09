@@ -1,4 +1,4 @@
-// src/configfirst/useDS.ts
+// src/core/useDS.ts
 import { useQuery } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import { resolveLeaf, buildRequest, parseResponse } from './dsCore'

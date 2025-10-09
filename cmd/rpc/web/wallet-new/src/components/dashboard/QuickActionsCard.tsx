@@ -40,7 +40,7 @@ export function QuickActionsCard({ onRunAction }:{
 
     return (
         <motion.div
-            className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
+            className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}

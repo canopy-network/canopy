@@ -11,7 +11,7 @@ export const StakedBalanceCard = () => {
     const totalRewards = stakingData.reduce((sum, data) => sum + data.rewards, 0);
     return (
         <motion.div
-            className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden h-full"
+            className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent relative overflow-hidden h-full"
             initial={hasAnimated ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}

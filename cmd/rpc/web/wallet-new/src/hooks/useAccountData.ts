@@ -1,123 +1,110 @@
-import { useQuery } from '@tanstack/react-query';
-import { useAccounts } from './useAccounts';
-import { Account, Validators } from '@/core/api';
+import { useQuery } from '@tanstack/react-query'
+import { useAccounts } from './useAccounts'
+import { useConfig } from '@/app/providers/ConfigProvider'
+import {useDSFetcher} from "@/core/dsFetch";
+import {hasDsKey} from "@/core/dsCore";
 
 interface AccountBalance {
-  address: string;
-  amount: number;
-  nickname?: string;
+    address: string
+    amount: number
+    nickname?: string
 }
 
 interface StakingData {
-  address: string;
-  staked: number;
-  rewards: number;
-  nickname?: string;
+    address: string
+    staked: number
+    rewards: number
+    nickname?: string
 }
 
-async function fetchAccountBalance(address: string, nickname?: string): Promise<AccountBalance> {
-  try {
-    // Use height 0 for account queries (as per original wallet)
-    const accountData = await Account(0, address);
-    
-    return {
-      address,
-      amount: accountData.amount || 0,
-      nickname
-    };
-  } catch (error) {
-    console.error(`Error fetching balance for address ${address}:`, error);
-    return {
-      address,
-      amount: 0,
-      nickname
-    };
-  }
-}
+const parseMaybeJson = (v: any) =>
+    (typeof v === 'string' && /^\s*[{[]/.test(v)) ? JSON.parse(v) : v
 
-async function fetchStakingData(address: string, nickname?: string): Promise<StakingData> {
-  try {
-    // Get all validators and find if this address is a validator
-    const allValidatorsResponse = await Validators(0);
-    const allValidators = allValidatorsResponse.results || [];
-    const validator = allValidators.find((v: any) => v.address === address);
-    
-    if (validator) {
-      return {
-        address,
-        staked: validator.stakedAmount || 0,
-        rewards: 0, // Rewards would need to be calculated separately
-        nickname
-      };
-    } else {
-      // Address is not a validator
-      return {
-        address,
-        staked: 0,
-        rewards: 0,
-        nickname
-      };
-    }
-  } catch (error) {
-    console.error(`Error fetching staking data for address ${address}:`, error);
-    return {
-      address,
-      staked: 0,
-      rewards: 0,
-      nickname
-    };
-  }
-}
 
 export function useAccountData() {
-  const { accounts, loading: accountsLoading } = useAccounts();
+    const { accounts, loading: accountsLoading } = useAccounts()
+    const dsFetch = useDSFetcher()
+    const { chain } = useConfig()
 
-  const balanceQuery = useQuery({
-    queryKey: ['accountBalances', accounts.map(acc => acc.address)],
-    enabled: !accountsLoading && accounts.length > 0,
-    queryFn: async () => {
-      if (accounts.length === 0) return { totalBalance: 0, balances: [] };
+    const chainId = chain?.chainId ?? 'chain'
+    const chainReadyBalances = !!chain && hasDsKey(chain, 'account')
+    const chainReadyValidators = !!chain && hasDsKey(chain, 'validators')
 
-      const balancePromises = accounts.map(account => 
-        fetchAccountBalance(account.address, account.nickname)
-      );
-      
-      const balances = await Promise.all(balancePromises);
-      const totalBalance = balances.reduce((sum, balance) => sum + balance.amount, 0);
-      
-      return { totalBalance, balances };
-    },
-    staleTime: 10000,
-    retry: 2,
-    retryDelay: 1000,
-  });
+    // ---- BALANCES ----
+    const balanceQuery = useQuery({
+        queryKey: ['accountBalances.ds', chainId, accounts.map(a => a.address)],
+        enabled: !accountsLoading && accounts.length > 0 && chainReadyBalances,
+        staleTime: 10_000,
+        retry: 2,
+        retryDelay: 1000,
+        queryFn: async () => {
+            // doble guard por seguridad
+            if (!chainReadyBalances || accounts.length === 0) {
+                return { totalBalance: 0, balances: [] as AccountBalance[] }
+            }
 
-  const stakingQuery = useQuery({
-    queryKey: ['stakingData', accounts.map(acc => acc.address)],
-    enabled: !accountsLoading && accounts.length > 0,
-    queryFn: async () => {
-      if (accounts.length === 0) return { totalStaked: 0, stakingData: [] };
+            const balances = await Promise.all(
+                accounts.map(async (acc): Promise<AccountBalance> => {
+                    try {
+                        const res = await dsFetch<number | any>('account', { account: { address: acc.address }})
+                        const val = typeof res === 'number'
+                            ? res
+                            : Number(parseMaybeJson(res)?.amount ?? 0)
 
-      const stakingPromises = accounts.map(account => 
-        fetchStakingData(account.address, account.nickname)
-      );
-      
-      const stakingData = await Promise.all(stakingPromises);
-      const totalStaked = stakingData.reduce((sum, data) => sum + data.staked, 0);
-      
-      return { totalStaked, stakingData };
-    },
-    staleTime: 10000,
-    retry: 2,
-    retryDelay: 1000,
-  });
+                        return { address: acc.address, amount: val || 0, nickname: acc.nickname }
+                    } catch (err) {
+                        // si el chain aún no estaba listo, regresamos 0 silenciosamente
+                        return { address: acc.address, amount: 0, nickname: acc.nickname }
+                    }
+                })
+            )
 
-  return {
-    totalBalance: balanceQuery.data?.totalBalance || 0,
-    totalStaked: stakingQuery.data?.totalStaked || 0,
-    balances: balanceQuery.data?.balances || [],
-    stakingData: stakingQuery.data?.stakingData || [],
-    loading: balanceQuery.isLoading || stakingQuery.isLoading,
-    error: balanceQuery.error || stakingQuery.error,
-  };
+            const totalBalance = balances.reduce((s, b) => s + (b.amount || 0), 0)
+            return { totalBalance, balances }
+        }
+    })
+
+    // ---- STAKING ----
+    const stakingQuery = useQuery({
+        queryKey: ['stakingData.ds', chainId, accounts.map(a => a.address)],
+        enabled: !accountsLoading && accounts.length > 0 && chainReadyValidators,
+        staleTime: 10_000,
+        retry: 2,
+        retryDelay: 1000,
+        queryFn: async () => {
+            if (!chainReadyValidators || accounts.length === 0) {
+                return { totalStaked: 0, stakingData: [] as StakingData[] }
+            }
+
+            const rows = await dsFetch<any[]>('validators', {})
+            const list = Array.isArray(rows) ? rows : []
+
+            const byAddr = new Map<string, any>()
+            for (const v of list) {
+                const obj = parseMaybeJson(v)
+                const key = obj?.address ?? obj?.validatorAddress ?? obj?.operatorAddress
+                if (key) byAddr.set(String(key), obj)
+            }
+
+            const stakingData = accounts.map((acc): StakingData => {
+                const v = byAddr.get(acc.address)
+                const staked = Number(v?.stakedAmount ?? v?.stake ?? 0)
+                return { address: acc.address, staked: staked || 0, rewards: 0, nickname: acc.nickname }
+            })
+
+            const totalStaked = stakingData.reduce((s, d) => s + (d.staked || 0), 0)
+            return { totalStaked, stakingData }
+        }
+    })
+
+    return {
+        totalBalance: balanceQuery.data?.totalBalance || 0,
+        totalStaked: stakingQuery.data?.totalStaked || 0,
+        balances: balanceQuery.data?.balances || [],
+        stakingData: stakingQuery.data?.stakingData || [],
+        loading: accountsLoading || balanceQuery.isLoading || stakingQuery.isLoading,
+        error: balanceQuery.error || stakingQuery.error,
+        refetchBalances: balanceQuery.refetch,
+        refetchStaking: stakingQuery.refetch,
+    }
 }

@@ -6,6 +6,9 @@ import { validateField } from './validators'
 import { template } from '@/core/templater'
 import { useSession } from '@/state/session'
 
+const looksLikeJson = (s: any) => typeof s === 'string' && /^\s*[\[{]/.test(s)
+const jsonMaybe = (s: any) => { try { return JSON.parse(s) } catch { return s } }
+
 const Grid: React.FC<{ cols: number; children: React.ReactNode }> = ({ cols, children }) => (
     <div className={cx('grid gap-4', `grid-cols-${cols}`)}>{children}</div>
 )
@@ -15,25 +18,26 @@ type Props = {
     value: Record<string, any>
     onChange: (patch: Record<string, any>) => void
     gridCols?: number
+    ctx?: Record<string, any>
 }
 
-export default function FormRenderer({ fields, value, onChange, gridCols = 12 }: Props) {
+export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx }: Props) {
     const [errors, setErrors] = React.useState<Record<string, string>>({})
     const { chain, account } = (window as any).__configCtx ?? {}
     const session = useSession()
 
     const tctx = React.useMemo(
-        () => ({ form: value, chain, account, session: { password: session?.password } }),
-        [value, chain, account, session?.password]
+        () => ({ form: value, chain, account, ...(ctx ?? {}), session: { password: session?.password } }),
+        [value, chain, account, ctx, session?.password]
     )
     const tt = React.useCallback((s?: any) => (typeof s === 'string' ? template(s, tctx) : s), [tctx])
+
 
     const fieldsKeyed = React.useMemo(
         () => fields.map((f: any) => ({ ...f, __key: `${f.tab ?? 'default'}:${f.group ?? ''}:${f.name}` })),
         [fields]
     )
 
-    /** 2) setVal estable; NO await en onChange del input (evita micro “lags”) */
     const setVal = React.useCallback((f: Field, v: any) => {
         onChange({ [f.name]: v })
         // valida async sin bloquear tipeo
@@ -55,22 +59,24 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12 }:
     )
 
     const renderControl = React.useCallback((f: any) => {
-        const common = 'w-full bg-neutral-900 border rounded px-3 py-2 focus:outline-none'
-        const border = errors[f.name] ? 'border-red-600' : 'border-neutral-800'
+        const common = 'w-full  bg-transparent  border placeholder-text-muted text-white  rounded px-3 py-2 rounded-md focus:outline-none'
+        const border = errors[f.name] ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
         const help = errors[f.name] || tt(f.help)
         const v = value[f.name] ?? ''
+
+
 
         const wrap = (child: React.ReactNode) => (
             <div key={f.__key} className={cx(`col-span-${f.colSpan ?? 12}`)}>
                 <label className="block">
-                    {tt(f.label) && <div className="text-sm mb-1">{tt(f.label)}</div>}
+                    {tt(f.label) && <div className="text-sm mb-1 text-text-muted ">{tt(f.label)}</div>}
                     <div className="flex items-stretch gap-1">
-                        {tt(f.prefix) && <span className="px-2 py-2 bg-neutral-800 rounded">{tt(f.prefix)}</span>}
+                        {tt(f.prefix) && <span className="px-2 py-2 bg-canopy-400 rounded">{tt(f.prefix)}</span>}
                         {child}
-                        {tt(f.suffix) && <span className="px-2 py-2 bg-neutral-800 rounded">{tt(f.suffix)}</span>}
+                        {tt(f.suffix) && <span className="px-2 py-2  bg-canopy-600 text-canopy-50 font-semibold  rounded">{tt(f.suffix)}</span>}
                     </div>
                     {help && (
-                        <div className={cx('text-xs mt-1', errors[f.name] ? 'text-red-400' : 'text-neutral-400')}>
+                        <div className={cx('text-xs mt-1', errors[f.name] ? 'text-red-400' : 'text-text-muted')}>
                             {help}
                         </div>
                     )}
@@ -91,6 +97,31 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12 }:
             )
         }
 
+        if (f.type === 'select') {
+            const raw = typeof f.options === 'string' ? tt(f.options) : f.options
+            const src = Array.isArray(raw) ? raw : (looksLikeJson(raw) ? jsonMaybe(raw) : [])
+            const baseOpts = Array.isArray(src) ? src : []
+            const opts = baseOpts.map((o: any, i: number) => {
+                const label = f.optionLabel ? String(o?.[f.optionLabel] ?? '') : tt(o?.label)
+                const value = f.optionValue ? (o?.[f.optionValue]) : (typeof o?.value === 'string' ? tt(o.value) : o?.value)
+                return { ...o, label, value, __k: `${f.name}-${String(value ?? i)}` }
+            })
+            return wrap(
+                <select
+                    className={cx(common, border)}
+                    value={v}
+                    disabled={f.disabled}
+                    onChange={(e) => setVal(f, e.target.value)}
+                >
+                    <option value="" disabled>{tt(f.placeholder) ?? 'Choose...'}</option>
+                    {opts.map((o: any) => <option key={o.__k} value={o.value}>{o.label}</option>)}
+                </select>
+            )
+        }
+        if (f.type === 'coin') {
+
+        }
+
         if (f.type === 'number') {
             return wrap(
                 <input
@@ -100,7 +131,7 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12 }:
                     placeholder={tt(f.placeholder)}
                     value={v ?? ''}
                     disabled={f.disabled}
-                    onChange={(e) => setVal(f, e.currentTarget.value)} // guarda como string mientras editas
+                    onChange={(e) => setVal(f, e.currentTarget.value)}
                 />
             )
         }

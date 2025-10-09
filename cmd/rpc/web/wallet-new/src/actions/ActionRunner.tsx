@@ -1,16 +1,22 @@
 // ActionRunner.tsx
 import React from 'react'
-import { useConfig } from '@/app/providers/ConfigProvider'
+import {useConfig} from '@/app/providers/ConfigProvider'
 import FormRenderer from './FormRenderer'
 import Confirm from './Confirm'
 import Result from './Result'
 import WizardRunner from './WizardRunner'
-import { template } from '@/core/templater'
-import { useResolvedFee } from '@/core/fees'
-import { useSession, attachIdleRenew } from '@/state/session'
+import {template} from '@/core/templater'
+import {useResolvedFee} from '@/core/fees'
+import {useSession, attachIdleRenew} from '@/state/session'
 import UnlockModal from '../components/UnlockModal'
 import useDebouncedValue from "../core/useDebouncedValue";
-import { getFieldsFromAction, normalizeFormForAction, buildPayloadFromAction, buildConfirmSummary } from '@/core/actionForm'
+import {
+    getFieldsFromAction,
+    normalizeFormForAction,
+    buildPayloadFromAction,
+    buildConfirmSummary
+} from '@/core/actionForm'
+import {microToDisplay} from "@/core/format";
 
 
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
@@ -37,8 +43,8 @@ function normalizeForm(action: any, form: Record<string, any>) {
 }
 
 
-export default function ActionRunner({ actionId }: { actionId: string }) {
-    const { manifest, chain, isLoading } = useConfig()
+export default function ActionRunner({actionId}: { actionId: string }) {
+    const {manifest, chain, isLoading} = useConfig()
     const action = React.useMemo(
         () => manifest?.actions.find((a) => a.id === actionId),
         [manifest, actionId]
@@ -53,7 +59,9 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
 
     const session = useSession()
     const ttlSec = chain?.session?.unlockTimeoutSec ?? 900
-    React.useEffect(() => { attachIdleRenew(ttlSec) }, [ttlSec])
+    React.useEffect(() => {
+        attachIdleRenew(ttlSec)
+    }, [ttlSec])
 
     const requiresAuth =
         (action?.auth?.type ??
@@ -61,12 +69,12 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
     const [unlockOpen, setUnlockOpen] = React.useState(false)
 
     // ✅ el hook de fee depende del form debounced, no del “en vivo”
-    const { data: fee, isFetching } = useResolvedFee(action as any, debouncedForm)
+    const {data: fee, isFetching} = useResolvedFee(action as any, debouncedForm)
 
     const isReady = React.useMemo(() => !!action && !!chain, [action, chain])
     const isWizard = React.useMemo(() => action?.flow === 'wizard', [action?.flow])
 
-    const onSubmit = React.useCallback(() => setStage('confirm'), [])
+    const onSubmit = React.useCallback(() => setStage('result'), [])
 
 
     const normForm = React.useMemo(() => normalizeFormForAction(action as any, debouncedForm), [action, debouncedForm])
@@ -94,13 +102,16 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
 
     const doExecute = React.useCallback(async () => {
         if (!isReady) return
-        if (requiresAuth && !session.isUnlocked()) { setUnlockOpen(true); return }
+        if (requiresAuth && !session.isUnlocked()) {
+            setUnlockOpen(true);
+            return
+        }
         setStage('executing')
         const res = await fetch(host + action!.rpc.path, {
             method: action!.rpc.method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
-        }).then((r) => r.json()).catch(() => ({ hash: '0xDEMO' }))
+        }).then((r) => r.json()).catch(() => ({hash: '0xDEMO'}))
         setTxRes(res)
         setStage('result')
     }, [isReady, requiresAuth, session, host, action, payload])
@@ -113,60 +124,60 @@ export default function ActionRunner({ actionId }: { actionId: string }) {
     }, [unlockOpen, session, doExecute])
 
     const onFormChange = React.useCallback((patch: Record<string, any>) => {
-        setForm((prev) => ({ ...prev, ...patch }))
+        setForm((prev) => ({...prev, ...patch}))
     }, [])
 
     return (
         <div className="space-y-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded p-4">
-                <h2 className="text-lg mb-3">{action?.label ?? 'Action'}</h2>
+            <div className="bg-bg-accent border border-neutral-800 rounded p-4 rounded-lg shadow-lg">
+                {action?.label && (
+                    <h2 className="text-lg mb-3">{action?.label ?? 'Action'}</h2>
+                )}
 
                 {isLoading && <div>Loading…</div>}
                 {!isLoading && !isReady && <div>No action "{actionId}" found in manifest</div>}
-                {!isLoading && isReady && isWizard && <WizardRunner action={action!} />}
+                {!isLoading && isReady && isWizard && <WizardRunner action={action!}/>}
 
                 {!isLoading && isReady && !isWizard && (
                     <>
                         {stage === 'form' && (
                             <div className="space-y-4">
-                                <FormRenderer fields={fields} value={form} onChange={onFormChange} />
+                                <FormRenderer fields={fields} value={form} onChange={onFormChange}/>
 
-                                {/* Línea de fee sin flicker: mantenemos el último valor mientras “isFetching” */}
-                                <div className="flex items-center justify-between">
-                                    <div className="text-sm text-neutral-400">
-                                        Estimated fee:{' '}
+                                <div className="flex-col h-full p-4 rounded-lg bg-bg-primary items-center">
+                                    <h4 className={'text-canopy-50'}>Network Fee</h4>
+                                    <div className="flex text-md  mt-3 justify-between">
+                                        <span className={'text-neutral-400 font-light'}>
+                                            Estimated fee:
+                                        </span>
                                         {fee
-                                            ? <span className={isFetching ? 'opacity-70 transition-opacity' : ''}>
-                          {fee.amount} {chain?.denom.symbol}
-                        </span>
+                                            ?
+                                         <span className={isFetching ? 'opacity-70 transition-opacity' : 'font-normal text-canopy-50'}>
+                                                {microToDisplay(Number(fee.amount), chain?.denom?.decimals ?? 6)} {chain?.denom.symbol}
+                                        </span>
                                             : '…'}
                                         {isFetching && <span className="ml-2 animate-pulse">calculating…</span>}
                                     </div>
-                                    <button onClick={onSubmit} className="px-3 py-2 bg-emerald-500 text-black rounded">Continue</button>
                                 </div>
+                                <button onClick={onSubmit}
+                                        className="w-full px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded">Continue
+                                </button>
                             </div>
                         )}
 
-                        {stage === 'confirm' && (
-                            <Confirm
-                                summary={confirmSummary}
-                                ctaLabel={action!.confirm?.ctaLabel ?? (action!.id === 'Send' ? 'Send' : 'Confirm')}
-                                danger={!!action!.confirm?.danger}
-                                showPayload={!!action!.confirm?.showPayload}
-                                payload={action!.confirm?.payloadSource === 'rpc.payload' ? payload : action!.confirm?.payloadTemplate}
-                                onBack={() => setStage('form')}
-                                onConfirm={doExecute}
-                            />
-                        )}
 
-                        <UnlockModal address={form.address || ''} ttlSec={ttlSec} open={unlockOpen} onClose={() => setUnlockOpen(false)} />
+                        <UnlockModal address={form.address || ''} ttlSec={ttlSec} open={unlockOpen}
+                                     onClose={() => setUnlockOpen(false)}/>
 
                         {stage === 'result' && (
                             <Result
-                                message={template(action!.success?.message ?? 'Done', { form, chain })}
+                                message={template(action!.success?.message ?? 'Done', {form, chain})}
                                 link={
                                     action!.success?.links?.[0]
-                                        ? { label: action!.success.links[0].label, href: template(action!.success.links[0].href, { result: txRes }) }
+                                        ? {
+                                            label: action!.success.links[0].label,
+                                            href: template(action!.success.links[0].href, {result: txRes})
+                                        }
                                         : undefined
                                 }
                                 onDone={() => setStage('form')}
