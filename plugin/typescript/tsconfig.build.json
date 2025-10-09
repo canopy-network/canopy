@@ -1,0 +1,27 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        /* Emit */
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "removeComments": true,
+
+        /* Optimization */
+        "importHelpers": true,
+        "inlineSourceMap": false,
+        "inlineSources": false
+    },
+    "include": ["src/**/*"],
+    "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.spec.ts",
+        "test/**/*",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "node_modules",
+        "dist",
+        "coverage",
+        "test-results"
+    ]
+}

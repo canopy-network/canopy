@@ -46,6 +46,9 @@ type Server struct {
 	// Canopy node controller
 	controller *controller.Controller
 
+	// Canopy chain configuration
+	chainConfig lib.ChainConfig
+
 	// Canopy node configuration
 	config lib.Config
 
@@ -62,14 +65,15 @@ type Server struct {
 }
 
 // NewServer constructs and returns a new Canopy RPC server
-func NewServer(controller *controller.Controller, config lib.Config, logger lib.LoggerI) *Server {
+func NewServer(controller *controller.Controller, config lib.Config, chainConfig lib.ChainConfig, logger lib.LoggerI) *Server {
 	return &Server{
-		controller: controller,
-		config:     config,
-		logger:     logger,
-		rcManager:  NewRCManager(controller, config, logger),
-		poll:       make(fsm.Poll),
-		pollMux:    &sync.RWMutex{},
+		controller:  controller,
+		chainConfig: chainConfig,
+		config:      config,
+		logger:      logger,
+		rcManager:   NewRCManager(controller, config, logger),
+		poll:        make(fsm.Poll),
+		pollMux:     &sync.RWMutex{},
 	}
 }
 

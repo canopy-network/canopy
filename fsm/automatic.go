@@ -4,7 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-/* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
+/* This file handles 'automatic' (non-transaction-induced) state changes that occur at the beginning and ending of a block */
 
 // BeginBlock() is code that is executed at the start of `applying` the block
 func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI {
@@ -29,6 +29,16 @@ func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI
 	rootChainId, err := s.LoadRootChainId(s.Height() - 1)
 	if err != nil {
 		return err
+	}
+	// execute plugin begin block
+	resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{Height: s.Height()})
+	// handle error
+	if err != nil {
+		return err
+	}
+	// handle plugin error
+	if resp.Error.E() != nil {
+		return resp.Error.E()
 	}
 	// if not root-chain: the committee won't match the certificate result
 	// so just set the committee to nil to ignore the byzantine evidence
@@ -61,7 +71,14 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
-	return
+	// execute plugin end block
+	resp, err := s.Plugin.EndBlock(s, &lib.PluginEndRequest{Height: s.Height(), ProposerAddress: proposerAddress})
+	// handle error
+	if err != nil {
+		return err
+	}
+	// handle plugin error
+	return resp.Error.E()
 }
 
 // CheckProtocolVersion() compares the protocol version against the governance enforced version

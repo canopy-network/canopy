@@ -124,6 +124,7 @@ func TestCheckTx(t *testing.T) {
 	require.NoError(t, e)
 	// define a version without a bad signature
 	sendTxBadSig := sendTx.(*lib.Transaction)
+	sendTxBadSig.Fee = 1
 	sendTxBadSig.Signature.Signature = []byte("bad sig")
 	// convert the object to bytes
 	txBadSig, e := lib.Marshal(sendTxBadSig)
@@ -177,7 +178,8 @@ func TestCheckTx(t *testing.T) {
 					ToAddress:   newTestAddressBytes(t),
 					Amount:      amount,
 				},
-				sender: newTestAddress(t),
+				sender:    newTestAddress(t),
+				recipient: newTestAddressBytes(t),
 			},
 		},
 	}
@@ -315,8 +317,11 @@ func TestCheckSignature(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
+			// get the authorized signers
+			authorizedSigners, err := sm.GetAuthorizedSignersFor(test.msg)
+			require.NoError(t, err)
 			// execute the function call
-			signer, err := sm.CheckSignature(test.msg, test.transaction, nil)
+			signer, err := sm.CheckSignature(test.transaction, authorizedSigners, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

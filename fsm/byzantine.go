@@ -39,7 +39,7 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 		return 0, err
 	}
 
-	// DOUBLE SIGNER LOGIC
+	// SLASH RECIPIENTS LOGIC
 
 	// define a convenience variable for the slash recipients
 	slashRecipients := qc.Results.SlashRecipients
@@ -49,7 +49,15 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 		if err = s.HandleDoubleSigners(qc.Header.ChainId, params, slashRecipients.DoubleSigners); err != nil {
 			return 0, err
 		}
+		// slash the explicit recipients
+		for _, recipient := range slashRecipients.SlashRecipients {
+			// slash the validator
+			if err = s.SlashValidator(recipient.Address, qc.Header.ChainId, recipient.Percent, params); err != nil {
+				return 0, err
+			}
+		}
 	}
+
 	return
 }
 
@@ -259,14 +267,8 @@ func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI
 func (s *StateMachine) SlashValidators(addresses [][]byte, chainId, percent uint64, p *ValidatorParams) lib.ErrorI {
 	// for each address in the list
 	for _, addr := range addresses {
-		// retrieve the validator
-		validator, err := s.GetValidator(crypto.NewAddressFromBytes(addr))
-		if err != nil {
-			s.log.Warn(ErrSlashNonExistentValidator().Error())
-			continue
-		}
 		// slash the validator
-		if err = s.SlashValidator(validator, chainId, percent, p); err != nil {
+		if err := s.SlashValidator(addr, chainId, percent, p); err != nil {
 			return err
 		}
 	}
@@ -274,7 +276,13 @@ func (s *StateMachine) SlashValidators(addresses [][]byte, chainId, percent uint
 }
 
 // SlashValidator() burns a specified percentage of a validator's staked tokens
-func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uint64, p *ValidatorParams) (err lib.ErrorI) {
+func (s *StateMachine) SlashValidator(address []byte, chainId, percent uint64, p *ValidatorParams) (err lib.ErrorI) {
+	// retrieve the validator
+	validator, err := s.GetValidator(crypto.NewAddressFromBytes(address))
+	if err != nil {
+		s.log.Warn(ErrSlashNonExistentValidator().Error())
+		return nil
+	}
 	// ensure no unauthorized slashes may occur
 	if !slices.Contains(validator.Committees, chainId) {
 		// This may happen if an async event causes a validator edit stake to occur before being slashed
