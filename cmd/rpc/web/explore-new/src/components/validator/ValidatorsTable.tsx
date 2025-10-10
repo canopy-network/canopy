@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import validatorsTexts from '../../data/validators.json'
 import AnimatedNumber from '../AnimatedNumber'
@@ -40,9 +40,10 @@ interface ValidatorsTableProps {
     onPageChange?: (page: number) => void
 }
 
-const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading = false, totalCount = 0, currentPage = 1, onPageChange }) => {
+const ValidatorsTable: React.FC<ValidatorsTableProps> = React.memo(({ validators, loading = false, totalCount = 0, currentPage = 1, onPageChange }) => {
     const navigate = useNavigate()
-    const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
+
+    const truncate = useCallback((s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`, [])
 
     const formatRewardRate = (rate: number) => {
         if (!rate || rate === 0) return '0.00%'
@@ -110,7 +111,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         )
     }
 
-    const getValidatorIcon = (address: string) => {
+    const getValidatorIcon = useCallback((address: string) => {
         // Create a simple hash from address to get a consistent index
         let hash = 0
         for (let i = 0; i < address.length; i++) {
@@ -144,14 +145,15 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         const index = Math.abs(hash) % icons.length
         return icons[index]
-    }
+    }, [])
 
-    const rows = validators.map((validator) => [
+    // Memoized rows calculation
+    const rows = useMemo(() => validators.map((validator) => [
         // Rank
         <div className="flex items-center gap-2">
             <span className="text-white text-sm font-medium">
-                <AnimatedNumber 
-                    value={validator.rank} 
+                <AnimatedNumber
+                    value={validator.rank}
                     className="text-white"
                 />
             </span>
@@ -177,8 +179,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         // Estimated Reward Rate
         <span className="text-green-400 text-sm font-medium">
-            <AnimatedNumber 
-                value={validator.estimatedRewardRate} 
+            <AnimatedNumber
+                value={validator.estimatedRewardRate}
                 format={{ maximumFractionDigits: 2 }}
                 suffix="%"
                 className="text-green-400"
@@ -192,24 +194,24 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         // Chains Restaked
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.chainsRestaked} 
+            <AnimatedNumber
+                value={validator.chainsRestaked}
                 className="text-gray-300"
             />
         </span>,
 
         // Blocks Produced
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.blocksProduced} 
+            <AnimatedNumber
+                value={validator.blocksProduced}
                 className="text-gray-300"
             />
         </span>,
 
         // Stake Weight
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.stakeWeight} 
+            <AnimatedNumber
+                value={validator.stakeWeight}
                 format={{ maximumFractionDigits: 2 }}
                 suffix="%"
                 className="text-gray-300"
@@ -220,8 +222,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         <div className="flex justify-center items-center">
             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${validator.weightChange > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                 {validator.weightChange > 0 ? '+' : ''}
-                <AnimatedNumber 
-                    value={validator.weightChange} 
+                <AnimatedNumber
+                    value={validator.weightChange}
                     format={{ maximumFractionDigits: 2 }}
                     className={validator.weightChange > 0 ? 'text-green-400' : 'text-red-400'}
                 />%
@@ -230,8 +232,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         // Total Stake (CNPY)
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.stakedAmount} 
+            <AnimatedNumber
+                value={validator.stakedAmount}
                 className="text-gray-300"
             />
         </span>,
@@ -240,23 +242,24 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         <div className="w-20">
             {formatStakingPower(validator.stakingPower)}
         </div>,
-    ])
+    ]), [validators, navigate, truncate, getValidatorIcon])
 
+    // Memoized pagination calculations
     const pageSize = 10
-    const totalPages = Math.ceil(totalCount / pageSize)
-    const startIdx = (currentPage - 1) * pageSize
-    const endIdx = Math.min(startIdx + pageSize, totalCount)
+    const totalPages = useMemo(() => Math.ceil(totalCount / pageSize), [totalCount, pageSize])
+    const startIdx = useMemo(() => (currentPage - 1) * pageSize, [currentPage, pageSize])
+    const endIdx = useMemo(() => Math.min(startIdx + pageSize, totalCount), [startIdx, pageSize, totalCount])
 
-    const goToPage = (page: number) => {
+    const goToPage = useCallback((page: number) => {
         if (onPageChange && page >= 1 && page <= totalPages) {
             onPageChange(page)
         }
-    }
+    }, [onPageChange, totalPages])
 
-    const prev = () => goToPage(currentPage - 1)
-    const next = () => goToPage(currentPage + 1)
+    const prev = useCallback(() => goToPage(currentPage - 1), [goToPage, currentPage])
+    const next = useCallback(() => goToPage(currentPage + 1), [goToPage, currentPage])
 
-    const visiblePages = React.useMemo(() => {
+    const visiblePages = useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
         const set = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
         return Array.from(set).filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b)
@@ -351,6 +354,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
             )}
         </div>
     )
-}
+})
+
+ValidatorsTable.displayName = 'ValidatorsTable'
 
 export default ValidatorsTable

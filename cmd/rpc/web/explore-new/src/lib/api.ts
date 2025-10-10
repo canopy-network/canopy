@@ -16,6 +16,14 @@ if (isProduction) {
     adminRPCURL = getEnvVar('VITE_PUBLIC_ADMIN_RPC_URL', adminRPCURL);
 }
 
+// Function to update API configuration
+const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: number) => {
+    rpcURL = newRpcURL;
+    adminRPCURL = newAdminRPCURL;
+    chainId = newChainId;
+    console.log('API Config Updated:', { rpcURL, adminRPCURL, chainId });
+};
+
 // Legacy support for window.__CONFIG__ (for backward compatibility)
 if (typeof window !== "undefined") {
     if (window.__CONFIG__) {
@@ -31,6 +39,12 @@ if (typeof window !== "undefined") {
     if (adminRPCURL.includes("localhost")) {
         adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
     }
+
+    // Listen for network changes
+    window.addEventListener('networkChanged', (event: any) => {
+        const network = event.detail;
+        updateApiConfig(network.rpcUrl, network.adminRpcUrl, network.chainId);
+    });
 
     console.log('RPC URL:', rpcURL);
     console.log('Admin RPC URL:', adminRPCURL);

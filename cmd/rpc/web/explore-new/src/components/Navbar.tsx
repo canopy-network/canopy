@@ -4,6 +4,7 @@ import React from 'react'
 import menuConfig from '../data/navbar.json'
 import Logo from './Logo'
 import { useBlocks } from '../hooks/useApi'
+import NetworkSelector from './NetworkSelector'
 
 const Navbar = () => {
     const location = useLocation()
@@ -90,6 +91,8 @@ const Navbar = () => {
 
                     {/* Navigation Items */}
                     <div className="hidden md:flex items-center space-x-2">
+                        {/* Network Selector */}
+                        <NetworkSelector />
                         {menu.root.map((item, index) => (
                             <div
                                 key={item.label}
@@ -193,6 +196,10 @@ const Navbar = () => {
             {/* Mobile menu */}
             <div className="md:hidden">
                 <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                    {/* Network Selector for Mobile */}
+                    <div className="px-3 py-2">
+                        <NetworkSelector />
+                    </div>
                     {menu.root.map((item, index) => (
                         <div key={item.label} className="mb-1">
                             <button

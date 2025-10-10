@@ -101,13 +101,13 @@ const TransactionsPage: React.FC = () => {
 
     // Detect if search is a transaction hash
     const isHashSearch = addressSearch && addressSearch.length >= 32 && /^[a-fA-F0-9]+$/.test(addressSearch)
-    
+
     // Hook for direct hash search
     const { data: hashSearchData, isLoading: isHashLoading } = useTxByHash(isHashSearch ? addressSearch : '')
-    
+
     // Hook to get all transactions data with real pagination
     const { data: transactionsData, isLoading } = useTransactionsWithRealPagination(currentPage, entriesPerPage, apiFilters)
-    
+
     // Hook to get blocks data to determine default block range
     const { data: blocksData } = useBlocks(1) // Get first page of blocks
 
@@ -126,7 +126,7 @@ const TransactionsPage: React.FC = () => {
             const from = tx.sender || tx.from || 'N/A'
             // Handle different transaction types for "To" field
             let to = tx.recipient || tx.to || 'N/A'
-            
+
             // For certificateResults, extract from reward recipients
             if (type === 'certificateResults' && tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
                 const recipients = tx.transaction.msg.qc.results.rewardRecipients.paymentPercents
@@ -160,7 +160,7 @@ const TransactionsPage: React.FC = () => {
                     } else {
                         date = new Date(timeSource)
                     }
-                    
+
                     if (isValid(date)) {
                         transactionDate = date.getTime()
                         age = formatDistanceToNow(date, { addSuffix: true })
@@ -207,10 +207,10 @@ const TransactionsPage: React.FC = () => {
             const blocks = blocksData.results
             const latestBlock = blocks[0] // First block is the most recent
             const oldestBlock = blocks[blocks.length - 1] // Last block is the oldest
-            
+
             const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
             const oldestHeight = oldestBlock.blockHeader?.height || oldestBlock.height || 0
-            
+
             // Set default values if not already set
             if (!fromBlock && !toBlock) {
                 setToBlock(latestHeight.toString())
@@ -231,13 +231,13 @@ const TransactionsPage: React.FC = () => {
     // Get transactions from the last 24 hours using txs-by-height
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
     const { data: todayTransactionsData } = useTransactions(1, 0) // Get recent transactions
-    
+
     const transactionsToday = React.useMemo(() => {
         if (todayTransactionsData?.totalCount) {
             // Use the total count from the API if available
             return todayTransactionsData.totalCount
         }
-        
+
         // Fallback: count transactions in the last 24h using the `date` property
         const filteredTxs = transactions.filter(tx => {
             return (tx.date || 0) >= twentyFourHoursAgo
@@ -254,17 +254,17 @@ const TransactionsPage: React.FC = () => {
     // Calculate peak TPS based on real transaction data
     const peakTPS = React.useMemo(() => {
         if (transactions.length === 0) return 0
-        
+
         // Group transactions by time intervals (1 second windows)
         const timeGroups: { [key: number]: number } = {}
-        
+
         transactions.forEach(tx => {
             if (tx.date) {
                 const timeWindow = Math.floor(tx.date / 1000) // Group by second
                 timeGroups[timeWindow] = (timeGroups[timeWindow] || 0) + 1
             }
         })
-        
+
         // Find the maximum TPS
         const maxTPS = Math.max(...Object.values(timeGroups))
         return maxTPS > 0 ? maxTPS : 1246 // Fallback to default if no data
@@ -481,22 +481,22 @@ const TransactionsPage: React.FC = () => {
                     {/* Block Range Filter */}
                     <div className="flex flex-col gap-2">
                         <label className="text-gray-400 text-sm">{filterConfigs[1].label}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="number"
-                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                            placeholder="From Block"
-                            value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
-                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
-                        />
-                        <input
-                            type="number"
-                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                            placeholder="To Block"
-                            value={(filterConfigs[1] as BlockRangeFilter).toBlock}
-                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
-                        />
-                    </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                placeholder="From Block"
+                                value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
+                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
+                            />
+                            <input
+                                type="number"
+                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                placeholder="To Block"
+                                value={(filterConfigs[1] as BlockRangeFilter).toBlock}
+                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
+                            />
+                        </div>
                     </div>
 
                     {/* Status Filter */}

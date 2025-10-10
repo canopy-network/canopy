@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import ValidatorsFilters from './ValidatorsFilters'
 import ValidatorsTable from './ValidatorsTable'
@@ -42,11 +42,11 @@ const ValidatorsPage: React.FC = () => {
     // Hook to get validators data with pagination
     const { data: validatorsData, isLoading, refetch: refetchValidators } = useValidators(currentPage)
 
-    // Hook to get blocks data to calculate blocks produced
+    // Hook to get blocks data to calculate blocks produced (only first page for stats)
     const { data: blocksData, refetch: refetchBlocks } = useBlocks(1)
 
-    // Function to get validator name from API
-    const getValidatorName = (validator: any): string => {
+    // Memoized function to get validator name from API
+    const getValidatorName = useCallback((validator: any): string => {
         // Use netAddress as main name (more readable)
         if (validator.netAddress && validator.netAddress !== 'N/A') {
             return validator.netAddress
@@ -58,13 +58,13 @@ const ValidatorsPage: React.FC = () => {
         }
 
         return 'Unknown Validator'
-    }
+    }, [])
 
 
-    // Calculate validator statistics from blocks data
-    const calculateValidatorStats = (blocks: any[]) => {
+    // Memoized function to calculate validator statistics from blocks data
+    const calculateValidatorStats = useCallback((blocks: any[]) => {
         const stats: { [key: string]: { blocksProduced: number, lastBlockTime: number } } = {}
-        
+
         blocks.forEach((block: any) => {
             const proposer = block.blockHeader?.proposer || block.blockHeader?.proposerAddress || block.proposer
             if (proposer) {
@@ -78,12 +78,12 @@ const ValidatorsPage: React.FC = () => {
                 }
             }
         })
-        
-        return stats
-    }
 
-    // Normalize validators data
-    const normalizeValidators = (payload: any, blocks: any[]): Validator[] => {
+        return stats
+    }, [])
+
+    // Memoized function to normalize validators data
+    const normalizeValidators = useCallback((payload: any, blocks: any[]): Validator[] => {
         if (!payload) return []
 
         // Real structure: { results: [...], totalCount: number }
@@ -172,36 +172,45 @@ const ValidatorsPage: React.FC = () => {
                 stakingPower: Math.round(stakingPower * 100) / 100
             }
         })
-    }
+    }, [getValidatorName, calculateValidatorStats])
+
+    // Memoized normalized validators
+    const normalizedValidators = useMemo(() => {
+        if (!validatorsData || !blocksData) return []
+
+        const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || blocksData
+        return normalizeValidators(validatorsData, Array.isArray(blocksList) ? blocksList : [])
+    }, [validatorsData, blocksData, normalizeValidators])
 
     // Effect to update validators when data changes
     useEffect(() => {
-        if (validatorsData && blocksData) {
-            const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || blocksData
-            const normalizedValidators = normalizeValidators(validatorsData, Array.isArray(blocksList) ? blocksList : [])
+        if (normalizedValidators.length > 0) {
             setAllValidators(normalizedValidators)
             setFilteredValidators(normalizedValidators)
             setLoading(false)
         }
-    }, [validatorsData, blocksData])
+    }, [normalizedValidators])
 
-    // Handle filtered validators from filters component
-    const handleFilteredValidators = (filtered: Validator[]) => {
+    // Memoized handlers
+    const handleFilteredValidators = useCallback((filtered: Validator[]) => {
         setFilteredValidators(filtered)
-    }
+    }, [])
 
-    // Handle refresh
-    const handleRefresh = () => {
+    const handleRefresh = useCallback(() => {
         setLoading(true)
         refetchValidators()
         refetchBlocks()
-    }
+    }, [refetchValidators, refetchBlocks])
 
-    const totalValidators = validatorsData?.totalCount || 0
-
-    const handlePageChange = (page: number) => {
+    const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page)
-    }
+        setLoading(true) // Show loading when changing pages
+    }, [])
+
+    // Memoized total validators
+    const totalValidators = useMemo(() => {
+        return validatorsData?.totalCount || 0
+    }, [validatorsData?.totalCount])
 
     return (
         <motion.div
