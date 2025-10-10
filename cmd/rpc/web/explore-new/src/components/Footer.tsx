@@ -17,30 +17,38 @@ const Footer: React.FC = () => {
 
                     {/* Right side - Links */}
                     <div className="flex items-center gap-6">
-                        <Link
-                            to="/api"
+                        <a
+                            href="https://canopy-network.gitbook.io/docs/secure-canopy/node-runner"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-gray-400 hover:text-primary text-sm transition-colors duration-200"
                         >
                             API
-                        </Link>
-                        <Link
-                            to="/docs"
+                        </a>
+                        <a
+                            href="https://canopy-network.gitbook.io/docs"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-gray-400 hover:text-primary text-sm transition-colors duration-200"
                         >
                             Docs
-                        </Link>
-                        <Link
-                            to="/privacy"
+                        </a>
+                        <a
+                            href="https://www.canopynetwork.org/privacy-policy"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-gray-400 hover:text-primary text-sm transition-colors duration-200"
                         >
                             Privacy
-                        </Link>
-                        <Link
-                            to="/terms"
+                        </a>
+                        <a
+                            href="https://www.canopynetwork.org/terms-of-service"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-gray-400 hover:text-primary text-sm transition-colors duration-200"
                         >
                             Terms
-                        </Link>
+                        </a>
                     </div>
                 </div>
             </div>
