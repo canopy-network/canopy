@@ -147,7 +147,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                         const safeX = isNaN(x) ? 10 : x
                         const safeY = isNaN(y) ? 110 : y
                         const blockLabel = blockLabels[index] || `Block ${index + 1}`
-                        
+
                         return (
                             <circle
                                 key={index}

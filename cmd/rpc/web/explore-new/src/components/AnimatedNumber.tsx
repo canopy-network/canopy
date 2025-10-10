@@ -27,7 +27,7 @@ const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
   return (
     <NumberFlow
       value={value}
-      format={format}
+      format={format as any}
       locales={locales}
       prefix={prefix}
       suffix={suffix}
