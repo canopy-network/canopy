@@ -288,6 +288,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+	// set the reference to lastCertificate on the new FSM
+	c.FSM.LastValidatorSet = c.LastValidatorSet
 	if err != nil {
 		// exit with error
 		return err
@@ -308,10 +310,15 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	c.Mempool.FSM.Reset()
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
-	// publish the root chain info to the nested chain subscribers
-	for _, id := range c.RCManager.ChainIds() {
+	// publish root chain information to all nested chain subscribers.
+	// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
+	// from RCManager since only these two chains exist. This will be updated to use
+	// dynamic chain discovery when additional chains are added.
+	// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
+	// for _, id := range c.RCManager.ChainIds() {
+	for _, id := range []uint64{1, 2} {
 		// get the root chain info
-		info, e := c.FSM.LoadRootChainInfo(id, 0)
+		info, e := c.FSM.LoadRootChainInfo(id, 0, c.LastValidatorSet[c.ChainHeight()][id])
 		if e != nil {
 			// don't log 'no-validators' error as this is possible
 			if e.Error() != lib.ErrNoValidators().Error() {
@@ -319,9 +326,17 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 			}
 			continue
 		}
+		// save current validator set for the next height
+		valSet, _ := c.FSM.GetCommitteeMembers(id)
+		if _, found := c.LastValidatorSet[c.ChainHeight()+1]; !found {
+			c.LastValidatorSet[c.ChainHeight()+1] = make(map[uint64]*lib.ValidatorSet)
+		}
+		c.LastValidatorSet[c.ChainHeight()+1][id] = &valSet
 		// publish root chain information
 		go c.RCManager.Publish(id, info)
 	}
+	// remove older validator set heights
+	delete(c.LastValidatorSet, c.ChainHeight()-2)
 	// exit
 	return
 }
