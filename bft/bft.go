@@ -22,7 +22,7 @@ import (
 //   2) Upgrade height which switches to the embedded 'root build height' once Validators all upgraded
 //   3) Cleanup the deprecated code
 
-var PROTOCOL_BREAK_UPGRADE_HEIGHT = uint64(1200)
+var PROTOCOL_BREAK_UPGRADE_HEIGHT = uint64(1_000_000_000)
 
 func (b *BFT) BeforeUpgradeHeight() bool {
 	if b.LoadIsOwnRoot() {
