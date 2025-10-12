@@ -1,10 +1,12 @@
 package store
 
 import (
+	"bytes"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -13,7 +15,6 @@ import (
 )
 
 const (
-	latestStatePrefix       = "s/"           // prefix designated for the LatestStateStore where the most recent blobs of state data are held
 	historicStatePrefix     = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
 	stateCommitmentPrefix   = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
 	indexerPrefix           = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
@@ -26,6 +27,13 @@ const (
 )
 
 var _ lib.StoreI = &Store{} // enforce the Store interface
+
+var (
+	// prefix designated for the LatestStateStore where the most recent blobs of state data are held
+	latestStatePrefix = "s/"
+	// key to obtain the current LSS prefix as it changes on each eviction
+	latestStateKeyPrefix = "s_prefix"
+)
 
 /*
 The Store struct is a high-level abstraction layer built on top of a single BadgerDB instance,
@@ -73,9 +81,6 @@ type Store struct {
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
 func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	if config.StoreConfig.CleanupBlockInterval == 0 {
-		config.StoreConfig.CleanupBlockInterval = 1
-	}
 	if config.StoreConfig.InMemory {
 		return NewStoreInMemory(l)
 	}
@@ -88,7 +93,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 	db, err := badger.OpenManaged(badger.DefaultOptions(path).WithNumVersionsToKeep(math.MaxInt64).WithLoggingLevel(badger.ERROR).
 		WithValueThreshold(1024).WithCompression(options.None).WithNumMemtables(16).WithMemTableSize(256 << 20).
 		WithNumLevelZeroTables(10).WithNumLevelZeroTablesStall(20).WithBaseTableSize(128 << 20).WithBaseLevelSize(512 << 20).
-		WithNumCompactors(runtime.NumCPU()).WithCompactL0OnClose(true).WithBypassLockGuard(true).WithDetectConflicts(false).WithSyncWrites(true),
+		WithNumCompactors(0).WithCompactL0OnClose(true).WithBypassLockGuard(true).WithDetectConflicts(false),
 	)
 	if err != nil {
 		return nil, ErrOpenDB(err)
@@ -110,6 +115,8 @@ func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 func NewStoreWithDB(config lib.Config, db *badger.DB, metrics *lib.Metrics, log lib.LoggerI) (*Store, lib.ErrorI) {
 	// get the latest CommitID (height and hash)
 	id := getLatestCommitID(db, log)
+	// get the current lss prefix
+	latestStatePrefix = getLSSPrefix(db, log)
 	// set the version
 	nextVersion, version := id.Height+1, id.Height
 	// make a reader from the current height and the latest height
@@ -200,7 +207,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 		return nil, ErrCommitDB(e)
 	}
 	// check if the current version is a multiple of the cleanup block interval
-	if s.Version()%s.config.StoreConfig.CleanupBlockInterval == 0 {
+	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
+	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
 		// trigger eviction of LSS deleted keys
 		if err := s.Evict(); err != nil {
 			s.log.Errorf("failed to evict LSS deleted keys: %s", err)
@@ -377,50 +385,73 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 }
 
 // Evict deletes all entries marked for eviction.
-// It is done by backing up the LSS store, discarding all the entries with
-// that prefix and restoring again the backup with none of the deleted keys.
-// This is done to ensure that the LSS keys are consistently deleted
+// It is done by backing up the LSS store, creating a new LSS store with the deleted keys removed,
+// and then updating the latest state prefix to use that new one, while in the background all the keys
+// of the previous LSS store. This allows for efficient garbage collection of old data while not needing
+// to wait for the entire DropPrefix process to complete before proceeding with new operations.
 func (s *Store) Evict() lib.ErrorI {
 	now := time.Now()
-	s.log.Debugf("Eviction process started at height %d", s.Version())
+	s.log.Debugf("key eviction started at height %d", s.Version())
 	// backup the LSS store
 	lssBackup, err := s.GetItems(lssVersion, []byte(latestStatePrefix), true)
 	if err != nil {
 		return ErrCommitDB(err)
 	}
-	// set discard timestamp, before evicting entries
-	s.db.SetDiscardTs(lssVersion)
-	// reset discard timestamp after eviction
-	defer s.db.SetDiscardTs(0)
-	// drop the entire LSS prefix to force eviction processing
-	if err := s.db.DropPrefix([]byte(latestStatePrefix)); err != nil {
-		return ErrCommitDB(err)
-	}
-	// restore the LSS store without the deleted keys
+	// save the current LSS prefix
+	currentLSSPrefix := latestStatePrefix
+	// create a new random LSS prefix
+	newLSSPrefix := hex.EncodeToString(fmt.Appendf(nil, "%s/", lib.RandSlice(32)))
+	// create the new LSS store without the deleted keys
 	writer := s.db.NewWriteBatchAt(lssVersion)
+	backupKeys := make([][]byte, 0, len(lssBackup))
 	for _, entry := range lssBackup {
+		// add the current key to the backup list
+		backupKeys = append(backupKeys, bytes.Clone(entry.Key))
+		// replace the old LSS prefix with the new one
+		entry.Key = bytes.Replace(entry.Key, []byte(currentLSSPrefix), []byte(newLSSPrefix), 1)
 		if err := writer.SetEntryAt(entry, lssVersion); err != nil {
 			return ErrStoreSet(err)
 		}
 	}
-	// commit the LSS restore
+	// write the new LSS prefix in the db for reboots
+	entry := &badger.Entry{
+		Key:   []byte(latestStateKeyPrefix),
+		Value: []byte(newLSSPrefix),
+	}
+	if err := writer.SetEntryAt(entry, lssVersion); err != nil {
+		return ErrStoreSet(err)
+	}
+	// commit the new LSS restore
 	if err := writer.Flush(); err != nil {
 		return ErrFlushBatch(err)
 	}
-	// ValueLogGC and Flatten temporarily disabled due to increased memory usage
-	// TODO: Re-enable ValueLogGC and Flatten after optimizing memory usage
-	// flatten the DB to optimize the storage layout
-	// if err := s.db.Flatten(1); err != nil {
-	// 	return ErrCommitDB(err)
-	// }
-	// run GC to clean up unused data
-	// if err := s.db.RunValueLogGC(valueLogGCDiscardRation); err != nil &&
-	// 	err != badger.ErrNoRewrite {
-	// 	return ErrCommitDB(err)
-	// }
+	// set the latest state prefix to the new one for next reads
+	latestStatePrefix = newLSSPrefix
+	go func() {
+		now := time.Now()
+		// create a new writeBatch for the given version
+		deleteWriter := s.db.NewWriteBatchAt(lssVersion)
+		// set discard timestamp, before evicting entries
+		s.db.SetDiscardTs(lssVersion)
+		// reset discard timestamp after eviction
+		defer s.db.SetDiscardTs(0)
+		// set all the previous keys to be deleted
+		for _, key := range backupKeys {
+			if err := deleteWriter.DeleteAt(key, lssVersion); err != nil {
+				s.log.Errorf("failed to delete key: %v", err)
+			}
+		}
+		// flush the writeBatch
+		if err := deleteWriter.Flush(); err != nil {
+			s.log.Errorf("eviction: failed to flush writeBatch: %v", err)
+		}
+		s.log.Debugf("deleted previous LSS keys took: %s", time.Since(now))
+	}()
 	// log the results
-	total, deleted := s.keyCount(lssVersion, []byte(latestStatePrefix), true)
-	s.log.Debugf("Eviction process finished. current deleted %d keys, %d total keys elapsed: %s", deleted, total, time.Since(now))
+	total, _ := s.keyCount(lssVersion, []byte(latestStatePrefix), true)
+	s.log.Debugf("key eviction finished [%d], total keys: %d elapsed: %s",
+		s.Version(), total, time.Since(now))
+	// exit
 	return nil
 }
 
@@ -505,4 +536,22 @@ func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *lib.CommitID) {
 		log.Fatalf("unmarshalCommitID() failed with err: %s", err.Error())
 	}
 	return
+}
+
+// getLSSPrefix() retrieves the current LSS prefix from the database
+func getLSSPrefix(db *badger.DB, log lib.LoggerI) string {
+	reader := db.NewTransactionAt(lssVersion, false)
+	defer reader.Discard()
+	item, err := reader.Get([]byte(latestStateKeyPrefix))
+	if err != nil {
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return latestStatePrefix
+		}
+		log.Fatalf("getLSSPrefix() failed with err: %s", err.Error())
+	}
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		log.Fatalf("getLSSPrefix() failed with err: %s", err.Error())
+	}
+	return string(val)
 }

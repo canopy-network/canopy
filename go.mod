@@ -1,6 +1,6 @@
 module github.com/canopy-network/canopy
 
-go 1.23.9
+go 1.24.0
 
 require (
 	filippo.io/edwards25519 v1.1.0
@@ -76,6 +76,7 @@ require (
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
+	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
