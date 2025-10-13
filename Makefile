@@ -3,7 +3,7 @@ GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
 WALLET_DIR := ./cmd/rpc/web/wallet
 EXPLORER_DIR := ./cmd/rpc/web/explorer
-EXPLORER_NEW_DIR := ./cmd/rpc/web/explorer-new
+EXPLORER_NEW_DIR := ./cmd/rpc/web/explore-new
 DOCKER_DIR := ./.docker/compose.yaml
 
 # ==================================================================================== #
