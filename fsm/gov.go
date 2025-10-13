@@ -56,11 +56,11 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	fmt.Println("=== DEBUG: UpdateParam called ===")
 	fmt.Println("DEBUG: UpdateParam paramSpace:", paramSpace, "paramName:", paramName)
 	fmt.Printf("DEBUG: UpdateParam store pointer: %p, type: %T\n", s.Store(), s.Store())
-	
+
 	// Check if validators exist at the START of UpdateParam
 	allValsStart, _ := s.GetValidators()
 	fmt.Println("DEBUG: UpdateParam START - GetValidators returned", len(allValsStart), "validators")
-	
+
 	// save the previous parameters to check for updates
 	previousParams, err := s.GetParams()
 	if err != nil {
@@ -110,25 +110,30 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	if err != nil {
 		return err
 	}
-	
+
 	// DEBUG: Check validators after setting params
 	allValsAfterSet, _ := s.GetValidators()
 	fmt.Println("DEBUG: UpdateParam - after SetParams, GetValidators returned", len(allValsAfterSet), "validators")
 	fmt.Printf("DEBUG: UpdateParam - store pointer before ConformStateToParamUpdate: %p\n", s.Store())
-	
-	// FIX FOR TRANSACTION ISOLATION BUG:
-	// Instead of calling ConformStateToParamUpdate here (where validators are invisible
-	// due to transaction isolation), defer it to EndBlock where we have full state visibility
-	// IMPORTANT: Only store the FIRST set of previous params if not already set, since
-	// multiple param updates in the same block should all be compared against the original state
-	if s.pendingParamUpdate == nil {
-		fmt.Println("DEBUG: Storing INITIAL pendingParamUpdate to be processed in EndBlock")
-		s.pendingParamUpdate = previousParams
-		fmt.Println("DEBUG: pendingParamUpdate stored successfully")
-	} else {
-		fmt.Println("DEBUG: pendingParamUpdate already set, keeping original")
+
+	// // FIX FOR TRANSACTION ISOLATION BUG:
+	// // Instead of calling ConformStateToParamUpdate here (where validators are invisible
+	// // due to transaction isolation), defer it to EndBlock where we have full state visibility
+	// // IMPORTANT: Only store the FIRST set of previous params if not already set, since
+	// // multiple param updates in the same block should all be compared against the original state
+	// if s.pendingParamUpdate == nil {
+	// 	fmt.Println("DEBUG: Storing INITIAL pendingParamUpdate to be processed in EndBlock")
+	// 	s.pendingParamUpdate = previousParams
+	// 	fmt.Println("DEBUG: pendingParamUpdate stored successfully")
+	// } else {
+	// 	fmt.Println("DEBUG: pendingParamUpdate already set, keeping original")
+	// }
+
+	if err = s.ConformStateToParamUpdate(previousParams); err != nil {
+		fmt.Println("DEBUG: ConformStateToParamUpdate returned error:", err)
+		return err
 	}
-	
+
 	return nil
 }
 
@@ -166,7 +171,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		fmt.Println("DEBUG: Current height:", s.Height())
 		fmt.Println("DEBUG: Store type:", fmt.Sprintf("%T", s.Store()))
 		fmt.Println("DEBUG: ValidatorPrefix:", ValidatorPrefix())
-		
+
 		// DEBUG: Check if this is a wrapped transaction store
 		currentStore := s.Store()
 		fmt.Printf("DEBUG: Current store pointer: %p, type: %T\n", currentStore, currentStore)
@@ -175,7 +180,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 			// Try to get the parent store if this is a transaction
 			fmt.Printf("DEBUG: Store details: %#v\n", storeI)
 		}
-		
+
 		// DEBUG: Try to check if ANY keys exist with the validator prefix
 		it, itErr := s.Iterator(ValidatorPrefix())
 		if itErr != nil {
@@ -191,7 +196,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 			}
 			fmt.Println("DEBUG: Iterator found", keyCount, "keys with ValidatorPrefix")
 		}
-		
+
 		// DEBUG: Try to iterate ALL keys to see what's actually in the store
 		fmt.Println("DEBUG: Attempting to iterate ALL keys in store...")
 		itAll, itAllErr := s.Iterator([]byte{})
@@ -216,21 +221,21 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 			fmt.Println("DEBUG: Keys by prefix:", keysByPrefix)
 			fmt.Println("DEBUG: Prefix 3 (validators) count:", keysByPrefix[3])
 		}
-		
+
 		// DEBUG: Try to get validators using GetValidators to see if they exist
 		allVals, debugErr := s.GetValidators()
 		fmt.Println("DEBUG: GetValidators returned", len(allVals), "validators, error:", debugErr)
 		for i, v := range allVals {
 			fmt.Printf("DEBUG: Validator %d: Address=%x, Stake=%d, Delegate=%v\n", i, v.Address, v.StakedAmount, v.Delegate)
 		}
-		
+
 		// DEBUG: Additional check - try to get a committee to see if validators are registered
 		committeeMembers, cmErr := s.GetCommitteeMembers(s.Config.ChainId)
 		fmt.Println("DEBUG: GetCommitteeMembers returned NumValidators:", committeeMembers.NumValidators, "error:", cmErr)
 		if committeeMembers.NumValidators > 0 && len(committeeMembers.ValidatorSet.ValidatorSet) > 0 {
 			firstVal := committeeMembers.ValidatorSet.ValidatorSet[0]
 			fmt.Printf("DEBUG: First committee member: PublicKey=%x, VotingPower=%d\n", firstVal.PublicKey, firstVal.VotingPower)
-			
+
 			// Try to get this validator by deriving address from public key
 			pub, pubErr := crypto.NewPublicKeyFromBytes(firstVal.PublicKey)
 			if pubErr == nil {
@@ -240,12 +245,12 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 				if valErr != nil {
 					fmt.Println("DEBUG: GetValidator by address FAILED:", valErr)
 				} else {
-					fmt.Printf("DEBUG: GetValidator by address SUCCESS: Stake=%d, Delegate=%v, UnstakingHeight=%d\n", 
+					fmt.Printf("DEBUG: GetValidator by address SUCCESS: Stake=%d, Delegate=%v, UnstakingHeight=%d\n",
 						val.StakedAmount, val.Delegate, val.UnstakingHeight)
 				}
 			}
 		}
-		
+
 		// iterate through all validators and delegates
 		callbackCount := 0
 		if err = s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) lib.ErrorI {

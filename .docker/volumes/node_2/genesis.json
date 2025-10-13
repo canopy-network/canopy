@@ -23,7 +23,7 @@
         1
       ],
       "netAddress": "tcp://node-1",
-      "stakedAmount": 1000000000,
+      "stakedAmount": 1100000000,
       "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
     },
     {
@@ -77,7 +77,10 @@
       "deleteOrderFee": 10000
     },
     "governance": {
-      "daoRewardPercentage": 10
+      "daoRewardPercentage": 10,
+      "minimumStakeForValidators": 2000000,
+      "minimumStakeForDelegates": 1000000,
+      "maximumDelegatesPerCommittee": 1
     }
   },
   "supply": null
