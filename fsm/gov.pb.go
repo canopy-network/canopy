@@ -7,12 +7,11 @@
 package fsm
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -658,14 +657,8 @@ type GovernanceParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// dao_reward_percent: is the percent of the block reward that is sent to the DAO
 	DaoRewardPercentage uint64 `protobuf:"varint,1,opt,name=dao_reward_percentage,json=daoRewardPercentage,proto3" json:"daoRewardPercentage"` // @gotags: json:"daoRewardPercentage"
-	// minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
-	MinimumStakeForValidators uint64 `protobuf:"varint,2,opt,name=minimum_stake_for_validators,json=minimumStakeForValidators,proto3" json:"minimumStakeForValidators"` // @gotags: json:"minimumStakeForValidators"
-	// minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
-	MinimumStakeForDelegates uint64 `protobuf:"varint,3,opt,name=minimum_stake_for_delegates,json=minimumStakeForDelegates,proto3" json:"minimumStakeForDelegates"` // @gotags: json:"minimumStakeForDelegates"
-	// maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
-	MaximumDelegatesPerCommittee uint64 `protobuf:"varint,4,opt,name=maximum_delegates_per_committee,json=maximumDelegatesPerCommittee,proto3" json:"maximumDelegatesPerCommittee"` // @gotags: json:"maximumDelegatesPerCommittee"
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GovernanceParams) Reset() {
@@ -701,27 +694,6 @@ func (*GovernanceParams) Descriptor() ([]byte, []int) {
 func (x *GovernanceParams) GetDaoRewardPercentage() uint64 {
 	if x != nil {
 		return x.DaoRewardPercentage
-	}
-	return 0
-}
-
-func (x *GovernanceParams) GetMinimumStakeForValidators() uint64 {
-	if x != nil {
-		return x.MinimumStakeForValidators
-	}
-	return 0
-}
-
-func (x *GovernanceParams) GetMinimumStakeForDelegates() uint64 {
-	if x != nil {
-		return x.MinimumStakeForDelegates
-	}
-	return 0
-}
-
-func (x *GovernanceParams) GetMaximumDelegatesPerCommittee() uint64 {
-	if x != nil {
-		return x.MaximumDelegatesPerCommittee
 	}
 	return 0
 }
@@ -783,12 +755,9 @@ const file_gov_proto_rawDesc = "" +
 	"subsidyFee\x12(\n" +
 	"\x10create_order_fee\x18\v \x01(\x04R\x0ecreateOrderFee\x12$\n" +
 	"\x0eedit_order_fee\x18\f \x01(\x04R\feditOrderFee\x12(\n" +
-	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"\x8d\x02\n" +
+	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"F\n" +
 	"\x10GovernanceParams\x122\n" +
-	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage\x12?\n" +
-	"\x1cminimum_stake_for_validators\x18\x02 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
-	"\x1bminimum_stake_for_delegates\x18\x03 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
-	"\x1fmaximum_delegates_per_committee\x18\x04 \x01(\x04R\x1cmaximumDelegatesPerCommittee*I\n" +
+	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage*I\n" +
 	"\x15GovProposalVoteConfig\x12\x0e\n" +
 	"\n" +
 	"ACCEPT_ALL\x10\x00\x12\x10\n" +

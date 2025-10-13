@@ -61,20 +61,6 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
-	// // FIX FOR TRANSACTION ISOLATION BUG:
-	// // If a parameter was updated during this block, enforce the new minimums now
-	// // that all transactions have been committed and we have full state visibility
-	// if s.pendingParamUpdate != nil {
-	// 	fmt.Println("=== DEBUG: EndBlock processing pendingParamUpdate ===")
-	// 	fmt.Println("DEBUG: Calling ConformStateToParamUpdate from EndBlock")
-	// 	if err = s.ConformStateToParamUpdate(s.pendingParamUpdate); err != nil {
-	// 		fmt.Println("DEBUG: ConformStateToParamUpdate returned error:", err)
-	// 		return err
-	// 	}
-	// 	fmt.Println("DEBUG: ConformStateToParamUpdate completed successfully")
-	// 	// clear the pending update after processing
-	// 	s.pendingParamUpdate = nil
-	// }
 	return
 }
 

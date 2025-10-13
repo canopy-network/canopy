@@ -33,7 +33,6 @@ type StateMachine struct {
 	log                lib.LoggerI                             // the logger for standard output and debugging
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
-	pendingParamUpdate *Params                                 // tracks previous params when a param update occurs, to be processed in EndBlock
 }
 
 // cache is the set of items to be cached used by the state machine
@@ -76,24 +75,11 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) 
 func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.ErrorI) {
 	// set height to the latest version and store to the passed store
 	s.height, s.store = store.Version(), store
-	// DEBUG: Log initialization
-	fmt.Printf("\n=== DEBUG: FSM Initialize at height/version %d ===\n", s.height)
-	fmt.Printf("DEBUG: Store pointer: %p, type: %T\n", s.store, s.store)
-	
 	// if height is genesis
 	if s.height == 0 {
 		// then initialize from a genesis file
 		return true, s.NewFromGenesisFile()
 	}
-	
-	// DEBUG: Check validators after loading from existing state
-	debugVals, _ := s.GetValidators()
-	fmt.Printf("DEBUG: After Initialize (non-genesis), GetValidators returned %d validators\n", len(debugVals))
-	if len(debugVals) > 0 {
-		fmt.Printf("DEBUG: First validator: Address=%x, Stake=%d\n", debugVals[0].Address, debugVals[0].StakedAmount)
-	}
-	fmt.Printf("=== DEBUG: FSM Initialize END ===\n\n")
-	
 	// load the previous block
 	blk, e := s.LoadBlock(s.Height() - 1)
 	if e != nil {
@@ -138,6 +124,15 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidat
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	currentStore := s.Store().(lib.StoreI)
+	s.EmptyIterator("Before TxWrap() Apply Txn")
+	txn, e := s.TxnWrap()
+	if e != nil {
+		panic(e)
+	}
+	s.EmptyIterator("After TxWrap() Apply Txn")
+	_ = txn.Flush()
+	s.SetStore(currentStore)
 	// sub-out transactions for those that succeeded (only useful for mempool application)
 	b.Transactions = blockTxs
 	// automated execution at the 'ending of a block'
@@ -190,6 +185,31 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidat
 	}
 	// exit
 	return
+}
+
+func (s *StateMachine) EmptyIterator(stage string) {
+	fmt.Println(stage)
+	itAll, itAllErr := s.Iterator([]byte{})
+	if itAllErr != nil {
+		fmt.Println("DEBUG: Error creating all-keys iterator:", itAllErr)
+	} else {
+		defer itAll.Close()
+		allKeyCount := 0
+		keysByPrefix := make(map[byte]int)
+		for ; itAll.Valid(); itAll.Next() {
+			allKeyCount++
+			if len(itAll.Key()) > 0 {
+				// Track keys by their first byte (the prefix type)
+				firstByte := itAll.Key()[1]
+				keysByPrefix[firstByte]++
+			}
+			//if allKeyCount <= 10 {
+			//	fmt.Printf("DEBUG: Key #%d: %x\n", allKeyCount, itAll.Key())
+			//}
+		}
+		fmt.Println("DEBUG: Total keys in store:", allKeyCount)
+		fmt.Println("DEBUG: Keys by prefix:", keysByPrefix)
+	}
 }
 
 // ApplyTransactions()

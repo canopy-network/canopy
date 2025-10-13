@@ -3,13 +3,12 @@ package fsm
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -86,12 +85,7 @@ func DefaultParams() *Params {
 			EditOrderFee:          10000,
 			DeleteOrderFee:        10000,
 		},
-		Governance: &GovernanceParams{
-			DaoRewardPercentage:          5,
-			MinimumStakeForValidators:    0,
-			MinimumStakeForDelegates:     0,
-			MaximumDelegatesPerCommittee: 0,
-		},
+		Governance: &GovernanceParams{DaoRewardPercentage: 5},
 	}
 }
 
@@ -436,10 +430,7 @@ func (x *FeeParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 // governance param space
 
 const (
-	ParamDAORewardPercentage          = "daoRewardPercentage"          // percent of rewards the DAO fund receives
-	ParamMinimumStakeForValidators    = "minimumStakeForValidators"    // minimum stake required to be a validator
-	ParamMinimumStakeForDelegates     = "minimumStakeForDelegates"     // minimum stake required to be a delegate
-	ParamMaximumDelegatesPerCommittee = "maximumDelegatesPerCommittee" // maximum number of delegates per committee
+	ParamDAORewardPercentage = "daoRewardPercentage" // percent of rewards the DAO fund receives
 )
 
 var _ ParamSpace = &GovernanceParams{}
@@ -457,12 +448,6 @@ func (x *GovernanceParams) SetUint64(paramName string, value uint64) lib.ErrorI 
 	switch paramName {
 	case ParamDAORewardPercentage:
 		x.DaoRewardPercentage = value
-	case ParamMinimumStakeForValidators:
-		x.MinimumStakeForValidators = value
-	case ParamMinimumStakeForDelegates:
-		x.MinimumStakeForDelegates = value
-	case ParamMaximumDelegatesPerCommittee:
-		x.MaximumDelegatesPerCommittee = value
 	default:
 		return ErrUnknownParam()
 	}

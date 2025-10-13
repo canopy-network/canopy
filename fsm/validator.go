@@ -3,7 +3,6 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -185,34 +184,8 @@ func (s *StateMachine) SetValidator(validator *Validator) (err lib.ErrorI) {
 	if err != nil {
 		return
 	}
-	// get gov params for validation
-	params, err := s.GetParamsGov()
-	if err != nil {
-		return err
-	}
-	// validate stake is above minimums (skip if validator is already unstaking)
-	if validator.UnstakingHeight == 0 {
-		if validator.Delegate {
-			if validator.StakedAmount < params.MinimumStakeForDelegates {
-				fmt.Printf("DEBUG: SetValidator REJECTED delegate - stake %d < minimum %d\n", validator.StakedAmount, params.MinimumStakeForDelegates)
-				return ErrStakeBelowMininum()
-			}
-		} else {
-			if validator.StakedAmount < params.MinimumStakeForValidators {
-				fmt.Printf("DEBUG: SetValidator REJECTED validator - stake %d < minimum %d\n", validator.StakedAmount, params.MinimumStakeForValidators)
-				return ErrStakeBelowMininum()
-			}
-		}
-	}
-	
-	// DEBUG: Log successful validator set
-	key := KeyForValidator(crypto.NewAddressFromBytes(validator.Address))
-	fmt.Printf("DEBUG: SetValidator SUCCESS - Address=%x, Stake=%d, Delegate=%v, Key=%x, Height=%d\n", 
-		validator.Address, validator.StakedAmount, validator.Delegate, key, s.Height())
-	
 	// set the bytes under a key for validator using a specific 'validator address'
-	if err = s.Set(key, bz); err != nil {
-		fmt.Printf("DEBUG: SetValidator s.Set() FAILED: %v\n", err)
+	if err = s.Set(KeyForValidator(crypto.NewAddressFromBytes(validator.Address)), bz); err != nil {
 		return
 	}
 	// exit

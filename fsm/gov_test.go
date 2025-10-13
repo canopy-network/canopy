@@ -1,13 +1,12 @@
 package fsm
 
 import (
-	"os"
-	"testing"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"os"
+	"testing"
 )
 
 func TestUpdateParam(t *testing.T) {

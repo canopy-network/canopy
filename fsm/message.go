@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -270,22 +269,10 @@ func (s *StateMachine) HandleMessageUnpause(msg *MessageUnpause) lib.ErrorI {
 
 // HandleMessageChangeParameter() is the proper handler for an `Change-Parameter` message
 func (s *StateMachine) HandleMessageChangeParameter(msg *MessageChangeParameter) lib.ErrorI {
-	fmt.Println("=== DEBUG: HandleMessageChangeParameter called ===")
-	fmt.Printf("DEBUG: HandleMessageChangeParameter store pointer: %p, type: %T\n", s.Store(), s.Store())
-	
-	// Check validators at the very start
-	allValsAtStart, _ := s.GetValidators()
-	fmt.Println("DEBUG: HandleMessageChangeParameter START - GetValidators returned", len(allValsAtStart), "validators")
-	
 	// requires explicit approval from +2/3 maj of the validator set
 	if err := s.ApproveProposal(msg); err != nil {
 		return ErrRejectProposal()
 	}
-	
-	fmt.Println("DEBUG: HandleMessageChangeParameter - after ApproveProposal")
-	allValsAfterApprove, _ := s.GetValidators()
-	fmt.Println("DEBUG: HandleMessageChangeParameter after ApproveProposal - GetValidators returned", len(allValsAfterApprove), "validators")
-	
 	// extract the value from the proto packed 'any'
 	protoMsg, err := lib.FromAny(msg.ParameterValue)
 	if err != nil {

@@ -1,8 +1,6 @@
 package fsm
 
 import (
-	"fmt"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
@@ -53,20 +51,11 @@ func (s *StateMachine) ApproveProposal(msg GovProposal) lib.ErrorI {
 
 // UpdateParam() updates a governance parameter keyed by space and name
 func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Message) (err lib.ErrorI) {
-	fmt.Println("=== DEBUG: UpdateParam called ===")
-	fmt.Println("DEBUG: UpdateParam paramSpace:", paramSpace, "paramName:", paramName)
-	fmt.Printf("DEBUG: UpdateParam store pointer: %p, type: %T\n", s.Store(), s.Store())
-
-	// Check if validators exist at the START of UpdateParam
-	allValsStart, _ := s.GetValidators()
-	fmt.Println("DEBUG: UpdateParam START - GetValidators returned", len(allValsStart), "validators")
-
 	// save the previous parameters to check for updates
 	previousParams, err := s.GetParams()
 	if err != nil {
 		return
 	}
-	fmt.Println("DEBUG: UpdateParam - after GetParams, validators:", len(allValsStart))
 	// retrieve the space from the string
 	var sp ParamSpace
 	switch paramSpace {
@@ -99,46 +88,20 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	// set the param space back in state
 	switch paramSpace {
 	case ParamSpaceCons:
-		err = s.SetParamsCons(sp.(*ConsensusParams))
+		return s.SetParamsCons(sp.(*ConsensusParams))
 	case ParamSpaceVal:
-		err = s.SetParamsVal(sp.(*ValidatorParams))
+		return s.SetParamsVal(sp.(*ValidatorParams))
 	case ParamSpaceFee:
-		err = s.SetParamsFee(sp.(*FeeParams))
+		return s.SetParamsFee(sp.(*FeeParams))
 	case ParamSpaceGov:
-		err = s.SetParamsGov(sp.(*GovernanceParams))
+		return s.SetParamsGov(sp.(*GovernanceParams))
 	}
-	if err != nil {
-		return err
-	}
-
-	// DEBUG: Check validators after setting params
-	allValsAfterSet, _ := s.GetValidators()
-	fmt.Println("DEBUG: UpdateParam - after SetParams, GetValidators returned", len(allValsAfterSet), "validators")
-	fmt.Printf("DEBUG: UpdateParam - store pointer before ConformStateToParamUpdate: %p\n", s.Store())
-
-	// // FIX FOR TRANSACTION ISOLATION BUG:
-	// // Instead of calling ConformStateToParamUpdate here (where validators are invisible
-	// // due to transaction isolation), defer it to EndBlock where we have full state visibility
-	// // IMPORTANT: Only store the FIRST set of previous params if not already set, since
-	// // multiple param updates in the same block should all be compared against the original state
-	// if s.pendingParamUpdate == nil {
-	// 	fmt.Println("DEBUG: Storing INITIAL pendingParamUpdate to be processed in EndBlock")
-	// 	s.pendingParamUpdate = previousParams
-	// 	fmt.Println("DEBUG: pendingParamUpdate stored successfully")
-	// } else {
-	// 	fmt.Println("DEBUG: pendingParamUpdate already set, keeping original")
-	// }
-
-	if err = s.ConformStateToParamUpdate(previousParams); err != nil {
-		fmt.Println("DEBUG: ConformStateToParamUpdate returned error:", err)
-		return err
-	}
-
-	return nil
+	// adjust the state if necessary
+	return s.ConformStateToParamUpdate(previousParams)
 }
 
 // ConformStateToParamUpdate() ensures the state does not violate the new values of the governance parameters
-// - Only MaxCommitteeSize, RootChainId, MinimumStakeForValidators & MinimumStakeForDelegates require an adjustment
+// - Only MaxCommitteeSize & RootChainId requires an adjustment
 // - MinSellOrderSize is purposefully allowed to violate new updates
 func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.ErrorI {
 	// retrieve the params from state
@@ -159,145 +122,6 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		if err = s.OverwriteCommitteeData(selfCommittee); err != nil {
 			return err
 		}
-	}
-	// check if minimum stake requirements have increased
-	validatorMinStakeIncreased := previousParams.Governance.MinimumStakeForValidators < params.Governance.MinimumStakeForValidators
-	delegateMinStakeIncreased := previousParams.Governance.MinimumStakeForDelegates < params.Governance.MinimumStakeForDelegates
-	// if either minimum stake has increased, force unstake those below the new minimum
-	if validatorMinStakeIncreased || delegateMinStakeIncreased {
-		fmt.Println("=== DEBUG: ConformStateToParamUpdate ===")
-		fmt.Println("validatorMinStakeIncreased:", validatorMinStakeIncreased)
-		fmt.Println("delegateMinStakeIncreased:", delegateMinStakeIncreased)
-		fmt.Println("DEBUG: Current height:", s.Height())
-		fmt.Println("DEBUG: Store type:", fmt.Sprintf("%T", s.Store()))
-		fmt.Println("DEBUG: ValidatorPrefix:", ValidatorPrefix())
-
-		// DEBUG: Check if this is a wrapped transaction store
-		currentStore := s.Store()
-		fmt.Printf("DEBUG: Current store pointer: %p, type: %T\n", currentStore, currentStore)
-		if storeI, ok := currentStore.(lib.StoreI); ok {
-			fmt.Println("DEBUG: Store version:", storeI.Version())
-			// Try to get the parent store if this is a transaction
-			fmt.Printf("DEBUG: Store details: %#v\n", storeI)
-		}
-
-		// DEBUG: Try to check if ANY keys exist with the validator prefix
-		it, itErr := s.Iterator(ValidatorPrefix())
-		if itErr != nil {
-			fmt.Println("DEBUG: Error creating iterator:", itErr)
-		} else {
-			defer it.Close()
-			keyCount := 0
-			for ; it.Valid(); it.Next() {
-				keyCount++
-				if keyCount <= 3 {
-					fmt.Printf("DEBUG: Found key #%d: %x\n", keyCount, it.Key())
-				}
-			}
-			fmt.Println("DEBUG: Iterator found", keyCount, "keys with ValidatorPrefix")
-		}
-
-		// DEBUG: Try to iterate ALL keys to see what's actually in the store
-		fmt.Println("DEBUG: Attempting to iterate ALL keys in store...")
-		itAll, itAllErr := s.Iterator([]byte{})
-		if itAllErr != nil {
-			fmt.Println("DEBUG: Error creating all-keys iterator:", itAllErr)
-		} else {
-			defer itAll.Close()
-			allKeyCount := 0
-			keysByPrefix := make(map[byte]int)
-			for ; itAll.Valid(); itAll.Next() {
-				allKeyCount++
-				if len(itAll.Key()) > 0 {
-					// Track keys by their first byte (the prefix type)
-					firstByte := itAll.Key()[0]
-					keysByPrefix[firstByte]++
-				}
-				if allKeyCount <= 10 {
-					fmt.Printf("DEBUG: Key #%d: %x\n", allKeyCount, itAll.Key())
-				}
-			}
-			fmt.Println("DEBUG: Total keys in store:", allKeyCount)
-			fmt.Println("DEBUG: Keys by prefix:", keysByPrefix)
-			fmt.Println("DEBUG: Prefix 3 (validators) count:", keysByPrefix[3])
-		}
-
-		// DEBUG: Try to get validators using GetValidators to see if they exist
-		allVals, debugErr := s.GetValidators()
-		fmt.Println("DEBUG: GetValidators returned", len(allVals), "validators, error:", debugErr)
-		for i, v := range allVals {
-			fmt.Printf("DEBUG: Validator %d: Address=%x, Stake=%d, Delegate=%v\n", i, v.Address, v.StakedAmount, v.Delegate)
-		}
-
-		// DEBUG: Additional check - try to get a committee to see if validators are registered
-		committeeMembers, cmErr := s.GetCommitteeMembers(s.Config.ChainId)
-		fmt.Println("DEBUG: GetCommitteeMembers returned NumValidators:", committeeMembers.NumValidators, "error:", cmErr)
-		if committeeMembers.NumValidators > 0 && len(committeeMembers.ValidatorSet.ValidatorSet) > 0 {
-			firstVal := committeeMembers.ValidatorSet.ValidatorSet[0]
-			fmt.Printf("DEBUG: First committee member: PublicKey=%x, VotingPower=%d\n", firstVal.PublicKey, firstVal.VotingPower)
-
-			// Try to get this validator by deriving address from public key
-			pub, pubErr := crypto.NewPublicKeyFromBytes(firstVal.PublicKey)
-			if pubErr == nil {
-				addr := pub.Address()
-				fmt.Printf("DEBUG: Trying to GetValidator by address: %x\n", addr.Bytes())
-				val, valErr := s.GetValidator(addr)
-				if valErr != nil {
-					fmt.Println("DEBUG: GetValidator by address FAILED:", valErr)
-				} else {
-					fmt.Printf("DEBUG: GetValidator by address SUCCESS: Stake=%d, Delegate=%v, UnstakingHeight=%d\n",
-						val.StakedAmount, val.Delegate, val.UnstakingHeight)
-				}
-			}
-		}
-
-		// iterate through all validators and delegates
-		callbackCount := 0
-		if err = s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) lib.ErrorI {
-			callbackCount++
-			fmt.Println("=== INSIDE CALLBACK, count:", callbackCount, " ===")
-			fmt.Println("Key:", key)
-			// convert bytes into a validator object
-			v, e := s.unmarshalValidator(value)
-			if e != nil {
-				return e
-			}
-			// skip if already unstaking
-			if v.UnstakingHeight != 0 {
-				fmt.Println("DEBUG: Skipping validator (already unstaking)")
-				return nil
-			}
-			// determine if this validator/delegate is below the new minimum
-			var belowMinimum bool
-			var unstakingBlocks uint64
-			fmt.Printf("DEBUG: Validator StakedAmount=%d, Delegate=%v\n", v.StakedAmount, v.Delegate)
-			if !v.Delegate {
-				fmt.Println("DEBUG: Checking validator minimum. MinimumStakeForValidators:", params.Governance.MinimumStakeForValidators)
-				// check if validator is below the new minimum stake for validators
-				belowMinimum = validatorMinStakeIncreased && v.StakedAmount < params.Governance.MinimumStakeForValidators
-				unstakingBlocks = params.Validator.UnstakingBlocks
-			} else {
-				fmt.Println("DEBUG: Checking delegate minimum. MinimumStakeForDelegates:", params.Governance.MinimumStakeForDelegates)
-				// check if delegate is below the new minimum stake for delegates
-				belowMinimum = delegateMinStakeIncreased && v.StakedAmount < params.Governance.MinimumStakeForDelegates
-				unstakingBlocks = params.Validator.DelegateUnstakingBlocks
-			}
-			// if below minimum, force unstake
-			if belowMinimum {
-				fmt.Println("DEBUG: Validator is below minimum! Setting to unstaking...")
-				// calculate the future unstaking height
-				unstakingHeight := s.Height() + unstakingBlocks
-				// set the validator/delegate as unstaking
-				return s.SetValidatorUnstaking(crypto.NewAddress(v.Address), v, unstakingHeight)
-			} else {
-				fmt.Println("DEBUG: Validator is NOT below minimum")
-			}
-			return nil
-		}); err != nil {
-			fmt.Println("DEBUG: IterateAndExecute returned error:", err)
-			return err
-		}
-		fmt.Println("DEBUG: IterateAndExecute completed, callback was called", callbackCount, "times")
 	}
 	// check for a change in MaxCommitteeSize
 	if previousParams.Validator.MaxCommitteeSize <= params.Validator.MaxCommittees {

@@ -270,7 +270,3 @@ func ErrInvalidERC20Tx(err error) lib.ErrorI {
 func ErrNotEmpty() lib.ErrorI {
 	return lib.NewError(lib.CodeErrNotEmpty, lib.StateMachineModule, "a field that should be empty isn't")
 }
-
-func ErrStakeBelowMininum() lib.ErrorI {
-	return lib.NewError(lib.CodeStakeBelowMinimum, lib.StateMachineModule, "stake bellow minimum")
-}
