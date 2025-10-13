@@ -11,13 +11,14 @@ import {
   convertTx,
   toCNPY,
   formatLocaleNumber,
+  defaultNetAddress,
 } from "@/components/util";
 
 // convertValue() converts the value based on its key and handles different types
 function convertValue(k, v, openModal) {
   if (k === "Id" || k === "Data") return v;
   if (k === "publicKey") return <Truncate text={v} />;
-  if (k === "netAddress") return <span className="net-address">{v || "tcp://delegating"}</span>;
+  if (k === "netAddress") return <span className="net-address">{v || defaultNetAddress}</span>;
   if (isHex(v) || k === "height") {
     const content = isNumber(v) ? v : <Truncate text={v} />;
     return (

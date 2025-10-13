@@ -127,8 +127,14 @@ func (s *Server) RootChainInfo(w http.ResponseWriter, r *http.Request, _ httprou
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
+	// if height is 0; set to the latest height
+	if req.Height == 0 {
+		req.Height = s.controller.FSM.Height()
+	}
+	// retrieve the saved last validator set if available
+	lastVS := s.controller.LastValidatorSet[req.Height][req.ID]
 	// load the root chain info directly
-	got, err := s.controller.FSM.LoadRootChainInfo(req.ID, req.Height)
+	got, err := s.controller.FSM.LoadRootChainInfo(req.ID, req.Height, lastVS)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return

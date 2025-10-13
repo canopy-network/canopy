@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"math"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,32 +217,36 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
-	DBName         string `json:"dbName"`         // name of the database
-	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
-	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
+	DataDirPath          string `json:"dataDirPath"`          // path of the designated folder where the application stores its data
+	DBName               string `json:"dbName"`               // name of the database
+	IndexByAccount       bool   `json:"indexByAccount"`       // index transactions by account
+	InMemory             bool   `json:"inMemory"`             // non-disk database, only for testing
+	CleanupBlockInterval uint64 `json:"cleanupBlockInterval"` // interval for cleaning up stale data, in blocks
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
 func DefaultDataDirPath() string {
 	// get the user home
 	home, err := os.UserHomeDir()
+	// home, err := os.Getwd()
 	// if unable to get the user home
 	if err != nil {
 		// fatal error
 		panic(err)
 	}
 	// exit with full default data directory path
+	// return filepath.Join(home, "canopy_2")
 	return filepath.Join(home, ".canopy")
 }
 
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:    DefaultDataDirPath(), // use the default data dir path
-		DBName:         "canopy",             // 'canopy' database name
-		IndexByAccount: true,                 // index transactions by account
-		InMemory:       false,                // persist to disk, not memory
+		DataDirPath:          DefaultDataDirPath(),           // use the default data dir path
+		DBName:               "canopy",                       // 'canopy' database name
+		IndexByAccount:       true,                           // index transactions by account
+		InMemory:             false,                          // persist to disk, not memory
+		CleanupBlockInterval: uint64(rand.Int32N(101) + 100), // clean every 100-200 blocks (random)
 	}
 }
 

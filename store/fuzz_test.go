@@ -26,7 +26,7 @@ const (
 
 func TestFuzz(t *testing.T) {
 	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR))
+		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
 	require.NoError(t, err)
 	store, _, cleanup := testStore(t)
 	defer cleanup()
@@ -40,7 +40,7 @@ func TestFuzz(t *testing.T) {
 
 func TestFuzzTxn(t *testing.T) {
 	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR))
+		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
