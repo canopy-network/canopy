@@ -19,8 +19,6 @@ interface BlockDetailInfoProps {
 }
 
 const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
-    const truncate = (s: string, n: number = 12) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-8)}`
-
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success('Copied to clipboard!', {

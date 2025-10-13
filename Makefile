@@ -29,7 +29,7 @@ build/canopy:
 	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
 
 ## build/canopy-full: build the canopy binary and its wallet and explorer altogether
-build/canopy-full: build/wallet build/explorer build/canopy
+build/canopy-full: build/wallet build/explorer build/canopy build/explorer-new
 
 ## build/wallet: build the canopy's wallet project
 build/wallet:

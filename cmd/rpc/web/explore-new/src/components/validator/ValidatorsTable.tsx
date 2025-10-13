@@ -44,11 +44,6 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
     const navigate = useNavigate()
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
-    const formatRewardRate = (rate: number) => {
-        if (!rate || rate === 0) return '0.00%'
-        return `${rate.toFixed(2)}%`
-    }
-
     const formatActivityScore = (score: string) => {
         const colors = {
             'Active': 'bg-green-500/20 text-green-400',
@@ -65,37 +60,6 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         )
     }
 
-    const formatChainsRestaked = (chains: number) => {
-        if (!chains || chains === 0) return '0'
-        return chains.toString()
-    }
-
-    const formatBlocksProduced = (blocks: number) => {
-        if (!blocks || blocks === 0) return '0'
-        return blocks.toLocaleString()
-    }
-
-    const formatStakeWeight = (weight: number) => {
-        if (!weight || weight === 0) return '0.00%'
-        return `${weight.toFixed(2)}%`
-    }
-
-    const formatWeightChange = (change: number) => {
-        if (!change || change === 0) return '0.00%'
-        const isPositive = change > 0
-        const color = isPositive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        const sign = isPositive ? '+' : ''
-        return (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-                {sign}{change.toFixed(2)}%
-            </span>
-        )
-    }
-
-    const formatTotalStake = (stake: number) => {
-        if (!stake || stake === 0) return '0'
-        return stake.toLocaleString()
-    }
 
     const formatStakingPower = (power: number) => {
         if (!power || power === 0) return '0%'
