@@ -38,3 +38,4 @@ cmd/web/explorer/.idea
 /cmd/tps/data
 keystore.json
 .docker/volumes/node_1/keystore.json
+node_module
