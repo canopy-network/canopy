@@ -352,8 +352,14 @@ type ValidatorParams struct {
 	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buyDeadlineBlocks"` // @gotags: json:"buyDeadlineBlocks"
 	// lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
 	LockOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=lock_order_fee_multiplier,json=lockOrderFeeMultiplier,proto3" json:"lockOrderFeeMultiplier"` // @gotags: json:"lockOrderFeeMultiplier"
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
+	MinimumStakeForValidators uint64 `protobuf:"varint,17,opt,name=minimum_stake_for_validators,json=minimumStakeForValidators,proto3" json:"minimumStakeForValidators"` // @gotags: json:"minimumStakeForValidators"
+	// minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
+	MinimumStakeForDelegates uint64 `protobuf:"varint,18,opt,name=minimum_stake_for_delegates,json=minimumStakeForDelegates,proto3" json:"minimumStakeForDelegates"` // @gotags: json:"minimumStakeForDelegates"
+	// maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
+	MaximumDelegatesPerCommittee uint64 `protobuf:"varint,19,opt,name=maximum_delegates_per_committee,json=maximumDelegatesPerCommittee,proto3" json:"maximumDelegatesPerCommittee"` // @gotags: json:"maximumDelegatesPerCommittee"
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *ValidatorParams) Reset() {
@@ -494,6 +500,27 @@ func (x *ValidatorParams) GetBuyDeadlineBlocks() uint64 {
 func (x *ValidatorParams) GetLockOrderFeeMultiplier() uint64 {
 	if x != nil {
 		return x.LockOrderFeeMultiplier
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMinimumStakeForValidators() uint64 {
+	if x != nil {
+		return x.MinimumStakeForValidators
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMinimumStakeForDelegates() uint64 {
+	if x != nil {
+		return x.MinimumStakeForDelegates
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMaximumDelegatesPerCommittee() uint64 {
+	if x != nil {
+		return x.MaximumDelegatesPerCommittee
 	}
 	return 0
 }
@@ -658,14 +685,8 @@ type GovernanceParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// dao_reward_percent: is the percent of the block reward that is sent to the DAO
 	DaoRewardPercentage uint64 `protobuf:"varint,1,opt,name=dao_reward_percentage,json=daoRewardPercentage,proto3" json:"daoRewardPercentage"` // @gotags: json:"daoRewardPercentage"
-	// minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
-	MinimumStakeForValidators uint64 `protobuf:"varint,2,opt,name=minimum_stake_for_validators,json=minimumStakeForValidators,proto3" json:"minimumStakeForValidators"` // @gotags: json:"minimumStakeForValidators"
-	// minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
-	MinimumStakeForDelegates uint64 `protobuf:"varint,3,opt,name=minimum_stake_for_delegates,json=minimumStakeForDelegates,proto3" json:"minimumStakeForDelegates"` // @gotags: json:"minimumStakeForDelegates"
-	// maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
-	MaximumDelegatesPerCommittee uint64 `protobuf:"varint,4,opt,name=maximum_delegates_per_committee,json=maximumDelegatesPerCommittee,proto3" json:"maximumDelegatesPerCommittee"` // @gotags: json:"maximumDelegatesPerCommittee"
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *GovernanceParams) Reset() {
@@ -705,27 +726,6 @@ func (x *GovernanceParams) GetDaoRewardPercentage() uint64 {
 	return 0
 }
 
-func (x *GovernanceParams) GetMinimumStakeForValidators() uint64 {
-	if x != nil {
-		return x.MinimumStakeForValidators
-	}
-	return 0
-}
-
-func (x *GovernanceParams) GetMinimumStakeForDelegates() uint64 {
-	if x != nil {
-		return x.MinimumStakeForDelegates
-	}
-	return 0
-}
-
-func (x *GovernanceParams) GetMaximumDelegatesPerCommittee() uint64 {
-	if x != nil {
-		return x.MaximumDelegatesPerCommittee
-	}
-	return 0
-}
-
 var File_gov_proto protoreflect.FileDescriptor
 
 const file_gov_proto_rawDesc = "" +
@@ -746,7 +746,7 @@ const file_gov_proto_rawDesc = "" +
 	"block_size\x18\x01 \x01(\x04R\tblockSize\x12)\n" +
 	"\x10protocol_version\x18\x02 \x01(\tR\x0fprotocolVersion\x12\"\n" +
 	"\rroot_chain_id\x18\x03 \x01(\x04R\vrootChainId\x12\x18\n" +
-	"\aretired\x18\x04 \x01(\x04R\aretired\"\xd9\x06\n" +
+	"\aretired\x18\x04 \x01(\x04R\aretired\"\xa0\b\n" +
 	"\x0fValidatorParams\x12)\n" +
 	"\x10unstaking_blocks\x18\x01 \x01(\x04R\x0funstakingBlocks\x12(\n" +
 	"\x10max_pause_blocks\x18\x02 \x01(\x04R\x0emaxPauseBlocks\x12?\n" +
@@ -765,7 +765,10 @@ const file_gov_proto_rawDesc = "" +
 	"\x17max_slash_per_committee\x18\r \x01(\x04R\x14maxSlashPerCommittee\x12<\n" +
 	"\x1adelegate_reward_percentage\x18\x0e \x01(\x04R\x18delegateRewardPercentage\x12.\n" +
 	"\x13buy_deadline_blocks\x18\x0f \x01(\x04R\x11buyDeadlineBlocks\x129\n" +
-	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\"\xf7\x03\n" +
+	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\x12?\n" +
+	"\x1cminimum_stake_for_validators\x18\x11 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
+	"\x1bminimum_stake_for_delegates\x18\x12 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
+	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\xf7\x03\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12\x1b\n" +
 	"\tstake_fee\x18\x02 \x01(\x04R\bstakeFee\x12$\n" +
@@ -783,12 +786,9 @@ const file_gov_proto_rawDesc = "" +
 	"subsidyFee\x12(\n" +
 	"\x10create_order_fee\x18\v \x01(\x04R\x0ecreateOrderFee\x12$\n" +
 	"\x0eedit_order_fee\x18\f \x01(\x04R\feditOrderFee\x12(\n" +
-	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"\x8d\x02\n" +
+	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"F\n" +
 	"\x10GovernanceParams\x122\n" +
-	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage\x12?\n" +
-	"\x1cminimum_stake_for_validators\x18\x02 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
-	"\x1bminimum_stake_for_delegates\x18\x03 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
-	"\x1fmaximum_delegates_per_committee\x18\x04 \x01(\x04R\x1cmaximumDelegatesPerCommittee*I\n" +
+	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage*I\n" +
 	"\x15GovProposalVoteConfig\x12\x0e\n" +
 	"\n" +
 	"ACCEPT_ALL\x10\x00\x12\x10\n" +

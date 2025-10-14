@@ -125,8 +125,8 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		}
 	}
 	// check if minimum stake requirements have increased
-	validatorMinStakeIncreased := previousParams.Governance.MinimumStakeForValidators < params.Governance.MinimumStakeForValidators
-	delegateMinStakeIncreased := previousParams.Governance.MinimumStakeForDelegates < params.Governance.MinimumStakeForDelegates
+	validatorMinStakeIncreased := previousParams.Validator.MinimumStakeForValidators < params.Validator.MinimumStakeForValidators
+	delegateMinStakeIncreased := previousParams.Validator.MinimumStakeForDelegates < params.Validator.MinimumStakeForDelegates
 	// if either minimum stake has increased, force unstake those below the new minimum
 	if validatorMinStakeIncreased || delegateMinStakeIncreased {
 		// iterate through all validators and delegates

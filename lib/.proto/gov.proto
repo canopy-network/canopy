@@ -120,6 +120,12 @@ message ValidatorParams {
   uint64 buy_deadline_blocks = 15; // @gotags: json:"buyDeadlineBlocks"
   // lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
   uint64 lock_order_fee_multiplier = 16; // @gotags: json:"lockOrderFeeMultiplier"
+  // minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
+  uint64 minimum_stake_for_validators = 17; // @gotags: json:"minimumStakeForValidators"
+  // minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
+  uint64 minimum_stake_for_delegates = 18; // @gotags: json:"minimumStakeForDelegates"
+  // maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
+  uint64 maximum_delegates_per_committee = 19; // @gotags: json:"maximumDelegatesPerCommittee"
 }
 
 // FeeParams is the parameter space that defines various amounts for transaction fees
@@ -157,10 +163,4 @@ message FeeParams {
 message GovernanceParams {
   // dao_reward_percent: is the percent of the block reward that is sent to the DAO
   uint64 dao_reward_percentage = 1; // @gotags: json:"daoRewardPercentage"
-  // minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
-  uint64 minimum_stake_for_validators = 2; // @gotags: json:"minimumStakeForValidators"
-  // minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
-  uint64 minimum_stake_for_delegates = 3; // @gotags: json:"minimumStakeForDelegates"
-  // maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
-  uint64 maximum_delegates_per_committee = 4; // @gotags: json:"maximumDelegatesPerCommittee"
 }

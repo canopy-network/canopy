@@ -63,6 +63,9 @@ func DefaultParams() *Params {
 			DelegateRewardPercentage:           10,
 			BuyDeadlineBlocks:                  60,
 			LockOrderFeeMultiplier:             2,
+			MinimumStakeForValidators:          0,
+			MinimumStakeForDelegates:           0,
+			MaximumDelegatesPerCommittee:       0,
 		},
 		Fee: &FeeParams{
 			SendFee:               10000,
@@ -80,10 +83,7 @@ func DefaultParams() *Params {
 			DeleteOrderFee:        10000,
 		},
 		Governance: &GovernanceParams{
-			DaoRewardPercentage:          5,
-			MinimumStakeForValidators:    0,
-			MinimumStakeForDelegates:     0,
-			MaximumDelegatesPerCommittee: 0,
+			DaoRewardPercentage: 5,
 		},
 	}
 }
@@ -314,6 +314,12 @@ func (x *ValidatorParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.BuyDeadlineBlocks = value
 	case ParamLockOrderFeeMultiplier:
 		x.LockOrderFeeMultiplier = value
+	case ParamMinimumStakeForValidators:
+		x.MinimumStakeForValidators = value
+	case ParamMinimumStakeForDelegates:
+		x.MinimumStakeForDelegates = value
+	case ParamMaximumDelegatesPerCommittee:
+		x.MaximumDelegatesPerCommittee = value
 	default:
 		return ErrUnknownParam()
 	}
@@ -450,12 +456,6 @@ func (x *GovernanceParams) SetUint64(paramName string, value uint64) lib.ErrorI 
 	switch paramName {
 	case ParamDAORewardPercentage:
 		x.DaoRewardPercentage = value
-	case ParamMinimumStakeForValidators:
-		x.MinimumStakeForValidators = value
-	case ParamMinimumStakeForDelegates:
-		x.MinimumStakeForDelegates = value
-	case ParamMaximumDelegatesPerCommittee:
-		x.MaximumDelegatesPerCommittee = value
 	default:
 		return ErrUnknownParam()
 	}

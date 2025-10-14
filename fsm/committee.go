@@ -443,8 +443,8 @@ func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err
 
 // GetTopDelegates() returns top delegates according to gov params
 func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// get gov params for filtering
-	params, err := s.GetParamsGov()
+	// get val params for filtering
+	params, err := s.GetParamsVal()
 	if err != nil {
 		return vs, err
 	}

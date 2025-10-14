@@ -184,8 +184,8 @@ func (s *StateMachine) SetValidator(validator *Validator) (err lib.ErrorI) {
 	if err != nil {
 		return
 	}
-	// get gov params for validation
-	params, err := s.GetParamsGov()
+	// get val params for validation
+	params, err := s.GetParamsVal()
 	if err != nil {
 		return err
 	}
@@ -295,13 +295,15 @@ func (s *StateMachine) SetValidatorUnstaking(address crypto.AddressI, validator 
 	return s.SetValidator(validator)
 }
 
+// SetValidatorUnstakingIfBelowMinimum() updates a validator as 'unstaking' and removes it from its respective committees
+// if it is below the minimum stake according to saved params
 func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator) (bool, lib.ErrorI) {
 	// skip if already unstaking
 	if validator.UnstakingHeight != 0 {
 		return false, nil
 	}
-	// get params for validation
-	params, err := s.GetParams()
+	// get val params for validation
+	params, err := s.GetParamsVal()
 	if err != nil {
 		return false, err
 	}
@@ -310,14 +312,14 @@ func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator)
 	var unstakingBlocks uint64
 	// validate stake is above minimums
 	if validator.Delegate {
-		if validator.StakedAmount < params.Governance.MinimumStakeForDelegates {
+		if validator.StakedAmount < params.MinimumStakeForDelegates {
 			belowMinimum = true
-			unstakingBlocks = params.Validator.DelegateUnstakingBlocks
+			unstakingBlocks = params.DelegateUnstakingBlocks
 		}
 	} else {
-		if validator.StakedAmount < params.Governance.MinimumStakeForValidators {
+		if validator.StakedAmount < params.MinimumStakeForValidators {
 			belowMinimum = true
-			unstakingBlocks = params.Validator.UnstakingBlocks
+			unstakingBlocks = params.UnstakingBlocks
 		}
 	}
 	// if below minimum, force unstake

@@ -625,8 +625,8 @@ func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
 
 			// set initial parameters with initial minimum stakes
 			params := DefaultParams()
-			params.Governance.MinimumStakeForValidators = test.initialValidatorMinStake
-			params.Governance.MinimumStakeForDelegates = test.initialDelegateMinStake
+			params.Validator.MinimumStakeForValidators = test.initialValidatorMinStake
+			params.Validator.MinimumStakeForDelegates = test.initialDelegateMinStake
 			require.NoError(t, sm.SetParams(params))
 
 			// set up validators in state (they meet the initial minimum stakes)
@@ -638,10 +638,10 @@ func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
 			// this stores pendingParamUpdate which is processed in EndBlock
 			err := sm.UpdateParam("gov", ParamMinimumStakeForValidators, &lib.UInt64Wrapper{Value: test.newValidatorMinStake})
 			require.NoError(t, err)
-			
+
 			err = sm.UpdateParam("gov", ParamMinimumStakeForDelegates, &lib.UInt64Wrapper{Value: test.newDelegateMinStake})
 			require.NoError(t, err)
-			
+
 			// Simulate EndBlock to process the pending param conformance
 			// In production, this happens automatically at the end of block application
 			err = sm.EndBlock([]byte{0})
@@ -704,8 +704,8 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	initialValidatorMinStake := uint64(1000)
 	initialDelegateMinStake := uint64(500)
 	params := DefaultParams()
-	params.Governance.MinimumStakeForValidators = initialValidatorMinStake
-	params.Governance.MinimumStakeForDelegates = initialDelegateMinStake
+	params.Validator.MinimumStakeForValidators = initialValidatorMinStake
+	params.Validator.MinimumStakeForDelegates = initialDelegateMinStake
 	require.NoError(t, sm.SetParams(params))
 
 	// create validators: some will be below the new minimum, some above
@@ -784,7 +784,7 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	// handle the messages (this is the real production flow)
 	require.NoError(t, sm.HandleMessageChangeParameter(validatorMinStakeMsg))
 	require.NoError(t, sm.HandleMessageChangeParameter(delegateMinStakeMsg))
-	
+
 	// Simulate EndBlock to process the pending param conformance
 	// In production, this happens automatically at the end of block application
 	err = sm.EndBlock([]byte{0})
@@ -793,8 +793,8 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	// get the updated params
 	updatedParams, err := sm.GetParams()
 	require.NoError(t, err)
-	require.Equal(t, newValidatorMinStake, updatedParams.Governance.MinimumStakeForValidators)
-	require.Equal(t, newDelegateMinStake, updatedParams.Governance.MinimumStakeForDelegates)
+	require.Equal(t, newValidatorMinStake, updatedParams.Validator.MinimumStakeForValidators)
+	require.Equal(t, newDelegateMinStake, updatedParams.Validator.MinimumStakeForDelegates)
 
 	// verify validator 0 (3000 stake, below 5000 minimum) is now unstaking
 	val0, err := sm.GetValidator(crypto.NewAddressFromBytes(validators[0].Address))
