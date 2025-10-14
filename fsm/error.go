@@ -272,5 +272,5 @@ func ErrNotEmpty() lib.ErrorI {
 }
 
 func ErrStakeBelowMininum() lib.ErrorI {
-	return lib.NewError(lib.CodeStakeBelowMinimum, lib.StateMachineModule, "stake bellow minimum")
+	return lib.NewError(lib.CodeStakeBelowMinimum, lib.StateMachineModule, "stake below minimum")
 }

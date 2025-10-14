@@ -88,24 +88,17 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	// set the param space back in state
 	switch paramSpace {
 	case ParamSpaceCons:
-		err = s.SetParamsCons(sp.(*ConsensusParams))
+		return s.SetParamsCons(sp.(*ConsensusParams))
 	case ParamSpaceVal:
-		err = s.SetParamsVal(sp.(*ValidatorParams))
+		return s.SetParamsVal(sp.(*ValidatorParams))
 	case ParamSpaceFee:
-		err = s.SetParamsFee(sp.(*FeeParams))
+		return s.SetParamsFee(sp.(*FeeParams))
 	case ParamSpaceGov:
-		err = s.SetParamsGov(sp.(*GovernanceParams))
-	}
-	if err != nil {
-		return err
+		return s.SetParamsGov(sp.(*GovernanceParams))
 	}
 
-	// Store initial params to defer ConformStateToParamUpdate until EndBlock (fixes isolation issue)
-	if s.pendingParamUpdate == nil {
-		s.pendingParamUpdate = previousParams
-	}
-
-	return nil
+	// adjust the state if necessary
+	return s.ConformStateToParamUpdate(previousParams)
 }
 
 // ConformStateToParamUpdate() ensures the state does not violate the new values of the governance parameters
@@ -143,28 +136,10 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 			if e != nil {
 				return e
 			}
-			// skip if already unstaking
-			if v.UnstakingHeight != 0 {
-				return nil
-			}
-			// determine if this validator/delegate is below the new minimum
-			var belowMinimum bool
-			var unstakingBlocks uint64
-			if !v.Delegate {
-				// check if validator is below the new minimum stake for validators
-				belowMinimum = validatorMinStakeIncreased && v.StakedAmount < params.Governance.MinimumStakeForValidators
-				unstakingBlocks = params.Validator.UnstakingBlocks
-			} else {
-				// check if delegate is below the new minimum stake for delegates
-				belowMinimum = delegateMinStakeIncreased && v.StakedAmount < params.Governance.MinimumStakeForDelegates
-				unstakingBlocks = params.Validator.DelegateUnstakingBlocks
-			}
-			// if below minimum, force unstake
-			if belowMinimum {
-				// calculate the future unstaking height
-				unstakingHeight := s.Height() + unstakingBlocks
-				// set the validator/delegate as unstaking
-				return s.SetValidatorUnstaking(crypto.NewAddress(v.Address), v, unstakingHeight)
+			// set validator to unstaking if below minium
+			_, err := s.SetValidatorUnstakingIfBelowMinimum(v)
+			if err != nil {
+				return err
 			}
 			return nil
 		}); err != nil {

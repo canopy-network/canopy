@@ -35,7 +35,6 @@ type StateMachine struct {
 	log                lib.LoggerI                             // the logger for standard output and debugging
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
-	pendingParamUpdate *Params                                 // tracks previous params when a param update occurs, to be processed in EndBlock
 }
 
 // cache is the set of items to be cached used by the state machine
