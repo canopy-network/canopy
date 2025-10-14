@@ -30,7 +30,7 @@
 - /v1/query/state-diff
 - /v1/query/cert-by-height
 - /v1/query/block-by-height
-- /v1/query/blocks
+- /v1/query/blocksd
 - /v1/query/block-by-hash
 - /v1/query/txs-by-height
 - /v1/query/txs-by-sender
