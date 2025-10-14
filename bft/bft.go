@@ -111,10 +111,11 @@ func (b *BFT) Start() {
 		// - This triggers when the phase's sleep time has expired, indicating that all expected messages for this phase should have already been received
 		case <-b.PhaseTimer.C:
 			func() {
+				startTime := time.Now()
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
 				// Update BFT metrics
-				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, time.Now())
+				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
 				// handle the phase
 				b.HandlePhase()
 			}()
