@@ -62,7 +62,7 @@ func NewTransaction(ethTx *ethtypes.Transaction, chainId uint64) (*Transaction, 
 	}
 	// validate address format
 	if !common.IsHexAddress(tx.to) {
-		return nil, ErrInvalidAddress
+		return nil, &InvalidAddressError{Address: tx.to}
 	}
 	// extract sender address using latest signer
 	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(big.NewInt(int64(chainId))), ethTx)

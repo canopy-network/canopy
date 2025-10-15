@@ -118,7 +118,7 @@ func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Bl
 		// create new Transaction from ethereum transaction
 		tx, err := NewTransaction(ethTx, p.chainId)
 		if err != nil {
-			p.logger.Errorf("failed to create transaction: %s", height, err)
+			p.logger.Errorf("failed to create transaction: %s", err)
 			continue
 			// return nil, err // return error if transaction creation fails
 		}
@@ -412,8 +412,9 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	err := tx.parseDataForOrders(p.orderValidator)
 	// check for error
 	if err != nil {
-		p.logAsciiBytes(tx.tx.Data())
 		p.logger.Warnf("Error parsing data for orders: %w", err)
+		p.logAsciiBytes(tx.tx.Data())
+		// a transaction having non-JSON data is an expected conditions
 		return nil
 	}
 	// check if parseDataForOrders found an order
