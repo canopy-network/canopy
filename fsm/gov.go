@@ -224,6 +224,7 @@ func (s *StateMachine) SetParamsCons(c *ConsensusParams) lib.ErrorI {
 
 // SetParamsVal() sets Validator params into state
 func (s *StateMachine) SetParamsVal(v *ValidatorParams) lib.ErrorI {
+	s.cache.valParams = v
 	return s.setParams(ParamSpaceVal, v)
 }
 
@@ -234,6 +235,7 @@ func (s *StateMachine) SetParamsGov(g *GovernanceParams) lib.ErrorI {
 
 // SetParamsFee() sets Fee params into state
 func (s *StateMachine) SetParamsFee(f *FeeParams) lib.ErrorI {
+	s.cache.feeParams = f
 	return s.setParams(ParamSpaceFee, f)
 }
 
