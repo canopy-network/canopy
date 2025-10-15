@@ -43,6 +43,17 @@ interface ManifestData {
     label: string;
     icon?: string;
     ui?: any;
+    actions?: Array<{
+      id: string;
+      label: string;
+      icon?: string;
+      rpc?: {
+        base: string;
+        path: string;
+        method: string;
+        payload?: any;
+      };
+    }>;
   }>;
 }
 

@@ -33,7 +33,9 @@
       "max": "MAX",
       "available": "Available",
       "uCNPY": "uCNPY",
-      "balance": "Balance"
+      "balance": "Balance",
+      "cancel": "Cancel",
+      "creating": "Creating..."
     },
     "allAddresses": {
       "title": "All Addresses",
@@ -163,6 +165,54 @@
           "message": "Pause {count} validator(s)?\n\nValidators: {list}"
         }
       }
+    },
+    "governance": {
+      "title": "Active Proposals",
+      "subtitle": "Vote on proposals that shape the future of the Canopy ecosystem",
+      "sections": {
+        "activeProposals": "Active Proposals",
+        "activePolls": "Active Polls",
+        "pastProposals": "Past Proposals",
+        "pastPolls": "Past Polls"
+      },
+      "labels": {
+        "for": "For",
+        "against": "Against",
+        "remaining": "remaining",
+        "details": "Details",
+        "discuss": "Discuss",
+        "vote": "Vote",
+        "createPoll": "Create a Poll",
+        "createProposal": "Create Proposal",
+        "searchPlaceholder": "Search proposals...",
+        "allCategories": "All Categories",
+        "viewDetails": "View Details",
+        "passed": "Passed",
+        "failed": "Failed"
+      },
+      "cards": {
+        "votes": "votes",
+        "cnpy": "CNPY"
+      },
+      "empty": {
+        "noActiveProposals": "No active proposals",
+        "noActivePolls": "No active polls"
+      },
+      "createProposal": "Create Proposal",
+      "createPoll": "Create Poll",
+      "paramSpace": "Parameter Space",
+      "paramKey": "Parameter Key",
+      "paramValue": "Parameter Value",
+      "startHeight": "Start Height",
+      "endHeight": "End Height",
+      "memo": "Memo",
+      "password": "Password",
+      "proposal": "Proposal",
+      "endBlock": "End Block",
+      "url": "Discussion URL",
+      "create": "Create",
+      "creating": "Creating...",
+      "cancel": "Cancel"
     },
     "keyManagement": {
       "title": "Key Management",
@@ -1160,6 +1210,227 @@
           "success": {
             "message": "Keyfile for '{{form.walletName}}' downloaded successfully",
             "links": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "Governance",
+      "label": "Governance",
+      "icon": "governance",
+      "kind": "page",
+      "flow": "single",
+      "rpc": {
+        "base": "query",
+        "path": "/v1/gov/proposals",
+        "method": "GET"
+      },
+      "actions": [
+        {
+          "id": "CreateProposal",
+          "label": "Create Proposal",
+          "icon": "plus",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/tx-change-param",
+            "method": "POST",
+            "payload": {
+              "address": "{{activeAccount.address}}",
+              "paramSpace": "{{form.paramSpace}}",
+              "paramKey": "{{form.paramKey}}",
+              "paramValue": "{{form.paramValue}}",
+              "startHeight": "{{form.startHeight}}",
+              "endHeight": "{{form.endHeight}}",
+              "memo": "{{form.memo}}",
+              "fee": 0,
+              "submit": true,
+              "password": "{{form.password}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              }
+            },
+            "fields": [
+              {
+                "name": "paramSpace",
+                "label": "Parameter Space",
+                "type": "select",
+                "required": true,
+                "colSpan": 12,
+                "options": [
+                  { "value": "fee", "label": "Fee" },
+                  { "value": "val", "label": "Validator" },
+                  { "value": "cons", "label": "Consensus" },
+                  { "value": "gov", "label": "Governance" }
+                ]
+              },
+              {
+                "name": "paramKey",
+                "label": "Parameter Key",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., sendFee",
+                "colSpan": 12
+              },
+              {
+                "name": "paramValue",
+                "label": "Parameter Value",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., 20000",
+                "colSpan": 12
+              },
+              {
+                "name": "startHeight",
+                "label": "Start Height",
+                "type": "number",
+                "required": true,
+                "colSpan": 6
+              },
+              {
+                "name": "endHeight",
+                "label": "End Height",
+                "type": "number",
+                "required": true,
+                "colSpan": 6
+              },
+              {
+                "name": "memo",
+                "label": "Memo",
+                "type": "textarea",
+                "required": false,
+                "placeholder": "Description of the proposal...",
+                "colSpan": 12
+              },
+              {
+                "name": "password",
+                "label": "Password",
+                "type": "password",
+                "required": true,
+                "colSpan": 12
+              }
+            ]
+          }
+        },
+        {
+          "id": "CreatePoll",
+          "label": "Create Poll",
+          "icon": "plus",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/tx-start-poll",
+            "method": "POST",
+            "payload": {
+              "address": "{{activeAccount.address}}",
+              "pollJSON": {
+                "proposal": "{{form.proposal}}",
+                "endBlock": "{{form.endBlock}}",
+                "URL": "{{form.url}}"
+              },
+              "fee": 0,
+              "submit": true,
+              "password": "{{form.password}}"
+            }
+          },
+          "form": {
+            "layout": {
+              "grid": {
+                "cols": 12,
+                "gap": 4
+              }
+            },
+            "fields": [
+              {
+                "name": "proposal",
+                "label": "Proposal",
+                "type": "textarea",
+                "required": true,
+                "placeholder": "Describe your proposal...",
+                "colSpan": 12
+              },
+              {
+                "name": "endBlock",
+                "label": "End Block",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 100",
+                "colSpan": 12
+              },
+              {
+                "name": "url",
+                "label": "Discussion URL",
+                "type": "url",
+                "required": true,
+                "placeholder": "https://discord.com/link-to-thread",
+                "colSpan": 12
+              },
+              {
+                "name": "password",
+                "label": "Password",
+                "type": "password",
+                "required": true,
+                "colSpan": 12
+              }
+            ]
+          }
+        },
+        {
+          "id": "AddVote",
+          "label": "Add Vote",
+          "icon": "vote",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/gov/add-vote",
+            "method": "POST",
+            "payload": {
+              "approve": "{{form.approve}}",
+              "proposal": "{{form.proposal}}"
+            }
+          }
+        },
+        {
+          "id": "DeleteVote",
+          "label": "Delete Vote",
+          "icon": "delete",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/gov/del-vote",
+            "method": "POST",
+            "payload": {
+              "proposal": "{{form.proposal}}"
+            }
+          }
+        },
+        {
+          "id": "VotePoll",
+          "label": "Vote Poll",
+          "icon": "vote",
+          "kind": "tx",
+          "flow": "single",
+          "rpc": {
+            "base": "admin",
+            "path": "/v1/admin/tx-vote-poll",
+            "method": "POST",
+            "payload": {
+              "address": "{{activeAccount.address}}",
+              "pollJSON": "{{form.pollJSON}}",
+              "pollApprove": "{{form.pollApprove}}",
+              "fee": 0,
+              "submit": true,
+              "password": "{{form.password}}"
+            }
           }
         }
       ]

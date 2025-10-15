@@ -59,9 +59,9 @@ export const useDashboardData = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ height: 0, address: '' })
             });
-            
+
             if (!response.ok) throw new Error('Failed to fetch accounts');
-            
+
             const result = await response.json();
             return result.accounts || [];
         } catch (error) {
@@ -77,9 +77,9 @@ export const useDashboardData = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ height: 0, address })
             });
-            
+
             if (!response.ok) throw new Error('Failed to fetch account balance');
-            
+
             const result = await response.json();
             return result.balance || '0';
         } catch (error) {
@@ -95,9 +95,9 @@ export const useDashboardData = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ height: 0, address: '' })
             });
-            
+
             if (!response.ok) throw new Error('Failed to fetch validators');
-            
+
             const result = await response.json();
             return result.validators || [];
         } catch (error) {
@@ -108,42 +108,7 @@ export const useDashboardData = () => {
 
     const fetchRecentTransactions = async (): Promise<Transaction[]> => {
         try {
-            // Simulamos transacciones recientes ya que no hay endpoint específico
-            // En un caso real, usarías /v1/query/txs-by-sender o similar
-            return [
-                {
-                    hash: '0x123...abc',
-                    time: '2 min ago',
-                    action: 'send',
-                    amount: '-125.50 CNPY',
-                    status: 'confirmed',
-                    from: '0x123...',
-                    to: '0x456...'
-                },
-                {
-                    hash: '0x456...def',
-                    time: '5 min ago',
-                    action: 'receive',
-                    amount: '+500.00 CNPY',
-                    status: 'confirmed',
-                    from: '0x789...',
-                    to: '0x123...'
-                },
-                {
-                    hash: '0x789...ghi',
-                    time: '1 hour ago',
-                    action: 'stake',
-                    amount: '-1,000.00 CNPY',
-                    status: 'confirmed'
-                },
-                {
-                    hash: '0xabc...jkl',
-                    time: '2 hours ago',
-                    action: 'swap',
-                    amount: '-0.5 ETH',
-                    status: 'open'
-                }
-            ];
+            return [];
         } catch (error) {
             console.error('Error fetching transactions:', error);
             return [];
@@ -167,7 +132,7 @@ export const useDashboardData = () => {
             for (const account of accounts) {
                 const balance = parseFloat(account.balance) || 0;
                 totalBalance += balance;
-                
+
                 if (account.status === 'staked' || account.status === 'delegated') {
                     stakedBalance += balance;
                 }
@@ -195,7 +160,7 @@ export const useDashboardData = () => {
 
     useEffect(() => {
         loadDashboardData();
-        
+
         // Refrescar datos cada 30 segundos
         const interval = setInterval(loadDashboardData, 30000);
         return () => clearInterval(interval);
