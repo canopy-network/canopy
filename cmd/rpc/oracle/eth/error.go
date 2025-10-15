@@ -2,11 +2,11 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
 	ErrInvalidKey             = errors.New("invalid private key")
-	ErrInvalidAddress         = errors.New("invalid address")
 	ErrInvalidTransactionData = errors.New("invalid transaction data")
 	ErrNotERC20Transfer       = errors.New("transaction is not an erc20 transfer")
 	ErrContractNotFound       = errors.New("contract address not found")
@@ -23,3 +23,13 @@ var (
 	ErrTokenInfo              = errors.New("failed to get token info")
 	ErrSourceHeight           = errors.New("ethereum block height lower than expected")
 )
+
+// InvalidAddressError represents an error for an invalid ethereum address
+type InvalidAddressError struct {
+	Address string
+}
+
+// Error returns the error message including the invalid address
+func (e *InvalidAddressError) Error() string {
+	return fmt.Sprintf("invalid address: %s", e.Address)
+}
