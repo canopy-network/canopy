@@ -412,7 +412,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	err := tx.parseDataForOrders(p.orderValidator)
 	// check for error
 	if err != nil {
-		p.logger.Warnf("Error parsing data for orders: %w", err)
+		p.logger.Warnf("Error parsing data for orders: %s", err)
 		p.logAsciiBytes(tx.tx.Data())
 		// a transaction having non-JSON data is an expected conditions
 		return nil
