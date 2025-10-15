@@ -2,11 +2,12 @@ package fsm
 
 import (
 	"encoding/json"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* GENESIS LOGIC: implements logic to import a json file to create the state at height 0 and export the state at any height */
@@ -68,11 +69,6 @@ func (s *StateMachine) ReadGenesisFromFile() (genesis *GenesisState, e lib.Error
 func (s *StateMachine) NewStateFromGenesis(genesis *GenesisState) (err lib.ErrorI) {
 	// create a new supply tracker object reference
 	supply := new(Supply)
-	// set the governance params from the genesis object in state FIRST
-	// (must be set before validators because SetValidator validates against MinimumStakeForValidators/Delegates)
-	if err = s.SetParams(genesis.Params); err != nil {
-		return
-	}
 	// set the accounts from the genesis object in state
 	if err = s.SetAccounts(genesis.Accounts, supply); err != nil {
 		return
@@ -94,7 +90,11 @@ func (s *StateMachine) NewStateFromGenesis(genesis *GenesisState) (err lib.Error
 		return
 	}
 	// set the retired committees from the genesis object in state
-	return s.SetRetiredCommittees(genesis.RetiredCommittees)
+	if err = s.SetRetiredCommittees(genesis.RetiredCommittees); err != nil {
+		return
+	}
+	// set the governance params from the genesis object in state
+	return s.SetParams(genesis.Params)
 }
 
 // ValidateGenesisState() validates a GenesisState object

@@ -184,24 +184,6 @@ func (s *StateMachine) SetValidator(validator *Validator) (err lib.ErrorI) {
 	if err != nil {
 		return
 	}
-	// get val params for validation
-	params, err := s.GetParamsVal()
-	if err != nil {
-		return err
-	}
-	// validate stake is above minimums (skip if validator is already unstaking)
-	if validator.UnstakingHeight == 0 {
-		if validator.Delegate {
-			if validator.StakedAmount < params.MinimumStakeForDelegates {
-				return ErrStakeBelowMininum()
-			}
-		} else {
-			if validator.StakedAmount < params.MinimumStakeForValidators {
-				return ErrStakeBelowMininum()
-			}
-		}
-	}
-
 	// set the bytes under a key for validator using a specific 'validator address'
 	if err = s.Set(KeyForValidator(crypto.NewAddressFromBytes(validator.Address)), bz); err != nil {
 		return
