@@ -273,7 +273,7 @@ func (t *Txn) write(prefix []byte, writeVersion uint64, op valueOp) lib.ErrorI {
 // NewIterator() creates a merged iterator with the reader and writer
 func (t *Txn) NewIterator(prefix []byte, reverse bool, allVersions bool) lib.IteratorI {
 	// create an iterator for the parent
-	parentIterator := t.reader.NewIterator(lib.Append(t.prefix, prefix), reverse, allVersions)
+	parentIterator := t.reader.NewIterator(prefix, reverse, allVersions)
 	// create a merged iterator for the parent and in-memory txn
 	return newTxnIterator(parentIterator, t.txn, prefix, reverse)
 }

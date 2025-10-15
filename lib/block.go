@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/canopy-network/canopy/lib/codec"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
@@ -311,3 +312,8 @@ func init() {
 }
 
 var _ Pageable = new(BlockResults) // Pageable interface enforcement
+
+// HeightResult is the structure to return the height
+type HeightResult struct {
+	Height uint64 `json:"height"`
+}
