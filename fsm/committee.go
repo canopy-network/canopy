@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"cmp"
+	"math/rand"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -452,17 +453,19 @@ func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err
 	if params.MaximumDelegatesPerCommittee == 0 {
 		return s.GetAllDelegates(chainId)
 	}
+
+	// First pass: collect all valid delegates to check total count
+	allDelegates := make([]*Validator, 0)
+
 	// iterate through the prefix for the committee, from the highest stake amount to lowest
 	it, err := s.RevIterator(DelegatePrefix(chainId))
 	if err != nil {
 		return
 	}
 	defer it.Close()
-	// create a variable to hold the committee members
-	members := make([]*lib.ConsensusValidator, 0)
-	var totalPower uint64
-	// for each item of the iterator up to MaxCommitteeSize
-	for i := uint64(0); it.Valid() && i < params.MaximumDelegatesPerCommittee; func() { it.Next(); i++ }() {
+
+	// collect all valid delegates
+	for it.Valid() {
 		// extract the address from the iterator key
 		address, e := AddressFromKey(it.Key())
 		if e != nil {
@@ -474,24 +477,83 @@ func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err
 			return vs, e
 		}
 		// ensure the validator is not included in the committee if it's paused or unstaking
-		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
-			continue
+		if val.MaxPausedHeight == 0 && val.UnstakingHeight == 0 {
+			allDelegates = append(allDelegates, val)
 		}
-		// increment the total power
-		totalPower += val.StakedAmount
-		// add the member to the list
-		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   val.PublicKey,
-			VotingPower: val.StakedAmount,
-			NetAddress:  val.NetAddress,
+		it.Next()
+	}
+
+	// if there are fewer delegates than the maximum, return all of them
+	if uint64(len(allDelegates)) <= params.MaximumDelegatesPerCommittee {
+		return buildValidatorSet(allDelegates), nil
+	}
+
+	// collect top delegates up to MaximumDelegatesPerCommittee
+	topDelegates := allDelegates[:params.MaximumDelegatesPerCommittee]
+	lastStake := topDelegates[len(topDelegates)-1].StakedAmount
+
+	// check for ties: find all delegates with the same stake as the last selected
+	tiedDelegates := make([]*Validator, 0)
+	for i := params.MaximumDelegatesPerCommittee; i < uint64(len(allDelegates)); i++ {
+		if allDelegates[i].StakedAmount == lastStake {
+			tiedDelegates = append(tiedDelegates, allDelegates[i])
+		} else {
+			break // stakes are sorted, no more ties
+		}
+	}
+
+	// if there are ties, randomly select among all candidates with that stake
+	if len(tiedDelegates) > 0 {
+		// collect all delegates with the last stake (including those already selected)
+		allWithLastStake := make([]*Validator, 0)
+		for i := uint64(0); i < params.MaximumDelegatesPerCommittee; i++ {
+			if topDelegates[i].StakedAmount == lastStake {
+				allWithLastStake = append(allWithLastStake, topDelegates[i])
+			}
+		}
+		allWithLastStake = append(allWithLastStake, tiedDelegates...)
+
+		// randomly shuffle the tied delegates
+		rand.Shuffle(len(allWithLastStake), func(i, j int) {
+			allWithLastStake[i], allWithLastStake[j] = allWithLastStake[j], allWithLastStake[i]
 		})
+
+		// rebuild topDelegates: keep non-tied delegates and add randomly selected tied ones
+		finalDelegates := make([]*Validator, 0, params.MaximumDelegatesPerCommittee)
+		for i := uint64(0); i < params.MaximumDelegatesPerCommittee; i++ {
+			if topDelegates[i].StakedAmount != lastStake {
+				finalDelegates = append(finalDelegates, topDelegates[i])
+			}
+		}
+		// add the randomly selected tied delegates to reach MaximumDelegatesPerCommittee
+		needed := int(params.MaximumDelegatesPerCommittee) - len(finalDelegates)
+		finalDelegates = append(finalDelegates, allWithLastStake[:needed]...)
+		topDelegates = finalDelegates
+	}
+
+	// build the final validator set
+	return buildValidatorSet(topDelegates), nil
+}
+
+// buildValidatorSet builds a lib.ValidatorSet from a slice of validators.
+func buildValidatorSet(delegates []*Validator) lib.ValidatorSet {
+	members := make([]*lib.ConsensusValidator, len(delegates))
+	var totalPower uint64
+	for i, d := range delegates {
+		vp := d.StakedAmount
+		members[i] = &lib.ConsensusValidator{
+			PublicKey:   d.PublicKey,
+			VotingPower: vp,
+			NetAddress:  d.NetAddress,
+		}
+		totalPower += vp
 	}
 	return lib.ValidatorSet{
 		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
 		TotalPower:    totalPower,
 		MinimumMaj23:  (2*totalPower)/3 + 1,
 		NumValidators: uint64(len(members)),
-	}, nil
+	}
 }
 
 // GetDelegatesPaginated() returns a page of delegates
