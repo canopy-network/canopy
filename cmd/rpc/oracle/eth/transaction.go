@@ -118,8 +118,8 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// not an erc20 transfer - normal condition
 		return nil
 	}
-	fmt.Println("checking", t.from, recipient, amount, string(data), err)
-	fmt.Println("checking", t.from == recipient, amount.Cmp(big.NewInt(0)))
+	// fmt.Println("checking", t.from, recipient, amount, string(data), err)
+	// fmt.Println("checking", t.from == recipient, amount.Cmp(big.NewInt(0)))
 	// all Canopy swap ERC20 transfers have aux data
 	if len(data) == 0 {
 		// no data to process - not a canopy swap ERC20 transfer
