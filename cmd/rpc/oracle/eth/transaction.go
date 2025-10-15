@@ -89,7 +89,7 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// large transactions are not expected from Canopy swap clients
 		return nil
 	}
-	// test for self-sent transactions
+	// support lock orders embedded in self-sent transactions
 	if t.To() == t.From() {
 		// canopy swap clients will place lock order json in transaction data
 		err := orderValidator.ValidateOrderJsonBytes(txData, types.LockOrderType)
@@ -135,9 +135,8 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// attempt to validate a lock order
 		err = orderValidator.ValidateOrderJsonBytes(data, types.LockOrderType)
 		if err != nil {
-			fmt.Println(err)
 			// erc20 transaction did not contain canopy lock order json - normal condition
-			return nil
+			return err
 		}
 		fmt.Println("validated lock order", t.from, recipient, amount, string(data), err)
 		order := &lib.LockOrder{}
@@ -154,10 +153,9 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	case 1: // positive amount - potential close order
 		// attempt to validate a close order
 		err = orderValidator.ValidateOrderJsonBytes(data, types.CloseOrderType)
-		fmt.Println(err)
 		if err != nil {
 			// erc20 transaction did not contain canopy close order json - normal condition
-			return nil
+			return err
 		}
 		order := &lib.CloseOrder{}
 		// unmarshal the validated json data
