@@ -412,6 +412,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	err := tx.parseDataForOrders(p.orderValidator)
 	// check for error
 	if err != nil {
+		p.logAsciiBytes(tx.tx.Data())
 		p.logger.Warnf("Error parsing data for orders: %w", err)
 		return nil
 	}
@@ -481,4 +482,28 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 	p.logger.Errorf("transaction %s with ERC20 transfer was a failed on-chain transaction, ignoring", txHashStr)
 	// return unsuccessful transaction
 	return false, nil
+}
+
+// logAsciiBytes logs the first 100 bytes of ASCII data from the provided byte slice
+func (p *EthBlockProvider) logAsciiBytes(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	// determine how many bytes to log (up to 100)
+	limit := len(data)
+	if limit > 100 {
+		limit = 100
+	}
+	// extract ascii printable characters
+	var asciiData []byte
+	for i := 0; i < limit; i++ {
+		// check if byte is printable ASCII (32-126)
+		if data[i] >= 32 && data[i] <= 126 {
+			asciiData = append(asciiData, data[i])
+		}
+	}
+	// log if we found any ASCII data
+	if len(asciiData) > 0 {
+		p.logger.Debugf("First 100 bytes ASCII data: %s", string(asciiData))
+	}
 }
