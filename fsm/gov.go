@@ -56,6 +56,8 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	if err != nil {
 		return
 	}
+	// this is needed because the update of params also updates the pointer
+	prevParamsCopy := proto.Clone(previousParams).(*Params)
 	// retrieve the space from the string
 	var sp ParamSpace
 	switch paramSpace {
@@ -88,17 +90,20 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	// set the param space back in state
 	switch paramSpace {
 	case ParamSpaceCons:
-		return s.SetParamsCons(sp.(*ConsensusParams))
+		err = s.SetParamsCons(sp.(*ConsensusParams))
 	case ParamSpaceVal:
-		return s.SetParamsVal(sp.(*ValidatorParams))
+		err = s.SetParamsVal(sp.(*ValidatorParams))
 	case ParamSpaceFee:
-		return s.SetParamsFee(sp.(*FeeParams))
+		err = s.SetParamsFee(sp.(*FeeParams))
 	case ParamSpaceGov:
-		return s.SetParamsGov(sp.(*GovernanceParams))
+		err = s.SetParamsGov(sp.(*GovernanceParams))
+	}
+	if err != nil {
+		return err
 	}
 
 	// adjust the state if necessary
-	return s.ConformStateToParamUpdate(previousParams)
+	return s.ConformStateToParamUpdate(prevParamsCopy)
 }
 
 // ConformStateToParamUpdate() ensures the state does not violate the new values of the governance parameters
@@ -137,7 +142,7 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 				return e
 			}
 			// set validator to unstaking if below minium
-			_, err := s.SetValidatorUnstakingIfBelowMinimum(v)
+			_, err := s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator)
 			if err != nil {
 				return err
 			}

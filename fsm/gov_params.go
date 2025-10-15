@@ -227,6 +227,9 @@ const (
 	ParamDelegateRewardPercentage           = "delegateRewardPercentage"           // the percentage of the block reward that is awarded to the delegates
 	ParamBuyDeadlineBlocks                  = "buyDeadlineBlocks"                  // the amount of blocks a 'buyer' has to complete an order they reserved
 	ParamLockOrderFeeMultiplier             = "lockOrderFeeMultiplier"             // the fee multiplier of the 'send' fee that is required to execute a lock order
+	ParamMinimumStakeForValidators          = "minimumStakeForValidators"          // minimum stake required to be a validator
+	ParamMinimumStakeForDelegates           = "minimumStakeForDelegates"           // minimum stake required to be a delegate
+	ParamMaximumDelegatesPerCommittee       = "maximumDelegatesPerCommittee"       // maximum number of delegates per committee
 )
 
 // Check() validates the Validator params
@@ -435,10 +438,7 @@ func (x *FeeParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 // governance param space
 
 const (
-	ParamDAORewardPercentage          = "daoRewardPercentage"          // percent of rewards the DAO fund receives
-	ParamMinimumStakeForValidators    = "minimumStakeForValidators"    // minimum stake required to be a validator
-	ParamMinimumStakeForDelegates     = "minimumStakeForDelegates"     // minimum stake required to be a delegate
-	ParamMaximumDelegatesPerCommittee = "maximumDelegatesPerCommittee" // maximum number of delegates per committee
+	ParamDAORewardPercentage = "daoRewardPercentage" // percent of rewards the DAO fund receives
 )
 
 var _ ParamSpace = &GovernanceParams{}

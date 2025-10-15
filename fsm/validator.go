@@ -297,15 +297,10 @@ func (s *StateMachine) SetValidatorUnstaking(address crypto.AddressI, validator 
 
 // SetValidatorUnstakingIfBelowMinimum() updates a validator as 'unstaking' and removes it from its respective committees
 // if it is below the minimum stake according to saved params
-func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator) (bool, lib.ErrorI) {
+func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator, params *ValidatorParams) (bool, lib.ErrorI) {
 	// skip if already unstaking
 	if validator.UnstakingHeight != 0 {
 		return false, nil
-	}
-	// get val params for validation
-	params, err := s.GetParamsVal()
-	if err != nil {
-		return false, err
 	}
 	// determine if this validator/delegate is below the new minimum
 	var belowMinimum bool

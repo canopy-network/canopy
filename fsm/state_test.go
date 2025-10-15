@@ -636,15 +636,10 @@ func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
 
 			// use the actual UpdateParam function (this is what happens in production via HandleMessageChangeParameter)
 			// this stores pendingParamUpdate which is processed in EndBlock
-			err := sm.UpdateParam("gov", ParamMinimumStakeForValidators, &lib.UInt64Wrapper{Value: test.newValidatorMinStake})
+			err := sm.UpdateParam("val", ParamMinimumStakeForValidators, &lib.UInt64Wrapper{Value: test.newValidatorMinStake})
 			require.NoError(t, err)
 
-			err = sm.UpdateParam("gov", ParamMinimumStakeForDelegates, &lib.UInt64Wrapper{Value: test.newDelegateMinStake})
-			require.NoError(t, err)
-
-			// Simulate EndBlock to process the pending param conformance
-			// In production, this happens automatically at the end of block application
-			err = sm.EndBlock([]byte{0})
+			err = sm.UpdateParam("val", ParamMinimumStakeForDelegates, &lib.UInt64Wrapper{Value: test.newDelegateMinStake})
 			require.NoError(t, err)
 
 			// get the updated params to verify and for unstaking height calculation
@@ -761,7 +756,7 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	validatorMinStakeAny, err := lib.NewAny(&lib.UInt64Wrapper{Value: newValidatorMinStake})
 	require.NoError(t, err)
 	validatorMinStakeMsg := &MessageChangeParameter{
-		ParameterSpace: "gov",
+		ParameterSpace: "val",
 		ParameterKey:   ParamMinimumStakeForValidators,
 		ParameterValue: validatorMinStakeAny,
 		StartHeight:    1,
@@ -773,7 +768,7 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	delegateMinStakeAny, err := lib.NewAny(&lib.UInt64Wrapper{Value: newDelegateMinStake})
 	require.NoError(t, err)
 	delegateMinStakeMsg := &MessageChangeParameter{
-		ParameterSpace: "gov",
+		ParameterSpace: "val",
 		ParameterKey:   ParamMinimumStakeForDelegates,
 		ParameterValue: delegateMinStakeAny,
 		StartHeight:    1,
@@ -784,11 +779,6 @@ func TestConformStateToParamUpdate_MinimumStake_ViaMessageHandler(t *testing.T) 
 	// handle the messages (this is the real production flow)
 	require.NoError(t, sm.HandleMessageChangeParameter(validatorMinStakeMsg))
 	require.NoError(t, sm.HandleMessageChangeParameter(delegateMinStakeMsg))
-
-	// Simulate EndBlock to process the pending param conformance
-	// In production, this happens automatically at the end of block application
-	err = sm.EndBlock([]byte{0})
-	require.NoError(t, err)
 
 	// get the updated params
 	updatedParams, err := sm.GetParams()

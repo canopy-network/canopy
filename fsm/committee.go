@@ -453,7 +453,7 @@ func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err
 		return s.GetAllDelegates(chainId)
 	}
 	// iterate through the prefix for the committee, from the highest stake amount to lowest
-	it, err := s.RevIterator(CommitteePrefix(chainId))
+	it, err := s.RevIterator(DelegatePrefix(chainId))
 	if err != nil {
 		return
 	}
