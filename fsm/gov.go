@@ -56,8 +56,6 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	if err != nil {
 		return
 	}
-	// this is needed because the update of params also updates the pointer
-	prevParamsCopy := proto.Clone(previousParams).(*Params)
 	// retrieve the space from the string
 	var sp ParamSpace
 	switch paramSpace {
@@ -103,7 +101,7 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	}
 
 	// adjust the state if necessary
-	return s.ConformStateToParamUpdate(prevParamsCopy)
+	return s.ConformStateToParamUpdate(previousParams)
 }
 
 // ConformStateToParamUpdate() ensures the state does not violate the new values of the governance parameters
@@ -273,11 +271,12 @@ func (s *StateMachine) GetParams() (*Params, lib.ErrorI) {
 		return nil, err
 	}
 	// return a collective 'parameters' object that holds all the spaces
+	// proto copies are needed for update safety
 	return &Params{
-		Consensus:  cons,
-		Validator:  val,
-		Fee:        fee,
-		Governance: gov,
+		Consensus:  proto.Clone(cons).(*ConsensusParams),
+		Validator:  proto.Clone(val).(*ValidatorParams),
+		Fee:        proto.Clone(fee).(*FeeParams),
+		Governance: proto.Clone(gov).(*GovernanceParams),
 	}, nil
 }
 

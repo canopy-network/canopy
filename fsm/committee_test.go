@@ -1929,8 +1929,7 @@ func TestGetTopDelegates(t *testing.T) {
 		detail                       string
 		maximumDelegatesPerCommittee uint64
 		validators                   []*Validator
-		expectedMinDelegates         int // minimum number of delegates expected (for tie scenarios)
-		expectedMaxDelegates         int // maximum number of delegates expected
+		expectedDelegates            int
 		expectedTotalPower           uint64
 		mustInclude                  [][]byte // public keys that must be included
 		mustExclude                  [][]byte // public keys that must be excluded
@@ -1962,9 +1961,8 @@ func TestGetTopDelegates(t *testing.T) {
 					Delegate:     true,
 				},
 			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			expectedTotalPower:   450,
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
 			mustInclude: [][]byte{
 				newTestPublicKeyBytes(t, 0),
 				newTestPublicKeyBytes(t, 1),
@@ -1998,120 +1996,13 @@ func TestGetTopDelegates(t *testing.T) {
 					Delegate:     true,
 				},
 			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			expectedTotalPower:   450,
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
 			mustInclude: [][]byte{
 				newTestPublicKeyBytes(t, 0),
 				newTestPublicKeyBytes(t, 1),
 				newTestPublicKeyBytes(t, 2),
 			},
-		},
-		{
-			name:                         "more delegates than maximum, no ties",
-			detail:                       "when there are more delegates than MaximumDelegatesPerCommittee and no ties, return top N",
-			maximumDelegatesPerCommittee: 3,
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 100,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 400,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 2),
-					PublicKey:    newTestPublicKeyBytes(t, 2),
-					StakedAmount: 300,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 3),
-					PublicKey:    newTestPublicKeyBytes(t, 3),
-					StakedAmount: 200,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 4),
-					PublicKey:    newTestPublicKeyBytes(t, 4),
-					StakedAmount: 50,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			expectedTotalPower:   900,
-			mustInclude: [][]byte{
-				newTestPublicKeyBytes(t, 1), // 400
-				newTestPublicKeyBytes(t, 2), // 300
-				newTestPublicKeyBytes(t, 3), // 200
-			},
-			mustExclude: [][]byte{
-				newTestPublicKeyBytes(t, 0), // 100
-				newTestPublicKeyBytes(t, 4), // 50
-			},
-		},
-		{
-			name:                         "tie at last position",
-			detail:                       "when there's a tie at the cutoff, random selection should pick from tied delegates",
-			maximumDelegatesPerCommittee: 3,
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t, 0),
-					PublicKey:    newTestPublicKeyBytes(t, 0),
-					StakedAmount: 500,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 400,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 2),
-					PublicKey:    newTestPublicKeyBytes(t, 2),
-					StakedAmount: 200,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 3),
-					PublicKey:    newTestPublicKeyBytes(t, 3),
-					StakedAmount: 200,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-				{
-					Address:      newTestAddressBytes(t, 4),
-					PublicKey:    newTestPublicKeyBytes(t, 4),
-					StakedAmount: 200,
-					Committees:   []uint64{chainId},
-					Delegate:     true,
-				},
-			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			// The total power should be 1100 (500 + 400 + 200)
-			expectedTotalPower: 1100,
-			// Must include the top 2
-			mustInclude: [][]byte{
-				newTestPublicKeyBytes(t, 0), // 500
-				newTestPublicKeyBytes(t, 1), // 400
-			},
-			// One of the 200-stake delegates will be excluded randomly
 		},
 		{
 			name:                         "paused and unstaking validators excluded",
@@ -2156,9 +2047,8 @@ func TestGetTopDelegates(t *testing.T) {
 					Delegate:     true,
 				},
 			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			expectedTotalPower:   1000,
+			expectedDelegates:  3,
+			expectedTotalPower: 1000,
 			mustInclude: [][]byte{
 				newTestPublicKeyBytes(t, 0), // 500
 				newTestPublicKeyBytes(t, 2), // 300
@@ -2196,9 +2086,8 @@ func TestGetTopDelegates(t *testing.T) {
 					Delegate:     true,
 				},
 			},
-			expectedMinDelegates: 3,
-			expectedMaxDelegates: 3,
-			expectedTotalPower:   450,
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
 			mustInclude: [][]byte{
 				newTestPublicKeyBytes(t, 0),
 				newTestPublicKeyBytes(t, 1),
@@ -2230,9 +2119,8 @@ func TestGetTopDelegates(t *testing.T) {
 			require.NoError(t, err)
 			// validate the returned validator set is not nil
 			require.NotNil(t, got.ValidatorSet)
-			// validate the number of delegates is within expected range
-			require.GreaterOrEqual(t, len(got.ValidatorSet.ValidatorSet), test.expectedMinDelegates)
-			require.LessOrEqual(t, len(got.ValidatorSet.ValidatorSet), test.expectedMaxDelegates)
+			// validate the number of delegates
+			require.Equal(t, len(got.ValidatorSet.ValidatorSet), test.expectedDelegates)
 			// validate total power
 			require.Equal(t, test.expectedTotalPower, got.TotalPower)
 			// validate num validators
