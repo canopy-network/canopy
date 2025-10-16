@@ -1,52 +1,5 @@
-import { useState, useEffect } from 'react';
-
-export interface ManifestAction {
-    id: string;
-    label: string;
-    icon?: string;
-    kind: 'tx' | 'page' | 'action';
-    flow: 'single' | 'wizard';
-    rpc?: {
-        base: string;
-        path: string;
-        method: string;
-        payload?: any;
-    };
-    form?: {
-        layout: {
-            grid: { cols: number; gap: number };
-            aside: { show: boolean; width?: number };
-        };
-        fields: Array<{
-            name: string;
-            label: string;
-            type: string;
-            required?: boolean;
-            placeholder?: string;
-            colSpan?: number;
-            rules?: any;
-            help?: string;
-            options?: Array<{ label: string; value: string }>;
-        }>;
-    };
-    confirm?: {
-        title: string;
-        ctaLabel: string;
-        showPayload: boolean;
-        payloadSource?: string;
-        summary: Array<{ label: string; value: string }>;
-    };
-    success?: {
-        message: string;
-        links: Array<{ label: string; href: string }>;
-    };
-    actions?: ManifestAction[];
-}
-
-export interface Manifest {
-    version: string;
-    actions: ManifestAction[];
-}
+import { useState, useEffect, useCallback } from 'react';
+import type { Action, Manifest } from "@/manifest/types";
 
 export const useManifest = () => {
     const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -54,68 +7,59 @@ export const useManifest = () => {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        const ac = new AbortController();
+
         const loadManifest = async () => {
             try {
                 setLoading(true);
-                const response = await fetch('/plugin/canopy/manifest.json');
-                if (!response.ok) {
-                    throw new Error(`Failed to load manifest: ${response.statusText}`);
-                }
-                const manifestData = await response.json();
-                setManifest(manifestData);
                 setError(null);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load manifest');
-                console.error('Error loading manifest:', err);
+
+                const res = await fetch('/plugin/canopy/manifest.json', { signal: ac.signal });
+                if (!res.ok) {
+                    throw new Error(`Failed to load manifest: ${res.status} ${res.statusText}`);
+                }
+
+                const data: Manifest = await res.json();
+                setManifest(data);
+            } catch (err: any) {
+                if (err?.name !== 'AbortError') {
+                    console.error('Error loading manifest:', err);
+                    setError(err instanceof Error ? err.message : 'Failed to load manifest');
+                }
             } finally {
                 setLoading(false);
             }
         };
 
         loadManifest();
+        return () => ac.abort();
     }, []);
 
-    const getActionById = (id: string): ManifestAction | undefined => {
+    const getActionById = useCallback((id: string): Action | undefined => {
         if (!manifest) return undefined;
-        
-        const findAction = (actions: ManifestAction[]): ManifestAction | undefined => {
-            for (const action of actions) {
-                if (action.id === id) return action;
-                if (action.actions) {
-                    const found = findAction(action.actions);
-                    if (found) return found;
-                }
-            }
-            return undefined;
-        };
+        return manifest.actions.find(a => a.id === id);
+    }, [manifest]);
 
-        return findAction(manifest.actions);
-    };
-
-    const getActionsByKind = (kind: 'tx' | 'page' | 'action'): ManifestAction[] => {
+    const getActionsByKind = useCallback((kind: 'tx' | 'query'): Action[] => {
         if (!manifest) return [];
-        
-        const findActions = (actions: ManifestAction[]): ManifestAction[] => {
-            const result: ManifestAction[] = [];
-            for (const action of actions) {
-                if (action.kind === kind) {
-                    result.push(action);
-                }
-                if (action.actions) {
-                    result.push(...findActions(action.actions));
-                }
-            }
-            return result;
-        };
+        return manifest.actions.filter(a => a.kind === kind);
+    }, [manifest]);
 
-        return findActions(manifest.actions);
-    };
+    const getVisibleActions = useCallback((): Action[] => {
+        if (!manifest) return [];
+        const sorted = [...manifest.actions]
+            .filter(a => !a.hidden)
+            .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || (a.order ?? 0) - (b.order ?? 0));
+        const max = manifest.ui?.quickActions?.max;
+        return typeof max === 'number' ? sorted.slice(0, max) : sorted;
+    }, [manifest]);
 
     return {
         manifest,
         loading,
         error,
         getActionById,
-        getActionsByKind
+        getActionsByKind,
+        getVisibleActions,
     };
 };

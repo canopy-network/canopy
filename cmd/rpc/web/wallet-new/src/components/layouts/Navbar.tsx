@@ -115,7 +115,7 @@ export const Navbar = (): JSX.Element => {
                     >
                         {[
                             { name: 'Dashboard', path: '/' },
-                            { name: 'Portfolio', path: '/portfolio' },
+                            { name: 'Accounts', path: '/accounts' },
                             { name: 'Staking', path: '/staking' },
                             { name: 'Governance', path: '/governance' },
                             { name: 'Monitoring', path: '/monitoring' }

@@ -1,614 +1,121 @@
 {
-  "version": "1",
   "actions": [
     {
-      "id": "Send",
-      "label": "Send",
+      "id": "send",
+      "title": "Send",
       "icon": "Send",
-      "kind": "tx",
-      "tags": ["quick", "dashboard"],
-      "priority": 100,
-      "utilType": "send",
-      "rpc": {
+      "slots": {
+        "modal": {
+          "className": "w-[40rem]"
+        }
+      },
+      "ui": { "variant": "modal", "icon": "Send"},
+      "tags": ["quick"],
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "From Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          },
+          {
+            "id": "output",
+            "name": "output",
+            "type": "text",
+            "label": "To Address",
+            "required": true,
+            "features": [{ "id": "pasteBtn", "op": "paste" }]
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "readOnly": true,
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{account.address}}"
+                }
+              }
+            }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "min": 0,
+            "features": [
+              {
+                "id": "maxBtn",
+                "op": "set",
+                "field": "amount",
+                "value": "{{ds.account.amount}} - {{fees.sendFee}}"
+              }
+            ]
+          }
+        ]
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toBaseDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.sendFee}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
         "base": "admin",
         "path": "/v1/admin/tx-send",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "pubKey": "",
-          "committees": "",
-          "netAddress": "",
-          "amount": "{{form.amount}}",
-          "delegate": false,
-          "earlyWithdrawal": false,
-          "output": "{{form.recipient}}",
-          "signer": "",
-          "memo": "{{form.memo}}",
-          "fee": "{{form.fee}}",
-          "submit": true,
-          "password": "{{form.password}}"
-        }
+        "method": "POST"
       }
-    },
-    {
-      "id": "Stake",
-      "label": "Stake",
-      "icon": "Lock",
-      "kind": "tx",
-      "tags": ["quick"],
-      "priority": 90,
-      "requiresFeature": "staking",
-      "utilType": "stake",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-stake",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "pubKey": "",
-          "committees": "{{form.committees}}",
-          "netAddress": "{{form.net_address}}",
-          "amount": "{{form.amount}}",
-          "delegate": "{{form.delegate}}",
-          "earlyWithdrawal": "{{form.earlyWithdrawal}}",
-          "output": "{{form.output}}",
-          "signer": "{{form.signer}}",
-          "memo": "{{form.memo}}",
-          "fee": "{{form.fee}}",
-          "submit": true,
-          "password": "{{form.password}}"
-        }
-      }
-    },
-    {
-      "id": "Swap",
-      "label": "Swap",
-      "icon": "Replace",
-      "kind": "tx",
-      "tags": ["quick"],
-      "priority": 70,
-      "utilType": "create_order",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-create-order",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "chainId": "{{form.chainId}}",
-          "data": "{{form.data}}",
-          "amount": "{{form.amount}}",
-          "receiveAmount": "{{form.receiveAmount}}",
-          "receiveAddress": "{{form.receiveAddress}}",
-          "memo": "{{form.memo}}",
-          "fee": "{{form.fee}}",
-          "submit": true,
-          "password": "{{form.password}}"
-        }
-      }
-    },
-    {
-      "id": "Receive",
-      "label": "Receive",
-      "icon": "Plus",
-      "kind": "tx",
-      "tags": ["quick"],
-      "priority": 60,
-      "utilType": "create_order"
-    },
-
-    {
-      "id": "EditStake",
-      "label": "Edit Stake",
-      "icon": "Pencil",
-      "kind": "tx",
-      "flow": "single",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-edit-stake",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "committees": "{{form.committees}}",
-          "netAddress": "{{form.netAddress}}",
-          "amount": "{{form.amount}}",
-          "earlyWithdrawal": "{{form.earlyWithdrawal}}",
-          "output": "",
-          "signer": "",
-          "memo": "{{form.memo}}",
-          "fee": "{{fees.effective}}",
-          "submit": true,
-          "password": "{{session.password}}"
-        }
-      },
-      "form": {
-        "layout": {
-          "grid": {
-            "cols": 12,
-            "gap": 4
-          }
-        },
-        "fields": [
-          {
-            "name": "committees",
-            "label": "Committees",
-            "type": "text",
-            "colSpan": 12
-          },
-          {
-            "name": "netAddress",
-            "label": "Net Address",
-            "type": "text",
-            "colSpan": 12
-          },
-          {
-            "name": "amount",
-            "label": "Amount (Δ)",
-            "type": "number",
-            "suffix": "{{chain.denom.symbol}}",
-            "colSpan": 12
-          },
-          {
-            "name": "earlyWithdrawal",
-            "label": "Early Withdrawal (true/false)",
-            "type": "select",
-            "options": [
-              {
-                "label": "true",
-                "value": "true"
-              },
-              {
-                "label": "false",
-                "value": "false"
-              }
-            ],
-            "colSpan": 12
-          },
-          {
-            "name": "memo",
-            "label": "Memo",
-            "type": "text",
-            "colSpan": 12
-          }
-        ]
-      }
-    },
-    {
-      "id": "Unstake",
-      "label": "Unstake",
-      "icon": "Unlock",
-      "kind": "tx",
-      "flow": "single",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-unstake",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "pubKey": "",
-          "committees": "",
-          "netAddress": "",
-          "amount": 0,
-          "delegate": false,
-          "earlyWithdrawal": false,
-          "output": "",
-          "signer": "",
-          "memo": "{{form.memo}}",
-          "fee": "{{fees.effective}}",
-          "submit": true,
-          "password": "{{session.password}}"
-        }
-      },
-      "form": {
-        "layout": {
-          "grid": {
-            "cols": 12,
-            "gap": 4
-          }
-        },
-        "fields": [
-          {
-            "name": "memo",
-            "label": "Memo",
-            "type": "text",
-            "placeholder": "Optional",
-            "colSpan": 12
-          }
-        ]
-      }
-    },
-    {
-      "id": "PauseValidator",
-      "label": "Pause Validator",
-      "icon": "Pause",
-      "kind": "tx",
-      "flow": "single",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-pause",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "pubKey": "",
-          "committees": "",
-          "netAddress": "",
-          "amount": 0,
-          "delegate": false,
-          "earlyWithdrawal": false,
-          "output": "",
-          "signer": "",
-          "memo": "{{form.memo}}",
-          "fee": "{{fees.effective}}",
-          "submit": true,
-          "password": "{{session.password}}"
-        }
-      },
-      "form": {
-        "layout": {
-          "grid": {
-            "cols": 12,
-            "gap": 4
-          }
-        },
-        "fields": [
-          {
-            "name": "memo",
-            "label": "Memo",
-            "type": "text",
-            "placeholder": "Optional"
-          }
-        ]
-      }
-    },
-    {
-      "id": "UnpauseValidator",
-      "label": "Unpause Validator",
-      "icon": "Play",
-      "kind": "tx",
-      "flow": "single",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/tx-unpause",
-        "method": "POST",
-        "payload": {
-          "address": "{{account.address}}",
-          "pubKey": "",
-          "committees": "",
-          "netAddress": "",
-          "amount": 0,
-          "delegate": false,
-          "earlyWithdrawal": false,
-          "output": "",
-          "signer": "",
-          "memo": "{{form.memo}}",
-          "fee": "{{fees.effective}}",
-          "submit": true,
-          "password": "{{session.password}}"
-        }
-      },
-      "form": {
-        "layout": {
-          "grid": {
-            "cols": 12,
-            "gap": 4
-          }
-        },
-        "fields": [
-          {
-            "name": "memo",
-            "label": "Memo",
-            "type": "text",
-            "placeholder": "Optional"
-          }
-        ]
-      }
-    },
-    {
-      "id": "KeyManagement",
-      "label": "Key Management",
-      "icon": "key",
-      "kind": "page",
-      "flow": "single",
-      "rpc": {
-        "base": "admin",
-        "path": "/v1/admin/keystore",
-        "method": "GET"
-      },
-      "actions": [
-        {
-          "id": "CreateNewKey",
-          "label": "Create New Key",
-          "icon": "Plus",
-          "kind": "tx",
-          "flow": "single",
-          "rpc": {
-            "base": "admin",
-            "path": "/v1/admin/keystore-new-key",
-            "method": "POST",
-            "payload": {
-              "nickname": "{{form.walletName}}",
-              "password": "{{form.password}}"
-            }
-          },
-          "form": {
-            "layout": {
-              "grid": {
-                "cols": 12,
-                "gap": 4
-              },
-              "aside": {
-                "show": false
-              }
-            },
-            "fields": [
-              {
-                "name": "walletName",
-                "label": "Wallet Name",
-                "type": "text",
-                "required": true,
-                "placeholder": "Primary Wallet",
-                "colSpan": 12,
-                "rules": {
-                  "minLength": 3,
-                  "maxLength": 50,
-                  "message": "Wallet name must be between 3 and 50 characters"
-                }
-              },
-              {
-                "name": "password",
-                "label": "Password",
-                "type": "password",
-                "required": true,
-                "placeholder": "Enter a strong password",
-                "colSpan": 12,
-                "rules": {
-                  "minLength": 8,
-                  "message": "Password must be at least 8 characters long"
-                }
-              }
-            ]
-          },
-          "confirm": {
-            "title": "Create New Wallet",
-            "ctaLabel": "Create Wallet",
-            "showPayload": false,
-            "summary": [
-              {
-                "label": "Wallet Name",
-                "value": "{{form.walletName}}"
-              }
-            ]
-          },
-          "success": {
-            "message": "New wallet '{{form.walletName}}' created successfully",
-            "links": []
-          }
-        },
-        {
-          "id": "ImportWallet",
-          "label": "Import Wallet",
-          "icon": "download",
-          "kind": "tx",
-          "flow": "single",
-          "rpc": {
-            "base": "admin",
-            "path": "/v1/admin/keystore-import-raw",
-            "method": "POST",
-            "payload": {
-              "nickname": "{{form.walletName}}",
-              "password": "{{form.password}}",
-              "privateKey": "{{form.privateKey}}"
-            }
-          },
-          "form": {
-            "layout": {
-              "grid": {
-                "cols": 12,
-                "gap": 4
-              },
-              "aside": {
-                "show": false
-              }
-            },
-            "fields": [
-              {
-                "name": "privateKey",
-                "label": "Private Key",
-                "type": "password",
-                "required": true,
-                "placeholder": "Enter your private key...",
-                "colSpan": 12,
-                "rules": {
-                  "minLength": 64,
-                  "message": "Private key must be 64 characters long"
-                }
-              },
-              {
-                "name": "walletName",
-                "label": "Wallet Name",
-                "type": "text",
-                "required": true,
-                "placeholder": "Imported Wallet",
-                "colSpan": 12,
-                "rules": {
-                  "minLength": 3,
-                  "maxLength": 50,
-                  "message": "Wallet name must be between 3 and 50 characters"
-                }
-              },
-              {
-                "name": "password",
-                "label": "Wallet Password",
-                "type": "password",
-                "required": true,
-                "placeholder": "Password",
-                "colSpan": 12,
-                "rules": {
-                  "minLength": 8,
-                  "message": "Password must be at least 8 characters long"
-                }
-              },
-              {
-                "name": "confirmPassword",
-                "label": "Confirm Password",
-                "type": "password",
-                "required": true,
-                "placeholder": "Confirm your password",
-                "colSpan": 12,
-                "rules": {
-                  "match": "{{form.password}}",
-                  "message": "Passwords do not match"
-                }
-              }
-            ]
-          },
-          "confirm": {
-            "title": "Import Wallet",
-            "ctaLabel": "Import Wallet",
-            "showPayload": false,
-            "summary": [
-              {
-                "label": "Wallet Name",
-                "value": "{{form.walletName}}"
-              },
-              {
-                "label": "Private Key",
-                "value": "{{form.privateKey | slice:0:8}}...{{form.privateKey | slice:-8}}"
-              }
-            ]
-          },
-          "success": {
-            "message": "Wallet '{{form.walletName}}' imported successfully",
-            "links": []
-          }
-        },
-        {
-          "id": "DeleteWallet",
-          "label": "Delete Wallet",
-          "icon": "trash",
-          "kind": "tx",
-          "flow": "single",
-          "rpc": {
-            "base": "admin",
-            "path": "/v1/admin/keystore-delete",
-            "method": "POST",
-            "payload": {
-              "nickname": "{{form.walletName}}"
-            }
-          },
-          "form": {
-            "layout": {
-              "grid": {
-                "cols": 12,
-                "gap": 4
-              },
-              "aside": {
-                "show": false
-              }
-            },
-            "fields": [
-              {
-                "name": "walletName",
-                "label": "Select Wallet to Delete",
-                "type": "select",
-                "required": true,
-                "colSpan": 12,
-                "options": "{{accounts}}",
-                "optionLabel": "nickname",
-                "optionValue": "nickname"
-              },
-              {
-                "name": "confirmation",
-                "label": "Type 'DELETE' to confirm",
-                "type": "text",
-                "required": true,
-                "placeholder": "DELETE",
-                "colSpan": 12,
-                "rules": {
-                  "match": "DELETE",
-                  "message": "You must type 'DELETE' to confirm"
-                }
-              }
-            ]
-          },
-          "confirm": {
-            "title": "Delete Wallet",
-            "ctaLabel": "Delete Wallet",
-            "showPayload": false,
-            "summary": [
-              {
-                "label": "Wallet to Delete",
-                "value": "{{form.walletName}}"
-              }
-            ]
-          },
-          "success": {
-            "message": "Wallet '{{form.walletName}}' deleted successfully",
-            "links": []
-          }
-        },
-        {
-          "id": "DownloadKeyfile",
-          "label": "Download Keyfile",
-          "icon": "download",
-          "kind": "action",
-          "flow": "single",
-          "rpc": {
-            "base": "admin",
-            "path": "/v1/admin/keystore-get",
-            "method": "POST",
-            "payload": {
-              "nickname": "{{form.walletName}}",
-              "password": "{{form.password}}"
-            }
-          },
-          "form": {
-            "layout": {
-              "grid": {
-                "cols": 12,
-                "gap": 4
-              },
-              "aside": {
-                "show": false
-              }
-            },
-            "fields": [
-              {
-                "name": "walletName",
-                "label": "Select Wallet",
-                "type": "select",
-                "required": true,
-                "colSpan": 12,
-                "options": "{{accounts}}",
-                "optionLabel": "nickname",
-                "optionValue": "nickname"
-              },
-              {
-                "name": "password",
-                "label": "Wallet Password",
-                "type": "password",
-                "required": true,
-                "placeholder": "Enter wallet password",
-                "colSpan": 12
-              }
-            ]
-          },
-          "confirm": {
-            "title": "Download Keyfile",
-            "ctaLabel": "Download",
-            "showPayload": false,
-            "summary": [
-              {
-                "label": "Wallet",
-                "value": "{{form.walletName}}"
-              }
-            ]
-          },
-          "success": {
-            "message": "Keyfile for '{{form.walletName}}' downloaded successfully",
-            "links": []
-          }
-        }
-      ]
     }
   ]
 }

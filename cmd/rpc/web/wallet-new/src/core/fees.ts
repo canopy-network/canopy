@@ -1,111 +1,144 @@
-import { useQuery } from '@tanstack/react-query'
-import { template } from './templater'
-import type { Action, FeeConfig, FeeProvider, FeeProviderSimulate } from '@/manifest/types'
-import { useConfig } from '@/app/providers/ConfigProvider'
-
-function get(obj: any, path?: string) {
-  if (!path) return obj
-  return path.split('.').reduce((a, k) => (a ? a[k] : undefined), obj)
+// fees.ts (arriba)
+export type FeeBuckets = Record<string, { multiplier: number; default?: boolean }>
+export type FeeProviderQuery = {
+    type: 'query'
+    base: 'rpc' | 'admin'
+    path: string
+    method?: 'GET'|'POST'
+    encoding?: 'json'|'text'
+    headers?: Record<string,string>
+    body?: any
+    selector?: string // ej: "fee" para tomar sólo el bloque fee del /params
+}
+export type FeeProviderStatic = {
+    type: 'static'
+    data: any // objeto fee literal
+}
+export type FeeProviderExternal = {
+    type: 'external'
+    url: string
+    method?: 'GET'|'POST'
+    headers?: Record<string,string>
+    body?: any
+    selector?: string
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-  const res = await fetch(url, init)
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw Object.assign(new Error(data?.message || 'RPC error'), { status: res.status, data })
-  return data
+export type FeesConfig = {
+    denom: string // ej: "{{chain.denom.base}}"
+    refreshMs?: number
+    providers: Array<FeeProviderQuery | FeeProviderStatic | FeeProviderExternal>
+    buckets?: FeeBuckets
 }
 
-async function resolveGasPrice(p: FeeProviderSimulate, hosts: {rpc: string; admin: string}) {
-  const gp = p.gasPrice
-  if (!gp) return undefined
-  if (gp.type === 'static') return parseFloat(gp.value)
-  const host = gp.base === 'admin' ? hosts.admin : hosts.rpc
-  const json = await fetchJson(host + gp.path)
-  const val = get(json, gp.selector) ?? gp.fallback
-  return val ? parseFloat(String(val)) : undefined
+export type ResolvedFees = {
+    /** Entier Object fee (ex: { sendFee, stakeFee, ... }) */
+    raw: any
+    amount?: number
+    bucket?: string
+    /** denom (ex: ucnpy) */
+    denom: string
+}
+// Decide qué clave de fee usar según la acción
+const feeKeyForAction = (actionId?: string) => {
+    // mapea lo que tengas en manifest: 'send'|'stake'|'unstake'...
+    if (actionId === 'send') return 'sendFee'
+    if (actionId === 'stake') return 'stakeFee'
+    if (actionId === 'unstake') return 'unstakeFee'
+    return 'sendFee' // fallback sensato
 }
 
-async function tryProvider(
-  pr: FeeProvider,
-  ctx: { hosts: { rpc: string; admin: string }; denom?: string; rpcPayload: any; bucketMult: number }
-) {
-  if (pr.type === 'static') {
-    return { amount: pr.amount, denom: ctx.denom, source: 'static' as const }
-  }
-  if (pr.type === 'query') {
-    const host = pr.base === 'admin' ? ctx.hosts.admin : ctx.hosts.rpc
-    const method = pr.method ?? 'GET'
-    const headers: Record<string,string> = { ...(pr.headers ?? {}) }
-    let body: string | undefined
-    if (method === 'POST') {
-      const enc = pr.encoding ?? 'json'
-      if (enc === 'text') {
-        body = typeof pr.body === 'string' ? pr.body : JSON.stringify(pr.body ?? {})
-        if (!headers['content-type']) headers['content-type'] = 'text/plain;charset=UTF-8'
-      } else {
-        body = JSON.stringify(pr.body ?? {})
-        if (!headers['content-type']) headers['content-type'] = 'application/json'
-      }
+// Aplica bucket (multiplier) si está definido
+const applyBucket = (base: number, bucket?: { multiplier?: number }) =>
+    typeof base === 'number' && bucket?.multiplier ? base * bucket.multiplier : base
+
+
+async function runProvider(p: FeesConfig['providers'][number], ctx: any): Promise<any> {
+    if (p.type === 'static') return p.data
+
+    if (p.type === 'query') {
+        const base = p.base === 'admin' ? ctx.chain.rpc.admin : ctx.chain.rpc.base
+        const url = `${base}${p.path}`
+        const init: RequestInit = { method: p.method || 'POST', headers: { 'Content-Type': 'application/json', ...(p.headers||{}) } }
+        if (p.method !== 'GET' && p.body !== undefined) init.body = typeof p.body === 'string' ? p.body : JSON.stringify(p.body)
+        const res = await fetch(url, init)
+        const text = await res.text()
+        const data = p.encoding === 'text' ? (JSON.parse(text)) : (JSON.parse(text))
+        return p.selector ? p.selector.split('.').reduce((a,k)=>a?.[k], data) : data
     }
-    const json = await fetchJson(host + pr.path, { method, headers, body })
-    let amt = get(json, pr.selector)
-    if (amt == null) throw new Error('query: selector empty')
-    let num = Number(amt)
-    if (Number.isNaN(num)) throw new Error('query: selector not numeric')
-    num *= ctx.bucketMult
-    return { amount: Math.ceil(num).toString(), denom: ctx.denom, source: 'query' as const }
-  }
-  if (pr.type === 'simulate') {
-    const host = pr.base === 'admin' ? ctx.hosts.admin : ctx.hosts.rpc
-    const method = pr.method ?? 'POST'
-    const headers: Record<string,string> = { ...(pr.headers ?? {}) }
-    let body: string
-    if (pr.body) {
-      const enc = pr.encoding ?? 'json'
-      if (enc === 'text') {
-        body = typeof pr.body === 'string' ? pr.body : JSON.stringify(pr.body)
-        if (!headers['content-type']) headers['content-type'] = 'text/plain;charset=UTF-8'
-      } else {
-        body = JSON.stringify(pr.body)
-        if (!headers['content-type']) headers['content-type'] = 'application/json'
-      }
-    } else {
-      body = JSON.stringify(ctx.rpcPayload)
-      if (!headers['content-type']) headers['content-type'] = 'application/json'
+
+    if (p.type === 'external') {
+        const init: RequestInit = { method: p.method || 'GET', headers: { 'Content-Type': 'application/json', ...(p.headers||{}) } }
+        if ((p.method || 'GET') !== 'GET' && p.body !== undefined) init.body = typeof p.body === 'string' ? p.body : JSON.stringify(p.body)
+        const res = await fetch(p.url, init)
+        const text = await res.text()
+        const data = JSON.parse(text)
+        return p.selector ? p.selector.split('.').reduce((a,k)=>a?.[k], data) : data
     }
-    const res = await fetchJson(host + pr.path, { method, headers, body })
-    const gasUsed = Number(get(res, 'gasUsed') ?? get(res, 'gas_used') ?? 0)
-    const gasAdj = (pr as any).gasAdjustment ?? 1.0
-    let gasPrice = await resolveGasPrice(pr as any, ctx.hosts)
-    if (!gasPrice) gasPrice = 0.025
-    let fee = Math.ceil(gasUsed * gasAdj * gasPrice * ctx.bucketMult)
-    return { amount: String(fee), denom: ctx.denom, source: 'simulate' as const }
-  }
-  throw new Error('unknown provider')
 }
 
-export function useResolvedFee(action: Action | undefined, formState: any, bucket?: string) {
-  const { chain, params } = useConfig()
-  const isReady = !!action && !!chain
-  const feeCfg: FeeConfig | undefined =
-    isReady && (action!.fees as any)?.use === 'custom' ? (action!.fees as any)
-    : chain?.fees
-  const denom = isReady ? template(feeCfg?.denom ?? '{{chain.denom.base}}', { chain }) : undefined
-  const hosts = { rpc: chain?.rpc.base ?? '', admin: chain?.rpc.admin ?? chain?.rpc.base ?? '' }
-  const mult = feeCfg?.buckets?.[bucket ?? 'avg']?.multiplier ?? 1.0
-  const payload = isReady ? template(action!.rpc.payload ?? {}, { form: formState, chain, params }) : {}
 
-  return useQuery({
-    queryKey: ['fee', action?.id ?? 'na', payload, bucket],
-    enabled: isReady && !!feeCfg?.providers?.length,
-    queryFn: async () => {
-      for (const pr of feeCfg!.providers) {
-        try { return await tryProvider(pr as any, { hosts, denom, rpcPayload: payload, bucketMult: mult }) }
-        catch (_) { /* try next */ }
-      }
-      throw new Error('All fee providers failed')
-    },
-    staleTime: feeCfg?.refreshMs ?? 30_000,
-    refetchInterval: feeCfg?.refreshMs ?? 30_000
-  })
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+export function useResolvedFees(
+    feesConfig: FeesConfig,
+    opts: { actionId?: string; bucket?: string; ctx: any }
+): ResolvedFees {
+    const { denom, refreshMs = 30000, providers, buckets } = feesConfig
+    const [raw, setRaw] = useState<any>(null)
+    const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+    const ctxRef = useRef(opts.ctx)
+    useEffect(() => {
+        ctxRef.current = opts.ctx
+    }, [opts.ctx])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const fetchOnce = async () => {
+            for (const p of providers) {
+                try {
+                    const data = await runProvider(p, ctxRef.current)
+                    if (!cancelled && data) {
+                        setRaw(data)
+                        break
+                    }
+                } catch (e) {
+                    console.error(`Error fetching fees from ${p.type}:`, e)
+                }
+            }
+        }
+
+        // Limpieza de timers previos
+        if (timerRef.current) clearInterval(timerRef.current)
+
+        // Primer fetch inmediato
+        fetchOnce()
+
+        // Refetch periódico
+        if (refreshMs > 0) {
+            timerRef.current = setInterval(fetchOnce, refreshMs)
+        }
+
+        return () => {
+            cancelled = true
+            if (timerRef.current) clearInterval(timerRef.current)
+        }
+    }, [
+        refreshMs,
+        JSON.stringify(providers), // solo refetch si cambian los providers
+    ])
+
+    const amount = useMemo(() => {
+        if (!raw) return undefined
+        const key = feeKeyForAction(opts.actionId)
+        const base = Number(raw?.[key] ?? 0)
+        const bucket =
+            opts.bucket ||
+            Object.entries(buckets || {}).find(([, b]) => b?.default)?.[0]
+        const bucketDef = bucket ? (buckets || {})[bucket] : undefined
+        return applyBucket(base, bucketDef)
+    }, [raw, opts.actionId, opts.bucket, buckets])
+
+    return { raw, amount, denom }
 }

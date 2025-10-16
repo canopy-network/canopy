@@ -59,10 +59,6 @@ export const NodeManagementCard = (): JSX.Element => {
         type: 'info'
     });
 
-    // Debug modal state changes
-    useEffect(() => {
-        console.log('Modal state changed:', modalState);
-    }, [modalState]);
 
     const formatAddress = (address: string, index: number) => {
         return address.substring(0, 8) + '...' + address.substring(address.length - 4);

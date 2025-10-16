@@ -41,11 +41,14 @@ type AccountsContextValue = {
 const AccountsContext = createContext<AccountsContextValue | undefined>(undefined)
 
 const STORAGE_KEY = 'activeAccountId'
+const REFRESH_INTERVAL = 30_000
 
 export function AccountsProvider({ children }: { children: React.ReactNode }) {
 
     const { data: ks, isLoading, isFetching, error, refetch } =
-        useDS<KeystoreResponse>('keystore')
+        useDS<KeystoreResponse>('keystore', {}, {
+            refetchIntervalMs: REFRESH_INTERVAL,
+        })
 
     const accounts: Account[] = useMemo(() => {
         const map = ks?.addressMap ?? {}

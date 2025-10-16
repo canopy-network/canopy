@@ -1,37 +1,21 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { LucideIcon } from '@/components/ui/LucideIcon';
-import { useConfig } from '@/app/providers/ConfigProvider';
-import {Action as ManifestAction} from "@/manifest/types";
 import {selectQuickActions} from "@/core/actionForm";
+import {Action} from "@/manifest/types";
 
-export function QuickActionsCard({ onRunAction }:{
-    onRunAction?: (a: ManifestAction) => void;
+export function QuickActionsCard({actions, onRunAction, maxNumberOfItems }:{
+    actions?: Action[];
+    onRunAction?: (a: Action) => void;
+    maxNumberOfItems?: number;
 }) {
-    const { chain, manifest } = useConfig();
 
-    const max = manifest?.ui?.quickActions?.max ?? 8;
-
-    const isQuick = React.useCallback(
-        (a: ManifestAction) => Array.isArray(a.tags) && a.tags.includes('quick'),
-        []
-    );
-
-    const hasFeature = React.useCallback(
-        (a: ManifestAction) => !a.requiresFeature || chain?.features?.includes(a.requiresFeature),
-        [chain?.features]
-    );
-
-    const rank = React.useCallback(
-        (a: ManifestAction) => typeof a.priority === 'number' ? a.priority : (typeof a.order === 'number' ? a.order : 0),
-        []
-    );
-
-    const actions = React.useMemo(() => selectQuickActions(manifest, chain), [manifest, chain])
+    const sortedActions = React.useMemo(() =>
+        selectQuickActions(actions,  maxNumberOfItems), [actions, maxNumberOfItems])
 
     const cols = React.useMemo(
-        () => Math.min(Math.max(actions.length || 1, 1), 2),
-        [actions.length]
+        () => Math.min(Math.max(sortedActions.length || 1, 1), 2),
+        [sortedActions.length]
     );
     const gridTemplateColumns = React.useMemo(
         () => `repeat(${cols}, minmax(0, 1fr))`,
@@ -48,7 +32,7 @@ export function QuickActionsCard({ onRunAction }:{
             <h3 className="text-text-muted text-sm font-medium mb-6">Quick Actions</h3>
 
             <div className="grid gap-3" style={{ gridTemplateColumns }}>
-                {actions.map((a, i) => (
+                {sortedActions.map((a, i) => (
                     <motion.button
                         key={a.id}
                         onClick={() => onRunAction?.(a)}
@@ -64,7 +48,7 @@ export function QuickActionsCard({ onRunAction }:{
                         <span className="text-sm font-medium text-white">{a.label ?? a.id}</span>
                     </motion.button>
                 ))}
-                {actions.length === 0 && (
+                {sortedActions.length === 0 && (
                     <div className="text-sm text-text-muted">No quick actions</div>
                 )}
             </div>

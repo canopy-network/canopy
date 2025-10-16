@@ -1,17 +1,17 @@
 import { template } from '@/core/templater'
 import type { Action, Field, Manifest } from '@/manifest/types'
 
-/** Lee los fields declarados en el manifest para la acción */
+/** Get fields from manifest */
 export const getFieldsFromAction = (action?: Action): Field[] =>
     Array.isArray(action?.form?.fields) ? (action!.form!.fields as Field[]) : []
 
-/** Hints por nombre para normalizar valores numéricos/booleanos */
+/** Hints for field names */
 const NUMERIC_HINTS = new Set(['amount','receiveAmount','fee','gas','gasPrice'])
 const BOOL_HINTS    = new Set(['delegate','earlyWithdrawal','submit'])
 
-/** Normaliza el form según Fields + hints:
- * - number: convierte "1,234.56" -> 1234.56
- * - boolean (por nombre): 'true'/'false' -> boolean
+/** Normalize form according to Fields + hints:
+ * - number: convert "1,234.56" to 1234.56
+ * - boolean (by name): 'true'/'false' to boolean
  */
 export function normalizeFormForAction(action: Action | undefined, form: Record<string, any>) {
     const out: Record<string, any> = { ...form }
@@ -31,35 +31,68 @@ export function normalizeFormForAction(action: Action | undefined, form: Record<
         if (n == null || !(n in out)) continue
 
         // por tipo
-        if (f.type === 'number' || NUMERIC_HINTS.has(n)) out[n] = asNum(out[n])
+        if (f.type === 'amount' || NUMERIC_HINTS.has(n)) out[n] = asNum(out[n])
         // por “hint” de nombre (p.ej. select true/false)
         if (BOOL_HINTS.has(n)) out[n] = asBool(out[n])
     }
     return out
 }
 
-/** Contexto para construir payload desde el manifest */
 export type BuildPayloadCtx = {
     form: Record<string, any>
     chain?: any
     session?: { password?: string }
-    fees?: { effective?: number | string }
+    account?: any
+    fees?: { raw?: any; amount?: number | string , denom?: string}
     extra?: Record<string, any>
 }
 
-/** Interpola el payload del manifest (rpc.payload) con template(...) */
-export function buildPayloadFromAction(action: Action | undefined, ctx: BuildPayloadCtx) {
-    const payloadTmpl = (action as any)?.rpc?.payload ?? {}
-    return template(payloadTmpl, {
-        ...ctx.extra,
-        form: ctx.form,
-        chain: ctx.chain,
-        session: ctx.session,
-        fees: ctx.fees,
-    })
+export function buildPayloadFromAction(action: Action, ctx: any) {
+    const result: Record<string, any> = {}
+
+    for (const [key, val] of Object.entries(action.payload || {})) {
+        // caso 1: simple string => resolver plantilla
+        if (typeof val === 'string') {
+            result[key] = template(val, ctx)
+            continue
+        }
+
+        if (typeof val === 'object' && val?.value !== undefined) {
+            let resolved = template(val?.value, ctx)
+
+            console.log(resolved)
+
+
+            if (val?.coerce) {
+                switch (val.coerce) {
+                    case 'number':
+                        //@ts-ignore
+                        resolved = Number(resolved)
+                        break
+                    case 'string':
+                        resolved = String(resolved)
+                        break
+                    case 'boolean':
+                        //@ts-ignore
+                        resolved =
+                            resolved === 'true' ||
+                            resolved === true ||
+                            resolved === 1 ||
+                            resolved === '1'
+                        break
+                }
+            }
+
+            result[key] = resolved
+            continue
+        }
+        // fallback
+        result[key] = val
+    }
+
+    return result
 }
 
-/** Construye el summary de confirmación con template(...) */
 export function buildConfirmSummary(
     action: Action | undefined,
     data: { form: Record<string, any>; chain?: any; fees?: { effective?: number | string } }
@@ -68,13 +101,12 @@ export function buildConfirmSummary(
     return items.map(s => ({ label: s.label, value: template(s.value, data) }))
 }
 
-/** Selección de Quick Actions usando tags + prioridad */
-export function selectQuickActions(manifest: Manifest | undefined, chain: any, max?: number) {
-    const limit = max ?? manifest?.ui?.quickActions?.max ?? 8
-    const hasFeature = (a: Action) => !a.requiresFeature || chain?.features?.includes(a.requiresFeature)
+export function selectQuickActions(actions: Action[] | undefined, chain: any, max?: number) {
+    const limit = max ?? 8
+    const hasFeature = (a: Action) => !a.requiresFeature
     const rank = (a: Action) => (typeof a.priority === 'number' ? a.priority : (typeof a.order === 'number' ? a.order : 0))
 
-    return (manifest?.actions ?? [])
+    return (actions ?? [])
         .filter(a => !a.hidden && Array.isArray(a.tags) && a.tags.includes('quick'))
         .filter(hasFeature)
         .sort((a, b) => rank(b) - rank(a))

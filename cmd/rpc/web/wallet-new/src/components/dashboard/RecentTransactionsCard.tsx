@@ -60,6 +60,7 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
         { account: {address: selectedAddress}},
         {
             enabled: !!selectedAddress,
+            refetchIntervalMs: 15_000,
             select: (d: any) => Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
         }
     )
@@ -69,7 +70,9 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
         { account: {address: selectedAddress}},
         {
             enabled: !!selectedAddress,
+            refetchIntervalMs: 15_000,
             select: (d: any) => Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
+
         }
     )
 

@@ -126,7 +126,7 @@
   },
   "fees": {
     "denom": "{{chain.denom.base}}",
-    "refreshMs": 30000,
+    "refreshMs": 500000,
     "providers": [
       {
         "type": "query",
@@ -135,7 +135,7 @@
         "method": "POST",
         "encoding": "text",
         "body": "{\"height\":0,\"address\":\"\"}",
-        "selector": "fee.sendFee"
+        "selector": "fee"
       }
     ],
     "buckets": {

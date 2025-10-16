@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useEmbeddedConfig } from '@/manifest/loader'
 import { useNodeParams } from '@/manifest/params'
-import type { ChainConfig, Manifest } from '@/manifest/types'
+import type { Manifest } from '@/manifest/types'
 
 type Ctx = {
-  chain?: ChainConfig
+  chain?:  Record<string, any>
   manifest?: Manifest
   params: Record<string, any>
   isLoading: boolean

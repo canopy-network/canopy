@@ -9,10 +9,29 @@ import { AllAddressesCard } from '@/components/dashboard/AllAddressesCard';
 import { NodeManagementCard } from '@/components/dashboard/NodeManagementCard';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {RecentTransactionsCard} from "@/components/dashboard/RecentTransactionsCard";
+import {Action as ManifestAction} from "@/manifest/types";
+import {ActionsModal} from "@/actions/ActionsModal";
 
 export const Dashboard = () => {
-    const { loading: manifestLoading } = useManifest();
+    const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
+    const [selectedActions, setSelectedActions] = React.useState<ManifestAction[]>([]);
+
+    const { manifest ,loading: manifestLoading } = useManifest();
     const { loading: dataLoading, error } = useAccountData();
+
+
+    const onRunAction = (action: ManifestAction) => {
+        const actions = [action] ;
+        if (action.relatedActions) {
+           const relatedActions = manifest?.actions.filter(a => action?.relatedActions?.includes(a.id))
+
+            if (relatedActions)
+                actions.push(...relatedActions)
+        }
+        setSelectedActions(actions);
+        setIsActionModalOpen(true);
+    }
+
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -64,7 +83,7 @@ export const Dashboard = () => {
                         </div>
                         <div className="lg:w-80 w-full">
                             <ErrorBoundary>
-                                <QuickActionsCard />
+                                <QuickActionsCard onRunAction={onRunAction} actions={manifest?.actions}/>
                             </ErrorBoundary>
                         </div>
                     </div>
@@ -90,6 +109,8 @@ export const Dashboard = () => {
                         </ErrorBoundary>
                     </div>
                 </div>
+
+                <ActionsModal actions={selectedActions} isOpen={isActionModalOpen} onClose={() => setIsActionModalOpen(false)} />
             </motion.div>
         </ErrorBoundary>
     );

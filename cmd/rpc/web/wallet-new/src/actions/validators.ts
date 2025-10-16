@@ -13,6 +13,7 @@ export async function validateField(f: any, value: any, ctx: any): Promise<Field
     if (rules.gt != null && !(n > rules.gt)) return { name: f.name, message: `Must be > ${rules.gt}` }
     if (rules.lt != null && !(n < rules.lt)) return { name: f.name, message: `Must be < ${rules.lt}` }
   }
+  //TODO: CHECK THIS WHY IS NOT WORKING PROPERLY
   if (f.type === 'address' || rules.address) {
     const { ok } = normalizeEvmAddress(String(value || ''))
     if (!ok) return { name: f.name, message: 'Invalid address' }
