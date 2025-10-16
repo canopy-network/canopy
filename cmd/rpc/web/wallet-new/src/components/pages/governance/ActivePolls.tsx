@@ -7,15 +7,21 @@ interface ActivePollsProps {
   polls: Record<string, { proposalHash: string; proposalURL: string; accounts: any; validators: any }>;
 }
 
-const Badge = ({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'core' | 'treasury' | 'validator' }) => (
+const Badge = ({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'core' | 'treasury' | 'validator' | 'accounts' | 'validators' | 'terminated' }) => (
   <span
-    className={`text-[10px] px-2 py-0.5 rounded-full border ${tone === 'core'
+    className={`text-[10px] px-2 py-0.5 rounded-full capitalize border ${tone === 'core'
       ? 'bg-primary/20 text-primary border-primary/20'
       : tone === 'treasury'
         ? 'bg-orange-500/20 text-orange-400 border-orange-500/20'
         : tone === 'validator'
           ? 'bg-purple-500/20 text-purple-400 border-purple-500/20'
-          : 'bg-gray-500/20 text-gray-400 border-gray-500/20'
+          : tone === 'accounts'
+            ? 'bg-green-500/20 text-green-400 border-green-500/20'
+            : tone === 'validators'
+              ? 'bg-blue-500/20 text-blue-400 border-blue-500/20'
+              : tone === 'terminated'
+                ? 'bg-red-500/20 text-red-400 border-red-500/20'
+                : 'bg-gray-500/20 text-gray-400 border-gray-500/20'
       }`}
   >
     {children}
@@ -23,11 +29,34 @@ const Badge = ({ children, tone = 'default' }: { children: React.ReactNode; tone
 );
 
 export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
+  const { votePoll, currentHeight } = useGovernanceActions('50003', '50002');
   const { getText } = useManifest();
-  const { votePoll } = useGovernanceActions('50003', '50002');
-  const title = getText('ui.governance.sections.activePolls', 'Active Polls');
+  // Calculate blocks remaining for a poll (assuming polls have endBlock)
+  const calculateBlocksRemaining = (endBlock: number) => {
+    const height = currentHeight.data || 0;
+    if (height >= endBlock) {
+      return 'Terminated';
+    } else {
+      const blocksRemaining = endBlock - height;
+      return `${blocksRemaining} blocks`;
+    }
+  };
 
-  const entries = Object.entries(polls || {});
+  // Get poll status for sorting and display
+  const getPollStatus = (endBlock: number) => {
+    const height = currentHeight.data || 0;
+    if (height >= endBlock) return 'terminated';
+    return 'active';
+  };
+
+  // Sort polls by status: active first, then terminated
+  const entries = Object.entries(polls || {}).sort(([, dataA], [, dataB]) => {
+    const statusA = 'active'; // getPollStatus(dataA.endBlock || 0);
+    const statusB = 'active'; // getPollStatus(dataB.endBlock || 0);
+    
+    const statusOrder = { active: 0, terminated: 1 };
+    return statusOrder[statusA as keyof typeof statusOrder] - statusOrder[statusB as keyof typeof statusOrder];
+  });
 
   return (
     <div className="max-h-[40rem] overflow-y-auto">
@@ -38,19 +67,23 @@ export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
           </div>
         )}
         {entries.map(([hash, data], index) => {
-          const pollId = `POLL-${String(index + 2).padStart(3, '0')}`;
+          const pollId = `POLL-${String(index + 1).padStart(3, '0')}`;
 
           // Use ONLY real data from API according to README
-          const forPercent = data.accounts?.approvedPercent || 0;
-          const againstPercent = data.accounts?.rejectPercent || 0;
+          const rawFor = data.accounts?.approvedPercent || 0;
+          const rawAgainst = data.accounts?.rejectPercent || 0;
+
+          // Normalizar para que For + Against = 100 % (evita fondo gris)
+          const totalPercent = rawFor + rawAgainst;
+          const forPercent = totalPercent > 0 ? (rawFor / totalPercent) * 100 : 0;
+          const againstPercent = totalPercent > 0 ? (rawAgainst / totalPercent) * 100 : 0;
           const totalVotes = data.accounts?.totalVotedTokens || 0;
           const cnpyVotes = data.accounts?.totalVotedTokens || 0;
 
-          // No poll type determination - use default
-          const pollType = 'validator';
-
-          // No time data in API
-          const timeRemaining = '0d 0h 0m';
+          // Calculate blocks remaining (assuming polls have endBlock - for now using a placeholder)
+          const endBlock = 2500; // This should come from the poll data structure
+          const blocksRemaining = calculateBlocksRemaining(endBlock);
+          const pollStatus = getPollStatus(endBlock);
 
           // Use real data from API
           const pollTitle = data.proposalURL || 'Poll Title';
@@ -62,13 +95,17 @@ export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Badge tone="core">{pollId}</Badge>
-                  <Badge tone="validator">
-                    Validator
-                  </Badge>
+                  <Badge tone="accounts">Accounts</Badge>
+                  <Badge tone="validators">Validators</Badge>
+                  {pollStatus === 'terminated' && (
+                    <Badge tone="terminated">Terminated</Badge>
+                  )}
                 </div>
                 <div className="text-right">
-                  <div className="text-white text-sm">{timeRemaining}</div>
-                  <div className="text-[11px] text-text-muted">remaining</div>
+                  <div className="text-white text-sm">{blocksRemaining}</div>
+                  {pollStatus !== 'terminated' && (
+                    <div className="text-[11px] text-text-muted">remaining</div>
+                  )}
                 </div>
               </div>
 
@@ -82,14 +119,16 @@ export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
                   <span className="text-xs text-red-400">Against: {againstPercent}%</span>
                 </div>
 
-                <div className="h-2 w-full bg-bg-primary rounded-full overflow-hidden mb-2 relative">
+                <div className="h-2 w-full bg-bg-primary rounded-full overflow-hidden mb-2 flex">
+                  {/* Green segment */}
                   <div
-                    className="absolute top-0 left-0 h-full bg-primary"
+                    className="h-full bg-primary"
                     style={{ width: `${forPercent}%` }}
                   ></div>
+                  {/* Red segment */}
                   <div
-                    className="absolute top-0 left-0 h-full bg-red-500"
-                    style={{ width: `${forPercent}%`, marginLeft: `${forPercent}%` }}
+                    className="h-full bg-red-500"
+                    style={{ width: `${againstPercent}%` }}
                   ></div>
                 </div>
 
@@ -120,12 +159,12 @@ export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
                                 },
                                 {
                                   onSuccess: () => {
-                                    toast.success('✅ Voto "Aprobar" registrado exitosamente!', {
+                                    toast.success('✅ "Approve" vote registered successfully!', {
                                       duration: 3000
                                     });
                                   },
                                   onError: (error: any) => {
-                                    toast.error(`❌ Error al votar en poll:\n${error.message}`, {
+                                    toast.error(`❌ Error voting in poll:\n${error.message}`, {
                                       duration: 4000,
                                       style: { whiteSpace: 'pre-line' }
                                     });
@@ -147,12 +186,12 @@ export default function ActivePolls({ polls }: ActivePollsProps): JSX.Element {
                                 },
                                 {
                                   onSuccess: () => {
-                                    toast.success('✅ Voto "Rechazar" registrado exitosamente!', {
+                                    toast.success('✅ "Reject" vote registered successfully!', {
                                       duration: 3000
                                     });
                                   },
                                   onError: (error: any) => {
-                                    toast.error(`❌ Error al votar en poll:\n${error.message}`, {
+                                    toast.error(`❌ Error voting in poll:\n${error.message}`, {
                                       duration: 4000,
                                       style: { whiteSpace: 'pre-line' }
                                     });

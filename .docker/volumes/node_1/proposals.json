@@ -1,1 +1,73 @@
-{}
+{
+    "7edaf1a0cac74c54b9ec34023af7fe8977fe36b95e40f4566db12b6f69daf75c": {
+        "proposal": {
+            "type": "changeParameter",
+            "msg": {
+                "parameterSpace": "cons|fee|val|gov",
+                "parameterKey": "protocolVersion",
+                "parameterValue": "example",
+                "startHeight": 1,
+                "endHeight": 1000,
+                "signer": "4646464646464646464646464646464646464646",
+                "proposalHash": ""
+            },
+            "signature": {
+                "publicKey": "95ecf39914b027b32132a8e24ad0e7d7a3599dcd06757b9eacf4cab391ea1fd7e3facde205d949a6e147402c81f90b6f",
+                "signature": "923396da659a35c81b4600853d1f151126f1b322d82fe36bea50c978abbb99b7a20867ec33cc97649f46d58572e87b8a0c3a108a146265163410d4ac03555515a15096446479d9983edb492d26e6ff3f2e464657179692c12498e5cc5426b7f3"
+            },
+            "time": 1741350747491943,
+            "createdHeight": 1,
+            "fee": 10000,
+            "memo": "example",
+            "networkID": 1,
+            "chainID": 1
+        },
+        "approve": true
+    },
+  "9bff898e6156b401a82375fcc9c2bfd3c3667b7d21db63d213b3090828e8bc3e": {
+    "proposal": {
+      "type": "changeParameter",
+      "msg": {
+        "parameterSpace": "fee",
+        "parameterKey": "sendFee",
+        "parameterValue": 1000,
+        "startHeight": 2000,
+        "endHeight": 2215,
+        "signer": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+      },
+      "signature": {
+        "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+        "signature": "8c5e71599bb3efcd68597398994f6d17d7afdb801b5c74c6dc7674d84a44effc"
+      },
+      "time": 1760572396516000,
+      "createdHeight": 0,
+      "fee": 10000,
+      "memo": "Test ",
+      "networkID": 1,
+      "chainID": 1
+    }
+  },
+  "newproposal123456789abcdef123456789abcdef123456789abcdef123456789abcdef": {
+    "proposal": {
+      "type": "changeParameter",
+      "msg": {
+        "parameterSpace": "fee",
+        "parameterKey": "stakeFee",
+        "parameterValue": 2000,
+        "startHeight": 2116,
+        "endHeight": 2216,
+        "signer": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+      },
+      "signature": {
+        "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+        "signature": "8c5e71599bb3efcd68597398994f6d17d7afdb801b5c74c6dc7674d84a44effc"
+      },
+      "time": 1760572396516000,
+      "createdHeight": 0,
+      "fee": 10000,
+      "memo": "Nueva propuesta para votar",
+      "networkID": 1,
+      "chainID": 1
+    }
+  }
+}

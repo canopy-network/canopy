@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAccounts } from './useAccounts';
 import { useManifest } from './useManifest';
 
@@ -30,6 +30,27 @@ export const useGovernanceActions = (adminPort: string = '50003', queryPort: str
   const { manifest } = useManifest();
   const queryClient = useQueryClient();
   const base = `http://localhost:${adminPort}`;
+  
+  // Helper function to get query base URL
+  const getQueryBase = () => `http://localhost:${queryPort}`;
+
+  // Get current block height
+  const currentHeight = useQuery({
+    queryKey: ['height', queryPort],
+    queryFn: async () => {
+      const response = await fetch(`${getQueryBase()}/v1/query/height`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch height: ${response.status}`);
+      }
+      return response.json();
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 10000, // Consider data stale after 10 seconds
+  });
 
   // Get governance actions from manifest
   const governanceAction = manifest?.actions?.find((action: any) => action.id === 'Governance');
@@ -195,12 +216,37 @@ export const useGovernanceActions = (adminPort: string = '50003', queryPort: str
       if (!addVoteAction?.rpc) throw new Error('AddVote action not found in manifest');
 
       const endpoint = `${base}${addVoteAction.rpc.path}`;
+      
+      // Ensure we send the complete proposal object structure
+      const completeProposal = {
+        type: data.proposal.type || "changeParameter",
+        msg: {
+          parameterSpace: data.proposal.msg?.parameterSpace,
+          parameterKey: data.proposal.msg?.parameterKey,
+          parameterValue: data.proposal.msg?.parameterValue,
+          startHeight: data.proposal.msg?.startHeight,
+          endHeight: data.proposal.msg?.endHeight,
+          signer: data.proposal.msg?.signer
+        },
+        signature: {
+          publicKey: data.proposal.signature?.publicKey,
+          signature: data.proposal.signature?.signature
+        },
+        time: data.proposal.time,
+        createdHeight: data.proposal.createdHeight,
+        fee: data.proposal.fee,
+        memo: data.proposal.memo,
+        networkID: data.proposal.networkID,
+        chainID: data.proposal.chainID
+      };
+
       const payload = {
         approve: data.approve,
-        proposal: data.proposal
+        proposal: completeProposal
       };
 
       console.log('Adding vote with payload:', payload);
+      console.log('Complete proposal structure:', completeProposal);
       console.log('Endpoint:', endpoint);
 
       const response = await fetch(endpoint, {
@@ -272,5 +318,6 @@ export const useGovernanceActions = (adminPort: string = '50003', queryPort: str
     votePoll,
     addVote,
     deleteVote,
+    currentHeight,
   };
 };

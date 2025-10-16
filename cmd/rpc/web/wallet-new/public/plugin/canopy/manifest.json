@@ -1263,6 +1263,7 @@
                 "type": "select",
                 "required": true,
                 "colSpan": 12,
+                "defaultValue": "fee",
                 "options": [
                   { "value": "fee", "label": "Fee" },
                   { "value": "val", "label": "Validator" },
@@ -1273,10 +1274,54 @@
               {
                 "name": "paramKey",
                 "label": "Parameter Key",
-                "type": "text",
+                "type": "select",
                 "required": true,
-                "placeholder": "e.g., sendFee",
-                "colSpan": 12
+                "colSpan": 12,
+                "defaultValue": "sendFee",
+                "optionsBySpace": {
+                  "cons": [
+                    { "value": "blockSize", "label": "Block Size" },
+                    { "value": "protocolVersion", "label": "Protocol Version" },
+                    { "value": "retired", "label": "Retired" },
+                    { "value": "rootChainID", "label": "Root Chain ID" }
+                  ],
+                  "val": [
+                    { "value": "unstakingBlocks", "label": "Unstaking Blocks" },
+                    { "value": "maxPauseBlocks", "label": "Max Pause Blocks" },
+                    { "value": "nonSignSlashPercentage", "label": "Non Sign Slash Percentage" },
+                    { "value": "maxNonSign", "label": "Max Non Sign" },
+                    { "value": "nonSignWindow", "label": "Non Sign Window" },
+                    { "value": "doubleSignSlashPercentage", "label": "Double Sign Slash Percentage" },
+                    { "value": "maxCommittees", "label": "Max Committees" },
+                    { "value": "maxCommitteeSize", "label": "Max Committee Size" },
+                    { "value": "earlyWithdrawalPenalty", "label": "Early Withdrawal Penalty" },
+                    { "value": "delegateUnstakingBlocks", "label": "Delegate Unstaking Blocks" },
+                    { "value": "minimumOrderSize", "label": "Minimum Order Size" },
+                    { "value": "stakePercentForSubsidizedCommittee", "label": "Stake Percent For Subsidized Committee" },
+                    { "value": "maxSlashPerCommittee", "label": "Max Slash Per Committee" },
+                    { "value": "delegateRewardPercentage", "label": "Delegate Reward Percentage" },
+                    { "value": "buyDeadlineBlocks", "label": "Buy Deadline Blocks" },
+                    { "value": "lockOrderFeeMultiplier", "label": "Lock Order Fee Multiplier" }
+                  ],
+                  "fee": [
+                    { "value": "sendFee", "label": "Send Fee" },
+                    { "value": "stakeFee", "label": "Stake Fee" },
+                    { "value": "editStakeFee", "label": "Edit Stake Fee" },
+                    { "value": "unstakeFee", "label": "Unstake Fee" },
+                    { "value": "pauseFee", "label": "Pause Fee" },
+                    { "value": "unpauseFee", "label": "Unpause Fee" },
+                    { "value": "changeParameterFee", "label": "Change Parameter Fee" },
+                    { "value": "daoTransferFee", "label": "DAO Transfer Fee" },
+                    { "value": "certificateResultsFee", "label": "Certificate Results Fee" },
+                    { "value": "subsidyFee", "label": "Subsidy Fee" },
+                    { "value": "createOrderFee", "label": "Create Order Fee" },
+                    { "value": "editOrderFee", "label": "Edit Order Fee" },
+                    { "value": "deleteOrderFee", "label": "Delete Order Fee" }
+                  ],
+                  "gov": [
+                    { "value": "daoRewardPercentage", "label": "DAO Reward Percentage" }
+                  ]
+                }
               },
               {
                 "name": "paramValue",
@@ -1284,21 +1329,24 @@
                 "type": "text",
                 "required": true,
                 "placeholder": "e.g., 20000",
-                "colSpan": 12
+                "colSpan": 12,
+                "defaultValue": "1000"
               },
               {
                 "name": "startHeight",
                 "label": "Start Height",
                 "type": "number",
                 "required": true,
-                "colSpan": 6
+                "colSpan": 6,
+                "defaultValue": "2200"
               },
               {
                 "name": "endHeight",
                 "label": "End Height",
                 "type": "number",
                 "required": true,
-                "colSpan": 6
+                "colSpan": 6,
+                "defaultValue": "2300"
               },
               {
                 "name": "memo",
@@ -1306,14 +1354,16 @@
                 "type": "textarea",
                 "required": false,
                 "placeholder": "Description of the proposal...",
-                "colSpan": 12
+                "colSpan": 12,
+                "defaultValue": ""
               },
               {
                 "name": "password",
                 "label": "Password",
                 "type": "password",
                 "required": true,
-                "colSpan": 12
+                "colSpan": 12,
+                "defaultValue": ""
               }
             ]
           }
