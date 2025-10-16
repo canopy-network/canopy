@@ -15,6 +15,10 @@ import (
 
 /* This file contains shared code for peers and messages that are routed by the controller throughout the app */
 
+const (
+	DefaultPort = "9000" // default port when not specified
+)
+
 // MESSAGE CODE BELOW
 
 // Channels are logical communication paths or streams that operate over a single 'multiplexed' network connection
@@ -78,7 +82,9 @@ func ResolvePort(oldPort string, chainId uint64) (string, ErrorI) {
 	if oldPort != "" {
 		return AddToPort(strings.ReplaceAll(oldPort, ":", ""), chainId)
 	}
-	return AddToPort("9000", chainId)
+	//TODO review if max chainID should be limited for now to 56,535, combined with defaultPort, or 64,510, combined with the lower bound port (1025)
+	//any higher value will return bad port error
+	return AddToPort(DefaultPort, chainId)
 }
 
 // ResolveAndReplacePort resolves the appropriate port and replaces the port in the net address

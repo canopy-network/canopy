@@ -24,7 +24,10 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-/* This file implements shared general utility functions that are used throughout the app */
+const (
+	MaxAllowedPort = 65535 // maxAllowedPort is the maximum port number allowed.
+	MinAllowedPort = 1025  // minAllowedPort is the minimum port number allowed to ensure it avoids commonly reserved system ports.
+)
 
 // PAGE CODE BELOW
 
@@ -564,10 +567,14 @@ func AddToPort(portStr string, add uint64) (string, ErrorI) {
 	if err != nil {
 		return "", ErrBadPort()
 	}
+	// check if port is valid, should be higher than 1024 to avoid port conflicts
+	if port < MinAllowedPort {
+		return "", ErrBadPortLowLimit()
+	}
 	// add the given number to the port
 	newPort := port + int(add)
 	// ensure the new port doesn't exceed the max port number (65535)
-	if newPort > 65535 {
+	if newPort > MaxAllowedPort {
 		return "", ErrMaxPort()
 	}
 	return fmt.Sprintf("%d", newPort), nil
