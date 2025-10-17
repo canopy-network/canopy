@@ -9,7 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
 )

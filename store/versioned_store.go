@@ -7,7 +7,7 @@ import (
 	"math"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 /* versioned_store.go implements a multi-version store in pebble db*/

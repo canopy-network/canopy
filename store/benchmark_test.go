@@ -2,15 +2,16 @@ package store
 
 import (
 	"fmt"
-	"github.com/alecthomas/units"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/cockroachdb/pebble/v2"
-	"github.com/dgraph-io/badger/v4"
-	"github.com/stretchr/testify/require"
 	"math"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/alecthomas/units"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/cockroachdb/pebble"
+	"github.com/dgraph-io/badger/v4"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBenchmark(t *testing.T) {
