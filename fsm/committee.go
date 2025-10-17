@@ -202,7 +202,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 		p, _ = s.GetCommitteeMembers(s.Config.ChainId)
 	} else {
 		// else get the delegates
-		p, _ = s.GetAllDelegates(id)
+		p, _ = s.GetTopDelegates(id)
 	}
 	// get the validator params from state
 	valParams, err := s.GetParamsVal()
@@ -266,6 +266,8 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 		}
 		// ensure the validator is not included in the committee if it's paused or unstaking
 		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
+			// this is necessary so the not added validator does not count to the limit
+			i--
 			continue
 		}
 		// add the member to the list
@@ -386,6 +388,61 @@ func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err
 		}
 		// ensure the validator is not included in the committee if it's paused or unstaking
 		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
+			continue
+		}
+		// increment the total power
+		totalPower += val.StakedAmount
+		// add the member to the list
+		members = append(members, &lib.ConsensusValidator{
+			PublicKey:   val.PublicKey,
+			VotingPower: val.StakedAmount,
+			NetAddress:  val.NetAddress,
+		})
+	}
+	return lib.ValidatorSet{
+		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
+		TotalPower:    totalPower,
+		MinimumMaj23:  (2*totalPower)/3 + 1,
+		NumValidators: uint64(len(members)),
+	}, nil
+}
+
+// GetTopDelegates() returns top delegates according to gov params
+func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+	// get val params for filtering
+	params, err := s.GetParamsVal()
+	if err != nil {
+		return vs, err
+	}
+	// if param is set to 0 all delegates should be returned
+	if params.MaximumDelegatesPerCommittee == 0 {
+		return s.GetAllDelegates(chainId)
+	}
+	// iterate through the prefix for the committee, from the highest stake amount to lowest
+	it, err := s.RevIterator(DelegatePrefix(chainId))
+	if err != nil {
+		return
+	}
+	defer it.Close()
+	// create a variable to hold the committee members
+	members := make([]*lib.ConsensusValidator, 0)
+	var totalPower uint64
+	// for each item of the iterator up to MaxCommitteeSize
+	for i := uint64(0); it.Valid() && i < params.MaximumDelegatesPerCommittee; func() { it.Next(); i++ }() {
+		// extract the address from the iterator key
+		address, e := AddressFromKey(it.Key())
+		if e != nil {
+			return vs, e
+		}
+		// load the validator from the state using the address
+		val, e := s.GetValidator(address)
+		if e != nil {
+			return vs, e
+		}
+		// ensure the validator is not included in the committee if it's paused or unstaking
+		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
+			// this is necessary so the not added delegator does not count to the limit
+			i--
 			continue
 		}
 		// increment the total power

@@ -120,6 +120,12 @@ message ValidatorParams {
   uint64 buy_deadline_blocks = 15; // @gotags: json:"buyDeadlineBlocks"
   // lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
   uint64 lock_order_fee_multiplier = 16; // @gotags: json:"lockOrderFeeMultiplier"
+  // minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
+  uint64 minimum_stake_for_validators = 17; // @gotags: json:"minimumStakeForValidators"
+  // minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
+  uint64 minimum_stake_for_delegates = 18; // @gotags: json:"minimumStakeForDelegates"
+  // maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
+  uint64 maximum_delegates_per_committee = 19; // @gotags: json:"maximumDelegatesPerCommittee"
 }
 
 // FeeParams is the parameter space that defines various amounts for transaction fees
