@@ -8,53 +8,70 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dgraph-io/badger/v4"
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/vfs"
 	"github.com/stretchr/testify/require"
 )
 
-func newTxn(t *testing.T, prefix []byte) (*Txn, *badger.DB, *badger.WriteBatch) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
+func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
+	fs := vfs.NewMem()
+	db, err := pebble.Open("memdb", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
 	require.NoError(t, err)
 	var version uint64 = 1
-	reader := db.NewTransactionAt(version, false)
-	writer := db.NewWriteBatchAt(version)
-	return NewBadgerTxn(reader, writer, prefix, false, true, version), db, writer
+	writer := db.NewBatch()
+	vs, err := NewVersionedStore(db.NewSnapshot(), writer, version)
+	require.NoError(t, err)
+	return NewVersionedStoreTxn(vs, vs, prefix, false, true, version), db, writer
 }
 
 func TestNestedTxn(t *testing.T) {
-	baseTxn, db, batch := newTxn(t, []byte("1/"))
+	const (
+		basePrefix   = "1/"
+		nestedPrefix = "2/"
+		keyA         = "a"
+		keyB         = "b"
+		valueA       = "a"
+		valueB       = "b"
+	)
+	baseTxn, db, batch := newTxn(t, []byte(basePrefix))
 	defer func() { baseTxn.Close(); db.Close(); baseTxn.Discard() }()
 	// create a nested transaction
-	nested := NewTxn(baseTxn, baseTxn, []byte("2/"), false, true, baseTxn.writeVersion)
+	nested := NewTxn(baseTxn, baseTxn, []byte(nestedPrefix), false, true, baseTxn.writeVersion)
 	// set some values in the nested transaction
-	require.NoError(t, nested.Set([]byte("a"), []byte("a")))
-	require.NoError(t, nested.Set([]byte("b"), []byte("b")))
-	require.NoError(t, nested.Delete([]byte("a")))
+	require.NoError(t, nested.Set([]byte(keyA), []byte(valueA)))
+	require.NoError(t, nested.Set([]byte(keyB), []byte(valueB)))
+	require.NoError(t, nested.Delete([]byte(keyA)))
 	// confirm value is successfully deleted
-	val, err := nested.Get([]byte("a"))
+	val, err := nested.Get([]byte(keyA))
 	require.NoError(t, err)
 	require.Nil(t, val)
 	// confirm value is not visible in the parent transaction
-	val, err = baseTxn.Get([]byte("2/b"))
+	val, err = baseTxn.Get([]byte(nestedPrefix + keyB))
 	require.NoError(t, err)
 	require.Nil(t, val)
 	// commit the nested transaction
-	require.NoError(t, nested.Flush())
+	require.NoError(t, nested.Commit())
 	// check that the changes are visible in the parent transaction
-	val, err = baseTxn.Get([]byte("2/b"))
+	val, err = baseTxn.Get([]byte(nestedPrefix + keyB))
 	require.NoError(t, err)
-	require.Equal(t, []byte("b"), val)
+	require.Equal(t, []byte(valueB), val)
 	// flush the parent transaction
-	require.NoError(t, baseTxn.Flush())
+	require.NoError(t, baseTxn.Commit())
 	// flush the batch
-	require.NoError(t, batch.Flush())
+	require.NoError(t, batch.Commit(&pebble.WriteOptions{Sync: false}))
 	// check that the changes are visible in the database
-	reader := db.NewTransactionAt(math.MaxUint64, false)
-	item, readErr := reader.Get([]byte("1/2/b"))
+	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), baseTxn.writeVersion)
+	require.NoError(t, err)
+	val, readErr := vs.Get([]byte(basePrefix + nestedPrefix + keyB))
 	require.NoError(t, readErr)
-	val, readErr = item.ValueCopy(nil)
-	require.NoError(t, readErr)
-	require.Equal(t, []byte("b"), val)
+	require.Equal(t, []byte(valueB), val)
 }
 
 func TestNestedTxnMergedIteration(t *testing.T) {
@@ -64,41 +81,44 @@ func TestNestedTxnMergedIteration(t *testing.T) {
 	nested := NewTxn(baseTxn, baseTxn, nil, false, true, baseTxn.writeVersion)
 	// set and and flush a value in the parent transaction
 	require.NoError(t, nested.Set([]byte("a"), []byte("a")))
-	require.NoError(t, baseTxn.Flush())
+	require.NoError(t, baseTxn.Commit())
 	// set and flush a value in the nested transaction
 	require.NoError(t, nested.Set([]byte("b"), []byte("b")))
-	require.NoError(t, nested.Flush())
+	require.NoError(t, nested.Commit())
 	// flush the batch
-	require.NoError(t, batch.Flush())
+	require.NoError(t, batch.Commit(&pebble.WriteOptions{Sync: false}))
 	// set a value in the parent transaction to not be flushed
 	require.NoError(t, baseTxn.Set([]byte("c"), []byte("c")))
 	// set a value in the nested transaction to not be flushed
 	require.NoError(t, nested.Set([]byte("d"), []byte("d")))
 
 	// create a new iterator on the nested transaction
-	iter := nested.NewIterator(nil, false, false)
-	iter.Close()
+	iter, err := nested.NewIterator(nil, false, false)
+	require.NoError(t, err)
 	expected := []string{"a", "b", "c", "d"}
 	got := []string{}
 	for ; iter.Valid(); iter.Next() {
-		got = append(got, string(iter.Value()))
+		got = append(got, string(iter.Key()))
 	}
+	iter.Close()
 	// confirm the iterator returns the expected values
 	require.Equal(t, expected, got)
 
 	// create a new reverse iterator on the nested transaction
-	iter = nested.NewIterator(nil, true, false)
-	iter.Close()
+	iter, err = nested.NewIterator(nil, true, false)
+	require.NoError(t, err)
 	expected = []string{"d", "c", "b", "a"}
 	got = []string{}
 	for ; iter.Valid(); iter.Next() {
-		got = append(got, string(iter.Value()))
+		got = append(got, string(iter.Key()))
 	}
+	iter.Close()
 	require.Equal(t, expected, got)
 }
 
 func TestTxnWriteSetGet(t *testing.T) {
-	test, db, writer := newTxn(t, []byte("1/"))
+	prefix := "1/"
+	test, db, writer := newTxn(t, []byte(prefix))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	key := []byte("a")
 	value := []byte("a")
@@ -111,32 +131,42 @@ func TestTxnWriteSetGet(t *testing.T) {
 	dbVal, dbErr := test.reader.Get(key)
 	require.NoError(t, dbErr)
 	require.Nil(t, dbVal)
-	require.NoError(t, test.Flush())
-	require.NoError(t, writer.Flush())
-	// test get from reader after write()
+	require.NoError(t, test.Commit())
+	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
+	// test get from db after write()
 	require.Len(t, test.txn.ops, 0)
-	val, err = test.Get(key)
+	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
+	require.NoError(t, err)
+	val, err = vs.Get(append([]byte(prefix), key...))
 	require.NoError(t, err)
 	require.Equal(t, value, val)
 }
 
 func TestTxnWriteDelete(t *testing.T) {
-	test, db, writer := newTxn(t, []byte("1/"))
+	prefix := "1/"
+	key, value := []byte("a"), []byte("a")
+	test, db, writer := newTxn(t, []byte(prefix))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// set value and delete in the ops
-	require.NoError(t, test.Set([]byte("a"), []byte("a")))
-	require.NoError(t, test.Delete([]byte("a")))
-	val, err := test.Get([]byte("a"))
+	require.NoError(t, test.Set(key, value))
+	val, err := test.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, value, val)
+	require.NoError(t, test.Delete(key))
+	val, err = test.Get(key)
 	require.NoError(t, err)
 	require.Nil(t, val)
 	// test get value from reader before write()
-	dbVal, dbErr := test.reader.Get([]byte("1/a"))
+	dbVal, dbErr := test.reader.Get(append([]byte(prefix), key...))
 	require.NoError(t, dbErr)
 	require.Nil(t, dbVal)
 	// test get value from reader after write()
-	require.NoError(t, test.Flush())
-	require.NoError(t, writer.Flush())
-	dbVal, dbErr = test.reader.Get([]byte("1/a"))
+	require.NoError(t, test.Commit())
+	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
+
+	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
+	require.NoError(t, err)
+	dbVal, dbErr = vs.Get(append([]byte(prefix), key...))
 	require.NoError(t, dbErr)
 	require.Nil(t, dbVal)
 }
@@ -236,12 +266,10 @@ func TestTxnIterateMixed(t *testing.T) {
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// first write to the memory txn and flush it
 	bulkSetKV(t, test, "1/", "f", "e", "d")
-	require.NoError(t, test.Flush())
-	require.NoError(t, writer.Flush())
-	// now add new entries to the memory txn.
-	// Since the reader and writer are on the same version,
-	// it's possible to read the previously flushed data
-	// without creating a new transaction
+	require.NoError(t, test.Commit())
+	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
+	// update the txn versioned store reader with a new snapshot to access the latest data
+	test.reader.(*VersionedStore).db = db.NewSnapshot()
 	bulkSetKV(t, test, "1/", "i", "h", "g")
 	// confirm that the only data in the memory txn are the last 3 entries
 	require.Len(t, test.txn.ops, 3)
@@ -312,12 +340,10 @@ func TestTxnIterateMixedWithDeletedValues(t *testing.T) {
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// first write to the db writer and flush it
 	bulkSetKV(t, test, "1/", "f", "e", "d")
-	require.NoError(t, test.Flush())
-	require.NoError(t, writer.Flush())
-	// now add new entries to the memory txn.
-	// Since the reader and writer are on the same version,
-	// it's possible to read the previously flushed data
-	// without creating a new transaction
+	require.NoError(t, test.Commit())
+	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
+	// update the txn versioned store reader with a new snapshot to access the latest data
+	test.reader.(*VersionedStore).db = db.NewSnapshot()
 	// add the values to the memory txn
 	bulkSetKV(t, test, "1/", "h", "g", "f")
 	require.NoError(t, test.Delete([]byte("1/f"))) // shared and shadowed
@@ -363,8 +389,10 @@ func TestIteratorBasic(t *testing.T) {
 	expectedVals := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
 	expectedValsReverse := []string{"h", "g", "f", "e", "d", "c", "b", "a"}
 	bulkSetKV(t, test, "", expectedVals...)
-	require.NoError(t, test.Flush())
-	require.NoError(t, writer.Flush())
+	require.NoError(t, test.Commit())
+	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
+	// update the txn versioned store reader with a new snapshot to access the latest data
+	test.reader.(*VersionedStore).db = db.NewSnapshot()
 	it, err := test.Iterator(nil)
 	require.NoError(t, err)
 	defer it.Close()

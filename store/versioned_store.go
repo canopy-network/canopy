@@ -37,7 +37,12 @@ func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) (*
 
 // Set() stores a key-value pair at the current version
 func (vs *VersionedStore) Set(key, value []byte) (err lib.ErrorI) {
-	k := vs.makeVersionedKey(key, vs.version)
+	return vs.SetAt(key, value, vs.version)
+}
+
+// SetAt() stores a key-value pair at the given version
+func (vs *VersionedStore) SetAt(key, value []byte, version uint64) (err lib.ErrorI) {
+	k := vs.makeVersionedKey(key, version)
 	v := vs.valueWithTombstone(AliveTombstone, value)
 	if e := vs.batch.Set(k, v, nil); e != nil {
 		return ErrStoreSet(e)
@@ -47,7 +52,12 @@ func (vs *VersionedStore) Set(key, value []byte) (err lib.ErrorI) {
 
 // Delete() marks a key as deleted at the current version
 func (vs *VersionedStore) Delete(key []byte) (err lib.ErrorI) {
-	k := vs.makeVersionedKey(key, vs.version)
+	return vs.DeleteAt(key, vs.version)
+}
+
+// DeleteAt() marks a key as deleted at the given version
+func (vs *VersionedStore) DeleteAt(key []byte, version uint64) (err lib.ErrorI) {
+	k := vs.makeVersionedKey(key, version)
 	v := vs.valueWithTombstone(DeadTombstone, nil)
 	if e := vs.batch.Set(k, v, nil); e != nil {
 		return ErrStoreDelete(e)
