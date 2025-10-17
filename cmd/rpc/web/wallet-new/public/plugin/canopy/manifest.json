@@ -1,4 +1,18 @@
 {
+  "ui": {
+    "tx": {
+      "typeMap": {
+        "send": "Send",
+        "stake": "Stake",
+        "receive": "Receive"
+      },
+      "typeIconMap": {
+        "send": "Send",
+        "stake": "Lock",
+        "receive": "Download"
+      }
+    }
+  },
   "actions": [
     {
       "id": "send",
@@ -9,8 +23,16 @@
           "className": "w-[40rem]"
         }
       },
-      "ui": { "variant": "modal", "icon": "Send"},
-      "tags": ["quick"],
+      "relatedActions": [
+        "receive"
+      ],
+      "ui": {
+        "variant": "modal",
+        "icon": "Send"
+      },
+      "tags": [
+        "quick"
+      ],
       "form": {
         "fields": [
           {
@@ -27,7 +49,12 @@
             "type": "text",
             "label": "To Address",
             "required": true,
-            "features": [{ "id": "pasteBtn", "op": "paste" }]
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ]
           },
           {
             "id": "asset",
@@ -115,6 +142,86 @@
         "base": "admin",
         "path": "/v1/admin/tx-send",
         "method": "POST"
+      },
+      "confirm": {
+        "summary": [
+          {
+            "label": "From",
+            "value": "upper<{{account.address}}>"
+          },
+          {
+            "label": "To",
+            "value": "{{form.to}}"
+          },
+          {
+            "label": "Amount",
+            "value": "{{form.amount}}"
+          },
+          {
+            "label": "Fee",
+            "value": "{{fees.amount}}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "receive",
+      "title": "Receive",
+      "icon": "Scan",
+      "slots": {
+        "modal": {
+          "className": "w-[40rem]"
+        }
+      },
+      "relatedActions": [
+        "send"
+      ],
+      "ui": {
+        "variant": "modal",
+        "icon": "Send"
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "layout": {
+          "aside": {
+            "show": true,
+            "width": "w-[10rem]"
+          }
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Receiving Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "features": [
+              {
+                "id": "copyBtn",
+                "op": "copy",
+                "from": "{{account.address}}"
+              }
+            ]
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "readOnly": true,
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{account.address}}"
+                }
+              }
+            }
+          }
+        ]
       }
     }
   ]

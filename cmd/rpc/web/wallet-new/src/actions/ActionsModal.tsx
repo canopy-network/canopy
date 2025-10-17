@@ -4,6 +4,7 @@ import {ModalTabs, Tab} from "./ModalTabs";
 import {Action as ManifestAction} from "@/manifest/types";
 import ActionRunner from "@/actions/ActionRunner";
 import {XIcon} from "lucide-react";
+import {cx} from "@/ui/cx";
 
 interface ActionModalProps {
     actions?: ManifestAction[]
@@ -31,7 +32,7 @@ export const ActionsModal: React.FC<ActionModalProps> = (
         let tabs: Tab[];
         tabs = actions?.map(a => ({
             value: a.id,
-            label: a.label || a.id,
+            label: a.title || a.id,
             icon: a.icon
         })) || [];
 
@@ -64,7 +65,7 @@ export const ActionsModal: React.FC<ActionModalProps> = (
                             ease: "easeInOut",
                             width: {duration: 0.3, ease: "easeInOut"}
                         }}
-                        className={`relative bg-bg-secondary rounded-xl border border-bg-accent p-6 ${modalClassName}`}
+                        className={cx(`relative bg-bg-secondary rounded-xl border border-bg-accent p-6`, modalClassName)}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <XIcon onClick={onClose} className="absolute top-4 right-4 text-text-muted cursor-pointer hover:text-white" />
@@ -76,7 +77,14 @@ export const ActionsModal: React.FC<ActionModalProps> = (
                         />
 
                         {selectedTab && (
+                            <motion.div
+
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.4 }}
+                            >
                             <ActionRunner actionId={selectedTab.value} />
+                            </motion.div>
                         )}
 
 

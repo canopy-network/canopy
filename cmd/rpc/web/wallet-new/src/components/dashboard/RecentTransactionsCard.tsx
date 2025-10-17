@@ -1,29 +1,33 @@
-import React from 'react'
-import { motion } from 'framer-motion'
-import { useConfig } from '@/app/providers/ConfigProvider'
-import { useAccounts } from '@/app/providers/AccountsProvider'
-import { useDS } from '@/core/useDs'
+import React, {useCallback} from 'react'
+import {motion} from 'framer-motion'
+import {useConfig} from '@/app/providers/ConfigProvider'
+import {LucideIcon} from "@/components/ui/LucideIcon";
 
-/** normaliza epoch a ms (acepta ns/us/ms) */
+const getStatusColor = (s: string) =>
+    s === 'Confirmed' ? 'bg-green-500/20 text-green-400' :
+        s === 'Open' ? 'bg-red-500/20 text-red-400' :
+            s === 'Pending' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'
+
+export interface Transaction {
+    hash: string
+    time: number
+    type: string
+    amount: number
+    status: string
+}
+
+export interface RecentTransactionsCardProps {
+    transactions?: Transaction[]
+    isLoading?: boolean,
+    hasError?: boolean,
+}
+
 const toEpochMs = (t: any) => {
     const n = Number(t ?? 0)
     if (!Number.isFinite(n) || n <= 0) return 0
     if (n > 1e16) return Math.floor(n / 1e6) // ns -> ms
     if (n > 1e13) return Math.floor(n / 1e3) // us -> ms
     return n // ya ms
-}
-
-const mapTx = (row: any, kind: 'sent'|'received') => {
-    // shape esperado por tu backend:
-    // { sender, recipient, messageType, height, transaction:{ type, msg:{ fromAddress, toAddress, amount }, time, ... }, txHash }
-    const tx = row?.transaction ?? row ?? {}
-    const msg = tx?.msg ?? {}
-    const type = row?.messageType ?? tx?.type ?? (kind === 'sent' ? 'send' : 'receive')
-    const amount = Number(msg?.amount ?? row?.amount ?? 0)
-    const hash = row?.txHash ?? row?.hash ?? tx?.hash ?? `${type}-${amount}-${tx?.time ?? 0}`
-    const timeMs = toEpochMs(tx?.time ?? row?.time ?? row?.timestamp ?? 0)
-    const status = row?.status ?? 'Confirmed'
-    return { hash, time: timeMs, type, amount, status }
 }
 
 const formatTimeAgo = (tsMs: number) => {
@@ -35,68 +39,59 @@ const formatTimeAgo = (tsMs: number) => {
     return `${d} day${d > 1 ? 's' : ''} ago`
 }
 
-const getStatusColor = (s: string) =>
-    s === 'Confirmed' ? 'bg-green-500/20 text-green-400' :
-        s === 'Open'      ? 'bg-red-500/20 text-red-400'   :
-            s === 'Pending'   ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'
 
-const getActionIcon = (a: string) => {
-    switch (a?.toLowerCase()) {
-        case 'send': return 'fa-solid fa-paper-plane text-text-primary'
-        case 'receive': return 'fa-solid fa-download text-text-primary'
-        case 'stake': return 'fa-solid fa-lock text-text-primary'
-        case 'unstake': return 'fa-solid fa-unlock text-text-primary'
-        case 'delegate': return 'fa-solid fa-handshake text-text-primary'
-        default: return 'fa-solid fa-circle text-text-primary'
-    }
-}
 
-export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
-    const { selectedAddress } = useAccounts()
-    const { chain } = useConfig()
+export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
+                                                                                  transactions,
+                                                                                  isLoading = false,
+                                                                                  hasError = false
+                                                                              }) => {
+    const {manifest, chain} = useConfig();
 
-    const { data: sent = [], isLoading: l1, error: e1 } = useDS<any[]>(
-        'txs.sent',
-        { account: {address: selectedAddress}},
-        {
-            enabled: !!selectedAddress,
-            refetchIntervalMs: 15_000,
-            select: (d: any) => Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
+    const getIcon = useCallback(
+        (txType: string) => manifest?.ui?.tx?.typeIconMap?.[txType] ?? 'fa-solid fa-circle text-text-primary',
+        [manifest]
+    );
+    const getTxMap = useCallback(
+        (txType: string) => manifest?.ui?.tx?.typeMap?.[txType] ?? txType,
+        [manifest]
+    );
+
+
+    const getTxTimeAgo = useCallback((): (tx: Transaction) => String => {
+        return (tx: Transaction) => {
+            const epochMs = toEpochMs(tx.time)
+            return formatTimeAgo(epochMs)
         }
-    )
+    }, []);
 
-    const { data: recd = [], isLoading: l2, error: e2 } = useDS<any[]>(
-        'txs.received',
-        { account: {address: selectedAddress}},
-        {
-            enabled: !!selectedAddress,
-            refetchIntervalMs: 15_000,
-            select: (d: any) => Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : [])
+    const symbol = String(chain?.denom?.symbol) ?? "CNPY"
 
-        }
-    )
 
-    const isLoading = l1 || l2
-    const error = e1 || e2
+    const toDisplay = useCallback((amount: number) => {
+        const decimals = Number(chain?.denom?.decimals) ?? 6
+        return amount / Math.pow(10, decimals)
+    }, [chain])
 
-    const decimals = chain?.denom?.decimals ?? 6
-    const symbol = chain?.denom?.symbol ?? 'CNPY'
-    const toDisplay = (amt: number) => amt / Math.pow(10, decimals)
-
-    const items = React.useMemo(() => {
-        const a = sent.map((row: any) => ({ ...mapTx(row, 'sent'), dir: 'sent' as const }))
-        const b = recd.map((row: any) => ({ ...mapTx(row, 'received'), dir: 'received' as const }))
-        const uniq = new Map<string, typeof a[number]>()
-        for (const t of [...a, ...b]) if (t.hash) uniq.set(t.hash, t)
-        return [...uniq.values()].sort((x, y) => (y.time || 0) - (x.time || 0)).slice(0, 10)
-    }, [sent, recd])
-
-    if (!selectedAddress) {
+    if (!transactions) {
         return (
             <motion.div className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
-                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                        initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}}
+                        transition={{duration: 0.5, delay: 0.3}}>
                 <div className="flex items-center justify-center h-full">
                     <div className="text-text-muted">Select an account to view transactions</div>
+                </div>
+            </motion.div>
+        )
+    }
+
+    if (!transactions?.length) {
+        return (
+            <motion.div className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
+                        initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}}
+                        transition={{duration: 0.5, delay: 0.3}}>
+                <div className="flex items-center justify-center h-full">
+                    <div className="text-text-muted">No transactions found</div>
                 </div>
             </motion.div>
         )
@@ -105,7 +100,8 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
     if (isLoading) {
         return (
             <motion.div className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
-                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                        initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}}
+                        transition={{duration: 0.5, delay: 0.3}}>
                 <div className="flex items-center justify-center h-full">
                     <div className="text-text-muted">Loading transactions...</div>
                 </div>
@@ -113,10 +109,11 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
         )
     }
 
-    if (error) {
+    if (hasError) {
         return (
             <motion.div className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
-                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                        initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}}
+                        transition={{duration: 0.5, delay: 0.3}}>
                 <div className="flex items-center justify-center h-full">
                     <div className="text-red-400">Error loading transactions</div>
                 </div>
@@ -127,13 +124,14 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
     return (
         <motion.div
             className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent h-full"
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+            initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{duration: 0.5, delay: 0.3}}
         >
             {/* Title */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                     <h3 className="text-text-primary text-lg font-semibold">Recent Transactions</h3>
-                    <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs font-medium">Live</span>
+                    <span
+                        className="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs font-medium">Live</span>
                 </div>
             </div>
 
@@ -147,22 +145,21 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
 
             {/* Rows */}
             <div className="space-y-3">
-                {items.length > 0 ? items.map((t, i) => {
-                    const humanType = t.type ? (t.type[0].toUpperCase() + t.type.slice(1)) : 'Transaction'
-                    const prefix = t.dir === 'sent' ? '-' : '+'
-                    const amountTxt = `${prefix}${toDisplay(Number(t.amount || 0)).toFixed(2)} ${symbol}`
-                    const hashShort = t.hash?.length > 14 ? `${t.hash.slice(0,10)}...${t.hash.slice(-4)}` : t.hash
+                {transactions.length > 0 ? transactions.map((tx, i) => {
+                    const prefix = tx?.type === 'send' ? '-' : '+'
+                    const amountTxt = `${prefix}${toDisplay(Number(tx.amount || 0)).toFixed(2)} ${symbol}`
+                    const hashShort = tx.hash?.length > 14 ? `${tx.hash.slice(0, 10)}...${tx.hash.slice(-4)}` : tx.hash
 
                     return (
-                        <motion.div key={`${t.hash}-${i}`}
+                        <motion.div key={`${tx.hash}-${i}`}
                                     className="grid grid-cols-4 gap-4 items-center py-3 border-b border-bg-accent/30 last:border-b-0"
-                                    initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.3, delay: 0.4 + (i * 0.06) }}
+                                    initial={{opacity: 0, x: -20}} animate={{opacity: 1, x: 0}}
+                                    transition={{duration: 0.3, delay: 0.4 + (i * 0.06)}}
                         >
-                            <div className="text-text-primary text-sm">{formatTimeAgo(t.time)}</div>
+                            <div className="text-text-primary text-sm">{getTxTimeAgo()(tx)}</div>
                             <div className="flex items-center gap-2">
-                                <i className={`${getActionIcon(humanType)} text-sm`}></i>
-                                <span className="text-text-primary text-sm">{humanType}</span>
+                                <LucideIcon name={getIcon(tx?.type)} className={'w-6 text-text-primary'}/>
+                                <span className="text-text-primary text-sm">{getTxMap(tx?.type)}</span>
                             </div>
                             <div className={`text-sm font-medium ${
                                 amountTxt.startsWith('+') ? 'text-green-400' :
@@ -171,11 +168,12 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
                                 {amountTxt}
                             </div>
                             <div className="flex items-center justify-between">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(t.status)}`}>
-                  {t.status}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                  {tx.status}
                 </span>
-                                <a href="#" className="text-primary hover:text-primary/80 text-xs font-medium flex items-center gap-1 transition-colors">
-                                    {hashShort}
+                                <a href={chain?.explorer + tx.hash} target="_blank" rel="noopener noreferrer"
+                                   className="text-primary hover:text-primary/80 text-xs font-medium flex items-center gap-1 transition-colors">
+                                    View on the explorer
                                     <i className="fa-solid fa-arrow-right text-xs"></i>
                                 </a>
                             </div>
@@ -188,7 +186,8 @@ export const RecentTransactionsCard: React.FC<{ address?: string }> = () => {
 
             {/* See All */}
             <div className="text-center mt-6">
-                <a href="#" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">See All</a>
+                <a href="#" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">See
+                    All</a>
             </div>
         </motion.div>
     )

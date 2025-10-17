@@ -12,8 +12,8 @@ import {
     buildPayloadFromAction,
 } from '@/core/actionForm'
 import {microToDisplay} from "@/core/format";
-import { useAccounts } from '@/app/providers/AccountsProvider'
-
+import {useAccounts} from '@/app/providers/AccountsProvider'
+import {template} from '@/core/templater'
 
 
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
@@ -21,7 +21,7 @@ type Stage = 'form' | 'confirm' | 'executing' | 'result'
 
 export default function ActionRunner({actionId}: { actionId: string }) {
     const {manifest, chain, isLoading} = useConfig()
-    const { selectedAccount } = useAccounts?.() ?? { selectedAccount: undefined }
+    const {selectedAccount} = useAccounts?.() ?? {selectedAccount: undefined}
 
     const action = React.useMemo(
         () => manifest?.actions.find((a) => a.id === actionId),
@@ -34,6 +34,7 @@ export default function ActionRunner({actionId}: { actionId: string }) {
     const [form, setForm] = React.useState<Record<string, any>>({})
     const debouncedForm = useDebouncedValue(form, 250)
     const [txRes, setTxRes] = React.useState<any>(null)
+
 
     const session = useSession()
     const ttlSec = chain?.session?.unlockTimeoutSec ?? 900
@@ -49,7 +50,7 @@ export default function ActionRunner({actionId}: { actionId: string }) {
     const feesResolved = useResolvedFees(chain?.fees, {
         actionId: action?.id,
         bucket: 'avg',
-        ctx: { chain }
+        ctx: {chain}
     })
 
     const templatingCtx = React.useMemo(() => ({
@@ -62,11 +63,19 @@ export default function ActionRunner({actionId}: { actionId: string }) {
         fees: {
             ...feesResolved
         },
-        session: { password: session?.password },
+        session: {password: session?.password},
     }), [form, chain, selectedAccount, feesResolved, session?.password])
 
-    const isReady = React.useMemo(() => !!action && !!chain, [action, chain])
+    const details = React.useMemo(
+        () =>
+            (action?.confirm?.summary ?? []).map((item) => ({
+                label: item.label,
+                value: typeof item.value === 'string' ? template(item.value, templatingCtx) : item.value,
+            })),
+        [action, templatingCtx]
+    )
 
+    const isReady = React.useMemo(() => !!action && !!chain, [action, chain])
 
 
     const normForm = React.useMemo(() => normalizeFormForAction(action as any, debouncedForm), [action, debouncedForm])
@@ -102,7 +111,7 @@ export default function ActionRunner({actionId}: { actionId: string }) {
         setStage('executing')
         const res = await fetch(host + action!.submit?.path, {
             method: action!.submit?.method,
-            headers:  action!.submit?.headers ?? {'Content-Type': 'application/json'},
+            headers: action!.submit?.headers ?? {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
         }).then((r) => r.json()).catch(() => ({hash: '0xDEMO'}))
         setTxRes(res)
@@ -128,12 +137,29 @@ export default function ActionRunner({actionId}: { actionId: string }) {
                 {isLoading && <div>Loading…</div>}
                 {!isLoading && !isReady && <div>No action "{actionId}" found in manifest</div>}
 
-                {!isLoading && isReady  && (
+                {!isLoading && isReady && (
                     <>
                         {stage === 'form' && (
                             <div className="space-y-4">
                                 <FormRenderer fields={fields} value={form} onChange={onFormChange} ctx={templatingCtx}/>
 
+                                {/* Si NO usas aside, mostramos los detalles bajo el form */}
+                                {!action?.form?.layout?.aside?.show && details.length > 0 && (
+                                    <div className="flex-col h-full p-4 rounded-lg bg-bg-primary items-center">
+                                        <h4 className="text-canopy-50">Details</h4>
+                                        <div className="mt-3 space-y-2">
+                                            {details.map((d, i) => (
+                                                <div key={i} className="flex text-md justify-between">
+                                                    <span className="text-neutral-400 font-light">{d.label}:</span>
+                                                    <span
+                                                        className="font-normal text-canopy-50">{String(d.value ?? '—')}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Tu bloque existente de Estimated fee */}
                                 <div className="flex-col h-full p-4 rounded-lg bg-bg-primary items-center">
                                     <h4 className={'text-canopy-50'}>Network Fee</h4>
                                     <div className="flex text-md  mt-3 justify-between">
@@ -141,10 +167,9 @@ export default function ActionRunner({actionId}: { actionId: string }) {
                                             Estimated fee:
                                         </span>
                                         {feesResolved
-                                            ?
-                                         <span className={'font-normal text-canopy-50'}>
-                                                {microToDisplay(Number(feesResolved.amount), chain?.denom?.decimals ?? 6)} {chain?.denom.symbol}
-                                        </span>
+                                            ? (
+                                                <span className={'font-normal text-canopy-50'}>{microToDisplay(Number(feesResolved.amount), chain?.denom?.decimals ?? 6)} {chain?.denom.symbol}</span>
+                                            )
                                             : '…'}
                                     </div>
                                 </div>
@@ -153,6 +178,26 @@ export default function ActionRunner({actionId}: { actionId: string }) {
                                 </button>
                             </div>
                         )}
+
+                        {/*/!* Columna lateral: detalles si aside.show === true *!/*/}
+                        {/*{action?.form?.layout?.aside?.show && (*/}
+                        {/*    <div className="col-span-4 space-y-4">*/}
+                        {/*        {details.length > 0 && (*/}
+                        {/*            <div className="flex-col h-full p-4 rounded-lg bg-bg-primary">*/}
+                        {/*                <h4 className="text-canopy-50">Details</h4>*/}
+                        {/*                <div className="mt-3 space-y-2">*/}
+                        {/*                    {details.map((d, i) => (*/}
+                        {/*                        <div key={i} className="flex text-md justify-between">*/}
+                        {/*                            <span className="text-neutral-400 font-light">{d.label}:</span>*/}
+                        {/*                            <span className="font-normal text-canopy-50">{String(d.value ?? '—')}</span>*/}
+                        {/*                        </div>*/}
+                        {/*                    ))}*/}
+                        {/*                </div>*/}
+                        {/*            </div>*/}
+                        {/*        )}*/}
+                        {/*    </div>*/}
+                        {/*)}*/}
+
 
 
                         <UnlockModal address={form.address || ''} ttlSec={ttlSec} open={unlockOpen}

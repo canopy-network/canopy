@@ -1,17 +1,17 @@
 import React from 'react'
 import type { Field, FieldOp } from '@/manifest/types'
-import { normalizeEvmAddress } from '@/core/address'
 import { cx } from '@/ui/cx'
 import { validateField } from './validators'
 import { template } from '@/core/templater'
 import { useSession } from '@/state/session'
-import {useFieldDs} from "@/actions/useFieldsDs";
+import {FieldControl} from "@/actions/FieldControl";
+import { motion } from "framer-motion"
 
 const looksLikeJson = (s: any) => typeof s === 'string' && /^\s*[\[{]/.test(s)
 const jsonMaybe = (s: any) => { try { return JSON.parse(s) } catch { return s } }
 
 const Grid: React.FC<{ cols: number; children: React.ReactNode }> = ({ cols, children }) => (
-    <div className={cx('grid gap-4', `grid-cols-${cols}`)}>{children}</div>
+    <motion.div className={cx('grid gap-4', `grid-cols-${cols}`)}>{children}</motion.div>
 )
 
 type Props = {
@@ -138,174 +138,6 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
         [fieldsKeyed, tabs]
     )
 
-
-
-    const renderControl = React.useCallback(
-        (f: any) => {
-            const common =
-                'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 rounded-md focus:outline-none'
-
-            const border = errors[f.name] ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
-            const help = errors[f.name] || resolveTemplate(f.help)
-            const v = value[f.name] ?? ''
-
-            const dsField = useFieldDs(f, templateContext)
-            const dsValue = dsField?.data
-
-            React.useEffect(() => {
-                if (f.ds && dsValue !== undefined) {
-                    const dsKey = Object.keys(f.ds)[0]
-                    setLocalDs(prev => {
-                        if (JSON.stringify(prev?.[dsKey]) === JSON.stringify(dsValue)) return prev
-                        return { ...prev, [dsKey]: dsValue }
-                    })
-                }
-            }, [dsValue, f.ds])
-
-            const wrap = (child: React.ReactNode) => (
-                <div key={f.__key} className={cx(`col-span-${f.colSpan ?? 12}`)}>
-                    <label className="block">
-                        {resolveTemplate(f.label) && <div className="text-sm mb-1 text-text-muted ">{resolveTemplate(f.label)}</div>}
-                        <div className="flex items-stretch gap-1">
-                            {resolveTemplate(f.prefix) && (
-                                <span className="px-2 py-2 bg-canopy-400 rounded">{resolveTemplate(f.prefix)}</span>
-                            )}
-
-                            {/* campo principal */}
-                            {child}
-
-                            {resolveTemplate(f.suffix) && (
-                                <span className="px-2 py-2 bg-canopy-600 text-canopy-50 font-semibold rounded">
-                  {resolveTemplate(f.suffix)}
-                </span>
-                            )}
-
-                            {/* features (Copy/Max/Paste) */}
-                            {f.features?.length ? (
-                                <FieldFeatures
-                                    fieldId={f.name}
-                                    features={f.features}
-                                    ctx={templateContext}
-                                    setVal={setVal}
-                                />
-                            ) : null}
-                        </div>
-
-                        {help && (
-                            <div
-                                className={cx('text-xs mt-1', errors[f.name] ? 'text-red-400' : 'text-text-muted')}
-                            >
-                                {help}
-                            </div>
-                        )}
-                    </label>
-                </div>
-            )
-
-            /** TEXT & TEXTAREA */
-            if (f.type === 'text' || f.type === 'textarea') {
-                const Comp: any = f.type === 'text' ? 'input' : 'textarea'
-                const resolved = resolveTemplate(f.value)
-                const resolvedValue = resolveTemplate(f.value)
-                const val = v === '' && resolvedValue != null
-                    ? resolvedValue
-                    : v || (dsValue?.amount ?? dsValue?.value ?? '')
-                return wrap(
-                    <Comp
-                        className={cx(common, border)}
-                        placeholder={resolveTemplate(f.placeholder)}
-                        value={val}
-                        readOnly={f.readOnly}
-                        disabled={f.disabled}
-                        onChange={(e: any) => setVal(f, e.target.value)}
-                    />
-                )
-            }
-
-            /** SELECT (una sola implementación) */
-            if (f.type === 'select') {
-                // f.options puede ser:
-                // - array [{label,value}], o
-                // - string (plantilla) que resuelve a array o JSON
-                const raw = typeof f.options === 'string' ? resolveTemplate(f.options) : f.options
-                const src = Array.isArray(raw) ? raw : looksLikeJson(raw) ? jsonMaybe(raw) : []
-                const baseOpts = Array.isArray(src) ? src : []
-                const opts = baseOpts.map((o: any, i: number) => {
-                    const label =
-                        f.optionLabel ? String(o?.[f.optionLabel] ?? '') : (typeof o?.label === 'string' ? resolveTemplate(o.label) : o?.label)
-                    const value =
-                        f.optionValue ? o?.[f.optionValue] : (typeof o?.value === 'string' ? resolveTemplate(o.value) : o?.value)
-                    return { ...o, label, value, __k: `${f.name}-${String(value ?? i)}` }
-                })
-                // default value por plantilla
-                const resolved = resolveTemplate(f.value)
-                const val = v === '' && resolved != null ? resolved : v
-                return wrap(
-                    <select
-                        className={cx(common, border)}
-                        value={val}
-                        readOnly={f.readOnly as any}
-                        disabled={f.disabled}
-                        onChange={(e) => setVal(f, e.target.value)}
-                    >
-                        <option value="" disabled>
-                            {resolveTemplate(f.placeholder) ?? 'Choose...'}
-                        </option>
-                        {opts.map((o: any) => (
-                            <option key={o.__k} value={o.value}>
-                                {o.label}
-                            </option>
-                        ))}
-                    </select>
-                )
-            }
-
-            /** NUMBER / AMOUNT */
-            if (f.type === 'number' || f.type === 'amount') {
-                const resolved = resolveTemplate(f.value)
-                const val = v === '' && resolved != null
-                    ? resolved
-                    : v || (dsValue?.amount ?? dsValue?.value ?? '')
-                return wrap(
-                    <input
-                        type="number"
-                        step="any"
-                        className={cx(common, border)}
-                        placeholder={resolveTemplate(f.placeholder)}
-                        value={val ?? ''}
-                        readOnly={f.readOnly}
-                        disabled={f.disabled}
-                        onChange={(e) => setVal(f, e.currentTarget.value)}
-                        min={f.min}
-                        max={f.max}
-                    />
-                )
-            }
-
-            /** ADDRESS (evm u otros) */
-            if (f.type === 'address') {
-                const fmt = f.format ?? 'evm'
-                const { ok } =
-                    fmt === 'evm' ? normalizeEvmAddress(String(v || '')) : { ok: true }
-                const resolved = resolveTemplate(f.value)
-                const val = v === '' && resolved != null ? resolved : v
-                return wrap(
-                    <input
-                        className={cx(common, ok || !val ? border : 'border-red-600')}
-                        placeholder={resolveTemplate(f.placeholder) ?? (fmt === 'evm' ? '0xabc... (or without 0x)' : 'address')}
-                        value={val}
-                        readOnly={f.readOnly}
-                        disabled={f.disabled}
-                        onChange={(e) => setVal(f, e.target.value)}
-                    />
-                )
-            }
-
-            return <div className="col-span-12">Unsupported field: {f.type}</div>
-        },
-        [errors, resolveTemplate, value, setVal, templateContext]
-    )
-
     return (
         <>
             {tabs.length > 0 && (
@@ -327,7 +159,17 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
                 </div>
             )}
             <Grid cols={gridCols}>
-                {(tabs.length ? fieldsInTab(activeTab) : fieldsKeyed).map((f: any) => renderControl(f))}
+                {(tabs.length ? fieldsInTab(activeTab) : fieldsKeyed).map((f: any) => (
+                    <FieldControl
+                        key={f.__key}
+                        f={f}
+                        value={value}
+                        errors={errors}
+                        templateContext={templateContext}
+                        setVal={setVal}
+                        setLocalDs={setLocalDs}
+                    />
+                ))}
             </Grid>
         </>
     )

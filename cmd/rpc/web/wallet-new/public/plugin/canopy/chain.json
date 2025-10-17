@@ -11,6 +11,7 @@
     "base": "http://localhost:50002",
     "admin": "http://localhost:50003"
   },
+  "explorer": "http://localhost:50001/",
   "address": {
     "format": "evm"
   },
@@ -72,6 +73,17 @@
 
       "received": {
         "source": { "base": "rpc", "path": "/v1/query/txs-by-rec", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      },
+      "failed": {
+        "source": { "base": "rpc", "path": "/v1/query/failed-txs", "method": "POST" },
         "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
         "selector": "",
         "page": {

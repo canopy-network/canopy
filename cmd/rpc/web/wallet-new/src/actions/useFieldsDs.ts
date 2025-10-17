@@ -1,28 +1,44 @@
 import React from "react";
-import {Field} from "@/manifest/types";
-import {useDS} from "@/core/useDs";
+import { Field } from "@/manifest/types";
+import { useDS } from "@/core/useDs";
 
 export function useFieldDs(field: Field, ctx: any) {
-    const dsKey = field?.ds ? Object.keys(field.ds)[0] : ''
+    const dsKey = React.useMemo(() => {
+        const k = field?.ds ? Object.keys(field.ds)[0] : null;
+        return typeof k === "string" ? k : null;
+    }, [field]);
 
-    if(!dsKey) return {data: null, isLoading: false, error: null, refetch: () => {}}
+    const enabled = !!dsKey;
 
-
-    const dsParams = field?.ds?.[dsKey] ?? []
-    const enabled = Boolean(dsKey)
+    const dsParams = React.useMemo(() => {
+        if (!enabled) return [];
+        // @ts-ignore: dsKey no es null cuando enabled = true
+        return field.ds[dsKey] ?? [];
+    }, [enabled, field, dsKey]);
 
     const renderedParams = React.useMemo(() => {
-        if (!enabled) return null
-        return JSON.parse(
-            JSON.stringify(dsParams).replace(/{{(.*?)}}/g, (_, k) => {
-                const path = k.trim().split('.')
-                return path.reduce((acc: { [x: string]: any; }, cur: string | number) => acc?.[cur], ctx)
-            })
-        )
-    }, [dsParams, ctx, enabled])
+        if (!enabled) return {};
+        try {
+            const json = JSON.stringify(dsParams).replace(/{{(.*?)}}/g, (_, k) => {
+                const path = k.trim().split(".");
+                const v = path.reduce((acc: any, cur: string) => acc?.[cur], ctx);
+                return v ?? ""; // evita 'undefined'
+            });
+            return JSON.parse(json);
+        } catch {
+            return {};
+        }
+    }, [dsParams, ctx, enabled]);
 
+    const { data, isLoading, error, refetch } = useDS(dsKey ?? "__disabled__", renderedParams, {
+        refetchIntervalMs: 3000,
+        enabled,
+    });
 
-    const { data, isLoading, error, refetch } = useDS(dsKey, renderedParams, {refetchIntervalMs: 3000, enabled })
-
-    return { data, isLoading, error, refetch }
+    return {
+        data: enabled ? data : null,
+        isLoading: enabled ? isLoading : false,
+        error: enabled ? error : null,
+        refetch,
+    };
 }

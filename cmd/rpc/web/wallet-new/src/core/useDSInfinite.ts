@@ -1,4 +1,3 @@
-// src/configfirst/useDSInfinite.ts
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import {

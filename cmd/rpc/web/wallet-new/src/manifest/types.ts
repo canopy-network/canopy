@@ -4,7 +4,13 @@
 
 export type Manifest = {
     version: string;
-    ui?: { quickActions?: { max?: number } };
+    ui?: {
+        quickActions?: { max?: number }
+        tx:{
+            typeMap: Record<string, string>;
+            typeIconMap: Record<string, string>;
+        }
+    };
     actions: Action[];
 };
 

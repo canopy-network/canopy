@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, {createContext, useCallback, useContext, useEffect, useMemo, useState} from 'react'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import {useDS} from "@/core/useDs";
 
@@ -44,28 +44,22 @@ const STORAGE_KEY = 'activeAccountId'
 const REFRESH_INTERVAL = 30_000
 
 export function AccountsProvider({ children }: { children: React.ReactNode }) {
-
     const { data: ks, isLoading, isFetching, error, refetch } =
-        useDS<KeystoreResponse>('keystore', {}, {
-            refetchIntervalMs: REFRESH_INTERVAL,
-        })
+        useDS<KeystoreResponse>('keystore', {}, { refetchIntervalMs: REFRESH_INTERVAL })
 
     const accounts: Account[] = useMemo(() => {
         const map = ks?.addressMap ?? {}
-        return Object.entries(map).map(([address, entry ]) => ({
+        return Object.entries(map).map(([address, entry]) => ({
             id: address,
             address,
-            // @ts-ignore
-            nickname: entry.keyNickname || `Account ${address.slice(0, 8)}...`,
-            // @ts-ignore
-            publicKey: entry.publicKey,
+            nickname: (entry as any).keyNickname || `Account ${address.slice(0, 8)}...`,
+            publicKey: (entry as any).publicKey,
         }))
     }, [ks])
 
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [isReady, setIsReady] = useState(false)
 
-    // Hidrata desde localStorage + sync entre pestañas
     useEffect(() => {
         try {
             const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
@@ -80,7 +74,6 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('storage', onStorage)
     }, [])
 
-    // Si no hay seleccionada pero hay cuentas, usa la primera
     useEffect(() => {
         if (!isReady) return
         if (!selectedId && accounts.length > 0) {
@@ -90,33 +83,39 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
         }
     }, [isReady, selectedId, accounts])
 
-    // Calculados
     const selectedAccount = useMemo(
         () => accounts.find(a => a.id === selectedId) ?? null,
         [accounts, selectedId]
     )
-    const selectedAddress = selectedAccount?.address
 
-    // API
-    const switchAccount = (id: string | null) => {
+    const selectedAddress = useMemo(() => selectedAccount?.address, [selectedAccount])
+
+    const stableError = useMemo(
+        () => (error ? ((error as any).message ?? 'Error') : null),
+        [error]
+    )
+
+    const switchAccount = useCallback((id: string | null) => {
         setSelectedId(id)
         if (typeof window !== 'undefined') {
             if (id) localStorage.setItem(STORAGE_KEY, id)
             else localStorage.removeItem(STORAGE_KEY)
         }
-    }
+    }, [])
 
-    const value: AccountsContextValue = {
+    const loading = isLoading || isFetching
+
+    const value: AccountsContextValue = useMemo(() => ({
         accounts,
         selectedId,
         selectedAccount,
         selectedAddress,
-        loading: isLoading || isFetching,
-        error: error ? ((error as any).message ?? 'Error') : null,
+        loading,
+        error: stableError,
         isReady,
         switchAccount,
         refetch,
-    }
+    }), [accounts, selectedId, selectedAccount, selectedAddress, loading, stableError, isReady, switchAccount, refetch])
 
     return (
         <AccountsContext.Provider value={value}>

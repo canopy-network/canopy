@@ -60,7 +60,6 @@ export function buildPayloadFromAction(action: Action, ctx: any) {
         if (typeof val === 'object' && val?.value !== undefined) {
             let resolved = template(val?.value, ctx)
 
-            console.log(resolved)
 
 
             if (val?.coerce) {
