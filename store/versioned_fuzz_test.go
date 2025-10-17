@@ -76,12 +76,12 @@ func FuzzTestVersionedStore(f *testing.F) {
 
 		// Final comprehensive read test - verify all keys at latest version
 		finalVersion := uint64(1000)
-		verifyFinalState(t, badgerDB, pebbleDB, finalVersion, keyPool)
+		verifyFinalState(t, badgerDB, pebbleDB.NewSnapshot(), finalVersion, keyPool)
 	})
 }
 
 // verifyFinalState performs a comprehensive verification of the final database state
-func verifyFinalState(t *testing.T, badgerDB *badger.DB, pebbleDB *pebble.DB, version uint64, keys []string) {
+func verifyFinalState(t *testing.T, badgerDB *badger.DB, pebbleDB pebble.Reader, version uint64, keys []string) {
 	// Create read-only transactions at final version
 	badgerReadTxn := badgerDB.NewTransactionAt(version, false)
 	defer badgerReadTxn.Discard()
@@ -175,7 +175,8 @@ func testVersionedStoreOperations(t *testing.T, badgerDB *badger.DB, pebbleDB *p
 	pebbleBatch := pebbleDB.NewBatch()
 	defer pebbleBatch.Close()
 
-	pebbleStore, err := NewVersionedStore(pebbleDB, pebbleBatch, version)
+	pebbleSnapshot := pebbleDB.NewSnapshot()
+	pebbleStore, err := NewVersionedStore(pebbleSnapshot, pebbleBatch, version)
 	require.NoError(t, err)
 	defer pebbleStore.Close()
 
@@ -201,12 +202,12 @@ func testVersionedStoreOperations(t *testing.T, badgerDB *badger.DB, pebbleDB *p
 	if badgerStore.Flush() == nil && pebbleStore.Commit() == nil {
 		badgerTxn.Flush()
 		// Read back and compare
-		compareStoreReads(t, badgerDB, pebbleDB, version, key, shouldDelete, value)
+		compareStoreReads(t, badgerDB, pebbleDB.NewSnapshot(), version, key, shouldDelete, value)
 	}
 }
 
 // compareStoreReads compares read operations between BadgerDB and PebbleDB
-func compareStoreReads(t *testing.T, badgerDB *badger.DB, pebbleDB *pebble.DB, version uint64, key []byte, shouldDelete bool, expectedValue []byte) {
+func compareStoreReads(t *testing.T, badgerDB *badger.DB, pebbleDB pebble.Reader, version uint64, key []byte, shouldDelete bool, expectedValue []byte) {
 	// Create read-only transactions
 	badgerReadTxn := badgerDB.NewTransactionAt(version, false)
 	defer badgerReadTxn.Discard()
@@ -376,7 +377,7 @@ func TestVersionedStoreMultiVersion(t *testing.T) {
 
 		// PebbleDB
 		pebbleBatch := pebbleDB.NewBatch()
-		pebbleStore, err := NewVersionedStore(pebbleDB, pebbleBatch, version)
+		pebbleStore, err := NewVersionedStore(pebbleDB.NewSnapshot(), pebbleBatch, version)
 		require.NoError(t, err)
 		require.NoError(t, pebbleStore.Set(key, value))
 		require.NoError(t, pebbleStore.Commit())
@@ -385,7 +386,7 @@ func TestVersionedStoreMultiVersion(t *testing.T) {
 
 	// Read from each version
 	for version := uint64(1); version <= 5; version++ {
-		expectedValue := []byte(fmt.Sprintf("value_at_version_%d", version))
+		expectedValue := fmt.Appendf(nil, "value_at_version_%d", version)
 
 		// BadgerDB read
 		badgerReadTxn := badgerDB.NewTransactionAt(version, false)
@@ -395,7 +396,7 @@ func TestVersionedStoreMultiVersion(t *testing.T) {
 		badgerReader.Close()
 
 		// PebbleDB read
-		pebbleReader, err := NewVersionedStore(pebbleDB, nil, version)
+		pebbleReader, err := NewVersionedStore(pebbleDB.NewSnapshot(), nil, version)
 		require.NoError(t, err)
 		val2, err := pebbleReader.Get(key)
 		require.NoError(t, err)

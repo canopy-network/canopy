@@ -24,14 +24,14 @@ const (
 
 // VersionedStore uses inverted version encoding and reverse seeks for maximum performance
 type VersionedStore struct {
-	db        *pebble.DB
+	db        pebble.Reader
 	batch     *pebble.Batch
 	version   uint64
 	keyBuffer []byte
 }
 
 // NewVersionedStore creates a new  versioned store
-func NewVersionedStore(db *pebble.DB, batch *pebble.Batch, version uint64) (*VersionedStore, lib.ErrorI) {
+func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) (*VersionedStore, lib.ErrorI) {
 	return &VersionedStore{db: db, batch: batch, version: version, keyBuffer: make([]byte, 0, 256)}, nil
 }
 
@@ -68,7 +68,7 @@ func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib
 		seekKey = vs.makeVersionedKey(key, vs.version+1)
 	}
 	// create a new iterator
-	i, err := vs.newVersionedIterator(key, true)
+	i, err := vs.newVersionedIterator(key, true, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -101,20 +101,36 @@ func (vs *VersionedStore) Commit() (e lib.ErrorI) {
 }
 
 // Close closes the store and releases resources
-func (vs *VersionedStore) Close() lib.ErrorI { return nil }
+func (vs *VersionedStore) Close() lib.ErrorI {
+	err := vs.db.Close()
+	if err != nil {
+		return ErrCloseDB(err)
+	}
+	return nil
+}
+
+// NewIterator is a wrapper around the underlying iterators to conform to the TxnReaderI interface
+func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
+	return vs.newVersionedIterator(prefix, reverse, allVersions)
+}
 
 // Iterator returns an iterator for all keys with the given prefix
 func (vs *VersionedStore) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, false)
+	return vs.newVersionedIterator(prefix, false, false)
 }
 
 // RevIterator returns a reverse iterator for all keys with the given prefix
 func (vs *VersionedStore) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, true)
+	return vs.newVersionedIterator(prefix, true, false)
+}
+
+// ArchiveIterator returns an iterator for all keys with the given prefix
+func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
+	return vs.newVersionedIterator(prefix, false, true)
 }
 
 // newVersionedIterator creates a new  versioned iterator
-func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool) (*VersionedIterator, lib.ErrorI) {
+func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allVersions bool) (*VersionedIterator, lib.ErrorI) {
 	var (
 		err  error
 		iter *pebble.Iterator
@@ -129,10 +145,11 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool) (*Ve
 		return nil, ErrStoreGet(fmt.Errorf("failed to create iterator: %v", err))
 	}
 	return &VersionedIterator{
-		iter:    iter,
-		store:   vs,
-		prefix:  prefix,
-		reverse: reverse,
+		iter:        iter,
+		store:       vs,
+		prefix:      prefix,
+		reverse:     reverse,
+		allVersions: allVersions,
 	}, nil
 }
 
@@ -147,6 +164,7 @@ type VersionedIterator struct {
 	isValid     bool
 	initialized bool
 	lastUserKey []byte
+	allVersions bool
 }
 
 // Valid returns true if the iterator is positioned at a valid entry
@@ -218,7 +236,8 @@ func (vi *VersionedIterator) advanceToNextKey() {
 			continue
 		}
 		// skip over the 'previous userKey' to go to the next 'userKey'
-		if version > vi.store.version || (vi.lastUserKey != nil && bytes.Equal(userKey, vi.lastUserKey)) {
+		if !vi.allVersions && version > vi.store.version ||
+			(vi.lastUserKey != nil && bytes.Equal(userKey, vi.lastUserKey)) {
 			continue
 		}
 		// set as 'previous userKey'
