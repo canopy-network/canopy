@@ -42,10 +42,10 @@ export function QuickActionsCard({actions, onRunAction, maxNumberOfItems }:{
                         transition={{ duration: 0.25 }}
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.98 }}
-                        aria-label={a.label ?? a.id}
+                        aria-label={a.title ?? a.id}
                     >
                         <LucideIcon name={a.icon || a.id} className="w-5 h-5 text-primary group-hover:text-white" />
-                        <span className="text-sm font-medium text-white">{a.label ?? a.id}</span>
+                        <span className="text-sm font-medium text-white">{a.title ?? a.id}</span>
                     </motion.button>
                 ))}
                 {sortedActions.length === 0 && (

@@ -18,17 +18,15 @@
       "id": "send",
       "title": "Send",
       "icon": "Send",
-      "slots": {
-        "modal": {
-          "className": "w-[40rem]"
-        }
-      },
       "relatedActions": [
         "receive"
       ],
       "ui": {
-        "variant": "modal",
-        "icon": "Send"
+        "slots": {
+          "modal": {
+            "className": "w-[40rem]"
+          }
+        }
       },
       "tags": [
         "quick"
@@ -49,6 +47,13 @@
             "type": "text",
             "label": "To Address",
             "required": true,
+            "length.min": 1,
+            "validation": {
+              "messages": {
+                "required": "Destination address is required",
+                "length.min": "Invalid destination address"
+              }
+            },
             "features": [
               {
                 "id": "pasteBtn",
@@ -76,7 +81,9 @@
             "name": "amount",
             "type": "amount",
             "label": "Amount",
+            "required": true,
             "min": 0,
+            "max": "{{ds.account.amount}}",
             "features": [
               {
                 "id": "maxBtn",
@@ -86,7 +93,53 @@
               }
             ]
           }
-        ]
+        ],
+        "info": {
+          "items": [
+            {
+              "label": "Network Fee",
+              "value": "{{formatToCoin<{{fees.raw.sendFee}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Estimation time",
+              "value": "≈ 20",
+              "icon": "Timer"
+            }
+          ]
+        },
+        "confirmation": {
+          "title": "Confirm Transaction",
+          "icon": "Send",
+          "summary": [
+            {
+              "label": "From",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            },
+            {
+              "label": "To",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btns": {
+            "submit": {
+              "label": "Send Transaction",
+              "icon": "Send"
+            },
+            "cancel": {
+              "label": "Cancel",
+              "icon": "Close"
+            }
+          }
+        }
       },
       "payload": {
         "address": {
@@ -142,43 +195,23 @@
         "base": "admin",
         "path": "/v1/admin/tx-send",
         "method": "POST"
-      },
-      "confirm": {
-        "summary": [
-          {
-            "label": "From",
-            "value": "upper<{{account.address}}>"
-          },
-          {
-            "label": "To",
-            "value": "{{form.to}}"
-          },
-          {
-            "label": "Amount",
-            "value": "{{form.amount}}"
-          },
-          {
-            "label": "Fee",
-            "value": "{{fees.amount}}"
-          }
-        ]
       }
     },
     {
       "id": "receive",
       "title": "Receive",
       "icon": "Scan",
-      "slots": {
-        "modal": {
-          "className": "w-[40rem]"
-        }
-      },
       "relatedActions": [
         "send"
       ],
       "ui": {
         "variant": "modal",
-        "icon": "Send"
+        "icon": "Send",
+        "slots": {
+          "modal": {
+            "className": "w-[20rem]"
+          }
+        }
       },
       "tags": [
         "quick"
@@ -221,7 +254,20 @@
               }
             }
           }
-        ]
+        ],
+        "info": {
+          "title": "Details",
+          "items": [
+            {
+              "label": "Only send {{chain.denom.symbol}} to this address.",
+              "icon": "Coins"
+            },
+            {
+              "label": "Allow 20 seconds for confirmation.",
+              "icon": "Timer"
+            }
+          ]
+        }
       }
     }
   ]

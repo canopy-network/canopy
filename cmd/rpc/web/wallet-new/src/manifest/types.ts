@@ -6,7 +6,7 @@ export type Manifest = {
     version: string;
     ui?: {
         quickActions?: { max?: number }
-        tx:{
+        tx: {
             typeMap: Record<string, string>;
             typeIconMap: Record<string, string>;
         }
@@ -24,7 +24,6 @@ export type PayloadValue =
 export type Action = {
     id: string;
     title?: string;      // opcional si usas label
-    label?: string;
     icon?: string;
     kind: 'tx' | 'view' | 'utility';
     tags?: string[];
@@ -34,19 +33,23 @@ export type Action = {
     requiresFeature?: string;
     hidden?: boolean;
 
-    // Apariencia básica (modal/página)
-    ui?: { variant?: 'modal' | 'page'; icon?: string };
+    ui?: { variant?: 'modal' | 'page'; icon?: string, slots?: { modal?: { className?: string } }; };
 
-    // Slots simples (p.ej. estilos del modal)
-    slots?: { modal?: { className?: string } };
-
-    // Form dinámico
+    // dynamic form
     form?: {
         fields: Field[];
         layout?: {
             grid?: { cols?: number; gap?: number };
             aside?: { show?: boolean; width?: number };
         };
+        info?: { title: string, items: { label: string, value: string, icons: string }[] };
+        summary?: { title: string, items: { label: string, value: string, icons: string }[] };
+        confirmation:{
+            btn: {
+                icon: string;
+                label: string;
+            }
+        }
     };
     payload?: Record<string, PayloadValue>
 

@@ -5,11 +5,14 @@ type Props = { name?: string; className?: string };
 type Importer = () => Promise<{ default: React.ComponentType<any> }>;
 const LIB = dynamicIconImports as Record<string, Importer>;
 
-const normalize = (n?: string) =>
-    (!n ? 'HelpCircle' : n)
-        .replace(/[-_ ]+/g, ' ')
+const normalize = (n?: string) => {
+    if (!n) return 'help-circle';
+    return n
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2') // separa mayúsculas con "-"
+        .replace(/[_\s]+/g, '-') // convierte espacios o guiones bajos en "-"
         .toLowerCase()
-        .replace(/\s+/g, '').trim(); // "qr-code" -> "QrCode", "send" -> "Send"
+        .trim();
+};
 
 const FALLBACKS = ['HelpCircle', 'Zap', 'Circle', 'Square']; // keys que existen en casi todas las versiones
 

@@ -21,6 +21,8 @@ type Props = {
     gridCols?: number
     /** ctx opcional extra: { fees, ds, ... }  */
     ctx?: Record<string, any>
+    onErrorsChange?: (errors: Record<string,string>, hasErrors: boolean) => void   // 👈 NUEVO
+
 }
 
 const FieldFeatures: React.FC<{
@@ -76,7 +78,7 @@ const FieldFeatures: React.FC<{
     )
 }
 
-export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx }: Props) {
+export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx, onErrorsChange }: Props) {
     const [errors, setErrors] = React.useState<Record<string, string>>({})
     const [localDs, setLocalDs] = React.useState<Record<string, any>>({})
     const { chain, account } = (window as any).__configCtx ?? {}
@@ -118,7 +120,7 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
                     ? (fieldsKeyed.find(x => x.name === fOrName) as Field | undefined)
                     : (fOrName as Field)
 
-                const e = await validateField((f as any) ?? {}, v, { chain })
+                const e = await validateField((f as any) ?? {}, v, templateContext)
                 setErrors((prev) =>
                     prev[name] === (e?.message ?? '') ? prev : { ...prev, [name]: e?.message ?? '' }
                 )
@@ -126,6 +128,16 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
         },
         [onChange, chain, fieldsKeyed]
     )
+
+    const hasActiveErrors = React.useMemo(() => {
+        const anyMsg = Object.values(errors).some((m) => !!m)
+        const requiredMissing = fields.some((f) => f.required && (value[f.name] == null || value[f.name] === ''))
+        return anyMsg || requiredMissing
+    }, [errors, fields, value])
+
+    React.useEffect(() => {
+        onErrorsChange?.(errors, hasActiveErrors)
+    }, [errors, hasActiveErrors, onErrorsChange])
 
     const tabs = React.useMemo(
         () =>

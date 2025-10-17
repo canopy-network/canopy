@@ -23,7 +23,7 @@ export const ActionsModal: React.FC<ActionModalProps> = (
 
 
     const modalClassName =  useMemo(() => {
-        return actions?.find(a => a.id === selectedTab?.value)?.slots?.modal?.className;
+        return actions?.find(a => a.id === selectedTab?.value)?.ui?.slots?.modal?.className;
     }, [selectedTab, actions])
 
 
@@ -65,7 +65,7 @@ export const ActionsModal: React.FC<ActionModalProps> = (
                             ease: "easeInOut",
                             width: {duration: 0.3, ease: "easeInOut"}
                         }}
-                        className={cx(`relative bg-bg-secondary rounded-xl border border-bg-accent p-6`, modalClassName)}
+                        className={cx(`relative bg-bg-secondary rounded-xl border border-bg-accent p-6 w-[26dvw] `, modalClassName)}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <XIcon onClick={onClose} className="absolute top-4 right-4 text-text-muted cursor-pointer hover:text-white" />
@@ -86,11 +86,6 @@ export const ActionsModal: React.FC<ActionModalProps> = (
                             <ActionRunner actionId={selectedTab.value} />
                             </motion.div>
                         )}
-
-
-
-
-
                     </motion.div>
                 </motion.div>
             )}
