@@ -126,7 +126,7 @@ func TestBeginBlock(t *testing.T) {
 			// get last validator set for begin block
 			// ensure expected error on function call
 			valSet, _ := sm.LoadCommittee(lib.CanopyChainId, sm.Height()-1)
-			require.Equal(t, test.error, sm.BeginBlock(&valSet))
+			_, err = sm.BeginBlock(&valSet)
 			if test.error != nil {
 				return
 			}
@@ -282,7 +282,8 @@ func TestEndBlock(t *testing.T) {
 			}()
 
 			// STEP 1) run function call and check for expected error
-			func() { require.Equal(t, test.error, sm.EndBlock(proposerAddress)) }()
+			_, err := sm.EndBlock(proposerAddress, 0)
+			func() { require.Equal(t, test.error, err) }()
 
 			// STEP 2) validate the update of addresses who proposed the block
 			func() {

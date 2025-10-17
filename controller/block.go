@@ -203,7 +203,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		return
 	}
 	// play the block against the state machine to generate a block result
-	blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], false)
+	blockResult, err = c.ApplyAndValidateBlock(block, rcBuildHeight, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], false)
 	if err != nil {
 		// exit with error
 		return
@@ -244,7 +244,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
 		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
+		blockResult, err = c.ApplyAndValidateBlock(block, qc.Header.RootHeight, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
 		if err != nil {
 			// exit with error
 			return
@@ -283,7 +283,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.RCManager, c.log)
 	// set the reference to lastCertificate on the new FSM
 	c.FSM.LastValidatorSet = c.LastValidatorSet
 	if err != nil {
@@ -354,7 +354,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
 		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
+		blockResult, err = c.ApplyAndValidateBlock(block, qc.Header.RootHeight, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
 		if err != nil {
 			// exit with error
 			return
@@ -403,7 +403,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// log to signal finishing the commit
 		c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 		// set up the finite state machine for the next height
-		c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+		c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.RCManager, c.log)
 		if err != nil {
 			// exit with error
 			return err
@@ -439,7 +439,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	})
 	eg.Go(func() error {
 		// set up the mempool for the next height with the temporary FSM
-		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Metrics, c.log)
+		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Metrics, c.RCManager, c.log)
 		if err != nil {
 			// exit with error
 			return err
@@ -470,7 +470,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 // INTERNAL HELPERS BELOW
 
 // ApplyAndValidateBlock() plays the block against the state machine which returns a result that is compared against the candidate block header
-func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *lib.ValidatorSet, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
+func (c *Controller) ApplyAndValidateBlock(block *lib.Block, rcBuildHeight uint64, lastValidatorSet *lib.ValidatorSet, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
 	// define convenience variables for the block header, hash, and height
 	candidate, candidateHash, candidateHeight := block.BlockHeader, lib.BytesToString(block.BlockHeader.Hash), block.BlockHeader.Height
 	// check the last qc in the candidate and set it in the ephemeral indexer to prepare for block application
@@ -481,14 +481,14 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *l
 	// log the start of 'apply block'
 	c.log.Debugf("Applying block %s for height %d", candidateHash[:20], candidateHeight)
 	// apply the block against the state machine
-	compare, txResults, _, failed, err := c.FSM.ApplyBlock(context.Background(), block, lastValidatorSet, false)
+	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, lastValidatorSet, rcBuildHeight, false)
 	if err != nil {
 		// exit with error
 		return
 	}
 	// if any transactions failed
-	if len(failed) != 0 {
-		for _, f := range failed {
+	if len(results.Failed) != 0 {
+		for _, f := range results.Failed {
 			c.log.Errorf("From: %s\nType:%s\nErr:%s", f.Address, f.Transaction.MessageType, f.Error.Error())
 		}
 		return nil, lib.ErrFailedTransactions()
@@ -518,7 +518,7 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *l
 	// log that the proposal is valid
 	c.log.Infof("Block %s with %d txs is valid for height %d ✅ ", candidateHash[:20], len(block.Transactions), candidateHeight)
 	// exit with the valid results
-	return &lib.BlockResult{BlockHeader: candidate, Transactions: txResults}, nil
+	return &lib.BlockResult{BlockHeader: candidate, Transactions: results.Results, Events: results.Events}, nil
 }
 
 // HandlePeerBlock() validates and handles an inbound certificate (with a block) from a remote peer

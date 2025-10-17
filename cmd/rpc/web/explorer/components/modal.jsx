@@ -23,6 +23,18 @@ function convertCardData(state, v) {
     delete value.transaction;
     return value;
   }
+  if (value.dexBatch) {
+    const successfulReceipts = value.dexBatch.receipts?.filter(amount => amount > 0).length || 0;
+    const totalReceipts = value.dexBatch.receipts?.length || 0;
+    return {
+      Committee: value.dexBatch.Committee || value.dexBatch.committee,
+      Orders: value.dexBatch.orders?.length || 0,
+      PoolSize: toCNPY(value.dexBatch.pool_size || value.dexBatch.poolSize || 0),
+      CounterPoolSize: toCNPY(value.dexBatch.counter_pool_size || value.dexBatch.counterPoolSize || 0),
+      LockedHeight: value.dexBatch.locked_height || value.dexBatch.lockedHeight || "null",
+      Receipts: `${successfulReceipts}/${totalReceipts}`,
+    };
+  }
   return value.block
     ? {
         height: value.block.blockHeader.height,
@@ -115,6 +127,26 @@ function convertTabData(state, v, tab) {
       default:
         return convertTransactions(txs);
     }
+  } else if ("dexBatch" in v) {
+    switch (tab) {
+      case 0: // Orders
+        return v.dexBatch.orders || [];
+      case 1: // Deposits
+        return v.dexBatch.deposits || [];
+      case 2: // Withdrawals
+        return v.dexBatch.withdraws || [];
+      case 3: // Pool Points
+        return v.dexBatch.poolPoints || v.dexBatch.pool_points || [];
+      case 4: // Receipts
+        return v.dexBatch.receipts?.map((amount, index) => ({
+          OrderIndex: index,
+          DistributedAmount: formatLocaleNumber(amount, 0, 6),
+          Status: amount > 0 ? "Success" : "Failed"
+        })) || [];
+      case 5: // Raw
+      default:
+        return v.dexBatch;
+    }
   }
 }
 
@@ -122,6 +154,7 @@ function convertTabData(state, v, tab) {
 function getModalTitle(state, v) {
   if ("transaction" in v) return "Transaction";
   if ("block" in v) return "Block";
+  if ("dexBatch" in v) return "Dex Batch";
   if ("validator" in v && !state.modalState.accOnly) return "Validator";
   return "Account";
 }
@@ -134,6 +167,17 @@ function getTabTitle(state, data, tab) {
   if ("block" in data) {
     return tab === 0 ? "Header" : tab === 1 ? "Transactions" : "Raw";
   }
+  if ("dexBatch" in data) {
+    switch (tab) {
+      case 0: return "Orders";
+      case 1: return "Deposits";
+      case 2: return "Withdrawals";
+      case 3: return "Pool Points";
+      case 4: return "Receipts";
+      case 5: return "Raw";
+      default: return "Raw";
+    }
+  }
   if ("validator" in data && !state.modalState.accOnly) {
     return tab === 0 ? "Validator" : tab === 1 ? "Account" : "Raw";
   }
@@ -144,6 +188,11 @@ function getTabTitle(state, data, tab) {
 export default function DetailModal({ state, setState }) {
   const data = state.modalState.data;
   const cards = convertCardData(state, data);
+  
+  // Local state for filtering and sorting
+  const [addressFilter, setAddressFilter] = React.useState('');
+  const [sortBy, setSortBy] = React.useState('none');
+  const [sortDirection, setSortDirection] = React.useState('asc');
 
   // check if the data is empty or no results
   if (isEmpty(data)) return <></>;
@@ -167,13 +216,16 @@ export default function DetailModal({ state, setState }) {
   // renderTab() renders a tab based on the state data and tab number
   function renderTab(tab) {
     if ("block" in data) {
-      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderPageTable(tab) : renderJSONViewer();
+      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderPageTable(tab) : renderJSONViewer(tab);
     }
     if ("transaction" in data) {
-      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderBasicTable(tab) : renderJSONViewer();
+      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderBasicTable(tab) : renderJSONViewer(tab);
+    }
+    if ("dexBatch" in data) {
+      return tab === 5 ? renderJSONViewer(tab) : renderDexBatchList(tab);
     }
     if ("validator" in data && !state.modalState.accOnly) {
-      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderTableButton() : renderJSONViewer();
+      return tab === 0 ? renderBasicTable(tab) : tab === 1 ? renderTableButton() : renderJSONViewer(tab);
     }
     return tab === 0 ? renderBasicTable(tab) : renderPageTable(tab);
   }
@@ -245,8 +297,133 @@ export default function DetailModal({ state, setState }) {
   }
 
   // renderJSONViewer() renders a raw json display
-  function renderJSONViewer() {
-    return <JsonViewer rootName={"result"} defaultInspectDepth={1} value={convertTabData(state, data, 2)} />;
+  function renderJSONViewer(tab) {
+    return <JsonViewer rootName={"result"} defaultInspectDepth={1} value={convertTabData(state, data, tab)} />;
+  }
+
+  // filterAndSortItems() filters and sorts items based on current filters
+  function filterAndSortItems(items, tab) {
+    if (!items || items.length === 0) return items;
+    
+    // Filter by address if filter is set
+    let filteredItems = items;
+    if (addressFilter) {
+      filteredItems = items.filter(item => {
+        // Check all fields for address-like values
+        return Object.values(item).some(value => 
+          value && value.toString().toLowerCase().includes(addressFilter.toLowerCase())
+        );
+      });
+    }
+    
+    // Sort by amount/points if sortBy is set
+    if (sortBy !== 'none') {
+      filteredItems = [...filteredItems].sort((a, b) => {
+        let aValue = 0;
+        let bValue = 0;
+        
+        // Determine sort field based on tab and sortBy selection
+        if (sortBy === 'amount') {
+          // Look for amount-related fields
+          const amountFields = ['amount', 'amountForSale', 'requestedAmount', 'points'];
+          const aField = amountFields.find(field => field in a);
+          const bField = amountFields.find(field => field in b);
+          aValue = aField ? parseFloat(a[aField]) || 0 : 0;
+          bValue = bField ? parseFloat(b[bField]) || 0 : 0;
+        }
+        
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      });
+    }
+    
+    return filteredItems;
+  }
+
+  // renderDexBatchList() renders a list view for DexBatch components
+  function renderDexBatchList(tab) {
+    const items = convertTabData(state, data, tab);
+    
+    if (!items || items.length === 0) {
+      return <div className="text-center p-4">No items found</div>;
+    }
+
+    const filteredAndSortedItems = filterAndSortItems(items, tab);
+
+    return (
+      <div className="dex-batch-list">
+        {/* Filter and Sort Controls */}
+        <div className="mb-3 p-3 border rounded bg-light">
+          <div className="row">
+            <div className="col-md-6">
+              <label className="form-label">Filter by Address:</label>
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="Enter address to filter..."
+                value={addressFilter}
+                onChange={(e) => setAddressFilter(e.target.value)}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Sort by:</label>
+              <select
+                className="form-select form-select-sm"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="none">No sorting</option>
+                <option value="amount">Amount/Points</option>
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Direction:</label>
+              <select
+                className="form-select form-select-sm"
+                value={sortDirection}
+                onChange={(e) => setSortDirection(e.target.value)}
+                disabled={sortBy === 'none'}
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-2 text-muted small">
+            Showing {filteredAndSortedItems.length} of {items.length} items
+          </div>
+        </div>
+
+        {/* Filtered Items List */}
+        {filteredAndSortedItems.length === 0 ? (
+          <div className="text-center p-4">No items match the current filter</div>
+        ) : (
+          filteredAndSortedItems.map((item, index) => (
+            <div key={index} className="dex-batch-item mb-3 p-3 border rounded">
+              <Table responsive size="sm">
+                <tbody>
+                  {Object.keys(item).map((key, i) => (
+                    <tr key={i}>
+                      <td className="detail-table-title" style={{ width: '30%' }}>
+                        {upperCaseAndRepUnderscore(key)}
+                      </td>
+                      <td className="detail-table-info">
+                        {key === 'address' || key === 'Address' ? (
+                          <Truncate text={item[key]} />
+                        ) : key.toLowerCase().includes('amount') || key.toLowerCase().includes('points') ? (
+                          toCNPY(item[key] || 0)
+                        ) : (
+                          item[key]?.toString() || 'null'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          ))
+        )}
+      </div>
+    );
   }
 
   // renderTableButtons() renders a button to display the account
@@ -306,7 +483,7 @@ export default function DetailModal({ state, setState }) {
         </CardGroup>
         {/* TABS */}
         <Tabs defaultActiveKey="0" id="modal-tab" className="mb-3" fill>
-          {[...Array(3)].map((_, i) => (
+          {[...Array("dexBatch" in data ? 6 : 3)].map((_, i) => (
             <Tab key={i} tabClassName="rb-tab" eventKey={i} title={getTabTitle(state, data, i)}>
               {renderTab(i)}
             </Tab>

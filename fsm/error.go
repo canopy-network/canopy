@@ -270,3 +270,23 @@ func ErrInvalidERC20Tx(err error) lib.ErrorI {
 func ErrNotEmpty() lib.ErrorI {
 	return lib.NewError(lib.CodeErrNotEmpty, lib.StateMachineModule, "a field that should be empty isn't")
 }
+
+func ErrMismatchDexBatchReceipt() lib.ErrorI {
+	return lib.NewError(lib.CodeMismatchDexBatchReceipt, lib.StateMachineModule, "the dex batch receipt doesn't correspond to the last batch")
+}
+
+func ErrInvalidLiquidityPool() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidLiquidityPool, lib.StateMachineModule, "the dex liquidity pool amount is invalid")
+}
+
+func ErrMaxDexBatchSize() lib.ErrorI {
+	return lib.NewError(lib.CodeMaxDexBatchSize, lib.StateMachineModule, "the dex batch size exceeds the global max")
+}
+
+func ErrInvalidInput() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid input parameter")
+}
+
+func ErrEventTypeEmpty() lib.ErrorI {
+	return lib.NewError(lib.CodeEventTypeEmpty, lib.StateMachineModule, "event type is empty")
+}

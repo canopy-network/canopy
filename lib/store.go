@@ -59,20 +59,23 @@ type WIndexerI interface {
 
 // RIndexerI defines the read interface for the indexing operations
 type RIndexerI interface {
-	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                  // get the tx by the Transaction hash
-	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)              // get Transactions for a height
-	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)    // get Transactions for a sender
-	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Transactions for a recipient
-	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                            // get a block by hash
-	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                        // get a block by height
-	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                  // get a block by height without transactions
-	GetBlocks(p PageParams) (*Page, ErrorI)                                                       // get a page of blocks within the page params
-	GetQCByHeight(height uint64) (*QuorumCertificate, ErrorI)                                     // get certificate for a height
-	GetDoubleSigners() ([]*DoubleSigner, ErrorI)                                                  // all double signers in the indexer
-	IsValidDoubleSigner(address []byte, height uint64) (bool, ErrorI)                             // get if the DoubleSigner is already set for a height
-	GetCheckpoint(chainId, height uint64) (blockHash HexBytes, err ErrorI)                        // get the checkpoint block hash for a certain committee and height combination
-	GetMostRecentCheckpoint(chainId uint64) (checkpoint *Checkpoint, err ErrorI)                  // get the most recent checkpoint for a committee
-	GetAllCheckpoints(chainId uint64) (checkpoints []*Checkpoint, err ErrorI)                     // export all checkpoints for a committee
+	GetTxByHash(hash []byte) (*TxResult, ErrorI)                                                   // get the tx by the Transaction hash
+	GetTxsByHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)               // get Transactions for a height
+	GetTxsBySender(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)     // get Transactions for a sender
+	GetTxsByRecipient(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI)  // get Transactions for a recipient
+	GetEventsByBlockHeight(height uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)       // get Events for a block height
+	GetEventsByAddress(address crypto.AddressI, newestToOldest bool, p PageParams) (*Page, ErrorI) // get Events for an address
+	GetEventsByChainId(chainId uint64, newestToOldest bool, p PageParams) (*Page, ErrorI)          // get Events for an event type
+	GetBlockByHash(hash []byte) (*BlockResult, ErrorI)                                             // get a block by hash
+	GetBlockByHeight(height uint64) (*BlockResult, ErrorI)                                         // get a block by height
+	GetBlockHeaderByHeight(height uint64) (*BlockResult, ErrorI)                                   // get a block by height without transactions
+	GetBlocks(p PageParams) (*Page, ErrorI)                                                        // get a page of blocks within the page params
+	GetQCByHeight(height uint64) (*QuorumCertificate, ErrorI)                                      // get certificate for a height
+	GetDoubleSigners() ([]*DoubleSigner, ErrorI)                                                   // all double signers in the indexer
+	IsValidDoubleSigner(address []byte, height uint64) (bool, ErrorI)                              // get if the DoubleSigner is already set for a height
+	GetCheckpoint(chainId, height uint64) (blockHash HexBytes, err ErrorI)                         // get the checkpoint block hash for a certain committee and height combination
+	GetMostRecentCheckpoint(chainId uint64) (checkpoint *Checkpoint, err ErrorI)                   // get the most recent checkpoint for a committee
+	GetAllCheckpoints(chainId uint64) (checkpoints []*Checkpoint, err ErrorI)                      // export all checkpoints for a committee
 }
 
 // WStoreI defines an interface for basic write operations
