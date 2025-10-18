@@ -66,8 +66,10 @@ type Message struct {
 	Timestamp uint64 `protobuf:"varint,8,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// rcBuildHeight: the root height when the block was built
 	RcBuildHeight uint64 `protobuf:"varint,9,opt,name=rcBuildHeight,proto3" json:"rcBuildHeight,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// bft_coordination_meta: coordination info from the last leader enabling in-sync handling of the next height
+	BftCoordinationMeta *lib.BFTCoordinationMeta `protobuf:"bytes,10,opt,name=bft_coordination_meta,json=bftCoordinationMeta,proto3" json:"bftCoordinationMeta"` // @gotags: json:"bftCoordinationMeta"
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Message) Reset() {
@@ -161,6 +163,13 @@ func (x *Message) GetRcBuildHeight() uint64 {
 		return x.RcBuildHeight
 	}
 	return 0
+}
+
+func (x *Message) GetBftCoordinationMeta() *lib.BFTCoordinationMeta {
+	if x != nil {
+		return x.BftCoordinationMeta
+	}
+	return nil
 }
 
 // double_sign_evidence is proof that a validator has signed two conflicting proposals at the same block height and round
@@ -280,7 +289,8 @@ var File_bft_proto protoreflect.FileDescriptor
 
 const file_bft_proto_rawDesc = "" +
 	"\n" +
-	"\tbft.proto\x12\x05types\x1a\x0fconsensus.proto\x1a\fcrypto.proto\x1a\x11certificate.proto\x1a\btx.proto\"\x97\x03\n" +
+	"\tbft.proto\x12\x05types\x1a\x0fconsensus.proto\x1a\fcrypto.proto\x1a\x11certificate.proto\x1a\n" +
+	"peer.proto\x1a\btx.proto\"\xe7\x03\n" +
 	"\aMessage\x12#\n" +
 	"\x06header\x18\x01 \x01(\v2\v.types.ViewR\x06header\x12\"\n" +
 	"\x03vrf\x18\x02 \x01(\v2\x10.types.SignatureR\x03vrf\x12(\n" +
@@ -291,7 +301,9 @@ const file_bft_proto_rawDesc = "" +
 	".types.VDFR\x03vdf\x12.\n" +
 	"\tsignature\x18\a \x01(\v2\x10.types.SignatureR\tsignature\x12\x1c\n" +
 	"\ttimestamp\x18\b \x01(\x04R\ttimestamp\x12$\n" +
-	"\rrcBuildHeight\x18\t \x01(\x04R\rrcBuildHeight\"v\n" +
+	"\rrcBuildHeight\x18\t \x01(\x04R\rrcBuildHeight\x12N\n" +
+	"\x15bft_coordination_meta\x18\n" +
+	" \x01(\v2\x1a.types.BFTCoordinationMetaR\x13bftCoordinationMeta\"v\n" +
 	"\x12DoubleSignEvidence\x12/\n" +
 	"\x06vote_a\x18\x01 \x01(\v2\x18.types.QuorumCertificateR\x05voteA\x12/\n" +
 	"\x06vote_b\x18\x02 \x01(\v2\x18.types.QuorumCertificateR\x05voteB\"\xdf\x01\n" +
@@ -316,14 +328,15 @@ func file_bft_proto_rawDescGZIP() []byte {
 
 var file_bft_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_bft_proto_goTypes = []any{
-	(*Message)(nil),               // 0: types.Message
-	(*DoubleSignEvidence)(nil),    // 1: types.DoubleSignEvidence
-	(*DoubleSignEvidences)(nil),   // 2: types.DoubleSignEvidences
-	nil,                           // 3: types.DoubleSignEvidences.DeDuplicatorEntry
-	(*lib.View)(nil),              // 4: types.View
-	(*lib.Signature)(nil),         // 5: types.Signature
-	(*lib.QuorumCertificate)(nil), // 6: types.QuorumCertificate
-	(*crypto.VDF)(nil),            // 7: types.VDF
+	(*Message)(nil),                 // 0: types.Message
+	(*DoubleSignEvidence)(nil),      // 1: types.DoubleSignEvidence
+	(*DoubleSignEvidences)(nil),     // 2: types.DoubleSignEvidences
+	nil,                             // 3: types.DoubleSignEvidences.DeDuplicatorEntry
+	(*lib.View)(nil),                // 4: types.View
+	(*lib.Signature)(nil),           // 5: types.Signature
+	(*lib.QuorumCertificate)(nil),   // 6: types.QuorumCertificate
+	(*crypto.VDF)(nil),              // 7: types.VDF
+	(*lib.BFTCoordinationMeta)(nil), // 8: types.BFTCoordinationMeta
 }
 var file_bft_proto_depIdxs = []int32{
 	4,  // 0: types.Message.header:type_name -> types.View
@@ -333,15 +346,16 @@ var file_bft_proto_depIdxs = []int32{
 	1,  // 4: types.Message.last_double_sign_evidence:type_name -> types.DoubleSignEvidence
 	7,  // 5: types.Message.vdf:type_name -> types.VDF
 	5,  // 6: types.Message.signature:type_name -> types.Signature
-	6,  // 7: types.DoubleSignEvidence.vote_a:type_name -> types.QuorumCertificate
-	6,  // 8: types.DoubleSignEvidence.vote_b:type_name -> types.QuorumCertificate
-	1,  // 9: types.DoubleSignEvidences.Evidence:type_name -> types.DoubleSignEvidence
-	3,  // 10: types.DoubleSignEvidences.DeDuplicator:type_name -> types.DoubleSignEvidences.DeDuplicatorEntry
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	8,  // 7: types.Message.bft_coordination_meta:type_name -> types.BFTCoordinationMeta
+	6,  // 8: types.DoubleSignEvidence.vote_a:type_name -> types.QuorumCertificate
+	6,  // 9: types.DoubleSignEvidence.vote_b:type_name -> types.QuorumCertificate
+	1,  // 10: types.DoubleSignEvidences.Evidence:type_name -> types.DoubleSignEvidence
+	3,  // 11: types.DoubleSignEvidences.DeDuplicator:type_name -> types.DoubleSignEvidences.DeDuplicatorEntry
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_bft_proto_init() }

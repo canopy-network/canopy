@@ -6,6 +6,7 @@ option go_package = "github.com/canopy-network/canopy/bft";
 import "consensus.proto";
 import "crypto.proto";
 import "certificate.proto";
+import "peer.proto";
 import "tx.proto";
 
 // *****************************************************************************************************
@@ -50,6 +51,8 @@ message Message {
   uint64 timestamp = 8;
   // rcBuildHeight: the root height when the block was built
   uint64 rcBuildHeight = 9;
+  // bft_coordination_meta: coordination info from the last leader enabling in-sync handling of the next height
+  BFTCoordinationMeta bft_coordination_meta = 10; // @gotags: json:"bftCoordinationMeta"
 }
 
 // double_sign_evidence is proof that a validator has signed two conflicting proposals at the same block height and round

@@ -49,6 +49,12 @@ func (c *Client) BlockByHash(hash string) (p *lib.BlockResult, err lib.ErrorI) {
 	return
 }
 
+func (c *Client) BlockTime(height uint64) (p *lib.BlockTimeInfo, err lib.ErrorI) {
+	p = new(lib.BlockTimeInfo)
+	err = c.heightRequest(BlockTimeRouteName, height, p)
+	return
+}
+
 func (c *Client) Blocks(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	p = new(lib.Page)
 	err = c.paginatedHeightRequest(BlocksRouteName, 0, params, p)

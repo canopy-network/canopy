@@ -415,6 +415,32 @@ func (s *StateMachine) LoadBlockAndCertificate(height uint64) (cert *lib.QuorumC
 	return
 }
 
+// LoadBlockTime() retrieves block time information
+func (s *StateMachine) LoadBlockTime(height uint64) (time *lib.BlockTimeInfo, e lib.ErrorI) {
+	time = new(lib.BlockTimeInfo)
+	// retrieve the block
+	blk, err := s.LoadBlock(height)
+	if err != nil {
+		return nil, err
+	}
+	// check for nil block
+	if blk == nil || blk.BlockHeader == nil {
+		return
+	}
+	// set height
+	time.Height = blk.BlockHeader.Height
+	// get block build time
+	time.BuildTime = blk.BlockHeader.Time
+	// get the block frequency in ms
+	time.BlockFrequencyMs = uint64(s.Config.BlockTimeMS())
+	// calculate the estimated commit time
+	time.EstCommitTime = time.BuildTime + time.BlockFrequencyMs*1000
+	// calculate the estimated next block time
+	time.EstNextBlockTime = time.EstCommitTime + time.BlockFrequencyMs*1000
+	// exit
+	return
+}
+
 // GetMaxValidators() returns the max validators per committee
 func (s *StateMachine) GetMaxValidators() (uint64, lib.ErrorI) {
 	// get the parameters for the validator space from state
@@ -488,6 +514,11 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 	if err != nil {
 		return nil, err
 	}
+	// get the block time info
+	blockTime, err := s.LoadBlockTime(height - 1)
+	if err != nil {
+		return nil, err
+	}
 	// return the root chain info
 	return &lib.RootChainInfo{
 		RootChainId:      s.Config.ChainId,
@@ -496,6 +527,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 		LastValidatorSet: lastValidatorSet[0].ValidatorSet,
 		LotteryWinner:    lotteryWinner,
 		Orders:           orders,
+		BlockTimeInfo:    blockTime,
 	}, nil
 }
 

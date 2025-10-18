@@ -4,14 +4,33 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
-	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
+
+// 08/25 BYZANTINE FAULT TOLERANCE PROTOCOL BREAKING CHANGE: ADD ROOT-BUILD-HEIGHT TO THE QUORUM CERTIFICATE
+//
+// NOTE: This is not expected to be a consensus-breaking change. Historical syncers will work fine without embedding an "if height == X then do Y" condition.
+//
+// 3 PHASES TO THIS UPGRADE:
+//   1) Backwards compatible feature add
+//   2) Upgrade height which switches to the embedded 'root build height' once Validators all upgraded
+//   3) Cleanup the deprecated code
+
+var PROTOCOL_BREAK_UPGRADE_HEIGHT = uint64(1_000_000_000)
+
+func (b *BFT) BeforeUpgradeHeight() bool {
+	if b.LoadIsOwnRoot() {
+		return b.Height < PROTOCOL_BREAK_UPGRADE_HEIGHT
+	} else {
+		return b.RootHeight < PROTOCOL_BREAK_UPGRADE_HEIGHT
+	}
+}
 
 // BFT is a structure that holds data for a Hotstuff BFT instance
 type BFT struct {
@@ -40,7 +59,8 @@ type BFT struct {
 	ResetBFT   chan ResetBFT // trigger that resets the BFT due to a new Target block or a new Canopy block
 	syncing    *atomic.Bool  // if chain for this committee is currently catching up to latest height
 
-	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
+	PhaseTimer     *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
+	LastCommitTime time.Time   // the last time a block was committed
 
 	PublicKey  []byte             // self consensus public key
 	PrivateKey crypto.PrivateKeyI // self consensus private key
@@ -95,6 +115,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 //   - (b) Target chainId <mission accomplished, move to next height>
 func (b *BFT) Start() {
 	var err lib.ErrorI
+	var resetOnRootHeight uint64
 	// load the committee from the base chain
 	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
 	if err != nil {
@@ -127,28 +148,36 @@ func (b *BFT) Start() {
 			func() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
+				// get the last commit time from the meta
+				lastCommitTime := time.UnixMicro(int64(resetBFT.BFTMeta.GetLastCommitTime()))
 				// calculate time since
-				since := time.Since(resetBFT.StartTime)
+				since := time.Since(lastCommitTime)
 				// allow if 'since' is less than 1 block old
 				if int(since.Milliseconds()) < b.Config.BlockTimeMS() {
-					b.log.Infof("Using included timestamp to calculate process time: %s", resetBFT.StartTime.Format(time.StampMilli))
+					b.log.Infof("Using last commit timestamp for bft timing: %s", lastCommitTime.Format(time.StampMilli))
 					processTime = since
 				}
 				// if is a root-chain update reset back to round 0 but maintain locks to prevent 'fork attacks'
 				// else increment the height and don't maintain locks
 				if !resetBFT.IsRootChainUpdate {
-					b.log.Info("Reset BFT (NEW_HEIGHT)")
+					b.log.Info("RESET BFT (NEW_HEIGHT)")
 					b.NewHeight(false)
-					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					b.SetWaitTimers(b.NewHeightWaitTime(), processTime)
+					b.LastCommitTime = time.UnixMicro(int64(resetBFT.BFTMeta.GetLastCommitTime()))
+					resetOnRootHeight = resetBFT.BFTMeta.GetResetOnRootHeight()
 				} else {
-					b.log.Info("Reset BFT (NEW_COMMITTEE)")
-					//if b.LoadIsOwnRoot() {
-					b.NewHeight(true)
-					//} else if b.Round != 0 {
-					//	b.NewHeight(true)
-					// set the wait timers to start consensus
-					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
-					//}
+					if b.BeforeUpgradeHeight() { // TODO DEPRECATE (11) // TODO 2 outstanding issues (1) deadlock on CommmitCertificate causing 2 sec delay (2) `RESET BFT (ROOT_HEIGHT` never seems to have a processing time...
+						b.NewHeight(true)
+						b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					} else {
+						if b.LoadIsOwnRoot() || resetOnRootHeight != 0 && b.Round == 0 && resetOnRootHeight == resetBFT.RootHeight {
+							b.log.Infof("RESET BFT (ROOT_HEIGHT: %d)", resetBFT.RootHeight)
+							b.NewHeight(true)
+							b.SetWaitTimers(b.NewHeightWaitTime(), processTime)
+						} else {
+							b.log.Infof("NOTIFICATION (NEW_ROOT_HEIGHT: %d)", resetBFT.RootHeight)
+						}
+					}
 				}
 			}()
 		}
@@ -262,6 +291,13 @@ func (b *BFT) StartElectionVotePhase() {
 	}
 	// get locally produced Verifiable delay function
 	b.HighVDF = b.VDFService.Finish()
+	// TODO DEPRECATE (1)
+	var rootBuildHeight uint64
+	if b.BeforeUpgradeHeight() {
+		rootBuildHeight = b.RCBuildHeight
+	} else {
+		rootBuildHeight = b.RootBuildHeight
+	}
 	// sign and send vote to Proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
@@ -271,7 +307,7 @@ func (b *BFT) StartElectionVotePhase() {
 		HighQc:                 b.HighQC,                         // forward highest known 'Lock' for this Height, so the new Proposer may satisfy SAFE-NODE-PREDICATE
 		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence, // forward any evidence of DoubleSigning
 		Vdf:                    b.HighVDF,                        // forward local VDF to the candidate
-		RcBuildHeight:          b.RCBuildHeight,                  // forward the highQC build height (if applicable)
+		RcBuildHeight:          rootBuildHeight,                  // forward the highQC build height (if applicable)
 	})
 }
 
@@ -297,19 +333,35 @@ func (b *BFT) StartProposePhase() {
 		return
 	}
 	b.HighVDF = highVDF
+	// TODO DEPRECATE (2)
+	var rootBuildHeight uint64
+	if b.BeforeUpgradeHeight() {
+		rootBuildHeight = b.RCBuildHeight
+	} else {
+		rootBuildHeight = b.RootBuildHeight
+	}
 	// produce new proposal or use highQC as the proposal
 	if b.HighQC == nil {
-		b.RCBuildHeight, b.Block, b.Results, err = b.ProduceProposal(b.ByzantineEvidence, b.HighVDF)
+		rootBuildHeight, b.Block, b.Results, err = b.ProduceProposal(b.ByzantineEvidence, b.HighVDF)
 		if err != nil {
 			b.log.Error(err.Error())
 			return
 		}
 	} else {
-		b.Block, b.Results = b.HighQC.Block, b.HighQC.Results
+		rootBuildHeight, b.Block, b.Results = b.HighQC.Header.RootBuildHeight, b.HighQC.Block, b.HighQC.Results
+	}
+	// get view
+	view := b.View.Copy()
+	// TODO DEPRECATE (3)
+	if b.BeforeUpgradeHeight() {
+		b.RCBuildHeight = rootBuildHeight
+	} else {
+		view.RootBuildHeight = rootBuildHeight
+		b.RootBuildHeight = rootBuildHeight
 	}
 	// send PROPOSE message to the replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
-		Header: b.View.Copy(),
+		Header: view,
 		Qc: &QC{
 			Header:      vote.Qc.Header, // the current view
 			Results:     b.Results,      // the proposed `certificate results`
@@ -321,7 +373,7 @@ func (b *BFT) StartProposePhase() {
 		},
 		HighQc:                 b.HighQC,                         // nil or justifies the proposal
 		LastDoubleSignEvidence: b.ByzantineEvidence.DSE.Evidence, // evidence is attached (if any) to validate the Proposal
-		RcBuildHeight:          b.RCBuildHeight,                  // the root chain height when the block was built
+		RcBuildHeight:          rootBuildHeight,                  // the root chain height when the block was built
 	})
 }
 
@@ -354,9 +406,16 @@ func (b *BFT) StartProposeVotePhase() {
 			return
 		}
 	}
+	// TODO DEPRECATE (4)
+	var rootBuildHeight uint64
+	if b.BeforeUpgradeHeight() {
+		rootBuildHeight = msg.RcBuildHeight
+	} else {
+		rootBuildHeight = msg.Header.RootBuildHeight
+	}
 	// ensure the build height isn't too old
-	if msg.RcBuildHeight < b.CommitteeData.LastRootHeightUpdated {
-		b.log.Error(lib.ErrInvalidRCBuildHeight().Error())
+	if rootBuildHeight < b.CommitteeData.LastRootHeightUpdated {
+		b.log.Error(lib.ErrInvalidRCBuildHeight(rootBuildHeight, b.CommitteeData.LastRootHeightUpdated).Error())
 		b.RoundInterrupt()
 		return
 	}
@@ -365,7 +424,7 @@ func (b *BFT) StartProposeVotePhase() {
 		DSE: NewDSE(msg.LastDoubleSignEvidence),
 	}
 	// check candidate block against FSM
-	if b.BlockResult, err = b.ValidateProposal(msg.RcBuildHeight, msg.Qc, byzantineEvidence); err != nil {
+	if b.BlockResult, err = b.ValidateProposal(rootBuildHeight, msg.Qc, byzantineEvidence); err != nil {
 		b.log.Error(err.Error())
 		b.RoundInterrupt()
 		return
@@ -378,10 +437,14 @@ func (b *BFT) StartProposeVotePhase() {
 	if err := b.RunVDF(b.GetBlockHash()); err != nil {
 		b.log.Errorf("RunVDF() failed with error, %s", err.Error())
 	}
+	// get view and set Root chain build height
+	view := b.View.Copy()
+	// set RootBuildHeight
+	view.RootBuildHeight = rootBuildHeight
 	// send vote to the proposer
 	b.SendToProposer(&Message{
 		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
-			Header:      b.View.Copy(),
+			Header:      view,
 			BlockHash:   b.GetBlockHash(),
 			ResultsHash: b.Results.Hash(),
 			ProposerKey: b.ProposerKey,
@@ -407,9 +470,19 @@ func (b *BFT) StartPrecommitPhase() {
 		b.RoundInterrupt()
 		return
 	}
+	// TODO DEPRECATE (5)
+	// get view
+	view := b.View.Copy()
+	var rootBuildHeight uint64
+	if b.BeforeUpgradeHeight() {
+		rootBuildHeight = b.RCBuildHeight
+	} else {
+		view.RootBuildHeight = vote.Qc.Header.RootBuildHeight
+		rootBuildHeight = vote.Qc.Header.RootBuildHeight
+	}
 	// send PRECOMMIT msg to Replicas
 	b.SendToReplicas(b.ValidatorSet, &Message{
-		Header: b.Copy(),
+		Header: view,
 		Qc: &QC{
 			Header:      vote.Qc.Header,   // vote view
 			BlockHash:   b.GetBlockHash(), // vote block payload
@@ -417,7 +490,7 @@ func (b *BFT) StartPrecommitPhase() {
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
-		RcBuildHeight: b.RCBuildHeight,
+		RcBuildHeight: rootBuildHeight,
 	})
 }
 
@@ -441,7 +514,12 @@ func (b *BFT) StartPrecommitVotePhase() {
 	}
 	// `lock` on the proposal (only by satisfying the SAFE-NODE-PREDICATE or COMMIT can this node unlock)
 	b.HighQC = msg.Qc
-	b.RCBuildHeight = msg.RcBuildHeight
+	// TODO DEPRECATE (6)
+	if b.BeforeUpgradeHeight() {
+		b.RCBuildHeight = msg.RcBuildHeight
+	} else {
+		b.RootBuildHeight = msg.Header.RootBuildHeight
+	}
 	b.HighQC.Block = b.Block
 	b.HighQC.Results = b.Results
 	b.log.Infof("🔒 Locked on proposal %s", lib.BytesToTruncatedString(b.HighQC.BlockHash))
@@ -484,7 +562,8 @@ func (b *BFT) StartCommitPhase() {
 			ProposerKey: b.ProposerKey,
 			Signature:   as,
 		},
-		Timestamp: uint64(time.Now().Add(b.WaitTime(Commit, b.Round)).UnixMicro()),
+		BftCoordinationMeta: b.GetBFTCoordinationMeta(),                                      // provide the next replicas BFT coordination information to help prevent partitions
+		Timestamp:           uint64(time.Now().Add(b.WaitTime(Commit, b.Round)).UnixMicro()), // TODO deprecate (9)
 	})
 }
 
@@ -514,12 +593,13 @@ func (b *BFT) StartCommitProcessPhase() {
 	}
 	// non-blocking
 	go func() {
+		// TODO deprecate msg.Timestamp (10)
 		// send the block to self for committing
-		b.SelfSendBlock(msg.Qc, msg.Timestamp)
+		b.SelfSendBlock(msg.Qc, msg.Timestamp, msg.BftCoordinationMeta)
 		// wait to allow for CommitProcess to finish
 		<-time.After(time.Duration(b.Config.CommitTimeoutMS) * time.Millisecond)
 		// gossip committed block message to peers
-		b.GossipBlock(msg.Qc, b.PublicKey, msg.Timestamp)
+		b.GossipBlock(msg.Qc, b.PublicKey, msg.Timestamp, msg.BftCoordinationMeta)
 	}()
 }
 
@@ -534,58 +614,119 @@ func (b *BFT) RoundInterrupt() {
 	b.BlockResult = nil
 	b.VDFCache = []*Message{}
 	b.ResetFSM()
+	view := b.View.Copy()
+	// determine the best faction based on what is currently known
+	var votingPower uint64
+	votingPower, view.RootHeight, view.Round = b.DetermineNextRootHeightAndRound(b.Round + 1)
+	if b.ValidatorSet.MinimumMaj23 > 0 {
+		b.log.Infof("Round Interrupt set round (%d) and root height (%d) with VP: %.2f%%",
+			view.Round, view.RootHeight, float64(votingPower)/float64(b.ValidatorSet.TotalPower)*100)
+	}
 	// send pacemaker message
 	b.SendToReplicas(b.ValidatorSet, &Message{
-		Qc: &lib.QuorumCertificate{
-			Header: b.View.Copy(),
-		},
+		Qc: &lib.QuorumCertificate{Header: view},
 	})
 }
 
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
-// - sets the highest round that +2/3rds majority of replicas have seen
+//   - When advancing to the next round, there may be no reliable leader to coordinate a reset.
+//   - If the root chain notification arrives while half the validators have already switched to the new round and the other half haven’t,
+//     the set can split on root height and root info.
+//   - Identify the largest voting-power group (“faction”) that agrees on (RootHeight X, Round Y).
+//   - Wait until there’s a ≥2/3 majority voting for that faction or timeout after 10 seconds
 func (b *BFT) Pacemaker() {
 	b.log.Info(b.View.ToString())
 	b.NewRound(false)
-	// sort the pacemaker votes from the highest Round to the lowest Round
-	var sortedVotes []*Message
-	for _, vote := range b.PacemakerMessages {
-		sortedVotes = append(sortedVotes, vote)
+	// determine largest faction
+	totalVP, rootHeight, nextRound := b.DetermineNextRootHeightAndRound(b.Round)
+	// set round
+	b.Round = nextRound
+	// set root height and refresh root chain info
+	b.RefreshRootChainInfo(rootHeight)
+	// log with div 0 protection
+	if b.ValidatorSet.MinimumMaj23 > 0 {
+		b.log.Infof("Pacemaker set round (%d) and root height (%d) with VP: %.2f%%",
+			nextRound, rootHeight, float64(totalVP)/float64(b.ValidatorSet.TotalPower)*100)
 	}
-	sort.Slice(sortedVotes, func(i, j int) bool {
-		return sortedVotes[i].Qc.Header.Round >= sortedVotes[j].Qc.Header.Round
-	})
-	// loop from the highest Round to the lowest Round, summing the voting power until reaching round 0 or getting +2/3rds majority
-	totalVotedPower, pacemakerRound := uint64(0), uint64(0)
-	for _, vote := range sortedVotes {
-		validator, err := b.ValidatorSet.GetValidator(vote.Signature.PublicKey)
-		if err != nil {
-			b.log.Warn(err.Error())
-			continue
-		}
-		totalVotedPower += validator.VotingPower
-		// if totalVotePower >= +33%, it's safe to advance to that round
-		if totalVotedPower >= lib.Uint64ReducePercentage(b.ValidatorSet.MinimumMaj23, 50) {
-			pacemakerRound = vote.Qc.Header.Round // set the highest round where +1/3rds have been
-			break
-		}
-	}
-	// if +1/3rd Round is larger than local Round - advance to the +1/3rd Round to better join the Majority
-	if pacemakerRound > b.Round {
-		b.log.Infof("Pacemaker peers set round: %d", pacemakerRound)
-		b.Round = pacemakerRound
-	}
+	// clear the pacemaker messages
+	b.PacemakerMessages = make(PacemakerMessages)
+	// exit
+	return
 }
 
 // PacemakerMessages is a collection of 'View' messages keyed by each Replica's public key
 // These messages help Replicas synchronize their Rounds more effectively during periods of instability or failure
 type PacemakerMessages map[string]*Message // [ public_key_string ] -> View message
 
+// DetermineNextRootHeightAndRound() identifies the largest voting-power group (“faction”) that agrees on
+// (RootHeight X, Round Y) where Round Y is >= self.NextRound
+func (b *BFT) DetermineNextRootHeightAndRound(round uint64) (totalVP, rootHeight, nextRound uint64) {
+	rootHeights, rounds := make(map[uint64]uint64), make(map[uint64]uint64) // rootHeight/round -> votingPower
+	// helper to track voting power
+	addVote := func(pubKey []byte, r, rh uint64) {
+		if v, err := b.ValidatorSet.GetValidator(pubKey); err == nil {
+			rounds[r] += v.VotingPower
+			rootHeights[rh] += v.VotingPower
+		}
+	}
+	// add self during the RoundInterrupt() phase to determine the best faction to vote on
+	// but omit self during the PacemakerPhase() in order to determine if a +2/3 majority may be reached if self joins the best faction
+	isPrePacemakerPhase := round == b.Round+1
+	if isPrePacemakerPhase {
+		b.log.Infof("Round %d Latest root chain height detected at: %d", round, b.Controller.RootChainHeight())
+		addVote(b.PublicKey, round, b.Controller.RootChainHeight())
+	}
+	// for each pacemaker vote
+	for _, msg := range b.PacemakerMessages {
+		addVote(msg.Signature.PublicKey, msg.Qc.Header.Round, msg.Qc.Header.RootHeight)
+	}
+	// find max round by voting power
+	for r, vp := range rounds {
+		if r >= round {
+			if nextRound == 0 || vp > rounds[nextRound] {
+				nextRound = r
+				totalVP = vp
+			}
+		}
+	}
+	// find max root height by voting power
+	for rh, vp := range rootHeights {
+		if rootHeight == 0 || vp > rootHeights[rootHeight] {
+			rootHeight = rh
+		}
+	}
+	return
+}
+
 // AddPacemakerMessage() adds the 'View' message to the list (keyed by public key string)
 func (b *BFT) AddPacemakerMessage(msg *Message) (err lib.ErrorI) {
 	b.Controller.Lock()
 	defer b.Controller.Unlock()
 	b.PacemakerMessages[lib.BytesToString(msg.Signature.PublicKey)] = msg
+	return
+}
+
+// DetermineResetOnRoot() provide coordination information to help prevent network partitions especially for nested chains
+func (b *BFT) GetBFTCoordinationMeta() (meta *lib.BFTCoordinationMeta) {
+	// next commit time
+	nextCommitTime := time.Now().Add(b.WaitTime(Commit, b.Round))
+	// initialize the meta
+	meta = &lib.BFTCoordinationMeta{LastCommitTime: uint64(nextCommitTime.UnixMicro())}
+	// get the root chain block timing
+	if lastRCBlkTime, _ := b.Controller.LoadRootBlockTime(); lastRCBlkTime != nil {
+		// calculate if the timestamps are within 2 seconds of each other
+		estNextRCBlkTime := time.UnixMicro(int64(lastRCBlkTime.EstNextBlockTime))
+		b.log.Infof("Next RootBlock expected: %s NextCommitTime: %s",
+			estNextRCBlkTime.Format("15:04:05"), nextCommitTime.Format("15:04:05"))
+		// if within 2 seconds
+		if estNextRCBlkTime.Sub(nextCommitTime).Abs() <= time.Second*2 {
+			// calculate the RC height after 'next commit'
+			rcHeightAfterNextCommit := lastRCBlkTime.Height + 2
+			b.log.Infof("ResetOnRootHeight set to %d", rcHeightAfterNextCommit)
+			// set the reset root on height to the next root block
+			meta.ResetOnRootHeight = rcHeightAfterNextCommit
+		}
+	}
 	return
 }
 
@@ -630,17 +771,21 @@ func (b *BFT) NewRound(newHeight bool) {
 	b.RefreshRootChainInfo()
 	// reset ProposerKey, Proposal, and Sortition data
 	b.ProposerKey = nil
-	b.Block, b.BlockHash, b.Results = nil, nil, nil
+	b.Block, b.BlockHash, b.Results, b.RootBuildHeight = nil, nil, nil, 0
 	b.SortitionData = nil
 	b.VDFCache = []*Message{}
 }
 
 // RefreshRootChainInfo() updates the cached root chain info with the latest known
-func (b *BFT) RefreshRootChainInfo() {
+func (b *BFT) RefreshRootChainInfo(rootHeight ...uint64) {
 	var err lib.ErrorI
 	// update heights
 	b.Height = b.Controller.ChainHeight()
-	b.RootHeight = b.Controller.RootChainHeight()
+	if len(rootHeight) != 1 {
+		b.RootHeight = b.Controller.RootChainHeight()
+	} else {
+		b.RootHeight = rootHeight[0]
+	}
 	// update the validator set
 	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
 	if err != nil {
@@ -675,6 +820,7 @@ func (b *BFT) NewHeight(keepLocks ...bool) {
 		b.PartialQCs = make(PartialQCs)
 		b.HighQC = nil
 		b.RCBuildHeight = 0
+		b.RootBuildHeight = 0
 	}
 }
 
@@ -749,7 +895,16 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 
 // waitTime() calculates the waiting time for a specific sleepTime configuration and Round number (helper)
 func (b *BFT) waitTime(sleepTimeMS int, round uint64) time.Duration {
-	return time.Duration(uint64(sleepTimeMS)*(2*round+1)) * time.Millisecond
+	var extraTimeMs int
+	if round != 0 {
+		extraTimeMs = int(math.Pow(float64(2), float64(round))) * 1000 // ms
+	}
+	return time.Duration(sleepTimeMS+extraTimeMs) * time.Millisecond
+}
+
+// NewHeightWaitTime() calculates the waiting time between last commit and election
+func (b *BFT) NewHeightWaitTime() (waitTime time.Duration) {
+	return time.Duration(b.Config.NewHeightTimeoutMs) * time.Millisecond
 }
 
 // msLeftInRound() calculates the milliseconds left in the round
@@ -789,7 +944,7 @@ func (b *BFT) msLeftInRound() int {
 func (b *BFT) SetWaitTimers(phaseWaitTime, processTime time.Duration) {
 	b.log.Debugf("Process time: %.2fs, Wait time: %.2fs", processTime.Seconds(), phaseWaitTime.Seconds())
 	subtract := func(wt, pt time.Duration) (t time.Duration) {
-		if pt > 24*time.Hour {
+		if pt > 24*time.Hour || pt < 0 {
 			return wt
 		}
 		if wt <= pt {
@@ -939,11 +1094,11 @@ type (
 		// LoadCertificate() gets the Quorum Certificate from the chainId-> plugin at a certain height
 		LoadCertificate(height uint64) (*lib.QuorumCertificate, lib.ErrorI)
 		// CommitCertificate() commits a block to persistence
-		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI)
+		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI)
 		// GossipBlock() is a P2P call to gossip a completed Quorum Certificate with a Proposal
-		GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64)
+		GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64, bftMeta *lib.BFTCoordinationMeta)
 		// SendToSelf() is a P2P call to directly send  a completed Quorum Certificate to self
-		SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64)
+		SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64, bftMeta *lib.BFTCoordinationMeta)
 		// SendToReplicas() is a P2P call to directly send a Consensus message to all Replicas
 		SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable)
 		// SendToProposer() is a P2P call to directly send a Consensus message to the Leader
@@ -963,6 +1118,8 @@ type (
 		SendCertificateResultsTx(certificate *lib.QuorumCertificate)
 		// LoadCommittee() loads the ValidatorSet operating under ChainId
 		LoadCommittee(rootChainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI)
+		// LoadRootBlockTime() loads the latest root block time information
+		LoadRootBlockTime() (*lib.BlockTimeInfo, lib.ErrorI)
 		// LoadCommitteeHeightInState() loads the committee information from state as updated by the quorum certificates
 		LoadCommitteeData() (*lib.CommitteeData, lib.ErrorI)
 		// LoadLastProposers() loads the last Canopy committee proposers for sortition data
@@ -976,7 +1133,8 @@ type (
 
 type ResetBFT struct {
 	IsRootChainUpdate bool
-	StartTime         time.Time
+	RootHeight        uint64
+	BFTMeta           *lib.BFTCoordinationMeta
 }
 
 const (

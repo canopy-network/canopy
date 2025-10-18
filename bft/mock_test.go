@@ -200,8 +200,11 @@ func (tc *testConsensus) simCommitPhase(t *testing.T, proposerIdx int, round uin
 
 // simPacemakerPhase() simulates the PACEMAKER phase of the BFT lifecycle
 func (tc *testConsensus) simPacemakerPhase(t *testing.T) {
-	for i := 1; i < len(tc.valKeys); i++ {
-		pacemakerMsg := &Message{Qc: &lib.QuorumCertificate{Header: tc.view(RoundInterrupt, uint64(i+2))}}
+	for i := 0; i < len(tc.valKeys); i++ {
+		round, rootHeight := uint64(3), uint64(3)
+		view := tc.view(RoundInterrupt, round)
+		view.RootHeight = rootHeight
+		pacemakerMsg := &Message{Qc: &lib.QuorumCertificate{Header: view}}
 		require.NoError(t, pacemakerMsg.Sign(tc.valKeys[i]))
 		require.NoError(t, tc.bft.HandleMessage(pacemakerMsg))
 	}
@@ -497,7 +500,7 @@ type testController struct {
 	sendToReplicasChan chan lib.Signable
 }
 
-func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
 	return nil
 }
 
@@ -509,12 +512,16 @@ func (t *testController) LoadIsOwnRoot() bool {
 	return true
 }
 
-func (t *testController) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64) {
-	t.GossipBlock(qc, nil, 0)
+func (t *testController) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64, bftMeta *lib.BFTCoordinationMeta) {
+	t.GossipBlock(qc, nil, 0, nil)
 }
 
 func (t *testController) ChainHeight() uint64 {
 	return t.RootChainHeight()
+}
+
+func (t *testController) LoadRootBlockTime() (*lib.BlockTimeInfo, lib.ErrorI) {
+	return &lib.BlockTimeInfo{}, nil
 }
 
 func (t *testController) ProduceProposal(_ *ByzantineEvidence, _ *crypto.VDF) (rcBuildHeight uint64, block []byte, results *lib.CertificateResult, err lib.ErrorI) {
@@ -572,7 +579,7 @@ func (t *testController) LoadLastProposers(_ uint64) (*lib.Proposers, lib.ErrorI
 	return t.proposers, nil
 }
 func (t *testController) ResetFSM() {}
-func (t *testController) GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64) {
+func (t *testController) GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64, bftMeta *lib.BFTCoordinationMeta) {
 	t.gossipCertChan <- certificate
 }
 

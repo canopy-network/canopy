@@ -77,9 +77,9 @@ func (c *Controller) ListenForBlock() {
 			// if not syncing - gossip the block
 			if !c.Syncing().Load() {
 				// gossip the block to our peers
-				c.GossipBlock(qc, sender, blockMessage.Time)
+				c.GossipBlock(qc, sender, blockMessage.Time, blockMessage.BftCoordinationMeta)
 				// signal a reset to the bft module
-				c.Consensus.ResetBFT <- bft.ResetBFT{StartTime: time.UnixMicro(int64(blockMessage.Time))}
+				c.Consensus.ResetBFT <- bft.ResetBFT{BFTMeta: blockMessage.BftCoordinationMeta}
 			}
 			// reset 'syncDetector' because a new block was received properly
 			syncDetector.Reset()
@@ -95,7 +95,7 @@ func (c *Controller) ListenForBlock() {
 // PUBLISHERS BELOW
 
 // GossipBlockMsg() gossips a certificate (with block) through the P2P network for a specific chainId
-func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubToExclude []byte, timestamp uint64) {
+func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubToExclude []byte, timestamp uint64, bftMeta *lib.BFTCoordinationMeta) {
 	// log the start of the gossip block function
 	c.log.Debugf("Gossiping certificate: %s", lib.BytesToString(certificate.ResultsHash))
 	// create the block message to gossip
@@ -103,6 +103,7 @@ func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubTo
 		ChainId:             c.Config.ChainId,
 		BlockAndCertificate: certificate,
 		Time:                timestamp,
+		BftCoordinationMeta: bftMeta,
 	}
 	// send the block message to all peers excluding the sender (gossip)
 	if err := c.P2P.SendToPeers(Block, blockMessage, lib.BytesToString(senderPubToExclude)); err != nil {
@@ -111,12 +112,13 @@ func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubTo
 }
 
 // SelfSendBlock() gossips a QuorumCertificate (with block) through the P2P network for handling
-func (c *Controller) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64) {
+func (c *Controller) SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64, bftMeta *lib.BFTCoordinationMeta) {
 	// create the block message
 	blockMessage := &lib.BlockMessage{
 		ChainId:             c.Config.ChainId,
 		BlockAndCertificate: qc,
 		Time:                timestamp,
+		BftCoordinationMeta: bftMeta,
 	}
 	// internally route the block to the 'block inbox'
 	if err := c.P2P.SelfSend(c.PublicKey, Block, blockMessage); err != nil {
@@ -226,7 +228,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - re-checks all transactions in mempool
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
-func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -273,6 +275,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// send the certificate results transaction on behalf of the quorum
 		c.SendCertificateResultsTx(qc)
 	}
+	// get the root chain height
+	rcBuildHeight := c.RootChainHeight()
 	// log the start of the commit
 	c.log.Debug("Committing to store")
 	// atomically write all from the ephemeral database batch to the actual database
@@ -296,8 +300,12 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return err
 	}
+	// if self is root
+	if ownRoot, _ := c.Mempool.FSM.LoadIsOwnRoot(); ownRoot {
+		rcBuildHeight = c.Mempool.FSM.Height() - 1
+	}
 	// check the mempool to cache a proposal block and validate the mempool itself
-	c.Mempool.CheckMempool()
+	c.Mempool.CheckMempool(rcBuildHeight)
 	// reset mempool FSM
 	c.Mempool.FSM.Reset()
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
@@ -318,8 +326,6 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 			}
 			continue
 		}
-		// set the timestamp
-		info.Timestamp = ts
 		// save current validator set for the next height
 		valSet, _ := c.FSM.GetCommitteeMembers(id)
 		if _, found := c.LastValidatorSet[c.ChainHeight()+1]; !found {
@@ -336,7 +342,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 }
 
 // CommitCertificate() the experimental and parallelized version of the above
-func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult) (err lib.ErrorI) {
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -390,6 +396,8 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// send the certificate results transaction on behalf of the quorum
 		c.SendCertificateResultsTx(qc)
 	}
+	// get the root chain height
+	rcBuildHeight := c.RootChainHeight()
 	// create an error group to run the commit and mempool update in parallel
 	eg := errgroup.Group{}
 	eg.Go(func() error {
@@ -431,7 +439,6 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 			}
 			// publish root chain information
 			// set the timestamp
-			info.Timestamp = ts
 			go c.RCManager.Publish(id, info)
 		}
 		// exit
@@ -444,8 +451,12 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 			// exit with error
 			return err
 		}
+		// if self is root
+		if ownRoot, _ := c.Mempool.FSM.LoadIsOwnRoot(); ownRoot {
+			rcBuildHeight = c.Mempool.FSM.Height() - 1
+		}
 		// check the mempool to cache a proposal block and validate the mempool itself
-		c.Mempool.CheckMempool()
+		c.Mempool.CheckMempool(rcBuildHeight)
 		// discard the temporary store after checking the mempool
 		memPoolStore.Discard()
 		// exit
@@ -587,8 +598,10 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	if result == nil || result.BlockHeader == nil || !bytes.Equal(result.BlockHeader.Hash, block.BlockHeader.Hash) {
 		result = nil
 	}
+	// set the last BFT time
+	c.Consensus.LastCommitTime = time.UnixMicro(int64(msg.BftCoordinationMeta.GetLastCommitTime()))
 	// attempts to commit the QC to persistence of chain by playing it against the state machine
-	if err = c.CommitCertificate(qc, block, result, msg.Time); err != nil {
+	if err = c.CommitCertificate(qc, block, result); err != nil {
 		// exit with error
 		return nil, err
 	}

@@ -236,9 +236,9 @@ const (
 
 	CodeValidatorIsADelegate ErrorCode = 66
 
-	CodeInvalidChainId ErrorCode = 68
-	CodeWrongNetworkID ErrorCode = 69
-
+	CodeInvalidChainId           ErrorCode = 68
+	CodeWrongNetworkID           ErrorCode = 69
+	CodeRootBuildHeight          ErrorCode = 70
 	CodeRootHeight               ErrorCode = 71
 	CodeInvalidQCCommitteeHeight ErrorCode = 72
 
@@ -464,7 +464,11 @@ func ErrNewHeight() ErrorI {
 }
 
 func ErrWrongRootHeight() ErrorI {
-	return NewError(CodeRootHeight, ConsensusModule, "wrong root height")
+	return NewError(CodeRootBuildHeight, ConsensusModule, "wrong root height")
+}
+
+func ErrWrongRootBuildHeight() ErrorI {
+	return NewError(CodeRootHeight, ConsensusModule, "wrong root build height")
 }
 
 func ErrInvalidQCCommitteeHeight() ErrorI {
@@ -475,8 +479,8 @@ func ErrInvalidQCRootChainHeight() ErrorI {
 	return NewError(CodeInvalidQCRootChainHeight, ConsensusModule, "invalid certificate root-chain height")
 }
 
-func ErrInvalidRCBuildHeight() ErrorI {
-	return NewError(CodeInvalidRCBuildHeight, ConsensusModule, "invalid root chain build height")
+func ErrInvalidRCBuildHeight(height, stateHeight uint64) ErrorI {
+	return NewError(CodeInvalidRCBuildHeight, ConsensusModule, fmt.Sprintf("invalid root chain build height %d with state height %d", height, stateHeight))
 }
 
 func ErrEmptyView() ErrorI {
@@ -600,7 +604,7 @@ func ErrInvalidNetAddress(s string) ErrorI {
 }
 
 func ErrWrongHighQCHeight() ErrorI {
-	return NewError(CodeWrongHighQCHeight, ConsensusModule, fmt.Sprintf("wrong high qc hegiht"))
+	return NewError(CodeWrongHighQCHeight, ConsensusModule, fmt.Sprintf("wrong high qc height"))
 }
 
 func ErrWriteFile(err error) ErrorI {
@@ -625,6 +629,10 @@ func ErrEmptyTransaction() ErrorI {
 
 func ErrEmptyMessage() ErrorI {
 	return NewError(CodeEmptyMessage, StateMachineModule, "message is empty")
+}
+
+func ErrUnknownFields() ErrorI {
+	return NewError(CodeUnknownMsg, StateMachineModule, "message contains unknown fields")
 }
 
 func ErrNoSavedBlockOrResults() ErrorI {
