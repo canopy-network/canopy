@@ -13,15 +13,19 @@ import {
 } from '@/core/actionForm'
 import {useAccounts} from '@/app/providers/AccountsProvider'
 import {template} from '@/core/templater'
+import { resolveToastFromManifest, resolveRedirectFromManifest } from "@/toast/manifestRuntime";
+import { useToast } from "@/toast/ToastContext";
+import { genericResultMap } from "@/toast/mappers";
 import {LucideIcon} from "@/components/ui/LucideIcon";
-import {motion} from "framer-motion";
 import {cx} from "@/ui/cx";
+import {motion} from "framer-motion";
 
 
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
 
 
-export default function ActionRunner({actionId}: { actionId: string }) {
+export default function ActionRunner({actionId, onFinish}: { actionId: string, onFinish?: () => void }) {
+    const toast = useToast();
     const [formHasErrors, setFormHasErrors] = React.useState(false)
     const [stage, setStage] = React.useState<Stage>('form')
     const [form, setForm] = React.useState<Record<string, any>>({})
@@ -73,6 +77,8 @@ export default function ActionRunner({actionId}: { actionId: string }) {
         session: {password: session?.password},
     }), [form, chain, selectedAccount, feesResolved, session?.password])
 
+
+
     const infoItems = React.useMemo(
         () =>
             (action?.form as any)?.info?.items?.map((it: any) => ({
@@ -114,6 +120,16 @@ export default function ActionRunner({actionId}: { actionId: string }) {
     const isReady = React.useMemo(() => !!action && !!chain, [action, chain])
 
 
+    const didInitToastRef = React.useRef(false);
+    React.useEffect(() => {
+        if (!action || !isReady) return;
+        if (didInitToastRef.current) return;
+        const t = resolveToastFromManifest(action, "onInit", templatingCtx);
+        if (t) toast.neutral(t);
+        didInitToastRef.current = true;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [action, isReady]);
+
     const normForm = React.useMemo(() => normalizeFormForAction(action as any, debouncedForm), [action, debouncedForm])
     const payload = React.useMemo(
         () => buildPayloadFromAction(action as any, {
@@ -145,14 +161,33 @@ export default function ActionRunner({actionId}: { actionId: string }) {
             setUnlockOpen(true);
             return
         }
+        const before = resolveToastFromManifest(action, "onBeforeSubmit", templatingCtx);
+        if (before) toast.neutral(before);
         setStage('executing')
         const res = await fetch(host + action!.submit?.path, {
             method: action!.submit?.method,
             headers: action!.submit?.headers ?? {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
-        }).then((r) => r.json()).catch(() => ({hash: '0xDEMO'}))
+        }).then((r) => r.json())
         setTxRes(res)
+
+        const key = (res?.ok ?? true) ? "onSuccess" : "onError";
+        const t = resolveToastFromManifest(action, key as any, templatingCtx, res);
+
+        if (t) {
+            toast.toast(t);
+        } else {
+            toast.fromResult({
+                result: res,
+                ctx: templatingCtx,
+                map: (r, c) => genericResultMap(r, c),
+                fallback: { title: "Processed", variant: "neutral", ctx: templatingCtx }
+            })
+        }
+        const fin = resolveToastFromManifest(action, "onFinally", templatingCtx, res);
+        if (fin) toast.info(fin);
         setStage('result')
+        if (onFinish) onFinish()
     }, [isReady, requiresAuth, session, host, action, payload])
 
     const onContinue = React.useCallback(() => {

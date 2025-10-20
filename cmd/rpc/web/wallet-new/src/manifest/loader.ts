@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { ChainConfig, Manifest } from './types'
+import type { Manifest } from './types'
 
 const DEFAULT_CHAIN = (import.meta.env.VITE_DEFAULT_CHAIN as string) || 'canopy'
 const MODE = ((import.meta.env.VITE_CONFIG_MODE as string) || 'embedded') as 'embedded' | 'runtime'
@@ -22,7 +22,7 @@ export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
 
   const chainQ = useQuery({
     queryKey: ['chain', base],
-    queryFn: () => fetchJson<ChainConfig>(`${base}/chain.json`),
+    queryFn: () => fetchJson<any>(`${base}/chain.json`),
     // Use the global refetch configuration every 20s
     // The configuration data may change, so it's good to update it
   })

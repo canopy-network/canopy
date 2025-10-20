@@ -3,6 +3,8 @@ import type { Field, FieldOp, SelectField, SourceRef } from '@/manifest/types'
 import { useFieldDs } from '@/actions/useFieldsDs'
 import { template } from '@/core/templater'
 import { cx } from '@/ui/cx'
+import * as Switch from '@radix-ui/react-switch';
+import {OptionCard, OptionCardOpt} from "@/actions/OptionCard";
 
 type Props = {
     f: Field
@@ -121,14 +123,14 @@ export const FieldControl: React.FC<Props> = ({
     const help = errors[f.name] || resolveTemplate(f.help)
     const v = value[f.name] ?? ''
 
-    // DS: siempre llama hook, controla con enabled dentro del hook (ya arreglado)
+    // DS: Always call hook, control with enabled inside the hook (already regulated)
     const dsField = useFieldDs(f, templateContext)
     const dsValue = dsField?.data
 
     React.useEffect(() => {
         if (!setLocalDs) return
-        // Si este field tiene ds, actualiza el contexto ds local para otras templates
-        // (no impacta a menos que definas setLocalDs arriba en FormRenderer)
+        // If this field has a data source, update the local ds context for other templates
+        // (does not affect anything unless setLocalDs is defined above in FormRenderer)
         const hasDs = (f as any)?.ds && typeof (f as any).ds === 'object'
         if (hasDs && dsValue !== undefined) {
             const dsKey = Object.keys((f as any).ds)[0]
@@ -229,6 +231,61 @@ export const FieldControl: React.FC<Props> = ({
                 onChange={(e) => setVal(f, e.target.value)}
             />
         )
+    }
+
+    // SWITCH
+    if (f.type === 'switch') {
+        const checked = Boolean(v ?? resolveTemplate(f.value) ?? false)
+        return (
+            <div className="col-span-12 flex flex-col ">
+                <div className={"flex items-center justify-between"}>
+                    <div className="text-sm mb-1 text-canopy-50 ">{resolveTemplate(f.label)}</div>
+                    <Switch.Root
+                        id={f.id}
+                        checked={checked}
+                        disabled={f.readOnly}
+                        onCheckedChange={(next) => setVal(f, next)}
+                        className="relative h-5 w-9 rounded-full bg-neutral-700 data-[state=checked]:bg-emerald-500 outline-none shadow-inner transition-colors"
+                        aria-label={String(resolveTemplate(f.label) ?? f.name)}
+                    >
+                        <Switch.Thumb className="block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[18px]" />
+                    </Switch.Root>
+                </div>
+
+
+                {f.help && <span className="text-xs text-text-muted">{resolveTemplate(f.help)}</span>}
+            </div>
+        )
+    }
+
+    // OPTION CARD
+    if (f.type === 'optionCard') {
+        const opts: OptionCardOpt[] = Array.isArray((f as any).options) ? (f as any).options : [];
+        const resolvedDefault = resolveTemplate(f.value);
+        const current = (v === '' || v == null) && resolvedDefault != null ? resolvedDefault : v;
+
+        return wrap(
+            <div role="radiogroup" aria-label={String(resolveTemplate(f.label) ?? f.name)} className="grid grid-cols-12 gap-3 w-full">
+                {opts.map((o, i) => {
+                    const label = resolveTemplate(o.label);
+                    const help = resolveTemplate(o.help);
+                    const val = String(resolveTemplate(o.value) ?? i);
+                    const selected = String(current ?? '') === val;
+
+                    return (
+                        <div key={val} className="col-span-12 ">
+                            <OptionCard
+                                selected={selected}
+                                disabled={f.readOnly}
+                                onSelect={() => setVal(f, val)}
+                                label={label}
+                                help={help}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+        );
     }
 
     // SELECT

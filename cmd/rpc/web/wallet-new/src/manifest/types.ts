@@ -104,6 +104,14 @@ export type TextField = FieldBase & {
     type: 'text' | 'textarea';
 };
 
+export type SwitchField = FieldBase & {
+    type: 'switch'
+}
+
+export type OptionCardField = FieldBase & {
+    type: "optionCard",
+}
+
 export type SelectField = FieldBase & {
     type: 'select';
     options?: Array<{ label: string; value: string }>;
@@ -114,6 +122,8 @@ export type SelectField = FieldBase & {
 export type Field =
     | AddressField
     | AmountField
+    | SwitchField
+    | OptionCardField
     | TextField
     | SelectField;
 

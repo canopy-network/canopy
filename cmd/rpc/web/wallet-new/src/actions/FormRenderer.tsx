@@ -22,60 +22,8 @@ type Props = {
     /** ctx opcional extra: { fees, ds, ... }  */
     ctx?: Record<string, any>
     onErrorsChange?: (errors: Record<string,string>, hasErrors: boolean) => void   // 👈 NUEVO
+    onFormOperation?: (fieldOperation: FieldOp) => void
 
-}
-
-const FieldFeatures: React.FC<{
-    fieldId: string
-    features?: FieldOp[]
-    ctx: Record<string, any>
-    setVal: (fieldId: string, v: any) => void
-}> = ({ features, ctx, setVal, fieldId }) => {
-    if (!features?.length) return null
-
-    const resolve = (s?: any) => (typeof s === 'string' ? template(s, ctx) : s)
-
-    const labelFor = (op: FieldOp) => {
-        if (op.op === 'copy') return 'Copy'
-        if (op.op === 'paste') return 'Paste'
-        if (op.op === 'set') return 'Max'
-        return op.op
-    }
-
-    const handle = async (op: FieldOp) => {
-        switch (op.op) {
-            case 'copy': {
-                const txt = String(resolve(op.from) ?? '')
-                await navigator.clipboard.writeText(txt)
-                return
-            }
-            case 'paste': {
-                const txt = await navigator.clipboard.readText()
-                setVal(fieldId, txt)
-                return
-            }
-            case 'set': {
-                const v = resolve(op.value)
-                setVal(op.field ?? fieldId, v)
-                return
-            }
-        }
-    }
-
-    return (
-        <div className="flex items-center  gap-2">
-            {features.map((op) => (
-                <button
-                    key={op.id}
-                    type="button"
-                    onClick={() => handle(op)}
-                    className="text-xs px-2 py-1 h-full rounded font-bold border border-primary text-primary hover:bg-primary hover:text-secondary"
-                >
-                    {labelFor(op)}
-                </button>
-            ))}
-        </div>
-    )
 }
 
 export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx, onErrorsChange }: Props) {

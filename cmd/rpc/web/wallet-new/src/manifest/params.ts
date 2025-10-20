@@ -5,7 +5,7 @@ import { template } from '@/core/templater'
 export function useNodeParams(chain?: ChainConfig) {
   const sources = chain?.params?.sources ?? []
   const queries = useQueries({
-    queries: sources.map((s) => ({
+    queries: sources.map((s: { id: any; base: string; path: any; method: string; headers: any; encoding: string; body: any }) => ({
       queryKey: ['params', s.id, chain?.rpc],
       enabled: !!chain,
       queryFn: async () => {

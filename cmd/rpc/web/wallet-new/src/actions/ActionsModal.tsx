@@ -83,7 +83,7 @@ export const ActionsModal: React.FC<ActionModalProps> = (
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5, delay: 0.4 }}
                             >
-                            <ActionRunner actionId={selectedTab.value} />
+                            <ActionRunner actionId={selectedTab.value} onFinish={onClose} />
                             </motion.div>
                         )}
                     </motion.div>

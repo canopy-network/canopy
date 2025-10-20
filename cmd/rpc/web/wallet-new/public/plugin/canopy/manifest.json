@@ -84,12 +84,19 @@
             "required": true,
             "min": 0,
             "max": "{{ds.account.amount}}",
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0",
+                "max": "Amount must be less than {{ds.account.amount}}"
+              }
+            },
             "features": [
               {
                 "id": "maxBtn",
                 "op": "set",
                 "field": "amount",
-                "value": "{{ds.account.amount}} - {{fees.sendFee}}"
+                "value": "{{ds.account.amount}} - {{fees.raw.sendFee}}"
               }
             ]
           }
@@ -108,9 +115,21 @@
             }
           ]
         },
+        "summary": {
+          "title": "Summary",
+          "items": [
+            {
+              "label": "Receiving Address",
+              "value": "{{form.address}}"
+            },
+            {
+              "label": "Asset",
+              "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})"
+            }
+          ]
+        },
         "confirmation": {
-          "title": "Confirm Transaction",
-          "icon": "Send",
+          "title": "Confirmations",
           "summary": [
             {
               "label": "From",
@@ -129,17 +148,13 @@
               "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
             }
           ],
-          "btns": {
-            "submit": {
-              "label": "Send Transaction",
-              "icon": "Send"
-            },
-            "cancel": {
-              "label": "Cancel",
-              "icon": "Close"
-            }
+          "btn": {
+            "icon": "Send",
+            "label": "Send"
           }
+
         }
+
       },
       "payload": {
         "address": {
@@ -195,6 +210,16 @@
         "base": "admin",
         "path": "/v1/admin/tx-send",
         "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            { "type": "link", "label": "Explorer", "href": "{{chain.explorer.tx}}/{{result}}", "newTab": true }
+          ]
+        }
       }
     },
     {
@@ -266,6 +291,223 @@
               "label": "Allow 20 seconds for confirmation.",
               "icon": "Timer"
             }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stake",
+      "title": "Stake",
+      "icon": "Lock",
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "min-w-[5rem] max-w-[10rem]"
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "fields": [
+          {
+            "id": "stakingAddress",
+            "name": "stakingAddress",
+            "type": "text",
+            "label": "Staking Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "readOnly": true,
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{account.address}}"
+                }
+              }
+            }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "placeholder": "0.00",
+            "required": true,
+            "min": 0,
+            "max": "{{ds.account.amount}}",
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0",
+                "max": "Amount must be less than {{ds.account.amount}}"
+              }
+            },
+            "features": [
+              {
+                "id": "maxBtn",
+                "op": "set",
+                "field": "amount",
+                "value": "{{ds.account.amount}} - {{fees.sendFee}}"
+              }
+            ]
+          },
+          {
+            "id": "rewardsAddress",
+            "name": "rewardsAddress",
+            "type": "text",
+            "label": "Rewards Address",
+            "required": true,
+            "length.min": 1,
+            "validation": {
+              "messages": {
+                "required": "Rewards address is required",
+                "length.min": "Invalid destination address"
+              }
+            },
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ]
+          },
+          {
+            "id": "stakeType",
+            "name": "stakeType",
+            "type": "optionCard",
+            "label": "Stake Type",
+            "required": true,
+            "options": [
+              {
+                "label": "Validation",
+                "value": false,
+                "help": "Run your own validator",
+                "toolTip": "This will run your own validator on the network."
+              },
+              {
+                "label": "Delegation",
+                "value":  true,
+                "help": "Delegate to committee",
+                "toolTip": "This will delegate your tokens to a committee."
+              }
+            ]
+          },
+          {
+            "id": "isAutocompound",
+            "name": "isAutocompound",
+            "type": "switch",
+            "label": "Autocompound",
+            "value": false,
+            "help": "Automatically restake rewards",
+            "toolTip": "This will automatically restake rewards."
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "text",
+            "label": "Transaction Fee",
+            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}",
+            "readOnly": true
+          }
+        ],
+        "confirmation": {
+          "title": "Confirmations",
+          "summary": [
+            {
+              "label": "From",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            },
+            {
+              "label": "To",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Send"
+          }
+
+        }
+
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toBaseDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.sendFee}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-send",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            { "type": "link", "label": "Explorer", "href": "{{chain.explorer.tx}}/{{result}}", "newTab": true }
           ]
         }
       }
