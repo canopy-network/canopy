@@ -9,12 +9,15 @@ import (
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBenchmark(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping benchmark test")
+	}
 	fmt.Println("=== COMPARISON: Few Keys, Many Versions ===")
 	testPebble(t, 50, 100_000)
 	testBadger(t, 50, 100_000)
@@ -36,14 +39,14 @@ func testBadger(t *testing.T, numKeys, numVersions int) {
 	require.NoError(t, err)
 	// generate keys
 	keys := make([][]byte, numKeys)
-	for i := 0; i < numKeys; i++ {
-		keys[i] = crypto.Hash([]byte(fmt.Sprintf("%d", i)))
+	for i := range numKeys {
+		keys[i] = crypto.Hash(fmt.Appendf(nil, "%d", i))
 	}
 	// execute writes
 	start := time.Now()
-	for i := 0; i < numVersions; i++ {
+	for i := range numVersions {
 		tx := db.NewWriteBatchAt(uint64(i + 1))
-		for j := 0; j < numKeys; j++ {
+		for j := range numKeys {
 			require.NoError(t, tx.Set(keys[j], keys[j]))
 		}
 		require.NoError(t, tx.Flush())
@@ -103,8 +106,8 @@ func testPebble(t *testing.T, numKeys, numVersions int) {
 
 	// generate keys
 	keys := make([][]byte, numKeys)
-	for i := 0; i < numKeys; i++ {
-		keys[i] = crypto.Hash([]byte(fmt.Sprintf("%d", i)))
+	for i := range numKeys {
+		keys[i] = crypto.Hash(fmt.Appendf(nil, "%d", i))
 	}
 
 	// execute writes - PROPER VERSIONING: Must commit per version like blockchain

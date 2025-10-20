@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,26 +26,46 @@ const (
 )
 
 func TestFuzz(t *testing.T) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
+	require.NoError(t, err)
+	// make a writable reader that reads from the last height
+	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, _, cleanup := testStore(t)
 	defer cleanup()
 	defer db.Close()
 	keys := make([]string, 0)
-	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
 }
 
 func TestFuzzTxn(t *testing.T) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
+	require.NoError(t, err)
+	// make a writable reader that reads from the last height
+	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
-	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
@@ -77,7 +98,7 @@ func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys
 		if x, ok := db.(TxnWriterI); ok {
 			switch math.Intn(10) {
 			case 0:
-				require.NoError(t, x.Flush())
+				require.NoError(t, x.Commit())
 			}
 		}
 	case CommitTesting:

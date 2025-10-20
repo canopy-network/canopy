@@ -2,7 +2,7 @@ package lib
 
 import (
 	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/dgraph-io/badger/v4"
+	"github.com/cockroachdb/pebble/v2"
 )
 
 /* This file contains persistence module interfaces that are used throughout the app */
@@ -14,7 +14,7 @@ type StoreI interface {
 	RWIndexerI                                   // reading and writing indexer
 	NewTxn() StoreI                              // wrap the store in a discardable nested store
 	Root() ([]byte, ErrorI)                      // get the merkle root from the store
-	DB() *badger.DB                              // retrieve the underlying badger db
+	DB() *pebble.DB                              // retrieve the underlying badger db
 	Version() uint64                             // access the height of the store
 	Copy() (StoreI, ErrorI)                      // make a clone of the store
 	NewReadOnly(version uint64) (StoreI, ErrorI) // historical read only version of the store

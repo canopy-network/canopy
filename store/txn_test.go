@@ -15,7 +15,7 @@ import (
 
 func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 	fs := vfs.NewMem()
-	db, err := pebble.Open("memdb", &pebble.Options{
+	db, err := pebble.Open("", &pebble.Options{
 		FS:                    fs,
 		DisableWAL:            false,
 		L0CompactionThreshold: 4,
