@@ -23,6 +23,9 @@ go.work
 # Jetbrains
 .idea
 
+# Zed
+.zed
+
 # Vendoring
 vendor
 

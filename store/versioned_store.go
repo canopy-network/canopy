@@ -7,7 +7,7 @@ import (
 	"math"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/v2"
 )
 
 /* versioned_store.go implements a multi-version store in pebble db*/
@@ -26,6 +26,7 @@ const (
 type VersionedStore struct {
 	db        pebble.Reader
 	batch     *pebble.Batch
+	closed    bool
 	version   uint64
 	keyBuffer []byte
 }
@@ -112,10 +113,23 @@ func (vs *VersionedStore) Commit() (e lib.ErrorI) {
 
 // Close closes the store and releases resources
 func (vs *VersionedStore) Close() lib.ErrorI {
-	err := vs.db.Close()
-	if err != nil {
-		return ErrCloseDB(err)
+	// prevent panic due to double close
+	if vs.closed {
+		return nil
 	}
+	// for write-only versioned store, db may be nil
+	if vs.db != nil {
+		if err := vs.db.Close(); err != nil {
+			return ErrCloseDB(err)
+		}
+	}
+	// for read-only versioned store, batch may be nil
+	if vs.batch != nil {
+		if err := vs.batch.Close(); err != nil {
+			return ErrCloseDB(err)
+		}
+	}
+	vs.closed = true
 	return nil
 }
 
