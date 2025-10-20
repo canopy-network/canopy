@@ -8,16 +8,16 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/vfs"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 	"github.com/stretchr/testify/require"
 )
 
 func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 	fs := vfs.NewMem()
 	db, err := pebble.Open("memdb", &pebble.Options{
-		DisableWAL:            false,
 		FS:                    fs,
+		DisableWAL:            false,
 		L0CompactionThreshold: 4,
 		L0StopWritesThreshold: 12,
 		MaxOpenFiles:          1000,
@@ -28,7 +28,7 @@ func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 	writer := db.NewBatch()
 	vs, err := NewVersionedStore(db.NewSnapshot(), writer, version)
 	require.NoError(t, err)
-	return NewVersionedStoreTxn(vs, vs, prefix, false, true, version), db, writer
+	return NewTxn(vs, vs, prefix, false, true, version), db, writer
 }
 
 func TestNestedTxn(t *testing.T) {

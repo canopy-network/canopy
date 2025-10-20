@@ -94,15 +94,6 @@ type TxnWriterI interface {
 // 	return NewTxn(BadgerTxnReader{reader, prefix}, writerI, prefix, state, sort, writeVersion...)
 // }
 
-func NewVersionedStoreTxn(reader *VersionedStore, writer *VersionedStore, prefix []byte, state, sort bool, writeVersion ...uint64) *Txn {
-	// var writerI TxnWriterI
-	// // prevent nil interface containing nil value
-	// if writer != nil {
-	// 	writerI = writer
-	// }
-	return NewTxn(reader, writer, prefix, state, sort, writeVersion...)
-}
-
 // NewTxn() creates a new instance of Txn with the specified reader and writer
 func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort bool, version ...uint64) *Txn {
 	var v uint64
