@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +29,7 @@ func TestFuzzMultiSet(t *testing.T) {
 	// close the store when done
 	defer memStore2.Close()
 	var keys [][]byte
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		// load 32 random bytes
 		random := make([]byte, 32)
 		_, err := rand.Read(random)
@@ -2020,12 +2021,20 @@ func FuzzKeyDecodeEncode(f *testing.F) {
 
 func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*SMT, *Txn) {
 	// create a new memory store to work with
-	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
 	require.NoError(t, err)
 	// make a writable reader that reads from the last height
-	reader := db.NewTransactionAt(1, true)
-	writer := db.NewWriteBatchAt(1)
-	memStore := NewBadgerTxn(reader, writer, []byte(stateCommitmentPrefix), false, false, 1)
+	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
+	require.NoError(t, err)
+	memStore := NewTxn(versionedStore, versionedStore, []byte(stateCommitmentPrefix), false, false, 1)
 	// if there's no preset - use the default 3 nodes
 	if preset == nil {
 		if root != nil {
