@@ -87,7 +87,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 		select {
 		// fires when received the response to the request
 		case msg := <-p.Inbox(lib.Topic_PEERS_RESPONSE):
-			// p.log.Debugf("Received peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+			p.log.Debugf("Received peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 			senderID := msg.Sender.Address.PublicKey
 			// rate limit per requester
 			blocked, totalBlock := l.NewRequest(lib.BytesToString(senderID))
@@ -110,7 +110,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 			}
 			// if they sent too many peers
 			if len(peerBookResponseMsg.Book) > MaxPeersExchanged {
-				//p.log.Warnf("Too many peers sent from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey)) TODO add back
+				p.log.Warnf("Too many peers sent from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 				//p.ChangeReputation(senderID, ExceedMaxPBLenRep)
 				continue
 			}
@@ -130,7 +130,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 				}
 				// try to dial
 				if err := p.DialAndDisconnect(bp.Address, true); err != nil {
-					// p.log.Debugf("DialAndDisconnect failed with err: %s", err.Error())
+					p.log.Debugf("DialAndDisconnect failed with err: %s", err.Error())
 					continue
 				}
 				// add peer to list
@@ -151,7 +151,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 		select {
 		// fires after receiving a peer request
 		case msg := <-p.Inbox(lib.Topic_PEERS_REQUEST):
-			// p.log.Debugf("Received peer book request from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+			p.log.Debugf("Received peer book request from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 			requesterID := msg.Sender.Address.PublicKey
 			// rate limit per requester
 			blocked, totalBlock := l.NewRequest(lib.BytesToString(requesterID))
@@ -277,10 +277,10 @@ func (p *PeerBook) GetAll() (res []*BookPeer) {
 
 // Add() adds a peer to the book in sorted order by public key
 func (p *PeerBook) Add(peer *BookPeer) {
-	//p.log.Debugf("Try add book peer %s with self %s", lib.BytesToTruncatedString(peer.Address.PublicKey), lib.BytesToTruncatedString(p.publicKey))
+	p.log.Debugf("Try add book peer %s with self %s", lib.BytesToTruncatedString(peer.Address.PublicKey), lib.BytesToTruncatedString(p.publicKey))
 	// if peer is self, ignore
 	if bytes.Equal(p.publicKey, peer.Address.PublicKey) {
-		//p.log.Debugf("Peer %s is self; ignoring", lib.BytesToTruncatedString(peer.Address.PublicKey))
+		p.log.Debugf("Peer %s is self; ignoring", lib.BytesToTruncatedString(peer.Address.PublicKey))
 		return
 	}
 	// lock for thread safety
@@ -291,7 +291,7 @@ func (p *PeerBook) Add(peer *BookPeer) {
 	// if peer already exists in the slice
 	if found {
 		p.Book[i] = peer // overwrite existing in case ip changed
-		//p.log.Debugf("Peer %s already found", lib.BytesToTruncatedString(peer.Address.PublicKey))
+		p.log.Debugf("Peer %s already found", lib.BytesToTruncatedString(peer.Address.PublicKey))
 		return
 	}
 	// if the peer does not yet exist, add it to the slice

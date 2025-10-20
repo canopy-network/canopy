@@ -379,9 +379,27 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 	// non blocking
 	go func() {
 		bz, _ := lib.Marshal(payload)
-		p.Inbox(topic) <- &lib.MessageAndMetadata{
+		m := &lib.MessageAndMetadata{
 			Message: bz,
 			Sender:  &lib.PeerInfo{Address: &lib.PeerAddress{PublicKey: fromPublicKey}},
+		}
+		select {
+		case p.Inbox(topic) <- m:
+		default:
+			p.log.Errorf("CRITICAL: Inbox %s queue full", lib.Topic_name[int32(topic)])
+			p.log.Error("Dropping all messages")
+			// drain inbox
+			func() {
+				for {
+					select {
+					case <-p.Inbox(topic):
+						// drop
+					default:
+						// channel is empty now
+						return
+					}
+				}
+			}()
 		}
 	}()
 	return nil
