@@ -343,11 +343,11 @@ func (s *Store) Reset() {
 	nextVersion := s.version + 1
 	newWriter := s.db.NewBatch()
 	// create new versioned stores first before discarding old ones
-	newVs, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, nextVersion)
-	newLSSVs, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
+	newLSSStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
+	newStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, nextVersion)
 	// create all new transaction-dependent objects
-	newLSS := NewTxn(newLSSVs, newLSSVs, []byte(latestStatePrefix), true, true, nextVersion)
-	newIndexer := NewTxn(newVs, newLSSVs, []byte(indexerPrefix), false, false, nextVersion)
+	newLSS := NewTxn(newLSSStore, newStore, []byte(latestStatePrefix), true, true, nextVersion)
+	newIndexer := NewTxn(newStore, newStore, []byte(indexerPrefix), false, false, nextVersion)
 	// only after creating all new objects, discard old transactions
 	s.Discard()
 	// update all references
@@ -358,9 +358,16 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	s.ss.reader.Close()
+	// close the latest state store
+	s.ss.Close()
+	// close the state commit store
+	if s.sc != nil {
+		s.sc.store.(TxnWriterI).Close()
+	}
 	s.sc = nil
-	s.Indexer.db.reader.Close()
+	// close the indexer store
+	s.Indexer.db.Close()
+	// close the writer
 	if s.writer != nil {
 		s.writer.Close()
 	}
@@ -419,12 +426,12 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 // getLatestCommitID() retrieves the latest CommitID from the database
 func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 	reader := db.NewSnapshot()
+	defer reader.Close()
 	vs, err := NewVersionedStore(reader, nil, lssVersion)
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())
 	}
 	tx := NewTxn(vs, nil, nil, false, false, 0)
-	defer reader.Close()
 	bz, err := tx.Get([]byte(lastCommitIDPrefix))
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())

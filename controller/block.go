@@ -290,6 +290,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// exit with error
 		return err
 	}
+	// reset the current mempool store to prepare for the next height
+	c.Mempool.FSM.Discard()
 	// set up the mempool with the actual new FSM for the next height
 	// this makes c.Mempool.FSM.Reset() is unnecessary
 	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
@@ -455,6 +457,8 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	if e := eg.Wait(); e != nil {
 		return e.(lib.ErrorI)
 	}
+	// reset the current mempool store to prepare for the next height
+	c.Mempool.FSM.Discard()
 	// set up the mempool with the actual new FSM for the next height
 	// this makes c.Mempool.FSM.Reset() is unnecessary
 	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {

@@ -2,9 +2,7 @@ package store
 
 import (
 	"bytes"
-	"reflect"
 	"sync"
-	"unsafe"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/dgraph-io/badger/v4"
@@ -203,16 +201,20 @@ func (t *Txn) Cancel() {
 // Close() cancels the current transaction. Any new writes will result in an error and a new
 // WriteBatch() must be created to write new entries.
 func (t *Txn) Close() lib.ErrorI {
-	if err := t.reader.Close(); err != nil {
-		return err
+	if t.reader != nil {
+		if err := t.reader.Close(); err != nil {
+			return err
+		}
 	}
 	// the same underlying struct can satisfy both interfaces, on such case Close() is only called
 	// once to prevent double closing
-	if any(t.reader) == any(t.writer) {
+	if any(t.reader) == any(t.writer) { // compares the pointers to check if they are the same
 		return nil
 	}
-	if err := t.writer.Close(); err != nil {
-		return err
+	if t.writer != nil {
+		if err := t.writer.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -539,178 +541,11 @@ func (i *Iterator) Value() (value []byte) {
 	return
 }
 
-const (
-	// ----------------------------------------------------------------------------------------------------------------
-	// BadgerDB garbage collector behavior is not well documented leading to many open issues in their repository
-	// However, here is our current understanding based on experimentation
-	// ----------------------------------------------------------------------------------------------------------------
-	// 1. Manual Keep (Protection)
-	//    - `badgerNoDiscardBit` prevents automatic GC of a key version.
-	//    - However, it can be manually superseded by a manual removal
-	//
-	// 2. Manual Remove (Explicit Deletion or Pruning)
-	//    - Deleting a key at a higher ts removes earlier versions once `discardTs >= ts`.
-	//    - Setting `badgerDiscardEarlierVersions` is similar, except it retains the current version.
-	//
-	// 3. Auto Remove – Tombstones
-	//    - Deleted keys (tombstoned) <= `discardTs` are automatically purged unless protected by `badgerNoDiscardBit`
-	//
-	// 4. Auto Remove – Set Entries
-	//    - For non-deleted (live) keys, Badger retains the number of versions to retain is defined by `KeepNumVersions`.
-	//    - Older versions exceeding this count are automatically eligible for GC.
-	//
-	//   Note:
-	// - The first GC pass after updating `discardTs` and flushing memtable is deterministic
-	// - Subsequent GC runs are probabilistic, depending on reclaimable space and value log thresholds
-	// ----------------------------------------------------------------------------------------------------------------
-	// Bits source: https://github.com/hypermodeinc/badger/blob/85389e88bf308c1dc271383b77b67f4ef4a85194/value.go#L37
-	badgerMetaFieldName       = "meta"  // badgerDB Entry 'meta' field name
-	badgerDeleteBit      byte = 1 << 0  // badgerDB 'tombstoned' flag
-	badgerNoDiscardBit   byte = 1 << 3  // badgerDB 'never discard'  bit
-	badgerSizeFieldName       = "size"  // badgerDB Txn 'size' field name
-	badgerCountFieldName      = "count" // badgerDB Txn 'count' field name
-	badgerTxnFieldName        = "txn"   // badgerDB WriteBatch 'txn' field name
-)
-
-// Enforce interface implementations
-// var _ TxnReaderI = &BadgerTxnReader{}
-
-type BadgerTxnReader struct {
-	*badger.Txn
-	prefix []byte
-}
-
-func (r BadgerTxnReader) Get(key []byte) ([]byte, lib.ErrorI) {
-	item, err := r.Txn.Get(key)
-	if err != nil {
-		if err == badger.ErrKeyNotFound {
-			return nil, nil
-		}
-		return nil, ErrStoreGet(err)
-	}
-	val, err := item.ValueCopy(nil)
-	if err != nil {
-		return nil, ErrStoreGet(err)
-	}
-	return val, nil
-}
-
-func (r BadgerTxnReader) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
-	newPrefix := lib.Append(r.prefix, prefix)
-	it := r.Txn.NewIterator(badger.IteratorOptions{
-		Prefix:      newPrefix,
-		Reverse:     reverse,
-		AllVersions: allVersions,
-	})
-	if !reverse {
-		it.Rewind()
-	} else {
-		seekLast(it, newPrefix)
-	}
-	return &Iterator{
-		reader: it,
-		prefix: r.prefix,
-	}, nil
-}
-
-func (r BadgerTxnReader) Discard() { r.Txn.Discard() }
-
-// setMeta() accesses the private field 'meta' of badgerDB's `Entry`
-// badger doesn't yet allow users to explicitly set keys as *do not discard*
-// https://github.com/hypermodeinc/badger/issues/2192
-func setMeta(e *badger.Entry, value byte) {
-	if e == nil {
-		return
-	}
-	v := reflect.ValueOf(e).Elem()
-	f := v.FieldByName(badgerMetaFieldName)
-	ptr := unsafe.Pointer(f.UnsafeAddr())
-	*(*byte)(ptr) = value
-}
-
-// getMeta() accesses the private field 'meta' of badgerDB's 'Entry'
-func getMeta(e *badger.Entry) byte {
-	if e == nil {
-		return 0
-	}
-	v := reflect.ValueOf(e).Elem()
-	f := v.FieldByName("meta")
-	return *(*byte)(unsafe.Pointer(f.UnsafeAddr()))
-}
-
-func getItemMeta(e *badger.Item) byte {
-	if e == nil {
-		return 0
-	}
-	v := reflect.ValueOf(e).Elem()
-	f := v.FieldByName("meta")
-	return *(*byte)(unsafe.Pointer(f.UnsafeAddr()))
-}
-
-// getTxnFromBatch() accesses the private field 'size/count' of badgerDB's `Txn` inside a 'WriteBatch'
-// badger doesn't yet allow users to access this info - though it allows users to avoid
-// TxnTooBig errors
-func getSizeAndCountFromBatch(batch *badger.WriteBatch) (size, count int64) {
-	v := reflect.ValueOf(batch).Elem()
-	f := v.FieldByName(badgerTxnFieldName)
-	if f.Kind() != reflect.Ptr || f.IsNil() {
-		return 0, 0
-	}
-	// f.Pointer() is the uintptr of the actual *Txn
-	txPtr := (*badger.Txn)(unsafe.Pointer(f.Pointer()))
-	return getSizeAndCount(txPtr)
-}
-
-// getSizeAndCount() accesses the private field 'size/count' of badgerDB's `Txn`
-// badger doesn't yet allow users to access this info - though it allows users to avoid
-// TxnTooBig errors
-func getSizeAndCount(txn *badger.Txn) (size, count int64) {
-	v := reflect.ValueOf(txn).Elem()
-	sizeF, countF := v.FieldByName(badgerSizeFieldName), v.FieldByName(badgerCountFieldName)
-	if !sizeF.IsValid() || !countF.IsValid() {
-		return 0, 0
-	}
-	sizePtr, countPtr := unsafe.Pointer(sizeF.UnsafeAddr()), unsafe.Pointer(countF.UnsafeAddr())
-	size, count = *(*int64)(sizePtr), *(*int64)(countPtr)
-	return
-}
-
-// seekLast() positions the iterator at the last key for the given prefix
-func seekLast(it *badger.Iterator, prefix []byte) { it.Seek(prefixEnd(prefix)) }
-
 // removePrefix() removes the prefix from the key
 func removePrefix(b, prefix []byte) []byte { return b[len(prefix):] }
 
 // prefixEnd() returns the end key for a given prefix by appending max possible bytes
 func prefixEnd(prefix []byte) []byte { return lib.Append(prefix, endBytes) }
-
-// newEntry() creates a new badgerDB entry
-func newEntry(key, value []byte, meta byte) (e *badger.Entry) {
-	e = &badger.Entry{Key: key, Value: value}
-	setMeta(e, meta)
-	return
-}
-
-// entryIsDelete() checks if entry is 'delete' operation
-func entryIsDelete(e *badger.Entry) bool {
-	if e == nil {
-		return false
-	}
-	return (getMeta(e) & badgerDeleteBit) != 0
-}
-
-func entryItemIsDelete(e *badger.Item) bool {
-	if e == nil {
-		return false
-	}
-	return (getItemMeta(e) & badgerDeleteBit) != 0
-}
-func entryItemIsDoNotDiscard(e *badger.Item) bool {
-	if e == nil {
-		return false
-	}
-	return (getItemMeta(e) & badgerNoDiscardBit) != 0
-}
 
 var endBytes = bytes.Repeat([]byte{0xFF}, maxKeyBytes+1)
 

@@ -169,6 +169,8 @@ func (c *Controller) Stop() {
 	c.Lock()
 	// unlock when the function completes
 	defer c.Unlock()
+	// close the controller mempool store
+	c.Mempool.FSM.Discard()
 	// stop the store module
 	if err := c.FSM.Store().(lib.StoreI).Close(); err != nil {
 		c.log.Error(err.Error())
