@@ -385,7 +385,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 		select {
 		case s.inbox <- m:
 		default:
-			s.logger.Errorf("CRITICAL: Inbox %s queue full", lib.Topic_name[int32(packet.StreamId)])
+			s.logger.Errorf("CRITICAL: Inbox %s queue full in receive service", lib.Topic_name[int32(packet.StreamId)])
 			s.logger.Error("Dropping all messages")
 			// drain inbox
 			func() {
