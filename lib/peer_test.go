@@ -3,9 +3,10 @@ package lib
 import (
 	"container/list"
 	"encoding/json"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"testing"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -158,6 +159,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   1,
 				maxPerRequester: 1,
 				maxRequests:     3,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "a",
 			expectedRequesterBlock: true,
@@ -173,6 +175,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   1,
 				maxPerRequester: 1,
 				maxRequests:     1,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "b",
 			expectedRequesterBlock: false,
@@ -186,6 +189,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   0,
 				maxPerRequester: 1,
 				maxRequests:     1,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "b",
 			expectedRequesterBlock: false,
