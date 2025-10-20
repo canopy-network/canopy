@@ -83,7 +83,7 @@ func (p *P2P) SendPeerBookRequests() {
 
 func (p *P2P) ListenForPeerBookResponses() {
 	// limit the number of inbound PeerBook requests per requester and by total number of requests
-	l := lib.NewLimiter(MaxPeerBookRequestsPerWindow, p.MaxPossiblePeers()*MaxPeerBookRequestsPerWindow, PeerBookRequestWindowS, p.log)
+	l := lib.NewLimiter(MaxPeerBookRequestsPerWindow, p.MaxPossiblePeers()*MaxPeerBookRequestsPerWindow, PeerBookRequestWindowS, "PEER_BOOK_RESPONSE", p.log)
 	for {
 		select {
 		// fires when received the response to the request
@@ -152,7 +152,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 // ListenForPeerBookRequests()
 func (p *P2P) ListenForPeerBookRequests() {
 	// limit the number of inbound PeerBook requests per requester and by total number of requests
-	l := lib.NewLimiter(MaxPeerBookRequestsPerWindow, p.MaxPossiblePeers()*MaxPeerBookRequestsPerWindow, PeerBookRequestWindowS, p.log)
+	l := lib.NewLimiter(MaxPeerBookRequestsPerWindow, p.MaxPossiblePeers()*MaxPeerBookRequestsPerWindow, PeerBookRequestWindowS, "PEER_BOOK_REQUEST", p.log)
 	for {
 		select {
 		// fires after receiving a peer request
