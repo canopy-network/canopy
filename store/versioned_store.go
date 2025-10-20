@@ -269,7 +269,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		// Now the iterator's current value is the newest visible version for userKey.
 		tomb, val := vi.store.parseValueWithTombstone(vi.iter.Value())
 		// skip dead user-keys
-		if tomb == DeadTombstone {
+		if !vi.allVersions && tomb == DeadTombstone {
 			continue
 		}
 		// set variables
