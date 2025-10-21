@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -21,6 +22,7 @@ const (
 	lastCommitIDPrefix    = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
 	maxKeyBytes           = 256            // maximum size of a key
 	lssVersion            = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
+	versionSyncBlock      = 100            // block threshold for syncing commits to stable storage
 )
 
 var _ lib.StoreI = &Store{} // enforce the Store interface
@@ -67,6 +69,7 @@ type Store struct {
 	metrics  *lib.Metrics  // telemetry
 	log      lib.LoggerI   // logger
 	config   lib.Config    // config
+	mu       *sync.Mutex   // mutex for concurrent commit/close
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -122,11 +125,11 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 	writer := db.NewBatch()
 	// make a versioned store from the current height and the latest height
 	// note: version for the versioned store may be overridden by the SetAt() and DeleteAt() code
-	hssVs, err := NewVersionedStore(db.NewSnapshot(), writer, version)
+	hssStore, err := NewVersionedStore(db.NewSnapshot(), writer, version)
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
-	lssVs, err := NewVersionedStore(db.NewSnapshot(), writer, lssVersion)
+	lssStore, err := NewVersionedStore(db.NewSnapshot(), writer, lssVersion)
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
@@ -136,10 +139,11 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		log:     log,
 		db:      db,
 		writer:  writer,
-		ss:      NewTxn(lssVs, lssVs, []byte(latestStatePrefix), true, true, nextVersion),
-		Indexer: &Indexer{NewTxn(hssVs, hssVs, []byte(indexerPrefix), false, false, nextVersion), config},
+		ss:      NewTxn(lssStore, lssStore, []byte(latestStatePrefix), true, true, nextVersion),
+		Indexer: &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
 		metrics: metrics,
 		config:  config,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -171,6 +175,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		sc:      NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
 		Indexer: &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
 		metrics: s.metrics,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -197,11 +202,15 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		ss:      s.ss.Copy(lssReader, lssReader),
 		Indexer: &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
 		metrics: s.metrics,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
+	// lock for safe concurrent access
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -221,17 +230,22 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	}
 	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
-	if e := s.writer.Commit(&pebble.WriteOptions{Sync: false}); e != nil {
-		return nil, ErrCommitDB(e)
+	if err := s.writer.Commit(
+		&pebble.WriteOptions{
+			// Wait for filesystem to sync every versionSyncBlock to make sure data is durable on the
+			// case of a crash
+			Sync: s.Version()%versionSyncBlock == 0,
+		}); err != nil {
+		return nil, ErrCommitDB(err)
 	}
 	// check if the current version is a multiple of the cleanup block interval
 	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
 	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
 		// go func() {
 		// trigger compaction of LSS deleted keys
-		// 	if err := s.Compact(); err != nil {
-		// 		s.log.Errorf("failed to evict LSS deleted keys: %s", err)
-		// 	}
+		// if err := s.Compact(); err != nil {
+		// 	s.log.Errorf("failed to evict LSS deleted keys: %s", err)
+		// }
 		// }()
 	}
 	// update the metrics once complete
@@ -317,12 +331,8 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	// if smt not cached
 	if s.sc == nil {
 		nextVersion := s.version + 1
-		vs, err := NewVersionedStore(s.db.NewSnapshot(), s.writer, nextVersion)
-		if err != nil {
-			return nil, err
-		}
 		// set up the state commit store
-		s.sc = NewDefaultSMT(NewTxn(vs, vs, []byte(stateCommitIDPrefix), false, false, nextVersion))
+		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, []byte(stateCommitIDPrefix), false, false, nextVersion))
 		// commit the SMT directly using the txn ops
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
 			return nil, err
@@ -339,7 +349,7 @@ func (s *Store) Reset() {
 	newWriter := s.db.NewBatch()
 	// create new versioned stores first before discarding old ones
 	newLSSStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
-	newStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, nextVersion)
+	newStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, s.version)
 	// create all new transaction-dependent objects
 	newLSS := NewTxn(newLSSStore, newStore, []byte(latestStatePrefix), true, true, nextVersion)
 	newIndexer := NewTxn(newStore, newStore, []byte(indexerPrefix), false, false, nextVersion)
@@ -355,10 +365,6 @@ func (s *Store) Reset() {
 func (s *Store) Discard() {
 	// close the latest state store
 	s.ss.Close()
-	// close the state commit store
-	if s.sc != nil {
-		s.sc.store.(TxnWriterI).Close()
-	}
 	s.sc = nil
 	// close the indexer store
 	s.Indexer.db.Close()
@@ -370,10 +376,20 @@ func (s *Store) Discard() {
 
 // Close() discards the writer and closes the database connection
 func (s *Store) Close() lib.ErrorI {
+	// concurrency lock for safety
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// stop the current writer/readers
 	s.Discard()
+	// Optionally ensure latest memtable is flushed (helps make state visible on disk).
+	if err := s.db.Flush(); err != nil {
+		return ErrCloseDB(fmt.Errorf("flush error: %v", err))
+	}
+	// close the database connection
 	if err := s.db.Close(); err != nil {
 		return ErrCloseDB(err)
 	}
+	// exit
 	return nil
 }
 
@@ -439,14 +455,13 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 }
 
 // Compact deletes all entries marked for compaction.
-// It does so by iterating over the database and actually deleting the tombstones,
-// flushing memtables to disk and compacting the database, all on the LSS prefix
+// it iterates over the LSS prefix, deletes tombstone entries, and performs compaction
 func (s *Store) Compact() lib.ErrorI {
 	now := time.Now()
 	s.log.Debugf("key compaction started at height %d", s.Version())
 	// create a timeout to limit the duration of the compaction process
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// create a batch to set the keys to be removed by the compaction
 	batch := s.db.NewBatch()
