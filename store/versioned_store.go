@@ -149,6 +149,7 @@ func (vs *VersionedStore) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI)
 }
 
 // ArchiveIterator returns an iterator for all keys with the given prefix
+// TODO: Currently not working, VersionedIterator must be modified to support archive iteration
 func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
 	return vs.newVersionedIterator(prefix, false, true)
 }
@@ -260,16 +261,24 @@ func (vi *VersionedIterator) advanceToNextKey() {
 			continue
 		}
 		// skip over the 'previous userKey' to go to the next 'userKey'
-		if !vi.allVersions && version > vi.store.version ||
-			(vi.lastUserKey != nil && bytes.Equal(userKey, vi.lastUserKey)) {
+		if version > vi.store.version || (vi.lastUserKey != nil && bytes.Equal(userKey, vi.lastUserKey)) {
 			continue
+		}
+		// in reverse mode, when a new key is found, seek to its highest version
+		if vi.reverse && vi.lastUserKey != nil {
+			vi.iter.SeekLT(vi.store.makeVersionedKey(userKey, vi.store.version))
+			vi.iter.Next()
+			userKey, version, err = vi.store.parseVersionedKey(vi.iter.Key())
+			if err != nil || version > vi.store.version {
+				continue
+			}
 		}
 		// set as 'previous userKey'
 		vi.lastUserKey = bytes.Clone(userKey)
 		// Now the iterator's current value is the newest visible version for userKey.
 		tomb, val := ParseValueWithTombstone(vi.iter.Value())
 		// skip dead user-keys
-		if !vi.allVersions && tomb == DeadTombstone {
+		if tomb == DeadTombstone {
 			continue
 		}
 		// set variables

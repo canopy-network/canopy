@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -28,7 +27,7 @@ const (
 var _ lib.StoreI = &Store{} // enforce the Store interface
 
 /*
-The Store struct is a high-level abstraction layer built on top of a single BadgerDB instance,
+The Store struct is a high-level abstraction layer built on top of a single PebbleDB instance,
 providing four main components for managing blockchain-related data.
 
 1. StateStore: This component is responsible for storing the actual blobs of data that represent
@@ -52,8 +51,8 @@ providing four main components for managing blockchain-related data.
    hash of the StateCommitStore corresponding to that version. This separation aids in managing
    the state versioning process.
 
-The Store leverages BadgerDB in Managed Mode to maintain historical versions of the state,
-allowing for time-travel operations and historical state queries. It uses BadgerDB Transactions
+The Store leverages PebbleD in Managed Mode to maintain historical versions of the state,
+allowing for time-travel operations and historical state queries. It uses PebbleDB Transactions
 to ensure that all writes to the StateStore, StateCommitStore, Indexer, and CommitIDStore are
 performed atomically in a single commit operation per height. Additionally, the Store uses
 lexicographically ordered prefix keys to facilitate easy and efficient iteration over stored data.
@@ -69,7 +68,6 @@ type Store struct {
 	metrics  *lib.Metrics  // telemetry
 	log      lib.LoggerI   // logger
 	config   lib.Config    // config
-	mu       *sync.Mutex   // mutex for concurrent commit/close
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -101,7 +99,6 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	fs := vfs.NewMem()
 	db, err := pebble.Open("", &pebble.Options{
-		DisableWAL:            false,                       // Keep WAL but optimize other settings
 		FS:                    fs,                          // memory file system
 		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
 		L0StopWritesThreshold: 40,                          // Much higher threshold
@@ -143,7 +140,6 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		Indexer: &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
 		metrics: metrics,
 		config:  config,
-		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -175,7 +171,6 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		sc:      NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
 		Indexer: &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
 		metrics: s.metrics,
-		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -202,15 +197,11 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		ss:      s.ss.Copy(lssReader, lssReader),
 		Indexer: &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
 		metrics: s.metrics,
-		mu:      &sync.Mutex{},
 	}, nil
 }
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
-	// lock for safe concurrent access
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -376,9 +367,6 @@ func (s *Store) Discard() {
 
 // Close() discards the writer and closes the database connection
 func (s *Store) Close() lib.ErrorI {
-	// concurrency lock for safety
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	// stop the current writer/readers
 	s.Discard()
 	// Optionally ensure latest memtable is flushed (helps make state visible on disk).
