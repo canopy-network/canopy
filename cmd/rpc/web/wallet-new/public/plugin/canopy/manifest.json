@@ -152,9 +152,7 @@
             "icon": "Send",
             "label": "Send"
           }
-
         }
-
       },
       "payload": {
         "address": {
@@ -217,7 +215,12 @@
           "title": "Send!",
           "description": "{{result}}",
           "actions": [
-            { "type": "link", "label": "Explorer", "href": "{{chain.explorer.tx}}/{{result}}", "newTab": true }
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
           ]
         }
       }
@@ -310,6 +313,18 @@
         "quick"
       ],
       "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "setup",
+              "title": "Setup"
+            },
+            {
+              "id": "committees",
+              "title": "Committees"
+            }
+          ]
+        },
         "fields": [
           {
             "id": "stakingAddress",
@@ -317,7 +332,8 @@
             "type": "text",
             "label": "Staking Address",
             "value": "{{account.address}}",
-            "readOnly": true
+            "readOnly": true,
+            "step": "setup"
           },
           {
             "id": "asset",
@@ -332,32 +348,33 @@
                   "address": "{{account.address}}"
                 }
               }
-            }
+            },
+            "step": "setup"
           },
           {
             "id": "amount",
             "name": "amount",
             "type": "amount",
-            "label": "Amount",
             "placeholder": "0.00",
+            "label": "Amount",
+            "value": "{{params.networkParams.validator.minimumOrderSize}}",
             "required": true,
-            "min": 0,
-            "max": "{{ds.account.amount}}",
+            "min": "{{params.networkParams.validator.minimumOrderSize}}",
+            "max": "{{formatToCoin<{{ds.account.amount}}>}}",
             "validation": {
               "messages": {
-                "required": "Amount is required",
-                "min": "Amount must be greater than 0",
-                "max": "Amount must be less than {{ds.account.amount}}"
+                "min": "Minimum you can send is {{min}} {{chain.denom.symbol}}",
+                "max": "You cannot send more than your balance {{numberToLocaleString<{{max}}>}} {{chain.denom.symbol}}"
               }
             },
-            "features": [
-              {
-                "id": "maxBtn",
-                "op": "set",
-                "field": "amount",
-                "value": "{{ds.account.amount}} - {{fees.sendFee}}"
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{account.address}}"
+                }
               }
-            ]
+            },
+            "step": "setup"
           },
           {
             "id": "rewardsAddress",
@@ -365,23 +382,11 @@
             "type": "text",
             "label": "Rewards Address",
             "required": true,
-            "length.min": 1,
-            "validation": {
-              "messages": {
-                "required": "Rewards address is required",
-                "length.min": "Invalid destination address"
-              }
-            },
-            "features": [
-              {
-                "id": "pasteBtn",
-                "op": "paste"
-              }
-            ]
+            "step": "setup"
           },
           {
-            "id": "stakeType",
-            "name": "stakeType",
+            "id": "isDelegate",
+            "name": "isDelegate",
             "type": "optionCard",
             "label": "Stake Type",
             "required": true,
@@ -398,7 +403,19 @@
                 "help": "Delegate to committee",
                 "toolTip": "This will delegate your tokens to a committee."
               }
-            ]
+            ],
+            "step": "setup"
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "showIf": "{{ form.isDelegate && form.isDelegate != 'true' }}",
+            "step": "setup",
+            "placeholder": "tcp://127.0.0.1:xxxx",
+            "help": "Put the url of the validator you want to delegate to."
           },
           {
             "id": "isAutocompound",
@@ -406,8 +423,7 @@
             "type": "switch",
             "label": "Autocompound",
             "value": false,
-            "help": "Automatically restake rewards",
-            "toolTip": "This will automatically restake rewards."
+            "step": "setup"
           },
           {
             "id": "txFee",
@@ -415,36 +431,84 @@
             "type": "text",
             "label": "Transaction Fee",
             "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}",
-            "readOnly": true
+            "readOnly": true,
+            "step": "setup"
+          },
+
+
+
+          {
+            "id": "selectCommittees",
+            "name": "selectCommittees",
+            "type": "tableSelect",
+            "label": "Select Committees",
+            "multiple": true,
+            "rowKey": "id",
+            "rows": [
+              { "id": 1, "name": "Canopy"},
+              { "id": 2, "name": "Canary" }
+            ],
+            "columns": [
+              {
+                "type": "image",
+                "title": "",
+                "initialsFrom": "{{ row.name }}",
+                "size": 28
+              },
+              { "key": "name", "title": "Committee", "expr": "{{ row.name }}", "align": "left"  }
+            ],
+
+            "step": "committees"
+          },
+
+
+          {
+            "id": "manualCommittees",
+            "name": "manualCommittees",
+            "type": "text",
+            "label": "Manually Enter Committee ID",
+            "placeholder": "1,2,3",
+            "help": "Enter comma separated committee ids",
+            "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}",
+            "step": "committees"
           }
+
         ],
         "confirmation": {
           "title": "Confirmations",
           "summary": [
             {
-              "label": "From",
+              "label": "Staking Address",
               "value": "{{shortAddress<{{account.address}}>}}"
             },
             {
-              "label": "To",
-              "value": "{{shortAddress<{{form.output}}>}}"
-            },
-            {
-              "label": "Amount",
+              "label": "Stake Amount",
               "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
             },
             {
-              "label": "Fee",
-              "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
+              "label": "Stake Type",
+              "value": "{{form.isDelegate ? 'Delegation' : 'Validation'}} {{form.isAutocompound ? 'with autocompounding' : ''}}"
+            },
+            {
+              "label": "Committees IDs",
+              "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}"
+            },
+            {
+              "label": "Rewards Address",
+              "value": "{{shortAddress<{{form.rewardsAddress}}>}}"
+            },
+            {
+              "label": "Edit Stake",
+              "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}"
             }
           ],
-          "btn": {
-            "icon": "Send",
-            "label": "Send"
+          "btns": {
+            "submit": {
+              "icon": "Lock",
+              "label": "Stake"
+            }
           }
-
         }
-
       },
       "payload": {
         "address": {
@@ -507,7 +571,12 @@
           "title": "Send!",
           "description": "{{result}}",
           "actions": [
-            { "type": "link", "label": "Explorer", "href": "{{chain.explorer.tx}}/{{result}}", "newTab": true }
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
           ]
         }
       }

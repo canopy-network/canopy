@@ -75,6 +75,7 @@ export const useDashboard = () => {
                 p.items.map(i => ({
                     ...i,
                     transaction: {
+                        // @ts-ignore
                         ...i.transaction,
                         type: 'send',
                     },
@@ -86,6 +87,7 @@ export const useDashboard = () => {
                 p.items.map(i => ({
                     ...i,
                     transaction: {
+                        // @ts-ignore
                         ...i.transaction,
                         type: 'receive',
                     },
@@ -97,26 +99,33 @@ export const useDashboard = () => {
                 p.items.map(i => ({
                     ...i,
                     transaction: {
+                        // @ts-ignore
                         ...i.transaction,
-                        type: i.transaction?.type ?? 'send',
+                        type: 'stake',
+                        status: 'Failed',
                     },
+
                 }))
             ) ?? [];
+
+        console.log(failed)
 
         const mergedTxs = [...sent, ...received, ...failed]
 
         return mergedTxs.map(tx => {
             return {
+                // @ts-ignore
                 hash: String(tx.txHash ?? ''),
                 type: tx.transaction.type,
                 amount: tx.transaction.msg.amount ?? 0,
                 fee: tx.transaction.fee,
                 //TODO: CHECK HOW TO GET THIS VALUE
-                status: 'Confirmed',
+                status:  tx.transaction.status ?? 'Confirmed',
                 time: tx?.transaction?.time,
+                // @ts-ignore
                 address: tx.address,
             } as Transaction;
-        });
+        }).sort((a, b) => b.time - a.time);
 
     }, [txSentQuery.data, txReceivedQuery.data, txFailedQuery.data])
 

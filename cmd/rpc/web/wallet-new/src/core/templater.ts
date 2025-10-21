@@ -45,17 +45,20 @@ function replaceBalanced(input: string, resolver: (expr: string) => string): str
 }
 
 /** Evalúa una expresión: función tipo fn<...> o ruta a datos a.b.c */
-function evalExpr(expr: string, ctx: any): string {
-    // funciones: ej. formatToCoin<{{ds.account.amount}}>
+function evalExpr(expr: string, ctx: any): any {
+    // 🔒 seguridad básica
+    const banned = /(constructor|prototype|__proto__|globalThis|window|document|import|Function|eval)\b/
+    if (banned.test(expr)) throw new Error('templater: forbidden token')
+
+    // 🔧 soporta funciones tipo formatToCoin<{{...}}>
     const funcMatch = expr.match(/^(\w+)<([\s\S]*)>$/)
     if (funcMatch) {
         const [, fnName, innerExpr] = funcMatch
-        // evalúa el interior tal cual (puede contener {{...}} anidados)
         const innerVal = template(innerExpr, ctx)
         const fn = templateFns[fnName]
         if (typeof fn === 'function') {
             try {
-                return String(fn(innerVal))
+                return fn(innerVal)
             } catch (e) {
                 console.error(`template fn ${fnName} error:`, e)
                 return ''
@@ -65,16 +68,29 @@ function evalExpr(expr: string, ctx: any): string {
         return ''
     }
 
-    // ruta normal: a.b.c
+    // 💡 NUEVO: detectar si es una expresión JS (contiene operadores)
+    const isExpression = /[<>=!+\-*/%&|?:]/.test(expr)
+
+    if (isExpression) {
+        try {
+            const argNames = Object.keys(ctx)
+            const argValues = Object.values(ctx)
+
+            // Ejemplo: new Function("form","chain","account", "return form.isDelegate === false")
+            const fn = new Function(...argNames, `return (${expr});`)
+            return fn(...argValues)
+        } catch (e) {
+            console.warn('template eval error:', e)
+            return ''
+        }
+    }
+
+    // 🧭 fallback: acceso tipo path (form.a.b)
     const path = expr.split('.').map(s => s.trim()).filter(Boolean)
     let val: any = ctx
     for (const p of path) val = val?.[p]
 
-    if (val == null) return ''
-    if (typeof val === 'object') {
-        try { return JSON.stringify(val) } catch { return '' }
-    }
-    return String(val)
+    return val
 }
 
 export function template(str: unknown, ctx: any): string {
@@ -84,4 +100,41 @@ export function template(str: unknown, ctx: any): string {
 
     const out = replaceBalanced(input, (expr) => evalExpr(expr, ctx))
     return out
+}
+
+export function templateAny(tpl: any, ctx: Record<string, any> = {}): any {
+    if (tpl == null) return tpl
+    if (typeof tpl !== 'string') return tpl
+
+    const m = tpl.match(/^\s*\{\{([\s\S]+?)\}\}\s*$/)
+    if (m) {
+        const expr = m[1]
+        try { return evalExpr(expr, ctx) } catch { /* cae al modo string */ }
+    }
+
+    return tpl.replace(/\{\{([\s\S]+?)\}\}/g, (_m, expr) => {
+        try {
+            const val = evalExpr(expr, ctx)
+            return val == null ? '' : String(val)
+        } catch {
+            return ''
+        }
+    })
+}
+
+export function templateBool(tpl: any, ctx: Record<string, any> = {}): boolean {
+    const v = templateAny(tpl, ctx)
+    return toBool(v)
+}
+
+
+export function toBool(v: any): boolean {
+    if (typeof v === 'boolean') return v
+    if (typeof v === 'number') return v !== 0 && !Number.isNaN(v)
+    if (v == null) return false
+    if (Array.isArray(v)) return v.length > 0
+    if (typeof v === 'object') return Object.keys(v).length > 0
+    const s = String(v).trim().toLowerCase()
+    if (s === '' || s === '0' || s === 'false' || s === 'no' || s === 'off' || s === 'null' || s === 'undefined') return false
+    return true
 }

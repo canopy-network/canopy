@@ -112,6 +112,41 @@ export type OptionCardField = FieldBase & {
     type: "optionCard",
 }
 
+
+export type TableSelectColumn = {
+    key: string
+    title: string
+    expr?: string
+    position?: "right" | "left" | "center"
+}
+
+export type TableRowAction = {
+    title?: string
+    label?: string
+    icon?: string
+    showIf?: string
+    emit?: { op: 'set' | 'copy'; field?: string; value?: string }
+    position?: "right" | "left" | "center"
+}
+
+export type TableSelectField = FieldBase & {
+    type: 'tableSelect'
+    id: string
+    name: string
+    label?: string
+    help?: string
+    required?: boolean
+    readOnly?: boolean
+    multiple?: boolean
+    rowKey?: string
+    columns: TableSelectColumn[]
+    rows?: any[]
+    source?: { uses: string; selector?: string } // p.ej. {uses:'ds', selector:'committees'}
+    rowAction?: TableRowAction
+}
+
+
+
 export type SelectField = FieldBase & {
     type: 'select';
     options?: Array<{ label: string; value: string }>;
@@ -125,7 +160,8 @@ export type Field =
     | SwitchField
     | OptionCardField
     | TextField
-    | SelectField;
+    | SelectField
+    | TableSelectField
 
 /* ===========================
  * Field Features (Ops)

@@ -5,6 +5,8 @@ import { template } from '@/core/templater'
 import { cx } from '@/ui/cx'
 import * as Switch from '@radix-ui/react-switch';
 import {OptionCard, OptionCardOpt} from "@/actions/OptionCard";
+import TableSelect from "@/actions/TableSelect";
+import { templateBool } from '@/core/templater';
 
 type Props = {
     f: Field
@@ -114,6 +116,12 @@ export const FieldControl: React.FC<Props> = ({
         (s?: any) => (typeof s === 'string' ? template(s, templateContext) : s),
         [templateContext]
     )
+
+    const isVisible = (f as any).showIf == null
+        ? true
+        : templateBool((f as any).showIf, templateContext);
+
+    if (!isVisible) return null;
 
     const common =
         'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none'
@@ -287,6 +295,21 @@ export const FieldControl: React.FC<Props> = ({
             </div>
         );
     }
+
+    if (f.type === 'tableSelect') {
+        return (
+            <TableSelect
+                field={f}
+                currentValue={v}
+                onChange={(next) => setVal(f, next)}
+                errors={errors}
+                resolveTemplate={resolveTemplate}
+                template={template}
+                templateContext={templateContext}
+            />
+        )
+    }
+
 
     // SELECT
     if (f.type === 'select') {

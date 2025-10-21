@@ -12,7 +12,7 @@ import {
     buildPayloadFromAction,
 } from '@/core/actionForm'
 import {useAccounts} from '@/app/providers/AccountsProvider'
-import {template} from '@/core/templater'
+import {template, templateBool} from '@/core/templater'
 import { resolveToastFromManifest, resolveRedirectFromManifest } from "@/toast/manifestRuntime";
 import { useToast } from "@/toast/ToastContext";
 import { genericResultMap } from "@/toast/mappers";
@@ -21,18 +21,21 @@ import {cx} from "@/ui/cx";
 import {motion} from "framer-motion";
 
 
+
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
 
 
 export default function ActionRunner({actionId, onFinish}: { actionId: string, onFinish?: () => void }) {
     const toast = useToast();
+
+
     const [formHasErrors, setFormHasErrors] = React.useState(false)
     const [stage, setStage] = React.useState<Stage>('form')
     const [form, setForm] = React.useState<Record<string, any>>({})
     const debouncedForm = useDebouncedValue(form, 250)
     const [txRes, setTxRes] = React.useState<any>(null)
 
-    const {manifest, chain, isLoading} = useConfig()
+    const {manifest, chain, params, isLoading} = useConfig()
     const {selectedAccount} = useAccounts?.() ?? {selectedAccount: undefined}
     const session = useSession()
 
@@ -46,12 +49,6 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
         ctx: {chain}
     })
 
-    const handleErrorsChange = React.useCallback((errs: Record<string,string>, hasErrors: boolean) => {
-        setFormHasErrors(hasErrors)
-    }, [])
-
-    const fields = React.useMemo(() => getFieldsFromAction(action), [action])
-
 
     const ttlSec = chain?.session?.unlockTimeoutSec ?? 900
     React.useEffect(() => {
@@ -64,6 +61,7 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
     const [unlockOpen, setUnlockOpen] = React.useState(false)
 
 
+
     const templatingCtx = React.useMemo(() => ({
         form,
         chain,
@@ -74,8 +72,11 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
         fees: {
             ...feesResolved
         },
+        params: {
+            ...params
+        },
         session: {password: session?.password},
-    }), [form, chain, selectedAccount, feesResolved, session?.password])
+    }), [form, chain, selectedAccount, feesResolved, session?.password, params])
 
 
 
@@ -226,6 +227,72 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
         setForm((prev) => ({...prev, ...patch}))
     }, [])
 
+    const [errorsMap, setErrorsMap] = React.useState<Record<string,string>>({})
+    const [stepIdx, setStepIdx] = React.useState(0)
+
+    const wizard = React.useMemo(() => (action as any)?.form?.wizard, [action])
+    const allFields = React.useMemo(() => getFieldsFromAction(action), [action])
+
+
+    const steps = React.useMemo(() => {
+        if (!wizard) return []
+        const declared = Array.isArray(wizard.steps) ? wizard.steps : []
+        if (declared.length) return declared
+        const uniq = Array.from(new Set(allFields.map((f:any)=>f.step).filter(Boolean)))
+        return uniq.map((id:any,i)=>({ id, title: `Step ${i+1}` }))
+    }, [wizard, allFields])
+
+    const fieldsForStep = React.useMemo(() => {
+        if (!wizard || !steps.length) return allFields
+        const cur = steps[stepIdx]?.id ?? (stepIdx+1)
+        return allFields.filter((f:any)=> (f.step ?? 1) === cur || String(f.step) === String(cur))
+    }, [wizard, steps, stepIdx, allFields])
+
+
+    const visibleFieldsForStep = React.useMemo(() => {
+        const list = fieldsForStep ?? []
+        return list.filter((f: any) => {
+            if (!f?.showIf) return true
+            try {
+                return templateBool(f.showIf, { ...templatingCtx, form })
+            } catch (e) {
+                console.warn('Error evaluating showIf', f.name, e)
+                return true
+            }
+        })
+    }, [fieldsForStep, templatingCtx, form])
+
+    const handleErrorsChange = React.useCallback((errs: Record<string,string>, hasErrors: boolean) => {
+        setErrorsMap(errs)
+        setFormHasErrors(hasErrors)
+    }, [])
+
+    const hasStepErrors = React.useMemo(() => {
+        const missingRequired = visibleFieldsForStep.some((f:any) =>
+            f.required && (form[f.name] == null || form[f.name] === '')
+        );
+        const fieldErrors = visibleFieldsForStep.some((f:any) => !!errorsMap[f.name]);
+        return missingRequired || fieldErrors;
+    }, [visibleFieldsForStep, form, errorsMap]);
+
+    const isLastStep = !wizard || stepIdx >= (steps.length - 1)
+
+
+    const goNext = React.useCallback(() => {
+        if (hasStepErrors) return
+        if (!wizard || isLastStep) {
+            if (hasSummary) setStage('confirm'); else void doExecute()
+        } else {
+            setStepIdx(i => i + 1)
+        }
+    }, [wizard, isLastStep, hasStepErrors, hasSummary, doExecute])
+
+    const goPrev = React.useCallback(() => {
+        if (!wizard) return
+        setStepIdx(i => Math.max(0, i - 1))
+    }, [wizard])
+
+
     return (
         <div className="space-y-6">
             {
@@ -247,7 +314,14 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
                         {
                             stage === 'form' && (
                                 <motion.div className="space-y-4">
-                                    <FormRenderer fields={fields} value={form} onChange={onFormChange} ctx={templatingCtx} onErrorsChange={handleErrorsChange}/>
+                                    <FormRenderer fields={visibleFieldsForStep} value={form} onChange={onFormChange} ctx={templatingCtx} onErrorsChange={handleErrorsChange}/>
+
+                                    {wizard && steps.length > 0 && (
+                                        <div className="flex items-center justify-between text-xs text-neutral-400">
+                                            <div>{steps[stepIdx]?.title ?? `Step ${stepIdx+1}`}</div>
+                                            <div>{stepIdx+1} / {steps.length}</div>
+                                        </div>
+                                    )}
 
 
                                     {infoItems.length > 0 && (
@@ -275,16 +349,22 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
                                             </div>
                                         </div>
                                     )}
-                                    {action?.submit && (
+
+
+                                    <div className="flex gap-2">
+                                        {wizard && stepIdx > 0 && (
+                                            <button onClick={goPrev} className="px-3 py-2 rounded border border-muted text-canopy-50">Back</button>
+                                        )}
                                         <button
-                                            disabled={formHasErrors}
-                                            onClick={onContinue}
-                                            className={cx("w-full px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded",
-                                                formHasErrors && "opacity-50 cursor-not-allowed cursor-not-allowed"
-                                            )}>
-                                            Continue
+                                            disabled={hasStepErrors}
+                                            onClick={goNext}
+                                            className={cx("flex-1 px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded",
+                                                hasStepErrors && "opacity-50 cursor-not-allowed"
+                                            )}
+                                        >
+                                            {(!wizard || isLastStep) ? 'Continue' : 'Next'}
                                         </button>
-                                    )}
+                                    </div>
 
                                 </motion.div>
                             )}

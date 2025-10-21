@@ -68,6 +68,7 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
                     ? (fieldsKeyed.find(x => x.name === fOrName) as Field | undefined)
                     : (fOrName as Field)
 
+
                 const e = await validateField((f as any) ?? {}, v, templateContext)
                 setErrors((prev) =>
                     prev[name] === (e?.message ?? '') ? prev : { ...prev, [name]: e?.message ?? '' }

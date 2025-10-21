@@ -109,13 +109,10 @@ export function useResolvedFees(
             }
         }
 
-        // Limpieza de timers previos
         if (timerRef.current) clearInterval(timerRef.current)
 
-        // Primer fetch inmediato
         fetchOnce()
 
-        // Refetch periódico
         if (refreshMs > 0) {
             timerRef.current = setInterval(fetchOnce, refreshMs)
         }
@@ -126,7 +123,7 @@ export function useResolvedFees(
         }
     }, [
         refreshMs,
-        JSON.stringify(providers), // solo refetch si cambian los providers
+        JSON.stringify(providers),
     ])
 
     const amount = useMemo(() => {
