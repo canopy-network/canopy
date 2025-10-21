@@ -96,7 +96,7 @@ func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib
 			continue
 		}
 		// parse the value to extract tombstone and actual value
-		tombstone, value = vs.parseValueWithTombstone(iter.Value())
+		tombstone, value = ParseValueWithTombstone(iter.Value())
 		// exit
 		return
 	}
@@ -267,7 +267,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		// set as 'previous userKey'
 		vi.lastUserKey = bytes.Clone(userKey)
 		// Now the iterator's current value is the newest visible version for userKey.
-		tomb, val := vi.store.parseValueWithTombstone(vi.iter.Value())
+		tomb, val := ParseValueWithTombstone(vi.iter.Value())
 		// skip dead user-keys
 		if !vi.allVersions && tomb == DeadTombstone {
 			continue
@@ -331,9 +331,9 @@ func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []
 	return
 }
 
-// parseValueWithTombstone() extracts tombstone and actual value
+// ParseValueWithTombstone() extracts tombstone and actual value
 // v = [1-byte Tombstone][ActualValue]
-func (vs *VersionedStore) parseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
+func ParseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
 	if len(v) == 0 {
 		return DeadTombstone, nil
 	}
