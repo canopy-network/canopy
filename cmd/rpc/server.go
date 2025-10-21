@@ -31,7 +31,9 @@ import (
 const (
 	colon = ":"
 
-	SoftwareVersion = "beta-0.1.13"
+	// uses golang's semver naming convention
+	// https://pkg.go.dev/golang.org/x/mod/semver
+	SoftwareVersion = "v0.1.13-beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
