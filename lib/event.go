@@ -281,6 +281,22 @@ func (e EventDexSwap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(temp)
 }
 
+// UnmarshalJSON implements custom JSON unmarshalling for EventDexSwap, converting HexBytes fields to []byte
+func (e *EventDexSwap) UnmarshalJSON(b []byte) error {
+	temp := eventDexSwap{}
+	if err := json.Unmarshal(b, &temp); err != nil {
+		return err
+	}
+	*e = EventDexSwap{
+		SoldAmount:   temp.SoldAmount,
+		BoughtAmount: temp.BoughtAmount,
+		LocalOrigin:  temp.LocalOrigin,
+		Success:      temp.Success,
+		OrderId:      temp.OrderId,
+	}
+	return nil
+}
+
 // eventLiquidityDeposit represents the JSON structure for EventLiquidityDeposit marshalling/unmarshalling
 type eventDexLiquidityDeposit struct {
 	Amount      uint64   `json:"amount"`
@@ -298,6 +314,20 @@ func (e EventDexLiquidityDeposit) MarshalJSON() ([]byte, error) {
 	return json.Marshal(temp)
 }
 
+// UnmarshalJSON implements custom JSON unmarshalling for EventDexLiquidityDeposit, converting HexBytes fields to []byte
+func (e *EventDexLiquidityDeposit) UnmarshalJSON(b []byte) error {
+	temp := eventDexLiquidityDeposit{}
+	if err := json.Unmarshal(b, &temp); err != nil {
+		return err
+	}
+	*e = EventDexLiquidityDeposit{
+		Amount:      temp.Amount,
+		LocalOrigin: temp.LocalOrigin,
+		OrderId:     temp.OrderId,
+	}
+	return nil
+}
+
 // eventLiquidityDeposit represents the JSON structure for EventLiquidityDeposit marshalling/unmarshalling
 type eventDexLiquidityWithdrawal struct {
 	LocalAmount  uint64   `json:"localAmount"`
@@ -313,4 +343,18 @@ func (e EventDexLiquidityWithdrawal) MarshalJSON() ([]byte, error) {
 		OrderId:      e.OrderId,
 	}
 	return json.Marshal(temp)
+}
+
+// UnmarshalJSON implements custom JSON unmarshalling for EventDexLiquidityWithdrawal, converting HexBytes fields to []byte
+func (e *EventDexLiquidityWithdrawal) UnmarshalJSON(b []byte) error {
+	temp := eventDexLiquidityWithdrawal{}
+	if err := json.Unmarshal(b, &temp); err != nil {
+		return err
+	}
+	*e = EventDexLiquidityWithdrawal{
+		LocalAmount:  temp.LocalAmount,
+		RemoteAmount: temp.RemoteAmount,
+		OrderId:      temp.OrderId,
+	}
+	return nil
 }
