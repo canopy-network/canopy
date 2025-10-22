@@ -265,7 +265,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 			continue
 		}
 		// in reverse mode, when a new key is found, seek to its highest version
-		if vi.reverse && vi.lastUserKey != nil {
+		if vi.reverse {
 			vi.iter.SeekLT(vi.store.makeVersionedKey(userKey, vi.store.version))
 			vi.iter.Next()
 			userKey, version, err = vi.store.parseVersionedKey(vi.iter.Key())
