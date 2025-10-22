@@ -226,6 +226,8 @@ message MessageDexLimitOrder {
   uint64 requested_amount = 3; // @gotags: json:"requestAmount"
   // sellers_send_address: the address the seller is selling and signing from
   bytes address = 4; // @gotags: json:"sellersSendAddress"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 5;  // @gotags: json:"orderId"
 }
 
 // MessageDexLiquidityDeposit: deposits tokens to the liquidity pool in exchange for liquidity points
@@ -236,6 +238,8 @@ message MessageDexLiquidityDeposit {
   uint64 amount = 2; // @gotags: json:"amount"
   // sellers_send_address: the address the seller is selling and signing from
   bytes address = 3; // @gotags: json:"sellersSendAddress"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }
 
 // MessageDexLiquidityWithdraw: withdraw tokens from both liquidity pools in exchange for burning liquidity points
@@ -246,4 +250,6 @@ message MessageDexLiquidityWithdraw {
   uint64 percent = 2; // @gotags: json:"percent"
   // address: the address the LP is signing from
   bytes address = 3; // @gotags: json:"address"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }

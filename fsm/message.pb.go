@@ -1043,7 +1043,9 @@ type MessageDexLimitOrder struct {
 	// requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
 	RequestedAmount uint64 `protobuf:"varint,3,opt,name=requested_amount,json=requestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
 	// sellers_send_address: the address the seller is selling and signing from
-	Address       []byte `protobuf:"bytes,4,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	Address []byte `protobuf:"bytes,4,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,5,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1106,6 +1108,13 @@ func (x *MessageDexLimitOrder) GetAddress() []byte {
 	return nil
 }
 
+func (x *MessageDexLimitOrder) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 // MessageDexLiquidityDeposit: deposits tokens to the liquidity pool in exchange for liquidity points
 type MessageDexLiquidityDeposit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1114,7 +1123,9 @@ type MessageDexLiquidityDeposit struct {
 	// amount: the amount tokens, transferred to escrow
 	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount"` // @gotags: json:"amount"
 	// sellers_send_address: the address the seller is selling and signing from
-	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	Address []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"sellersSendAddress"` // @gotags: json:"sellersSendAddress"
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,4,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1170,6 +1181,13 @@ func (x *MessageDexLiquidityDeposit) GetAddress() []byte {
 	return nil
 }
 
+func (x *MessageDexLiquidityDeposit) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 // MessageDexLiquidityWithdraw: withdraw tokens from both liquidity pools in exchange for burning liquidity points
 type MessageDexLiquidityWithdraw struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1178,7 +1196,9 @@ type MessageDexLiquidityWithdraw struct {
 	// percent: the percent of tokens to withdraw
 	Percent uint64 `protobuf:"varint,2,opt,name=percent,proto3" json:"percent"` // @gotags: json:"percent"
 	// address: the address the LP is signing from
-	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	Address []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,4,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1230,6 +1250,13 @@ func (x *MessageDexLiquidityWithdraw) GetPercent() uint64 {
 func (x *MessageDexLiquidityWithdraw) GetAddress() []byte {
 	if x != nil {
 		return x.Address
+	}
+	return nil
+}
+
+func (x *MessageDexLiquidityWithdraw) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
 	}
 	return nil
 }
@@ -1314,20 +1341,23 @@ const file_message_proto_rawDesc = "" +
 	"\x14SellerReceiveAddress\x18\x06 \x01(\fR\x14SellerReceiveAddress\"H\n" +
 	"\x12MessageDeleteOrder\x12\x18\n" +
 	"\aOrderId\x18\x01 \x01(\fR\aOrderId\x12\x18\n" +
-	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\x9e\x01\n" +
+	"\aChainId\x18\x02 \x01(\x04R\aChainId\"\xb8\x01\n" +
 	"\x14MessageDexLimitOrder\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12&\n" +
 	"\x0famount_for_sale\x18\x02 \x01(\x04R\ramountForSale\x12)\n" +
 	"\x10requested_amount\x18\x03 \x01(\x04R\x0frequestedAmount\x12\x18\n" +
-	"\aaddress\x18\x04 \x01(\fR\aaddress\"i\n" +
+	"\aaddress\x18\x04 \x01(\fR\aaddress\x12\x18\n" +
+	"\aOrderId\x18\x05 \x01(\fR\aOrderId\"\x83\x01\n" +
 	"\x1aMessageDexLiquidityDeposit\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x18\n" +
-	"\aaddress\x18\x03 \x01(\fR\aaddress\"l\n" +
+	"\aaddress\x18\x03 \x01(\fR\aaddress\x12\x18\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"\x86\x01\n" +
 	"\x1bMessageDexLiquidityWithdraw\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x18\n" +
 	"\apercent\x18\x02 \x01(\x04R\apercent\x12\x18\n" +
-	"\aaddress\x18\x03 \x01(\fR\aaddressB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
+	"\aaddress\x18\x03 \x01(\fR\aaddress\x12\x18\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderIdB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once

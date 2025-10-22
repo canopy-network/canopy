@@ -34,7 +34,7 @@ func (x *DexBatch) Copy() *DexBatch {
 		ReceiptHash: x.ReceiptHash,
 		Orders:      x.Orders,
 		Deposits:    x.Deposits,
-		Withdraws:   x.Withdraws,
+		Withdrawals: x.Withdrawals,
 		PoolSize:    x.PoolSize,
 		//CounterPoolSize: 0,
 		//PoolPoints:      nil,
@@ -62,7 +62,7 @@ func (x *DexBatch) IsEmpty() bool {
 	if x == nil {
 		return true
 	}
-	return len(x.ReceiptHash) == 0 && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdraws) == 0 && len(x.Deposits) == 0
+	return len(x.ReceiptHash) == 0 && len(x.Receipts) == 0 && len(x.Orders) == 0 && len(x.Withdrawals) == 0 && len(x.Deposits) == 0
 }
 
 // EnsureNonNil() ensures the slices in the batch are not empty
@@ -74,8 +74,8 @@ func (x *DexBatch) EnsureNonNil() {
 	if x.Deposits == nil {
 		x.Deposits = []*DexLiquidityDeposit{}
 	}
-	if x.Withdraws == nil {
-		x.Withdraws = []*DexLiquidityWithdraw{}
+	if x.Withdrawals == nil {
+		x.Withdrawals = []*DexLiquidityWithdraw{}
 	}
 	if x.Receipts == nil {
 		x.Receipts = []uint64{}
@@ -128,6 +128,7 @@ type dexLimitOrder struct {
 	AmountForSale   uint64   `json:"amountForSale"`
 	RequestedAmount uint64   `json:"requestedAmount"`
 	Address         HexBytes `json:"address"`
+	OrderId         HexBytes `json:"orderId"`
 }
 
 // MarshalJSON() implements the json.Marshal interface for DexLimitOrder
@@ -136,6 +137,7 @@ func (x DexLimitOrder) MarshalJSON() ([]byte, error) {
 		AmountForSale:   x.AmountForSale,
 		RequestedAmount: x.RequestedAmount,
 		Address:         x.Address,
+		OrderId:         x.OrderId,
 	})
 }
 
@@ -149,6 +151,7 @@ func (x *DexLimitOrder) UnmarshalJSON(b []byte) (err error) {
 		AmountForSale:   d.AmountForSale,
 		RequestedAmount: d.RequestedAmount,
 		Address:         d.Address,
+		OrderId:         d.OrderId,
 	}
 	return
 }
@@ -156,6 +159,7 @@ func (x *DexLimitOrder) UnmarshalJSON(b []byte) (err error) {
 type dexLiquidityDeposit struct {
 	Amount  uint64   `json:"amount"`
 	Address HexBytes `json:"address"`
+	OrderId HexBytes `json:"orderId"`
 }
 
 // MarshalJSON() implements the json.Marshal interface for DexLiquidityDeposit
@@ -175,6 +179,7 @@ func (x *DexLiquidityDeposit) UnmarshalJSON(b []byte) (err error) {
 	*x = DexLiquidityDeposit{
 		Amount:  d.Amount,
 		Address: d.Address,
+		OrderId: d.OrderId,
 	}
 	return
 }
@@ -182,6 +187,7 @@ func (x *DexLiquidityDeposit) UnmarshalJSON(b []byte) (err error) {
 type dexLiquidityWithdraw struct {
 	Percent uint64   `json:"percent"`
 	Address HexBytes `json:"address"`
+	OrderId HexBytes `json:"orderId"`
 }
 
 // MarshalJSON() implements the json.Marshal interface for dexLiquidityWithdraw
@@ -189,6 +195,7 @@ func (x DexLiquidityWithdraw) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dexLiquidityWithdraw{
 		Percent: x.Percent,
 		Address: x.Address,
+		OrderId: x.OrderId,
 	})
 }
 
@@ -227,7 +234,7 @@ func (x DexBatch) MarshalJSON() ([]byte, error) {
 		ReceiptHash:     x.ReceiptHash,
 		Orders:          x.Orders,
 		Deposits:        x.Deposits,
-		Withdraws:       x.Withdraws,
+		Withdraws:       x.Withdrawals,
 		PoolSize:        x.PoolSize,
 		CounterPoolSize: x.CounterPoolSize,
 		PoolPoints:      x.PoolPoints,
@@ -248,7 +255,7 @@ func (x *DexBatch) UnmarshalJSON(b []byte) (err error) {
 		ReceiptHash:     d.ReceiptHash,
 		Orders:          d.Orders,
 		Deposits:        d.Deposits,
-		Withdraws:       d.Withdraws,
+		Withdrawals:     d.Withdraws,
 		CounterPoolSize: d.CounterPoolSize,
 		PoolSize:        d.PoolSize,
 		PoolPoints:      d.PoolPoints,

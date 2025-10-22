@@ -62,8 +62,8 @@ func TestDexBatch_EnsureNonNil(t *testing.T) {
 	if batch.Deposits == nil {
 		t.Error("expected Deposits to be initialized")
 	}
-	if batch.Withdraws == nil {
-		t.Error("expected Withdraws to be initialized")
+	if batch.Withdrawals == nil {
+		t.Error("expected Withdrawals to be initialized")
 	}
 	if batch.Receipts == nil {
 		t.Error("expected Receipts to be initialized")

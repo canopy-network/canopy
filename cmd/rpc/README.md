@@ -1783,9 +1783,9 @@ $ curl -X POST localhost:50002/v1/query/block-by-hash \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool }` - deposit amount and whether it was made on this chain or the counter
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64 }` - amount of liquidity received on local and remote chains
-    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool }` - amounts sold/bought, direction, and success status
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object
     - **automatic-begin-unstaking**: `{}` - empty object
@@ -1826,7 +1826,8 @@ $ curl -X POST localhost:50002/v1/query/events-by-height \
         "soldAmount": 1000000,
         "boughtAmount": 950000,
         "localOrigin": true,
-        "success": true
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
       },
       "height": 1000,
       "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
@@ -1879,9 +1880,9 @@ $ curl -X POST localhost:50002/v1/query/events-by-height \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool }` - deposit amount and whether it was made on this chain or the counter
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64 }` - amount of liquidity received on local and remote chains
-    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool }` - amounts sold/bought, direction, and success status
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object
     - **automatic-begin-unstaking**: `{}` - empty object
@@ -1922,7 +1923,8 @@ $ curl -X POST localhost:50002/v1/query/events-by-address \
         "soldAmount": 1000000,
         "boughtAmount": 950000,
         "localOrigin": true,
-        "success": true
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
       },
       "height": 1000,
       "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
@@ -1975,9 +1977,9 @@ $ curl -X POST localhost:50002/v1/query/events-by-address \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool }` - deposit amount and whether it was made on this chain or the counter
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64 }` - amount of liquidity received on local and remote chains
-    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool }` - amounts sold/bought, direction, and success status
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object
     - **automatic-begin-unstaking**: `{}` - empty object
@@ -2018,7 +2020,8 @@ $ curl -X POST localhost:50002/v1/query/events-by-chain \
         "soldAmount": 1000000,
         "boughtAmount": 950000,
         "localOrigin": true,
-        "success": true
+        "success": true,
+        "orderId": "ff22f214f5f300d315a5"
       },
       "height": 1000,
       "reference": "ff22f214f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
@@ -2554,12 +2557,15 @@ $ curl -X POST localhost:50002/v1/query/orders \
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
   - **address**: `hex string` - the address where the funds are transferred from and to
+  - **orderId**: `hex string` - unique identifier for the order (20 bytes, derived from transaction hash)
 - **deposits**: `dex deposit array` - the list of dex limit orders
   - **amount**: `uint64` - amount of asset being deposited
   - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the deposit (20 bytes, derived from transaction hash)
 - **withdraws**: `dex withdraw array` - the list of dex limit orders
   - **percent**: `uint64` - the percent of liquidity being withdrawn
   - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the withdrawal (20 bytes, derived from transaction hash)
 - **poolPoints**: `array` - a list of pool points
   - **address**: `hex-string` - the recipient address of the points
   - **points**: `uint64` the amount of points owned
@@ -2581,19 +2587,22 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
         {
             "amountForSale": 1000000000000,
             "requestedAmount": 2000000000000,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "a1b2c3d4e5f67890abcd"
         }
     ],
     "deposits": [
         {
             "amount": 1000000000000,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "1234567890abcdef1234"
         }
     ],
     "withdraws": [
         {
             "amount": 100,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "fedcba0987654321fedc"
         }
     ],
     "poolPoints": [
@@ -2623,12 +2632,15 @@ $ curl -X POST localhost:50002/v1/query/dex-batch \
   - **amountForSale**: `uint64` - amount of asset for sale
   - **requestedAmount**: `uint64` - the minimum requested amount of 'counter-asset' to receive
   - **address**: `hex string` - the address where the funds are transferred from and to
+  - **orderId**: `hex string` - unique identifier for the order (20 bytes, derived from transaction hash)
 - **deposits**: `dex deposit array` - the list of dex limit orders
   - **amount**: `uint64` - amount of asset being deposited
   - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the deposit (20 bytes, derived from transaction hash)
 - **withdraws**: `dex withdraw array` - the list of dex limit orders
   - **percent**: `uint64` - the percent of liquidity being withdrawn
   - **address**: `hex string` - the address where the funds are transferred from
+  - **orderId**: `hex string` - unique identifier for the withdrawal (20 bytes, derived from transaction hash)
 - **poolPoints**: `array` - a list of pool points
   - **address**: `hex-string` - the recipient address of the points
   - **points**: `uint64` the amount of points owned
@@ -2650,19 +2662,22 @@ $ curl -X POST localhost:50002/v1/query/next-dex-batch \
         {
             "amountForSale": 1000000000000,
             "requestedAmount": 2000000000000,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "a1b2c3d4e5f67890abcd"
         }
     ],
     "deposits": [
         {
             "amount": 1000000000000,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "1234567890abcdef1234"
         }
     ],
     "withdraws": [
         {
             "amount": 100,
-            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711"
+            "address": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "orderId": "fedcba0987654321fedc"
         }
     ],
     "poolPoints": [

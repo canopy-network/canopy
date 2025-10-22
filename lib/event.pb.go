@@ -32,7 +32,7 @@ type Event struct {
 	//	*Event_Reward
 	//	*Event_Slash
 	//	*Event_DexLiquidityDeposit
-	//	*Event_DexLiquidityWithdraw
+	//	*Event_DexLiquidityWithdrawal
 	//	*Event_DexSwap
 	//	*Event_OrderBookSwap
 	//	*Event_AutoPause
@@ -128,10 +128,10 @@ func (x *Event) GetDexLiquidityDeposit() *EventDexLiquidityDeposit {
 	return nil
 }
 
-func (x *Event) GetDexLiquidityWithdraw() *EventDexLiquidityWithdraw {
+func (x *Event) GetDexLiquidityWithdrawal() *EventDexLiquidityWithdrawal {
 	if x != nil {
-		if x, ok := x.Msg.(*Event_DexLiquidityWithdraw); ok {
-			return x.DexLiquidityWithdraw
+		if x, ok := x.Msg.(*Event_DexLiquidityWithdrawal); ok {
+			return x.DexLiquidityWithdrawal
 		}
 	}
 	return nil
@@ -240,8 +240,8 @@ type Event_DexLiquidityDeposit struct {
 	DexLiquidityDeposit *EventDexLiquidityDeposit `protobuf:"bytes,4,opt,name=dex_liquidity_deposit,json=dexLiquidityDeposit,proto3,oneof"`
 }
 
-type Event_DexLiquidityWithdraw struct {
-	DexLiquidityWithdraw *EventDexLiquidityWithdraw `protobuf:"bytes,5,opt,name=dex_liquidity_withdraw,json=dexLiquidityWithdraw,proto3,oneof"`
+type Event_DexLiquidityWithdrawal struct {
+	DexLiquidityWithdrawal *EventDexLiquidityWithdrawal `protobuf:"bytes,5,opt,name=dex_liquidity_withdrawal,json=dexLiquidityWithdrawal,proto3,oneof"`
 }
 
 type Event_DexSwap struct {
@@ -270,7 +270,7 @@ func (*Event_Slash) isEvent_Msg() {}
 
 func (*Event_DexLiquidityDeposit) isEvent_Msg() {}
 
-func (*Event_DexLiquidityWithdraw) isEvent_Msg() {}
+func (*Event_DexLiquidityWithdrawal) isEvent_Msg() {}
 
 func (*Event_DexSwap) isEvent_Msg() {}
 
@@ -377,7 +377,9 @@ type EventDexLiquidityDeposit struct {
 	// amount: the deposit amount
 	Amount uint64 `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
 	// local_origin: was the deposit made on this chain or the counter
-	LocalOrigin   bool `protobuf:"varint,2,opt,name=local_origin,json=localOrigin,proto3" json:"localOrigin"` // @gotags: json:"localOrigin"
+	LocalOrigin bool `protobuf:"varint,2,opt,name=local_origin,json=localOrigin,proto3" json:"localOrigin"` // @gotags: json:"localOrigin"
+	// order_id: the unique identifier of the order
+	OrderId       []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -426,30 +428,39 @@ func (x *EventDexLiquidityDeposit) GetLocalOrigin() bool {
 	return false
 }
 
-type EventDexLiquidityWithdraw struct {
+func (x *EventDexLiquidityDeposit) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
+type EventDexLiquidityWithdrawal struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// local_amount: the amount of liquidity received on this chain
 	LocalAmount uint64 `protobuf:"varint,1,opt,name=local_amount,json=localAmount,proto3" json:"localAmount"` // @gotags: json:"localAmount"
 	// counter_amount: the amount of liquidity received on the counter chain
-	RemoteAmount  uint64 `protobuf:"varint,2,opt,name=remote_amount,json=remoteAmount,proto3" json:"remoteAmount"` // @gotags: json:"remoteAmount"
+	RemoteAmount uint64 `protobuf:"varint,2,opt,name=remote_amount,json=remoteAmount,proto3" json:"remoteAmount"` // @gotags: json:"remoteAmount"
+	// order_id: the unique identifier of the order
+	OrderId       []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EventDexLiquidityWithdraw) Reset() {
-	*x = EventDexLiquidityWithdraw{}
+func (x *EventDexLiquidityWithdrawal) Reset() {
+	*x = EventDexLiquidityWithdrawal{}
 	mi := &file_event_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EventDexLiquidityWithdraw) String() string {
+func (x *EventDexLiquidityWithdrawal) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EventDexLiquidityWithdraw) ProtoMessage() {}
+func (*EventDexLiquidityWithdrawal) ProtoMessage() {}
 
-func (x *EventDexLiquidityWithdraw) ProtoReflect() protoreflect.Message {
+func (x *EventDexLiquidityWithdrawal) ProtoReflect() protoreflect.Message {
 	mi := &file_event_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -461,23 +472,30 @@ func (x *EventDexLiquidityWithdraw) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EventDexLiquidityWithdraw.ProtoReflect.Descriptor instead.
-func (*EventDexLiquidityWithdraw) Descriptor() ([]byte, []int) {
+// Deprecated: Use EventDexLiquidityWithdrawal.ProtoReflect.Descriptor instead.
+func (*EventDexLiquidityWithdrawal) Descriptor() ([]byte, []int) {
 	return file_event_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *EventDexLiquidityWithdraw) GetLocalAmount() uint64 {
+func (x *EventDexLiquidityWithdrawal) GetLocalAmount() uint64 {
 	if x != nil {
 		return x.LocalAmount
 	}
 	return 0
 }
 
-func (x *EventDexLiquidityWithdraw) GetRemoteAmount() uint64 {
+func (x *EventDexLiquidityWithdrawal) GetRemoteAmount() uint64 {
 	if x != nil {
 		return x.RemoteAmount
 	}
 	return 0
+}
+
+func (x *EventDexLiquidityWithdrawal) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
 }
 
 type EventDexSwap struct {
@@ -489,7 +507,9 @@ type EventDexSwap struct {
 	// local_origin: did the user sell on this chain and receive tokens on the remote chain
 	LocalOrigin bool `protobuf:"varint,3,opt,name=local_origin,json=localOrigin,proto3" json:"localOrigin"` // @gotags: json:"localOrigin"
 	// success: did the swap succeed
-	Success       bool `protobuf:"varint,4,opt,name=success,proto3" json:"success"` // @gotags: json:"success"
+	Success bool `protobuf:"varint,4,opt,name=success,proto3" json:"success"` // @gotags: json:"success"
+	// order_id: the unique identifier of the order
+	OrderId       []byte `protobuf:"bytes,5,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -550,6 +570,13 @@ func (x *EventDexSwap) GetSuccess() bool {
 		return x.Success
 	}
 	return false
+}
+
+func (x *EventDexSwap) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
 }
 
 type EventOrderBookSwap struct {
@@ -763,14 +790,14 @@ var File_event_proto protoreflect.FileDescriptor
 
 const file_event_proto_rawDesc = "" +
 	"\n" +
-	"\vevent.proto\x12\x05types\"\xb0\x06\n" +
+	"\vevent.proto\x12\x05types\"\xb6\x06\n" +
 	"\x05Event\x12\x1d\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\tR\teventType\x12,\n" +
 	"\x06reward\x18\x02 \x01(\v2\x12.types.EventRewardH\x00R\x06reward\x12)\n" +
 	"\x05slash\x18\x03 \x01(\v2\x11.types.EventSlashH\x00R\x05slash\x12U\n" +
-	"\x15dex_liquidity_deposit\x18\x04 \x01(\v2\x1f.types.EventDexLiquidityDepositH\x00R\x13dexLiquidityDeposit\x12X\n" +
-	"\x16dex_liquidity_withdraw\x18\x05 \x01(\v2 .types.EventDexLiquidityWithdrawH\x00R\x14dexLiquidityWithdraw\x120\n" +
+	"\x15dex_liquidity_deposit\x18\x04 \x01(\v2\x1f.types.EventDexLiquidityDepositH\x00R\x13dexLiquidityDeposit\x12^\n" +
+	"\x18dex_liquidity_withdrawal\x18\x05 \x01(\v2\".types.EventDexLiquidityWithdrawalH\x00R\x16dexLiquidityWithdrawal\x120\n" +
 	"\bdex_swap\x18\x06 \x01(\v2\x13.types.EventDexSwapH\x00R\adexSwap\x12C\n" +
 	"\x0forder_book_swap\x18\a \x01(\v2\x19.types.EventOrderBookSwapH\x00R\rorderBookSwap\x126\n" +
 	"\n" +
@@ -790,19 +817,22 @@ const file_event_proto_rawDesc = "" +
 	"\x06amount\x18\x01 \x01(\x04R\x06amount\"$\n" +
 	"\n" +
 	"EventSlash\x12\x16\n" +
-	"\x06amount\x18\x01 \x01(\x04R\x06amount\"U\n" +
+	"\x06amount\x18\x01 \x01(\x04R\x06amount\"p\n" +
 	"\x18EventDexLiquidityDeposit\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x04R\x06amount\x12!\n" +
-	"\flocal_origin\x18\x02 \x01(\bR\vlocalOrigin\"c\n" +
-	"\x19EventDexLiquidityWithdraw\x12!\n" +
+	"\flocal_origin\x18\x02 \x01(\bR\vlocalOrigin\x12\x19\n" +
+	"\border_id\x18\x03 \x01(\fR\aorderId\"\x80\x01\n" +
+	"\x1bEventDexLiquidityWithdrawal\x12!\n" +
 	"\flocal_amount\x18\x01 \x01(\x04R\vlocalAmount\x12#\n" +
-	"\rremote_amount\x18\x02 \x01(\x04R\fremoteAmount\"\x91\x01\n" +
+	"\rremote_amount\x18\x02 \x01(\x04R\fremoteAmount\x12\x19\n" +
+	"\border_id\x18\x03 \x01(\fR\aorderId\"\xac\x01\n" +
 	"\fEventDexSwap\x12\x1f\n" +
 	"\vsold_amount\x18\x01 \x01(\x04R\n" +
 	"soldAmount\x12#\n" +
 	"\rbought_amount\x18\x02 \x01(\x04R\fboughtAmount\x12!\n" +
 	"\flocal_origin\x18\x03 \x01(\bR\vlocalOrigin\x12\x18\n" +
-	"\asuccess\x18\x04 \x01(\bR\asuccess\"\x98\x02\n" +
+	"\asuccess\x18\x04 \x01(\bR\asuccess\x12\x19\n" +
+	"\border_id\x18\x05 \x01(\fR\aorderId\"\x98\x02\n" +
 	"\x12EventOrderBookSwap\x12\x1f\n" +
 	"\vsold_amount\x18\x01 \x01(\x04R\n" +
 	"soldAmount\x12#\n" +
@@ -830,22 +860,22 @@ func file_event_proto_rawDescGZIP() []byte {
 
 var file_event_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_event_proto_goTypes = []any{
-	(*Event)(nil),                     // 0: types.Event
-	(*EventReward)(nil),               // 1: types.EventReward
-	(*EventSlash)(nil),                // 2: types.EventSlash
-	(*EventDexLiquidityDeposit)(nil),  // 3: types.EventDexLiquidityDeposit
-	(*EventDexLiquidityWithdraw)(nil), // 4: types.EventDexLiquidityWithdraw
-	(*EventDexSwap)(nil),              // 5: types.EventDexSwap
-	(*EventOrderBookSwap)(nil),        // 6: types.EventOrderBookSwap
-	(*EventAutoPause)(nil),            // 7: types.EventAutoPause
-	(*EventAutoBeginUnstaking)(nil),   // 8: types.EventAutoBeginUnstaking
-	(*EventFinishUnstaking)(nil),      // 9: types.EventFinishUnstaking
+	(*Event)(nil),                       // 0: types.Event
+	(*EventReward)(nil),                 // 1: types.EventReward
+	(*EventSlash)(nil),                  // 2: types.EventSlash
+	(*EventDexLiquidityDeposit)(nil),    // 3: types.EventDexLiquidityDeposit
+	(*EventDexLiquidityWithdrawal)(nil), // 4: types.EventDexLiquidityWithdrawal
+	(*EventDexSwap)(nil),                // 5: types.EventDexSwap
+	(*EventOrderBookSwap)(nil),          // 6: types.EventOrderBookSwap
+	(*EventAutoPause)(nil),              // 7: types.EventAutoPause
+	(*EventAutoBeginUnstaking)(nil),     // 8: types.EventAutoBeginUnstaking
+	(*EventFinishUnstaking)(nil),        // 9: types.EventFinishUnstaking
 }
 var file_event_proto_depIdxs = []int32{
 	1, // 0: types.Event.reward:type_name -> types.EventReward
 	2, // 1: types.Event.slash:type_name -> types.EventSlash
 	3, // 2: types.Event.dex_liquidity_deposit:type_name -> types.EventDexLiquidityDeposit
-	4, // 3: types.Event.dex_liquidity_withdraw:type_name -> types.EventDexLiquidityWithdraw
+	4, // 3: types.Event.dex_liquidity_withdrawal:type_name -> types.EventDexLiquidityWithdrawal
 	5, // 4: types.Event.dex_swap:type_name -> types.EventDexSwap
 	6, // 5: types.Event.order_book_swap:type_name -> types.EventOrderBookSwap
 	7, // 6: types.Event.auto_pause:type_name -> types.EventAutoPause
@@ -867,7 +897,7 @@ func file_event_proto_init() {
 		(*Event_Reward)(nil),
 		(*Event_Slash)(nil),
 		(*Event_DexLiquidityDeposit)(nil),
-		(*Event_DexLiquidityWithdraw)(nil),
+		(*Event_DexLiquidityWithdrawal)(nil),
 		(*Event_DexSwap)(nil),
 		(*Event_OrderBookSwap)(nil),
 		(*Event_AutoPause)(nil),

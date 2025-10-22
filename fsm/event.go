@@ -43,28 +43,31 @@ func (s *StateMachine) EventOrderBookSwap(order *lib.SellOrder) lib.ErrorI {
 }
 
 // EventDexSwap() adds an AMM token swap event to the indexer
-func (s *StateMachine) EventDexSwap(address []byte, soldAmount, boughtAmount, chainId uint64, localOrigin, success bool) lib.ErrorI {
+func (s *StateMachine) EventDexSwap(address, orderId []byte, soldAmount, boughtAmount, chainId uint64, localOrigin, success bool) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexSwap, &lib.EventDexSwap{
 		SoldAmount:   soldAmount,
 		BoughtAmount: boughtAmount,
 		LocalOrigin:  localOrigin,
 		Success:      success,
+		OrderId:      orderId,
 	}, address, chainId)
 }
 
 // EventDexLiquidityDeposit() adds an AMM liquidity deposit event to the indexer
-func (s *StateMachine) EventDexLiquidityDeposit(address []byte, amount, chainId uint64, localOrigin bool) lib.ErrorI {
+func (s *StateMachine) EventDexLiquidityDeposit(address, orderId []byte, amount, chainId uint64, localOrigin bool) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexLiquidityDeposit, &lib.EventDexLiquidityDeposit{
 		Amount:      amount,
 		LocalOrigin: localOrigin,
+		OrderId:     orderId,
 	}, address, chainId)
 }
 
 // EventDexLiquidityWithdraw() adds a liquidity withdraw event to the indexer
-func (s *StateMachine) EventDexLiquidityWithdraw(address []byte, localAmount, remoteAmount, chainId uint64) lib.ErrorI {
-	return s.addEvent(lib.EventTypeDexLiquidityWithdraw, &lib.EventDexLiquidityWithdraw{
+func (s *StateMachine) EventDexLiquidityWithdraw(address, orderId []byte, localAmount, remoteAmount, chainId uint64) lib.ErrorI {
+	return s.addEvent(lib.EventTypeDexLiquidityWithdraw, &lib.EventDexLiquidityWithdrawal{
 		LocalAmount:  localAmount,
 		RemoteAmount: remoteAmount,
+		OrderId:      orderId,
 	}, address, chainId)
 }
 
@@ -94,7 +97,7 @@ func (s *StateMachine) addEvent(eventType lib.EventType, msg interface{}, addres
 	case lib.EventTypeDexLiquidityDeposit:
 		e.Msg = &lib.Event_DexLiquidityDeposit{DexLiquidityDeposit: msg.(*lib.EventDexLiquidityDeposit)}
 	case lib.EventTypeDexLiquidityWithdraw:
-		e.Msg = &lib.Event_DexLiquidityWithdraw{DexLiquidityWithdraw: msg.(*lib.EventDexLiquidityWithdraw)}
+		e.Msg = &lib.Event_DexLiquidityWithdrawal{DexLiquidityWithdrawal: msg.(*lib.EventDexLiquidityWithdrawal)}
 	case lib.EventTypeOrderBookSwap:
 		e.Msg = &lib.Event_OrderBookSwap{OrderBookSwap: msg.(*lib.EventOrderBookSwap)}
 	}

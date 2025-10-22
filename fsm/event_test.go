@@ -262,6 +262,7 @@ func TestEventDexSwap(t *testing.T) {
 		name         string
 		detail       string
 		address      []byte
+		orderId      []byte
 		soldAmount   uint64
 		boughtAmount uint64
 		chainId      uint64
@@ -274,6 +275,7 @@ func TestEventDexSwap(t *testing.T) {
 			name:         "valid successful dex swap event",
 			detail:       "successfully adds a successful dex swap event",
 			address:      newTestAddressBytes(t),
+			orderId:      []byte("order123"),
 			soldAmount:   100,
 			boughtAmount: 95,
 			chainId:      1,
@@ -285,6 +287,7 @@ func TestEventDexSwap(t *testing.T) {
 			name:         "valid failed dex swap event",
 			detail:       "successfully adds a failed dex swap event",
 			address:      newTestAddressBytes(t),
+			orderId:      []byte("order123"),
 			soldAmount:   100,
 			boughtAmount: 0,
 			chainId:      1,
@@ -298,7 +301,7 @@ func TestEventDexSwap(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexSwap(test.address, test.soldAmount, test.boughtAmount, test.chainId, test.inbound, test.success)
+			err := sm.EventDexSwap(test.address, test.orderId, test.soldAmount, test.boughtAmount, test.chainId, test.inbound, test.success)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -320,6 +323,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 		name     string
 		detail   string
 		address  []byte
+		orderId  []byte
 		amount   uint64
 		chainId  uint64
 		inbound  bool
@@ -330,6 +334,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 			name:     "valid liquidity deposit event",
 			detail:   "successfully adds a liquidity deposit event",
 			address:  newTestAddressBytes(t),
+			orderId:  []byte("order123"),
 			amount:   1000,
 			chainId:  1,
 			inbound:  true,
@@ -341,7 +346,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexLiquidityDeposit(test.address, test.amount, test.chainId, test.inbound)
+			err := sm.EventDexLiquidityDeposit(test.address, test.orderId, test.amount, test.chainId, test.inbound)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -363,6 +368,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 		name         string
 		detail       string
 		address      []byte
+		orderId      []byte
 		localAmount  uint64
 		remoteAmount uint64
 		chainId      uint64
@@ -384,7 +390,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexLiquidityWithdraw(test.address, test.localAmount, test.remoteAmount, test.chainId)
+			err := sm.EventDexLiquidityWithdraw(test.address, test.orderId, test.localAmount, test.remoteAmount, test.chainId)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

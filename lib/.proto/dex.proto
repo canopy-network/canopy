@@ -56,6 +56,8 @@ message DexLimitOrder {
   uint64 requestedAmount = 2; // @gotags: json:"requestedAmount"
   // address: the address where the funds are transferred from and to
   bytes address = 3; // @gotags: json:"address"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }
 
 // DexLiquidityDeposit a liquidity deposit command
@@ -64,6 +66,8 @@ message DexLiquidityDeposit {
   bytes address = 1;
   // amount: the amount of the deposit
   uint64 amount = 2;
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }
 
 // DexLiquidityWithdraw a liquidity withdraw command
@@ -72,6 +76,8 @@ message DexLiquidityWithdraw {
   bytes address = 1;
   // percent: the percent of points being withdrawn
   uint64 percent = 2;
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }
 
 // DexBatch is a group of limit orders that must be processed atomically
@@ -84,8 +90,8 @@ message DexBatch {
   repeated DexLimitOrder orders = 3; // @gotags: json:"orders"
   // deposits: the liquidity provider 'deposit' command
   repeated DexLiquidityDeposit deposits = 4;
-  // withdraws: the liquidity provider 'withdraw' command
-  repeated DexLiquidityWithdraw withdraws = 5;
+  // withdrawals: the liquidity provider 'withdraw' command
+  repeated DexLiquidityWithdraw withdrawals = 5;
   // pool_size: contains the current balance of the liquidity pool
   uint64 pool_size = 6; // @gotags: json:"poolSize"
   // counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain

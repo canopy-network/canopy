@@ -11,7 +11,7 @@ message Event {
     EventReward reward = 2;
     EventSlash slash = 3;
     EventDexLiquidityDeposit dex_liquidity_deposit = 4;
-    EventDexLiquidityWithdraw dex_liquidity_withdraw = 5;
+    EventDexLiquidityWithdrawal dex_liquidity_withdrawal = 5;
     EventDexSwap dex_swap = 6;
     EventOrderBookSwap order_book_swap = 7;
     EventAutoPause auto_pause = 8;
@@ -49,13 +49,17 @@ message EventDexLiquidityDeposit {
   uint64 amount = 1;
   // local_origin: was the deposit made on this chain or the counter
   bool local_origin = 2; // @gotags: json:"localOrigin"
+  // order_id: the unique identifier of the order
+  bytes order_id = 3; // @gotags: json:"orderId"
 }
 
-message EventDexLiquidityWithdraw {
+message EventDexLiquidityWithdrawal {
   // local_amount: the amount of liquidity received on this chain
   uint64 local_amount = 1; // @gotags: json:"localAmount"
   // counter_amount: the amount of liquidity received on the counter chain
   uint64 remote_amount = 2; // @gotags: json:"remoteAmount"
+  // order_id: the unique identifier of the order
+  bytes order_id = 3; // @gotags: json:"orderId"
 }
 
 message EventDexSwap {
@@ -67,6 +71,8 @@ message EventDexSwap {
   bool local_origin = 3; // @gotags: json:"localOrigin"
   // success: did the swap succeed
   bool success = 4; // @gotags: json:"success"
+  // order_id: the unique identifier of the order
+  bytes order_id = 5; // @gotags: json:"orderId"
 }
 
 message EventOrderBookSwap {

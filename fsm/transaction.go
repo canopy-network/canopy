@@ -148,7 +148,19 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, bat
 				hash, _ := tx.GetHash()
 				x.ProposalHash = lib.BytesToString(hash)
 			case *MessageCreateOrder:
-				// populate the order id for the create order
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLimitOrder:
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLiquidityDeposit:
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLiquidityWithdraw:
+				// populate the order id
 				hash, _ := tx.GetHash()
 				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
 			}
@@ -423,7 +435,7 @@ func NewDexLiquidityDeposit(from crypto.PrivateKeyI, amount, committeeId, networ
 	}, networkId, chainId, fee, height, memo)
 }
 
-// NewDexLiquidityWithdraw() creates a DexLiquidityWithdraw object in the interface form of TransactionI
+// NewDexLiquidityWithdraw() creates a DexLiquidityWithdrawal object in the interface form of TransactionI
 func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent uint64, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
 	return NewTransaction(from, &MessageDexLiquidityWithdraw{
 		ChainId: committeeId,

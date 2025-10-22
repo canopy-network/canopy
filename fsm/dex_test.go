@@ -14,12 +14,12 @@ import (
 )
 
 var emptyDexBatch = &lib.DexBatch{
-	Committee: 1,
-	Orders:    []*lib.DexLimitOrder{},
-	Deposits:  []*lib.DexLiquidityDeposit{},
-	Withdraws: []*lib.DexLiquidityWithdraw{},
-	PoolSize:  0,
-	Receipts:  []uint64{},
+	Committee:   1,
+	Orders:      []*lib.DexLimitOrder{},
+	Deposits:    []*lib.DexLiquidityDeposit{},
+	Withdrawals: []*lib.DexLiquidityWithdraw{},
+	PoolSize:    0,
+	Receipts:    []uint64{},
 }
 
 func TestHandleDexBatch(t *testing.T) {
@@ -61,12 +61,12 @@ func TestHandleDexBatch(t *testing.T) {
 				sm.RCManager = mock
 			},
 			expectedLockedBatch: &lib.DexBatch{
-				Committee: 2,
-				Orders:    []*lib.DexLimitOrder{},
-				Deposits:  []*lib.DexLiquidityDeposit{},
-				Withdraws: []*lib.DexLiquidityWithdraw{},
-				PoolSize:  0,
-				Receipts:  []uint64{},
+				Committee:   2,
+				Orders:      []*lib.DexLimitOrder{},
+				Deposits:    []*lib.DexLiquidityDeposit{},
+				Withdrawals: []*lib.DexLiquidityWithdraw{},
+				PoolSize:    0,
+				Receipts:    []uint64{},
 			},
 		},
 		{
@@ -95,7 +95,7 @@ func TestHandleDexBatch(t *testing.T) {
 					ReceiptHash:  lib.EmptyReceiptsHash,
 					Orders:       []*lib.DexLimitOrder{},
 					Deposits:     []*lib.DexLiquidityDeposit{},
-					Withdraws:    []*lib.DexLiquidityWithdraw{},
+					Withdrawals:  []*lib.DexLiquidityWithdraw{},
 					PoolSize:     1000,
 					LockedHeight: 0,
 				}
@@ -104,7 +104,7 @@ func TestHandleDexBatch(t *testing.T) {
 					ReceiptHash:     remoteBatch.Hash(),
 					Orders:          []*lib.DexLimitOrder{},
 					Deposits:        []*lib.DexLiquidityDeposit{},
-					Withdraws:       []*lib.DexLiquidityWithdraw{},
+					Withdrawals:     []*lib.DexLiquidityWithdraw{},
 					PoolSize:        1000,
 					CounterPoolSize: 1000,
 					Receipts:        []uint64{},
@@ -226,7 +226,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			chainId: 1,
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
@@ -269,7 +269,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			chainId: 1,
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 25,
@@ -315,7 +315,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			chainId: 1,
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
@@ -374,7 +374,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 						Amount:  100, // depositing 100 counter asset
 					},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
@@ -812,7 +812,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Committee: 1,
 				ReceiptHash: (&lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}}}).Hash(),
@@ -838,7 +838,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				// set locked batch
 				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}}}))
@@ -866,7 +866,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Committee: 1,
 				ReceiptHash: (&lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 25,
 					}}}).Hash(),
@@ -892,7 +892,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				// set locked batch
 				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 25,
 					}}}))
@@ -923,7 +923,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Committee: 1,
 				ReceiptHash: (&lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}, {
@@ -955,7 +955,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				// set locked batch
 				require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(1), &lib.DexBatch{
 					Committee: 1,
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}, {
@@ -993,7 +993,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 						Address: newTestAddressBytes(t, 2),
 						Amount:  100,
 					}},
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}}}).Hash(),
@@ -1027,7 +1027,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 						Address: newTestAddressBytes(t, 2),
 						Amount:  100,
 					}},
-					Withdraws: []*lib.DexLiquidityWithdraw{{
+					Withdrawals: []*lib.DexLiquidityWithdraw{{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 100,
 					}}}))
@@ -1070,7 +1070,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 2), Amount: 100},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 3),
 						Percent: 100, // Full withdraw of their share
@@ -1139,7 +1139,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 3), Amount: 80},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 4),
 						Percent: 100,
@@ -1205,7 +1205,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 1), Amount: 60},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{
 						Address: newTestAddressBytes(t, 1),
 						Percent: 50, // Half of their existing points
@@ -1266,7 +1266,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 					{Address: newTestAddressBytes(t, 4), Amount: 100},
 					{Address: newTestAddressBytes(t, 5), Amount: 80},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 6), Percent: 100},
 					{Address: newTestAddressBytes(t, 7), Percent: 50},
 				},
@@ -1341,7 +1341,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 3), Amount: 120},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 4), Percent: 100},
 				},
 				PoolSize: 100,
@@ -1399,7 +1399,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 2), Amount: 1},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 3), Percent: 10}, // Very small withdraw
 				},
 				PoolSize: 100,
@@ -1460,7 +1460,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 2), Amount: 200},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 3), Percent: 25},
 				},
 				PoolSize: 100,
@@ -1520,7 +1520,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 5), Amount: 50},
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 2), Percent: 25},
 					{Address: newTestAddressBytes(t, 3), Percent: 50},
 					{Address: newTestAddressBytes(t, 4), Percent: 75},
@@ -1699,7 +1699,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				Deposits: []*lib.DexLiquidityDeposit{
 					{Address: newTestAddressBytes(t, 2), Amount: 50}, // Replenish
 				},
-				Withdraws: []*lib.DexLiquidityWithdraw{
+				Withdrawals: []*lib.DexLiquidityWithdraw{
 					{Address: newTestAddressBytes(t, 3), Percent: 100}, // Try to withdraw everything
 				},
 				PoolSize: 50,
@@ -1952,7 +1952,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.NoError(t, err)
 	expected := &lib.DexBatch{
 		Committee: chain1Id,
-		Withdraws: []*lib.DexLiquidityWithdraw{{
+		Withdrawals: []*lib.DexLiquidityWithdraw{{
 			Address: account1.Bytes(),
 			Percent: 100,
 		}},
@@ -1972,7 +1972,7 @@ func TestDexWithdraw(t *testing.T) {
 	require.NoError(t, err)
 	expected = &lib.DexBatch{
 		Committee: chain1Id,
-		Withdraws: []*lib.DexLiquidityWithdraw{{
+		Withdrawals: []*lib.DexLiquidityWithdraw{{
 			Address: account1.Bytes(),
 			Percent: 100,
 		}},

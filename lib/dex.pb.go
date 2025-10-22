@@ -30,7 +30,9 @@ type DexLimitOrder struct {
 	// requested_amount: the minimum requested amount of 'counter-asset' to receive
 	RequestedAmount uint64 `protobuf:"varint,2,opt,name=requestedAmount,proto3" json:"requestedAmount"` // @gotags: json:"requestedAmount"
 	// address: the address where the funds are transferred from and to
-	Address       []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	Address []byte `protobuf:"bytes,3,opt,name=address,proto3" json:"address"` // @gotags: json:"address"
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,4,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -86,13 +88,22 @@ func (x *DexLimitOrder) GetAddress() []byte {
 	return nil
 }
 
+func (x *DexLimitOrder) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 // DexLiquidityDeposit a liquidity deposit command
 type DexLiquidityDeposit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// address: the address where the funds are deposited from
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// amount: the amount of the deposit
-	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,4,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -141,13 +152,22 @@ func (x *DexLiquidityDeposit) GetAmount() uint64 {
 	return 0
 }
 
+func (x *DexLiquidityDeposit) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 // DexLiquidityWithdraw a liquidity withdraw command
 type DexLiquidityWithdraw struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// address: the address where the funds are withdrawn to
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// percent: the percent of points being withdrawn
-	Percent       uint64 `protobuf:"varint,2,opt,name=percent,proto3" json:"percent,omitempty"`
+	Percent uint64 `protobuf:"varint,2,opt,name=percent,proto3" json:"percent,omitempty"`
+	// OrderId: auto-populated by the state machine to assign the unique bytes to the order
+	OrderId       []byte `protobuf:"bytes,4,opt,name=OrderId,proto3" json:"orderId"` // @gotags: json:"orderId"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -196,6 +216,13 @@ func (x *DexLiquidityWithdraw) GetPercent() uint64 {
 	return 0
 }
 
+func (x *DexLiquidityWithdraw) GetOrderId() []byte {
+	if x != nil {
+		return x.OrderId
+	}
+	return nil
+}
+
 // DexBatch is a group of limit orders that must be processed atomically
 type DexBatch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -207,8 +234,8 @@ type DexBatch struct {
 	Orders []*DexLimitOrder `protobuf:"bytes,3,rep,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
 	// deposits: the liquidity provider 'deposit' command
 	Deposits []*DexLiquidityDeposit `protobuf:"bytes,4,rep,name=deposits,proto3" json:"deposits,omitempty"`
-	// withdraws: the liquidity provider 'withdraw' command
-	Withdraws []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdraws,proto3" json:"withdraws,omitempty"`
+	// withdrawals: the liquidity provider 'withdraw' command
+	Withdrawals []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdrawals,proto3" json:"withdrawals,omitempty"`
 	// pool_size: contains the current balance of the liquidity pool
 	PoolSize uint64 `protobuf:"varint,6,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
 	// counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain
@@ -283,9 +310,9 @@ func (x *DexBatch) GetDeposits() []*DexLiquidityDeposit {
 	return nil
 }
 
-func (x *DexBatch) GetWithdraws() []*DexLiquidityWithdraw {
+func (x *DexBatch) GetWithdrawals() []*DexLiquidityWithdraw {
 	if x != nil {
-		return x.Withdraws
+		return x.Withdrawals
 	}
 	return nil
 }
@@ -391,23 +418,26 @@ var File_dex_proto protoreflect.FileDescriptor
 
 const file_dex_proto_rawDesc = "" +
 	"\n" +
-	"\tdex.proto\x12\x05types\"y\n" +
+	"\tdex.proto\x12\x05types\"\x93\x01\n" +
 	"\rDexLimitOrder\x12$\n" +
 	"\ramountForSale\x18\x01 \x01(\x04R\ramountForSale\x12(\n" +
 	"\x0frequestedAmount\x18\x02 \x01(\x04R\x0frequestedAmount\x12\x18\n" +
-	"\aaddress\x18\x03 \x01(\fR\aaddress\"G\n" +
+	"\aaddress\x18\x03 \x01(\fR\aaddress\x12\x18\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"a\n" +
 	"\x13DexLiquidityDeposit\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\"J\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12\x18\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"d\n" +
 	"\x14DexLiquidityWithdraw\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
-	"\apercent\x18\x02 \x01(\x04R\apercent\"\xd6\x03\n" +
+	"\apercent\x18\x02 \x01(\x04R\apercent\x12\x18\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"\xda\x03\n" +
 	"\bDexBatch\x12\x1c\n" +
 	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12!\n" +
 	"\freceipt_hash\x18\x02 \x01(\fR\vreceiptHash\x12,\n" +
 	"\x06orders\x18\x03 \x03(\v2\x14.types.DexLimitOrderR\x06orders\x126\n" +
-	"\bdeposits\x18\x04 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x129\n" +
-	"\twithdraws\x18\x05 \x03(\v2\x1b.types.DexLiquidityWithdrawR\twithdraws\x12\x1b\n" +
+	"\bdeposits\x18\x04 \x03(\v2\x1a.types.DexLiquidityDepositR\bdeposits\x12=\n" +
+	"\vwithdrawals\x18\x05 \x03(\v2\x1b.types.DexLiquidityWithdrawR\vwithdrawals\x12\x1b\n" +
 	"\tpool_size\x18\x06 \x01(\x04R\bpoolSize\x12*\n" +
 	"\x11counter_pool_size\x18\a \x01(\x04R\x0fcounterPoolSize\x122\n" +
 	"\vpool_points\x18\b \x03(\v2\x11.types.PoolPointsR\n" +
@@ -444,7 +474,7 @@ var file_dex_proto_goTypes = []any{
 var file_dex_proto_depIdxs = []int32{
 	0, // 0: types.DexBatch.orders:type_name -> types.DexLimitOrder
 	1, // 1: types.DexBatch.deposits:type_name -> types.DexLiquidityDeposit
-	2, // 2: types.DexBatch.withdraws:type_name -> types.DexLiquidityWithdraw
+	2, // 2: types.DexBatch.withdrawals:type_name -> types.DexLiquidityWithdraw
 	4, // 3: types.DexBatch.pool_points:type_name -> types.PoolPoints
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type

@@ -139,7 +139,7 @@ func (s *StateMachine) HandleDexBatchReceipt(remoteBatch *lib.DexBatch, chainId 
 			return false, err
 		}
 		// add dex swap event
-		if err = s.EventDexSwap(o.Address, o.AmountForSale, gotAmt, localBatch.Committee, true, gotAmt != 0); err != nil {
+		if err = s.EventDexSwap(o.Address, o.OrderId, o.AmountForSale, gotAmt, localBatch.Committee, true, gotAmt != 0); err != nil {
 			return false, err
 		}
 	}
@@ -198,7 +198,7 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 			dY = 0
 		}
 		// add dex swap event
-		if err = s.EventDexSwap(order.Address, dX, dY, chainId, false, dY == 0); err != nil {
+		if err = s.EventDexSwap(order.Address, order.OrderId, dX, dY, chainId, false, dY == 0); err != nil {
 			return nil, err
 		}
 		// fail (below limit)
@@ -305,7 +305,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 		// update the batch pool size
 		batch.PoolSize += order.Amount
 		// add dex deposit event
-		if err = s.EventDexLiquidityDeposit(order.Address, order.Amount, chainId, local); err != nil {
+		if err = s.EventDexLiquidityDeposit(order.Address, order.OrderId, order.Amount, chainId, local); err != nil {
 			return err
 		}
 	}
@@ -319,29 +319,25 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 
 // HandleBatchWithdraw() handles local/remote liquidity withdraw requests
 func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, y *uint64, local bool) lib.ErrorI {
-	if len(batch.Withdraws) == 0 {
+	if len(batch.Withdrawals) == 0 {
 		return nil
 	}
 	// initialize vars
-	totalPointsToRemove, withdraws := uint64(0), make(map[string]uint64)
+	totalPointsToRemove := uint64(0)
 	// get liquidity pool
 	p, err := s.GetPool(chainId + LiquidityPoolAddend)
 	if err != nil {
 		return err
 	}
 	// collect withdrawals
-	for _, w := range batch.Withdraws {
+	for _, w := range batch.Withdrawals {
 		initialPoints, e := p.GetPointsFor(w.Address)
 		if e != nil {
 			s.log.Error(e.Error())
 			continue
 		}
-		// calculate the points to withdraw
-		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
-		// increment the points to remove
-		withdraws[lib.BytesToString(w.Address)] += pointsToRemove
 		// update the total points to remove
-		totalPointsToRemove += pointsToRemove
+		totalPointsToRemove += lib.SafeMulDiv(initialPoints, w.Percent, 100)
 	}
 	// if nothing to withdraw
 	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
@@ -352,34 +348,39 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	// total remote reserve to withdraw
 	totalXWithdraw := lib.SafeMulDiv(batch.PoolSize, totalPointsToRemove, p.TotalPoolPoints)
 	// distribute tokens
-	for address, points := range withdraws {
-		// get address
-		addr, _ := lib.StringToBytes(address)
+	for _, w := range batch.Withdrawals {
+		initialPoints, e := p.GetPointsFor(w.Address)
+		if e != nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
+			continue
+		}
+		// calculate points from percent
+		points := lib.SafeMulDiv(initialPoints, w.Percent, 100)
 		// calculate share
 		yShare := lib.SafeMulDiv(totalYWithdrawal, points, totalPointsToRemove)
 		// calculate virtual share
 		xShare := lib.SafeMulDiv(totalXWithdraw, points, totalPointsToRemove)
 		// remove points from pool
-		if err = p.RemovePoints(addr, points); err != nil {
+		if err = p.RemovePoints(w.Address, points); err != nil {
 			return err
 		}
 		// credit user and update pool balance
 		if local {
 			// credit account
-			if err = s.AccountAdd(crypto.NewAddress(addr), xShare); err != nil {
+			if err = s.AccountAdd(crypto.NewAddress(w.Address), xShare); err != nil {
 				return err
 			}
 			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(addr, xShare, yShare, chainId); err != nil {
+			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, xShare, yShare, chainId); err != nil {
 				return err
 			}
 		} else {
 			// credit account
-			if err = s.AccountAdd(crypto.NewAddress(addr), yShare); err != nil {
+			if err = s.AccountAdd(crypto.NewAddress(w.Address), yShare); err != nil {
 				return err
 			}
 			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(addr, yShare, xShare, chainId); err != nil {
+			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, yShare, xShare, chainId); err != nil {
 				return err
 			}
 		}

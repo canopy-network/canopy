@@ -98,8 +98,8 @@ func (e *Event) MarshalJSON() ([]byte, error) {
 			msgBytes, err = json.Marshal(msg.Slash)
 		case *Event_DexLiquidityDeposit:
 			msgBytes, err = json.Marshal(msg.DexLiquidityDeposit)
-		case *Event_DexLiquidityWithdraw:
-			msgBytes, err = json.Marshal(msg.DexLiquidityWithdraw)
+		case *Event_DexLiquidityWithdrawal:
+			msgBytes, err = json.Marshal(msg.DexLiquidityWithdrawal)
 		case *Event_DexSwap:
 			msgBytes, err = json.Marshal(msg.DexSwap)
 		case *Event_OrderBookSwap:
@@ -193,11 +193,11 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 			}
 			e.Msg = &Event_DexLiquidityDeposit{DexLiquidityDeposit: &dexLiquidityDeposit}
 		case string(EventTypeDexLiquidityWithdraw):
-			var dexLiquidityWithdraw EventDexLiquidityWithdraw
+			var dexLiquidityWithdraw EventDexLiquidityWithdrawal
 			if err := json.Unmarshal(temp.Msg, &dexLiquidityWithdraw); err != nil {
 				return err
 			}
-			e.Msg = &Event_DexLiquidityWithdraw{DexLiquidityWithdraw: &dexLiquidityWithdraw}
+			e.Msg = &Event_DexLiquidityWithdrawal{DexLiquidityWithdrawal: &dexLiquidityWithdraw}
 		case string(EventTypeOrderBookSwap):
 			var orderBookSwap EventOrderBookSwap
 			if err := json.Unmarshal(temp.Msg, &orderBookSwap); err != nil {
@@ -258,4 +258,59 @@ func (e *EventOrderBookSwap) UnmarshalJSON(data []byte) error {
 	e.OrderId = temp.OrderId
 
 	return nil
+}
+
+// eventDexSwap represents the JSON structure for EventDexSwap marshalling/unmarshalling
+type eventDexSwap struct {
+	SoldAmount   uint64   `json:"soldAmount"`
+	BoughtAmount uint64   `json:"boughtAmount"`
+	LocalOrigin  bool     `json:"localOrigin"`
+	Success      bool     `json:"success"`
+	OrderId      HexBytes `json:"orderId"`
+}
+
+// MarshalJSON implements custom JSON marshalling for EventDexSwap, converting []byte fields to HexBytes
+func (e EventDexSwap) MarshalJSON() ([]byte, error) {
+	temp := eventDexSwap{
+		SoldAmount:   e.SoldAmount,
+		BoughtAmount: e.BoughtAmount,
+		LocalOrigin:  e.LocalOrigin,
+		Success:      e.Success,
+		OrderId:      e.OrderId,
+	}
+	return json.Marshal(temp)
+}
+
+// eventLiquidityDeposit represents the JSON structure for EventLiquidityDeposit marshalling/unmarshalling
+type eventDexLiquidityDeposit struct {
+	Amount      uint64   `json:"amount"`
+	LocalOrigin bool     `json:"localOrigin"`
+	OrderId     HexBytes `json:"orderId"`
+}
+
+// MarshalJSON() implements custom JSON marshalling for EventLiquidityDeposit, converting []byte fields to HexBytes
+func (e EventDexLiquidityDeposit) MarshalJSON() ([]byte, error) {
+	temp := eventDexLiquidityDeposit{
+		Amount:      e.Amount,
+		LocalOrigin: e.LocalOrigin,
+		OrderId:     e.OrderId,
+	}
+	return json.Marshal(temp)
+}
+
+// eventLiquidityDeposit represents the JSON structure for EventLiquidityDeposit marshalling/unmarshalling
+type eventDexLiquidityWithdrawal struct {
+	LocalAmount  uint64   `json:"localAmount"`
+	RemoteAmount uint64   `json:"remoteAmount"`
+	OrderId      HexBytes `json:"orderId"`
+}
+
+// MarshalJSON() implements custom JSON marshalling for EventDexLiquidityWithdrawal, converting []byte fields to HexBytes
+func (e EventDexLiquidityWithdrawal) MarshalJSON() ([]byte, error) {
+	temp := eventDexLiquidityWithdrawal{
+		LocalAmount:  e.LocalAmount,
+		RemoteAmount: e.RemoteAmount,
+		OrderId:      e.OrderId,
+	}
+	return json.Marshal(temp)
 }

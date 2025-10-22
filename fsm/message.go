@@ -486,6 +486,7 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 		AmountForSale:   msg.AmountForSale,
 		RequestedAmount: msg.RequestedAmount,
 		Address:         msg.Address,
+		OrderId:         msg.OrderId,
 	})
 	// update next sell batch
 	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
@@ -518,12 +519,13 @@ func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidity
 	batch.Deposits = append(batch.Deposits, &lib.DexLiquidityDeposit{
 		Address: msg.Address,
 		Amount:  msg.Amount,
+		OrderId: msg.OrderId,
 	})
 	// update next sell batch
 	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
 }
 
-// HandleMessageDexLiquidityWithdraw() is the proper handler for a `DexLiquidityWithdraw` message
+// HandleMessageDexLiquidityWithdraw() is the proper handler for a `DexLiquidityWithdrawal` message
 func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidityWithdraw) (err lib.ErrorI) {
 	// get the next sell batch
 	batch, err := s.GetDexBatch(msg.ChainId, false)
@@ -535,7 +537,7 @@ func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidit
 		return ErrInvalidLiquidityPool()
 	}
 	// hard limit ops to 5K per batch to prevent unchecked state growth
-	if len(batch.Withdraws) >= 5_000 {
+	if len(batch.Withdrawals) >= 5_000 {
 		return ErrMaxDexBatchSize()
 	}
 	// get the liquidity pool
@@ -548,9 +550,10 @@ func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidit
 		return err
 	}
 	// add the batch to the order
-	batch.Withdraws = append(batch.Withdraws, &lib.DexLiquidityWithdraw{
+	batch.Withdrawals = append(batch.Withdrawals, &lib.DexLiquidityWithdraw{
 		Address: msg.Address,
 		Percent: msg.Percent,
+		OrderId: msg.OrderId,
 	})
 	// update next sell batch
 	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
