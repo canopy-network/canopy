@@ -286,11 +286,3 @@ func ErrInvalidLiquidityPool() lib.ErrorI {
 func ErrMaxDexBatchSize() lib.ErrorI {
 	return lib.NewError(lib.CodeMaxDexBatchSize, lib.StateMachineModule, "the dex batch size exceeds the global max")
 }
-
-func ErrInvalidInput() lib.ErrorI {
-	return lib.NewError(lib.CodeInvalidTxMessage, lib.StateMachineModule, "invalid input parameter")
-}
-
-func ErrEventTypeEmpty() lib.ErrorI {
-	return lib.NewError(lib.CodeEventTypeEmpty, lib.StateMachineModule, "event type is empty")
-}

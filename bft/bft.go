@@ -145,8 +145,8 @@ func (b *BFT) Start() {
 					//if b.LoadIsOwnRoot() {
 					b.NewHeight(true)
 					//} else if b.Round != 0 {
-					//b.NewHeight(true)
-					//set the wait timers to start consensus
+					//	b.NewHeight(true)
+					// set the wait timers to start consensus
 					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
 					//}
 				}

@@ -49,7 +49,7 @@ func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 }
 
 // EndBlock() is code that is executed at the end of `applying` the block
-func (s *StateMachine) EndBlock(proposerAddress []byte, rcBuildHeight uint64) (events lib.Events, err lib.ErrorI) {
+func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err lib.ErrorI) {
 	s.events.Refer(lib.EventStageEndBlock)
 	// update the list of addresses who proposed the last blocks
 	// this information is used for leader election
@@ -87,7 +87,7 @@ func (s *StateMachine) EndBlock(proposerAddress []byte, rcBuildHeight uint64) (e
 	// if not independent
 	if !ownRoot {
 		// trigger the dex batch
-		if err = s.HandleDexBatch(rcBuildHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
+		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
 			if err.Error() != ErrMismatchDexBatchReceipt().Error() {
 				s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
 			} else {
@@ -148,8 +148,6 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	results, chainId := qc.Results, qc.Header.ChainId
 	// handle dex action ordered by the quorum
-	// if handling a QC from another chain
-	//if committee == nil || qc.Header.ChainId != s.Config.ChainId {
 	if qc.Header.ChainId != s.Config.ChainId {
 		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, results.DexBatch); err != nil {
 			if err.Error() != ErrMismatchDexBatchReceipt().Error() {

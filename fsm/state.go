@@ -21,18 +21,19 @@ const (
 type StateMachine struct {
 	store lib.RWStoreI
 
-	ProtocolVersion    uint64                // the version of the protocol this node is running
-	NetworkID          uint32                // the id of the network this node is configured to be on
-	height             uint64                // the 'version' of the state based on number of blocks currently on
-	totalVDFIterations uint64                // the number of 'verifiable delay iterations' in the blockchain up to this version
-	slashTracker       *SlashTracker         // tracks total slashes across multiple blocks
-	proposeVoteConfig  GovProposalVoteConfig // the configuration of how the state machine behaves with governance proposals
-	RCManager          lib.RCManagerI        // access to the root chain info
-	Config             lib.Config            // the main configuration as defined by the 'config.json' file
-	Metrics            *lib.Metrics          // the telemetry module
-	events             *lib.EventsTracker    // a simple event tracker for 'per-transaction' events
-	log                lib.LoggerI           // the logger for standard output and debugging
-	cache              *cache                // the state machine cache
+	ProtocolVersion    uint64                                  // the version of the protocol this node is running
+	NetworkID          uint32                                  // the id of the network this node is configured to be on
+	height             uint64                                  // the 'version' of the state based on number of blocks currently on
+	totalVDFIterations uint64                                  // the number of 'verifiable delay iterations' in the blockchain up to this version
+	slashTracker       *SlashTracker                           // tracks total slashes across multiple blocks
+	proposeVoteConfig  GovProposalVoteConfig                   // the configuration of how the state machine behaves with governance proposals
+	RCManager          lib.RCManagerI                          // access to the root chain info
+	Config             lib.Config                              // the main configuration as defined by the 'config.json' file
+	Metrics            *lib.Metrics                            // the telemetry module
+	events             *lib.EventsTracker                      // a simple event tracker for 'per-transaction' events
+	log                lib.LoggerI                             // the logger for standard output and debugging
+	cache              *cache                                  // the state machine cache
+	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
 }
 
 // cache is the set of items to be cached used by the state machine
@@ -55,7 +56,7 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, rcManager lib.RCM
 		Metrics:           metrics,
 		RCManager:         rcManager,
 		log:               log,
-		events:            &lib.EventsTracker{},
+		events:            new(lib.EventsTracker),
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 		},
@@ -101,7 +102,7 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 // NOTES:
 // - this function may be used to validate 'additional' transactions outside the normal block size as if they were to be included
 // - a list of failed transactions are returned
-func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, rcBuildHeight uint64, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
+func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidatorSet *lib.ValidatorSet, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
 	// catch in case there's a panic
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -119,7 +120,7 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, rcBuildHeig
 		return nil, nil, ErrWrongStoreType()
 	}
 	// automated execution at the 'beginning of a block'
-	events, err := s.BeginBlock()
+	events, err := s.BeginBlock(lastValidatorSet)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,14 +133,12 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, rcBuildHeig
 	// sub-out transactions for those that succeeded (only useful for mempool application)
 	b.Transactions = r.Txs
 	// automated execution at the 'ending of a block'
-	events, err = s.EndBlock(b.BlockHeader.ProposerAddress, rcBuildHeight)
+	events, err = s.EndBlock(b.BlockHeader.ProposerAddress)
 	if err != nil {
 		return nil, nil, err
 	}
 	// add the events from end block
 	r.AddEvent(events...)
-	// load the validator set for the previous height
-	lastValidatorSet, _ := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
 	// calculate the merkle root of the last validators to maintain validator continuity between blocks (if root)
 	lastValidatorRoot, err := lastValidatorSet.ValidatorSet.Root()
 	if err != nil {
@@ -425,7 +424,7 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 }
 
 // LoadRootChainInfo() returns the 'need-to-know' information for a nested chain
-func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo, lib.ErrorI) {
+func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...*lib.ValidatorSet) (*lib.RootChainInfo, lib.ErrorI) {
 	lastHeight := uint64(1)
 	// update the metrics once complete
 	defer s.Metrics.UpdateGetRootChainInfo(time.Now())
@@ -458,7 +457,13 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 	}
 	// get the previous committee
 	// allow an error here to have size 0 validator sets
-	lastValidatorSet, _ := lastSM.GetCommitteeMembers(id)
+	if len(lastValidatorSet) == 0 || lastValidatorSet[0] == nil {
+		lvs, err := lastSM.GetCommitteeMembers(id)
+		if err != nil {
+			return nil, err
+		}
+		lastValidatorSet = []*lib.ValidatorSet{&lvs}
+	}
 	// get the delegate lottery winner
 	lotteryWinner, err := sm.LotteryWinner(id)
 	if err != nil {
@@ -474,7 +479,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		RootChainId:      s.Config.ChainId,
 		Height:           sm.height,
 		ValidatorSet:     validatorSet.ValidatorSet,
-		LastValidatorSet: lastValidatorSet.ValidatorSet,
+		LastValidatorSet: lastValidatorSet[0].ValidatorSet,
 		LotteryWinner:    lotteryWinner,
 		Orders:           orders,
 	}, nil
@@ -503,13 +508,14 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		slashTracker:       NewSlashTracker(),
 		proposeVoteConfig:  s.proposeVoteConfig,
 		RCManager:          s.RCManager,
-		events:             &lib.EventsTracker{},
+		events:             new(lib.EventsTracker),
 		Config:             s.Config,
 		Metrics:            nil,
 		log:                s.log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 		},
+		LastValidatorSet: s.LastValidatorSet,
 	}, nil
 }
 

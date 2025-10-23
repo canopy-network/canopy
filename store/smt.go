@@ -33,7 +33,7 @@ import (
 // OPTIMIZATIONS OVER REGULAR SMT:
 // 1. Any leaf nodes without values are set to nil. A parent node is also nil if both children are nil
 // 2. If a parent has exactly one non-nil child, replace the parent with the non-nil child
-// 3. A tree always starts with two children: (0x0...) and (FxF...), and a TransactionRoot
+// 3. A tree always starts with two children: (0x0...) and (FxF...), and a Root
 //
 // ALGORITHM:
 //	1. Tree Traversal

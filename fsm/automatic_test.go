@@ -280,7 +280,7 @@ func TestEndBlock(t *testing.T) {
 			}()
 
 			// STEP 1) run function call and check for expected error
-			_, err := sm.EndBlock(proposerAddress, 0)
+			_, err := sm.EndBlock(proposerAddress)
 			func() { require.Equal(t, test.error, err) }()
 
 			// STEP 2) validate the update of addresses who proposed the block
