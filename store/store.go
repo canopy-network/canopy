@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -21,7 +22,6 @@ const (
 	lastCommitIDPrefix    = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
 	maxKeyBytes           = 256            // maximum size of a key
 	lssVersion            = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
-	versionSyncBlock      = 100            // block threshold for syncing commits to stable storage
 )
 
 var _ lib.StoreI = &Store{} // enforce the Store interface
@@ -51,11 +51,11 @@ providing four main components for managing blockchain-related data.
    hash of the StateCommitStore corresponding to that version. This separation aids in managing
    the state versioning process.
 
-The Store leverages PebbleD in Managed Mode to maintain historical versions of the state,
-allowing for time-travel operations and historical state queries. It uses PebbleDB Transactions
-to ensure that all writes to the StateStore, StateCommitStore, Indexer, and CommitIDStore are
-performed atomically in a single commit operation per height. Additionally, the Store uses
-lexicographically ordered prefix keys to facilitate easy and efficient iteration over stored data.
+The store package contains its own multiversion concurrency control system where all the keys are
+managed. PebbleDB is used on top of that to ensure that all writes to the StateStore, StateCommitStore,
+Indexer, and CommitIDStore are performed atomically in a single commit operation per height.
+Additionally, the Store uses lexicographically ordered prefix keys to facilitate easy and efficient
+iteration over stored data.
 */
 
 type Store struct {
@@ -68,6 +68,7 @@ type Store struct {
 	metrics  *lib.Metrics  // telemetry
 	log      lib.LoggerI   // logger
 	config   lib.Config    // config
+	mu       *sync.Mutex   // mutex for concurrent commits
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -140,6 +141,7 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 		Indexer: &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
 		metrics: metrics,
 		config:  config,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -171,6 +173,7 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		sc:      NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
 		Indexer: &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
 		metrics: s.metrics,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -197,6 +200,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		ss:      s.ss.Copy(lssReader, lssReader),
 		Indexer: &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
 		metrics: s.metrics,
+		mu:      &sync.Mutex{},
 	}, nil
 }
 
@@ -214,35 +218,40 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err = s.setCommitID(s.version, root); err != nil {
 		return nil, err
 	}
-	// extract the internal metrics from the badger Txn
-	// commit the in-memory txn to the badger writer
+	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		return nil, e
 	}
+	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
-	if err := s.writer.Commit(
-		&pebble.WriteOptions{
-			// Wait for filesystem to sync every versionSyncBlock to make sure data is durable on the
-			// case of a crash
-			Sync: s.Version()%versionSyncBlock == 0,
-		}); err != nil {
+	// NOTE: PebbleDB has a non deterministic issue where batch.Commit(pebble.WriteOptions{})
+	// could panic with a nil pointer dereference in applyInternal(). This occurs because the batch's
+	// internal db reference may have uninitialized fields (specifically the 'closed' atomic field).
+	// To avoid this panic, always commit batches through the DB instance (db.Apply(batch))
+	// rather than calling batch.Commit() directly, as the DB struct ensures all internal
+	// fields are properly initialized.
+	// Should check again on the batch behavior once pebbleDB releases a new version.
+	s.mu.Lock() // lock commit op
+	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
 		return nil, ErrCommitDB(err)
 	}
-	// check if the current version is a multiple of the cleanup block interval
-	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
-	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
-		// go func() {
-		// trigger compaction of LSS deleted keys
-		// if err := s.Compact(); err != nil {
-		// 	s.log.Errorf("failed to evict LSS deleted keys: %s", err)
-		// }
-		// }()
-	}
+	s.mu.Unlock() // unlock commit op
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
 	// reset the writer for the next height
 	s.Reset()
+	// check if the current version is a multiple of the cleanup block interval
+	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
+	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
+		go func() {
+			// trigger compaction of LSS deleted keys
+			if err := s.Compact([]byte(latestStatePrefix),
+				prefixEnd([]byte(latestStatePrefix))); err != nil {
+				s.log.Errorf("failed to evict LSS deleted keys: %s", err)
+			}
+		}()
+	}
 	// return the root
 	return
 }
@@ -309,10 +318,11 @@ func (s *Store) NewTxn() lib.StoreI {
 		ss:      NewTxn(s.ss, s.ss, nil, false, true, nextVersion),
 		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, nextVersion), s.config},
 		metrics: s.metrics,
+		mu:      s.mu,
 	}
 }
 
-// DB() returns the underlying BadgerDB instance associated with the Store, providing access
+// DB() returns the underlying PebbleDB instance associated with the Store, providing access
 // to the database for direct operations and management.
 func (s *Store) DB() *pebble.DB { return s.db }
 
@@ -367,6 +377,9 @@ func (s *Store) Discard() {
 
 // Close() discards the writer and closes the database connection
 func (s *Store) Close() lib.ErrorI {
+	// lock for thread safety
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	// stop the current writer/readers
 	s.Discard()
 	// Optionally ensure latest memtable is flushed (helps make state visible on disk).
@@ -442,11 +455,12 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 	return
 }
 
-// Compact deletes all entries marked for compaction.
-// it iterates over the LSS prefix, deletes tombstone entries, and performs compaction
-func (s *Store) Compact() lib.ErrorI {
-	now := time.Now()
-	s.log.Debugf("key compaction started at height %d", s.Version())
+// Compact deletes all entries marked for compaction on the given prefix range.
+// it iterates over the prefix, deletes tombstone entries, and performs DB compaction
+func (s *Store) Compact(startPrefix []byte, endPrefix []byte) lib.ErrorI {
+	// track current time and version
+	now, version := time.Now(), s.Version()
+	s.log.Debugf("key compaction started at height %d", version)
 	// create a timeout to limit the duration of the compaction process
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -454,40 +468,44 @@ func (s *Store) Compact() lib.ErrorI {
 	// create a batch to set the keys to be removed by the compaction
 	batch := s.db.NewBatch()
 	defer batch.Close()
-	// set compaction prefixes
-	startPrefix := []byte(latestStatePrefix)
-	endPrefix := prefixEnd([]byte(latestStatePrefix))
-	total, deleted := 0, 0
-	// callback function to delete tombstones
-	deleteFn := func(it *pebble.Iterator) {
-		tombstone, _ := ParseValueWithTombstone(it.Value())
+	// set metrics to log
+	total, toDelete := 0, 0
+	// collect and delete tombstone entries
+	err := s.withIterator(startPrefix, endPrefix, func(it *pebble.Iterator) {
+		tombstone, _ := parseValueWithTombstone(it.Value())
 		if tombstone == DeadTombstone {
 			batch.Delete(it.Key(), pebble.NoSync)
-			deleted++
+			toDelete++
 		} else {
 			total++
 		}
-	}
-	err := s.withIterator(startPrefix, endPrefix, deleteFn)
+	})
 	if err != nil {
 		return ErrCommitDB(err)
 	}
-	// commit the batch to delete the tombstone keys, wait for sync so the tombstone removal
-	// is on stable storage
-	if err := batch.Commit(pebble.Sync); err != nil {
+	// if nothing to delete, skip compaction
+	if batch.Empty() {
+		s.log.Debugf("key compaction finished [%d], no values to delete", version)
+		return nil
+	}
+	// commit the batch
+	s.mu.Lock() // lock commit op
+	if err := s.db.Apply(batch, pebble.Sync); err != nil {
 		return ErrCommitDB(err)
 	}
+	s.mu.Unlock() // unlock commit op
+	batchTime := time.Since(now)
 	// perform a flush to ensure memtables are flushed to disk
 	if err := s.db.Flush(); err != nil {
 		return ErrCommitDB(fmt.Errorf("failed to flush memtables: %v", err))
 	}
-	// perform the actual compaction over the latest state prefix
+	// flush and compact the range
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
 	// log results
-	s.log.Debugf("key compaction finished [%d], total keys: %d, deleted: %d elapsed: %s",
-		s.Version(), total, deleted, time.Since(now))
+	s.log.Debugf("key compaction finished [%d], total keys: %d, deleted: %d batchTime: %s elapsed: %s",
+		version, total, toDelete, batchTime, time.Since(now))
 	return nil
 }
 
