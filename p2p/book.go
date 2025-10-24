@@ -129,12 +129,11 @@ func (p *P2P) ListenForPeerBookResponses() {
 					continue
 				}
 				// try to dial
-				if err := p.DialAndDisconnect(bp.Address, true); err != nil {
-					// p.log.Debugf("DialAndDisconnect failed with err: %s", err.Error())
-					continue
-				}
-				// add peer to list
-				p.book.Add(bp)
+				go func(address *lib.PeerAddress) {
+					if err := p.DialAndDisconnect(address, true); err == nil {
+						p.book.Add(bp)
+					}
+				}(bp.Address)
 			}
 			p.ChangeReputation(senderID, GoodPeerBookRespRep)
 		case <-l.TimeToReset(): // fires when the limiter should reset
