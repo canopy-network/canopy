@@ -159,7 +159,10 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 	var (
 		err  error
 		iter *pebble.Iterator
-		opts = &pebble.IterOptions{LowerBound: prefix, UpperBound: prefixEnd(prefix)}
+		opts = &pebble.IterOptions{
+			LowerBound: prefix,
+			UpperBound: prefixEnd(prefix),
+		}
 	)
 	if vs.batch != nil && vs.batch.Indexed() {
 		iter, err = vs.batch.NewIter(opts)
@@ -232,20 +235,10 @@ func (vi *VersionedIterator) Close() { _ = vi.iter.Close() }
 func (vi *VersionedIterator) first() {
 	vi.initialized = true
 	// seek to proper position
-	if !vi.reverse {
-		if len(vi.prefix) == 0 {
-			vi.iter.First()
-		} else {
-			vi.iter.SeekGE(vi.prefix)
-		}
+	if vi.reverse {
+		vi.iter.Last()
 	} else {
-		if len(vi.prefix) == 0 {
-			vi.iter.Last()
-		} else {
-			if !vi.iter.SeekLT(prefixEnd(vi.prefix)) {
-				vi.iter.Last()
-			}
-		}
+		vi.iter.First()
 	}
 	// go to the next 'user key'
 	vi.advanceToNextKey()
@@ -266,7 +259,12 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		}
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
-			vi.iter.SeekLT(vi.store.makeVersionedKey(userKey, vi.store.version))
+			for vi.iter.Prev() {
+				prevUserKey, prevVersion, err := vi.store.parseVersionedKey(vi.iter.Key())
+				if err != nil || !bytes.Equal(userKey, prevUserKey) || prevVersion > vi.store.version {
+					break
+				}
+			}
 			vi.iter.Next()
 			userKey, version, err = vi.store.parseVersionedKey(vi.iter.Key())
 			if err != nil || version > vi.store.version {
@@ -319,7 +317,7 @@ func (vs *VersionedStore) parseVersionedKey(versionedKey []byte) (userKey []byte
 	// extract user key (everything between history prefix and suffix)
 	userKeyEnd := len(versionedKey) - VersionSize
 	// extract the userKey and the version
-	userKey, version = versionedKey[:userKeyEnd], binary.BigEndian.Uint64(versionedKey[userKeyEnd:])
+	userKey, version = bytes.Clone(versionedKey[:userKeyEnd]), binary.BigEndian.Uint64(versionedKey[userKeyEnd:])
 	// extract inverted version and convert back to real version
 	version = ^version
 	// exit
