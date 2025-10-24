@@ -1,65 +1,124 @@
 {
-  "time": "2024-12-14 20:10:52",
-  "accounts": [
-    {
-      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-      "amount": 1000000
-    },
-    {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "amount": 1000000
-    },
-    {
-      "address": "6f94783856d5ce46d24dd5946215086211d70776",
-      "amount": 1000000
-    }
-  ],
-  "nonSigners": null,
   "validators": [
     {
-      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-      "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-      "committees": [
-        1
-      ],
-      "netAddress": "tcp://node-1",
-      "stakedAmount": 1000000000,
-      "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+      "address": "9c51a2b9b9234865a61cd43aae7f899441ae6271",
+      "publicKey": "8ad02e9b05e418f198e89179685a48b227f1c2bc266d4db002f24f8155c5119cbb9387146319b5dc4a260184f20d5d4f",
+      "committees": [1, 2],
+      "netAddress": "tcp://cnpy.xyz",
+      "stakedAmount": 1,
+      "output": "cf228862bd36016c0154e789d5fabe584da31c7e"
     },
     {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
-      "committees": [
-        1
-      ],
-      "netAddress": "tcp://node-2",
-      "stakedAmount": 1000000000,
-      "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+      "address": "5bc4bd9a3468889febdc6a73df0090b12a263eb4",
+      "publicKey": "90703d453dfa70af3c85f3605e6cc8222d01d68d439ee5a9ade10be631572b330e1793206c8d417d9693be1d5af417fe",
+      "committees": [1, 2],
+      "netAddress": "tcp://cnpy.network",
+      "stakedAmount": 1,
+      "output": "faef35fb62796dfd6dfb9b19ea3d4be130a97257"
+    },
+    {
+      "address": "997634c57ad60414116dc59417db6829c209f1df",
+      "publicKey": "89c592a8a27bc2ba3783048ebad2ee77b67ce8db1d3706d19135fac44e71d459870791d8face14dde4df6262a6445a27",
+      "committees": [1, 2],
+      "netAddress": "tcp://minerstellar.com",
+      "stakedAmount": 1,
+      "output": "12ee25b30f3016e3427983c1fb75eabab025a2d5"
+    },
+    {
+      "address": "ac2c2eb9aa04b99ec9a523b09ca844a77826c291",
+      "publicKey": "b1891c2a38b553279b46452a4ecc49fa42ecb7c71a27f39efa5b3f817481b443cb44da9be251fa571d1ac43dd5ef7fd9",
+      "committees": [1, 2],
+      "netAddress": "tcp://agentofthecrown.com",
+      "stakedAmount": 1,
+      "output": "330d139fd014ec84c15b9786f9934a5a95a02d25"
+    },
+    {
+      "address": "a843153e432b2b3052e50cfb37bbd021e9cbd34c",
+      "publicKey": "b338f09135994130bee5da939513241b5d01ba5e73c409ed5ecea597b86a8b9c05fd27fb5e47a7296350fbae6262a484",
+      "committees": [1, 2],
+      "netAddress": "tcp://cnpynetwork.com",
+      "stakedAmount": 1,
+      "output": "1202c3f3ac5e4876f9b35774858ca16e129ceba1"
+    },
+    {
+      "address": "5946f3adf4965295b816a40b719ff79e9fd1dba2",
+      "publicKey": "8794c211342dc0da348b16e4e5903ffd7f913c390bd29dbfad0c44b891b08a99d74bc90546d89b54098ac7c0c5331550",
+      "committees": [1, 2],
+      "netAddress": "tcp://dun3waves.xyz",
+      "stakedAmount": 1,
+      "output": "3b7d461b533ff5b7ec28d172656b8049f29e5b11"
+    },
+    {
+      "address": "51f334c0e137b99aa8fc9eae3a71064c2ccf8208",
+      "publicKey": "99e38bdc8b7c7f9f8a67151da78994a2616ac127518d4dd8f5a08ad760921758269fcb5172713b9585ec7007f60cb6fe",
+      "committees": [1, 2],
+      "netAddress": "tcp://canopynode.cam",
+      "stakedAmount": 1,
+      "output": "3dad3f4dcb6e0411a6acfc66c3d8850aff9789e4"
+    },
+    {
+      "address": "8b243551a78f5380d6ba5b1e84fee34b23f6e757",
+      "publicKey": "a329a705dab85db2fd950cef9ffd87e27ff4b91b929d5ab26e6efb40b1b3b45e74f7d8162822c49b9909893e6461cc8d",
+      "committees": [1, 2],
+      "netAddress": "tcp://uem44.com",
+      "stakedAmount": 1,
+      "output": "b70bd2f4a87a43597c9c78d65dc3192090fdaa6f"
+    },
+    {
+      "address": "fc5cdb5c0b6a6df41b92976bbdf2b6832855446f",
+      "publicKey": "b17d4eb3938957e710bacc9f09d2a9aa79a568fcdf1f8fc565bdb5de3f334295e929e4b086b9c8e9610654155fb0452b",
+      "committees": [1, 2],
+      "netAddress": "tcp://canopycoin.xyz",
+      "stakedAmount": 1,
+      "output": "a59917b6d045327d4a39736fea81b72e1891692e"
+    },
+    {
+      "address": "4e2ce94661e2e3fd3af02e21898803c4d74e84ba",
+      "publicKey": "ab4fe218bb09a27908c6181fc799b8371d895f13173fed5b924af60235a548cd882ba97f911c08d9bda34c46a7dab359",
+      "committees": [1, 2],
+      "netAddress": "tcp://cryptoicp.com",
+      "stakedAmount": 1,
+      "output": "bc01362a7bd2613a3786ce32007452fd51f2bf1b"
+    },
+    {
+      "address": "33e14ef6b87fb688b829c5e29618bb549dc7b4cd",
+      "publicKey": "b346ad1f1809adc64d4a06e5be4d9960a018faada129d659623fd97846d5127de550218929ec9de4af9d9cbd1ec52d46",
+      "committees": [1, 2],
+      "netAddress": "tcp://lava-9.com",
+      "stakedAmount": 1,
+      "output": "b587ddd8b58134c61ec52e5b1e88a27a5e07be82"
+    },
+    {
+      "address": "b9c6c2dfa9d049e480c8cec9c29463abf078a594",
+      "publicKey": "9174b24ba27fe8a0f8616bf1a382d81428ef8a94b7ff70916bb9b266c9070bd848e49a0c33a1c17553416c949ea3409a",
+      "committees": [1, 2],
+      "netAddress": "tcp://cleanmarro.com",
+      "stakedAmount": 1,
+      "output": "8f5633ac35fc17fe113b8ecaa2060289607c0352"
     }
   ],
   "params": {
     "consensus": {
       "blockSize": 1000000,
       "protocolVersion": "1/0",
-      "rootChainID": 1,
-      "retired": 0
+      "rootChainID": 1
     },
     "validator": {
-      "unstakingBlocks": 2,
-      "maxPauseBlocks": 4380,
+      "unstakingBlocks": 30240,
+      "maxPauseBlocks": 30240,
       "doubleSignSlashPercentage": 10,
       "nonSignSlashPercentage": 1,
-      "maxNonSign": 4,
-      "nonSignWindow": 10,
-      "maxCommittees": 15,
+      "maxNonSign": 60,
+      "nonSignWindow": 100,
+      "maxCommittees": 16,
       "maxCommitteeSize": 100,
-      "earlyWithdrawalPenalty": 20,
-      "delegateUnstakingBlocks": 2,
-      "minimumOrderSize": 1000,
+      "earlyWithdrawalPenalty": 0,
+      "delegateUnstakingBlocks": 12960,
+      "minimumOrderSize": 1000000000,
       "stakePercentForSubsidizedCommittee": 33,
       "maxSlashPerCommittee": 15,
-      "delegateRewardPercentage": 10,
-      "buyDeadlineBlocks": 15,
+      "delegateRewardPercentage": 0,
+      "buyDeadlineBlocks": 60,
       "lockOrderFeeMultiplier": 2
     },
     "fee": {
@@ -71,14 +130,14 @@
       "unpauseFee": 10000,
       "changeParameterFee": 10000,
       "daoTransferFee": 10000,
+      "certificateResultsFee": 0,
       "subsidyFee": 10000,
       "createOrderFee": 10000,
       "editOrderFee": 10000,
       "deleteOrderFee": 10000
     },
     "governance": {
-      "daoRewardPercentage": 10
+      "daoRewardPercentage": 5
     }
-  },
-  "supply": null
+  }
 }

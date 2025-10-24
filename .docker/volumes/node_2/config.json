@@ -1,6 +1,6 @@
 {
   "logLevel": "debug",
-  "chainId": 1,
+  "chainId": 2,
   "sleepUntil": 0,
   "rootChain": [
     {
@@ -30,7 +30,11 @@
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": [],
+  "dialPeers": [
+    "8ad02e9b05e418f198e89179685a48b227f1c2bc266d4db002f24f8155c5119cbb9387146319b5dc4a260184f20d5d4f@tcp://cnpy.xyz",
+    "9353441f5319ca7b9ee2f8bd764a8c75e3b6b7b13a18b0c4e5252bc0b1232861318b3063255238edc1fb96f08fa2157a@tcp://canopy.seed1.node2.eu.nodefleet.net",
+    "a3d591f2e602fd18df7c94abf02f6d342939570b169886bb355e6879cd7b9dda8c5d825f7895336d4e29750e65fc65df@tcp://canopy.seed1.node2.us.nodefleet.net"
+  ],
   "bannedPeerIDs": null,
   "bannedIPs": null,
   "minimumPeersToStart": 0,
