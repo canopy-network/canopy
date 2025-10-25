@@ -29,7 +29,7 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const transport, dialTimeout, minPeerTick = "tcp", time.Second, 100 * time.Millisecond
+const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 15 * time.Second
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
@@ -97,6 +97,8 @@ func (p *P2P) Start() {
 	go p.ListenForInboundPeers(&lib.PeerAddress{NetAddress: p.config.ListenAddress})
 	// Dials external outbound peers
 	go p.DialForOutboundPeers()
+	// Start inbox monitoring
+	go p.MonitorInboxStats(inboxMonitorInterval)
 	// Wait until peers reaches minimum count
 	p.WaitForMinimumPeers()
 }
@@ -490,4 +492,57 @@ func (p *P2P) catchPanic() {
 	if r := recover(); r != nil {
 		p.log.Error(string(debug.Stack()))
 	}
+}
+
+// MonitorInboxStats continuously monitors and logs inbox channel depths
+// without blocking message processing. Safe to run as a goroutine.
+func (p *P2P) MonitorInboxStats(interval time.Duration) {
+	//TODO once stable change inboxMonitorInterval to 30-60 seconds to avoid spamming logs
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Collect stats without blocking
+		stats := p.GetInboxStats()
+
+		// Calculate total messages across all inboxes
+		totalMessages := 0
+		for _, count := range stats {
+			totalMessages += count
+		}
+
+		// Only log if there are messages (avoid spam when idle)
+		if totalMessages == 0 {
+			continue
+		}
+
+		// Log summary
+		p.log.Infof("Inbox Stats: Total=%d msgs across %d topics", totalMessages, len(stats))
+
+		// Log details for non-empty inboxes
+		for topic, count := range stats {
+			if count > 0 {
+				percentage := float64(count) / float64(maxInboxQueueSize) * 100
+
+				if percentage > 50 {
+					p.log.Warnf("  ⚠️  %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
+				} else {
+					p.log.Infof("  ✓ %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
+				}
+			}
+		}
+	}
+}
+
+// GetInboxStats returns the current message count for each inbox channel
+// This operation is non-blocking and safe to call concurrently
+func (p *P2P) GetInboxStats() map[lib.Topic]int {
+	stats := make(map[lib.Topic]int)
+
+	// len() on channels is non-blocking and thread-safe
+	for topic, ch := range p.channels {
+		stats[topic] = len(ch)
+	}
+
+	return stats
 }
