@@ -1,19 +1,56 @@
 // API Configuration
-let rpcURL = "http://localhost:50002"; // default value for the RPC URL
-let adminRPCURL = "http://localhost:50003"; // default Admin RPC URL
-let chainId = 1; // default chain id
+// Get environment variables with fallbacks
+const getEnvVar = (key: keyof ImportMetaEnv, fallback: string): string => {
+    return import.meta.env[key] || fallback;
+};
 
+// Default values
+let rpcURL = getEnvVar('VITE_RPC_URL', "http://localhost:50002");
+let adminRPCURL = getEnvVar('VITE_ADMIN_RPC_URL', "http://localhost:50003");
+let chainId = parseInt(getEnvVar('VITE_CHAIN_ID', "1"));
+
+// Check if we're in production mode and use public URLs
+const isProduction = getEnvVar('VITE_NODE_ENV', 'development') === 'production';
+if (isProduction) {
+    rpcURL = getEnvVar('VITE_PUBLIC_RPC_URL', rpcURL);
+    adminRPCURL = getEnvVar('VITE_PUBLIC_ADMIN_RPC_URL', adminRPCURL);
+}
+
+// Function to update API configuration
+const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: number) => {
+    rpcURL = newRpcURL;
+    adminRPCURL = newAdminRPCURL;
+    chainId = newChainId;
+    console.log('API Config Updated:', { rpcURL, adminRPCURL, chainId });
+};
+
+// Legacy support for window.__CONFIG__ (for backward compatibility)
 if (typeof window !== "undefined") {
     if (window.__CONFIG__) {
         rpcURL = window.__CONFIG__.rpcURL;
         adminRPCURL = window.__CONFIG__.adminRPCURL;
         chainId = Number(window.__CONFIG__.chainId);
     }
-    rpcURL = rpcURL.replace("localhost", window.location.hostname);
-    adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
-    console.log(rpcURL);
+
+    // Replace localhost with current hostname for local development
+    if (rpcURL.includes("localhost")) {
+        rpcURL = rpcURL.replace("localhost", window.location.hostname);
+    }
+    if (adminRPCURL.includes("localhost")) {
+        adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
+    }
+
+    // Listen for network changes
+    window.addEventListener('networkChanged', (event: any) => {
+        const network = event.detail;
+        updateApiConfig(network.rpcUrl, network.adminRpcUrl, network.chainId);
+    });
+
+    console.log('RPC URL:', rpcURL);
+    console.log('Admin RPC URL:', adminRPCURL);
+    console.log('Chain ID:', chainId);
 } else {
-    console.log("config undefined");
+    console.log("Running in SSR mode, using environment variables");
 }
 
 // RPC PATHS
@@ -129,23 +166,23 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
     try {
         // Get the total number of transactions
         const totalTransactionCount = await getTotalTransactionCount();
-        
+
         // If there are no filters, use a more direct approach
         if (!filters || Object.values(filters).every(v => !v)) {
             // Get blocks sequentially to cover the pagination
             const startIndex = (page - 1) * perPage;
             const endIndex = startIndex + perPage;
-            
+
             let allTransactions: any[] = [];
             let currentBlockPage = 1;
             const maxPages = 50; // Limit to avoid too many requests
-            
+
             while (allTransactions.length < endIndex && currentBlockPage <= maxPages) {
                 const blocksResponse = await Blocks(currentBlockPage, 0);
                 const blocks = blocksResponse?.results || blocksResponse?.blocks || [];
-                
+
                 if (!Array.isArray(blocks) || blocks.length === 0) break;
-                
+
                 for (const block of blocks) {
                     if (block.transactions && Array.isArray(block.transactions)) {
                         const blockTransactions = block.transactions.map((tx: any) => ({
@@ -156,25 +193,25 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
                             blockNumber: block.blockHeader?.height || block.height
                         }));
                         allTransactions = allTransactions.concat(blockTransactions);
-                        
+
                         // If we have enough transactions, exit
                         if (allTransactions.length >= endIndex) break;
                     }
                 }
-                
+
                 currentBlockPage++;
             }
-            
+
             // Ordenar por tiempo (más recientes primero)
             allTransactions.sort((a, b) => {
                 const timeA = a.blockTime || a.time || a.timestamp || 0;
                 const timeB = b.blockTime || b.time || b.timestamp || 0;
                 return timeB - timeA;
             });
-            
+
             // Aplicar paginación
             const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
-            
+
             return {
                 results: paginatedTransactions,
                 totalCount: totalTransactionCount,
@@ -184,10 +221,10 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
                 hasMore: endIndex < totalTransactionCount
             };
         }
-        
+
         // If there are filters, use the previous method
         return await AllTransactions(page, perPage, filters);
-        
+
     } catch (error) {
         console.error('Error fetching transactions with real pagination:', error);
         return { results: [], totalCount: 0, pageNumber: page, perPage, totalPages: 0, hasMore: false };
@@ -202,46 +239,46 @@ const CACHE_DURATION = 30000; // 30 segundos
 export async function getTotalTransactionCount(): Promise<number> {
     try {
         // Verificar cache
-        if (totalTransactionCountCache && 
+        if (totalTransactionCountCache &&
             (Date.now() - totalTransactionCountCache.timestamp) < CACHE_DURATION) {
             return totalTransactionCountCache.count;
         }
-        
+
         // Get information from the latest block to know the total number of transactions
         const latestBlocksResponse = await Blocks(1, 0);
         const latestBlock = latestBlocksResponse?.results?.[0] || latestBlocksResponse?.blocks?.[0];
-        
+
         let totalCount = 0;
-        
+
         if (latestBlock?.blockHeader?.totalTxs) {
             totalCount = latestBlock.blockHeader.totalTxs;
         } else {
             // Fallback: get transactions from multiple pages of blocks
             let currentPage = 1;
             const maxPages = 10; // Limit to avoid too many requests
-            
+
             while (currentPage <= maxPages) {
                 const blocksResponse = await Blocks(currentPage, 0);
                 const blocks = blocksResponse?.results || blocksResponse?.blocks || [];
-                
+
                 if (!Array.isArray(blocks) || blocks.length === 0) break;
-                
+
                 for (const block of blocks) {
                     if (block.transactions && Array.isArray(block.transactions)) {
                         totalCount += block.transactions.length;
                     }
                 }
-                
+
                 currentPage++;
             }
         }
-        
+
         // Actualizar cache
         totalTransactionCountCache = {
             count: totalCount,
             timestamp: Date.now()
         };
-        
+
         return totalCount;
     } catch (error) {
         console.error('Error getting total transaction count:', error);
@@ -262,21 +299,21 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
     try {
         // Obtener el conteo total de transacciones
         const totalTransactionCount = await getTotalTransactionCount();
-        
+
         // Calcular cuántos bloques necesitamos obtener para cubrir la paginación
         // Asumimos un promedio de transacciones por bloque para optimizar
         const estimatedTxsPerBlock = 1; // Ajustar según la realidad de tu blockchain
         const blocksNeeded = Math.ceil((page * perPage) / estimatedTxsPerBlock) + 5; // Buffer extra
-        
+
         // Obtener múltiples páginas de bloques para asegurar suficientes transacciones
         let allTransactions: any[] = [];
         let currentBlockPage = 1;
         const maxBlockPages = Math.min(blocksNeeded, 20); // Limitar para rendimiento
-        
+
         while (currentBlockPage <= maxBlockPages && allTransactions.length < (page * perPage)) {
             const blocksResponse = await Blocks(currentBlockPage, 0);
             const blocks = blocksResponse?.results || blocksResponse?.blocks || blocksResponse?.list || [];
-            
+
             if (!Array.isArray(blocks) || blocks.length === 0) break;
 
             for (const block of blocks) {
@@ -292,7 +329,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
                     allTransactions = allTransactions.concat(blockTransactions);
                 }
             }
-            
+
             currentBlockPage++;
         }
 

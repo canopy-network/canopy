@@ -6,9 +6,15 @@ interface TransactionTypesProps {
     toBlock: string
     loading: boolean
     transactionsData: any
+    blockGroups: Array<{
+        start: number
+        end: number
+        label: string
+        blockCount: number
+    }>
 }
 
-const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock, loading, transactionsData }) => {
+const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock, loading, transactionsData, blockGroups }) => {
     // Use real transaction data to categorize by type
     const getTransactionTypeData = () => {
         if (!transactionsData?.results || !Array.isArray(transactionsData.results)) {
@@ -258,14 +264,11 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7 // Adjusted to show 7 days in the 7D filter
-                    const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
-                    if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
-                        return <span key={index}>{label}</span>
-                    }
-                    return null
-                })}
+                {blockGroups.slice(0, 6).map((group, index) => (
+                    <span key={index} className="text-center flex-1 px-1 truncate">
+                        {group.start}-{group.end}
+                    </span>
+                ))}
             </div>
 
             {/* Legend - Only show types that exist */}

@@ -7,9 +7,15 @@ interface FeeTrendsProps {
     loading: boolean
     paramsData: any
     transactionsData: any
+    blockGroups: Array<{
+        start: number
+        end: number
+        label: string
+        blockCount: number
+    }>
 }
 
-const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, paramsData, transactionsData }) => {
+const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, paramsData, transactionsData, blockGroups }) => {
     // Calculate real fee data from params and transactions
     const getFeeData = () => {
         if (!paramsData?.fee || !transactionsData?.results) {

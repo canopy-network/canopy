@@ -6,9 +6,15 @@ interface NetworkActivityProps {
     toBlock: string
     loading: boolean
     blocksData: any
+    blockGroups: Array<{
+        start: number
+        end: number
+        label: string
+        blockCount: number
+    }>
 }
 
-const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, loading, blocksData }) => {
+const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, loading, blocksData, blockGroups }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; blockLabel: string } | null>(null)
     // Use real block data filtered by block range
     const getTransactionData = () => {
@@ -141,7 +147,9 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
 
                     {/* Data points */}
                     {transactionData.map((value, index) => {
-                        const x = (index / Math.max(transactionData.length - 1, 1)) * 280 + 10
+                        // Calculate position based on block groups for better alignment
+                        const groupIndex = Math.floor(index / (transactionData.length / blockGroups.length))
+                        const x = (groupIndex / Math.max(blockGroups.length - 1, 1)) * 280 + 10
                         const y = 110 - ((value - minValue) / range) * 100
                         // Asegurar que x e y no sean NaN
                         const safeX = isNaN(x) ? 10 : x
@@ -155,7 +163,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                                 cy={safeY}
                                 r="4"
                                 fill="#4ADE80"
-                                className="cursor-pointer transition-all duration-200 hover:r-6"
+                                className="cursor-pointer transition-all duration-200 hover:r-6 drop-shadow-sm"
                                 onMouseEnter={() => setHoveredPoint({
                                     index,
                                     x: safeX,
@@ -193,14 +201,11 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {blockLabels.map((label, index) => {
-                    const numLabelsToShow = Math.min(7, blockLabels.length) // Show up to 7 block labels
-                    const interval = Math.floor(blockLabels.length / (numLabelsToShow - 1))
-                    if (blockLabels.length <= numLabelsToShow || index % interval === 0) {
-                        return <span key={index}>{label}</span>
-                    }
-                    return null
-                })}
+                {blockGroups.slice(0, 6).map((group, index) => (
+                    <span key={index} className="text-center flex-1 px-1 truncate">
+                        {group.start}-{group.end}
+                    </span>
+                ))}
             </div>
         </motion.div>
     )

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import React from 'react';
 import {
     Blocks,
     Transactions,
@@ -301,15 +302,20 @@ export const useTableData = (page: number, category: number, committee?: number)
     });
 };
 
-// Hook for Analytics - Get multiple pages of blocks for transaction analysis
-export const useBlocksForAnalytics = (numPages: number = 10) => {
+// Define queryKeys for blocks in range
+const blocksInRangeKey = (fromBlock: number, toBlock: number, maxBlocks: number) => 
+    ['blocksInRange', fromBlock, toBlock, maxBlocks];
+
+// Hook for fetching blocks within a specific range
+export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 100) => {
     return useQuery({
-        queryKey: ['blocksForAnalytics', numPages],
+        queryKey: blocksInRangeKey(fromBlock, toBlock, maxBlocksToFetch),
         queryFn: async () => {
-            const allBlocks: any[] = []
-            
-            // Fetch multiple pages of blocks
-            for (let page = 1; page <= numPages; page++) {
+            const allBlocks: any[] = [];
+            let page = 1;
+            const perPage = 100; // Max blocks per page from API
+
+            while (allBlocks.length < maxBlocksToFetch) {
                 try {
                     const response = await fetch('http://localhost:50002/v1/query/blocks', {
                         method: 'POST',
@@ -317,39 +323,102 @@ export const useBlocksForAnalytics = (numPages: number = 10) => {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            perPage: 100, // Max per page
-                            pageNumber: page
-                        })
-                    })
-                    
+                            perPage: perPage,
+                            pageNumber: page,
+                        }),
+                    });
+
                     if (!response.ok) {
-                        console.error(`Failed to fetch blocks page ${page}`)
-                        break
+                        console.error(`Failed to fetch blocks page ${page}`);
+                        throw new Error(`Failed to fetch blocks page ${page}`);
                     }
-                    
-                    const data = await response.json()
+
+                    const data = await response.json();
                     if (data.results && Array.isArray(data.results)) {
-                        allBlocks.push(...data.results)
+                        allBlocks.push(...data.results);
                     }
-                    
-                    // If we got less than 100 blocks, we've reached the end
-                    if (data.results.length < 100) {
-                        break
+
+                    // If we got less than perPage blocks, we've reached the end of available blocks
+                    if (data.results.length < perPage) {
+                        break;
                     }
-                } catch (error) {
-                    console.error(`Error fetching blocks page ${page}:`, error)
-                    break
+
+                    page++;
+                } catch (error: any) {
+                    console.error(`Error fetching blocks page ${page}:`, error);
+                    throw new Error(`Error fetching blocks: ${error.message}`);
                 }
             }
-            
-            return {
-                results: allBlocks,
-                totalCount: allBlocks.length
+
+            // Filter blocks by height if fromBlock or toBlock are specified
+            let filteredBlocks = allBlocks;
+            if (fromBlock > 0 || toBlock > 0) {
+                filteredBlocks = allBlocks.filter(block => {
+                    const blockHeight = block.height || block.blockHeader?.height || 0;
+                    return blockHeight >= fromBlock && blockHeight <= toBlock;
+                });
             }
+
+            // Ensure we don't return more than maxBlocksToFetch
+            const finalBlocks = filteredBlocks.slice(0, maxBlocksToFetch);
+
+            return {
+                results: finalBlocks,
+                totalCount: finalBlocks.length,
+            };
         },
         staleTime: 60000, // Cache for 1 minute
         refetchInterval: 300000, // Refetch every 5 minutes
     });
+};
+
+// Hook for Analytics - Get multiple pages of blocks for transaction analysis
+export const useBlocksForAnalytics = (numPages: number = 10) => {
+    // Usa el hook de useBlocksInRange para obtener los bloques
+    return useBlocksInRange(0, 0, numPages * 100); // Fetch up to numPages * 100 blocks
+};
+
+// Hook para extraer transacciones de los bloques en un rango específico
+export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 100) => {
+    // Reutilizar el hook de useBlocksInRange para obtener los bloques
+    const blocksQuery = useBlocksInRange(fromBlock, toBlock, maxBlocksToFetch);
+    
+    // Procesar los bloques para extraer las transacciones
+    const { data: blocksData, isLoading, error } = blocksQuery;
+    
+    // Transformar los datos de bloques para extraer las transacciones
+    const transformedData = React.useMemo(() => {
+        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+            return { results: [], totalCount: 0 };
+        }
+        
+        const allTransactions: any[] = [];
+        
+        // Extraer transacciones de cada bloque
+        blocksData.results.forEach((block: any) => {
+            if (block.transactions && Array.isArray(block.transactions)) {
+                // Agregar información del bloque a cada transacción
+                const txsWithBlockInfo = block.transactions.map((tx: any) => ({
+                    ...tx,
+                    blockHeight: block.blockHeader?.height || block.height,
+                    blockTime: block.blockHeader?.time || block.time,
+                }));
+                
+                allTransactions.push(...txsWithBlockInfo);
+            }
+        });
+        
+        return {
+            results: allTransactions,
+            totalCount: allTransactions.length
+        };
+    }, [blocksData]);
+    
+    return {
+        data: transformedData,
+        isLoading,
+        error
+    };
 };
 
 // Hook for fetching orders (swaps)
@@ -383,3 +452,4 @@ export const useOrder = (chainId: number, orderId: string, height: number = 0) =
         staleTime: 30000, // Cache for 30 seconds
     });
 };
+

@@ -6,9 +6,15 @@ interface StakingTrendsProps {
     toBlock: string
     loading: boolean
     validatorsData: any
+    blockGroups: Array<{
+        start: number
+        end: number
+        label: string
+        blockCount: number
+    }>
 }
 
-const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loading, validatorsData }) => {
+const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loading, validatorsData, blockGroups }) => {
     // Generate real staking data based on validators and supply
     const generateStakingData = () => {
         if (!validatorsData?.results || !Array.isArray(validatorsData.results)) {
@@ -116,31 +122,49 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid-staking)" />
 
-                    {/* Line chart */}
-                    {stakingData.length > 1 && (
+                    {/* Line chart - aligned with block groups */}
+                    {blockGroups.length > 1 && (
                         <polyline
                             fill="none"
                             stroke="#4ADE80"
-                            strokeWidth="2"
-                            points={stakingData.map((value, index) => {
-                                const x = (index / (stakingData.length - 1)) * 280 + 10
-                                const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={blockGroups.map((group, groupIndex) => {
+                                // Calculate average value for this group
+                                const startIndex = Math.floor((groupIndex / blockGroups.length) * stakingData.length)
+                                const endIndex = Math.floor(((groupIndex + 1) / blockGroups.length) * stakingData.length)
+                                const groupData = stakingData.slice(startIndex, endIndex)
+                                const avgValue = groupData.reduce((sum, val) => sum + val, 0) / groupData.length
+                                
+                                const x = (groupIndex / Math.max(blockGroups.length - 1, 1)) * 280 + 10
+                                const y = 110 - ((avgValue - minValue) / (maxValue - minValue)) * 100
                                 return `${x},${y}`
                             }).join(' ')}
                         />
                     )}
 
-                    {/* Data points */}
-                    {stakingData.map((value, index) => {
-                        const x = (index / (stakingData.length - 1)) * 280 + 10
-                        const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
+                    {/* Data points - one per block group for clean alignment */}
+                    {blockGroups.map((group, groupIndex) => {
+                        // Calculate average value for this group
+                        const startIndex = Math.floor((groupIndex / blockGroups.length) * stakingData.length)
+                        const endIndex = Math.floor(((groupIndex + 1) / blockGroups.length) * stakingData.length)
+                        const groupData = stakingData.slice(startIndex, endIndex)
+                        const avgValue = groupData.reduce((sum, val) => sum + val, 0) / groupData.length
+                        
+                        const x = (groupIndex / Math.max(blockGroups.length - 1, 1)) * 280 + 10
+                        const y = 110 - ((avgValue - minValue) / (maxValue - minValue)) * 100
+                        
                         return (
                             <circle
-                                key={index}
+                                key={groupIndex}
                                 cx={x}
                                 cy={y}
-                                r="2"
+                                r="4"
                                 fill="#4ADE80"
+                                className="drop-shadow-lg"
+                                stroke="#2D5A3D"
+                                strokeWidth="1"
                             />
                         )
                     })}
@@ -155,14 +179,11 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {dateLabels.map((label, index) => {
-                    const numLabelsToShow = 7
-                    const interval = Math.floor(dateLabels.length / (numLabelsToShow - 1))
-                    if (dateLabels.length <= numLabelsToShow || index % interval === 0) {
-                        return <span key={index}>{label}</span>
-                    }
-                    return null
-                })}
+                {blockGroups.slice(0, 6).map((group, index) => (
+                    <span key={index} className="text-center flex-1 px-1 truncate">
+                        {group.start}-{group.end}
+                    </span>
+                ))}
             </div>
         </motion.div>
     )

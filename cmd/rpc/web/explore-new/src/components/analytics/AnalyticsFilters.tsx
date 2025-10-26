@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 
 interface AnalyticsFiltersProps {
     fromBlock: string
@@ -21,32 +21,61 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     onFromBlockChange,
     onToBlockChange
 }) => {
+    const [selectedRange, setSelectedRange] = useState<string>('')
+
+    // Detect when custom range is being used
+    useEffect(() => {
+        if (fromBlock && toBlock) {
+            const from = parseInt(fromBlock)
+            const to = parseInt(toBlock)
+            const range = to - from + 1
+
+            // Check if it matches any predefined range
+            const predefinedRanges = ['10', '25', '50', '100']
+            const matchingRange = predefinedRanges.find(r => parseInt(r) === range)
+
+            if (matchingRange) {
+                setSelectedRange(matchingRange)
+            } else {
+                setSelectedRange('custom')
+            }
+        }
+    }, [fromBlock, toBlock])
+
     const handleBlockRangeSelect = (range: string) => {
+        setSelectedRange(range)
+
         if (range === 'custom') return
-        
+
         const blockCount = parseInt(range)
         const currentToBlock = parseInt(toBlock) || 0
         const newFromBlock = Math.max(0, currentToBlock - blockCount + 1)
-        
+
         onFromBlockChange(newFromBlock.toString())
     }
 
     return (
         <div className="flex items-center justify-between flex-col lg:flex-row gap-4 lg:gap-0 space-x-2 mb-8 bg-card border border-gray-800/30 hover:border-gray-800/50 rounded-xl p-4">
             <div className="flex items-center space-x-2">
-                {blockRangeFilters.map((filter) => (
-                    <button
-                        key={filter.key}
-                        onClick={() => handleBlockRangeSelect(filter.key)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                            filter.key === 'custom' 
-                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                    >
-                        {filter.label}
-                    </button>
-                ))}
+                {blockRangeFilters.map((filter) => {
+                    const isSelected = selectedRange === filter.key
+                    const isCustom = filter.key === 'custom'
+
+                    return (
+                        <button
+                            key={filter.key}
+                            onClick={() => handleBlockRangeSelect(filter.key)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isSelected
+                                    ? 'bg-primary text-black shadow-lg shadow-primary/25'
+                                    : isCustom
+                                        ? 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                        : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                }`}
+                        >
+                            {filter.label}
+                        </button>
+                    )
+                })}
             </div>
             <div className="flex items-center gap-2">
                 <span className="text-gray-400 text-xs">From</span>
