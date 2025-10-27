@@ -599,7 +599,7 @@ export function toCNPY(uCNPY) {
 
 // toUCNPY converts a CNPY amount to uCNPY
 export function toUCNPY(cnpy) {
-  return cnpy * cnpyConversionRate;
+  return Math.floor(cnpy * cnpyConversionRate);
 }
 
 // numberFromCommas removes commas from a string and returns a number
