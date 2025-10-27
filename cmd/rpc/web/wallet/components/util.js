@@ -597,7 +597,7 @@ export function toCNPY(uCNPY) {
   return uCNPY / cnpyConversionRate;
 }
 
-// toUCNPY converts a CNPY amount to uCNPY
+// toUCNPY converts a CNPY amount to uCNPY and ensures it's an integer
 export function toUCNPY(cnpy) {
   return Math.floor(cnpy * cnpyConversionRate);
 }

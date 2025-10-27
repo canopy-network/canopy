@@ -158,12 +158,7 @@ const RenderAmountInput = ({ amount, onClick, input, inputValue }) => {
         Available: <span className="fw-bold">{formatNumber(amount)} CNPY </span>
         <Button
           aria-label="max-button"
-          onClick={() => {
-            // Convert uCNPY to CNPY, then format it properly as a string
-            const cnpyAmount = amount / 1000000;
-            const formattedAmount = formatLocaleNumber(cnpyAmount, 6, 6);
-            onClick(input.label, formattedAmount, input.type);
-          }}
+          onClick={() => onClick(input.label, Math.floor(amount).toString(), input.type)}
           variant="link"
           bsPrefix="max-amount-btn"
         >
