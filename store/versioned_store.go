@@ -323,6 +323,20 @@ func (vs *VersionedStore) makeVersionedKey(userKey []byte, version uint64) []byt
 	return result
 }
 
+// valueWithTombstone() creates a value with tombstone prefix
+// v = [1-byte Tombstone][ActualValue]
+func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []byte) {
+	v = make([]byte, 1+len(value))
+	// first byte is tombstone indicator
+	v[0] = tombstone
+	// the rest is the value
+	if len(value) > 0 {
+		copy(v[1:], value)
+	}
+	// exit
+	return
+}
+
 // parseVersionedKey() extracts components and converts back from inverted version
 // k = [UserKey][InvertedVersion]
 // The caller should not modify the returned userKey slice as it points to the original buffer,
@@ -334,20 +348,6 @@ func parseVersionedKey(versionedKey []byte) (userKey []byte, version uint64, err
 	userKey, version = versionedKey[:userKeyEnd], binary.BigEndian.Uint64(versionedKey[userKeyEnd:])
 	// extract inverted version and convert back to real version
 	version = ^version
-	// exit
-	return
-}
-
-// valueWithTombstone() creates a value with tombstone prefix
-// v = [1-byte Tombstone][ActualValue]
-func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []byte) {
-	v = make([]byte, 1+len(value))
-	// first byte is tombstone indicator
-	v[0] = tombstone
-	// the rest is the value
-	if len(value) > 0 {
-		copy(v[1:], value)
-	}
 	// exit
 	return
 }
@@ -429,4 +429,34 @@ func newTargetWindowFilter(minVersion, maxVersion uint64) sstable.BlockPropertyF
 		maxVersion,
 		nil,
 	)
+}
+
+// MVCCComparer is a custom comparer for versioned keys that treats the last 8 bytes
+// as a version suffix, enabling prefix-based optimizations.
+var MVCCComparer = &pebble.Comparer{
+	Name:                 "canopy.mvcc.comparer",
+	Compare:              pebble.DefaultComparer.Compare,
+	Equal:                pebble.DefaultComparer.Equal,
+	FormatKey:            pebble.DefaultComparer.FormatKey,
+	ComparePointSuffixes: pebble.DefaultComparer.ComparePointSuffixes,
+	Separator:            pebble.DefaultComparer.Separator,
+	Successor:            pebble.DefaultComparer.Successor,
+	ImmediateSuccessor:   pebble.DefaultComparer.ImmediateSuccessor,
+	CompareRangeSuffixes: pebble.DefaultComparer.CompareRangeSuffixes,
+	FormatValue:          pebble.DefaultComparer.FormatValue,
+	ValidateKey:          pebble.DefaultComparer.ValidateKey,
+	AbbreviatedKey:       pebble.DefaultComparer.AbbreviatedKey,
+	// Split at the version boundary
+	Split: func(key []byte) int {
+		if len(key) <= VersionSize {
+			return len(key)
+		}
+		return len(key) - VersionSize
+	},
+}
+
+type fmtKey struct{ key []byte }
+
+func (f fmtKey) Format(s fmt.State, c rune) {
+	fmt.Fprintf(s, "%x", f.key)
 }

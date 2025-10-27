@@ -10,6 +10,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/bloom"
 	"github.com/cockroachdb/pebble/v2/vfs"
 )
 
@@ -78,7 +79,7 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 
 // NewStore() creates a new instance of a disk DB
 func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	cache := pebble.NewCache(128 << 20) // 128MB cache
+	cache := pebble.NewCache(256 << 20) // 256MB cache
 	defer cache.Unref()
 	db, err := pebble.Open(path, &pebble.Options{
 		DisableWAL:            false,                       // Keep WAL but optimize other settings
@@ -92,6 +93,7 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
 			func() pebble.BlockPropertyCollector { return newVersionedPropertyCollector() },
 		},
+		Levels: [7]pebble.LevelOptions{{FilterPolicy: bloom.FilterPolicy(12)}},
 	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
