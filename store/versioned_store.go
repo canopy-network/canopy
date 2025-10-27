@@ -8,6 +8,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/sstable"
 )
 
 /* versioned_store.go implements a multi-version store in pebble db*/
@@ -91,7 +92,7 @@ func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib
 	}
 	// find latest version ≤ version
 	for ; i.iter.Valid(); i.iter.Next() {
-		userKey, ver, e := vs.parseVersionedKey(iter.Key())
+		userKey, ver, e := parseVersionedKey(iter.Key())
 		if e != nil || !bytes.Equal(userKey, key) || ver > vs.version {
 			continue
 		}
@@ -156,12 +157,21 @@ func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.Err
 
 // newVersionedIterator creates a new  versioned iterator
 func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allVersions bool) (*VersionedIterator, lib.ErrorI) {
+	var filters []pebble.BlockPropertyFilter
+	if vs.version != math.MaxUint64 {
+		filters = []pebble.BlockPropertyFilter{
+			newTargetWindowFilter(0, vs.version),
+		}
+	}
+
 	var (
 		err  error
 		iter *pebble.Iterator
 		opts = &pebble.IterOptions{
-			LowerBound: prefix,
-			UpperBound: prefixEnd(prefix),
+			LowerBound:      prefix,
+			UpperBound:      prefixEnd(prefix),
+			KeyTypes:        pebble.IterKeyTypePointsOnly,
+			PointKeyFilters: filters,
 		}
 	)
 	if vs.batch != nil && vs.batch.Indexed() {
@@ -249,7 +259,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 	vi.isValid, vi.key, vi.value = false, nil, nil
 	// while the iterator is valid - step to next key
 	for ; vi.iter.Valid(); vi.step() {
-		userKey, version, err := vi.store.parseVersionedKey(vi.iter.Key())
+		userKey, version, err := parseVersionedKey(vi.iter.Key())
 		if err != nil || (len(vi.prefix) > 0 && !bytes.HasPrefix(userKey, vi.prefix)) {
 			continue
 		}
@@ -259,15 +269,16 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		}
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
+			// clone user key as is currently a reference to the key in the iterator
+			userKey = bytes.Clone(userKey)
 			for vi.iter.Prev() {
-				prevUserKey, prevVersion, err := vi.store.parseVersionedKey(vi.iter.Key())
+				prevUserKey, prevVersion, err := parseVersionedKey(vi.iter.Key())
 				if err != nil || !bytes.Equal(userKey, prevUserKey) || prevVersion > vi.store.version {
 					break
 				}
 			}
 			vi.iter.Next()
-			userKey, version, err = vi.store.parseVersionedKey(vi.iter.Key())
-			if err != nil || version > vi.store.version {
+			if version > vi.store.version {
 				continue
 			}
 		}
@@ -313,11 +324,13 @@ func (vs *VersionedStore) makeVersionedKey(userKey []byte, version uint64) []byt
 
 // parseVersionedKey() extracts components and converts back from inverted version
 // k = [UserKey][InvertedVersion]
-func (vs *VersionedStore) parseVersionedKey(versionedKey []byte) (userKey []byte, version uint64, err lib.ErrorI) {
+// The caller should not modify the returned userKey slice as it points to the original buffer,
+// instead it should make a copy if needed.
+func parseVersionedKey(versionedKey []byte) (userKey []byte, version uint64, err lib.ErrorI) {
 	// extract user key (everything between history prefix and suffix)
 	userKeyEnd := len(versionedKey) - VersionSize
 	// extract the userKey and the version
-	userKey, version = bytes.Clone(versionedKey[:userKeyEnd]), binary.BigEndian.Uint64(versionedKey[userKeyEnd:])
+	userKey, version = versionedKey[:userKeyEnd], binary.BigEndian.Uint64(versionedKey[userKeyEnd:])
 	// extract inverted version and convert back to real version
 	version = ^version
 	// exit
@@ -358,4 +371,65 @@ func ensureCapacity(buf []byte, n int) []byte {
 		return make([]byte, n, n*2)
 	}
 	return buf[:n]
+}
+
+// BlockPropertyCollector / BlockPropertyFilter code below
+
+const blockPropertyName = "canopy.mvcc.version.range"
+
+// versionedInternalMapper implements the IntervalMapper interface through which an user can
+// define the mapping between keys and intervals by mapping keys to [version, version+1) using the
+// version bytes
+type versionedInternalMapper struct{}
+
+// enforce interface implementation
+var _ sstable.IntervalMapper = versionedInternalMapper{}
+
+// MapPointKey implements sstable.IntervalMapper.
+// It extracts the trailing 8 bytes of key.UserKey, inverts (^), and returns [v, v+1).
+func (versionedInternalMapper) MapPointKey(key pebble.InternalKey, _ []byte) (sstable.BlockInterval, error) {
+	userKey := key.UserKey
+	if len(userKey) < VersionSize {
+		// ignore malformed keys
+		return sstable.BlockInterval{}, nil
+	}
+	// Decode inverted suffix directly. Avoid any higher-level parser here.
+	_, version, err := parseVersionedKey(userKey)
+	if err != nil {
+		// ignore malformed keys
+		return sstable.BlockInterval{}, nil
+	}
+	// BlockIntervalCollector does not support math.MaxUint64 as a upper bound range
+	if version == math.MaxUint64 {
+		return sstable.BlockInterval{}, nil
+	}
+
+	return sstable.BlockInterval{Lower: version, Upper: version + 1}, nil
+}
+
+// MapRangeKeys implements sstable.IntervalMapper for range keys.
+// Not implemented as the versioned store does not support range keys.
+func (versionedInternalMapper) MapRangeKeys(span sstable.Span) (sstable.BlockInterval, error) {
+	return sstable.BlockInterval{}, nil
+}
+
+// newVersionedPropertyCollector returns a BlockPropertyCollector that records per-block
+// [minVersion, maxVersionExclusive) using the interval mapper.
+func newVersionedPropertyCollector() pebble.BlockPropertyCollector {
+	return sstable.NewBlockIntervalCollector(
+		blockPropertyName,
+		versionedInternalMapper{},
+		nil,
+	)
+}
+
+// newTargetWindowFilter builds a filter to admit blocks/tables that may contain
+// any minVersion <= version <= maxVersion. It uses the interval [minVersion, maxVersion+1).
+func newTargetWindowFilter(minVersion, maxVersion uint64) sstable.BlockPropertyFilter {
+	return sstable.NewBlockIntervalFilter(
+		blockPropertyName,
+		minVersion,
+		maxVersion,
+		nil,
+	)
 }
