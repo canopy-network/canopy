@@ -108,6 +108,9 @@ func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 		L0StopWritesThreshold: 40,                          // Much higher threshold
 		FormatMajorVersion:    pebble.FormatColumnarBlocks, // Current format version
 		Logger:                log,                         // use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
+			func() pebble.BlockPropertyCollector { return newVersionedPropertyCollector() },
+		},
 	})
 	if err != nil {
 		return nil, ErrOpenDB(err)

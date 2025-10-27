@@ -21,6 +21,7 @@ const (
 	VersionSize    = 8
 	DeadTombstone  = byte(1)
 	AliveTombstone = byte(0)
+	maxVersion     = math.MaxUint64
 )
 
 // VersionedStore uses inverted version encoding and reverse seeks for maximum performance
@@ -76,7 +77,7 @@ func (vs *VersionedStore) Get(key []byte) ([]byte, lib.ErrorI) {
 // get()  retrieves the latest version of a key using reverse seek
 func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib.ErrorI) {
 	var seekKey = key
-	if vs.version != math.MaxUint64 {
+	if vs.version != maxVersion {
 		seekKey = vs.makeVersionedKey(key, vs.version+1)
 	}
 	// create a new iterator
@@ -157,13 +158,13 @@ func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.Err
 
 // newVersionedIterator creates a new  versioned iterator
 func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allVersions bool) (*VersionedIterator, lib.ErrorI) {
+	// use property filter if possible
 	var filters []pebble.BlockPropertyFilter
-	if vs.version != math.MaxUint64 {
+	if vs.version != maxVersion {
 		filters = []pebble.BlockPropertyFilter{
 			newTargetWindowFilter(0, vs.version),
 		}
 	}
-
 	var (
 		err  error
 		iter *pebble.Iterator
@@ -377,17 +378,16 @@ func ensureCapacity(buf []byte, n int) []byte {
 
 const blockPropertyName = "canopy.mvcc.version.range"
 
-// versionedInternalMapper implements the IntervalMapper interface through which an user can
+// versionedCollector implements the IntervalMapper interface through which an user can
 // define the mapping between keys and intervals by mapping keys to [version, version+1) using the
 // version bytes
-type versionedInternalMapper struct{}
+type versionedCollector struct{}
 
 // enforce interface implementation
-var _ sstable.IntervalMapper = versionedInternalMapper{}
+var _ sstable.IntervalMapper = versionedCollector{}
 
-// MapPointKey implements sstable.IntervalMapper.
-// It extracts the trailing 8 bytes of key.UserKey, inverts (^), and returns [v, v+1).
-func (versionedInternalMapper) MapPointKey(key pebble.InternalKey, _ []byte) (sstable.BlockInterval, error) {
+// MapPointKey adds a versioned key to the interval collector.
+func (versionedCollector) MapPointKey(key pebble.InternalKey, _ []byte) (sstable.BlockInterval, error) {
 	userKey := key.UserKey
 	if len(userKey) < VersionSize {
 		// ignore malformed keys
@@ -395,21 +395,18 @@ func (versionedInternalMapper) MapPointKey(key pebble.InternalKey, _ []byte) (ss
 	}
 	// Decode inverted suffix directly. Avoid any higher-level parser here.
 	_, version, err := parseVersionedKey(userKey)
-	if err != nil {
-		// ignore malformed keys
+	// ignore invalid keys, math.MaxUint64 is not supported as an upper bound range for the interval
+	// collector as is a half range of type [min, max)
+	if err != nil && version == maxVersion {
 		return sstable.BlockInterval{}, nil
 	}
-	// BlockIntervalCollector does not support math.MaxUint64 as a upper bound range
-	if version == math.MaxUint64 {
-		return sstable.BlockInterval{}, nil
-	}
-
+	// set the interval for the key
 	return sstable.BlockInterval{Lower: version, Upper: version + 1}, nil
 }
 
 // MapRangeKeys implements sstable.IntervalMapper for range keys.
 // Not implemented as the versioned store does not support range keys.
-func (versionedInternalMapper) MapRangeKeys(span sstable.Span) (sstable.BlockInterval, error) {
+func (versionedCollector) MapRangeKeys(span sstable.Span) (sstable.BlockInterval, error) {
 	return sstable.BlockInterval{}, nil
 }
 
@@ -418,7 +415,7 @@ func (versionedInternalMapper) MapRangeKeys(span sstable.Span) (sstable.BlockInt
 func newVersionedPropertyCollector() pebble.BlockPropertyCollector {
 	return sstable.NewBlockIntervalCollector(
 		blockPropertyName,
-		versionedInternalMapper{},
+		versionedCollector{},
 		nil,
 	)
 }
