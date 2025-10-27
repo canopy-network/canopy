@@ -92,6 +92,11 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 		Cache:                 cache,                       // Block cache
 		FormatMajorVersion:    pebble.FormatColumnarBlocks, // Current format version
 		Logger:                log,                         // Use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
+			func() pebble.BlockPropertyCollector {
+				return NewVersionedCollector()
+			},
+		},
 	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
