@@ -98,7 +98,11 @@ func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib
 			continue
 		}
 		// parse the value to extract tombstone and actual value
-		tombstone, value = parseValueWithTombstone(iter.Value())
+		rawValue, valErr := iter.ValueAndErr()
+		if valErr != nil {
+			return nil, 0, ErrStoreGet(valErr)
+		}
+		tombstone, value = parseValueWithTombstone(rawValue)
 		// exit
 		return
 	}
@@ -285,8 +289,12 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		}
 		// set as 'previous userKey'
 		vi.lastUserKey = bytes.Clone(userKey)
+		rawValue, valErr := vi.iter.ValueAndErr()
+		if valErr != nil {
+			continue
+		}
 		// Now the iterator's current value is the newest visible version for userKey.
-		tomb, val := parseValueWithTombstone(vi.iter.Value())
+		tomb, val := parseValueWithTombstone(rawValue)
 		// skip dead user-keys
 		if tomb == DeadTombstone {
 			continue
@@ -380,7 +388,8 @@ const blockPropertyName = "canopy.mvcc.version.range"
 
 // versionedCollector implements the IntervalMapper interface through which an user can
 // define the mapping between keys and intervals by mapping keys to [version, version+1) using the
-// version bytes
+// version bytes. This helps iteration as it allows for efficient range queries on versioned data by
+// only checking the SST tables and blocks that may contain the required versioned data.
 type versionedCollector struct{}
 
 // enforce interface implementation
@@ -397,7 +406,7 @@ func (versionedCollector) MapPointKey(key pebble.InternalKey, _ []byte) (sstable
 	_, version, err := parseVersionedKey(userKey)
 	// ignore invalid keys, math.MaxUint64 is not supported as an upper bound range for the interval
 	// collector as is a half range of type [min, max)
-	if err != nil && version == maxVersion {
+	if err != nil || version == maxVersion {
 		return sstable.BlockInterval{}, nil
 	}
 	// set the interval for the key
@@ -421,42 +430,12 @@ func newVersionedPropertyCollector() pebble.BlockPropertyCollector {
 }
 
 // newTargetWindowFilter builds a filter to admit blocks/tables that may contain
-// any minVersion <= version <= maxVersion. It uses the interval [minVersion, maxVersion+1).
-func newTargetWindowFilter(minVersion, maxVersion uint64) sstable.BlockPropertyFilter {
+// any low <= version <= high. It uses the interval [low, high+1).
+func newTargetWindowFilter(low, high uint64) sstable.BlockPropertyFilter {
 	return sstable.NewBlockIntervalFilter(
 		blockPropertyName,
-		minVersion,
-		maxVersion,
+		low,
+		high+1,
 		nil,
 	)
-}
-
-// MVCCComparer is a custom comparer for versioned keys that treats the last 8 bytes
-// as a version suffix, enabling prefix-based optimizations.
-var MVCCComparer = &pebble.Comparer{
-	Name:                 "canopy.mvcc.comparer",
-	Compare:              pebble.DefaultComparer.Compare,
-	Equal:                pebble.DefaultComparer.Equal,
-	FormatKey:            pebble.DefaultComparer.FormatKey,
-	ComparePointSuffixes: pebble.DefaultComparer.ComparePointSuffixes,
-	Separator:            pebble.DefaultComparer.Separator,
-	Successor:            pebble.DefaultComparer.Successor,
-	ImmediateSuccessor:   pebble.DefaultComparer.ImmediateSuccessor,
-	CompareRangeSuffixes: pebble.DefaultComparer.CompareRangeSuffixes,
-	FormatValue:          pebble.DefaultComparer.FormatValue,
-	ValidateKey:          pebble.DefaultComparer.ValidateKey,
-	AbbreviatedKey:       pebble.DefaultComparer.AbbreviatedKey,
-	// Split at the version boundary
-	Split: func(key []byte) int {
-		if len(key) <= VersionSize {
-			return len(key)
-		}
-		return len(key) - VersionSize
-	},
-}
-
-type fmtKey struct{ key []byte }
-
-func (f fmtKey) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%x", f.key)
 }
