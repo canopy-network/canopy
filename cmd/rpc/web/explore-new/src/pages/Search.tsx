@@ -18,12 +18,25 @@ const SearchPage: React.FC = () => {
 
     const { results: searchResults, loading } = useSearch(searchTerm)
 
-    // Get search term from URL
+    // Get search term and filters from URL
     useEffect(() => {
+        // Get search term
         const query = searchParams.get('q')
         if (query) {
             setSearchTerm(query)
         }
+
+        // Get filters from URL
+        const urlType = searchParams.get('type')
+        const urlDate = searchParams.get('date')
+        const urlSort = searchParams.get('sort')
+
+        // Update filters from URL
+        setFilters({
+            type: urlType || 'all',
+            date: urlDate || 'all',
+            sort: urlSort || 'newest'
+        })
     }, [searchParams])
 
     const handleSearch = (e: React.FormEvent) => {
@@ -36,7 +49,31 @@ const SearchPage: React.FC = () => {
 
     const handleFilterChange = (newFilters: any) => {
         setFilters(newFilters)
-        // Here you could refilter the results
+
+        // Update URL params with filters
+        const updatedParams = new URLSearchParams(searchParams)
+
+        // Add filter parameters to URL
+        if (newFilters.type && newFilters.type !== 'all') {
+            updatedParams.set('type', newFilters.type)
+        } else {
+            updatedParams.delete('type')
+        }
+
+        if (newFilters.date && newFilters.date !== 'all') {
+            updatedParams.set('date', newFilters.date)
+        } else {
+            updatedParams.delete('date')
+        }
+
+        if (newFilters.sort && newFilters.sort !== 'newest') {
+            updatedParams.set('sort', newFilters.sort)
+        } else {
+            updatedParams.delete('sort')
+        }
+
+        // Update URL without navigating
+        setSearchParams(updatedParams)
     }
 
     const clearSearch = () => {

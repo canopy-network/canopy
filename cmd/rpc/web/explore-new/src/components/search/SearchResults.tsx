@@ -7,7 +7,11 @@ import toast from 'react-hot-toast'
 interface SearchResultsProps {
     results: any
     searchTerm?: string
-    filters?: any
+    filters?: {
+        type: string
+        date: string
+        sort: string
+    }
 }
 
 interface FieldConfig {
@@ -17,7 +21,7 @@ interface FieldConfig {
     fullWidth?: boolean
 }
 
-const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
+const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
     const [activeTab, setActiveTab] = useState('all')
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 5
@@ -233,20 +237,159 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
     const getFilteredResults = () => {
         if (!results) return []
 
-        let allResults = []
+        // Remove duplicates using Maps before filtering
+        const uniqueBlocksMap = new Map()
+        const uniqueTxMap = new Map()
+        const uniqueAddressesMap = new Map()
+        const uniqueValidatorsMap = new Map()
 
+        // Process blocks and remove duplicates
+        results.blocks?.forEach((block: any) => {
+            if (block && block.data) {
+                const blockId = block.id || block.data.blockHeader?.hash || block.data.hash
+                if (blockId && !uniqueBlocksMap.has(blockId)) {
+                    uniqueBlocksMap.set(blockId, { ...block.data, resultType: 'block' })
+                }
+            }
+        })
+
+        // Process transactions and remove duplicates
+        results.transactions?.forEach((tx: any) => {
+            if (tx && tx.data) {
+                const txId = tx.id || tx.data.txHash || tx.data.hash
+                if (txId && !uniqueTxMap.has(txId)) {
+                    uniqueTxMap.set(txId, { ...tx.data, resultType: 'transaction' })
+                }
+            }
+        })
+
+        // Process addresses and remove duplicates
+        results.addresses?.forEach((addr: any) => {
+            if (addr && addr.data) {
+                const addrId = addr.id || addr.data.address
+                if (addrId && !uniqueAddressesMap.has(addrId)) {
+                    uniqueAddressesMap.set(addrId, { ...addr.data, resultType: 'address' })
+                }
+            }
+        })
+
+        // Process validators and remove duplicates
+        results.validators?.forEach((val: any) => {
+            if (val && val.data) {
+                const valId = val.id || val.data.address
+                if (valId && !uniqueValidatorsMap.has(valId)) {
+                    uniqueValidatorsMap.set(valId, { ...val.data, resultType: 'validator' })
+                }
+            }
+        })
+
+        // Get unique arrays from Maps
+        const uniqueBlocks = Array.from(uniqueBlocksMap.values())
+        const uniqueTransactions = Array.from(uniqueTxMap.values())
+        const uniqueAddresses = Array.from(uniqueAddressesMap.values())
+        const uniqueValidators = Array.from(uniqueValidatorsMap.values())
+
+        // Apply tab filter
+        let filteredResults = []
         if (activeTab === 'all') {
-            allResults = [
-                ...(results.blocks || []).filter((block: any) => block && block.data).map((block: any) => ({ ...block.data, resultType: 'block' })),
-                ...(results.transactions || []).filter((tx: any) => tx && tx.data).map((tx: any) => ({ ...tx.data, resultType: 'transaction' })),
-                ...(results.addresses || []).filter((addr: any) => addr && addr.data).map((addr: any) => ({ ...addr.data, resultType: 'address' })),
-                ...(results.validators || []).filter((val: any) => val && val.data).map((val: any) => ({ ...val.data, resultType: 'validator' }))
+            filteredResults = [
+                ...uniqueBlocks,
+                ...uniqueTransactions,
+                ...uniqueAddresses,
+                ...uniqueValidators
             ]
-        } else {
-            allResults = (results[activeTab] || []).filter((item: any) => item && item.data).map((item: any) => ({ ...item.data, resultType: activeTab }))
+        } else if (activeTab === 'blocks') {
+            filteredResults = uniqueBlocks
+        } else if (activeTab === 'transactions') {
+            filteredResults = uniqueTransactions
+        } else if (activeTab === 'addresses') {
+            filteredResults = uniqueAddresses
+        } else if (activeTab === 'validators') {
+            filteredResults = uniqueValidators
         }
 
-        return allResults
+        // Apply custom filters if provided
+        if (filters) {
+            // Apply type filter
+            if (filters.type !== 'all') {
+                // We've already filtered by tab, but double-check
+                const filterType = filters.type.slice(0, -1) // remove 's' from end (e.g. 'blocks' -> 'block')
+                filteredResults = filteredResults.filter(item => item.resultType === filterType)
+            }
+
+            // Apply date filter if available
+            if (filters.date !== 'all') {
+                const now = new Date()
+                let cutoffDate = now
+
+                switch (filters.date) {
+                    case '24h':
+                        cutoffDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                        break
+                    case '7d':
+                        cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                        break
+                    case '30d':
+                        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                        break
+                    case '1y':
+                        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                        break
+                }
+
+                filteredResults = filteredResults.filter(item => {
+                    // Get timestamp (different fields depending on result type)
+                    let timestamp
+                    if (item.resultType === 'block') {
+                        timestamp = item.blockHeader?.time || item.time || item.timestamp
+                    } else if (item.resultType === 'transaction') {
+                        timestamp = item.time || item.timestamp || item.blockTime
+                    } else {
+                        return true // Default to showing items we can't date filter
+                    }
+
+                    if (!timestamp) return true
+
+                    const itemDate = new Date(timestamp)
+                    return itemDate >= cutoffDate
+                })
+            }
+
+            // Apply sort
+            if (filters.sort) {
+                filteredResults.sort((a: any, b: any) => {
+                    // Get timestamps for sorting
+                    let timestampA, timestampB
+
+                    if (a.resultType === 'block') {
+                        timestampA = a.blockHeader?.time || a.time || a.timestamp
+                    } else if (a.resultType === 'transaction') {
+                        timestampA = a.time || a.timestamp || a.blockTime
+                    }
+
+                    if (b.resultType === 'block') {
+                        timestampB = b.blockHeader?.time || b.time || b.timestamp
+                    } else if (b.resultType === 'transaction') {
+                        timestampB = b.time || b.timestamp || b.blockTime
+                    }
+
+                    // Default to current time if no timestamp (for sorting purposes)
+                    const dateA = timestampA ? new Date(timestampA) : new Date()
+                    const dateB = timestampB ? new Date(timestampB) : new Date()
+
+                    // Sort by date
+                    if (filters.sort === 'newest') {
+                        return dateB.getTime() - dateA.getTime()
+                    } else if (filters.sort === 'oldest') {
+                        return dateA.getTime() - dateB.getTime()
+                    }
+
+                    return 0 // Default no change
+                })
+            }
+        }
+
+        return filteredResults
     }
 
     const allFilteredResults = getFilteredResults()
