@@ -140,7 +140,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                             fill="none"
                             stroke="#4ADE80"
                             strokeWidth="2"
-                            points={txCounts.map((value, index) => {
+                            points={txCounts.map((value: number, index: number) => {
                                 const x = (index / Math.max(txCounts.length - 1, 1)) * 280 + 10
                                 const y = 110 - ((value - minValue) / range) * 100
                                 return `${x},${y}`
@@ -198,7 +198,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {blockGroups.slice(0, 6).map((group, index) => (
+                {blockGroups.slice(0, 6).map((group: any, index: number) => (
                     <span key={index} className="text-center flex-1 px-1 truncate">
                         {group.start}-{group.end}
                     </span>
