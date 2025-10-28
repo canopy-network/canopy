@@ -191,7 +191,7 @@ const Navbar = () => {
                     </div>
                     <div className="hidden md:flex items-center space-x-2 relative w-4/12">
                         {/* Network Selector - Only show in development */}
-                        {import.meta.env.DEV && (
+                        {import.meta.env.DEV && import.meta.env.VITE_APP_ENV !== 'development' && (
                             <div className='w-6/12'>
                                 <NetworkSelector />
                             </div>
@@ -255,7 +255,7 @@ const Navbar = () => {
                         ))}
 
                         {/* Mobile Network Selector */}
-                        {import.meta.env.DEV && (
+                        {import.meta.env.DEV && import.meta.env.VITE_APP_ENV !== 'development' && (
                             <div className="px-3 py-2">
                                 <NetworkSelector />
                             </div>
