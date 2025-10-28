@@ -40,8 +40,8 @@ var versionCmd = &cobra.Command{
 }
 
 var (
-	client, config, chainConfig, l = &rpc.Client{}, lib.Config{}, lib.ChainConfig{}, lib.LoggerI(nil)
-	DataDir, validatorKey          = "", crypto.PrivateKeyI(nil)
+	client, config, l             = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	Popul8, DataDir, validatorKey = false, "", crypto.PrivateKeyI(nil)
 )
 
 func init() {
@@ -54,8 +54,8 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	config, chainConfig, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	config.ChainConfig = chainConfig
+	startCmd.PersistentFlags().BoolVar(&Popul8, "populate", false, "populate the chain with data")
+	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
 	l = lib.NewLogger(lib.LoggerConfig{
 		Level:      config.GetLogLevel(),
 		Structured: config.Structured,
@@ -95,7 +95,7 @@ func Start() {
 		l.Fatal(err.Error())
 	}
 	// initialize the state machine
-	sm, err := fsm.New(config, db, new(lib.Plugin), metrics, nil, l)
+	sm, err := fsm.New(config, db, metrics, nil, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -105,13 +105,17 @@ func Start() {
 		l.Fatal(err.Error())
 	}
 	// initialize the rpc server
-	rpcServer := rpc.NewServer(app, config, chainConfig, l)
+	rpcServer := rpc.NewServer(app, config, l)
 	// start the metrics server
 	metrics.Start()
 	// start the application
 	app.Start()
 	// start the rpc server
 	rpcServer.Start()
+	// populate the chain with data
+	if Popul8 {
+		go Populate()
+	}
 	// block until a kill signal is received
 	waitForKill()
 	// gracefully stop the app
@@ -151,7 +155,7 @@ func getFirstPassword(log lib.LoggerI) string {
 }
 
 // InitializeDataDirectory() populates the data directory with configuration and data files if missing
-func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config, chainConfig lib.ChainConfig, privateValKey crypto.PrivateKeyI) {
+func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config, privateValKey crypto.PrivateKeyI) {
 	// make the data dir if missing
 	if err := os.MkdirAll(dataDirPath, os.ModePerm); err != nil {
 		log.Fatal(err.Error())
@@ -161,14 +165,6 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	if _, err := os.Stat(configFilePath); errors.Is(err, os.ErrNotExist) {
 		log.Infof("Creating %s file", lib.ConfigFilePath)
 		if err = lib.DefaultConfig().WriteToFile(configFilePath); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
-	// make the chain.json file if missing
-	chainsFilePath := filepath.Join(dataDirPath, lib.ChainsFilePath)
-	if _, err := os.Stat(chainsFilePath); errors.Is(err, os.ErrNotExist) {
-		log.Infof("Creating %s file", lib.ChainsFilePath)
-		if err = lib.DefaultChainConfig().WriteToFile(chainsFilePath); err != nil {
 			log.Fatal(err.Error())
 		}
 	}
@@ -271,11 +267,6 @@ func InitializeDataDirectory(dataDirPath string, log lib.LoggerI) (c lib.Config,
 	}
 	// load the config object
 	c, err = lib.NewConfigFromFile(configFilePath)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	// load the chain config object
-	chainConfig, err = lib.NewChainConfigFromFile(chainsFilePath)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

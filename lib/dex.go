@@ -14,11 +14,11 @@ var (
 
 // Hash() creates a hash representative of the dex batch
 func (x *DexBatch) Hash() []byte {
-	if x == nil {
-		return bytes.Clone(EmptyReceiptsHash)
-	}
 	if x.IsEmpty() {
-		x.ReceiptHash = bytes.Clone(EmptyReceiptsHash)
+		if x != nil {
+			x.ReceiptHash = bytes.Clone(EmptyReceiptsHash)
+		}
+		return bytes.Clone(EmptyReceiptsHash)
 	}
 	bz, _ := Marshal(x.Copy())
 	return crypto.Hash(bz)
@@ -167,6 +167,7 @@ func (x DexLiquidityDeposit) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dexLiquidityDeposit{
 		Amount:  x.Amount,
 		Address: x.Address,
+		OrderId: x.OrderId,
 	})
 }
 
@@ -208,6 +209,7 @@ func (x *DexLiquidityWithdraw) UnmarshalJSON(b []byte) (err error) {
 	*x = DexLiquidityWithdraw{
 		Percent: d.Percent,
 		Address: d.Address,
+		OrderId: d.OrderId,
 	}
 	return
 }

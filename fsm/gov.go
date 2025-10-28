@@ -32,6 +32,7 @@ func (s *StateMachine) ApproveProposal(msg GovProposal) lib.ErrorI {
 		return ErrRejectProposal()
 	// if on the local approve list
 	case ProposalApproveList:
+		return nil // TODO for indexing only undo before merge
 		// read the 'approve list' from the data directory
 		proposals := make(GovProposals)
 		// get the voted from the local proposals.json file in the data directory

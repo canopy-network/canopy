@@ -267,6 +267,9 @@ func (m *Mempool) CheckMempool() {
 	// log a warning
 	if len(result.Failed) != 0 {
 		m.log.Warnf("Removed failed %d txs from mempool", len(result.Failed))
+		for _, f := range result.Failed {
+			m.log.Warnf("%s", f.Error)
+		}
 	}
 	// reset the RPC cached results
 	m.cachedResults = nil
