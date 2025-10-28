@@ -7,6 +7,7 @@ import {
     getTransactionsWithRealPagination,
     Accounts,
     Validators,
+    ValidatorsWithFilters,
     Committee,
     DAO,
     Account,
@@ -26,17 +27,19 @@ import {
     getModalData,
     getCardData,
     getTableData,
-    Order
+    Order,
+    rpcURL
 } from '../lib/api';
 
 // Query Keys
 export const queryKeys = {
-    blocks: (page: number) => ['blocks', page],
+    blocks: (page: number, perPage?: number, filter?: string) => ['blocks', page, perPage, filter],
     transactions: (page: number, height: number) => ['transactions', page, height],
     allTransactions: (page: number, perPage: number, filters?: any) => ['allTransactions', page, perPage, filters],
     realPaginationTransactions: (page: number, perPage: number, filters?: any) => ['realPaginationTransactions', page, perPage, filters],
     accounts: (page: number) => ['accounts', page],
     validators: (page: number) => ['validators', page],
+    validatorsWithFilters: (page: number, unstaking: number, paused: number, delegate: number, committee: number) => ['validatorsWithFilters', page, unstaking, paused, delegate, committee],
     committee: (page: number, chainId: number) => ['committee', page, chainId],
     dao: (height: number) => ['dao', height],
     account: (height: number, address: string) => ['account', height, address],
@@ -59,11 +62,17 @@ export const queryKeys = {
 };
 
 // Hooks for Blocks
-export const useBlocks = (page: number, perPage: number = 10) => {
+export const useBlocks = (page: number, perPage: number = 10, filter: string = 'all') => {
+    // Cargar más bloques si el filtro es week (semana) o 24h para tener suficientes datos para filtrar
+    const blockCount = filter === 'week' ? 50 : filter === '24h' ? 30 : perPage;
+
     return useQuery({
-        queryKey: queryKeys.blocks(page),
-        queryFn: () => Blocks(page, perPage),
-        staleTime: 30000, // 30 seconds
+        queryKey: queryKeys.blocks(page, blockCount, filter),
+        queryFn: () => Blocks(page, blockCount),
+        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
+        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchOnWindowFocus: false, // Don't refetch when window regains focus
+        gcTime: 600000 // Keep in cache for 10 minutes
     });
 };
 
@@ -72,7 +81,10 @@ export const useTransactions = (page: number, height: number = 0) => {
     return useQuery({
         queryKey: queryKeys.transactions(page, height),
         queryFn: () => Transactions(page, height),
-        staleTime: 30000,
+        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
+        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchOnWindowFocus: false, // Don't refetch when window regains focus
+        gcTime: 600000 // Keep in cache for 10 minutes
     });
 };
 
@@ -126,6 +138,54 @@ export const useValidators = (page: number) => {
     return useQuery({
         queryKey: queryKeys.validators(page),
         queryFn: () => Validators(page, 0),
+        staleTime: 30000,
+    });
+};
+
+// Hook to get all validators at once
+export const useAllValidators = () => {
+    return useQuery({
+        queryKey: ['all-validators'],
+        queryFn: async () => {
+            // Get all pages of validators
+            const allValidators = []
+            let page = 1
+            let hasMore = true
+
+            while (hasMore) {
+                const response = await Validators(page, 0)
+                const validators = response.results || response.validators || response.list || response.data || response
+
+                if (Array.isArray(validators) && validators.length > 0) {
+                    allValidators.push(...validators)
+                    page++
+
+                    // Check if we have more pages
+                    const totalPages = response.totalPages || Math.ceil((response.totalCount || 0) / 10)
+                    hasMore = page <= totalPages
+                } else {
+                    hasMore = false
+                }
+            }
+
+            return {
+                results: allValidators,
+                totalCount: allValidators.length,
+                totalPages: Math.ceil(allValidators.length / 10)
+            }
+        },
+        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
+        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchOnWindowFocus: false, // Don't refetch when window regains focus
+        gcTime: 600000 // Keep in cache for 10 minutes
+    });
+};
+
+// Hook to get validators with server-side filtering
+export const useValidatorsWithFilters = (page: number, unstaking: number = 0, paused: number = 0, delegate: number = 0, committee: number = 0) => {
+    return useQuery({
+        queryKey: queryKeys.validatorsWithFilters(page, unstaking, paused, delegate, committee),
+        queryFn: () => ValidatorsWithFilters(page, unstaking, paused, delegate, committee),
         staleTime: 30000,
     });
 };
@@ -302,22 +362,20 @@ export const useTableData = (page: number, category: number, committee?: number)
     });
 };
 
-// Define queryKeys for blocks in range
-const blocksInRangeKey = (fromBlock: number, toBlock: number, maxBlocks: number) => 
-    ['blocksInRange', fromBlock, toBlock, maxBlocks];
-
-// Hook for fetching blocks within a specific range
-export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 100) => {
+// Hook para cargar TODOS los bloques UNA SOLA VEZ y reutilizar los datos
+export const useAllBlocksCache = () => {
     return useQuery({
-        queryKey: blocksInRangeKey(fromBlock, toBlock, maxBlocksToFetch),
+        queryKey: ['allBlocksCache'],
         queryFn: async () => {
             const allBlocks: any[] = [];
-            let page = 1;
-            const perPage = 100; // Max blocks per page from API
+            const perPage = 10; // Max blocks per page from API
+            const maxPages = 10; // Máximo 10 páginas (100 bloques)
 
-            while (allBlocks.length < maxBlocksToFetch) {
-                try {
-                    const response = await fetch('http://localhost:50002/v1/query/blocks', {
+            // Hacer solo los requests necesarios
+            const requests = [];
+            for (let page = 1; page <= maxPages; page++) {
+                requests.push(
+                    fetch(`${rpcURL}/v1/query/blocks`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -326,76 +384,141 @@ export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksTo
                             perPage: perPage,
                             pageNumber: page,
                         }),
-                    });
+                    })
+                );
+            }
 
+            try {
+                // Hacer todos los requests en paralelo
+                const responses = await Promise.all(requests);
+
+                // Procesar todas las respuestas
+                for (let i = 0; i < responses.length; i++) {
+                    const response = responses[i];
                     if (!response.ok) {
-                        console.error(`Failed to fetch blocks page ${page}`);
-                        throw new Error(`Failed to fetch blocks page ${page}`);
+                        console.error(`Failed to fetch blocks page ${i + 1}`);
+                        throw new Error(`Failed to fetch blocks page ${i + 1}`);
                     }
 
                     const data = await response.json();
                     if (data.results && Array.isArray(data.results)) {
                         allBlocks.push(...data.results);
+                        console.log(`📦 Página ${i + 1}: ${data.results.length} bloques agregados`);
                     }
-
-                    // If we got less than perPage blocks, we've reached the end of available blocks
-                    if (data.results.length < perPage) {
-                        break;
-                    }
-
-                    page++;
-                } catch (error: any) {
-                    console.error(`Error fetching blocks page ${page}:`, error);
-                    throw new Error(`Error fetching blocks: ${error.message}`);
+                    (allBlocks as any).totalCount = data.totalCount || 0;
                 }
+
+                return allBlocks;
+            } catch (error: any) {
+                console.error(`Error fetching blocks:`, error);
+                throw new Error(`Error fetching blocks: ${error.message}`);
             }
-
-            // Filter blocks by height if fromBlock or toBlock are specified
-            let filteredBlocks = allBlocks;
-            if (fromBlock > 0 || toBlock > 0) {
-                filteredBlocks = allBlocks.filter(block => {
-                    const blockHeight = block.height || block.blockHeader?.height || 0;
-                    return blockHeight >= fromBlock && blockHeight <= toBlock;
-                });
-            }
-
-            // Ensure we don't return more than maxBlocksToFetch
-            const finalBlocks = filteredBlocks.slice(0, maxBlocksToFetch);
-
-            return {
-                results: finalBlocks,
-                totalCount: finalBlocks.length,
-            };
         },
-        staleTime: 60000, // Cache for 1 minute
-        refetchInterval: 300000, // Refetch every 5 minutes
+        staleTime: 300000, // Cache for 5 minutes
+        refetchInterval: 600000, // Refetch every 10 minutes
+        gcTime: 600000, // Keep in cache for 10 minutes
     });
 };
 
+// Define queryKeys for blocks in range
+const blocksInRangeKey = (fromBlock: number, toBlock: number, maxBlocks: number) =>
+    ['blocksInRange', fromBlock, toBlock, maxBlocks];
+
+// Hook for fetching blocks within a specific range - AHORA REUTILIZA LOS DATOS
+export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 10) => {
+    // Usar el cache de todos los bloques
+    const { data: allBlocks, isLoading, error } = useAllBlocksCache();
+
+    // Procesar los datos en el cliente sin hacer más requests
+    const processedData = React.useMemo(() => {
+        if (!allBlocks || !Array.isArray(allBlocks)) {
+            return { results: [], totalCount: 0 };
+        }
+
+        let filteredBlocks = allBlocks;
+
+        // Filter blocks by height if fromBlock or toBlock are specified
+        if (fromBlock > 0 || toBlock > 0) {
+            filteredBlocks = allBlocks.filter(block => {
+                const blockHeight = block.height || block.blockHeader?.height || 0;
+                return blockHeight >= fromBlock && blockHeight <= toBlock;
+            });
+        }
+
+        // Ensure we don't return more than maxBlocksToFetch
+        const finalBlocks = filteredBlocks.slice(0, maxBlocksToFetch);
+
+        return {
+            results: finalBlocks,
+            totalCount: finalBlocks.length,
+        };
+    }, [allBlocks, fromBlock, toBlock, maxBlocksToFetch]);
+
+    return {
+        data: processedData,
+        isLoading,
+        error
+    };
+};
+
+
 // Hook for Analytics - Get multiple pages of blocks for transaction analysis
 export const useBlocksForAnalytics = (numPages: number = 10) => {
-    // Usa el hook de useBlocksInRange para obtener los bloques
-    return useBlocksInRange(0, 0, numPages * 100); // Fetch up to numPages * 100 blocks
+    // Usar el cache global de bloques
+    const { data: allBlocks, isLoading, error } = useAllBlocksCache();
+
+    // Procesar los datos en el cliente sin hacer más requests
+    const processedData = React.useMemo(() => {
+        if (!allBlocks || !Array.isArray(allBlocks)) {
+            return { results: [], totalCount: 0 };
+        }
+
+        // Limitar a máximo 100 bloques (10 páginas * 10 bloques por página)
+        const maxBlocks = Math.min(numPages * 10, 100);
+        const finalBlocks = allBlocks.slice(0, maxBlocks);
+
+        return {
+            results: finalBlocks,
+            totalCount: finalBlocks.length,
+        };
+    }, [allBlocks, numPages]);
+
+    return {
+        data: processedData,
+        isLoading,
+        error
+    };
 };
 
 // Hook para extraer transacciones de los bloques en un rango específico
-export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 100) => {
-    // Reutilizar el hook de useBlocksInRange para obtener los bloques
-    const blocksQuery = useBlocksInRange(fromBlock, toBlock, maxBlocksToFetch);
-    
-    // Procesar los bloques para extraer las transacciones
-    const { data: blocksData, isLoading, error } = blocksQuery;
-    
-    // Transformar los datos de bloques para extraer las transacciones
-    const transformedData = React.useMemo(() => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 50) => {
+    // Usar el cache global de bloques
+    const { data: allBlocks, isLoading, error } = useAllBlocksCache();
+
+    // Procesar los datos en el cliente sin hacer más requests
+    const processedData = React.useMemo(() => {
+        if (!allBlocks || !Array.isArray(allBlocks)) {
             return { results: [], totalCount: 0 };
         }
-        
+
+        let filteredBlocks = allBlocks;
+
+        // Filter blocks by height if fromBlock or toBlock are specified
+        if (fromBlock > 0 || toBlock > 0) {
+            filteredBlocks = allBlocks.filter(block => {
+                const blockHeight = block.height || block.blockHeader?.height || 0;
+                return blockHeight >= fromBlock && blockHeight <= toBlock;
+            });
+        }
+
+        // Limitar a máximo 50 bloques para evitar demasiados requests
+        const limitedBlocks = Math.min(maxBlocksToFetch, 50);
+        const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
+
         const allTransactions: any[] = [];
-        
+
         // Extraer transacciones de cada bloque
-        blocksData.results.forEach((block: any) => {
+        finalBlocks.forEach((block: any) => {
             if (block.transactions && Array.isArray(block.transactions)) {
                 // Agregar información del bloque a cada transacción
                 const txsWithBlockInfo = block.transactions.map((tx: any) => ({
@@ -403,19 +526,19 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
                     blockHeight: block.blockHeader?.height || block.height,
                     blockTime: block.blockHeader?.time || block.time,
                 }));
-                
+
                 allTransactions.push(...txsWithBlockInfo);
             }
         });
-        
+
         return {
             results: allTransactions,
             totalCount: allTransactions.length
         };
-    }, [blocksData]);
-    
+    }, [allBlocks, fromBlock, toBlock, maxBlocksToFetch]);
+
     return {
-        data: transformedData,
+        data: processedData,
         isLoading,
         error
     };
@@ -452,4 +575,5 @@ export const useOrder = (chainId: number, orderId: string, height: number = 0) =
         staleTime: 30000, // Cache for 30 seconds
     });
 };
+
 

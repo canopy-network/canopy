@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import ValidatorDetailHeader from './ValidatorDetailHeader'
 import ValidatorStakeChains from './ValidatorStakeChains'
 import ValidatorRewards from './ValidatorRewards'
-import { useValidator, useBlocks } from '../../hooks/useApi'
+import { useValidator, useAllBlocksCache } from '../../hooks/useApi'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import ValidatorMetrics from './ValidatorMetrics'
 
@@ -62,7 +62,7 @@ const ValidatorDetailPage: React.FC = () => {
     const { data: validatorData, isLoading } = useValidator(0, validatorAddress || '')
 
     // Hook to get blocks data to calculate blocks produced
-    const { data: blocksData } = useBlocks(1)
+    const { data: blocksData } = useAllBlocksCache()
 
     // Function to generate validator name (simulated)
     const generateValidatorName = (address: string): string => {
@@ -198,7 +198,7 @@ const ValidatorDetailPage: React.FC = () => {
     // Efecto para procesar datos del validador
     useEffect(() => {
         if (validatorData && blocksData && validatorAddress) {
-            const blocksList = blocksData.results || blocksData.blocks || blocksData.list || blocksData.data || []
+            const blocksList = Array.isArray(blocksData) ? blocksData : []
             const blocksProduced = countBlocksByValidator(validatorAddress, Array.isArray(blocksList) ? blocksList : [])
 
             // Extract real validator data
@@ -234,7 +234,7 @@ const ValidatorDetailPage: React.FC = () => {
 
     if (loading || isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
                     <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
@@ -276,7 +276,7 @@ const ValidatorDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Breadcrumb */}
             <div className="mb-6">

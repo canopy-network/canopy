@@ -2,9 +2,19 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { useCardData, useAccounts, useTransactionsWithRealPagination, useTransactions } from '../../hooks/useApi'
 import { useQuery } from '@tanstack/react-query'
-import { Accounts } from '../../lib/api'
+import { Accounts, getTotalTransactionCount, getTotalAccountCount } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
+import { parseISO } from 'date-fns'
+
+// List normalization: accepts {transactions|blocks|results|list|data} or flat arrays
+const normalizeList = (payload: any) => {
+    if (!payload) return [] as any[]
+    if (Array.isArray(payload)) return payload
+    const candidates = (payload as any)
+    const found = candidates.transactions || candidates.blocks || candidates.results || candidates.list || candidates.data
+    return Array.isArray(found) ? found : []
+}
 
 interface StageCardProps {
     title: string
@@ -90,25 +100,33 @@ const Stages = () => {
         enabled: heightCutoff24h > 0,
     })
 
-    const totalAccounts: number = React.useMemo(() => {
-        const total = (accountsPage as any)?.totalCount || (accountsPage as any)?.count || 0
-        return Number(total) || 0
-    }, [accountsPage])
+    const [totalAccounts, setTotalAccounts] = React.useState(0)
+    const [accountsLast24h, setAccountsLast24h] = React.useState(0)
+    const [totalTxs, setTotalTxs] = React.useState(0)
+    const [txsLast24h, setTxsLast24h] = React.useState(0)
+    const [isLoadingStats, setIsLoadingStats] = React.useState(true)
 
-    const totalTxs: number = React.useMemo(() => {
-        const total = (txsPage as any)?.totalCount || (txsPage as any)?.count || 0
-        return Number(total) || 0
-    }, [txsPage])
+    React.useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                setIsLoadingStats(true)
+                const [txStats, accountStats] = await Promise.all([
+                    getTotalTransactionCount(),
+                    getTotalAccountCount()
+                ])
 
-    const txsLast24h: number = React.useMemo(() => {
-        const total = (txs24hPage as any)?.totalCount || (txs24hPage as any)?.count || 0
-        return Number(total) || 0
-    }, [txs24hPage])
-
-    const accountsLast24h: number = React.useMemo(() => {
-        const total = (accounts24hPage as any)?.totalCount || (accounts24hPage as any)?.count || 0
-        return Number(total) || 0
-    }, [accounts24hPage])
+                setTotalTxs(txStats.total)
+                setTxsLast24h(txStats.last24h)
+                setTotalAccounts(accountStats.total)
+                setAccountsLast24h(accountStats.last24h)
+            } catch (error) {
+                console.error('Error fetching stats:', error)
+            } finally {
+                setIsLoadingStats(false)
+            }
+        }
+        fetchStats()
+    }, [])
 
     // delegated only as staking delta proxy
     const delegatedOnlyCNPY: number = React.useMemo(() => {
@@ -116,6 +134,24 @@ const Stages = () => {
         const d = s.delegatedOnly ?? 0
         return toCNPY(Number(d) || 0)
     }, [cardData])
+
+    // Skeleton loading component for cards
+    const SkeletonCard = ({ title, icon }: { title: string, icon: React.ReactNode }) => (
+        <div className="bg-card rounded-lg p-6 border border-gray-800/50">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+                <div className="text-primary">{icon}</div>
+            </div>
+            <div className="space-y-2">
+                <div className="h-8 bg-gray-700/50 rounded relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
+                </div>
+                <div className="h-4 bg-gray-700/30 rounded w-3/4 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+    )
 
     const stages: StageCardProps[] = [
         { title: 'Staking %', data: `${stakingPercent.toFixed(1)}%`, isProgressBar: true, icon: <i className="fa-solid fa-chart-pie text-primary"></i>, metric: 'stakingPercent' },
@@ -131,8 +167,30 @@ const Stages = () => {
             ), icon: <i className="fa-solid fa-cube text-primary"></i>, metric: 'blocks'
         },
         { title: 'Total Stake', data: convertNumber(totalStakeCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-lock text-primary"></i>, metric: 'totalStake' },
-        { title: 'Total Accounts', data: convertNumber(totalAccounts), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>, icon: <i className="fa-solid fa-users text-primary"></i>, metric: 'accounts' },
-        { title: 'Total Txs', data: convertNumber(totalTxs), isProgressBar: false, subtitle: <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>, icon: <i className="fa-solid fa-arrow-right-arrow-left text-primary"></i>, metric: 'txs' },
+        {
+            title: 'Total Accounts',
+            data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
+            isProgressBar: false,
+            subtitle: isLoadingStats ? (
+                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
+                </div>
+            ) : <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>,
+            icon: <i className="fa-solid fa-users text-primary"></i>,
+            metric: 'accounts'
+        },
+        {
+            title: 'Total Txs',
+            data: isLoadingStats ? 'Loading...' : convertNumber(totalTxs),
+            isProgressBar: false,
+            subtitle: isLoadingStats ? (
+                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
+                </div>
+            ) : <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>,
+            icon: <i className="fa-solid fa-arrow-right-arrow-left text-primary"></i>,
+            metric: 'txs'
+        },
     ]
 
     const parseNumberFromString = (value: string): { number: number, prefix: string, suffix: string } => {
@@ -187,8 +245,8 @@ const Stages = () => {
                                     return (
                                         <>
                                             {prefix}
-                                            <AnimatedNumber 
-                                                value={number} 
+                                            <AnimatedNumber
+                                                value={number}
                                                 format={{ maximumFractionDigits: 2 }}
                                                 className="text-white"
                                             />

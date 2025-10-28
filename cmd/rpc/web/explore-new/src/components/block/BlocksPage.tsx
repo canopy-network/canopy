@@ -25,7 +25,8 @@ const BlocksPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
 
     // Hook to get blocks data with pagination - always fetch a good amount for filtering
-    const { data: blocksData, isLoading } = useBlocks(currentPage, 100)
+    // Re-fetch when activeFilter changes to ensure we get appropriate data
+    const { data: blocksData, isLoading } = useBlocks(currentPage, 10, activeFilter)
 
     // Normalize blocks data
     const normalizeBlocks = (payload: any): Block[] => {
@@ -88,33 +89,45 @@ const BlocksPage: React.FC = () => {
     // Filter blocks based on time filter
     const filterBlocksByTime = (blocks: Block[], filter: string): Block[] => {
         const now = Date.now()
-        
+
+        // Si no hay bloques o son pocos, no filtrar
+        if (!blocks || blocks.length < 3) {
+            return blocks;
+        }
+
+        // Ordenar primero por timestamp para asegurar filtro correcto
+        const sortedBlocks = [...blocks].sort((a, b) => {
+            const timeA = new Date(a.timestamp).getTime();
+            const timeB = new Date(b.timestamp).getTime();
+            return timeB - timeA; // Orden descendente (más recientes primero)
+        });
+
         switch (filter) {
             case 'hour':
-                return blocks.filter(block => {
+                return sortedBlocks.filter(block => {
                     const blockTime = new Date(block.timestamp).getTime()
                     return (now - blockTime) <= (60 * 60 * 1000) // Last hour
                 })
             case '24h':
-                return blocks.filter(block => {
+                return sortedBlocks.filter(block => {
                     const blockTime = new Date(block.timestamp).getTime()
                     return (now - blockTime) <= (24 * 60 * 60 * 1000) // Last 24 hours
                 })
             case 'week':
-                return blocks.filter(block => {
+                return sortedBlocks.filter(block => {
                     const blockTime = new Date(block.timestamp).getTime()
                     return (now - blockTime) <= (7 * 24 * 60 * 60 * 1000) // Last week
                 })
             case 'all':
             default:
-                return blocks
+                return sortedBlocks
         }
     }
 
     // Sort blocks based on sort criteria
     const sortBlocks = (blocks: Block[], sortCriteria: string): Block[] => {
         const sortedBlocks = [...blocks]
-        
+
         switch (sortCriteria) {
             case 'height':
                 return sortedBlocks.sort((a, b) => b.height - a.height) // Descending
@@ -131,6 +144,11 @@ const BlocksPage: React.FC = () => {
 
     // Apply filters and sorting
     const applyFiltersAndSort = React.useCallback(() => {
+        if (allBlocks.length === 0) {
+            setFilteredBlocks([]);
+            return;
+        }
+
         if (activeFilter === 'all') {
             // For "all" filter, just sort the current page blocks
             const sorted = sortBlocks(allBlocks, sortBy)
@@ -138,6 +156,8 @@ const BlocksPage: React.FC = () => {
         } else {
             // For time-based filters, filter and sort the loaded blocks
             let filtered = filterBlocksByTime(allBlocks, activeFilter)
+            console.log(`Después de filtrar por ${activeFilter}: ${filtered.length} bloques`);
+
             filtered = sortBlocks(filtered, sortBy)
             setFilteredBlocks(filtered)
         }
@@ -155,6 +175,10 @@ const BlocksPage: React.FC = () => {
     // Effect to apply filters and sorting when they change
     useEffect(() => {
         applyFiltersAndSort()
+        // When activeFilter changes, reset to first page to prevent showing empty results
+        if (activeFilter !== 'all') {
+            setCurrentPage(1)
+        }
     }, [allBlocks, activeFilter, sortBy, applyFiltersAndSort])
 
     // Effect to simulate real-time updates
@@ -201,11 +225,11 @@ const BlocksPage: React.FC = () => {
         // This is an approximation since we only have a subset of blocks loaded
         const currentFilteredCount = filteredBlocks.length
         if (currentFilteredCount === 0) return 0
-        
+
         // Estimate total based on the ratio of filtered vs total in current page
         const currentPageTotal = allBlocks.length
         if (currentPageTotal === 0) return 0
-        
+
         const filterRatio = currentFilteredCount / currentPageTotal
         return Math.round(totalBlocks * filterRatio)
     }, [activeFilter, totalBlocks, filteredBlocks.length, allBlocks.length])
@@ -216,7 +240,7 @@ const BlocksPage: React.FC = () => {
 
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter)
-        setCurrentPage(1) // Reset to first page when filter changes
+        // La paginación se reinicia automáticamente en el efecto useEffect cuando cambia el filtro
     }
 
     const handleSortChange = (sortCriteria: string) => {
@@ -229,7 +253,7 @@ const BlocksPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             <BlocksFilters
                 activeFilter={activeFilter}

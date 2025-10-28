@@ -1,7 +1,7 @@
 import React from 'react'
 import TableCard from './TableCard'
 import config from '../../data/overview.json'
-import { useBlocks, useOrders, useTransactionsWithRealPagination } from '../../hooks/useApi'
+import { useAllBlocksCache, useOrders, useTransactionsWithRealPagination } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
@@ -11,7 +11,7 @@ const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0,
 const OverviewCards: React.FC = () => {
     // Data hooks
     const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
-    const { data: blocksPage } = useBlocks(1)
+    const { data: blocksPage } = useAllBlocksCache()
     const chainId = typeof window !== 'undefined' && (window as any).__CONFIG__ ? Number((window as any).__CONFIG__.chainId) : 1
     const { data: ordersPage } = useOrders(chainId)
 
@@ -39,7 +39,7 @@ const OverviewCards: React.FC = () => {
                         columns={[{ label: 'From' }, { label: 'To' }, { label: 'Amount' }, { label: 'Time' }]}
                         rows={txs.slice(0, 5).map((t: any) => {
                             const from = t.sender || t.from || t.source || ''
-                            
+
                             // Handle different transaction types for "To" field
                             let to = ''
                             if (t.messageType === 'certificateResults' && t.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
@@ -52,7 +52,7 @@ const OverviewCards: React.FC = () => {
                                 // For other transaction types
                                 to = t.recipient || t.to || t.destination || ''
                             }
-                            
+
                             const amount = t.amount ?? t.value ?? t.fee ?? 0
 
                             // Format time using date-fns
@@ -84,7 +84,7 @@ const OverviewCards: React.FC = () => {
                             // Get first 2 characters for the circle
                             const fromInitials = from ? from.slice(0, 2).toUpperCase() : 'N/A'
                             const toInitials = to ? to.slice(0, 2).toUpperCase() : 'N/A'
-                            
+
                             // Show "N/A" if no data available
                             const displayTo = to || 'N/A'
                             const displayFrom = from || 'N/A'
@@ -94,7 +94,7 @@ const OverviewCards: React.FC = () => {
                                     <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
                                         {fromInitials}
                                     </div>
-                                    <span className="text-white">{truncate(String(displayFrom), 8)}</span>
+                                    <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>
                                 </div>,
                                 <div className="flex items-center gap-2">
                                     {to ? (
@@ -102,7 +102,7 @@ const OverviewCards: React.FC = () => {
                                             <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
                                                 {toInitials}
                                             </div>
-                                            <span className="text-white">{truncate(String(displayTo), 8)}</span>
+                                            <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
                                         </>
                                     ) : (
                                         <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
@@ -130,7 +130,7 @@ const OverviewCards: React.FC = () => {
                             const hash = b.blockHeader?.hash || b.hash || ''
                             const txCount = b.txCount ?? b.numTxs ?? (b.transactions?.length ?? 0)
                             const btime = b.blockHeader?.time || b.time || b.timestamp
-                            
+
                             // Format time using date-fns
                             let timeAgo = '-'
                             if (btime) {
@@ -156,7 +156,7 @@ const OverviewCards: React.FC = () => {
                                 }
                             }
                             return [
-                                <Link to={`/blocks/${height}`} className="text-gray-200 flex items-center gap-2">
+                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-green-400 hover:underline">
                                     <div className="bg-green-300/10 rounded-full py-0.5 px-1">
                                         <i className="fa-solid fa-cube text-primary"></i>
                                     </div>
@@ -164,7 +164,7 @@ const OverviewCards: React.FC = () => {
                                         {typeof height === 'number' ? (
                                             <AnimatedNumber
                                                 value={height}
-                                                className="text-gray-200"
+                                                className="text-gray-200 hover:text-green-400 hover:underline"
                                             />
                                         ) : (
                                             height

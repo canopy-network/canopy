@@ -63,11 +63,11 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
         // 7. Network Uptime - Calculate based on validator status
         if (validatorsData?.results || validatorsData?.validators) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
-            const activeValidators = validatorsList.filter((v: any) => 
+            const activeValidators = validatorsList.filter((v: any) =>
                 !v.unstakingHeight || v.unstakingHeight === 0
             )
-            const uptimePercentage = validatorsList.length > 0 
-                ? (activeValidators.length / validatorsList.length) * 100 
+            const uptimePercentage = validatorsList.length > 0
+                ? (activeValidators.length / validatorsList.length) * 100
                 : 0
             realMetrics.networkUptime = Math.min(99.99, Math.max(0, uptimePercentage))
         }
@@ -108,8 +108,8 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Network Uptime</span>
                         <span className="text-sm font-medium text-primary">
-                            <AnimatedNumber 
-                                value={realMetrics.networkUptime} 
+                            <AnimatedNumber
+                                value={realMetrics.networkUptime}
                                 format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                                 suffix="%"
                                 className="text-primary"
@@ -129,8 +129,8 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Avg. Transaction Fee</span>
                         <span className="text-sm font-medium text-white">
-                            <AnimatedNumber 
-                                value={realMetrics.avgTransactionFee} 
+                            <AnimatedNumber
+                                value={realMetrics.avgTransactionFee}
                                 format={{ maximumFractionDigits: 4 }}
                                 suffix=" CNPY"
                                 className="text-white"
@@ -150,8 +150,8 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Total Value Locked (TVL)</span>
                         <span className="text-sm font-medium text-white">
-                            <AnimatedNumber 
-                                value={realMetrics.totalValueLocked} 
+                            <AnimatedNumber
+                                value={realMetrics.totalValueLocked}
                                 format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                                 suffix="M CNPY"
                                 className="text-white"
@@ -171,8 +171,8 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Active Validators</span>
                         <span className="text-sm font-medium text-white">
-                            <AnimatedNumber 
-                                value={realMetrics.validatorCount} 
+                            <AnimatedNumber
+                                value={realMetrics.validatorCount}
                                 className="text-white"
                             />
                         </span>

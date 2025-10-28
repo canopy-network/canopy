@@ -15,12 +15,12 @@ interface NetworkActivityProps {
 }
 
 const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, loading, blocksData, blockGroups }) => {
-    const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; blockLabel: string } | null>(null)
-    // Use real block data filtered by block range
+    const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number; value: number; timeLabel: string } | null>(null)
+
+    // Use real block data and group by time like BlockProductionRate
     const getTransactionData = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
-            console.log('No blocks data available')
-            return [] // Return empty array if no real data or invalid
+        if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
+            return { txCounts: [], timeKeys: [], timeLabels: [] }
         }
 
         const realBlocks = blocksData.results
@@ -34,64 +34,68 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
         })
 
         if (filteredBlocks.length === 0) {
-            return []
+            return { txCounts: [], timeKeys: [], timeLabels: [] }
         }
 
-        // Sort blocks by height (oldest first for proper chart display)
+        // Sort blocks by timestamp (oldest first)
         filteredBlocks.sort((a: any, b: any) => {
-            const heightA = a.blockHeader?.height || a.height || 0
-            const heightB = b.blockHeader?.height || b.height || 0
-            return heightA - heightB
+            const timeA = a.blockHeader?.time || a.time || 0
+            const timeB = b.blockHeader?.time || b.time || 0
+            return timeA - timeB
         })
 
-        // Create data array with transaction counts per block
-        const dataByBlock = filteredBlocks.map((block: any) => {
-            return block.transactions?.length || block.blockHeader?.numTxs || 0
+        // Agrupar transacciones por tiempo (similar a BlockProductionRate)
+        const txByTime: { [hour: string]: number } = {}
+
+        filteredBlocks.forEach((block: any) => {
+            const blockTime = block.blockHeader?.time || block.time || 0
+            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
+            const blockDate = new Date(blockTimeMs)
+
+            // Agrupar por hora:minuto (redondeando a intervalos de 10 minutos si hay muchos bloques)
+            const minute = filteredBlocks.length < 20 ?
+                blockDate.getMinutes() :
+                Math.floor(blockDate.getMinutes() / 10) * 10
+
+            const timeKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+            if (!txByTime[timeKey]) {
+                txByTime[timeKey] = 0
+            }
+
+            // Contar transacciones en este bloque - usar numTxs del blockHeader
+            const txCount = block.blockHeader?.numTxs || 0
+            txByTime[timeKey] += txCount
         })
 
-        return dataByBlock
+        // Convertir el objeto a un array ordenado por hora
+        const timeKeys = Object.keys(txByTime).sort()
+        const txCounts = timeKeys.map(key => txByTime[key])
+
+        // Crear etiquetas de tiempo (HH:MM o HH:MM-HH:MM)
+        const timeLabels = timeKeys.map(key => {
+            if (filteredBlocks.length < 20) {
+                return key
+            }
+
+            const [hour, minute] = key.split(':').map(Number)
+            const endMinute = (minute + 10) % 60
+            const endHour = endMinute < minute ? (hour + 1) % 24 : hour
+
+            return `${key}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
+        })
+
+        console.log('Transaction data by time:', txByTime)
+        console.log('Time keys:', timeKeys)
+        console.log('TX counts:', txCounts)
+
+        return { txCounts, timeKeys, timeLabels }
     }
 
-    const transactionData = getTransactionData()
-    const maxValue = Math.max(...transactionData, 1) // Mínimo 1 para evitar división por cero
-    const minValue = Math.min(...transactionData, 0) // Mínimo 0
-    const range = maxValue - minValue || 1 // Evitar división por cero
-
-
-    const getBlockLabels = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
-            return []
-        }
-
-        const realBlocks = blocksData.results
-        const fromBlockNum = parseInt(fromBlock) || 0
-        const toBlockNum = parseInt(toBlock) || 0
-
-        // Filter blocks by the specified range
-        const filteredBlocks = realBlocks.filter((block: any) => {
-            const blockHeight = block.blockHeader?.height || block.height || 0
-            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
-        })
-
-        // Sort blocks by height (oldest first for proper chart display)
-        filteredBlocks.sort((a: any, b: any) => {
-            const heightA = a.blockHeader?.height || a.height || 0
-            const heightB = b.blockHeader?.height || b.height || 0
-            return heightA - heightB
-        })
-
-        // Create labels with block heights
-        const blockLabels = filteredBlocks.map((block: any) => {
-            const blockHeight = block.blockHeader?.height || block.height || 0
-            return `#${blockHeight}`
-        })
-
-        return blockLabels
-    }
-
-    const blockLabels = getBlockLabels()
-
-    // REMOVED: No simulation flag is used anymore
+    const { txCounts, timeKeys, timeLabels } = getTransactionData()
+    const maxValue = txCounts.length > 0 ? Math.max(...txCounts, 1) : 1
+    const minValue = txCounts.length > 0 ? Math.min(...txCounts, 0) : 0
+    const range = maxValue - minValue || 1
 
     if (loading) {
         return (
@@ -116,7 +120,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     Network Activity
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Transactions per day
+                    Transactions per minute
                 </p>
             </div>
 
@@ -131,45 +135,38 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     <rect width="100%" height="100%" fill="url(#grid)" />
 
                     {/* Line chart */}
-                    <polyline
-                        fill="none"
-                        stroke="#4ADE80"
-                        strokeWidth="2"
-                        points={transactionData.map((value, index) => {
-                            const x = (index / Math.max(transactionData.length - 1, 1)) * 280 + 10
-                            const y = 110 - ((value - minValue) / range) * 100
-                            // Asegurar que x e y no sean NaN
-                            const safeX = isNaN(x) ? 10 : x
-                            const safeY = isNaN(y) ? 110 : y
-                            return `${safeX},${safeY}`
-                        }).join(' ')}
-                    />
+                    {txCounts.length > 1 && (
+                        <polyline
+                            fill="none"
+                            stroke="#4ADE80"
+                            strokeWidth="2"
+                            points={txCounts.map((value, index) => {
+                                const x = (index / Math.max(txCounts.length - 1, 1)) * 280 + 10
+                                const y = 110 - ((value - minValue) / range) * 100
+                                return `${x},${y}`
+                            }).join(' ')}
+                        />
+                    )}
 
                     {/* Data points */}
-                    {transactionData.map((value, index) => {
-                        // Calculate position based on block groups for better alignment
-                        const groupIndex = Math.floor(index / (transactionData.length / blockGroups.length))
-                        const x = (groupIndex / Math.max(blockGroups.length - 1, 1)) * 280 + 10
+                    {txCounts.map((value, index) => {
+                        const x = (index / Math.max(txCounts.length - 1, 1)) * 280 + 10
                         const y = 110 - ((value - minValue) / range) * 100
-                        // Asegurar que x e y no sean NaN
-                        const safeX = isNaN(x) ? 10 : x
-                        const safeY = isNaN(y) ? 110 : y
-                        const blockLabel = blockLabels[index] || `Block ${index + 1}`
 
                         return (
                             <circle
                                 key={index}
-                                cx={safeX}
-                                cy={safeY}
+                                cx={x}
+                                cy={y}
                                 r="4"
                                 fill="#4ADE80"
                                 className="cursor-pointer transition-all duration-200 hover:r-6 drop-shadow-sm"
                                 onMouseEnter={() => setHoveredPoint({
                                     index,
-                                    x: safeX,
-                                    y: safeY,
+                                    x,
+                                    y,
                                     value,
-                                    blockLabel
+                                    timeLabel: timeLabels[index] || `Time ${index + 1}`
                                 })}
                                 onMouseLeave={() => setHoveredPoint(null)}
                             />
@@ -187,16 +184,16 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                             transform: 'translate(-50%, -120%)'
                         }}
                     >
-                        <div className="font-semibold">{hoveredPoint.blockLabel}</div>
+                        <div className="font-semibold">{hoveredPoint.timeLabel}</div>
                         <div className="text-green-400">{hoveredPoint.value.toLocaleString()} transactions</div>
                     </div>
                 )}
 
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-400">
-                    <span>{Math.round(maxValue / 1000)}k</span>
-                    <span>{Math.round((maxValue + minValue) / 2 / 1000)}k</span>
-                    <span>{Math.round(minValue / 1000)}k</span>
+                    <span>{Math.round(maxValue)}</span>
+                    <span>{Math.round((maxValue + minValue) / 2)}</span>
+                    <span>{Math.round(minValue)}</span>
                 </div>
             </div>
 

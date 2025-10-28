@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import React from 'react'
 import menuConfig from '../data/navbar.json'
 import Logo from './Logo'
-import { useBlocks } from '../hooks/useApi'
+import { useAllBlocksCache } from '../hooks/useApi'
+import NetworkSelector from './NetworkSelector'
 
 const Navbar = () => {
     const location = useLocation()
     const navigate = useNavigate()
     const [searchTerm, setSearchTerm] = React.useState('')
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
 
     // Menu configuration by route, with dropdowns and submenus
     type MenuLink = { label: string, path: string }
@@ -46,7 +48,7 @@ const Navbar = () => {
     // State for mobile dropdowns (accordion)
     const [mobileOpenIndex, setMobileOpenIndex] = React.useState<number | null>(null)
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
-    const blocks = useBlocks(1)
+    const blocks = useAllBlocksCache()
     React.useEffect(() => {
         // Cerrar dropdowns al cambiar de ruta
         handleClose()
@@ -57,10 +59,14 @@ const Navbar = () => {
         const handleDocumentMouseDown = (event: MouseEvent) => {
             if (navRef.current && !navRef.current.contains(event.target as Node)) {
                 handleClose()
+                setIsMobileMenuOpen(false)
             }
         }
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') handleClose()
+            if (event.key === 'Escape') {
+                handleClose()
+                setIsMobileMenuOpen(false)
+            }
         }
         document.addEventListener('mousedown', handleDocumentMouseDown)
         document.addEventListener('keydown', handleKeyDown)
@@ -78,13 +84,18 @@ const Navbar = () => {
                     <div className="flex items-center">
                         <Link to="/" className="flex items-center space-x-3">
                             <Logo size={180} showText={false} />
-                            <motion.span
-                                whileHover={{ scale: 1.03 }}
-                                className="font-semibold text-white text-2xl flex items-center gap-1"
-                            >
-                                {menu.title}
-                                <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-sm translate-1"><p className='text-gray-500 font-light'>Block:</p> <p className="font-medium text-primary">#{blocks.data?.totalCount.toLocaleString()}</p></div>
-                            </motion.span>
+                            <div className="flex items-center gap-3">
+                                <motion.span
+                                    whileHover={{ scale: 1.03 }}
+                                    className="font-semibold text-white text-2xl"
+                                >
+                                    {menu.title}
+                                </motion.span>
+                                <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-sm">
+                                    <p className='text-gray-500 font-light'>Block:</p>
+                                    <p className="font-medium text-primary">#{blocks.data?.[0]?.blockHeader?.height?.toLocaleString() || '0'}</p>
+                                </div>
+                            </div>
                         </Link>
                     </div>
 
@@ -142,7 +153,7 @@ const Navbar = () => {
                                                     >
                                                         <Link
                                                             to={child.path}
-                                                            className="block px-3 py-2 text-md font-normal text-gray-300 hover:text-primary hover:bg-gray-700/70"
+                                                            className="block px-3 py-2 text-sm font-normal text-gray-300 hover:text-primary hover:bg-gray-700/70"
                                                         >
                                                             {child.label}
                                                         </Link>
@@ -158,13 +169,33 @@ const Navbar = () => {
 
                     {/* Mobile menu button */}
                     <div className="md:hidden flex items-center">
-                        <button className="text-gray-300 hover:text-primary focus:outline-none focus:text-primary">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
+                        <button
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            className="text-gray-300 hover:text-primary focus:outline-none focus:text-primary"
+                        >
+                            <motion.svg
+                                className="h-6 w-6"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                animate={{ rotate: isMobileMenuOpen ? 90 : 0 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                {isMobileMenuOpen ? (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                ) : (
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                )}
+                            </motion.svg>
                         </button>
                     </div>
-                    <div className="flex items-center space-x-2 relative w-2/12">
+                    <div className="hidden md:flex items-center space-x-2 relative w-4/12">
+                        {/* Network Selector - Only show in development */}
+                        {import.meta.env.DEV && (
+                            <div className='w-6/12'>
+                                <NetworkSelector />
+                            </div>
+                        )}
                         <input
                             type="text"
                             placeholder="Search blocks, transactions, addresses..."
@@ -191,38 +222,80 @@ const Navbar = () => {
             </div>
 
             {/* Mobile menu */}
-            <div className="md:hidden">
-                <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                    {menu.root.map((item, index) => (
-                        <div key={item.label} className="mb-1">
-                            <button
-                                onClick={() => toggleMobileIndex(index)}
-                                className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index ? 'bg-primary/20 text-primary' : 'text-gray-300 hover:text-primary hover:bg-gray-700'}`}
-                            >
-                                <span>{item.label}</span>
-                                <svg className={`h-4 w-4 transition-transform ${mobileOpenIndex === index ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" /></svg>
-                            </button>
-                            {item.children && item.children.length > 0 && (
-                                <div className={`${mobileOpenIndex === index ? 'block' : 'hidden'} mt-1 ml-2 border-l border-gray-700`}>
-                                    <ul className="py-1">
-                                        {item.children.map((child) => (
-                                            <li key={child.path}>
-                                                <Link
-                                                    to={child.path}
-                                                    className="block px-3 py-2 text-sm text-gray-300 hover:text-primary hover:bg-gray-700 rounded-md"
-                                                    onClick={() => setMobileOpenIndex(null)}
-                                                >
-                                                    {child.label}
-                                                </Link>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+            {isMobileMenuOpen && (
+                <div className="md:hidden">
+                    <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                        {menu.root.map((item, index) => (
+                            <div key={item.label} className="mb-1">
+                                <button
+                                    onClick={() => toggleMobileIndex(index)}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index ? 'bg-primary/20 text-primary' : 'text-gray-300 hover:text-primary hover:bg-gray-700'}`}
+                                >
+                                    <span>{item.label}</span>
+                                    <svg className={`h-4 w-4 transition-transform ${mobileOpenIndex === index ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" /></svg>
+                                </button>
+                                {item.children && item.children.length > 0 && (
+                                    <div className={`${mobileOpenIndex === index ? 'block' : 'hidden'} mt-1 ml-2 border-l border-gray-700`}>
+                                        <ul className="py-1">
+                                            {item.children.map((child) => (
+                                                <li key={child.path}>
+                                                    <Link
+                                                        to={child.path}
+                                                        className="block px-3 py-2 text-sm text-gray-300 hover:text-primary hover:bg-gray-700 rounded-md"
+                                                        onClick={() => setMobileOpenIndex(null)}
+                                                    >
+                                                        {child.label}
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+
+                        {/* Mobile Network Selector */}
+                        {import.meta.env.DEV && (
+                            <div className="px-3 py-2">
+                                <NetworkSelector />
+                            </div>
+                        )}
+
+                        {/* Mobile Search */}
+                        <div className="px-3 py-2">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search blocks, transactions, addresses..."
+                                    className="w-full px-4 py-3 pl-10 bg-card border border-gray-800/80 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                                            if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
+                                                navigate('/token-swaps');
+                                            } else if (lowerCaseSearchTerm.includes('validator') || lowerCaseSearchTerm.includes('stake')) {
+                                                navigate('/validators');
+                                            } else if (lowerCaseSearchTerm.includes('block')) {
+                                                navigate('/blocks');
+                                            } else if (lowerCaseSearchTerm.includes('transaction') || lowerCaseSearchTerm.includes('tx')) {
+                                                navigate('/transactions');
+                                            } else if (lowerCaseSearchTerm.includes('account') || lowerCaseSearchTerm.includes('address')) {
+                                                navigate('/accounts');
+                                            } else {
+                                                navigate('/search', { state: { query: searchTerm } });
+                                            }
+                                            setIsMobileMenuOpen(false)
+                                        }
+                                    }}
+                                />
+                                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                            </div>
                         </div>
-                    ))}
+                    </div>
                 </div>
-            </div>
+            )}
         </nav>
     )
 }

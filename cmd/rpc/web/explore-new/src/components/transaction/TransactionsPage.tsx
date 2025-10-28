@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useTransactionsWithRealPagination, useTransactions, useBlocks, useTxByHash } from '../../hooks/useApi'
+import { useTransactionsWithRealPagination, useTransactions, useAllBlocksCache, useTxByHash } from '../../hooks/useApi'
+import { getTotalTransactionCount } from '../../lib/api'
 import transactionsTexts from '../../data/transactions.json'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -101,15 +102,15 @@ const TransactionsPage: React.FC = () => {
 
     // Detect if search is a transaction hash
     const isHashSearch = addressSearch && addressSearch.length >= 32 && /^[a-fA-F0-9]+$/.test(addressSearch)
-    
+
     // Hook for direct hash search
     const { data: hashSearchData, isLoading: isHashLoading } = useTxByHash(isHashSearch ? addressSearch : '')
-    
+
     // Hook to get all transactions data with real pagination
     const { data: transactionsData, isLoading } = useTransactionsWithRealPagination(currentPage, entriesPerPage, apiFilters)
-    
+
     // Hook to get blocks data to determine default block range
-    const { data: blocksData } = useBlocks(1) // Get first page of blocks
+    const { data: blocksData } = useAllBlocksCache() // Get first page of blocks
 
     // Normalize transaction data
     const normalizeTransactions = (payload: any): Transaction[] => {
@@ -126,7 +127,7 @@ const TransactionsPage: React.FC = () => {
             const from = tx.sender || tx.from || 'N/A'
             // Handle different transaction types for "To" field
             let to = tx.recipient || tx.to || 'N/A'
-            
+
             // For certificateResults, extract from reward recipients
             if (type === 'certificateResults' && tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
                 const recipients = tx.transaction.msg.qc.results.rewardRecipients.paymentPercents
@@ -160,7 +161,7 @@ const TransactionsPage: React.FC = () => {
                     } else {
                         date = new Date(timeSource)
                     }
-                    
+
                     if (isValid(date)) {
                         transactionDate = date.getTime()
                         age = formatDistanceToNow(date, { addSuffix: true })
@@ -203,14 +204,14 @@ const TransactionsPage: React.FC = () => {
 
     // Effect to set default block values
     useEffect(() => {
-        if (blocksData?.results && blocksData.results.length > 0) {
-            const blocks = blocksData.results
+        if (blocksData && Array.isArray(blocksData)) {
+            const blocks = blocksData
             const latestBlock = blocks[0] // First block is the most recent
             const oldestBlock = blocks[blocks.length - 1] // Last block is the oldest
-            
+
             const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
             const oldestHeight = oldestBlock.blockHeader?.height || oldestBlock.height || 0
-            
+
             // Set default values if not already set
             if (!fromBlock && !toBlock) {
                 setToBlock(latestHeight.toString())
@@ -225,25 +226,27 @@ const TransactionsPage: React.FC = () => {
     }, [transactionType, fromBlock, toBlock, statusFilter, amountRangeValue, addressSearch])
 
 
-    const totalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : (transactionsData?.totalCount || 0)
-    const isLoadingData = isHashSearch ? isHashLoading : isLoading
+    // Get transaction stats directly
+    const [transactionsToday, setTransactionsToday] = useState(0)
+    const [tpmLast24h, setTpmLast24h] = useState(0)
+    const [totalTransactions, setTotalTransactions] = useState(0)
 
-    // Get transactions from the last 24 hours using txs-by-height
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
-    const { data: todayTransactionsData } = useTransactions(1, 0) // Get recent transactions
-    
-    const transactionsToday = React.useMemo(() => {
-        if (todayTransactionsData?.totalCount) {
-            // Use the total count from the API if available
-            return todayTransactionsData.totalCount
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const stats = await getTotalTransactionCount()
+                setTransactionsToday(stats.last24h)
+                setTpmLast24h(stats.tpm)
+                setTotalTransactions(stats.total)
+            } catch (error) {
+                console.error('Error fetching transaction stats:', error)
+            }
         }
-        
-        // Fallback: count transactions in the last 24h using the `date` property
-        const filteredTxs = transactions.filter(tx => {
-            return (tx.date || 0) >= twentyFourHoursAgo
-        })
-        return filteredTxs.length
-    }, [todayTransactionsData, transactions, twentyFourHoursAgo])
+        fetchStats()
+    }, [])
+
+    const isLoadingData = isHashSearch ? isHashLoading : isLoading
+    const displayTotalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : totalTransactions
 
     const averageFee = React.useMemo(() => {
         if (transactions.length === 0) return 0
@@ -251,24 +254,7 @@ const TransactionsPage: React.FC = () => {
         return (totalFees / transactions.length).toFixed(4)
     }, [transactions])
 
-    // Calculate peak TPS based on real transaction data
-    const peakTPS = React.useMemo(() => {
-        if (transactions.length === 0) return 0
-        
-        // Group transactions by time intervals (1 second windows)
-        const timeGroups: { [key: number]: number } = {}
-        
-        transactions.forEach(tx => {
-            if (tx.date) {
-                const timeWindow = Math.floor(tx.date / 1000) // Group by second
-                timeGroups[timeWindow] = (timeGroups[timeWindow] || 0) + 1
-            }
-        })
-        
-        // Find the maximum TPS
-        const maxTPS = Math.max(...Object.values(timeGroups))
-        return maxTPS > 0 ? maxTPS : 1246 // Fallback to default if no data
-    }, [transactions])
+
 
 
     // Calculate success rate
@@ -282,7 +268,7 @@ const TransactionsPage: React.FC = () => {
         {
             title: 'Transactions Today',
             value: transactionsToday.toLocaleString(),
-            subValue: '+12.4% from yesterday',
+            subValue: `Last 24 hours`,
             icon: 'fa-solid fa-arrow-right-arrow-left text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-primary',
@@ -303,10 +289,10 @@ const TransactionsPage: React.FC = () => {
             valueColor: 'text-white',
         },
         {
-            title: 'Peak TPS',
-            value: peakTPS.toLocaleString(),
-            subValue: 'Transactions Per Second',
-            icon: 'fa-solid fa-bolt text-primary',
+            title: 'Average TPM (24h)',
+            value: tpmLast24h.toFixed(2).toLocaleString(),
+            subValue: 'Transactions Per Minute',
+            icon: 'fa-solid fa-chart-line text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-gray-400',
         },
@@ -425,7 +411,7 @@ const TransactionsPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Header con información de transacciones */}
             <div className="mb-6">
@@ -481,22 +467,22 @@ const TransactionsPage: React.FC = () => {
                     {/* Block Range Filter */}
                     <div className="flex flex-col gap-2">
                         <label className="text-gray-400 text-sm">{filterConfigs[1].label}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="number"
-                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                            placeholder="From Block"
-                            value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
-                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
-                        />
-                        <input
-                            type="number"
-                            className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
-                            placeholder="To Block"
-                            value={(filterConfigs[1] as BlockRangeFilter).toBlock}
-                            onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
-                        />
-                    </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                placeholder="From Block"
+                                value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
+                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
+                            />
+                            <input
+                                type="number"
+                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                placeholder="To Block"
+                                value={(filterConfigs[1] as BlockRangeFilter).toBlock}
+                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
+                            />
+                        </div>
                     </div>
 
                     {/* Status Filter */}
@@ -534,16 +520,29 @@ const TransactionsPage: React.FC = () => {
                     <div className="flex flex-col gap-2 col-span-1 md:col-span-2">
                         <label className="text-gray-400 text-sm">{filterConfigs[3].label}</label>
                         <div className="relative pt-4">
-                            <input
-                                type="range"
-                                min={(filterConfigs[3] as AmountRangeFilter).min}
-                                max={(filterConfigs[3] as AmountRangeFilter).max}
-                                step={(filterConfigs[3] as AmountRangeFilter).step}
-                                value={(filterConfigs[3] as AmountRangeFilter).value}
-                                onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
-                                className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
-                                style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
-                            />
+                            <div className="relative">
+                                <input
+                                    type="range"
+                                    min={(filterConfigs[3] as AmountRangeFilter).min}
+                                    max={(filterConfigs[3] as AmountRangeFilter).max}
+                                    step={(filterConfigs[3] as AmountRangeFilter).step}
+                                    value={(filterConfigs[3] as AmountRangeFilter).value}
+                                    onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
+                                    className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
+                                    style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
+                                />
+
+                                {/* Current value tooltip */}
+                                <div
+                                    className="absolute top-0 transform -translate-y-8 px-2 py-1 bg-primary text-black text-xs font-medium rounded shadow-lg"
+                                    style={{
+                                        left: `${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%`,
+                                        transform: 'translateX(-50%) translateY(-8px)'
+                                    }}
+                                >
+                                    {(filterConfigs[3] as AmountRangeFilter).value >= 1000 ? "1000+" : (filterConfigs[3] as AmountRangeFilter).value} CNPY
+                                </div>
+                            </div>
                             <div className="flex justify-between text-xs text-gray-400 mt-2">
                                 {(filterConfigs[3] as AmountRangeFilter).displayLabels.map((label, idx) => (
                                     <span
@@ -585,7 +584,7 @@ const TransactionsPage: React.FC = () => {
             <TransactionsTable
                 transactions={transactions}
                 loading={loading || isLoadingData}
-                totalCount={totalTransactions}
+                totalCount={displayTotalTransactions}
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
                 showEntriesSelector={true}

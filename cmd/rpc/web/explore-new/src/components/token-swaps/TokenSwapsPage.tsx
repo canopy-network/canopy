@@ -53,7 +53,7 @@ const TokenSwapsPage: React.FC = () => {
             const assetPair = assetPairs[order.committee % assetPairs.length] || 'CNPY/UNKNOWN';
 
             // Calculate exchange rate (CNPY per unit of counter asset)
-            const exchangeRate = order.requestedAmount > 0 
+            const exchangeRate = order.requestedAmount > 0
                 ? `1 Asset = ${(order.amountForSale / order.requestedAmount).toFixed(6)} CNPY`
                 : 'N/A';
 
@@ -151,7 +151,7 @@ const TokenSwapsPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -159,13 +159,13 @@ const TokenSwapsPage: React.FC = () => {
                     <p className="text-gray-400">Real-time atomic swaps between Canopy (CNPY) and other cryptocurrencies</p>
                 </div>
                 <div className="flex items-center space-x-4">
-                    <button 
+                    <button
                         onClick={() => window.location.reload()}
                         className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors duration-200 font-medium"
                     >
                         <i className="fas fa-sync-alt mr-2"></i>Refresh
                     </button>
-                    <button 
+                    <button
                         onClick={handleExportData}
                         className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"
                     >
@@ -174,8 +174,8 @@ const TokenSwapsPage: React.FC = () => {
                 </div>
             </div>
 
-            <SwapFilters 
-                onApplyFilters={handleApplyFilters} 
+            <SwapFilters
+                onApplyFilters={handleApplyFilters}
                 onResetFilters={handleResetFilters}
                 filters={filters}
                 onFiltersChange={setFilters}

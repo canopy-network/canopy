@@ -1,8 +1,10 @@
 import React from 'react'
 import TableCard from './TableCard'
-import { useValidators, useTransactionsWithRealPagination, useBlocks } from '../../hooks/useApi'
+import { useAllValidators, useTransactionsWithRealPagination, useAllBlocksCache } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
+import { Link } from 'react-router-dom'
+import Logo from '../Logo'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
@@ -14,70 +16,131 @@ const normalizeList = (payload: any) => {
 }
 
 const ExtraTables: React.FC = () => {
-    const { data: validatorsPage } = useValidators(1)
+    const { data: allValidatorsData } = useAllValidators()
     const { data: txsPage } = useTransactionsWithRealPagination(1, 20)
-    const { data: blocksPage } = useBlocks(1)
+    const { data: blocksPage } = useAllBlocksCache()
 
-    const validators = normalizeList(validatorsPage)
+    // Get all validators and take only top 10 by staking power
+    const allValidators = allValidatorsData?.results || []
     const txs = normalizeList(txsPage)
     const blocks = normalizeList(blocksPage)
 
-    const totalStake = React.useMemo(() => validators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0), [validators])
-    
+    // Calculate total stake for percentages
+    const totalStake = React.useMemo(() => allValidators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0), [allValidators])
+
     // Calculate validator statistics from blocks data
     const validatorStats = React.useMemo(() => {
-        const stats: { [key: string]: { blocksProduced: number, lastBlockTime: number } } = {}
-        
+        const stats: { [key: string]: { lastBlockTime: number } } = {}
+
         blocks.forEach((block: any) => {
             const proposer = block.blockHeader?.proposer || block.proposer
             if (proposer) {
                 if (!stats[proposer]) {
-                    stats[proposer] = { blocksProduced: 0, lastBlockTime: 0 }
+                    stats[proposer] = { lastBlockTime: 0 }
                 }
-                stats[proposer].blocksProduced++
                 const blockTime = block.blockHeader?.time || block.time || 0
                 if (blockTime > stats[proposer].lastBlockTime) {
                     stats[proposer].lastBlockTime = blockTime
                 }
             }
         })
-        
+
         return stats
     }, [blocks])
 
-    const validatorRows: Array<React.ReactNode[]> = React.useMemo(() => {
-        // Sort validators by stake amount (descending order)
-        const sortedValidators = [...validators].sort((a: any, b: any) => {
-            const stakeA = Number(a.stakedAmount || 0)
-            const stakeB = Number(b.stakedAmount || 0)
-            return stakeB - stakeA // Descending order (highest stake first)
+    // Calculate staking power for all validators and get top 10
+    const top10Validators = React.useMemo(() => {
+        if (allValidators.length === 0) return []
+
+        const validatorsWithStakingPower = allValidators.map((v: any) => {
+            const address = v.address || 'N/A'
+            const stakedAmount = Number(v.stakedAmount || 0)
+            const maxPausedHeight = v.maxPausedHeight || 0
+            const unstakingHeight = v.unstakingHeight || 0
+            const delegate = v.delegate || false
+
+            // Calculate stake weight
+            const stakeWeight = totalStake > 0 ? (stakedAmount / totalStake) * 100 : 0
+
+            // Calculate validator status
+            const isUnstaking = unstakingHeight && unstakingHeight > 0
+            const isPaused = maxPausedHeight && maxPausedHeight > 0
+            const isDelegate = delegate === true
+            const isActive = !isUnstaking && !isPaused && !isDelegate
+
+            // Calculate staking power
+            const statusMultiplier = isActive ? 1.0 : 0.5
+            const stakingPower = Math.min(stakeWeight * statusMultiplier, 100)
+
+            return {
+                ...v,
+                stakingPower: Math.round(stakingPower * 100) / 100
+            }
         })
 
-        return sortedValidators.map((v: any, idx: number) => {
+        // Sort by staked amount (highest first) and take top 10
+        return validatorsWithStakingPower
+            .sort((a, b) => Number(b.stakedAmount || 0) - Number(a.stakedAmount || 0))
+            .slice(0, 10)
+    }, [allValidators, totalStake])
+
+    const validatorRows: Array<React.ReactNode[]> = React.useMemo(() => {
+        if (top10Validators.length === 0) return []
+
+        // Calculate the maximum stake for relative progress bar display
+        const maxStake = top10Validators.length > 0 ? Math.max(...top10Validators.map(v => Number(v.stakedAmount || 0))) : 1
+
+        // Debug: Log the first few validators to verify ranking
+        console.log('Top 10 validators (ranked by stake):', top10Validators.slice(0, 3).map((v, i) => ({
+            rank: i + 1,
+            address: v.address?.slice(0, 8),
+            stake: Number(v.stakedAmount || 0),
+            stakeFormatted: (Number(v.stakedAmount || 0) / 1000000).toFixed(2) + 'M'
+        })))
+        console.log('Max stake (should be first validator):', maxStake, 'Formatted:', (maxStake / 1000000).toFixed(2) + 'M')
+
+        return top10Validators.map((v: any, idx: number) => {
             const address = v.address || 'N/A'
             const stake = Number(v.stakedAmount ?? 0)
             const chainsStaked = Array.isArray(v.committees) ? v.committees.length : (Number(v.committees) || 0)
             const powerPct = totalStake > 0 ? (stake / totalStake) * 100 : 0
             const clampedPct = Math.max(0, Math.min(100, powerPct))
-            
+
+            // For visual progress bar, use relative percentage based on max stake
+            const visualPct = maxStake > 0 ? (stake / maxStake) * 100 : 0
+
+            // Debug: Log progress bar calculation for first few validators
+            if (idx < 3) {
+                console.log(`Validator ${idx + 1} (${address.slice(0, 8)}): stake=${stake}, maxStake=${maxStake}, visualPct=${visualPct.toFixed(2)}%`)
+            }
+
             // Get validator statistics
-            const stats = validatorStats[address] || { blocksProduced: 0, lastBlockTime: 0 }
-            
-            // Calculate validator status for activity scoring
-            const isActive = !v.unstakingHeight || v.unstakingHeight === 0
-            
+            const stats = validatorStats[address] || { lastBlockTime: 0 }
+
+            // Calculate validator status based on README specifications
+            const isUnstaking = v.unstakingHeight && v.unstakingHeight > 0
+            const isPaused = v.maxPausedHeight && v.maxPausedHeight > 0
+            const isDelegate = v.delegate === true
+            const isActive = !isUnstaking && !isPaused && !isDelegate
+
             // Calculate rewards percentage (simplified - based on stake percentage)
             const rewardsPct = powerPct > 0 ? (powerPct * 0.1).toFixed(2) : '0.00'
-            
-            // Calculate 24h change (simplified - based on activity)
-            const activityScore = (stats.blocksProduced > 0 && isActive) ? 'Active' : 'Inactive'
-            
+
+            // Calculate activity score based on README states
+            let activityScore = 'Inactive'
+            if (isUnstaking) {
+                activityScore = 'Unstaking'
+            } else if (isPaused) {
+                activityScore = 'Paused'
+            } else if (isDelegate) {
+                activityScore = 'Delegate'
+            } else if (isActive) {
+                activityScore = 'Active'
+            }
+
             // Total weight (same as stake for now)
             const totalWeight = stake
-            
-            // Weight delta (simplified - based on recent activity)
-            const weightDelta = stats.blocksProduced > 0 ? '+' + (stats.blocksProduced * 1000).toLocaleString() : '0'
-            
+
             return [
                 <span className="text-gray-400">
                     <AnimatedNumber
@@ -89,7 +152,7 @@ const ExtraTables: React.FC = () => {
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary">
                         {(String(address)[0] || 'V').toUpperCase()}
                     </div>
-                    <span>{truncate(String(address), 16)}</span>
+                    <Link to={`/validator/${address}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -104,18 +167,14 @@ const ExtraTables: React.FC = () => {
                         chainsStaked || '0'
                     )}
                 </span>,
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                    activityScore === 'Active' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-gray-500/20 text-gray-400'
-                }`}>
+                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-green-500/20 text-primary' :
+                    activityScore === 'Standby' ? 'bg-yellow-500/20 text-yellow-400' :
+                        activityScore === 'Paused' ? 'bg-orange-500/20 text-orange-400' :
+                            activityScore === 'Unstaking' ? 'bg-red-500/20 text-red-400' :
+                                activityScore === 'Delegate' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-gray-500/20 text-gray-400'
+                    }`}>
                     {activityScore}
-                </span>,
-                <span className="text-gray-200">
-                    <AnimatedNumber
-                        value={stats.blocksProduced}
-                        className="text-gray-200"
-                    />
                 </span>,
                 <span className="text-gray-200">
                     {typeof totalWeight === 'number' ? (
@@ -126,13 +185,6 @@ const ExtraTables: React.FC = () => {
                     ) : (
                         totalWeight ? String(totalWeight).toLocaleString() : '0'
                     )}
-                </span>,
-                <span className={`text-xs ${
-                    weightDelta.startsWith('+') 
-                        ? 'text-green-400' 
-                        : 'text-gray-400'
-                }`}>
-                    {weightDelta}
                 </span>,
                 <span className="text-gray-200">
                     {typeof stake === 'number' ? (
@@ -146,13 +198,13 @@ const ExtraTables: React.FC = () => {
                 </span>,
                 <div className="flex items-center gap-2">
                     <div className="w-24 sm:w-32 h-3 bg-gray-700/60 rounded-full overflow-hidden">
-                        <div className="h-3 bg-primary transition-[width] duration-500 ease-out" style={{ width: `${clampedPct}%` }}></div>
+                        <div className="h-3 bg-primary transition-[width] duration-500 ease-out" style={{ width: `${visualPct}%` }}></div>
                     </div>
                     <i className="fa-solid fa-bolt text-primary/80 text-xs"></i>
                 </div>,
             ]
         })
-    }, [validators, totalStake, validatorStats])
+    }, [top10Validators, totalStake, validatorStats])
 
     return (
         <div className="grid grid-cols-1 gap-6">
@@ -168,9 +220,7 @@ const ExtraTables: React.FC = () => {
                     { label: 'Rewards %' },
                     { label: 'Chains Staked' },
                     { label: '24h Change' },
-                    { label: 'Blocks Produced' },
                     { label: 'Total Weight' },
-                    { label: 'Weight Δ' },
                     { label: 'Total Stake' },
                     { label: 'Staking Power' },
                 ]}
@@ -253,9 +303,11 @@ const ExtraTables: React.FC = () => {
                             {timeAgo}
                         </span>,
                         <span className="bg-green-300/10 text-primary rounded-full px-2 py-1 text-xs">{action || 'N/A'}</span>,
-                        <div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-input flex items-center justify-center"><i className="fa-solid fa-leaf text-primary text-xs"></i></div><span>{String(chain)}</span></div>,
-                        <span>{truncate(String(from))}</span>,
-                        <span>{truncate(String(to))}</span>,
+                        <div className="flex items-center gap-2">
+                            <Logo size={80} showText={false} />
+                        </div>,
+                        <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
+                        <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
                         <span className="text-primary">
                             {typeof amount === 'number' ? (
                                 <>
@@ -268,7 +320,7 @@ const ExtraTables: React.FC = () => {
                                 <span className="text-primary">{amount} &nbsp;CNPY</span>
                             )}
                         </span>,
-                        <span className="text-gray-400">{truncate(String(hash))}</span>,
+                        <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
                     ]
                 })}
             />

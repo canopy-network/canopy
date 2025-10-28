@@ -233,23 +233,52 @@ const TableCard: React.FC<TableCardProps> = ({
             </div>
 
             {paginate && !loading && (
-                <div className="mt-3 flex items-center justify-between text-sm text-gray-400">
-                    <div className="flex items-center gap-2">
-                        <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
-                        {visiblePages.map((p, idx, arr) => {
-                            const prevNum = arr[idx - 1]
-                            const needDots = idx > 0 && p - (prevNum || 0) > 1
-                            return (
-                                <React.Fragment key={p}>
-                                    {needDots && <span className="px-1">…</span>}
-                                    <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
-                                </React.Fragment>
-                            )
-                        })}
-                        <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                <div className="mt-3">
+                    {/* Mobile Pagination */}
+                    <div className="md:hidden">
+                        <div className="flex items-center justify-between mb-3">
+                            <button
+                                onClick={prev}
+                                disabled={currentPaginatedPage === 1}
+                                className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                            >
+                                <i className="fa-solid fa-angle-left mr-1"></i>Previous
+                            </button>
+                            <span className="text-sm text-gray-400">
+                                Page {currentPaginatedPage} of {totalPages}
+                            </span>
+                            <button
+                                onClick={next}
+                                disabled={currentPaginatedPage === totalPages}
+                                className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                            >
+                                Next<i className="fa-solid fa-angle-right ml-1"></i>
+                            </button>
+                        </div>
+                        <div className="text-center text-xs text-gray-500">
+                            Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                        </div>
                     </div>
-                    <div>
-                        Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+
+                    {/* Desktop Pagination */}
+                    <div className="hidden md:flex items-center justify-between text-sm text-gray-400">
+                        <div className="flex items-center gap-2">
+                            <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
+                            {visiblePages.map((p, idx, arr) => {
+                                const prevNum = arr[idx - 1]
+                                const needDots = idx > 0 && p - (prevNum || 0) > 1
+                                return (
+                                    <React.Fragment key={p}>
+                                        {needDots && <span className="px-1">…</span>}
+                                        <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
+                                    </React.Fragment>
+                                )
+                            })}
+                            <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                        </div>
+                        <div>
+                            Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                        </div>
                     </div>
                 </div>
             )}

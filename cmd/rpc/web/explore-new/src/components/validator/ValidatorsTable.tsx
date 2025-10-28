@@ -18,7 +18,6 @@ interface Validator {
     compound: boolean
     // Real calculated fields
     chainsRestaked: number
-    blocksProduced: number
     stakeWeight: number
     // Real activity-based fields
     isActive: boolean
@@ -27,8 +26,6 @@ interface Validator {
     activityScore: string
     // Real reward estimation
     estimatedRewardRate: number
-    // Real weight change based on activity
-    weightChange: number
     stakingPower: number
 }
 
@@ -50,6 +47,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
             'Standby': 'bg-yellow-500/20 text-yellow-400',
             'Paused': 'bg-orange-500/20 text-orange-400',
             'Unstaking': 'bg-red-500/20 text-red-400',
+            'Delegate': 'bg-blue-500/20 text-blue-400',
             'Inactive': 'bg-gray-500/20 text-gray-400'
         }
         const colorClass = colors[score as keyof typeof colors] || colors['Inactive']
@@ -61,14 +59,26 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
     }
 
 
-    const formatStakingPower = (power: number) => {
-        if (!power || power === 0) return '0%'
-        const percentage = Math.min(power, 100)
+    const formatStakingPower = (validator: Validator, validators: Validator[]) => {
+        if (!validator.stakedAmount || validator.stakedAmount === 0) return '0%'
+
+        // Calculate the maximum stake amount for relative progress bar display
+        const maxStake = validators.length > 0 ? Math.max(...validators.map(v => v.stakedAmount)) : 1
+
+        // Calculate relative percentage based on max stake amount
+        const relativePercentage = maxStake > 0 ? (validator.stakedAmount / maxStake) * 100 : 0
+        const clampedPercentage = Math.max(0, Math.min(100, relativePercentage))
+
+        // Debug: Log stake amounts for first few validators
+        if (validators.indexOf(validator) < 3) {
+            console.log(`Validator ${validator.address?.slice(0, 8)}: stake=${validator.stakedAmount}, maxStake=${maxStake}, percentage=${clampedPercentage.toFixed(2)}%`)
+        }
+
         return (
             <div className="w-full bg-gray-700 rounded-full h-2">
                 <div
                     className="bg-primary h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${percentage}%` }}
+                    style={{ width: `${clampedPercentage}%` }}
                 ></div>
             </div>
         )
@@ -114,8 +124,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         // Rank
         <div className="flex items-center gap-2">
             <span className="text-white text-sm font-medium">
-                <AnimatedNumber 
-                    value={validator.rank} 
+                <AnimatedNumber
+                    value={validator.rank}
                     className="text-white"
                 />
             </span>
@@ -141,8 +151,8 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         // Estimated Reward Rate
         <span className="text-green-400 text-sm font-medium">
-            <AnimatedNumber 
-                value={validator.estimatedRewardRate} 
+            <AnimatedNumber
+                value={validator.estimatedRewardRate}
                 format={{ maximumFractionDigits: 2 }}
                 suffix="%"
                 className="text-green-400"
@@ -156,53 +166,33 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
         // Chains Restaked
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.chainsRestaked} 
-                className="text-gray-300"
-            />
-        </span>,
-
-        // Blocks Produced
-        <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.blocksProduced} 
+            <AnimatedNumber
+                value={validator.chainsRestaked}
                 className="text-gray-300"
             />
         </span>,
 
         // Stake Weight
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.stakeWeight} 
+            <AnimatedNumber
+                value={validator.stakeWeight}
                 format={{ maximumFractionDigits: 2 }}
                 suffix="%"
                 className="text-gray-300"
             />
         </span>,
 
-        // Weight Change
-        <div className="flex justify-center items-center">
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${validator.weightChange > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                {validator.weightChange > 0 ? '+' : ''}
-                <AnimatedNumber 
-                    value={validator.weightChange} 
-                    format={{ maximumFractionDigits: 2 }}
-                    className={validator.weightChange > 0 ? 'text-green-400' : 'text-red-400'}
-                />%
-            </span>
-        </div>,
-
         // Total Stake (CNPY)
         <span className="text-gray-300 text-sm">
-            <AnimatedNumber 
-                value={validator.stakedAmount} 
+            <AnimatedNumber
+                value={validator.stakedAmount}
                 className="text-gray-300"
             />
         </span>,
 
         // Staking Power
         <div className="w-20">
-            {formatStakingPower(validator.stakingPower)}
+            {formatStakingPower(validator, validators)}
         </div>,
     ])
 

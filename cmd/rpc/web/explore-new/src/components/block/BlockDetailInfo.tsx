@@ -58,16 +58,16 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
                 {blockDetailTexts.blockDetails.title}
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.blockHeight}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockHeight}</span>
                         <span className="text-primary font-mono">{block.height.toLocaleString()}</span>
                     </div>
 
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.status}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.status}</span>
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${block.status === 'confirmed'
                             ? 'bg-green-500/20 text-green-400'
                             : 'bg-yellow-500/20 text-yellow-400'
@@ -76,13 +76,13 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
                         </span>
                     </div>
 
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.timestamp}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.timestamp}</span>
                         <span className="text-white font-mono text-sm">{formatTimestamp(block.timestamp)}</span>
                     </div>
 
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.transactionCount}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.transactionCount}</span>
                         <span className="text-white">{block.transactionCount} {blockDetailTexts.blockDetails.units.transactions}</span>
                     </div>
 
@@ -90,47 +90,51 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
 
                 {/* Right Column */}
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.builderName}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.builderName}</span>
                         <span className="text-white">{block.builderName}</span>
                     </div>
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.blockReward}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockReward}</span>
                         <span className="text-primary font-mono">{block.blockReward} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.size}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.size}</span>
                         <span className="text-white">{block.size.toLocaleString()} {blockDetailTexts.blockDetails.units.bytes}</span>
                     </div>
 
-                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                        <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.totalTransactionFees}</span>
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                        <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.totalTransactionFees}</span>
                         <span className="text-orange-400 font-mono">{block.totalTransactionFees} {blockDetailTexts.blockDetails.units.cnpy}</span>
                     </div>
 
                 </div>
 
-                <div className="flex justify-between items-center col-span-2 border-b border-gray-400/30 pb-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
                     <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.blockHash}</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-mono text-sm">{block.blockHash}</span>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-gray-400 font-mono text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                            {block.blockHash}
+                        </span>
                         <button
                             onClick={() => copyToClipboard(block.blockHash)}
-                            className="text-primary hover:text-primary/80 transition-colors"
+                            className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                         >
                             <i className="fa-solid fa-copy text-xs"></i>
                         </button>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center col-span-2">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 gap-2">
                     <span className="text-gray-400">{blockDetailTexts.blockDetails.fields.parentHash}</span>
-                    <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-mono text-sm">{block.parentHash}</span>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-gray-400 font-mono text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                            {block.parentHash}
+                        </span>
                         <button
                             onClick={() => copyToClipboard(block.parentHash)}
-                            className="text-primary hover:text-primary/80 transition-colors"
+                            className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                         >
                             <i className="fa-solid fa-copy text-xs"></i>
                         </button>

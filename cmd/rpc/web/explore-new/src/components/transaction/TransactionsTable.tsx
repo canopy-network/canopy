@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import transactionsTexts from '../../data/transactions.json'
 import TableCard from '../Home/TableCard'
 import AnimatedNumber from '../AnimatedNumber'
@@ -119,7 +119,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
     const rows = transactions.map((transaction) => [
         // Hash
-        <span className="font-mono text-white text-sm cursor-pointer hover:text-primary"
+        <span className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
             onClick={() => navigate(`/transaction/${transaction.hash}`)}>
             {truncate(transaction.hash, 12)}
         </span>,
@@ -131,18 +131,18 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         </div>,
 
         // From
-        <span className="text-gray-400 font-mono text-sm">
+        <Link to={`/account/${transaction.from}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
             {truncate(transaction.from, 12)}
-        </span>,
+        </Link>,
 
         // To
-        <span className="text-gray-400 font-mono text-sm">
+        <Link to={`/account/${transaction.to}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
             {transaction.to === 'N/A' ? (
                 <span className="text-gray-500">N/A</span>
             ) : (
                 truncate(transaction.to, 12)
             )}
-        </span>,
+        </Link>,
 
         // Amount
         <span className="text-white text-sm font-medium">

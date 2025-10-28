@@ -86,6 +86,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
             onPageChange={onPageChange}
             loading={loading}
             spacing={4}
+            paginate={true}
             showEntriesSelector={showEntriesSelector}
             entriesPerPageOptions={entriesPerPageOptions}
             currentEntriesPerPage={currentEntriesPerPage}

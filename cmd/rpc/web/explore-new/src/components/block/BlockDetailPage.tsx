@@ -50,7 +50,7 @@ const BlockDetailPage: React.FC = () => {
     // Hook to get specific block data by height
     const { data: blockData, isLoading } = useBlockByHeight(parseInt(blockHeight || '0'))
 
-    // Procesar datos del bloque cuando se obtienen
+    // Process block data when received
     useEffect(() => {
         if (blockData && blockHeight) {
             const blockHeader = blockData.blockHeader
@@ -58,7 +58,7 @@ const BlockDetailPage: React.FC = () => {
             const meta = blockData.meta || {}
 
             if (blockHeader) {
-                // Crear objeto del bloque con datos reales
+                // Create block object with real data
                 const blockInfo: Block = {
                     height: blockHeader.height,
                     builderName: `Validator ${blockHeader.proposerAddress.slice(0, 8)}...`,
@@ -67,7 +67,7 @@ const BlockDetailPage: React.FC = () => {
                     timestamp: new Date(blockHeader.time / 1000).toISOString(),
                     size: meta.size || 0,
                     transactionCount: blockHeader.numTxs || blockTransactions.length,
-                    totalTransactionFees: 0, // Calcular basado en las transacciones reales
+                    totalTransactionFees: 0, // Calculate based on real transactions
                     blockHash: blockHeader.hash,
                     parentHash: blockHeader.lastBlockHash,
                     proposerAddress: blockHeader.proposerAddress,
@@ -80,13 +80,13 @@ const BlockDetailPage: React.FC = () => {
                     totalVDFIterations: blockHeader.totalVDFIterations
                 }
 
-                // Procesar transacciones reales
+                // Process real transactions
                 const realTransactions: Transaction[] = blockTransactions.map((tx: any) => ({
                     hash: tx.txHash,
                     from: tx.sender,
                     to: tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents?.[0]?.address || 'N/A',
-                    value: 0, // Las transacciones de certificado no tienen valor directo
-                    fee: 0, // Las transacciones de certificado no tienen fee directo
+                    value: tx.amount || tx.value || 0,
+                    fee: tx.fee || 0.025,
                     messageType: tx.messageType,
                     height: tx.height,
                     sender: tx.sender,
@@ -169,23 +169,24 @@ const BlockDetailPage: React.FC = () => {
         )
     }
 
+    // Use real data from the endpoint
     const blockStats = {
-        gasUsed: 8542156,
-        gasLimit: 10000000
+        gasUsed: blockData?.blockHeader?.totalVDFIterations || 0,
+        gasLimit: 10000000 // This value could come from network configuration
     }
 
     const networkInfo = {
-        difficulty: 15.2,
-        nonce: '0x1o2b3c4d5e6f',
-        extraData: 'Canopy v1.2.3'
+        difficulty: 15.2, // This value could be calculated based on VDF iterations
+        nonce: blockData?.blockHeader?.hash?.slice(0, 16) || '0x0000000000000000',
+        extraData: `Canopy Network ID: ${blockData?.blockHeader?.networkID || 1}`
     }
 
     const validatorInfo = {
-        name: block.builderName,
+        name: `Validator ${blockData?.blockHeader?.proposerAddress?.slice(0, 8)}...`,
         avatar: '',
-        activeSince: '2023',
-        stake: 1200000,
-        stakeWeight: 5
+        activeSince: '2023', // This value could come from historical validator data
+        stake: 1200000, // This value could come from validator data
+        stakeWeight: 5 // This value could be calculated based on the total network stake
     }
 
     return (
@@ -194,7 +195,7 @@ const BlockDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             <BlockDetailHeader
                 blockHeight={block.height}
@@ -218,6 +219,7 @@ const BlockDetailPage: React.FC = () => {
                         blockStats={blockStats}
                         networkInfo={networkInfo}
                         validatorInfo={validatorInfo}
+                        blockData={blockData}
                     />
                 </div>
                 <div className='lg:col-span-3'>

@@ -15,14 +15,12 @@ interface Validator {
     delegate: boolean
     compound: boolean
     chainsRestaked: number
-    blocksProduced: number
     stakeWeight: number
     isActive: boolean
     isPaused: boolean
     isUnstaking: boolean
     activityScore: string
     estimatedRewardRate: number
-    weightChange: number
     stakingPower: number
 }
 
@@ -53,16 +51,14 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                 switch (statusFilter) {
                     case 'active':
                         return validator.activityScore === 'Active'
-                    case 'standby':
-                        return validator.activityScore === 'Standby'
                     case 'paused':
                         return validator.activityScore === 'Paused'
                     case 'unstaking':
                         return validator.activityScore === 'Unstaking'
+                    case 'delegate':
+                        return validator.activityScore === 'Delegate'
                     case 'inactive':
                         return validator.activityScore === 'Inactive'
-                    case 'delegates':
-                        return validator.delegate === true
                     default:
                         return true
                 }
@@ -80,8 +76,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
             switch (sortBy) {
                 case 'stake':
                     return b.stakedAmount - a.stakedAmount
-                case 'blocks':
-                    return b.blocksProduced - a.blocksProduced
                 case 'reward':
                     return b.estimatedRewardRate - a.estimatedRewardRate
                 case 'chains':
@@ -112,16 +106,14 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                 switch (statusFilter) {
                     case 'active':
                         return validator.activityScore === 'Active'
-                    case 'standby':
-                        return validator.activityScore === 'Standby'
                     case 'paused':
                         return validator.activityScore === 'Paused'
                     case 'unstaking':
                         return validator.activityScore === 'Unstaking'
+                    case 'delegate':
+                        return validator.activityScore === 'Delegate'
                     case 'inactive':
                         return validator.activityScore === 'Inactive'
-                    case 'delegates':
-                        return validator.delegate === true
                     default:
                         return true
                 }
@@ -143,9 +135,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
             'Estimated Reward Rate (%)',
             'Activity Score',
             'Chains Restaked',
-            'Blocks Produced',
             'Stake Weight (%)',
-            'Weight Change (%)',
             'Total Stake',
             'Staking Power (%)',
             'Delegate',
@@ -162,9 +152,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                 validator.estimatedRewardRate.toFixed(2),
                 `"${validator.activityScore}"`,
                 validator.chainsRestaked,
-                validator.blocksProduced,
                 validator.stakeWeight.toFixed(2),
-                validator.weightChange.toFixed(2),
                 validator.stakedAmount,
                 validator.stakingPower.toFixed(2),
                 validator.delegate ? 'Yes' : 'No',
@@ -227,28 +215,26 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                 {/* Left Side - Dropdowns */}
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        <select 
+                        <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
                             className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         >
                             <option value="all">All Validators</option>
                             <option value="active">Active</option>
-                            <option value="standby">Standby</option>
                             <option value="paused">Paused</option>
                             <option value="unstaking">Unstaking</option>
+                            <option value="delegate">Delegate</option>
                             <option value="inactive">Inactive</option>
-                            <option value="delegates">Delegates</option>
                         </select>
                     </div>
                     <div className="relative">
-                        <select 
+                        <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
                             className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         >
                             <option value="stake">Sort by Stake</option>
-                            <option value="blocks">Sort by Blocks</option>
                             <option value="reward">Sort by Reward Rate</option>
                             <option value="chains">Sort by Chains</option>
                             <option value="weight">Sort by Weight</option>
@@ -259,11 +245,11 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     </div>
                     {/* Middle - Min Stake Slider */}
                     <div className="flex items-center gap-3">
-                        <input 
-                            type="range" 
-                            className="bg-primary h-2 rounded-full w-24" 
-                            min="0" 
-                            max="100" 
+                        <input
+                            type="range"
+                            className="bg-primary h-2 rounded-full w-24"
+                            min="0"
+                            max="100"
                             value={minStakePercent}
                             onChange={handleMinStakeChange}
                         />
@@ -275,16 +261,16 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
 
                 {/* Right Side - Export and Refresh */}
                 <div className="flex items-center gap-3">
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={exportToExcel}
                         className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors"
                     >
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}
                     </button>
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={onRefresh}
                         className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
                     >

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { useCardData, useSupply, useValidators, useBlocks, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
+import { useCardData, useSupply, useValidators, useAllBlocksCache, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
 import AnalyticsFilters from './AnalyticsFilters'
 import KeyMetrics from './KeyMetrics'
 import NetworkActivity from './NetworkActivity'
@@ -26,6 +26,8 @@ const NetworkAnalyticsPage: React.FC = () => {
     const [fromBlock, setFromBlock] = useState('')
     const [toBlock, setToBlock] = useState('')
     const [isExporting, setIsExporting] = useState(false)
+    const [errorMessage, setErrorMessage] = useState('')
+    const [searchParams, setSearchParams] = useState({ from: '', to: '' })
     const [metrics, setMetrics] = useState<NetworkMetrics>({
         networkUptime: 0,
         avgTransactionFee: 0,
@@ -41,18 +43,43 @@ const NetworkAnalyticsPage: React.FC = () => {
     const { data: cardData, isLoading: cardLoading } = useCardData()
     const { data: supplyData, isLoading: supplyLoading } = useSupply()
     const { data: validatorsData, isLoading: validatorsLoading } = useValidators(1)
-    const { data: blocksData, isLoading: blocksLoading } = useBlocks(1)
-    
-    // Convertir fromBlock y toBlock a números para useBlocksInRange
-    const fromBlockNum = parseInt(fromBlock) || 0
-    const toBlockNum = parseInt(toBlock) || 0
-    
+    const { data: blocksData, isLoading: blocksLoading } = useAllBlocksCache()
+
+    // Convertir searchParams (valores de búsqueda confirmados) a números para useBlocksInRange
+    // Usar isNaN para verificar si es un número válido
+    const fromBlockNum = isNaN(parseInt(searchParams.from)) ? 0 : parseInt(searchParams.from)
+    const toBlockNum = isNaN(parseInt(searchParams.to)) ? 0 : parseInt(searchParams.to)
+
     // Usar useBlocksInRange para obtener bloques específicos según el filtro
-    const { data: filteredBlocksData, isLoading: filteredBlocksLoading } = useBlocksInRange(fromBlockNum, toBlockNum, 100)
-    
+    // Calcular cantidad de bloques a cargar según el rango
+    const blockRange = (fromBlockNum && toBlockNum) ? (toBlockNum - fromBlockNum + 1) : 0;
+
+    // Verificar si el rango excede el límite de 100 bloques
+    useEffect(() => {
+        if (blockRange > 100) {
+            setErrorMessage('Block range cannot exceed 100 blocks. Please select a smaller range.');
+        } else {
+            setErrorMessage('');
+        }
+    }, [blockRange]);
+
+    const blocksToFetch = blockRange > 0 ? Math.min(blockRange, 100) : 10; // Por defecto 10 bloques, máximo 100
+
+    // Solo hacer la petición si searchParams.from y searchParams.to son válidos
+    const { data: filteredBlocksData, isLoading: filteredBlocksLoading } = useBlocksInRange(
+        fromBlockNum && toBlockNum ? fromBlockNum : 0,
+        fromBlockNum && toBlockNum ? toBlockNum : 0,
+        blocksToFetch
+    )
+
     // Usar useTransactionsInRange para obtener transacciones específicas según el filtro
-    const { data: filteredTransactionsData, isLoading: filteredTransactionsLoading } = useTransactionsInRange(fromBlockNum, toBlockNum, 100)
-    
+    // Solo hacer la petición si searchParams.from y searchParams.to son válidos
+    const { data: filteredTransactionsData, isLoading: filteredTransactionsLoading } = useTransactionsInRange(
+        fromBlockNum && toBlockNum ? fromBlockNum : 0,
+        fromBlockNum && toBlockNum ? toBlockNum : 0,
+        100
+    )
+
     // Mantener hooks originales como fallback
     const { data: analyticsBlocksData } = useBlocksForAnalytics(10) // Get 10 pages of blocks for analytics
     const { data: pendingData, isLoading: pendingLoading } = usePending(1)
@@ -85,8 +112,8 @@ const NetworkAnalyticsPage: React.FC = () => {
 
     // Set default block range values based on current blocks (max 100 blocks)
     useEffect(() => {
-        if (blocksData?.results && blocksData.results.length > 0) {
-            const blocks = blocksData.results
+        if (blocksData && blocksData.length > 0) {
+            const blocks = blocksData
             const latestBlock = blocks[0] // First block is the most recent
             const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
 
@@ -95,6 +122,12 @@ const NetworkAnalyticsPage: React.FC = () => {
                 const maxBlocks = Math.min(100, latestHeight + 1) // Don't exceed available blocks
                 setToBlock(latestHeight.toString())
                 setFromBlock(Math.max(0, latestHeight - maxBlocks + 1).toString())
+
+                // Also set initial search params
+                setSearchParams({
+                    from: Math.max(0, latestHeight - maxBlocks + 1).toString(),
+                    to: latestHeight.toString()
+                })
             }
         }
     }, [blocksData, fromBlock, toBlock])
@@ -108,7 +141,7 @@ const NetworkAnalyticsPage: React.FC = () => {
             const blockSize = paramsData.consensus?.blockSize || 1000000
 
             // Calcular block time basado en datos reales
-            const blocksList = blocksData?.results || []
+            const blocksList = blocksData || []
             let blockTime = 6.2 // Default
             if (blocksList.length >= 2) {
                 const latestBlock = blocksList[0]
@@ -204,10 +237,10 @@ const NetworkAnalyticsPage: React.FC = () => {
             }
 
             // 5. Recent Blocks (limited to 50)
-            if (blocksData?.results && blocksData.results.length > 0) {
+            if (blocksData && blocksData.length > 0) {
                 exportData.push(['RECENT BLOCKS', '', '', '', '', ''])
                 exportData.push(['Height', 'Hash', 'Time', 'Proposer', 'Total Transactions', 'Block Size'])
-                blocksData.results.slice(0, 50).forEach((block: any) => {
+                blocksData.slice(0, 50).forEach((block: any) => {
                     const blockHeader = block.blockHeader || block
 
                     // Validate and format timestamp
@@ -314,6 +347,34 @@ const NetworkAnalyticsPage: React.FC = () => {
         window.location.reload()
     }
 
+    const handleSearch = () => {
+        if (fromBlock && toBlock) {
+            const fromNum = parseInt(fromBlock)
+            const toNum = parseInt(toBlock)
+
+            if (isNaN(fromNum) || isNaN(toNum)) {
+                setErrorMessage('Please enter valid block numbers.')
+                return
+            }
+
+            if (toNum < fromNum) {
+                setErrorMessage('The "To" block must be greater than or equal to the "From" block.')
+                return
+            }
+
+            if (toNum - fromNum + 1 > 100) {
+                setErrorMessage('Block range cannot exceed 100 blocks. Please select a smaller range.')
+                return
+            }
+
+            // Update search parameters - this will trigger the API requests
+            setSearchParams({
+                from: fromBlock,
+                to: toBlock
+            })
+        }
+    }
+
     const isLoading = cardLoading || supplyLoading || validatorsLoading || blocksLoading || filteredBlocksLoading || filteredTransactionsLoading || pendingLoading || paramsLoading
 
     return (
@@ -322,7 +383,7 @@ const NetworkAnalyticsPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Header */}
             <div className="mb-8">
@@ -373,6 +434,9 @@ const NetworkAnalyticsPage: React.FC = () => {
                 toBlock={toBlock}
                 onFromBlockChange={setFromBlock}
                 onToBlockChange={setToBlock}
+                onSearch={handleSearch}
+                isLoading={filteredBlocksLoading}
+                errorMessage={errorMessage}
             />
 
             {/* Analytics Grid - 3 columns layout */}
@@ -416,8 +480,8 @@ const NetworkAnalyticsPage: React.FC = () => {
                     <BlockProductionRate
                         fromBlock={fromBlock}
                         toBlock={toBlock}
-                        loading={isLoading}
-                        blocksData={filteredBlocksData || blocksData}
+                        loading={filteredBlocksLoading}
+                        blocksData={filteredBlocksData}
                     />
 
                     {/* Transaction Types */}

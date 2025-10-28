@@ -10,7 +10,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30000, // 30 seconds
-      refetchInterval: 20000, // 20s auto refresh
+      refetchInterval: 60000, // 1 minute auto refresh
       retry: 3,
       refetchOnWindowFocus: false,
       refetchOnMount: true, // Refetch when component mounts

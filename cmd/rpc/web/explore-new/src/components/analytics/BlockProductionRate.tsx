@@ -9,21 +9,16 @@ interface BlockProductionRateProps {
 }
 
 const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, toBlock, loading, blocksData }) => {
-    // Use real block data to calculate production rate by 10-minute intervals
+    // Use real block data to calculate production rate by time intervals (10 minutes or 1 minute)
     const getBlockData = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
-            console.log("No blocks data available or not an array")
+        if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
+            // Silently return empty array without logging errors
             return []
         }
 
         const realBlocks = blocksData.results
         console.log(`Total blocks available: ${realBlocks.length}`)
-        
-        // Log sample block structure to debug
-        if (realBlocks.length > 0) {
-            console.log("Sample block structure:", JSON.stringify(realBlocks[0], null, 2).substring(0, 500) + "...")
-        }
-        
+
         const fromBlockNum = parseInt(fromBlock) || 0
         const toBlockNum = parseInt(toBlock) || 0
         console.log(`Block range: ${fromBlockNum} to ${toBlockNum}`)
@@ -41,120 +36,78 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return []
         }
 
-        // If we only have one block, create a single data point
-        if (filteredBlocks.length === 1) {
-            console.log("Only one block in range, creating single data point")
-            return [1]
-        }
-
-        // If all blocks have the same height, distribute them evenly
-        const allSameHeight = filteredBlocks.every((block: any) => {
-            const height = block.blockHeader?.height || block.height || 0
-            const firstHeight = filteredBlocks[0].blockHeader?.height || filteredBlocks[0].height || 0
-            return height === firstHeight
-        })
-        
-        if (allSameHeight) {
-            console.log("All blocks have the same height, distributing evenly")
-            // Create 6 equal groups
-            const result = [0, 0, 0, 0, 0, 0]
-            result[0] = filteredBlocks.length // Put all blocks in first interval
-            return result
-        }
-
-        // Sort blocks by height (oldest first)
+        // Sort blocks by timestamp (oldest first)
         filteredBlocks.sort((a: any, b: any) => {
-            const heightA = a.blockHeader?.height || a.height || 0
-            const heightB = b.blockHeader?.height || b.height || 0
-            return heightA - heightB
+            const timeA = a.blockHeader?.time || a.time || 0
+            const timeB = b.blockHeader?.time || b.time || 0
+            return timeA - timeB
         })
 
-        // Group blocks by height ranges
-        const totalBlocks = filteredBlocks.length
-        const groupCount = Math.min(6, totalBlocks)
-        const groupSize = Math.max(1, Math.ceil(totalBlocks / groupCount))
-        
-        const heightGroups = new Array(groupCount).fill(0)
-        
-        filteredBlocks.forEach((block, index) => {
-            const groupIndex = Math.min(Math.floor(index / groupSize), groupCount - 1)
-            heightGroups[groupIndex]++
+        // Extraer los tiempos reales de los bloques y agruparlos por hora
+        const blocksByHour: { [hour: string]: number } = {}
+
+        filteredBlocks.forEach((block: any) => {
+            const blockTime = block.blockHeader?.time || block.time || 0
+            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
+            const blockDate = new Date(blockTimeMs)
+
+            // Agrupar por hora:minuto (redondeando a intervalos de 10 minutos si hay muchos bloques)
+            const minute = filteredBlocks.length < 20 ?
+                blockDate.getMinutes() :
+                Math.floor(blockDate.getMinutes() / 10) * 10
+
+            const hourKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+
+            if (!blocksByHour[hourKey]) {
+                blocksByHour[hourKey] = 0
+            }
+            blocksByHour[hourKey]++
         })
-        
-        console.log(`Height groups: ${JSON.stringify(heightGroups)}`)
-        return heightGroups
+
+        // Convertir el objeto a un array ordenado por hora
+        const timeKeys = Object.keys(blocksByHour).sort()
+        const timeGroups = timeKeys.map(key => blocksByHour[key])
+
+        console.log('Real time keys:', timeKeys)
+        console.log('Blocks per time interval:', timeGroups)
+
+        // Guardar las claves de tiempo para usarlas en las etiquetas
+        // @ts-ignore - Añadir propiedad temporal para compartir con getTimeIntervalLabels
+        getBlockData.timeKeys = timeKeys
+
+        return timeGroups
     }
 
     const blockData = getBlockData()
     const maxValue = Math.max(...blockData, 0)
     const minValue = Math.min(...blockData, 0)
 
-    // Get block height labels for the x-axis
-    const getBlockHeightLabels = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+    // Get time interval labels for the x-axis
+    const getTimeIntervalLabels = () => {
+        // @ts-ignore - Acceder a la propiedad temporal que guardamos en getBlockData
+        const timeKeys = getBlockData.timeKeys || []
+
+        if (!timeKeys.length) {
             return []
         }
 
-        const realBlocks = blocksData.results
-        const fromBlockNum = parseInt(fromBlock) || 0
-        const toBlockNum = parseInt(toBlock) || 0
+        // Para cada clave de tiempo (HH:MM), crear una etiqueta
+        return timeKeys.map(key => {
+            // Si hay pocos bloques (< 20), mostrar solo la hora:minuto
+            if (blocksData?.results?.length < 20) {
+                return key
+            }
 
-        // Filter blocks by the specified range
-        const filteredBlocks = realBlocks.filter((block: any) => {
-            const blockHeight = block.blockHeader?.height || block.height || 0
-            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
+            // Si hay muchos bloques, mostrar el rango de 10 minutos
+            const [hour, minute] = key.split(':').map(Number)
+            const endMinute = (minute + 10) % 60
+            const endHour = endMinute < minute ? (hour + 1) % 24 : hour
+
+            return `${key}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
         })
-
-        // If no blocks in range, return empty array
-        if (filteredBlocks.length === 0) {
-            return []
-        }
-
-        // If we only have one block, return its height
-        if (filteredBlocks.length === 1) {
-            const height = filteredBlocks[0].blockHeader?.height || filteredBlocks[0].height || 0
-            return [`#${height}`]
-        }
-
-        // If all blocks have the same height, create artificial labels
-        const allSameHeight = filteredBlocks.every((block: any) => {
-            const height = block.blockHeader?.height || block.height || 0
-            const firstHeight = filteredBlocks[0].blockHeader?.height || filteredBlocks[0].height || 0
-            return height === firstHeight
-        })
-        
-        if (allSameHeight) {
-            // Create 6 equal labels
-            return ["Group 1", "Group 2", "Group 3", "Group 4", "Group 5", "Group 6"]
-        }
-
-        // Sort blocks by height (oldest first)
-        filteredBlocks.sort((a: any, b: any) => {
-            const heightA = a.blockHeader?.height || a.height || 0
-            const heightB = b.blockHeader?.height || b.height || 0
-            return heightA - heightB
-        })
-
-        // Get min and max heights
-        const minHeight = filteredBlocks[0].blockHeader?.height || filteredBlocks[0].height || 0
-        const maxHeight = filteredBlocks[filteredBlocks.length - 1].blockHeader?.height || filteredBlocks[filteredBlocks.length - 1].height || 0
-        
-        // Create 6 equal groups based on height range
-        const groupCount = Math.min(6, filteredBlocks.length)
-        const heightRange = maxHeight - minHeight
-        const groupSize = Math.max(1, Math.ceil(heightRange / groupCount))
-        
-        const labels = []
-        for (let i = 0; i < groupCount; i++) {
-            const start = minHeight + i * groupSize
-            const end = Math.min(start + groupSize - 1, maxHeight)
-            labels.push(`${start}-${end}`)
-        }
-        
-        return labels
     }
 
-    const blockHeightLabels = getBlockHeightLabels()
+    const timeIntervalLabels = getTimeIntervalLabels()
 
     if (loading) {
         return (
@@ -181,7 +134,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                         Block Production Rate
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Blocks per group
+                        Blocks per time interval
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -202,9 +155,9 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 <h3 className="text-lg font-semibold text-white">
                     Block Production Rate
                 </h3>
-                    <p className="text-sm text-gray-400 mt-1">
-                        Blocks per group
-                    </p>
+                <p className="text-sm text-gray-400 mt-1">
+                    Blocks per {blocksData?.results?.length < 20 ? '1-minute' : '10-minute'} interval
+                </p>
             </div>
 
             <div className="h-32 relative">
@@ -270,7 +223,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {blockHeightLabels.map((label: string, index: number) => (
+                {timeIntervalLabels.map((label: string, index: number) => (
                     <span key={index} className="text-center flex-1 px-1 truncate">{label}</span>
                 ))}
             </div>

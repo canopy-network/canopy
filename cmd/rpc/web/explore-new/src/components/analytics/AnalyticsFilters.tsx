@@ -5,6 +5,9 @@ interface AnalyticsFiltersProps {
     toBlock: string
     onFromBlockChange: (block: string) => void
     onToBlockChange: (block: string) => void
+    onSearch?: () => void
+    isLoading?: boolean
+    errorMessage?: string
 }
 
 const blockRangeFilters = [
@@ -19,7 +22,10 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     fromBlock,
     toBlock,
     onFromBlockChange,
-    onToBlockChange
+    onToBlockChange,
+    onSearch,
+    isLoading = false,
+    errorMessage = ''
 }) => {
     const [selectedRange, setSelectedRange] = useState<string>('')
 
@@ -66,10 +72,10 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                             key={filter.key}
                             onClick={() => handleBlockRangeSelect(filter.key)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isSelected
-                                    ? 'bg-primary text-black shadow-lg shadow-primary/25'
-                                    : isCustom
-                                        ? 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
-                                        : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                ? 'bg-primary text-black shadow-lg shadow-primary/25'
+                                : isCustom
+                                    ? 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                    : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
                                 }`}
                         >
                             {filter.label}
@@ -79,37 +85,57 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
             </div>
             <div className="flex items-center gap-2">
                 <span className="text-gray-400 text-xs">From</span>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 relative">
                     <input
-                        type="number"
+                        type="text"
                         className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                        placeholder={fromBlock || "From"}
-                        value=""
+                        placeholder="From"
+                        value={fromBlock}
                         onChange={(e) => onFromBlockChange(e.target.value)}
-                        onFocus={(e) => {
-                            if (!e.target.value && fromBlock) {
-                                e.target.value = fromBlock;
-                            }
-                        }}
                         min="0"
+                        disabled={isLoading}
                     />
                 </div>
                 <span className="text-gray-400 text-xs">To</span>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 relative">
                     <input
-                        type="number"
+                        type="text"
                         className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                        placeholder={toBlock || "To"}
-                        value=""
+                        placeholder="To"
+                        value={toBlock}
                         onChange={(e) => onToBlockChange(e.target.value)}
-                        onFocus={(e) => {
-                            if (!e.target.value && toBlock) {
-                                e.target.value = toBlock;
-                            }
-                        }}
                         min="0"
+                        disabled={isLoading}
                     />
                 </div>
+
+                {/* Sync animation */}
+                {isLoading && (
+                    <div className="flex items-center ml-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
+                        <span className="ml-2 text-xs text-primary">Syncing...</span>
+                    </div>
+                )}
+
+                {/* Error message */}
+                {errorMessage && (
+                    <div className="flex items-center ml-2">
+                        <span className="text-xs text-red-500">{errorMessage}</span>
+                    </div>
+                )}
+
+                {/* Search button */}
+                <button
+                    onClick={onSearch}
+                    disabled={isLoading || !fromBlock || !toBlock || !!errorMessage}
+                    className={`ml-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 
+                        ${(isLoading || !fromBlock || !toBlock || !!errorMessage)
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            : 'bg-primary text-black hover:bg-primary/80'}`}
+                >
+                    <i className="fas fa-search mr-2"></i>
+                    Search
+                </button>
             </div>
         </div>
     )

@@ -23,18 +23,18 @@ const TransactionDetailPage: React.FC = () => {
     useEffect(() => {
         console.log('Block data changed:', blockData)
         console.log('Current transaction hash:', transactionHash)
-        
+
         if (blockData?.transactions && Array.isArray(blockData.transactions)) {
             console.log('Block transactions:', blockData.transactions)
-            
+
             const txHashes = blockData.transactions.map((tx: any) => {
                 // Try different possible hash fields
                 return tx.txHash || tx.hash || tx.transactionHash || tx.id
             }).filter(Boolean)
-            
+
             console.log('Extracted tx hashes:', txHashes)
             setBlockTransactions(txHashes)
-            
+
             // Find current transaction index
             const currentIndex = txHashes.findIndex((hash: string) => hash === transactionHash)
             console.log('Current transaction index:', currentIndex)
@@ -77,7 +77,7 @@ const TransactionDetailPage: React.FC = () => {
             } else {
                 date = new Date(timestamp)
             }
-            
+
             if (isValid(date)) {
                 return format(date, 'yyyy-MM-dd HH:mm:ss') + ' UTC'
             }
@@ -90,7 +90,7 @@ const TransactionDetailPage: React.FC = () => {
     const getTimeAgo = (timestamp: string | number) => {
         try {
             let txTime: Date
-            
+
             if (typeof timestamp === 'number') {
                 // If it's a timestamp in microseconds (like in Canopy)
                 if (timestamp > 1e12) {
@@ -103,7 +103,7 @@ const TransactionDetailPage: React.FC = () => {
             } else {
                 txTime = new Date(timestamp)
             }
-            
+
             if (isValid(txTime)) {
                 return formatDistanceToNow(txTime, { addSuffix: true })
             }
@@ -115,7 +115,7 @@ const TransactionDetailPage: React.FC = () => {
 
     const handlePreviousTx = () => {
         console.log('Previous clicked - currentTxIndex:', currentTxIndex, 'blockTransactions:', blockTransactions)
-        
+
         if (currentTxIndex > 0 && blockTransactions.length > 0) {
             const prevTxHash = blockTransactions[currentTxIndex - 1]
             console.log('Navigating to previous tx:', prevTxHash)
@@ -128,7 +128,7 @@ const TransactionDetailPage: React.FC = () => {
 
     const handleNextTx = () => {
         console.log('Next clicked - currentTxIndex:', currentTxIndex, 'blockTransactions:', blockTransactions)
-        
+
         if (currentTxIndex < blockTransactions.length - 1 && blockTransactions.length > 0) {
             const nextTxHash = blockTransactions[currentTxIndex + 1]
             console.log('Navigating to next tx:', nextTxHash)
@@ -141,7 +141,7 @@ const TransactionDetailPage: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
                 <div className="animate-pulse">
                     <div className="h-8 bg-gray-700/50 rounded w-1/3 mb-4"></div>
                     <div className="h-32 bg-gray-700/50 rounded mb-6"></div>
@@ -163,7 +163,7 @@ const TransactionDetailPage: React.FC = () => {
 
     if (error || !transactionData) {
         return (
-            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Transaction not found</h1>
                     <p className="text-gray-400 mb-6">The requested transaction could not be found.</p>
@@ -201,35 +201,39 @@ const TransactionDetailPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mx-auto px-4 sm:px-6 lg:px-8 py-10"
+            className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Header */}
             <div className="mb-8">
                 {/* Breadcrumb */}
-                <nav className="flex items-center space-x-2 text-sm text-gray-400 mb-4">
+                <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
                     <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
                         Home
                     </button>
-                    <span>›</span>
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
                     <button onClick={() => navigate('/transactions')} className="hover:text-primary transition-colors">
                         Transactions
                     </button>
-                    <span>›</span>
-                    <span className="text-white">{truncate(transactionHash || '', 8)}</span>
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                    <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
+                        {truncate(transactionHash || '', window.innerWidth < 640 ? 6 : 8)}
+                    </span>
                 </nav>
 
                 {/* Transaction Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                                <i className="fa-solid fa-left-right text-white text-lg"></i>
-                            </div>
                             <div>
-                                <h1 className="text-4xl font-bold text-white">
-                                    Transaction Details
-                                </h1>
-                                <div className="flex items-center gap-3 mt-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <i className="fa-solid fa-left-right text-white text-lg"></i>
+                                    </div>
+                                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words">
+                                        Transaction Details
+                                    </h1>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 mt-2">
                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${status === 'success' || status === 'Success'
                                         ? 'bg-green-500/20 text-green-400'
                                         : 'bg-yellow-500/20 text-yellow-400'
@@ -245,21 +249,23 @@ const TransactionDetailPage: React.FC = () => {
                     </div>
 
                     {/* Navigation Buttons */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-start md:self-center">
                         <button
                             onClick={handlePreviousTx}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-700/50 text-white hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-gray-700/50 text-white hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={currentTxIndex <= 0}
                         >
                             <i className="fa-solid fa-chevron-left"></i>
-                            Previous Tx
+                            <span className="hidden sm:inline">Previous Tx</span>
+                            <span className="sm:hidden">Prev</span>
                         </button>
                         <button
                             onClick={handleNextTx}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-primary text-black hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-primary text-black hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={currentTxIndex >= blockTransactions.length - 1}
                         >
-                            Next Tx
+                            <span className="hidden sm:inline">Next Tx</span>
+                            <span className="sm:hidden">Next</span>
                             <i className="fa-solid fa-chevron-right"></i>
                         </button>
                     </div>
@@ -269,7 +275,7 @@ const TransactionDetailPage: React.FC = () => {
             <div className="flex flex-col gap-6">
                 <div className="flex lg:flex-row flex-col gap-6">
                     {/* Main Content */}
-                    <div className="space-y-6 w-8/12">
+                    <div className="space-y-6 w-full lg:w-8/12">
                         {/* Transaction Information */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
@@ -284,13 +290,15 @@ const TransactionDetailPage: React.FC = () => {
                             <div className="space-y-4">
                                 {/* Left Column */}
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400">Transaction Hash</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-primary font-mono text-sm">{txHash}</span>
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <span className="text-primary font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                                                {txHash}
+                                            </span>
                                             <button
                                                 onClick={() => copyToClipboard(txHash)}
-                                                className="text-primary hover:text-green-400 transition-colors"
+                                                className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
                                             >
                                                 <i className="fa-solid fa-copy text-xs"></i>
                                             </button>
@@ -339,26 +347,30 @@ const TransactionDetailPage: React.FC = () => {
 
                                 </div>
 
-                                <div className="flex justify-between items-center col-span-2 border-b border-gray-400/30 pb-4">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
                                     <span className="text-gray-400">From</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{from}</span>
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <span className="text-gray-400 font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                                            {from}
+                                        </span>
                                         <button
                                             onClick={() => copyToClipboard(from)}
-                                            className="text-primary hover:text-green-400 transition-colors"
+                                            className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
                                         >
                                             <i className="fa-solid fa-copy text-xs"></i>
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-between items-center col-span-2 border-b border-gray-400/30 pb-4">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
                                     <span className="text-gray-400">To</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-400 font-mono text-sm">{to}</span>
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <span className="text-gray-400 font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                                            {to}
+                                        </span>
                                         <button
                                             onClick={() => copyToClipboard(to)}
-                                            className="text-primary hover:text-green-400 transition-colors"
+                                            className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
                                         >
                                             <i className="fa-solid fa-copy text-xs"></i>
                                         </button>
@@ -376,7 +388,7 @@ const TransactionDetailPage: React.FC = () => {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="lg:col-span-1 w-4/12">
+                    <div className="w-full lg:w-4/12">
                         <div className="space-y-6">
                             {/* Transaction Flow */}
                             <motion.div
@@ -390,26 +402,45 @@ const TransactionDetailPage: React.FC = () => {
                                 </h3>
 
                                 <div className="space-y-6">
-                                    <div className="text-center flex flex-col items-start gap-2 bg-input rounded-lg p-3">
+                                    <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
                                         <div className="text-white text-sm mb-2">From Address</div>
-                                        <div className="">
-                                            <div className="font-mono text-gray-400 text-sm">{from}</div>
+                                        <div className="w-full overflow-hidden">
+                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
+                                                {from}
+                                            </div>
+                                            <div className="flex justify-end mt-1">
+                                                <button
+                                                    onClick={() => copyToClipboard(from)}
+                                                    className="text-primary hover:text-green-400 transition-colors text-xs px-1 py-0.5"
+                                                >
+                                                    Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center justify-center">
                                         <div className="text-center">
-                                            <div className="bg-primary text-black p-2.5 px-[0.45rem] rounded-full inline-flex items-center justify-center">
-                                                <i className="fa-solid fa-arrow-down text-2xl"></i>
+                                            <div className="bg-primary text-black p-2 px-[0.45rem] rounded-full inline-flex items-center justify-center">
+                                                <i className="fa-solid fa-arrow-down text-lg sm:text-2xl"></i>
                                             </div>
-
                                         </div>
                                     </div>
 
-                                    <div className="text-center flex flex-col items-start gap-2 bg-input rounded-lg p-3">
-                                        <div className="text-white text-sm mt-2">To Address</div>
-                                        <div className="">
-                                            <div className="font-mono text-gray-400 text-sm">{to}</div>
+                                    <div className="flex flex-col items-start gap-2 bg-input rounded-lg p-3">
+                                        <div className="text-white text-sm mb-2">To Address</div>
+                                        <div className="w-full overflow-hidden">
+                                            <div className="font-mono text-gray-400 text-xs sm:text-sm truncate">
+                                                {to}
+                                            </div>
+                                            <div className="flex justify-end mt-1">
+                                                <button
+                                                    onClick={() => copyToClipboard(to)}
+                                                    className="text-primary hover:text-green-400 transition-colors text-xs px-1 py-0.5"
+                                                >
+                                                    Copy <i className="fa-solid fa-copy text-xs ml-1"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

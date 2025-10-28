@@ -19,12 +19,14 @@ interface BlockSidebarProps {
         stake: number
         stakeWeight: number
     }
+    blockData?: any // Agregar datos completos del bloque
 }
 
 const BlockSidebar: React.FC<BlockSidebarProps> = ({
     blockStats,
     networkInfo,
-    validatorInfo
+    validatorInfo,
+    blockData
 }) => {
     const gasUsedPercentage = (blockStats.gasUsed / blockStats.gasLimit) * 100
 
@@ -44,7 +46,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 <div className="space-y-4">
                     <div>
                         <div className="flex justify-between items-center mb-2">
-                            <span className="text-gray-400 text-sm">{blockDetailTexts.blockStatistics.fields.gasUsed}</span>
+                            <span className="text-gray-400 text-sm">VDF Iterations</span>
                             <span className="text-white font-mono text-sm">{blockStats.gasUsed.toLocaleString()}</span>
                         </div>
                         <div className="w-full bg-gray-700/50 rounded-full h-2">
@@ -55,9 +57,10 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                         </div>
                         <div className="flex justify-between items-center mt-1 text-xs text-gray-400">
                             <span>0</span>
-                            <span>{blockStats.gasLimit.toLocaleString()} ({blockDetailTexts.blockStatistics.fields.gasLimit})</span>
+                            <span>{blockStats.gasLimit.toLocaleString()} (Max Iterations)</span>
                         </div>
                     </div>
+
                 </div>
             </motion.div>
 
@@ -73,17 +76,17 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 </h3>
 
                 <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">{blockDetailTexts.networkInfo.fields.difficulty}</span>
-                        <span className="text-white font-mono text-sm">{networkInfo.difficulty} {blockDetailTexts.networkInfo.units.th}</span>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Network ID</span>
+                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.networkID || 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">{blockDetailTexts.networkInfo.fields.nonce}</span>
-                        <span className="text-white font-mono text-sm">{networkInfo.nonce}</span>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Chain ID</span>
+                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.chainId || 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">{blockDetailTexts.networkInfo.fields.extraData}</span>
-                        <span className="text-white text-sm">{networkInfo.extraData}</span>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">{blockDetailTexts.networkInfo.fields.extraData}</span>
+                        <span className="text-white text-sm break-words">{networkInfo.extraData}</span>
                     </div>
                 </div>
             </motion.div>
@@ -105,18 +108,26 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                     </div>
                     <div>
                         <div className="text-white font-medium">{validatorInfo.name}</div>
-                        <div className="text-gray-400 text-sm">{blockDetailTexts.validatorInfo.status.activeSince} {validatorInfo.activeSince}</div>
+                        <div className="text-gray-400 text-sm">Proposer Address</div>
                     </div>
                 </div>
 
                 <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">{blockDetailTexts.validatorInfo.fields.stake}</span>
-                        <span className="text-white font-mono text-sm">{validatorInfo.stake.toLocaleString()} {blockDetailTexts.blockDetails.units.cnpy}</span>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Proposer Address</span>
+                        <span className="text-white font-mono text-xs truncate max-w-[180px] sm:max-w-full">{blockData?.blockHeader?.proposerAddress?.slice(0, 16)}...</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-400 text-sm">{blockDetailTexts.validatorInfo.fields.stakeWeight}</span>
-                        <span className="text-white font-mono text-sm">{validatorInfo.stakeWeight}%</span>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Committee Height</span>
+                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.committeeHeight?.toLocaleString() ?? '0'}</span>
+                    </div>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Round</span>
+                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.round ?? 0}</span>
+                    </div>
+                    <div className="flex flex-wrap justify-between items-center">
+                        <span className="text-gray-400 text-sm mr-2">Phase</span>
+                        <span className="text-white text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.phase || 'N/A'}</span>
                     </div>
                 </div>
             </motion.div>
@@ -125,3 +136,4 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
 }
 
 export default BlockSidebar
+

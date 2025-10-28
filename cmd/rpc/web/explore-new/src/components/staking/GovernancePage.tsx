@@ -11,7 +11,7 @@ const GovernancePage: React.FC = () => {
             transition={{ duration: 0.3 }}
             className="min-h-screen bg-background"
         >
-            <div className="container mx-auto px-4 py-8">
+            <div className="max-w-[100rem] mx-auto px-4 py-8">
                 {/* Governance Content */}
                 <GovernanceView />
             </div>
