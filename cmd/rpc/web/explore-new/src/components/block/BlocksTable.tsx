@@ -75,7 +75,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
 
     const getTransactionColor = (count: number) => {
         if (count <= 50) {
-            return 'bg-blue-500/20 text-blue-400' // Azul for low
+            return 'bg-blue-500/20 text-blue-400' // Blue for low
         } else if (count <= 150) {
             return 'bg-green-500/20 text-green-400' // Green for medium
         } else {
@@ -264,7 +264,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
                 </table>
             </div>
 
-            {/* Paginación personalizada */}
+            {/* Custom pagination */}
             {!loading && totalPages > 1 && (
                 <div className="mt-3 flex items-center justify-between text-sm text-gray-400">
                     <div className="flex items-center gap-2">

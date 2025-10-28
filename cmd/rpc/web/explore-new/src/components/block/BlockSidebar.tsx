@@ -19,7 +19,7 @@ interface BlockSidebarProps {
         stake: number
         stakeWeight: number
     }
-    blockData?: any // Agregar datos completos del bloque
+    blockData?: any // Add complete block data
 }
 
 const BlockSidebar: React.FC<BlockSidebarProps> = ({

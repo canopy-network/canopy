@@ -59,14 +59,14 @@ const Stages = () => {
 
     const totalSupplyCNPY: number = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
-        // nuevo formato: total en uCNPY
+        // new format: total in uCNPY
         const total = s.total ?? s.totalSupply ?? s.total_cnpy ?? s.totalCNPY ?? 0
         return toCNPY(Number(total) || 0)
     }, [cardData])
 
     const totalStakeCNPY: number = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
-        // preferir supply.staked; fallback a pool.bondedTokens
+        // prefer supply.staked; fallback to pool.bondedTokens
         const st = s.staked ?? 0
         if (st) return toCNPY(Number(st) || 0)
         const p = (cardData as any)?.pool || {}
@@ -79,7 +79,7 @@ const Stages = () => {
         const total = Number(s.total ?? 0)
         const staked = Number(s.staked ?? 0)
         if (total > 0) return toCNPY(Math.max(0, total - staked))
-        // fallback a otros campos si no existen
+        // fallback to other fields if they don't exist
         const liquid = s.circulating ?? s.liquidSupply ?? s.liquid ?? 0
         return toCNPY(Number(liquid) || 0)
     }, [cardData])
@@ -91,8 +91,8 @@ const Stages = () => {
 
     // extra datasets for totals
     const { data: accountsPage } = useAccounts(1)
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 10) // Usar paginación real
-    const { data: txs24hPage } = useTransactions(1, 0) // Usar txs-by-height para transacciones recientes
+    const { data: txsPage } = useTransactionsWithRealPagination(1, 10) // Use real pagination
+    const { data: txs24hPage } = useTransactions(1, 0) // Use txs-by-height for recent transactions
     const { data: accounts24hPage } = useQuery({
         queryKey: ['accounts24h', heightCutoff24h],
         queryFn: () => Accounts(1, heightCutoff24h),

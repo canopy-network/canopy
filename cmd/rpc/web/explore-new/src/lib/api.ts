@@ -160,7 +160,7 @@ export function Transactions(page: number, height: number) {
     return POST(rpcURL, pageHeightReq(page, height), txsByHeightPath);
 }
 
-// Función optimizada para obtener transacciones con paginación real
+// Optimized function to get transactions with real pagination
 export async function getTransactionsWithRealPagination(page: number, perPage: number = 10, filters?: {
     type?: string;
     fromDate?: string;
@@ -209,14 +209,14 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
                 currentBlockPage++;
             }
 
-            // Ordenar por tiempo (más recientes primero)
+            // Sort by time (most recent first)
             allTransactions.sort((a, b) => {
                 const timeA = a.blockTime || a.time || a.timestamp || 0;
                 const timeB = b.blockTime || b.time || b.timestamp || 0;
                 return timeB - timeA;
             });
 
-            // Aplicar paginación
+            // Apply pagination
             const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
 
             return {
@@ -425,12 +425,12 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
         // Obtener el conteo total de transacciones
         const totalTransactionCount = await getTotalTransactionCount();
 
-        // Calcular cuántos bloques necesitamos obtener para cubrir la paginación
-        // Asumimos un promedio de transacciones por bloque para optimizar
-        const estimatedTxsPerBlock = 1; // Ajustar según la realidad de tu blockchain
-        const blocksNeeded = Math.ceil((page * perPage) / estimatedTxsPerBlock) + 5; // Buffer extra
+        // Calculate how many blocks we need to fetch to cover the pagination
+        // We assume an average transactions per block to optimize
+        const estimatedTxsPerBlock = 1; // Adjust according to your blockchain reality
+        const blocksNeeded = Math.ceil((page * perPage) / estimatedTxsPerBlock) + 5; // Extra buffer
 
-        // Obtener múltiples páginas de bloques para asegurar suficientes transacciones
+        // Fetch multiple pages of blocks to ensure enough transactions
         let allTransactions: any[] = [];
         let currentBlockPage = 1;
         const maxBlockPages = Math.min(blocksNeeded, 20); // Limitar para rendimiento
@@ -494,7 +494,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
 
                         if (filters.toDate) {
                             const toDate = new Date(filters.toDate);
-                            toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+                            toDate.setHours(23, 59, 59, 999); // Include the whole day
                             if (txDate > toDate) return false;
                         }
                     }
@@ -525,14 +525,14 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
             });
         }
 
-        // Ordenar por tiempo (más recientes primero)
+        // Sort by time (most recent first)
         allTransactions.sort((a, b) => {
             const timeA = a.blockTime || a.time || a.timestamp || 0;
             const timeB = b.blockTime || b.time || b.timestamp || 0;
             return timeB - timeA;
         });
 
-        // Aplicar paginación
+        // Apply pagination
         const startIndex = (page - 1) * perPage;
         const endIndex = startIndex + perPage;
         const paginatedTransactions = allTransactions.slice(startIndex, endIndex);

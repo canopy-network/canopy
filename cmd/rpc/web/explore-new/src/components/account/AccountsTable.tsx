@@ -30,7 +30,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
     totalCount = 0,
     currentPage = 1,
     onPageChange,
-    // Desestructurar las nuevas props
+    // Destructure the new props
     showEntriesSelector = false,
     entriesPerPageOptions = [10, 25, 50, 100],
     currentEntriesPerPage = 10,

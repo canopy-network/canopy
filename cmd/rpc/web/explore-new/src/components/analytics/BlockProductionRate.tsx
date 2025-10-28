@@ -43,7 +43,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return timeA - timeB
         })
 
-        // Extraer los tiempos reales de los bloques y agruparlos por hora
+        // Extract real block times and group them by hour
         const blocksByHour: { [hour: string]: number } = {}
 
         filteredBlocks.forEach((block: any) => {
@@ -51,7 +51,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
             const blockDate = new Date(blockTimeMs)
 
-            // Agrupar por hora:minuto (redondeando a intervalos de 10 minutos si hay muchos bloques)
+            // Group by hour:minute (rounding to 10-minute intervals if there are many blocks)
             const minute = filteredBlocks.length < 20 ?
                 blockDate.getMinutes() :
                 Math.floor(blockDate.getMinutes() / 10) * 10
@@ -64,15 +64,15 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             blocksByHour[hourKey]++
         })
 
-        // Convertir el objeto a un array ordenado por hora
+        // Convert the object to an array sorted by hour
         const timeKeys = Object.keys(blocksByHour).sort()
         const timeGroups = timeKeys.map(key => blocksByHour[key])
 
         console.log('Real time keys:', timeKeys)
         console.log('Blocks per time interval:', timeGroups)
 
-        // Guardar las claves de tiempo para usarlas en las etiquetas
-        // @ts-ignore - Añadir propiedad temporal para compartir con getTimeIntervalLabels
+        // Save time keys to use them in labels
+        // @ts-ignore - Add temporary property to share with getTimeIntervalLabels
         getBlockData.timeKeys = timeKeys
 
         return timeGroups
@@ -84,21 +84,21 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
 
     // Get time interval labels for the x-axis
     const getTimeIntervalLabels = () => {
-        // @ts-ignore - Acceder a la propiedad temporal que guardamos en getBlockData
+        // @ts-ignore - Access the temporary property we saved in getBlockData
         const timeKeys = getBlockData.timeKeys || []
 
         if (!timeKeys.length) {
             return []
         }
 
-        // Para cada clave de tiempo (HH:MM), crear una etiqueta
+        // For each time key (HH:MM), create a label
         return timeKeys.map(key => {
-            // Si hay pocos bloques (< 20), mostrar solo la hora:minuto
+            // If there are few blocks (< 20), show only hour:minute
             if (blocksData?.results?.length < 20) {
                 return key
             }
 
-            // Si hay muchos bloques, mostrar el rango de 10 minutos
+            // If there are many blocks, show the 10-minute range
             const [hour, minute] = key.split(':').map(Number)
             const endMinute = (minute + 10) % 60
             const endHour = endMinute < minute ? (hour + 1) % 24 : hour

@@ -63,7 +63,7 @@ export const queryKeys = {
 
 // Hooks for Blocks
 export const useBlocks = (page: number, perPage: number = 10, filter: string = 'all') => {
-    // Cargar más bloques si el filtro es week (semana) o 24h para tener suficientes datos para filtrar
+    // Load more blocks if the filter is week or 24h to have enough data to filter
     const blockCount = filter === 'week' ? 50 : filter === '24h' ? 30 : perPage;
 
     return useQuery({
@@ -106,7 +106,7 @@ export const useAllTransactions = (page: number, perPage: number = 10, filters?:
     });
 };
 
-// Hook para transacciones con paginación real (recomendado)
+// Hook for transactions with real pagination (recommended)
 export const useTransactionsWithRealPagination = (page: number, perPage: number = 10, filters?: {
     type?: string;
     fromDate?: string;
@@ -369,7 +369,7 @@ export const useAllBlocksCache = () => {
         queryFn: async () => {
             const allBlocks: any[] = [];
             const perPage = 10; // Max blocks per page from API
-            const maxPages = 10; // Máximo 10 páginas (100 bloques)
+            const maxPages = 10; // Maximum 10 pages (100 blocks)
 
             // Hacer solo los requests necesarios
             const requests = [];
@@ -429,7 +429,7 @@ export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksTo
     // Usar el cache de todos los bloques
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
-    // Procesar los datos en el cliente sin hacer más requests
+    // Process data on the client without making more requests
     const processedData = React.useMemo(() => {
         if (!allBlocks || !Array.isArray(allBlocks)) {
             return { results: [], totalCount: 0 };
@@ -467,13 +467,13 @@ export const useBlocksForAnalytics = (numPages: number = 10) => {
     // Usar el cache global de bloques
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
-    // Procesar los datos en el cliente sin hacer más requests
+    // Process data on the client without making more requests
     const processedData = React.useMemo(() => {
         if (!allBlocks || !Array.isArray(allBlocks)) {
             return { results: [], totalCount: 0 };
         }
 
-        // Limitar a máximo 100 bloques (10 páginas * 10 bloques por página)
+        // Limit to a maximum of 100 blocks (10 pages * 10 blocks per page)
         const maxBlocks = Math.min(numPages * 10, 100);
         const finalBlocks = allBlocks.slice(0, maxBlocks);
 
@@ -490,12 +490,12 @@ export const useBlocksForAnalytics = (numPages: number = 10) => {
     };
 };
 
-// Hook para extraer transacciones de los bloques en un rango específico
+// Hook to extract transactions from blocks in a specific range
 export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 50) => {
     // Usar el cache global de bloques
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
-    // Procesar los datos en el cliente sin hacer más requests
+    // Process data on the client without making more requests
     const processedData = React.useMemo(() => {
         if (!allBlocks || !Array.isArray(allBlocks)) {
             return { results: [], totalCount: 0 };
@@ -511,7 +511,7 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
             });
         }
 
-        // Limitar a máximo 50 bloques para evitar demasiados requests
+        // Limit to a maximum of 50 blocks to avoid too many requests
         const limitedBlocks = Math.min(maxBlocksToFetch, 50);
         const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
 
@@ -520,7 +520,7 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
         // Extraer transacciones de cada bloque
         finalBlocks.forEach((block: any) => {
             if (block.transactions && Array.isArray(block.transactions)) {
-                // Agregar información del bloque a cada transacción
+                // Add block information to each transaction
                 const txsWithBlockInfo = block.transactions.map((tx: any) => ({
                     ...tx,
                     blockHeight: block.blockHeader?.height || block.height,

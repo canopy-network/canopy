@@ -90,16 +90,16 @@ const BlocksPage: React.FC = () => {
     const filterBlocksByTime = (blocks: Block[], filter: string): Block[] => {
         const now = Date.now()
 
-        // Si no hay bloques o son pocos, no filtrar
+        // If there are no blocks or few blocks, don't filter
         if (!blocks || blocks.length < 3) {
             return blocks;
         }
 
-        // Ordenar primero por timestamp para asegurar filtro correcto
+        // Sort first by timestamp to ensure correct filtering
         const sortedBlocks = [...blocks].sort((a, b) => {
             const timeA = new Date(a.timestamp).getTime();
             const timeB = new Date(b.timestamp).getTime();
-            return timeB - timeA; // Orden descendente (más recientes primero)
+            return timeB - timeA; // Descending order (most recent first)
         });
 
         switch (filter) {
@@ -156,7 +156,7 @@ const BlocksPage: React.FC = () => {
         } else {
             // For time-based filters, filter and sort the loaded blocks
             let filtered = filterBlocksByTime(allBlocks, activeFilter)
-            console.log(`Después de filtrar por ${activeFilter}: ${filtered.length} bloques`);
+            console.log(`After filtering by ${activeFilter}: ${filtered.length} blocks`);
 
             filtered = sortBlocks(filtered, sortBy)
             setFilteredBlocks(filtered)
@@ -240,7 +240,7 @@ const BlocksPage: React.FC = () => {
 
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter)
-        // La paginación se reinicia automáticamente en el efecto useEffect cuando cambia el filtro
+        // Pagination resets automatically in the useEffect when the filter changes
     }
 
     const handleSortChange = (sortCriteria: string) => {

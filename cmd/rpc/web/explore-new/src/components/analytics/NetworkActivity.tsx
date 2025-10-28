@@ -44,7 +44,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             return timeA - timeB
         })
 
-        // Agrupar transacciones por tiempo (similar a BlockProductionRate)
+        // Group transactions by time (similar to BlockProductionRate)
         const txByTime: { [hour: string]: number } = {}
 
         filteredBlocks.forEach((block: any) => {
@@ -52,7 +52,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
             const blockDate = new Date(blockTimeMs)
 
-            // Agrupar por hora:minuto (redondeando a intervalos de 10 minutos si hay muchos bloques)
+            // Group by hour:minute (rounding to 10-minute intervals if there are many blocks)
             const minute = filteredBlocks.length < 20 ?
                 blockDate.getMinutes() :
                 Math.floor(blockDate.getMinutes() / 10) * 10
@@ -63,16 +63,16 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                 txByTime[timeKey] = 0
             }
 
-            // Contar transacciones en este bloque - usar numTxs del blockHeader
+            // Count transactions in this block - use numTxs from blockHeader
             const txCount = block.blockHeader?.numTxs || 0
             txByTime[timeKey] += txCount
         })
 
-        // Convertir el objeto a un array ordenado por hora
+        // Convert the object to an array sorted by hour
         const timeKeys = Object.keys(txByTime).sort()
         const txCounts = timeKeys.map(key => txByTime[key])
 
-        // Crear etiquetas de tiempo (HH:MM o HH:MM-HH:MM)
+        // Create time labels (HH:MM or HH:MM-HH:MM)
         const timeLabels = timeKeys.map(key => {
             if (filteredBlocks.length < 20) {
                 return key

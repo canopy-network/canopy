@@ -54,10 +54,10 @@ export const useSearch = (searchTerm: string) => {
                 validators: []
             }
 
-            // BÚSQUEDA DIRECTA DE BLOQUES, TRANSACCIONES, CUENTAS Y VALIDADORES
+            // DIRECT SEARCH FOR BLOCKS, TRANSACTIONS, ACCOUNTS, AND VALIDATORS
             const searchPromises: Promise<any>[] = []
 
-            // 1. Si parece un hash de transacción (32+ caracteres hexadecimales)
+            // 1. If it looks like a transaction hash (32+ hexadecimal characters)
             if (term.length >= 32 && /^[a-fA-F0-9]+$/.test(term)) {
                 searchPromises.push(
                     TxByHash(term)
@@ -75,7 +75,7 @@ export const useSearch = (searchTerm: string) => {
                         .catch(err => console.log('Transaction search error:', err))
                 )
 
-                // También podría ser un hash de bloque
+                // It could also be a block hash
                 searchPromises.push(
                     BlockByHash(term)
                         .then(block => {
@@ -93,7 +93,7 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
-            // 2. Si es una dirección (40 caracteres hexadecimales)
+            // 2. If it is an address (40 hexadecimal characters)
             if (term.length === 40) {
                 searchPromises.push(
                     getModalData(term, 1)
@@ -125,7 +125,7 @@ export const useSearch = (searchTerm: string) => {
                         .catch(err => console.log('Address search error:', err))
                 )
 
-                // Búsqueda directa como validador y como cuenta
+                // Direct search as validator and as account
                 searchPromises.push(
                     Validator(0, term)
                         .then(validator => {
@@ -169,7 +169,7 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
-            // 3. Si es un número (altura de bloque)
+            // 3. If it is a number (block height)
             if (/^\d+$/.test(term)) {
                 const blockHeight = parseInt(term)
                 searchPromises.push(

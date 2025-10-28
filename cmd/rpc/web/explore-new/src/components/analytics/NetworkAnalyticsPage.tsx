@@ -39,22 +39,22 @@ const NetworkAnalyticsPage: React.FC = () => {
         networkVersion: '0.0.0'
     })
 
-    // Hooks para obtener datos REALES
+    // Hooks to get REAL data
     const { data: cardData, isLoading: cardLoading } = useCardData()
     const { data: supplyData, isLoading: supplyLoading } = useSupply()
     const { data: validatorsData, isLoading: validatorsLoading } = useValidators(1)
     const { data: blocksData, isLoading: blocksLoading } = useAllBlocksCache()
 
-    // Convertir searchParams (valores de búsqueda confirmados) a números para useBlocksInRange
-    // Usar isNaN para verificar si es un número válido
+    // Convert searchParams (confirmed search values) to numbers for useBlocksInRange
+    // Use isNaN to check if it's a valid number
     const fromBlockNum = isNaN(parseInt(searchParams.from)) ? 0 : parseInt(searchParams.from)
     const toBlockNum = isNaN(parseInt(searchParams.to)) ? 0 : parseInt(searchParams.to)
 
-    // Usar useBlocksInRange para obtener bloques específicos según el filtro
-    // Calcular cantidad de bloques a cargar según el rango
+    // Use useBlocksInRange to get specific blocks according to the filter
+    // Calculate number of blocks to load according to the range
     const blockRange = (fromBlockNum && toBlockNum) ? (toBlockNum - fromBlockNum + 1) : 0;
 
-    // Verificar si el rango excede el límite de 100 bloques
+    // Check if the range exceeds the limit of 100 blocks
     useEffect(() => {
         if (blockRange > 100) {
             setErrorMessage('Block range cannot exceed 100 blocks. Please select a smaller range.');
@@ -63,24 +63,24 @@ const NetworkAnalyticsPage: React.FC = () => {
         }
     }, [blockRange]);
 
-    const blocksToFetch = blockRange > 0 ? Math.min(blockRange, 100) : 10; // Por defecto 10 bloques, máximo 100
+    const blocksToFetch = blockRange > 0 ? Math.min(blockRange, 100) : 10; // Default 10 blocks, maximum 100
 
-    // Solo hacer la petición si searchParams.from y searchParams.to son válidos
+    // Only make the request if searchParams.from and searchParams.to are valid
     const { data: filteredBlocksData, isLoading: filteredBlocksLoading } = useBlocksInRange(
         fromBlockNum && toBlockNum ? fromBlockNum : 0,
         fromBlockNum && toBlockNum ? toBlockNum : 0,
         blocksToFetch
     )
 
-    // Usar useTransactionsInRange para obtener transacciones específicas según el filtro
-    // Solo hacer la petición si searchParams.from y searchParams.to son válidos
+    // Use useTransactionsInRange to get specific transactions according to the filter
+    // Only make the request if searchParams.from and searchParams.to are valid
     const { data: filteredTransactionsData, isLoading: filteredTransactionsLoading } = useTransactionsInRange(
         fromBlockNum && toBlockNum ? fromBlockNum : 0,
         fromBlockNum && toBlockNum ? toBlockNum : 0,
         100
     )
 
-    // Mantener hooks originales como fallback
+    // Keep original hooks as fallback
     const { data: analyticsBlocksData } = useBlocksForAnalytics(10) // Get 10 pages of blocks for analytics
     const { data: pendingData, isLoading: pendingLoading } = usePending(1)
     const { data: paramsData, isLoading: paramsLoading } = useParams()
@@ -140,17 +140,17 @@ const NetworkAnalyticsPage: React.FC = () => {
             const pendingCount = pendingData.totalCount || 0
             const blockSize = paramsData.consensus?.blockSize || 1000000
 
-            // Calcular block time basado en datos reales
+            // Calculate block time based on real data
             const blocksList = blocksData || []
             let blockTime = 6.2 // Default
             if (blocksList.length >= 2) {
                 const latestBlock = blocksList[0]
                 const previousBlock = blocksList[1]
-                const timeDiff = (latestBlock.blockHeader.time - previousBlock.blockHeader.time) / 1000000 // Convertir a segundos
+                const timeDiff = (latestBlock.blockHeader.time - previousBlock.blockHeader.time) / 1000000 // Convert to seconds
                 blockTime = Math.round(timeDiff * 10) / 10
             }
 
-            // Usar datos reales de la API
+            // Use real data from the API
             const networkVersion = paramsData.consensus?.protocolVersion || '1/0'
             const sendFee = paramsData.fee?.sendFee || 10000
 
@@ -161,10 +161,10 @@ const NetworkAnalyticsPage: React.FC = () => {
                 pendingTransactions: pendingCount,
                 blockTime: blockTime,
                 blockSize: blockSize / 1000000,
-                networkVersion: networkVersion, // protocolVersion de la API
-                avgTransactionFee: sendFee / 1000000, // Convertir de wei a CNPY
+                networkVersion: networkVersion, // protocolVersion from the API
+                avgTransactionFee: sendFee / 1000000, // Convert from wei to CNPY
                 // The following remain simulated because they're not in the API:
-                // networkUptime: 99.98 (SIMULADO)
+                // networkUptime: 99.98 (SIMULATED)
             }))
         }
     }, [cardData, supplyData, validatorsData, pendingData, paramsData, blocksData])
@@ -343,7 +343,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     }
 
     const handleRefresh = () => {
-        // Implementar refresh de datos
+        // Implement data refresh
         window.location.reload()
     }
 

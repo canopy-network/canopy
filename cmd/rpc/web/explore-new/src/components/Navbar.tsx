@@ -50,7 +50,7 @@ const Navbar = () => {
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
     const blocks = useAllBlocksCache()
     React.useEffect(() => {
-        // Cerrar dropdowns al cambiar de ruta
+        // Close dropdowns when changing route
         handleClose()
         setMobileOpenIndex(null)
     }, [currentRoot])

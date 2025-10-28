@@ -32,19 +32,19 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
         const avgRewardPerValidator = totalStaked > 0 ? totalStaked / validators.length : 0
         const baseReward = avgRewardPerValidator / 1000000 // Convert from micro to CNPY
 
-        // Usar los blockGroups para generar datos de recompensas realistas
-        // Cada grupo de bloques tendrá una recompensa basada en el número de bloques
+        // Use blockGroups to generate realistic reward data
+        // Each block group will have a reward based on the number of blocks
         const rewards = blockGroups.map((group, index) => {
-            // Calcular recompensa basada en el número de bloques en este grupo
-            // y añadir una pequeña variación para que se vea más natural
-            const blockFactor = group.blockCount / 10 // Normalizar por cada 10 bloques
-            const timeFactor = Math.sin((index / blockGroups.length) * Math.PI) * 0.2 + 0.9 // Variación de 0.7 a 1.1
+            // Calculate reward based on the number of blocks in this group
+            // and add a small variation to make it look more natural
+            const blockFactor = group.blockCount / 10 // Normalize by every 10 blocks
+            const timeFactor = Math.sin((index / blockGroups.length) * Math.PI) * 0.2 + 0.9 // Variation from 0.7 to 1.1
 
-            // Recompensa base * factor de bloques * factor de tiempo
+            // Base reward * block factor * time factor
             return Math.max(0, baseReward * blockFactor * timeFactor)
         })
 
-        // Crear etiquetas de tiempo basadas en los grupos de bloques
+        // Create time labels based on block groups
         const timeLabels = blockGroups.map(group => `${group.start}-${group.end}`)
 
         return { rewards, timeLabels }
