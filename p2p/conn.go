@@ -264,9 +264,12 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	// will block the execution until at or below the desired rate of flow
 	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
-	if err := receiveProtoMsg(c.conn, msg); err != nil {
+	lenM, err := receiveProtoMsg(c.conn, msg)
+	if err != nil {
 		return nil, err
 	}
+	// update the limiter
+	m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
 }
@@ -306,11 +309,12 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	//defer lib.TimeTrack(c.log, time.Now())
 	// send the proto message wrapped in an Envelope over the wire
-	if err = sendProtoMsg(c.conn, &Envelope{Payload: a}); err != nil {
+	lenM, err := sendProtoMsg(c.conn, &Envelope{Payload: a})
+	if err != nil {
 		c.Error(err)
 	}
 	// update the rate limiter with how many bytes were written
-	//m.Update(n)
+	m.Update(lenM)
 }
 
 // Stream: an independent, bidirectional communication channel that is scoped to a single topic.
@@ -409,28 +413,30 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 // HELPERS BELOW
 
 // sendProtoMsg() encodes and sends a length-prefixed proto message to a net.Conn
-func sendProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) lib.ErrorI {
+// returns length of message bytes
+func sendProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) (int, lib.ErrorI) {
 	// marshal into proto bytes
 	bz, err := lib.Marshal(ptr)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// send the bytes prefixed by length
-	return sendLengthPrefixed(conn, bz, timeout...)
+	return len(bz), sendLengthPrefixed(conn, bz, timeout...)
 }
 
 // receiveProtoMsg() receives and decodes a length-prefixed proto message from a net.Conn
-func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) lib.ErrorI {
+// returns length of message bytes
+func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) (int, lib.ErrorI) {
 	// read the message from the wire
 	msg, err := receiveLengthPrefixed(conn, timeout...)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// unmarshal into proto
 	if err = lib.Unmarshal(msg, ptr); err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return len(msg), nil
 }
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
