@@ -6,6 +6,7 @@
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
+  VITE_NODE_ENV = "production"
 
 # Redirects for SPA (Single Page Application)
 [[redirects]]
