@@ -2,6 +2,7 @@
   base = "cmd/rpc/web/explore-new"
   publish = "dist"
   command = "npm run build"
+  environment = { NODE_ENV = "production" }
 
 [build.environment]
   NODE_VERSION = "20"
