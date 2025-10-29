@@ -255,8 +255,9 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	// reset the writer for the next height
 	s.Reset()
 	// check if the current version is a multiple of the cleanup block interval
-	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
-	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
+	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
+	version := s.Version()
+	if compactionInterval > 0 && version%compactionInterval == 0 {
 		go func() {
 			// compactions are not allowed to run concurrently to not intertwine with the keys
 			if s.compaction.Load() {
@@ -265,9 +266,10 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 			}
 			s.compaction.Store(true)
 			defer s.compaction.Store(false)
-			// trigger compaction of LSS keys
-			if err := s.Compact([]byte(latestStatePrefix),
-				prefixEnd([]byte(latestStatePrefix))); err != nil {
+			// perform HSS compaction every 4th compaction
+			hssCompaction := (version/compactionInterval)%4 == 0
+			// trigger compaction of store keys
+			if err := s.Compact(hssCompaction); err != nil {
 				s.log.Errorf("failed to compact keys: %s", err)
 			}
 		}()
@@ -477,13 +479,15 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 
 // Compact deletes all entries marked for compaction on the given prefix range.
 // it iterates over the prefix, deletes tombstone entries, and performs DB compaction
-func (s *Store) Compact(startPrefix []byte, endPrefix []byte) lib.ErrorI {
+func (s *Store) Compact(compactHSS bool) lib.ErrorI {
+	// first compaction: latest state  keys
+	startPrefix, endPrefix := []byte(latestStatePrefix), prefixEnd([]byte(latestStatePrefix))
 	// track current time and version
 	now, version := time.Now(), s.Version()
 	s.log.Debugf("key compaction started at height %d", version)
 	// create a timeout to limit the duration of the compaction process
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	// create a batch to set the keys to be removed by the compaction
 	batch := s.db.NewBatch()
@@ -523,9 +527,20 @@ func (s *Store) Compact(startPrefix []byte, endPrefix []byte) lib.ErrorI {
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
-	// log results
-	s.log.Debugf("key compaction finished [%d], total keys: %d, deleted: %d batchTime: %s elapsed: %s",
-		version, total, toDelete, batchTime, time.Since(now))
+	lssTime := time.Since(now)
+	s.log.Debugf("key compaction finished [LSS] [%d], total keys: %d, deleted: %d batch: %s elapsed: %s",
+		version, total, toDelete, batchTime, lssTime)
+	// second compaction: historic state keys
+	if compactHSS {
+		startPrefix, endPrefix = []byte(historicStatePrefix), prefixEnd([]byte(historicStatePrefix))
+		hssTime := time.Now()
+		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
+			return ErrCommitDB(err)
+		}
+		// log results
+		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
+			time.Since(hssTime), time.Since(now))
+	}
 	return nil
 }
 
