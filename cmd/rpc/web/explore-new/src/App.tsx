@@ -18,6 +18,7 @@ import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
 import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
 import SupplyPage from './components/staking/SupplyPage'
+import { useNetworkChangeHandler } from './hooks/useApi'
 
 
 function AnimatedRoutes() {
@@ -48,6 +49,9 @@ function AnimatedRoutes() {
 }
 
 function App() {
+  // Handle network changes and invalidate queries
+  useNetworkChangeHandler();
+
   return (
     <Router>
       <div className="min-h-screen bg-background flex flex-col">

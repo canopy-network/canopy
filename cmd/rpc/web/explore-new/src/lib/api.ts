@@ -29,6 +29,13 @@ const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: 
     adminRPCURL = newAdminRPCURL;
     chainId = newChainId;
     console.log('API Config Updated:', { rpcURL, adminRPCURL, chainId });
+
+    // Dispatch custom event for React Query invalidation
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('apiConfigChanged', {
+            detail: { rpcURL, adminRPCURL, chainId }
+        }));
+    }
 };
 
 // Legacy support for window.__CONFIG__ (for backward compatibility)
@@ -253,9 +260,8 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
         const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
         let accountsLast24h = 0;
 
-        // SI TENEMOS BLOQUES CACHEADOS, USARLOS
+        // if we have cached blocks, use them
         if (cachedBlocks && Array.isArray(cachedBlocks) && cachedBlocks.length > 0) {
-            console.log('✅ getTotalAccountCount - USANDO BLOQUES DEL CACHE GLOBAL:', cachedBlocks.length, 'bloques');
 
             for (const block of cachedBlocks) {
                 const blockTime = block.blockHeader?.time || block.time;
@@ -290,17 +296,12 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
                     }
                 }
             }
-
-            console.log('✅ getTotalAccountCount - Encontradas', accountsLast24h, 'cuentas en últimas 24h');
-
             return {
                 total: totalAccounts,
                 last24h: accountsLast24h
             };
         }
 
-        // FALLBACK si no hay bloques cacheados
-        console.log('📡 getTotalAccountCount - Sin bloques cacheados, usando fallback');
         return {
             total: totalAccounts,
             last24h: Math.max(1, Math.floor(totalAccounts * 0.05))
@@ -315,13 +316,10 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
 }
 
 export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ total: number, last24h: number, tpm: number }> {
-    console.log('🔥 getTotalTransactionCount EJECUTANDO');
-
     try {
         // Verificar cache
         if (totalTransactionCountCache &&
             (Date.now() - totalTransactionCountCache.timestamp) < CACHE_DURATION) {
-            console.log('📡 getTotalTransactionCount - Usando cache en memoria');
             return {
                 total: totalTransactionCountCache.count,
                 last24h: totalTransactionCountCache.last24h || 0,
@@ -335,8 +333,6 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
 
         // SI TENEMOS BLOQUES CACHEADOS, USARLOS
         if (cachedBlocks && Array.isArray(cachedBlocks) && cachedBlocks.length > 0) {
-            console.log('✅ getTotalTransactionCount - USANDO BLOQUES DEL CACHE GLOBAL:', cachedBlocks.length, 'bloques');
-
             for (const block of cachedBlocks) {
                 if (block.transactions && Array.isArray(block.transactions)) {
                     totalCount += block.transactions.length;
@@ -377,8 +373,6 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
             const minutesIn24h = 24 * 60;
             const tpm = last24hCount > 0 ? last24hCount / minutesIn24h : 0;
 
-            console.log('✅ getTotalTransactionCount - Total:', totalCount, 'Últimas 24h:', last24hCount, 'TPM:', tpm.toFixed(2));
-
             // Actualizar cache
             totalTransactionCountCache = {
                 count: totalCount,
@@ -394,8 +388,6 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
             };
         }
 
-        // FALLBACK si no hay bloques cacheados - retornar valores cached o estimados
-        console.log('📡 getTotalTransactionCount - Sin bloques cacheados, usando fallback');
         return {
             total: 795963,
             last24h: 79596,
@@ -684,12 +676,34 @@ export async function getModalData(query: string | number, page: number) {
 
 export async function getCardData() {
     const cardData: any = {};
-    cardData.blocks = await Blocks(1, 0);
-    cardData.canopyCommittee = await Committee(1, chainId);
-    cardData.supply = await Supply(0, 0);
-    cardData.pool = await DAO(0, 0);
-    cardData.params = await Params(0, 0);
-    cardData.ecoParams = await EcoParams(0);
+
+    try {
+        cardData.blocks = await Blocks(1, 0);
+        cardData.canopyCommittee = await Committee(1, chainId);
+        cardData.supply = await Supply(0, 0);
+        cardData.pool = await DAO(0, 0);
+        cardData.params = await Params(0, 0);
+        cardData.ecoParams = await EcoParams(0);
+
+        // Check if this network has real transactions
+        const hasRealTransactions = cardData.blocks?.results?.some((block: any) => {
+            const txRoot = block.blockHeader?.transactionRoot;
+            return txRoot && txRoot !== "4646464646464646464646464646464646464646464646464646464646464646";
+        });
+
+        cardData.hasRealTransactions = hasRealTransactions;
+    } catch (error) {
+        console.error('❌ Error in getCardData:', error);
+        // Return empty data structure on error
+        cardData.blocks = { results: [], totalCount: 0 };
+        cardData.canopyCommittee = null;
+        cardData.supply = null;
+        cardData.pool = null;
+        cardData.params = null;
+        cardData.ecoParams = null;
+        cardData.hasRealTransactions = false;
+    }
+
     return cardData;
 }
 

@@ -17,22 +17,17 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
         }
 
         const realBlocks = blocksData.results
-        console.log(`Total blocks available: ${realBlocks.length}`)
-
         const fromBlockNum = parseInt(fromBlock) || 0
         const toBlockNum = parseInt(toBlock) || 0
-        console.log(`Block range: ${fromBlockNum} to ${toBlockNum}`)
 
         // Filter blocks by the specified range
         const filteredBlocks = realBlocks.filter((block: any) => {
             const blockHeight = block.blockHeader?.height || block.height || 0
             return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
         })
-        console.log(`Filtered blocks count: ${filteredBlocks.length}`)
 
         // If no blocks in range, return empty array
         if (filteredBlocks.length === 0) {
-            console.log("No blocks in the specified range")
             return []
         }
 
@@ -67,9 +62,6 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
         // Convert the object to an array sorted by hour
         const timeKeys = Object.keys(blocksByHour).sort()
         const timeGroups = timeKeys.map(key => blocksByHour[key])
-
-        console.log('Real time keys:', timeKeys)
-        console.log('Blocks per time interval:', timeGroups)
 
         // Save time keys to use them in labels
         // @ts-ignore - Add temporary property to share with getTimeIntervalLabels

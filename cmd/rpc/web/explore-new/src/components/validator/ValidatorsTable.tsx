@@ -69,11 +69,6 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         const relativePercentage = maxStake > 0 ? (validator.stakedAmount / maxStake) * 100 : 0
         const clampedPercentage = Math.max(0, Math.min(100, relativePercentage))
 
-        // Debug: Log stake amounts for first few validators
-        if (validators.indexOf(validator) < 3) {
-            console.log(`Validator ${validator.address?.slice(0, 8)}: stake=${validator.stakedAmount}, maxStake=${maxStake}, percentage=${clampedPercentage.toFixed(2)}%`)
-        }
-
         return (
             <div className="w-full bg-gray-700 rounded-full h-2">
                 <div

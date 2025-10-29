@@ -316,7 +316,6 @@ const TransactionsPage: React.FC = () => {
         // Here would go the logic to apply filters to the API
         // We need to reset the page to 1 when filters are applied
         setCurrentPage(1)
-        console.log('Applying filters:', { transactionType, fromBlock, toBlock, statusFilter, amountRangeValue, addressSearch })
     }
 
     // Function to change entries per page
@@ -327,8 +326,7 @@ const TransactionsPage: React.FC = () => {
 
     // Function to handle export
     const handleExportTransactions = () => {
-        console.log('Exporting transactions...', transactions)
-        // Crear CSV con las transacciones filtradas
+        // create CSV with the filtered transactions
         const csvContent = [
             ['Hash', 'Type', 'From', 'To', 'Amount', 'Fee', 'Status', 'Age', 'Block Height'].join(','),
             ...transactions.map(tx => [

@@ -156,8 +156,6 @@ const BlocksPage: React.FC = () => {
         } else {
             // For time-based filters, filter and sort the loaded blocks
             let filtered = filterBlocksByTime(allBlocks, activeFilter)
-            console.log(`After filtering by ${activeFilter}: ${filtered.length} blocks`);
-
             filtered = sortBlocks(filtered, sortBy)
             setFilteredBlocks(filtered)
         }

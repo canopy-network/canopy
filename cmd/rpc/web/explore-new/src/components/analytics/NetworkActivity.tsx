@@ -85,9 +85,6 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             return `${key}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
         })
 
-        console.log('Transaction data by time:', txByTime)
-        console.log('Time keys:', timeKeys)
-        console.log('TX counts:', txCounts)
 
         return { txCounts, timeKeys, timeLabels }
     }

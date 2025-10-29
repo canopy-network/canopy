@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import {
     Blocks,
@@ -347,9 +347,10 @@ export const useModalData = (query: string | number, page: number) => {
 // Hooks for Card Data
 export const useCardData = () => {
     return useQuery({
-        queryKey: queryKeys.cardData(),
+        queryKey: [...queryKeys.cardData(), rpcURL], // Include RPC URL to invalidate on network change
         queryFn: () => getCardData(),
-        staleTime: 30000,
+        staleTime: 5000, // Reduced stale time for more frequent updates
+        refetchOnWindowFocus: true, // Refetch when window regains focus
     });
 };
 
@@ -402,8 +403,7 @@ export const useAllBlocksCache = () => {
 
                     const data = await response.json();
                     if (data.results && Array.isArray(data.results)) {
-                        allBlocks.push(...data.results);
-                        console.log(`📦 Página ${i + 1}: ${data.results.length} bloques agregados`);
+                        allBlocks.push(...data.results)
                     }
                     (allBlocks as any).totalCount = data.totalCount || 0;
                 }
@@ -574,6 +574,40 @@ export const useOrder = (chainId: number, orderId: string, height: number = 0) =
         enabled: !!orderId, // Only run if orderId is provided
         staleTime: 30000, // Cache for 30 seconds
     });
+};
+
+// Hook to handle network changes and invalidate queries
+export const useNetworkChangeHandler = () => {
+    const queryClient = useQueryClient();
+
+    React.useEffect(() => {
+        const handleApiConfigChange = (event: any) => {
+            console.log('🔄 Network changed, invalidating queries...', event.detail);
+
+            // Invalidate specific queries that depend on network data
+            queryClient.invalidateQueries({ queryKey: ['cardData'] });
+            queryClient.invalidateQueries({ queryKey: ['blocks'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['validators'] });
+            queryClient.invalidateQueries({ queryKey: ['supply'] });
+            queryClient.invalidateQueries({ queryKey: ['params'] });
+            queryClient.invalidateQueries({ queryKey: ['ecoParams'] });
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+
+            // Also invalidate all queries as fallback
+            queryClient.invalidateQueries();
+        };
+
+        // Listen for API config changes
+        window.addEventListener('apiConfigChanged', handleApiConfigChange);
+        window.addEventListener('networkChanged', handleApiConfigChange);
+
+        return () => {
+            window.removeEventListener('apiConfigChanged', handleApiConfigChange);
+            window.removeEventListener('networkChanged', handleApiConfigChange);
+        };
+    }, [queryClient]);
 };
 
 

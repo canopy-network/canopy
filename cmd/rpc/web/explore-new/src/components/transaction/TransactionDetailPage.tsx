@@ -21,26 +21,18 @@ const TransactionDetailPage: React.FC = () => {
 
     // Extract all transaction hashes from the block
     useEffect(() => {
-        console.log('Block data changed:', blockData)
-        console.log('Current transaction hash:', transactionHash)
-
         if (blockData?.transactions && Array.isArray(blockData.transactions)) {
-            console.log('Block transactions:', blockData.transactions)
-
             const txHashes = blockData.transactions.map((tx: any) => {
                 // Try different possible hash fields
                 return tx.txHash || tx.hash || tx.transactionHash || tx.id
             }).filter(Boolean)
 
-            console.log('Extracted tx hashes:', txHashes)
             setBlockTransactions(txHashes)
 
             // Find current transaction index
             const currentIndex = txHashes.findIndex((hash: string) => hash === transactionHash)
-            console.log('Current transaction index:', currentIndex)
             setCurrentTxIndex(currentIndex)
         } else {
-            console.log('No block transactions found')
             setBlockTransactions([])
             setCurrentTxIndex(-1)
         }
@@ -114,27 +106,19 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     const handlePreviousTx = () => {
-        console.log('Previous clicked - currentTxIndex:', currentTxIndex, 'blockTransactions:', blockTransactions)
-
         if (currentTxIndex > 0 && blockTransactions.length > 0) {
             const prevTxHash = blockTransactions[currentTxIndex - 1]
-            console.log('Navigating to previous tx:', prevTxHash)
             navigate(`/transaction/${prevTxHash}`)
         } else {
-            console.log('No previous transaction, going back')
             navigate(-1)
         }
     }
 
     const handleNextTx = () => {
-        console.log('Next clicked - currentTxIndex:', currentTxIndex, 'blockTransactions:', blockTransactions)
-
         if (currentTxIndex < blockTransactions.length - 1 && blockTransactions.length > 0) {
             const nextTxHash = blockTransactions[currentTxIndex + 1]
-            console.log('Navigating to next tx:', nextTxHash)
             navigate(`/transaction/${nextTxHash}`)
         } else {
-            console.log('No next transaction, going back')
             navigate(-1)
         }
     }

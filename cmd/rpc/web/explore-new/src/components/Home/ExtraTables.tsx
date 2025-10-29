@@ -89,34 +89,13 @@ const ExtraTables: React.FC = () => {
 
         // Calculate the maximum stake for relative progress bar display
         const maxStake = top10Validators.length > 0 ? Math.max(...top10Validators.map(v => Number(v.stakedAmount || 0))) : 1
-
-        // Debug: Log the first few validators to verify ranking
-        console.log('Top 10 validators (ranked by stake):', top10Validators.slice(0, 3).map((v, i) => ({
-            rank: i + 1,
-            address: v.address?.slice(0, 8),
-            stake: Number(v.stakedAmount || 0),
-            stakeFormatted: (Number(v.stakedAmount || 0) / 1000000).toFixed(2) + 'M'
-        })))
-        console.log('Max stake (should be first validator):', maxStake, 'Formatted:', (maxStake / 1000000).toFixed(2) + 'M')
-
         return top10Validators.map((v: any, idx: number) => {
             const address = v.address || 'N/A'
             const stake = Number(v.stakedAmount ?? 0)
             const chainsStaked = Array.isArray(v.committees) ? v.committees.length : (Number(v.committees) || 0)
             const powerPct = totalStake > 0 ? (stake / totalStake) * 100 : 0
-            const clampedPct = Math.max(0, Math.min(100, powerPct))
-
             // For visual progress bar, use relative percentage based on max stake
             const visualPct = maxStake > 0 ? (stake / maxStake) * 100 : 0
-
-            // Debug: Log progress bar calculation for first few validators
-            if (idx < 3) {
-                console.log(`Validator ${idx + 1} (${address.slice(0, 8)}): stake=${stake}, maxStake=${maxStake}, visualPct=${visualPct.toFixed(2)}%`)
-            }
-
-            // Get validator statistics
-            const stats = validatorStats[address] || { lastBlockTime: 0 }
-
             // Calculate validator status based on README specifications
             const isUnstaking = v.unstakingHeight && v.unstakingHeight > 0
             const isPaused = v.maxPausedHeight && v.maxPausedHeight > 0

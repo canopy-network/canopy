@@ -1,20 +1,9 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { useCardData, useAccounts, useTransactionsWithRealPagination, useTransactions } from '../../hooks/useApi'
-import { useQuery } from '@tanstack/react-query'
-import { Accounts, getTotalTransactionCount, getTotalAccountCount } from '../../lib/api'
+import { useCardData } from '../../hooks/useApi'
+import { getTotalTransactionCount, getTotalAccountCount } from '../../lib/api'
 import { convertNumber, toCNPY } from '../../lib/utils'
 import AnimatedNumber from '../AnimatedNumber'
-import { parseISO } from 'date-fns'
-
-// List normalization: accepts {transactions|blocks|results|list|data} or flat arrays
-const normalizeList = (payload: any) => {
-    if (!payload) return [] as any[]
-    if (Array.isArray(payload)) return payload
-    const candidates = (payload as any)
-    const found = candidates.transactions || candidates.blocks || candidates.results || candidates.list || candidates.data
-    return Array.isArray(found) ? found : []
-}
 
 interface StageCardProps {
     title: string
@@ -37,25 +26,6 @@ const Stages = () => {
         return Number(height) || 0
     }, [cardData])
 
-    // Estimate height limit for last 24h using recovered block times
-    const heightCutoff24h: number = React.useMemo(() => {
-        const list = (cardData as any)?.blocks
-        const arr = list?.blocks || list?.list || list?.data || []
-        if (!Array.isArray(arr) || arr.length < 2) return Math.max(0, latestBlockHeight - 100000) // fallback amplio
-        const first = arr[0]
-        const last = arr[arr.length - 1]
-        const h1 = Number(first?.blockHeader?.height ?? first?.height ?? latestBlockHeight)
-        const h2 = Number(last?.blockHeader?.height ?? last?.height ?? latestBlockHeight)
-        const t1 = Number(first?.blockHeader?.time ?? first?.time ?? 0)
-        const t2 = Number(last?.blockHeader?.time ?? last?.time ?? 0)
-        const dh = Math.max(1, Math.abs(h1 - h2))
-        const dtRaw = Math.abs(t1 - t2)
-        // heuristic to convert to seconds according to magnitude
-        const dtSec = dtRaw > 1e12 ? dtRaw / 1e9 : dtRaw > 1e9 ? dtRaw / 1e9 : dtRaw > 1e6 ? dtRaw / 1e6 : dtRaw > 1e3 ? dtRaw / 1e3 : Math.max(1, dtRaw)
-        const blocksPerSecond = dh / dtSec
-        const blocksIn24h = Math.max(1, Math.round(blocksPerSecond * 86400))
-        return Math.max(0, latestBlockHeight - blocksIn24h)
-    }, [cardData, latestBlockHeight])
 
     const totalSupplyCNPY: number = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
@@ -89,17 +59,6 @@ const Stages = () => {
         return Math.max(0, Math.min(100, (totalStakeCNPY / totalSupplyCNPY) * 100))
     }, [totalStakeCNPY, totalSupplyCNPY])
 
-    // extra datasets for totals
-    const { data: accountsPage } = useAccounts(1)
-    const { data: txsPage } = useTransactionsWithRealPagination(1, 10) // Use real pagination
-    const { data: txs24hPage } = useTransactions(1, 0) // Use txs-by-height for recent transactions
-    const { data: accounts24hPage } = useQuery({
-        queryKey: ['accounts24h', heightCutoff24h],
-        queryFn: () => Accounts(1, heightCutoff24h),
-        staleTime: 30000,
-        enabled: heightCutoff24h > 0,
-    })
-
     const [totalAccounts, setTotalAccounts] = React.useState(0)
     const [accountsLast24h, setAccountsLast24h] = React.useState(0)
     const [totalTxs, setTotalTxs] = React.useState(0)
@@ -110,23 +69,49 @@ const Stages = () => {
         const fetchStats = async () => {
             try {
                 setIsLoadingStats(true)
-                const [txStats, accountStats] = await Promise.all([
-                    getTotalTransactionCount(),
-                    getTotalAccountCount()
-                ])
 
-                setTotalTxs(txStats.total)
-                setTxsLast24h(txStats.last24h)
-                setTotalAccounts(accountStats.total)
-                setAccountsLast24h(accountStats.last24h)
+                // Check if this network has real transactions
+                const hasRealTransactions = cardData?.hasRealTransactions ?? true
+
+                if (hasRealTransactions) {
+                    const [txStats, accountStats] = await Promise.all([
+                        getTotalTransactionCount(),
+                        getTotalAccountCount()
+                    ])
+
+                    setTotalTxs(txStats.total)
+                    setTxsLast24h(txStats.last24h)
+                    setTotalAccounts(accountStats.total)
+                    setAccountsLast24h(accountStats.last24h)
+                } else {
+                    setTotalTxs(0)
+                    setTxsLast24h(0)
+                    try {
+                        const accountStats = await getTotalAccountCount()
+                        setTotalAccounts(accountStats.total)
+                        setAccountsLast24h(accountStats.last24h)
+                    } catch (error) {
+                        console.error('Error fetching account stats:', error)
+                        setTotalAccounts(0)
+                        setAccountsLast24h(0)
+                    }
+                }
             } catch (error) {
                 console.error('Error fetching stats:', error)
+                // Set zeros on error
+                setTotalTxs(0)
+                setTxsLast24h(0)
+                setTotalAccounts(0)
+                setAccountsLast24h(0)
             } finally {
                 setIsLoadingStats(false)
             }
         }
-        fetchStats()
-    }, [])
+
+        if (cardData) {
+            fetchStats()
+        }
+    }, [cardData])
 
     // delegated only as staking delta proxy
     const delegatedOnlyCNPY: number = React.useMemo(() => {
@@ -135,23 +120,6 @@ const Stages = () => {
         return toCNPY(Number(d) || 0)
     }, [cardData])
 
-    // Skeleton loading component for cards
-    const SkeletonCard = ({ title, icon }: { title: string, icon: React.ReactNode }) => (
-        <div className="bg-card rounded-lg p-6 border border-gray-800/50">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-gray-400">{title}</h3>
-                <div className="text-primary">{icon}</div>
-            </div>
-            <div className="space-y-2">
-                <div className="h-8 bg-gray-700/50 rounded relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-                <div className="h-4 bg-gray-700/30 rounded w-3/4 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-            </div>
-        </div>
-    )
 
     const stages: StageCardProps[] = [
         { title: 'Staking %', data: `${stakingPercent.toFixed(1)}%`, isProgressBar: true, icon: <i className="fa-solid fa-chart-pie text-primary"></i>, metric: 'stakingPercent' },
