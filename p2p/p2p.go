@@ -515,11 +515,28 @@ func (p *P2P) catchPanic() {
 // MonitorInboxStats continuously monitors and logs inbox channel depths
 // without blocking message processing. Safe to run as a goroutine.
 func (p *P2P) MonitorInboxStats(interval time.Duration) {
+	// Add panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.Errorf("MonitorInboxStats panic: %v, stack: %s", r, string(debug.Stack()))
+		}
+	}()
+
+	p.log.Infof("Starting inbox monitoring with interval: %s", interval)
+
 	//TODO once stable change inboxMonitorInterval to 30-60 seconds to avoid spamming logs
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	tickCount := 0
 	for range ticker.C {
+		tickCount++
+
+		// Log heartbeat every 10 ticks to prove it's running
+		if tickCount%10 == 0 {
+			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
+		}
+
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
 
@@ -529,8 +546,11 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 			totalMessages += count
 		}
 
-		// Only log if there are messages (avoid spam when idle)
+		// Log even when idle every 60 seconds to confirm monitoring is active
 		if totalMessages == 0 {
+			if tickCount%4 == 0 { // Every 60 seconds with 15s interval
+				p.log.Debugf("Inbox Stats: All inboxes empty (monitoring active)")
+			}
 			continue
 		}
 
@@ -550,6 +570,8 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 			}
 		}
 	}
+
+	p.log.Warnf("MonitorInboxStats exited unexpectedly")
 }
 
 // GetInboxStats returns the current message count for each inbox channel

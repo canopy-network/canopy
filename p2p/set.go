@@ -323,7 +323,7 @@ func (ps *PeerSet) changeIOCount(increment, outbound bool) {
 
 // updateMetrics is a helper to update peer metrics
 func (ps *PeerSet) updateMetrics() {
-	ps.logger.Debugf("METRICS Inbound: %d, Outbound: %d", ps.inbound, ps.outbound)
+	//ps.logger.Debugf("METRICS Inbound: %d, Outbound: %d", ps.inbound, ps.outbound)
 	ps.metrics.UpdatePeerMetrics(ps.inbound+ps.outbound, ps.inbound, ps.outbound)
 }
 
