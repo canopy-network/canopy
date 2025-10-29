@@ -616,26 +616,29 @@ func (c *Controller) CheckAndSetLastCertificate(candidate *lib.BlockHeader) lib.
 			// exit with error
 			return lib.ErrInvalidLastQuorumCertificate()
 		}
-		// define a convenience variable for the 'root height'
-		rHeight, height := candidate.LastQuorumCertificate.Header.RootHeight, candidate.LastQuorumCertificate.Header.Height
-		// get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
-		vs, err := c.LoadCommittee(c.LoadRootChainId(height), rHeight) // TODO investigate - during consensus it works without -1 but during syncing might need -1?
-		if err != nil {
-			// exit with error
-			return err
-		}
-		// ensure the last quorum certificate is valid
-		isPartialQC, err := candidate.LastQuorumCertificate.Check(vs, 0, &lib.View{
-			Height: candidate.Height - 1, RootHeight: rHeight, NetworkId: c.Config.NetworkID, ChainId: c.Config.ChainId,
-		}, true)
-		// if the check failed
-		if err != nil {
-			// exit with error
-			return err
-		}
-		// ensure is a full +2/3rd maj QC
-		if isPartialQC {
-			return lib.ErrNoMaj23()
+		// the synced blocks were already validated during consensus, no need to validate again
+		if !c.Syncing().Load() {
+			// define a convenience variable for the 'root height'
+			rHeight, height := candidate.LastQuorumCertificate.Header.RootHeight, candidate.LastQuorumCertificate.Header.Height
+			// get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
+			vs, err := c.LoadCommittee(c.LoadRootChainId(height), rHeight) // TODO investigate - during consensus it works without -1 but during syncing might need -1?
+			if err != nil {
+				// exit with error
+				return err
+			}
+			// ensure the last quorum certificate is valid
+			isPartialQC, err := candidate.LastQuorumCertificate.Check(vs, 0, &lib.View{
+				Height: candidate.Height - 1, RootHeight: rHeight, NetworkId: c.Config.NetworkID, ChainId: c.Config.ChainId,
+			}, true)
+			// if the check failed
+			if err != nil {
+				// exit with error
+				return err
+			}
+			// ensure is a full +2/3rd maj QC
+			if isPartialQC {
+				return lib.ErrNoMaj23()
+			}
 		}
 		// update the LastQuorumCertificate in the ephemeral store to ensure deterministic last-COMMIT-QC (multiple valid versions can exist)
 		if err = c.FSM.Store().(lib.StoreI).IndexQC(candidate.LastQuorumCertificate); err != nil {
