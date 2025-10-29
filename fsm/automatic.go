@@ -75,7 +75,9 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	}
 	// ensure the certificate results are not nil
 	if qc == nil || qc.Results == nil {
-		s.log.Warn(lib.ErrNilCertResults().Error())
+		if s.Height() > 1 {
+			s.log.Errorf(lib.ErrNilCertResults().Error())
+		}
 		// return the events
 		return s.events.Reset(), nil
 	}
