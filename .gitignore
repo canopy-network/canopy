@@ -26,6 +26,9 @@ go.work
 # Zed
 .zed
 
+# Visual Studio Code
+.vscode
+
 # Vendoring
 vendor
 

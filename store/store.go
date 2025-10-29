@@ -6,6 +6,7 @@ import (
 	"math"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -60,16 +61,17 @@ iteration over stored data.
 */
 
 type Store struct {
-	version  uint64        // version of the store
-	db       *pebble.DB    // underlying database
-	writer   *pebble.Batch // the shared batch writer that allows committing it all at once
-	ss       *Txn          // reference to the state store
-	sc       *SMT          // reference to the state commitment store
-	*Indexer               // reference to the indexer store
-	metrics  *lib.Metrics  // telemetry
-	log      lib.LoggerI   // logger
-	config   lib.Config    // config
-	mu       *sync.Mutex   // mutex for concurrent commits
+	version    uint64        // version of the store
+	db         *pebble.DB    // underlying database
+	writer     *pebble.Batch // the shared batch writer that allows committing it all at once
+	ss         *Txn          // reference to the state store
+	sc         *SMT          // reference to the state commitment store
+	*Indexer                 // reference to the indexer store
+	metrics    *lib.Metrics  // telemetry
+	log        lib.LoggerI   // logger
+	config     lib.Config    // config
+	mu         *sync.Mutex   // mutex for concurrent commits
+	compaction atomic.Bool   // atomic boolean for compaction status
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -141,15 +143,16 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 	}
 	// return the store object
 	return &Store{
-		version: version,
-		log:     log,
-		db:      db,
-		writer:  writer,
-		ss:      NewTxn(lssStore, lssStore, []byte(latestStatePrefix), true, true, nextVersion),
-		Indexer: &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
-		metrics: metrics,
-		config:  config,
-		mu:      &sync.Mutex{},
+		version:    version,
+		log:        log,
+		db:         db,
+		writer:     writer,
+		ss:         NewTxn(lssStore, lssStore, []byte(latestStatePrefix), true, true, nextVersion),
+		Indexer:    &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
+		metrics:    metrics,
+		config:     config,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
@@ -174,14 +177,15 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 	}
 	// return the store object
 	return &Store{
-		version: queryVersion,
-		log:     s.log,
-		db:      s.db,
-		ss:      stateReader,
-		sc:      NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
-		Indexer: &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
-		metrics: s.metrics,
-		mu:      &sync.Mutex{},
+		version:    queryVersion,
+		log:        s.log,
+		db:         s.db,
+		ss:         stateReader,
+		sc:         NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
+		Indexer:    &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
+		metrics:    s.metrics,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
@@ -201,14 +205,15 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	}
 	// return the store object
 	return &Store{
-		version: s.version,
-		log:     s.log,
-		db:      s.db,
-		writer:  writer,
-		ss:      s.ss.Copy(lssReader, lssReader),
-		Indexer: &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
-		metrics: s.metrics,
-		mu:      &sync.Mutex{},
+		version:    s.version,
+		log:        s.log,
+		db:         s.db,
+		writer:     writer,
+		ss:         s.ss.Copy(lssReader, lssReader),
+		Indexer:    &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
+		metrics:    s.metrics,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
@@ -253,10 +258,17 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
 	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
 		go func() {
-			// trigger compaction of LSS deleted keys
+			// compactions are not allowed to run concurrently to not intertwine with the keys
+			if s.compaction.Load() {
+				s.log.Debugf("key compaction skipped [%d]: already in progress", s.Version())
+				return
+			}
+			s.compaction.Store(true)
+			defer s.compaction.Store(false)
+			// trigger compaction of LSS keys
 			if err := s.Compact([]byte(latestStatePrefix),
 				prefixEnd([]byte(latestStatePrefix))); err != nil {
-				s.log.Errorf("failed to evict LSS deleted keys: %s", err)
+				s.log.Errorf("failed to compact keys: %s", err)
 			}
 		}()
 	}
