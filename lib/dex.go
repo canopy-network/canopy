@@ -14,11 +14,11 @@ var (
 
 // Hash() creates a hash representative of the dex batch
 func (x *DexBatch) Hash() []byte {
-	if x.IsEmpty() {
-		if x != nil {
-			x.ReceiptHash = bytes.Clone(EmptyReceiptsHash)
-		}
+	if x == nil {
 		return bytes.Clone(EmptyReceiptsHash)
+	}
+	if x.IsEmpty() {
+		x.ReceiptHash = bytes.Clone(EmptyReceiptsHash)
 	}
 	bz, _ := Marshal(x.Copy())
 	return crypto.Hash(bz)
