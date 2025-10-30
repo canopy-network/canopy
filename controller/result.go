@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/canopy-network/canopy/fsm"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -68,6 +69,10 @@ func (c *Controller) SendCertificateResultsTx(qc *lib.QuorumCertificate) {
 
 // CalculateRewardRecipients() calculates the block reward recipients of the proposal
 func (c *Controller) CalculateRewardRecipients(fsm *fsm.StateMachine, proposerAddress []byte, rootChainHeight uint64) (results *lib.CertificateResult) {
+	start := time.Now()
+	defer func() {
+		c.log.Debugf("CalculateRewardRecipients took %v", time.Since(start))
+	}()
 	// set block reward recipients
 	results = &lib.CertificateResult{
 		RewardRecipients: &lib.RewardRecipients{},

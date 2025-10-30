@@ -209,6 +209,10 @@ func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*li
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
 func (c *Controller) GetRootChainLotteryWinner(fsm *fsm.StateMachine, rootHeight uint64) (winner *lib.LotteryWinner, err lib.ErrorI) {
+	start := time.Now()
+	defer func() {
+		c.log.Debugf("GetRootChainLotteryWinner took %v", time.Since(start))
+	}()
 	// get the root chain id from the state machine
 	rootChainId, err := fsm.LoadRootChainId(c.ChainHeight())
 	// if an error occurred retrieving the id
