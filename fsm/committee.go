@@ -195,32 +195,61 @@ func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewa
 
 // LotteryWinner() selects a validator/delegate randomly weighted based on their stake within a committee
 func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *lib.LotteryWinner, err lib.ErrorI) {
+	s.log.Infof("[LotteryWinner] START - id=%d, validators=%v, height=%d", id, validators, s.Height())
+	
 	// create a variable to hold the 'members' of the committee
 	var p lib.ValidatorSet
+	var getErr lib.ErrorI
+	
 	// if validators
 	if len(validators) == 1 && validators[0] == true {
-		p, _ = s.GetCommitteeMembers(s.Config.ChainId)
+		s.log.Infof("[LotteryWinner] Fetching committee members for chainId=%d", s.Config.ChainId)
+		p, getErr = s.GetCommitteeMembers(s.Config.ChainId)
+		if getErr != nil {
+			s.log.Errorf("[LotteryWinner] ERROR in GetCommitteeMembers: %v", getErr)
+			return nil, getErr
+		}
+		s.log.Infof("[LotteryWinner] Got committee members: NumValidators=%d, TotalPower=%d", p.NumValidators, p.TotalPower)
 	} else {
 		// else get the delegates
-		p, _ = s.GetAllDelegates(id)
+		s.log.Infof("[LotteryWinner] Fetching delegates for chainId=%d", id)
+		p, getErr = s.GetAllDelegates(id)
+		if getErr != nil {
+			s.log.Errorf("[LotteryWinner] ERROR in GetAllDelegates: %v", getErr)
+			return nil, getErr
+		}
+		s.log.Infof("[LotteryWinner] Got delegates: NumValidators=%d, TotalPower=%d", p.NumValidators, p.TotalPower)
 	}
+	
 	// get the validator params from state
+	s.log.Infof("[LotteryWinner] Fetching validator params")
 	valParams, err := s.GetParamsVal()
 	if err != nil {
+		s.log.Errorf("[LotteryWinner] ERROR in GetParamsVal: %v", err)
 		return nil, err
 	}
+	s.log.Infof("[LotteryWinner] Got validator params, DelegateRewardPercentage=%d", valParams.DelegateRewardPercentage)
+	
 	// define a convenience variable for the 'cut' of the lottery winner
 	winnerCut := valParams.DelegateRewardPercentage
+	
 	// if there are no validators in the set - return
 	if p.NumValidators == 0 || p.TotalPower == 0 {
+		s.log.Warnf("[LotteryWinner] No validators in set (NumValidators=%d, TotalPower=%d), returning empty winner", p.NumValidators, p.TotalPower)
 		return &lib.LotteryWinner{Winner: nil, Cut: winnerCut}, nil
 	}
+	
 	// get the last proposers
+	s.log.Infof("[LotteryWinner] Fetching last proposers")
 	lastProposers, err := s.GetLastProposers()
 	if err != nil {
-		return
+		s.log.Errorf("[LotteryWinner] ERROR in GetLastProposers: %v", err)
+		return nil, err
 	}
+	s.log.Infof("[LotteryWinner] Got last proposers, count=%d", len(lastProposers.Addresses))
+	
 	// use un-grindable weighted pseudorandom to select a winner
+	s.log.Infof("[LotteryWinner] Calling WeightedPseudorandom")
 	winner := lib.WeightedPseudorandom(&lib.PseudorandomParams{
 		SortitionData: &lib.SortitionData{
 			LastProposerAddresses: lastProposers.Addresses,
@@ -230,53 +259,94 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 			TotalPower:            p.TotalPower,
 		}, ValidatorSet: p.ValidatorSet,
 	})
+	
+	if winner == nil {
+		s.log.Errorf("[LotteryWinner] ERROR: WeightedPseudorandom returned nil winner")
+		return nil, lib.ErrEmptyLotteryWinner()
+	}
+	
+	s.log.Infof("[LotteryWinner] Got winner address=%s", lib.BytesToString(winner.Address().Bytes()))
+	
 	// return the lottery winner and cut
-	return &lib.LotteryWinner{
+	result := &lib.LotteryWinner{
 		Winner: winner.Address().Bytes(),
 		Cut:    winnerCut,
-	}, nil
+	}
+	
+	s.log.Infof("[LotteryWinner] SUCCESS - returning winner with cut=%d", winnerCut)
+	return result, nil
 }
 
 // GetCommitteeMembers() retrieves the ValidatorSet that is responsible for the 'chainId'
 func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+	s.log.Infof("[GetCommitteeMembers] START - chainId=%d", chainId)
+	
 	// get the validator params
 	p, err := s.GetParamsVal()
 	if err != nil {
+		s.log.Errorf("[GetCommitteeMembers] ERROR getting validator params: %v", err)
 		return
 	}
+	s.log.Infof("[GetCommitteeMembers] MaxCommitteeSize=%d", p.MaxCommitteeSize)
+	
 	// iterate through the prefix for the committee, from the highest stake amount to lowest
 	it, err := s.RevIterator(CommitteePrefix(chainId))
 	if err != nil {
+		s.log.Errorf("[GetCommitteeMembers] ERROR creating iterator: %v", err)
 		return
 	}
-	defer it.Close()
+	defer func() {
+		s.log.Infof("[GetCommitteeMembers] Closing iterator")
+		it.Close()
+	}()
+	
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
 	// for each item of the iterator up to MaxCommitteeSize
 	for i := uint64(0); it.Valid() && i < p.MaxCommitteeSize; func() { it.Next(); i++ }() {
+		s.log.Debugf("[GetCommitteeMembers] Processing validator index=%d", i)
+		
 		// extract the address from the iterator key
 		address, e := AddressFromKey(it.Key())
 		if e != nil {
+			s.log.Errorf("[GetCommitteeMembers] ERROR extracting address from key at index=%d: %v", i, e)
 			return vs, e
 		}
+		s.log.Debugf("[GetCommitteeMembers] Processing address=%s", address.String())
+		
 		// load the validator from the state using the address
 		val, e := s.GetValidator(address)
 		if e != nil {
+			s.log.Errorf("[GetCommitteeMembers] ERROR loading validator at index=%d, address=%s: %v", i, address.String(), e)
 			return vs, e
 		}
+		
 		// ensure the validator is not included in the committee if it's paused or unstaking
 		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
+			s.log.Debugf("[GetCommitteeMembers] Skipping paused/unstaking validator at index=%d", i)
 			continue
 		}
+		
 		// add the member to the list
 		members = append(members, &lib.ConsensusValidator{
 			PublicKey:   val.PublicKey,
 			VotingPower: val.StakedAmount,
 			NetAddress:  val.NetAddress,
 		})
+		s.log.Debugf("[GetCommitteeMembers] Added validator to members, total=%d", len(members))
 	}
+	
+	s.log.Infof("[GetCommitteeMembers] Iterator complete, total members=%d", len(members))
+	
 	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	result, err := lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	if err != nil {
+		s.log.Errorf("[GetCommitteeMembers] ERROR creating ValidatorSet: %v", err)
+		return vs, err
+	}
+	
+	s.log.Infof("[GetCommitteeMembers] SUCCESS - NumValidators=%d, TotalPower=%d", result.NumValidators, result.TotalPower)
+	return result, nil
 }
 
 // GetCommitteePaginated() returns a 'page' of committee members ordered from the highest stake to lowest
@@ -363,31 +433,50 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // GetAllDelegates() returns all delegates for a certain chainId
 // It is heavily cached to improve performance as the delegates are used for each block commit
 func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+	s.log.Infof("[GetAllDelegates] START - chainId=%d", chainId)
+	
 	// iterate from highest stake to lowest
 	it, err := s.RevIterator(DelegatePrefix(chainId))
 	if err != nil {
+		s.log.Errorf("[GetAllDelegates] ERROR creating iterator: %v", err)
 		return vs, err
 	}
-	defer it.Close()
+	defer func() {
+		s.log.Infof("[GetAllDelegates] Closing iterator")
+		it.Close()
+	}()
+	
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
 	var totalPower uint64
+	iterCount := uint64(0)
+	
 	// loop through the iterator
 	for ; it.Valid(); it.Next() {
+		s.log.Debugf("[GetAllDelegates] Processing delegate index=%d", iterCount)
+		
 		// get the address from the iterator key
 		address, e := AddressFromKey(it.Key())
 		if e != nil {
+			s.log.Errorf("[GetAllDelegates] ERROR extracting address from key at index=%d: %v", iterCount, e)
 			return vs, e
 		}
+		s.log.Debugf("[GetAllDelegates] Processing address=%s", address.String())
+		
 		// get the validator from the address
 		val, e := s.GetValidator(address)
 		if e != nil {
+			s.log.Errorf("[GetAllDelegates] ERROR loading validator at index=%d, address=%s: %v", iterCount, address.String(), e)
 			return vs, e
 		}
+		
 		// ensure the validator is not included in the committee if it's paused or unstaking
 		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
+			s.log.Debugf("[GetAllDelegates] Skipping paused/unstaking validator at index=%d", iterCount)
+			iterCount++
 			continue
 		}
+		
 		// increment the total power
 		totalPower += val.StakedAmount
 		// add the member to the list
@@ -396,13 +485,21 @@ func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err
 			VotingPower: val.StakedAmount,
 			NetAddress:  val.NetAddress,
 		})
+		s.log.Debugf("[GetAllDelegates] Added delegate to members, total=%d, totalPower=%d", len(members), totalPower)
+		iterCount++
 	}
-	return lib.ValidatorSet{
+	
+	s.log.Infof("[GetAllDelegates] Iterator complete, processed=%d, totalMembers=%d", iterCount, len(members))
+	
+	result := lib.ValidatorSet{
 		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
 		TotalPower:    totalPower,
 		MinimumMaj23:  (2*totalPower)/3 + 1,
 		NumValidators: uint64(len(members)),
-	}, nil
+	}
+	
+	s.log.Infof("[GetAllDelegates] SUCCESS - NumValidators=%d, TotalPower=%d", result.NumValidators, result.TotalPower)
+	return result, nil
 }
 
 // GetDelegatesPaginated() returns a page of delegates
