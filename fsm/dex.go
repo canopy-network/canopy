@@ -14,34 +14,38 @@ import (
 
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
+	var localBatch *lib.DexBatch
 	// exit without handling as the 'rootHeight' explicitly not set
 	if rootHeight == 0 {
 		return
 	}
-	// handle 'self certificate' as a trigger to get dex data from the root chain
-	if chainId == s.Config.ChainId {
-		var localBatch *lib.DexBatch
+	isNested := chainId == s.Config.ChainId
+	// if nested, replace chainId with root chainId
+	if isNested {
 		// set 'chain id' as the root chain
 		if chainId, err = s.GetRootChainId(); err != nil {
 			return
 		}
-		// get the local locked dex batch
-		localBatch, err = s.GetDexBatch(chainId, true)
-		if err != nil {
-			return
-		}
-		// if should execute the liveness fallback protocol
-		livenessFallback := !localBatch.IsEmpty() && (s.Height()-localBatch.LockedHeight) >= 15
+	}
+	// get the local locked dex batch
+	localBatch, err = s.GetDexBatch(chainId, true)
+	if err != nil {
+		return
+	}
+	// if should execute the liveness fallback protocol
+	livenessFallback := !localBatch.IsEmpty() && (s.Height()-localBatch.LockedHeight) >= 5
+	// if nested, replace remoteBatch (which is a local batch) with truly a remote batch
+	if isNested {
 		// get root chain dex batch
 		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootHeight, s.Config.ChainId, livenessFallback); err != nil {
 			return
 		}
-		// if executing the liveness fallback
-		if livenessFallback {
-			// handle the liveness fallback
-			if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
-				return
-			}
+	}
+	// if executing the liveness fallback
+	if livenessFallback {
+		// handle the liveness fallback
+		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
+			return
 		}
 	}
 	// handle the remote dex batch
