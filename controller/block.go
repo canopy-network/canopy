@@ -614,7 +614,7 @@ func (c *Controller) CheckAndSetLastCertificate(candidate *lib.BlockHeader) lib.
 		}
 		// define a convenience variable for the 'root height'
 		//rHeight, height := candidate.LastQuorumCertificate.Header.RootHeight, candidate.LastQuorumCertificate.Header.Height
-		g // get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
+		// get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
 		//vs, err := c.LoadCommittee(c.LoadRootChainId(height), rHeight) // TODO investigate - during consensus it works without -1 but during syncing might need -1?
 		//if err != nil {
 		//	// exit with error
