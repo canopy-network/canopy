@@ -535,6 +535,9 @@ func (s *SMT) addSyntheticBorders() (cleanup func() lib.ErrorI, err lib.ErrorI) 
 	}
 	// reset the operations
 	s.operations = saved
+	// CRITICAL: clear nodeCache after border insertion to prevent memory accumulation
+	// during parallel processing. The border insertion traverses and caches many nodes.
+	s.nodeCache = make(map[string]*node)
 	// define a cleanup function to remove the borders
 	cleanup = func() lib.ErrorI {
 		// reset the SMT
@@ -545,7 +548,14 @@ func (s *SMT) addSyntheticBorders() (cleanup func() lib.ErrorI, err lib.ErrorI) 
 			s.operations[i] = &node{Key: n.Key, delete: true}
 		}
 		// remove synthetic borders
-		return s.commit(false)
+		if err := s.commit(false); err != nil {
+			return err
+		}
+		// CRITICAL: clear nodeCache after border cleanup to prevent memory leaks
+		// This cleanup runs in defer at the very end, and the cache can accumulate
+		// nodes from the border deletion operations.
+		s.nodeCache = make(map[string]*node)
+		return nil
 	}
 	return
 }
