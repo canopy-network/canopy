@@ -11,7 +11,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
-	"github.com/cockroachdb/pebble/v2/bloom"
+	"github.com/cockroachdb/pebble/v2/sstable"
 	"github.com/cockroachdb/pebble/v2/vfs"
 )
 
@@ -79,23 +79,46 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 	return NewStore(config, filepath.Join(config.DataDirPath, `canopy`), metrics, l)
 }
 
-// NewStore() creates a new instance of a disk DB
+// NewStore() creates a new instance of a disk DB˙
 func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	cache := pebble.NewCache(256 << 20) // 256MB cache
+	cache := pebble.NewCache(256 << 20) // 256 MB cache
 	defer cache.Unref()
-	db, err := pebble.Open(path, &pebble.Options{
-		DisableWAL:            false,                       // Keep WAL but optimize other settings
-		MemTableSize:          512 << 20,                   // Larger memtable to reduce flushes
-		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
-		L0StopWritesThreshold: 40,                          // Much higher threshold
-		MaxOpenFiles:          5000,                        // More file handles
-		Cache:                 cache,                       // Block cache
-		FormatMajorVersion:    pebble.FormatColumnarBlocks, // Current format version
-		Logger:                log,                         // Use project's logger
-		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
-			func() pebble.BlockPropertyCollector { return newVersionedPropertyCollector() },
+
+	lvl := pebble.LevelOptions{
+		FilterPolicy:   nil,       // no blooms for scans
+		BlockSize:      128 << 10, // 128 KB data blocks
+		IndexBlockSize: 512 << 10, // 512 KB index blocks
+		Compression: func() *sstable.CompressionProfile {
+			return sstable.ZstdCompression // Biggest compression at the expense of more CPU resources
 		},
-		Levels: [7]pebble.LevelOptions{{FilterPolicy: bloom.FilterPolicy(12)}},
+	}
+
+	db, err := pebble.Open(path, &pebble.Options{
+		DisableWAL:                  false,    // Keep WAL but optimize other settings
+		MemTableSize:                64 << 20, // Larger memtable to reduce flushes
+		MemTableStopWritesThreshold: 4,
+		L0CompactionThreshold:       10,                          // Delay compaction during bulk writes
+		L0StopWritesThreshold:       16,                          // Much higher threshold
+		MaxOpenFiles:                5000,                        // More file handles
+		Cache:                       cache,                       // Block cache
+		FormatMajorVersion:          pebble.FormatColumnarBlocks, // Current format version
+		LBaseMaxBytes:               512 << 20,                   // [512MB] Maximum size of the LBase level
+		Levels: [7]pebble.LevelOptions{
+			lvl, lvl, lvl, lvl, lvl, lvl, lvl, // apply same scan-optimized blocks across all levels
+		},
+		TargetFileSizes: [7]int64{
+			32 << 20,  // L0: 32MB
+			64 << 20,  // L1: 64MB
+			128 << 20, // L2: 128MB
+			256 << 20, // L3: 256MB
+			256 << 20, // L4: 256MB
+			256 << 20, // L5: 256MB
+			256 << 20, // L6: 256MB
+		},
+		Logger: log, // Use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
+			newVersionedPropertyCollector,
+		},
 	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
@@ -270,7 +293,7 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 			hssCompaction := (version/compactionInterval)%4 == 0
 			// trigger compaction of store keys
 			if err := s.Compact(hssCompaction); err != nil {
-				s.log.Errorf("failed to compact keys: %s", err)
+				s.log.Errorf("key compaction failed: %s", err)
 			}
 		}()
 	}
@@ -487,7 +510,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	s.log.Debugf("key compaction started at height %d", version)
 	// create a timeout to limit the duration of the compaction process
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	// create a batch to set the keys to be removed by the compaction
 	batch := s.db.NewBatch()
