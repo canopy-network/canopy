@@ -1,0 +1,16 @@
+# Generated files
+node_modules/
+dist/
+build/
+coverage/
+
+# Generated protobuf files
+src/proto/index.js
+src/proto/index.d.ts
+
+# Package files
+package-lock.json
+*.log
+
+# Documentation
+CHANGELOG.md

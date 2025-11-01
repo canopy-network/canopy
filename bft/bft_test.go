@@ -141,7 +141,7 @@ func TestStartElectionVotePhase(t *testing.T) {
 				}
 			}
 			pub, _, expectedView := c.valKeys[0].PublicKey(), c.valKeys[0], lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				RootHeight: 1,
@@ -217,14 +217,14 @@ func TestStartProposePhase(t *testing.T) {
 				multiKey = c.simElectionVotePhase(t, 0, test.hasBE, test.hasLivenessHQC, test.hasSafetyHQC, 0)
 			}
 			expectedView, expectedQCView := lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				Round:      0,
 				Phase:      Propose,
 				RootHeight: 1,
 			}, lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				RootHeight: 1,
@@ -389,14 +389,14 @@ func TestStartPrecommitPhase(t *testing.T) {
 				Round:      0,
 				Phase:      Precommit,
 				RootHeight: 1,
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 			}, lib.View{
 				Height:     1,
 				Round:      0,
 				Phase:      ProposeVote,
 				RootHeight: 1,
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 			}
 			if test.has23MajPropVote {
@@ -477,7 +477,7 @@ func TestStartPrecommitVotePhase(t *testing.T) {
 				c.bft.ProposerKey = []byte("some other proposer")
 			}
 			expectedView := lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				Round:      0,
@@ -537,14 +537,14 @@ func TestStartCommitPhase(t *testing.T) {
 			c := newTestConsensus(t, Commit, 3)
 			multiKey, blockHash, resultsHash := crypto.MultiPublicKeyI(nil), []byte(nil), []byte(nil)
 			expectedView, expectedQCView := lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				Round:      0,
 				RootHeight: 1,
 				Phase:      Commit,
 			}, lib.View{
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Height:     1,
 				Round:      0,
@@ -649,7 +649,7 @@ func TestStartCommitProcessPhase(t *testing.T) {
 				Height:     1,
 				Round:      1,
 				RootHeight: 1,
-				NetworkId:  lib.CanopyMainnetNetworkId,
+				NetworkId:  lib.MainnetNetworkId,
 				ChainId:    lib.CanopyChainId,
 				Phase:      PrecommitVote,
 			}
@@ -690,7 +690,7 @@ func TestRoundInterrupt(t *testing.T) {
 		msg, ok := m.(*Message)
 		require.True(t, ok)
 		require.EqualExportedValues(t, msg.Qc.Header, &lib.View{
-			NetworkId:  lib.CanopyMainnetNetworkId,
+			NetworkId:  lib.MainnetNetworkId,
 			Height:     1,
 			Round:      0,
 			RootHeight: 1,

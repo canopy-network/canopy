@@ -12,6 +12,7 @@
       "url": "http://node-2:40002"
     }
   ],
+  "plugin": false,
   "runVDF": false,
   "headless": false,
   "walletPort": "40000",

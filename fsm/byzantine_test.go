@@ -966,7 +966,7 @@ func TestSlashTracker(t *testing.T) {
 				val, e := sm.GetValidator(addr)
 				require.NoError(t, e)
 				// execute the slash function call and ensure no error
-				require.NoError(t, sm.SlashValidator(val, s.ChainId, s.Percent, valParams))
+				require.NoError(t, sm.SlashValidator(addr.Bytes(), s.ChainId, s.Percent, valParams))
 				// validate the slash tracker state
 				require.Equal(t, s.expectedTotalSlashState, sm.slashTracker.GetTotalSlashPercent(s.Address, s.ChainId))
 				// retrieve the validator
