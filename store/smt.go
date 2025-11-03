@@ -245,10 +245,6 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 			subtree.reset()
 			// process operations in this subtree
 			err := subtree.commit(true)
-			// explicitly clear subtree resources to help GC
-			subtree.nodeCache = nil
-			subtree.operations = nil
-			subtree.traversed = nil
 			// send result back
 			resultChan <- subtreeResult{index: idx, err: err}
 		}(i, groups[i], subtreeRoots[i])
@@ -263,14 +259,6 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 			return result.err
 		}
 	}
-	
-	// close channel to free resources
-	close(resultChan)
-	
-	// clear groups to free memory before final steps
-	for i := range groups {
-		groups[i] = nil
-	}
 
 	// after all subtrees are processed, the tree state is already consistent
 	// because each subtree operation updated the shared store
@@ -279,9 +267,6 @@ func (s *SMT) CommitParallel(unsortedOps map[uint64]valueOp) (err lib.ErrorI) {
 	if err != nil {
 		return err
 	}
-	
-	// clear the main tree's nodeCache to free memory after parallel processing
-	s.nodeCache = make(map[string]*node)
 
 	return nil
 }
@@ -562,19 +547,13 @@ func (s *SMT) getSubtreeRoots() (roots []*node, err lib.ErrorI) {
 	return
 }
 
-// createSubtree() initializes the subtree structure with a smaller cache size
+// createSubtree() initializes the subtree structure
 func (s *SMT) createSubtree(root *node, operations []*node) *SMT {
-	// Use a smaller initial cache size for subtrees to reduce memory pressure
-	// The cache will grow as needed but start smaller
-	initialCacheSize := len(operations) * 2 // heuristic: 2x operations
-	if initialCacheSize > MaxCacheSize/NumSubtrees {
-		initialCacheSize = MaxCacheSize / NumSubtrees
-	}
 	return &SMT{
 		store:        s.store,
 		root:         root,
 		keyBitLength: s.keyBitLength,
-		nodeCache:    make(map[string]*node, initialCacheSize),
+		nodeCache:    make(map[string]*node),
 		operations:   operations,
 		minKey:       s.minKey,
 		maxKey:       s.maxKey,
@@ -641,8 +620,7 @@ func (s *SMT) resetGCP() {
 func (s *SMT) setNode(n *node) lib.ErrorI {
 	// check cache max size
 	if len(s.nodeCache) >= MaxCacheSize {
-		// create new cache and let GC collect the old one
-		s.nodeCache = make(map[string]*node)
+		s.nodeCache = make(map[string]*node, MaxCacheSize)
 	}
 	// set in cache
 	s.nodeCache[string(n.Key.bytes())] = n
