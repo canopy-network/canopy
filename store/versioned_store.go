@@ -83,28 +83,30 @@ func (vs *VersionedStore) Get(key []byte) ([]byte, lib.ErrorI) {
 
 // get() retrieves the latest version of a key using reverse seek
 func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib.ErrorI) {
-	// strictly iterate over this userKey's versions
-	lb := encodeUserKey(key)
 	var seekKey []byte
 	if vs.version != maxVersion {
 		// seek to boundary just above snapshot to land on newest visible
 		seekKey = vs.makeVersionedKey(key, vs.version+1)
 	}
-	// create a new iterator
-	i, err := vs.newVersionedIterator(lb, true, false)
+	// strictly iterate over this userKey's versions
+	i, err := vs.newVersionedIterator(encodeUserKey(key), true, false)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer i.Close()
 	// position iterator
 	iter := i.iter
-	if !i.iter.SeekLT(seekKey) {
-		i.iter.SeekGE(key)
-	}
+	iter.SeekGE(seekKey)
 	// find latest version ≤ version
-	for ; i.iter.Valid(); i.iter.Next() {
-		userKey, ver, e := parseVersionedKey(iter.Key())
-		if e != nil || !bytes.Equal(userKey, key) || ver > vs.version {
+	for ; iter.Valid(); iter.Next() {
+		// validate version
+		ver := parseVersion(iter.Key())
+		if ver > vs.version {
+			continue
+		}
+		// validate user key
+		userKey, _, e := parseVersionedKey(iter.Key(), false)
+		if e != nil || !bytes.Equal(userKey, key) {
 			continue
 		}
 		// parse the value to extract tombstone and actual value
@@ -210,16 +212,16 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 
 // VersionedIterator implements  iteration with single-pass key deduplication
 type VersionedIterator struct {
-	iter        *pebble.Iterator
-	store       *VersionedStore
-	prefix      []byte
-	reverse     bool
-	key         []byte
-	value       []byte
-	isValid     bool
-	initialized bool
-	lastUserKey []byte
-	allVersions bool
+	iter           *pebble.Iterator
+	store          *VersionedStore
+	prefix         []byte
+	reverse        bool
+	key            []byte
+	value          []byte
+	isValid        bool
+	initialized    bool
+	lastEncodedKey []byte
+	allVersions    bool
 }
 
 // Valid returns true if the iterator is positioned at a valid entry
@@ -276,29 +278,47 @@ func (vi *VersionedIterator) advanceToNextKey() {
 	vi.isValid, vi.key, vi.value = false, nil, nil
 	// while the iterator is valid - step to next key
 	for ; vi.iter.Valid(); vi.step() {
-		userKey, version, err := parseVersionedKey(vi.iter.Key())
-		// skip over the 'previous userKey' to go to the next 'userKey'
-		if err != nil || version > vi.store.version || (vi.lastUserKey != nil &&
-			bytes.Equal(userKey, vi.lastUserKey)) {
+		// validate version
+		version := parseVersion(vi.iter.Key())
+		if version > vi.store.version {
+			// skip over the 'previous userKey' to go to the next 'userKey'
 			continue
 		}
+		// validate key and avoid duplicates
+		encodedKey := extractEncodedKey(vi.iter.Key())
+		if encodedKey == nil || (vi.lastEncodedKey != nil && bytes.Equal(encodedKey, vi.lastEncodedKey)) {
+			continue
+		}
+		// new key found, perform full parsing
+		userKey, _, err := parseVersionedKey(vi.iter.Key(), false)
+		if err != nil {
+			continue
+		}
+		// reuse buffer if capacity is sufficient
+		vi.lastEncodedKey = ensureCapacity(vi.lastEncodedKey, len(encodedKey))
+		copy(vi.lastEncodedKey, encodedKey)
+		vi.lastEncodedKey = vi.lastEncodedKey[:len(encodedKey)]
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
+			// copy encoded key as is currently a reference
 			for vi.iter.Prev() {
-				prevUserKey, prevVersion, err := parseVersionedKey(vi.iter.Key())
-				if err != nil || !bytes.Equal(userKey, prevUserKey) || prevVersion > vi.store.version {
+				prevVersion := parseVersion(vi.iter.Key())
+				// validate version
+				if prevVersion > vi.store.version {
+					break
+				}
+				// validate key
+				prevEncodedKey := extractEncodedKey(vi.iter.Key())
+				if prevEncodedKey == nil || !bytes.Equal(vi.lastEncodedKey, prevEncodedKey) {
 					break
 				}
 			}
+			// got back to the highest version
 			vi.iter.Next()
 			if version > vi.store.version {
 				continue
 			}
 		}
-		// reuse buffer if capacity is sufficient
-		vi.lastUserKey = ensureCapacity(vi.lastUserKey, len(userKey))
-		copy(vi.lastUserKey, userKey)
-		vi.lastUserKey = vi.lastUserKey[:len(userKey)]
 		// extract value
 		rawValue, valErr := vi.iter.ValueAndErr()
 		if valErr != nil {
@@ -361,16 +381,18 @@ func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []
 
 // parseVersionedKey() extracts components and converts back from inverted version
 // k = [Enc(UserKey)][0x00,0x00][InvertedVersion]
-func parseVersionedKey(versionedKey []byte) (userKey []byte, version uint64, err lib.ErrorI) {
+func parseVersionedKey(versionedKey []byte, versionParse bool) (userKey []byte, version uint64, err lib.ErrorI) {
+	// validate key length
 	min := len(separator) + VersionSize
 	if len(versionedKey) < min {
 		return nil, 0, ErrInvalidKey()
 	}
+	// validate separator + version size
 	encEnd := len(versionedKey) - (len(separator) + VersionSize)
 	if encEnd < 0 {
 		return nil, 0, ErrInvalidKey()
 	}
-	// verify terminator
+	// validate separator
 	if !bytes.Equal(versionedKey[encEnd:encEnd+len(separator)], separator) {
 		return nil, 0, ErrInvalidKey()
 	}
@@ -379,9 +401,33 @@ func parseVersionedKey(versionedKey []byte) (userKey []byte, version uint64, err
 	if derr != nil {
 		return nil, 0, ErrInvalidKey()
 	}
-	// invert version
-	version = ^binary.BigEndian.Uint64(versionedKey[encEnd+len(separator):])
+	if versionParse {
+		// get the version from the last 8 bytes
+		version = parseVersion(versionedKey)
+	}
 	return decoded, version, nil
+}
+
+// parseVersion extracts version directly from the last 8 bytes without full parsing
+func parseVersion(versionedKey []byte) uint64 {
+	if len(versionedKey) < VersionSize {
+		return 0
+	}
+	// extract inverted version from last 8 bytes
+	offset := len(versionedKey) - VersionSize
+	return ^binary.BigEndian.Uint64(versionedKey[offset:])
+}
+
+// extractEncodedKey returns the key portion without version
+// Returns: [Enc(UserKey)][0x00,0x00] (includes separator, excludes version)
+// Note: returns a reference, clone if needed
+func extractEncodedKey(versionedKey []byte) []byte {
+	minLen := len(separator) + VersionSize
+	if len(versionedKey) < minLen {
+		return nil
+	}
+	// return everything except the last 8 bytes (version)
+	return versionedKey[:len(versionedKey)-VersionSize]
 }
 
 // parseValueWithTombstone() extracts tombstone and actual value
@@ -477,11 +523,11 @@ func (versionedCollector) MapPointKey(key pebble.InternalKey, _ []byte) (sstable
 		// ignore malformed keys
 		return sstable.BlockInterval{}, nil
 	}
-	// Decode inverted suffix directly. Avoid any higher-level parser here.
-	_, version, err := parseVersionedKey(userKey)
+	// decode version directly
+	version := parseVersion(userKey)
 	// ignore invalid keys, math.MaxUint64 is not supported as an upper bound range for the interval
 	// collector as is a half range of type [min, max)
-	if err != nil || version == maxVersion {
+	if version == 0 || version == maxVersion {
 		return sstable.BlockInterval{}, nil
 	}
 	// set the interval for the key
