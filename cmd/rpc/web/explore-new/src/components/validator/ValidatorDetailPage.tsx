@@ -136,8 +136,6 @@ const ValidatorDetailPage: React.FC = () => {
                 compound,
                 status,
                 rank: rank || 0, // Use rank from query param, 0 if not provided
-                maxPausedHeight,
-                unstakingHeight,
                 nestedChains: generateNestedChains(committees, stakedAmount)
             }
 

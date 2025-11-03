@@ -99,7 +99,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         {metric.suffix}
                     </div>
                     {metric.subtitle && (
-                        <div className={`text-xs mt-1 ${metric.subtitleColor || 'text-gray-400'}`}>
+                        <div className="text-xs mt-1 text-gray-400">
                             {metric.subtitle}
                         </div>
                     )}
