@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useLocation } from 'react-router-dom'
 import ValidatorsFilters from './ValidatorsFilters'
 import ValidatorsTable from './ValidatorsTable'
-import { useAllValidators, useAllBlocksCache } from '../../hooks/useApi'
+import { useAllValidators, useAllDelegators, useAllBlocksCache } from '../../hooks/useApi'
 
 interface Validator {
     rank: number
@@ -35,9 +36,21 @@ const ValidatorsPage: React.FC = () => {
     const [filteredValidators, setFilteredValidators] = useState<Validator[]>([])
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
+    const location = useLocation()
+
+    // Determine if we're on delegators page
+    const isDelegatorsPage = location.pathname === '/delegators'
+    const initialFilter = isDelegatorsPage ? 'delegate' : 'all'
+    const pageTitle = isDelegatorsPage ? 'Delegators' : undefined
 
     // Hook to get validators data with pagination
-    const { data: validatorsData, isLoading, refetch: refetchValidators } = useAllValidators()
+    // Use useAllDelegators when on delegators page to filter at API level
+    const { data: allValidatorsData, isLoading: isLoadingValidators, refetch: refetchValidators } = useAllValidators()
+    const { data: delegatorsData, isLoading: isLoadingDelegators, refetch: refetchDelegators } = useAllDelegators()
+    
+    const validatorsData = isDelegatorsPage ? delegatorsData : allValidatorsData
+    const isLoading = isDelegatorsPage ? isLoadingDelegators : isLoadingValidators
+    const refetch = isDelegatorsPage ? refetchDelegators : refetchValidators
 
     // Hook to get blocks data to calculate blocks produced
     const { data: blocksData, refetch: refetchBlocks } = useAllBlocksCache()
@@ -64,8 +77,16 @@ const ValidatorsPage: React.FC = () => {
         if (!validatorsData) return []
 
         // Real structure: { results: [...], totalCount: number }
-        const validatorsList = validatorsData.results || []
+        let validatorsList = validatorsData.results || []
         if (!Array.isArray(validatorsList)) return []
+
+        // Filter out delegators when on validators page (only show non-delegators)
+        if (!isDelegatorsPage) {
+            validatorsList = validatorsList.filter((validator: any) => {
+                // Exclude delegators (those with delegate: true)
+                return !validator.delegate || validator.delegate === false
+            })
+        }
 
         // Calculate total stake for percentages
         const totalStake = validatorsList.reduce((sum: number, validator: any) =>
@@ -163,7 +184,7 @@ const ValidatorsPage: React.FC = () => {
             estimatedRewardRate: validator.estimatedRewardRate,
             stakingPower: validator.stakingPower
         }))
-    }, [validatorsData])
+    }, [validatorsData, isDelegatorsPage])
 
     // Effect to update validators when data changes
     useEffect(() => {
@@ -192,7 +213,7 @@ const ValidatorsPage: React.FC = () => {
     // Handle refresh
     const handleRefresh = () => {
         setLoading(true)
-        refetchValidators()
+        refetch()
         refetchBlocks()
     }
 
@@ -215,6 +236,8 @@ const ValidatorsPage: React.FC = () => {
                 validators={allValidators}
                 onFilteredValidators={handleFilteredValidators}
                 onRefresh={handleRefresh}
+                initialFilter={initialFilter}
+                pageTitle={pageTitle}
             />
 
             <ValidatorsTable
@@ -223,6 +246,7 @@ const ValidatorsPage: React.FC = () => {
                 totalCount={totalValidators}
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
+                pageTitle={pageTitle}
             />
         </motion.div>
     )

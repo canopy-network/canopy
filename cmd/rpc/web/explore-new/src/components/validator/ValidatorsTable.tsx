@@ -35,9 +35,10 @@ interface ValidatorsTableProps {
     totalCount?: number
     currentPage?: number
     onPageChange?: (page: number) => void
+    pageTitle?: string
 }
 
-const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading = false, totalCount = 0, currentPage = 1, onPageChange }) => {
+const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading = false, totalCount = 0, currentPage = 1, onPageChange, pageTitle }) => {
     const navigate = useNavigate()
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
@@ -215,7 +216,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         <div className="rounded-xl border border-gray-800/60 bg-card shadow-xl p-5">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg text-white/90 inline-flex items-center gap-2">
-                    {validatorsTexts.page.title}
+                    {pageTitle || validatorsTexts.page.title}
                     {loading && <i className="fa-solid fa-circle-notch fa-spin text-gray-400 text-sm" aria-hidden="true"></i>}
                 </h3>
                 <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">

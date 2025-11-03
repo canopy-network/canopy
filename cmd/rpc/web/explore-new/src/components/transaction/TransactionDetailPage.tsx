@@ -1,9 +1,28 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useTxByHash, useBlockByHeight } from '../../hooks/useApi'
+import { useTxByHash, useBlockByHeight, useParams as useParamsHook } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
+
+// Helper function to convert micro denomination to CNPY
+const toCNPY = (micro: number): number => {
+    return micro / 1000000
+}
+
+// Helper function to format fee - shows real value from endpoint in micro denomination
+const formatFee = (micro: number): string => {
+    if (micro === 0) return '0 CNPY'
+    // Always show the real value from endpoint in micro denomination first
+    const microFormatted = micro.toLocaleString('en-US')
+    const cnpy = toCNPY(micro)
+    // If >= 1 CNPY, show both micro and CNPY
+    if (cnpy >= 1) {
+        return `${microFormatted} CNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
+    }
+    // If < 1 CNPY, show only micro denomination
+    return `${microFormatted} CNPY`
+}
 
 const TransactionDetailPage: React.FC = () => {
     const { transactionHash } = useParams<{ transactionHash: string }>()
@@ -19,20 +38,72 @@ const TransactionDetailPage: React.FC = () => {
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
 
+    // Get params to access fee information
+    const { data: paramsData } = useParamsHook(0)
+
+    // Extract transaction data safely (must be before any conditional returns)
+    const transaction = transactionData?.result || transactionData
+    const transactionFeeMicro = transaction?.transaction?.fee || transaction?.fee || 0
+    const txType = transaction?.transaction?.type || transaction?.messageType || transaction?.type || 'send'
+
+    // Get fee params directly from endpoint
+    const feeParams = paramsData?.fee || {}
+    
+    // Map transaction type to fee param key (directly from endpoint)
+    const getFeeParamKey = (type: string): string => {
+        const typeMap: Record<string, string> = {
+            'send': 'sendFee',
+            'stake': 'stakeFee',
+            'edit-stake': 'editStakeFee',
+            'editStake': 'editStakeFee',
+            'unstake': 'unstakeFee',
+            'pause': 'pauseFee',
+            'unpause': 'unpauseFee',
+            'changeParameter': 'changeParameterFee',
+            'daoTransfer': 'daoTransferFee',
+            'certificateResults': 'certificateResultsFee',
+            'subsidy': 'subsidyFee',
+            'createOrder': 'createOrderFee',
+            'editOrder': 'editOrderFee',
+            'deleteOrder': 'deleteOrderFee',
+        }
+        return typeMap[type.toLowerCase()] || 'sendFee'
+    }
+    
+    // Get minimum fee for this transaction type (directly from endpoint)
+    const minimumFeeForTxType = feeParams[getFeeParamKey(txType)] || feeParams.sendFee || 0
+
+    // Helper function to normalize hash for comparison
+    const normalizeHash = (hash: string): string => {
+        if (!hash) return ''
+        // Remove '0x' prefix if present and convert to lowercase
+        return hash.replace(/^0x/i, '').toLowerCase()
+    }
+
     // Extract all transaction hashes from the block
     useEffect(() => {
         if (blockData?.transactions && Array.isArray(blockData.transactions)) {
+            // Store both normalized and original hashes for comparison and navigation
             const txHashes = blockData.transactions.map((tx: any) => {
-                // Try different possible hash fields
-                return tx.txHash || tx.hash || tx.transactionHash || tx.id
-            }).filter(Boolean)
+                // Try different possible hash fields - keep original format
+                return tx.txHash || tx.hash || tx.transactionHash || tx.id || null
+            }).filter(Boolean) as string[]
 
             setBlockTransactions(txHashes)
 
-            // Find current transaction index
-            const currentIndex = txHashes.findIndex((hash: string) => hash === transactionHash)
-            setCurrentTxIndex(currentIndex)
+            // Find current transaction index (normalize both hashes for comparison)
+            const normalizedCurrentHash = normalizeHash(transactionHash || '')
+            const currentIndex = txHashes.findIndex((hash: string) => {
+                if (!hash) return false
+                return normalizeHash(hash) === normalizedCurrentHash
+            })
+            setCurrentTxIndex(currentIndex >= 0 ? currentIndex : -1)
+        } else if (blockData && (!blockData.transactions || (Array.isArray(blockData.transactions) && blockData.transactions.length === 0))) {
+            // Block exists but has no transactions
+            setBlockTransactions([])
+            setCurrentTxIndex(-1)
         } else {
+            // No block data yet
             setBlockTransactions([])
             setCurrentTxIndex(-1)
         }
@@ -106,18 +177,22 @@ const TransactionDetailPage: React.FC = () => {
     }
 
     const handlePreviousTx = () => {
-        if (currentTxIndex > 0 && blockTransactions.length > 0) {
+        if (currentTxIndex > 0 && blockTransactions.length > 0 && currentTxIndex !== -1) {
             const prevTxHash = blockTransactions[currentTxIndex - 1]
-            navigate(`/transaction/${prevTxHash}`)
+            if (prevTxHash) {
+                navigate(`/transaction/${prevTxHash}`)
+            }
         } else {
             navigate(-1)
         }
     }
 
     const handleNextTx = () => {
-        if (currentTxIndex < blockTransactions.length - 1 && blockTransactions.length > 0) {
+        if (currentTxIndex >= 0 && currentTxIndex < blockTransactions.length - 1 && blockTransactions.length > 0) {
             const nextTxHash = blockTransactions[currentTxIndex + 1]
-            navigate(`/transaction/${nextTxHash}`)
+            if (nextTxHash) {
+                navigate(`/transaction/${nextTxHash}`)
+            }
         } else {
             navigate(-1)
         }
@@ -162,22 +237,44 @@ const TransactionDetailPage: React.FC = () => {
         )
     }
 
-    // Extract data from the API response
-    const transaction = transactionData.result || transactionData
-    const status = transaction.status || 'success'
-    const blockHeight = transaction.height || transaction.blockHeight || transaction.block || 0
-    const timestamp = transaction.transaction?.time || transaction.timestamp || transaction.time || new Date().toISOString()
-    const value = transaction.value || '0 CNPY'
-    const fee = transaction.fee || '0.025 CNPY'
-    const gasPrice = transaction.gasPrice || '20 Gwei'
-    const gasUsed = transaction.gasUsed || '21,000'
+    // Extract data from the API response (using transaction already extracted above)
+    const status = transaction?.status || 'success'
+    const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
+    const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
+    const fee = formatFee(transactionFeeMicro)
+    
     const from = transaction.sender || transaction.from || '0x0000000000000000000000000000000000000000'
-    const to = transaction.to || '0x0000000000000000000000000000000000000000'
+    const to = transaction.recipient || transaction.to || '0x0000000000000000000000000000000000000000'
     const nonce = transaction.nonce || 0
-    const txType = transaction.transaction?.type || transaction.messageType || transaction.type || 'Transfer'
-    const position = transaction?.msg?.qc?.header?.round || 0
+    const position = transaction?.index || transaction?.msg?.qc?.header?.round || 0
     const confirmations = transaction.confirmations || 142
     const txHash = transaction.txHash || transactionHash || ''
+    
+    // Extract amount from transaction according to message type (from README)
+    let amountMicro = 0
+    if (transaction.transaction?.msg) {
+        const msg = transaction.transaction.msg
+        // Check for different message types according to README
+        if (msg.messageSend?.amount !== undefined) {
+            amountMicro = msg.messageSend.amount
+        } else if (msg.messageStake?.amount !== undefined) {
+            amountMicro = msg.messageStake.amount
+        } else if (msg.messageEditStake?.amount !== undefined) {
+            amountMicro = msg.messageEditStake.amount
+        } else if (msg.messageDAOTransfer?.amount !== undefined) {
+            amountMicro = msg.messageDAOTransfer.amount
+        } else if (msg.messageSubsidy?.amount !== undefined) {
+            amountMicro = msg.messageSubsidy.amount
+        } else if (msg.messageCreateOrder?.amountForSale !== undefined) {
+            amountMicro = msg.messageCreateOrder.amountForSale
+        } else if (msg.messageEditOrder?.amountForSale !== undefined) {
+            amountMicro = msg.messageEditOrder.amountForSale
+        } else if (msg.amount !== undefined) {
+            // Fallback for direct amount field
+            amountMicro = msg.amount
+        }
+    }
+    const value = amountMicro > 0 ? formatFee(amountMicro) : '0 CNPY'
 
     return (
         <motion.div
@@ -319,16 +416,6 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-orange-400 font-mono">{fee}</span>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Gas Price</span>
-                                        <span className="text-white font-mono text-sm">{gasPrice}</span>
-                                    </div>
-
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Gas Used</span>
-                                        <span className="text-white font-mono text-sm">{gasUsed}</span>
-                                    </div>
-
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
@@ -445,7 +532,7 @@ const TransactionDetailPage: React.FC = () => {
                                     <div>
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-gray-400 text-sm">Gas Used</span>
-                                            <span className="text-white font-mono text-sm">{gasUsed}</span>
+                                            <span className="text-white font-mono text-sm">{transactionFeeMicro.toLocaleString()}</span>
                                         </div>
                                         <div className="w-full bg-gray-700/50 rounded-full h-2">
                                             <div
@@ -455,19 +542,27 @@ const TransactionDetailPage: React.FC = () => {
                                         </div>
                                         <div className="flex justify-between items-center mt-1 text-xs text-gray-400">
                                             <span>0</span>
-                                            <span>{gasUsed} (Gas Limit)</span>
+                                            <span>{transactionFeeMicro.toLocaleString()} (Gas Limit)</span>
                                         </div>
                                     </div>
 
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-400 text-sm">Base Fee</span>
-                                            <span className="text-white font-mono text-sm">15 Gwei</span>
+                                            <span className="text-gray-400 text-sm">Transaction Fee</span>
+                                            <span className="text-white font-mono text-sm">{formatFee(transactionFeeMicro)}</span>
                                         </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400 text-sm">Priority Fee</span>
-                                            <span className="text-white font-mono text-sm">5 Gwei</span>
-                                        </div>
+                                        {minimumFeeForTxType > 0 && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-400 text-sm">Base Fee</span>
+                                                <span className="text-white font-mono text-sm">{formatFee(minimumFeeForTxType)}</span>
+                                            </div>
+                                        )}
+                                        {transactionFeeMicro > minimumFeeForTxType && minimumFeeForTxType > 0 && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-400 text-sm">Priority Fee</span>
+                                                <span className="text-white font-mono text-sm">{formatFee(transactionFeeMicro - minimumFeeForTxType)}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>

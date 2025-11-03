@@ -555,10 +555,10 @@ export function Validators(page: number, _: number) {
     return POST(rpcURL, pageHeightReq(page, 0), validatorsPath);
 }
 
-export function ValidatorsWithFilters(page: number, unstaking: number = 0, paused: number = 0, delegate: number = 0, committee: number = 0) {
+export function ValidatorsWithFilters(page: number, unstaking: number = 0, paused: number = 0, delegate: number = 0, committee: number = 0, perPage: number = 1000) {
     const request = {
         height: 0,
-        perPage: 10,
+        perPage: perPage,
         pageNumber: page,
         unstaking,
         paused,

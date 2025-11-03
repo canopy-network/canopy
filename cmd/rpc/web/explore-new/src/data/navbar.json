@@ -15,12 +15,12 @@
             "path": "/transactions"
           },
           {
-            "label": "Validators",
-            "path": "/validators"
-          },
-          {
             "label": "Accounts",
             "path": "/accounts"
+          },
+          {
+            "label": "Swaps",
+            "path": "/token-swaps"
           }
         ]
       },
@@ -29,16 +29,16 @@
         "path": "/staking",
         "children": [
           {
-            "label": "Governance",
-            "path": "/staking/governance"
+            "label": "Staking",
+            "path": "/staking"
           },
           {
-            "label": "Supply",
-            "path": "/staking/supply"
+            "label": "Validators",
+            "path": "/validators"
           },
           {
-            "label": "Token Swaps",
-            "path": "/token-swaps"
+            "label": "Delegators",
+            "path": "/delegators"
           }
         ]
       },
@@ -47,7 +47,15 @@
         "path": "/analytics",
         "children": [
           {
-            "label": "Network Analytics",
+            "label": "Supply",
+            "path": "/staking/supply"
+          },
+          {
+            "label": "Governance",
+            "path": "/staking/governance"
+          },
+          {
+            "label": "Network Charts",
             "path": "/analytics"
           }
         ]

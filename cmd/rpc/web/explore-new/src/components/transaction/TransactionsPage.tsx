@@ -136,7 +136,8 @@ const TransactionsPage: React.FC = () => {
                 }
             }
             const amount = tx.amount || tx.value || 0
-            const fee = tx.fee || 0.025 // Valor por defecto
+            // Extract fee from transaction - it comes in micro denomination from endpoint
+            const fee = tx.transaction?.fee || tx.fee || 0 // Fee is in micro denomination (uCNPY) according to README
             const status = tx.status || 'success'
             const blockHeight = tx.blockHeight || tx.height || 0
 
@@ -248,10 +249,23 @@ const TransactionsPage: React.FC = () => {
     const isLoadingData = isHashSearch ? isHashLoading : isLoading
     const displayTotalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : totalTransactions
 
+    // Helper function to format fee from micro denomination to display format
+    const formatFeeDisplay = (micro: number): string => {
+        if (micro === 0) return '0'
+        const microFormatted = micro.toLocaleString('en-US')
+        const cnpy = micro / 1000000
+        // If >= 1 CNPY, show both micro and CNPY, otherwise just micro
+        if (cnpy >= 1) {
+            return `${microFormatted} (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
+        }
+        return microFormatted
+    }
+
     const averageFee = React.useMemo(() => {
-        if (transactions.length === 0) return 0
+        if (transactions.length === 0) return '0'
         const totalFees = transactions.reduce((sum, tx) => sum + (tx.fee || 0), 0)
-        return (totalFees / transactions.length).toFixed(4)
+        const avgFeeMicro = totalFees / transactions.length
+        return formatFeeDisplay(avgFeeMicro)
     }, [transactions])
 
 

@@ -181,6 +181,45 @@ export const useAllValidators = () => {
     });
 };
 
+// Hook to get all delegators at once (using delegate filter = 1)
+export const useAllDelegators = () => {
+    return useQuery({
+        queryKey: ['all-delegators'],
+        queryFn: async () => {
+            // Get all pages of delegators with delegate filter = 1 (MustBe)
+            const allDelegators = []
+            let page = 1
+            let hasMore = true
+
+            while (hasMore) {
+                const response = await ValidatorsWithFilters(page, 0, 0, 1, 0) // delegate: 1 = MustBe
+                const delegators = response.results || response.validators || response.list || response.data || response
+
+                if (Array.isArray(delegators) && delegators.length > 0) {
+                    allDelegators.push(...delegators)
+                    page++
+
+                    // Check if we have more pages
+                    const totalPages = response.totalPages || Math.ceil((response.totalCount || 0) / 10)
+                    hasMore = page <= totalPages
+                } else {
+                    hasMore = false
+                }
+            }
+
+            return {
+                results: allDelegators,
+                totalCount: allDelegators.length,
+                totalPages: Math.ceil(allDelegators.length / 10)
+            }
+        },
+        staleTime: 300000, // Cache for 5 minutes
+        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchOnWindowFocus: false, // Don't refetch when window regains focus
+        gcTime: 600000 // Keep in cache for 10 minutes
+    });
+};
+
 // Hook to get validators with server-side filtering
 export const useValidatorsWithFilters = (page: number, unstaking: number = 0, paused: number = 0, delegate: number = 0, committee: number = 0) => {
     return useQuery({

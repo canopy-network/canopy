@@ -39,10 +39,17 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
             realMetrics.avgTransactionFee = sendFee / 1000000 // Convert to CNPY
         }
 
-        // 3. Validator Count - Real data from validators
+        // 3. Validator Count - Real ACTIVE validators based on API fields
+        // Active = not paused, not unstaking, and not delegate
         if (validatorsData?.results || validatorsData?.validators) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
-            realMetrics.validatorCount = validatorsList.length
+            const activeValidators = validatorsList.filter((v: any) => {
+                const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
+                const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
+                const isDelegate = v?.delegate === true
+                return !isUnstaking && !isPaused && !isDelegate
+            })
+            realMetrics.validatorCount = activeValidators.length
         }
 
         // 4. Pending Transactions - Real data from pending
@@ -63,9 +70,12 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
         // 7. Network Uptime - Calculate based on validator status
         if (validatorsData?.results || validatorsData?.validators) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
-            const activeValidators = validatorsList.filter((v: any) =>
-                !v.unstakingHeight || v.unstakingHeight === 0
-            )
+            const activeValidators = validatorsList.filter((v: any) => {
+                const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
+                const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
+                const isDelegate = v?.delegate === true
+                return !isUnstaking && !isPaused && !isDelegate
+            })
             const uptimePercentage = validatorsList.length > 0
                 ? (activeValidators.length / validatorsList.length) * 100
                 : 0

@@ -122,7 +122,13 @@ const Stages = () => {
 
 
     const stages: StageCardProps[] = [
-        { title: 'Staking %', data: `${stakingPercent.toFixed(1)}%`, isProgressBar: true, icon: <i className="fa-solid fa-chart-pie text-primary"></i>, metric: 'stakingPercent' },
+        { 
+            title: 'Staking %', 
+            data: `${stakingPercent.toFixed(1)}%`, 
+            isProgressBar: true, 
+            icon: <i className="fa-solid fa-chart-pie text-primary"></i>, 
+            metric: 'stakingPercent',
+        },
         { title: 'CNPY Staking', data: `+${convertNumber(delegatedOnlyCNPY)}`, isProgressBar: false, subtitle: <p className="text-sm text-primary">delta</p>, icon: <i className="fa-solid fa-coins text-primary"></i>, metric: 'cnpyStakingDelta' },
         { title: 'Total Supply', data: convertNumber(totalSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-wallet text-primary"></i>, metric: 'totalSupply' },
         { title: 'Liquid Supply', data: convertNumber(liquidSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-droplet text-primary"></i>, metric: 'liquidSupply' },
@@ -232,15 +238,37 @@ const Stages = () => {
                         )}
 
                         {(stage.isProgressBar || /%/.test(stage.data)) && (
-                            <div className="mt-4">
-                                <div className="h-2 w-full rounded bg-gray-700/40 overflow-hidden">
-                                    <motion.div
-                                        className="h-2 rounded bg-primary"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
-                                        transition={{ duration: 0.9, ease: 'easeOut' }}
-                                    />
+                            <div className="mt-2">
+                                <div className="h-2 w-full rounded bg-gray-700/40 overflow-hidden relative flex">
+                                    {stage.metric === 'stakingPercent' ? (
+                                        <>
+                                            {/* Staked portion in green */}
+                                            <motion.div
+                                                className="h-2 rounded-l bg-primary"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
+                                                transition={{ duration: 0.9, ease: 'easeOut' }}
+                                            />
+                                            {/* Liquid portion in gray */}
+                                            <motion.div
+                                                className="h-2 rounded-r bg-gray-500/60"
+                                                initial={{ width: 0 }}
+                                                animate={{ width: activated.has(index) ? `${100 - parsePercent(stage.data)}%` : 0 }}
+                                                transition={{ duration: 0.9, ease: 'easeOut' }}
+                                            />
+                                        </>
+                                    ) : (
+                                        <motion.div
+                                            className="h-2 rounded bg-primary"
+                                            initial={{ width: 0 }}
+                                            animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
+                                            transition={{ duration: 0.9, ease: 'easeOut' }}
+                                        />
+                                    )}
                                 </div>
+                                {stage.metric === 'stakingPercent' && (
+                                    <p className="text-xs text-gray-400 absolute mt-1">{convertNumber(liquidSupplyCNPY)} CNPY liquid</p>
+                                )}
                             </div>
                         )}
                     </motion.article>

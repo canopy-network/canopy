@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import BlockDetailHeader from './BlockDetailHeader'
 import BlockDetailInfo from './BlockDetailInfo'
 import BlockTransactions from './BlockTransactions'
 import BlockSidebar from './BlockSidebar'
-import { useBlockByHeight } from '../../hooks/useApi'
+import { useBlockByHeight, useAllBlocksCache } from '../../hooks/useApi'
 
 interface Block {
     height: number
@@ -48,7 +48,15 @@ const BlockDetailPage: React.FC = () => {
     const [loading, setLoading] = useState(true)
 
     // Hook to get specific block data by height
-    const { data: blockData, isLoading } = useBlockByHeight(parseInt(blockHeight || '0'))
+    const { data: blockData, isLoading, error } = useBlockByHeight(parseInt(blockHeight || '0'))
+    
+    // Get latest block to check if current block is the last one
+    const { data: blocksCache } = useAllBlocksCache()
+    
+    // Get latest block height from cache
+    const latestBlockHeight = useMemo(() => {
+        return blocksCache?.[0]?.blockHeader?.height || 0
+    }, [blocksCache])
 
     // Process block data when received
     useEffect(() => {
@@ -110,8 +118,16 @@ const BlockDetailPage: React.FC = () => {
     }
 
     const handleNextBlock = () => {
-        if (block) {
-            navigate(`/block/${block.height + 1}`)
+        if (!block) return
+        const nextHeight = block.height + 1
+        // Si aún no sabemos el último (cache no cargado), permite avanzar
+        if (latestBlockHeight === 0) {
+            navigate(`/block/${nextHeight}`)
+            return
+        }
+        // Con cache cargado, no dejar pasar del último
+        if (block.height < latestBlockHeight && nextHeight <= latestBlockHeight) {
+            navigate(`/block/${nextHeight}`)
         }
     }
 
@@ -204,7 +220,7 @@ const BlockDetailPage: React.FC = () => {
                 onPreviousBlock={handlePreviousBlock}
                 onNextBlock={handleNextBlock}
                 hasPrevious={block.height > 1}
-                hasNext={true}
+                hasNext={latestBlockHeight === 0 || block.height < latestBlockHeight}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -1,12 +1,18 @@
 import React from 'react'
 import blocksTexts from '../../data/blocks.json'
 
+interface DynamicFilter {
+    key: string
+    label: string
+}
+
 interface BlocksFiltersProps {
     activeFilter: string
     onFilterChange: (filter: string) => void
     totalBlocks: number
     sortBy: string
     onSortChange: (sort: string) => void
+    dynamicFilters: DynamicFilter[]
 }
 
 const BlocksFilters: React.FC<BlocksFiltersProps> = ({
@@ -14,14 +20,10 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
     onFilterChange,
     totalBlocks,
     sortBy,
-    onSortChange
+    onSortChange,
+    dynamicFilters
 }) => {
-    const filters = [
-        { key: 'all', label: blocksTexts.filters.allBlocks },
-        { key: 'hour', label: blocksTexts.filters.lastHour },
-        { key: '24h', label: blocksTexts.filters.last24h },
-        { key: 'week', label: blocksTexts.filters.lastWeek }
-    ]
+    const filters = dynamicFilters
 
     const sortOptions = [
         { key: 'height', label: 'Sort by Height' },
@@ -76,6 +78,11 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                             {filter.label}
                         </button>
                     ))}
+                    {activeFilter !== 'all' && (
+                        <span className="ml-3 text-xs text-gray-400 italic">
+                            Filtered by time from the last 100 cached blocks
+                        </span>
+                    )}
                 </div>
 
                 {/* Sort and Filter Controls */}
@@ -84,7 +91,7 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                         <select 
                             value={sortBy}
                             onChange={(e) => onSortChange(e.target.value)}
-                            className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                            className="bg-gray-700/50  rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         >
                             {sortOptions.map((option) => (
                                 <option key={option.key} value={option.key}>
@@ -93,7 +100,7 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                             ))}
                         </select>
                     </div>
-                    <button className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors">
+                    <button className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors">
                         <i className="fa-solid fa-filter text-xs"></i>
                         {blocksTexts.table.controls.filter}
                     </button>

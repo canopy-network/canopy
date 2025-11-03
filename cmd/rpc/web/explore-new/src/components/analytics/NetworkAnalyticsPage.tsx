@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { useCardData, useSupply, useValidators, useAllBlocksCache, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
+import { useCardData, useSupply, useAllValidators, useAllBlocksCache, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
 import AnalyticsFilters from './AnalyticsFilters'
 import KeyMetrics from './KeyMetrics'
 import NetworkActivity from './NetworkActivity'
@@ -42,7 +42,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     // Hooks to get REAL data
     const { data: cardData, isLoading: cardLoading } = useCardData()
     const { data: supplyData, isLoading: supplyLoading } = useSupply()
-    const { data: validatorsData, isLoading: validatorsLoading } = useValidators(1)
+    const { data: validatorsData, isLoading: validatorsLoading } = useAllValidators()
     const { data: blocksData, isLoading: blocksLoading } = useAllBlocksCache()
 
     // Convert searchParams (confirmed search values) to numbers for useBlocksInRange
@@ -136,6 +136,12 @@ const NetworkAnalyticsPage: React.FC = () => {
     useEffect(() => {
         if (cardData && supplyData && validatorsData && pendingData && paramsData) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
+            const activeValidators = validatorsList.filter((v: any) => {
+                const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
+                const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
+                const isDelegate = v?.delegate === true
+                return !isUnstaking && !isPaused && !isDelegate
+            })
             const totalStake = supplyData.staked || supplyData.stakedSupply || 0
             const pendingCount = pendingData.totalCount || 0
             const blockSize = paramsData.consensus?.blockSize || 1000000
@@ -156,7 +162,7 @@ const NetworkAnalyticsPage: React.FC = () => {
 
             setMetrics(prev => ({
                 ...prev,
-                validatorCount: validatorsList.length,
+                validatorCount: activeValidators.length,
                 totalValueLocked: totalStake / 1000000000000,
                 pendingTransactions: pendingCount,
                 blockTime: blockTime,

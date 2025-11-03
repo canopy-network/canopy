@@ -8,6 +8,42 @@ import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
+// List of Font Awesome icons for addresses
+const addressIcons = [
+    'fa-user',
+    'fa-user-tie',
+    'fa-user-shield',
+    'fa-user-circle',
+    'fa-user-ninja',
+    'fa-user-astronaut',
+    'fa-user-graduate',
+    'fa-user-md',
+    'fa-user-cog',
+    'fa-user-friends',
+    'fa-id-badge',
+    'fa-id-card',
+    'fa-id-card-alt',
+    'fa-briefcase',
+    'fa-briefcase-medical',
+    'fa-building',
+    'fa-landmark',
+    'fa-university',
+    'fa-hospital',
+    'fa-store'
+]
+
+// Generate a deterministic icon based on address hash
+const getIconForAddress = (address: string): string => {
+    if (!address || address === 'N/A') return 'fa-user'
+    // Simple hash function to get consistent icon for same address
+    let hash = 0
+    for (let i = 0; i < address.length; i++) {
+        hash = address.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    const index = Math.abs(hash) % addressIcons.length
+    return addressIcons[index]
+}
+
 const OverviewCards: React.FC = () => {
     // Data hooks
     const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
@@ -81,26 +117,26 @@ const OverviewCards: React.FC = () => {
                                 }
                             }
 
-                            // Get first 2 characters for the circle
-                            const fromInitials = from ? from.slice(0, 2).toUpperCase() : 'N/A'
-                            const toInitials = to ? to.slice(0, 2).toUpperCase() : 'N/A'
-
                             // Show "N/A" if no data available
                             const displayTo = to || 'N/A'
                             const displayFrom = from || 'N/A'
 
+                            // Get icons for addresses
+                            const fromIcon = getIconForAddress(displayFrom)
+                            const toIcon = getIconForAddress(displayTo)
+
                             return [
                                 <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
-                                        {fromInitials}
+                                    <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-primary">
+                                        <i className={`fa-solid ${fromIcon}`}></i>
                                     </div>
                                     <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>
                                 </div>,
                                 <div className="flex items-center gap-2">
                                     {to ? (
                                         <>
-                                            <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-white">
-                                                {toInitials}
+                                            <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-primary">
+                                                <i className={`fa-solid ${toIcon}`}></i>
                                             </div>
                                             <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
                                         </>

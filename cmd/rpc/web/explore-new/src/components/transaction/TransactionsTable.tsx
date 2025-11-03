@@ -53,9 +53,21 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         return `${amount.toLocaleString()} ${transactionsTexts.table.units.cnpy}`
     }
 
+    // Helper function to convert micro denomination to CNPY
+    const toCNPY = (micro: number): number => {
+        return micro / 1000000
+    }
+
     const formatFee = (fee: number) => {
-        if (!fee || fee === 0) return 'N/A'
-        return `${fee} ${transactionsTexts.table.units.cnpy}`
+        if (!fee || fee === 0) return '0 CNPY'
+        // Fee comes in micro denomination (uCNPY) from endpoint according to README
+        const microFormatted = fee.toLocaleString('en-US')
+        const cnpy = toCNPY(fee)
+        // If >= 1 CNPY, show both micro and CNPY, otherwise just micro
+        if (cnpy >= 1) {
+            return `${microFormatted} uCNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
+        }
+        return `${microFormatted} uCNPY`
     }
 
     const getStatusColor = (status: string) => {
@@ -73,22 +85,27 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
     const getTypeIcon = (type: string) => {
         switch (type.toLowerCase()) {
+            case 'send':
+                return 'bi bi-send'
             case 'transfer':
-                return 'fa-solid fa-arrow-right-arrow-left'
+                return 'bi bi-send'
             case 'stake':
-                return 'fa-solid fa-lock'
+                return 'bi bi-file-lock2'
+            case 'edit-stake':
+                return 'bi bi-file-lock2'
             case 'unstake':
                 return 'fa-solid fa-unlock'
             case 'swap':
-                return 'fa-solid fa-exchange-alt'
+                return 'bi bi-arrow-left-right'
             case 'governance':
                 return 'fa-solid fa-vote-yea'
             case 'delegate':
-                return 'fa-solid fa-user-check'
+                return 'bi bi-file-lock2' // Same as stake when delegated
             case 'undelegate':
                 return 'fa-solid fa-user-times'
             case 'certificateresults':
-                return 'fa-solid fa-arrow-right-arrow-left'
+            case 'certificate':
+                return 'bi bi-c-circle-fill'
             default:
                 return 'fa-solid fa-circle'
         }
@@ -126,7 +143,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
         // Type
         <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(transaction.type)}`}>
-            <i className={`${getTypeIcon(transaction.type)} text-xs`}></i>
+            <i className={`${getTypeIcon(transaction.type)} text-xs`} style={{ fontSize: '0.875rem' }}></i>
             <span>{transaction.type}</span>
         </div>,
 
@@ -159,18 +176,12 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             )}
         </span>,
 
-        // Fee
+        // Fee (in micro denomination from endpoint)
         <span className="text-gray-300 text-sm">
             {typeof transaction.fee === 'number' ? (
-                <>
-                    <AnimatedNumber
-                        value={transaction.fee}
-                        format={{ maximumFractionDigits: 4 }}
-                        className="text-gray-300"
-                    /> {transactionsTexts.table.units.cnpy}
-                </>
-            ) : (
                 formatFee(transaction.fee)
+            ) : (
+                formatFee(transaction.fee || 0)
             )}
         </span>,
 

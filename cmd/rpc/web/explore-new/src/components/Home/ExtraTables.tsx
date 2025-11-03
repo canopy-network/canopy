@@ -8,11 +8,66 @@ import Logo from '../Logo'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
+// Get random icon for validator based on address (deterministic)
+const getValidatorIcon = (address: string): string => {
+    // List of Bootstrap Icons for validators
+    const icons = [
+        'bi-shield-fill',
+        'bi-shield-check',
+        'bi-shield-lock',
+        'bi-star-fill',
+        'bi-star',
+        'bi-award-fill',
+        'bi-award',
+        'bi-trophy-fill',
+        'bi-trophy',
+        'bi-gem',
+        'bi-diamond-fill',
+        'bi-lightning-fill',
+        'bi-lightning',
+        'bi-fire',
+        'bi-heart-fill',
+        'bi-heart',
+        'bi-gift-fill',
+        'bi-gift',
+        'bi-rocket-fill',
+        'bi-rocket',
+        'bi-flash-fill',
+        'bi-flash',
+        'bi-zap-fill',
+        'bi-zap',
+    ]
+    
+    // Use address to deterministically select an icon
+    if (!address || address === 'N/A') return icons[0]
+    // Convert address to number using char codes
+    const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return icons[hash % icons.length]
+}
+
 const normalizeList = (payload: any) => {
     if (!payload) return [] as any[]
     if (Array.isArray(payload)) return payload
     const found = payload.results || payload.list || payload.data || payload.validators || payload.transactions
     return Array.isArray(found) ? found : []
+}
+
+// Get transaction type icon based on action type
+const getTransactionIcon = (action: string): string => {
+    const actionLower = (action || '').toLowerCase()
+    
+    if (actionLower.includes('stake') || actionLower.includes('delegate') || actionLower.includes('edit-stake')) {
+        return 'bi bi-file-lock2'
+    } else if (actionLower.includes('send') || actionLower.includes('transfer')) {
+        return 'bi bi-send'
+    } else if (actionLower.includes('certificate') || actionLower.includes('certificateresults')) {
+        return 'bi bi-c-circle-fill'
+    } else if (actionLower.includes('swap') || actionLower.includes('exchange')) {
+        return 'bi bi-arrow-left-right'
+    }
+    
+    // Default icon
+    return 'fa-solid fa-circle'
 }
 
 const ExtraTables: React.FC = () => {
@@ -129,7 +184,7 @@ const ExtraTables: React.FC = () => {
                 </span>,
                 <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary">
-                        {(String(address)[0] || 'V').toUpperCase()}
+                        <i className={`bi ${getValidatorIcon(address)} text-primary`} style={{ fontSize: '0.875rem' }}></i>
                     </div>
                     <Link to={`/validator/${address}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
@@ -210,13 +265,13 @@ const ExtraTables: React.FC = () => {
                 title="Recent Transactions"
                 live
                 columns={[
+                    { label: 'Hash' },
                     { label: 'Time' },
                     { label: 'Action' },
-                    { label: 'Chain' },
+                    { label: 'Amount' },
                     { label: 'From' },
                     { label: 'To' },
-                    { label: 'Amount' },
-                    { label: 'Hash' },
+                    { label: 'Chain' },
                 ]}
                 paginate
                 pageSize={10}
@@ -277,29 +332,33 @@ const ExtraTables: React.FC = () => {
                     }
 
                     const hash = t.txHash || t.hash || 'N/A'
+                    const actionIcon = getTransactionIcon(action)
                     return [
+                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
                         <span className="text-gray-400">
                             {timeAgo}
                         </span>,
-                        <span className="bg-green-300/10 text-primary rounded-full px-2 py-1 text-xs">{action || 'N/A'}</span>,
-                        <div className="flex items-center gap-2">
-                            <Logo size={80} showText={false} />
-                        </div>,
+                        <span className="bg-green-300/10 text-primary rounded-full px-2 py-1 text-xs inline-flex items-center gap-1">
+                            <i className={actionIcon} style={{ fontSize: '0.875rem' }}></i>
+                            {action || 'N/A'}
+                        </span>,
+                        <span className="text-primary">
+                                  {typeof amount === 'number' ? (
+                                      <>
+                                          <AnimatedNumber
+                                              value={amount}
+                                              format={{ maximumFractionDigits: 4 }}
+                                              className="text-primary"
+                                          />&nbsp; CNPY </>
+                                  ) : (
+                                      <span className="text-primary">{amount} &nbsp;CNPY</span>
+                                  )}
+                              </span>,
                         <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
                         <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
-                        <span className="text-primary">
-                            {typeof amount === 'number' ? (
-                                <>
-                                    <AnimatedNumber
-                                        value={amount}
-                                        format={{ maximumFractionDigits: 4 }}
-                                        className="text-primary"
-                                    />&nbsp; CNPY </>
-                            ) : (
-                                <span className="text-primary">{amount} &nbsp;CNPY</span>
-                            )}
-                        </span>,
-                        <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
+                           <div className="flex items-center gap-2">
+                           <Logo size={80} showText={false} />
+                       </div>,
                     ]
                 })}
             />

@@ -29,17 +29,30 @@ interface ValidatorsFiltersProps {
     validators: Validator[]
     onFilteredValidators: (filteredValidators: Validator[]) => void
     onRefresh: () => void
+    initialFilter?: string
+    pageTitle?: string
+    overviewCards?: React.ReactNode
 }
 
 const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
     totalValidators,
     validators,
     onFilteredValidators,
-    onRefresh
+    onRefresh,
+    initialFilter = 'all',
+    pageTitle,
+    overviewCards
 }) => {
-    const [statusFilter, setStatusFilter] = useState<string>('all')
+    const [statusFilter, setStatusFilter] = useState<string>(initialFilter)
     const [sortBy, setSortBy] = useState<string>('stake')
     const [minStakePercent, setMinStakePercent] = useState<number>(0)
+
+    // Apply initial filter when component mounts or initialFilter changes
+    React.useEffect(() => {
+        if (initialFilter && initialFilter !== 'all') {
+            setStatusFilter(initialFilter)
+        }
+    }, [initialFilter])
 
     // Filter and sort validators based on current filters
     const applyFilters = () => {
@@ -192,10 +205,14 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
             <div className="flex items-center justify-between mb-4">
                 <div>
                     <h1 className="text-3xl font-bold text-white">
-                        {validatorsTexts.page.title}
+                        {pageTitle || validatorsTexts.page.title}
                     </h1>
                     <p className="text-gray-400">
-                        {validatorsTexts.page.description}
+                        {pageTitle === 'Delegators' 
+                            ? 'Complete list of Canopy network delegators'
+                            : pageTitle === 'Staking'
+                            ? 'Complete list of Canopy network validators and delegators'
+                            : validatorsTexts.page.description}
                     </p>
                 </div>
 
@@ -210,6 +227,13 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                 </div>
             </div>
 
+            {/* Overview Cards */}
+            {overviewCards && (
+                <div className="mb-6">
+                    {overviewCards}
+                </div>
+            )}
+
             {/* Filters and Controls */}
             <div className="flex items-center justify-between bg-card rounded-lg p-4">
                 {/* Left Side - Dropdowns */}
@@ -218,9 +242,9 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                            className="bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         >
-                            <option value="all">All Validators</option>
+                            <option value="all">{pageTitle === 'Staking' ? 'All Stakers' : 'All Validators'}</option>
                             <option value="active">Active</option>
                             <option value="paused">Paused</option>
                             <option value="unstaking">Unstaking</option>
@@ -232,7 +256,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
-                            className="bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                            className="bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         >
                             <option value="stake">Sort by Stake</option>
                             <option value="reward">Sort by Reward Rate</option>
@@ -264,7 +288,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     <button
                         type="button"
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 bg-gray-700/50 border border-gray-600 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors"
+                        className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors"
                     >
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}
@@ -272,7 +296,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     <button
                         type="button"
                         onClick={onRefresh}
-                        className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
+                        className="flex items-center gap-2 bg-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
                     >
                         <i className="fa-solid fa-refresh text-xs"></i>
                         {validatorsTexts.filters.refresh}

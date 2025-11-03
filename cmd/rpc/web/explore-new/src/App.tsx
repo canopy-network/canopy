@@ -33,6 +33,7 @@ function AnimatedRoutes() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/transaction/:transactionHash" element={<TransactionDetailPage />} />
         <Route path="/validators" element={<ValidatorsPage />} />
+        <Route path="/delegators" element={<ValidatorsPage />} />
         <Route path="/validator/:validatorAddress" element={<ValidatorDetailPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/account/:address" element={<AccountDetailPage />} />

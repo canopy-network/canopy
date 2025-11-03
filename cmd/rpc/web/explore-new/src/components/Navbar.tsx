@@ -23,11 +23,11 @@ const Navbar = () => {
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
         '/blocks': {
-            title: 'Blocks Explorer',
+            title: '',
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
         '/transactions': {
-            title: 'Transactions Explorer',
+            title: '',
             root: ((menuConfig as any)?.home?.root || []) as any,
         },
     }
