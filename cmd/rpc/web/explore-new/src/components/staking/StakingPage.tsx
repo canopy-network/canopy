@@ -203,7 +203,7 @@ const StakingPage: React.FC = () => {
 
     // Calculate stats for overview cards
     const stats = React.useMemo(() => {
-        const validators = allStakers.filter(staker => !staker.delegate || staker.delegate === false)
+        const validators = allStakers.filter(staker => !staker.delegate)
         const delegators = allStakers.filter(staker => staker.delegate === true)
         const paused = allStakers.filter(staker => staker.isPaused || staker.activityScore === 'Paused')
         

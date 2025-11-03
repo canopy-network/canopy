@@ -135,7 +135,7 @@ const NetworkAnalyticsPage: React.FC = () => {
     // Update metrics when REAL data changes
     useEffect(() => {
         if (cardData && supplyData && validatorsData && pendingData && paramsData) {
-            const validatorsList = validatorsData.results || validatorsData.validators || []
+            const validatorsList = validatorsData.results || []
             const activeValidators = validatorsList.filter((v: any) => {
                 const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
                 const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
