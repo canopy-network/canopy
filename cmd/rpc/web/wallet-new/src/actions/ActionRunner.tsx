@@ -25,7 +25,7 @@ import {motion} from "framer-motion";
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
 
 
-export default function ActionRunner({actionId, onFinish}: { actionId: string, onFinish?: () => void }) {
+export default function ActionRunner({actionId, onFinish, className}: { actionId: string, onFinish?: () => void, className?: string}) {
     const toast = useToast();
 
 
@@ -304,7 +304,7 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
                 )
 
             }
-            <div>
+            <div className={cx("flex flex-col gap-4", className)}>
 
                 {isLoading && <div>Loading…</div>}
                 {!isLoading && !isReady && <div>No action "{actionId}" found in manifest</div>}
@@ -314,7 +314,13 @@ export default function ActionRunner({actionId, onFinish}: { actionId: string, o
                         {
                             stage === 'form' && (
                                 <motion.div className="space-y-4">
-                                    <FormRenderer fields={visibleFieldsForStep} value={form} onChange={onFormChange} ctx={templatingCtx} onErrorsChange={handleErrorsChange}/>
+                                    <FormRenderer
+                                        fields={visibleFieldsForStep}
+                                        value={form}
+                                        onChange={onFormChange}
+                                        ctx={{ ...templatingCtx, form: debouncedForm, layout: (action as any)?.form?.layout }} // <-- aquí
+                                        onErrorsChange={handleErrorsChange}
+                                    />
 
                                     {wizard && steps.length > 0 && (
                                         <div className="flex items-center justify-between text-xs text-neutral-400">

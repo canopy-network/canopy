@@ -4,10 +4,31 @@
 
 :root {
   --primary: #22d3a6;
+  --primary-foreground: #1a1b23;
 }
 
 html,
 body,
 #root {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", sans-serif; ;
 }
+
+
+/* width */
+::-webkit-scrollbar {
+    width: 2px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+    background: var(--primary-foreground);
+
+
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: #ffffff;
+    border-radius: 5px;
+}
+

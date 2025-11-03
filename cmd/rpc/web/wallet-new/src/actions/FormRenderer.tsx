@@ -6,12 +6,10 @@ import { template } from '@/core/templater'
 import { useSession } from '@/state/session'
 import {FieldControl} from "@/actions/FieldControl";
 import { motion } from "framer-motion"
+import useDebouncedValue from "@/core/useDebouncedValue";
 
-const looksLikeJson = (s: any) => typeof s === 'string' && /^\s*[\[{]/.test(s)
-const jsonMaybe = (s: any) => { try { return JSON.parse(s) } catch { return s } }
-
-const Grid: React.FC<{ cols: number; children: React.ReactNode }> = ({ cols, children }) => (
-    <motion.div className={cx('grid gap-4', `grid-cols-${cols}`)}>{children}</motion.div>
+const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <motion.div className="grid grid-cols-12 gap-4">{children}</motion.div>
 )
 
 type Props = {
@@ -19,7 +17,6 @@ type Props = {
     value: Record<string, any>
     onChange: (patch: Record<string, any>) => void
     gridCols?: number
-    /** ctx opcional extra: { fees, ds, ... }  */
     ctx?: Record<string, any>
     onErrorsChange?: (errors: Record<string,string>, hasErrors: boolean) => void   // 👈 NUEVO
     onFormOperation?: (fieldOperation: FieldOp) => void
@@ -32,22 +29,22 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
     const { chain, account } = (window as any).__configCtx ?? {}
     const session = useSession()
 
+    const debouncedForm = useDebouncedValue(value, 250) // <-- nuevo
+
     const templateContext = React.useMemo(() => ({
-        form: value,
+        form: debouncedForm,
         chain,
         account,
-        // 🔴 importante: merge con lo que venga en ctx
         ds: { ...(ctx?.ds || {}), ...localDs },
         ...(ctx || {}),
         session: { password: session?.password },
-    }), [value, chain, account, ctx?.ds, ctx, session?.password, localDs])
+    }), [debouncedForm, chain, account, ctx?.ds, ctx, session?.password, localDs])
 
     const resolveTemplate = React.useCallback(
         (s?: any) => (typeof s === 'string' ? template(s, templateContext) : s),
         [templateContext]
     )
 
-    /** Normaliza fields con una key estable (tab:group:name) */
     const fieldsKeyed = React.useMemo(
         () =>
             fields.map((f: any) => ({
@@ -119,7 +116,7 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
                     ))}
                 </div>
             )}
-            <Grid cols={gridCols}>
+            <Grid>
                 {(tabs.length ? fieldsInTab(activeTab) : fieldsKeyed).map((f: any) => (
                     <FieldControl
                         key={f.__key}

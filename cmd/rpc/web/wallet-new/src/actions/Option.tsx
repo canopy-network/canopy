@@ -1,8 +1,8 @@
 import {cx} from "@/ui/cx";
 
-export type OptionCardOpt = { label: string; value: string; help?: string; icon?: string; toolTip?: string }
+export type OptionItem = { label: string; value: string; help?: string; icon?: string; toolTip?: string }
 
-export const OptionCard: React.FC<{
+export const Option: React.FC<{
     selected: boolean
     disabled?: boolean
     onSelect: () => void
@@ -14,8 +14,8 @@ export const OptionCard: React.FC<{
         onClick={onSelect}
         disabled={disabled}
         className={cx(
-            "w-full text-left rounded-md border-2 border-muted p-3 transition-colors",
-            "focus:outline-none focus:ring-2 focus:ring-emerald-400",
+            "w-full text-left rounded-md  p-3 transition-colors",
+            "focus:outline-none ",
             disabled && "opacity-60 cursor-not-allowed"
         )}
         aria-pressed={selected}

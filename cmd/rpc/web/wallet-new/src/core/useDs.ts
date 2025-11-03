@@ -3,10 +3,28 @@ import { useQuery } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import { resolveLeaf, buildRequest, parseResponse } from './dsCore'
 
+type UseDsOptions = {
+    enabled?: boolean;
+    refetchIntervalMs?: number;
+    queryKey?: any[];
+    select?: (d:any)=>any;
+    staleTimeMs?: number;
+    instanceId?: string;
+    key? : string[]
+};
+
+function stableStringify(obj: any) {
+    try {
+        return JSON.stringify(obj, Object.keys(obj || {}).sort());
+    } catch {
+        return JSON.stringify(obj || {});
+    }
+}
+
 export function useDS<T = any>(
     key: string,
     ctx?: Record<string, any>,
-    opts?: { select?: (d:any)=>T; staleTimeMs?: number; refetchIntervalMs?: number; enabled?: boolean }
+    opts?: UseDsOptions
 ) {
     const { chain } = useConfig()
     const leaf = resolveLeaf(chain, key)
@@ -25,7 +43,7 @@ export function useDS<T = any>(
     const ctxKey = JSON.stringify(ctx ?? {})
 
     return useQuery({
-        queryKey: ['ds', chain?.chainId  ?? 'chain', key, ctxKey],
+        queryKey: opts?.key ?? ['ds', chain?.chainId  ?? 'chain', key, ctxKey, opts?.instanceId ?? 'default' ],
         enabled: !!leaf && (opts?.enabled ?? true),
         staleTime,
         refetchInterval,

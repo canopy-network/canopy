@@ -215,10 +215,11 @@ export async function validateField(
 
     // PATTERN
     if (vconf.pattern) {
+        const pattern = template(vconf.pattern, ctx);
+
         const rx =
-            typeof vconf.pattern === "string"
-                ? new RegExp(vconf.pattern)
-                : vconf.pattern;
+                 new RegExp(pattern)
+
         if (!rx.test(asString)) {
             return {
                 ok: false,

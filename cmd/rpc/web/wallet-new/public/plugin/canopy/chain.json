@@ -48,6 +48,12 @@
       "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
       "body": { "nickname": "{{nickname}}" }
     },
+    "validator": {
+      "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },
+      "body": { "height": "0", "address": "{{account.address}}" },
+      "coerce": { "body": { "height": "int" } },
+      "selector": ""
+    },
     "validators": {
       "source": { "base": "rpc", "path": "/v1/query/validators", "method": "POST" },
       "body": { "height": 0, "pageNumber": 1, "perPage": 1000 },

@@ -91,6 +91,7 @@
                 "max": "Amount must be less than {{ds.account.amount}}"
               }
             },
+            "help": "Available ",
             "features": [
               {
                 "id": "maxBtn",
@@ -305,7 +306,11 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "min-w-[5rem] max-w-[10rem]"
+            "style": {
+              "minWidth": "34rem",
+              "maxWidth": "40rem",
+              "width": "33vw"
+            }
           }
         }
       },
@@ -327,29 +332,97 @@
         },
         "fields": [
           {
-            "id": "stakingAddress",
-            "name": "stakingAddress",
-            "type": "text",
-            "label": "Staking Address",
-            "value": "{{account.address}}",
-            "readOnly": true,
+            "id": "operator",
+            "span": {
+              "base": 12
+            },
+            "name": "operator",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Staking (Operator) Address",
+            "placeholder": "Select Staking Address",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "ds": {
+              "keystore": {
+              }
+            },
+            "step": "setup"
+          },
+          {
+            "id": "output",
+            "span": {
+              "base": 12
+            },
+            "name": "output",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Rewards Address",
+            "placeholder": "Select Rewards Address",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "ds": {
+              "keystore": {
+                "__options": {
+                  "refetchIntervalMs": 20000
+                }
+              }
+            },
+            "step": "setup"
+          },
+          {
+            "id": "signerResponsible",
+            "name": "signerResponsible",
+            "type": "option",
+            "label": "Signer Address",
+            "required": true,
+            "inLine": true,
+            "borders": false,
+            "options": [
+              {
+                "label": "Operator",
+                "value": "operator",
+                "help": "Staked Address"
+              },
+              {
+                "label": "Reward",
+                "value":  "reward",
+                "help": "Output Address"
+              }
+            ],
             "step": "setup"
           },
           {
             "id": "asset",
             "name": "asset",
-            "type": "text",
-            "label": "Asset",
-            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
-            "readOnly": true,
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg '><h4 class='text-canopy-50 text-md mb-2'>Signer Address Information</h4><div class='flex justify-between'><div class='flex-col'><p>Liquid:</p> <p>{{formatToCoin<{{ds.account.amount}}>}} {{chain.denom.symbol}}</p></div> <div class='flex-col'> <p>Staked:</p> <p>{{ds.validator.stakedAmount ?? 0}} {{chain.denom.symbol}}</p></div> <div class='flex-col'><p>Committees:</p> <p>{{ds.validator.address ? ds.validator.committees : 'N/A'}}</p></div> </div></div>",
             "ds": {
               "account": {
                 "account": {
-                  "address": "{{account.address}}"
+                  "address": "{{form.operator}}"
+                },
+
+                "__options": {
+                  "refetchIntervalMs": 5000,
+                  "watch": ["form.signerResponsible", "form.operator", "form.output"]
+                }
+
+              },
+              "validator": {
+                "account": {
+                  "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+                },
+
+                "__options": {
+                  "refetchIntervalMs": 20000,
+                  "watch": ["form.signerResponsible", "form.operator", "form.output"]
+
                 }
               }
             },
-            "step": "setup"
+            "step": "setup",
+            "span": { "base": 12 }
           },
           {
             "id": "amount",
@@ -359,7 +432,6 @@
             "label": "Amount",
             "value": "{{params.networkParams.validator.minimumOrderSize}}",
             "required": true,
-            "min": "{{params.networkParams.validator.minimumOrderSize}}",
             "max": "{{formatToCoin<{{ds.account.amount}}>}}",
             "validation": {
               "messages": {
@@ -374,14 +446,15 @@
                 }
               }
             },
-            "step": "setup"
-          },
-          {
-            "id": "rewardsAddress",
-            "name": "rewardsAddress",
-            "type": "text",
-            "label": "Rewards Address",
-            "required": true,
+            "features": [
+              {
+                "id": "max",
+                "op": "max"
+              }
+            ],
+            "span": {
+              "base": 12
+            },
             "step": "setup"
           },
           {
@@ -421,27 +494,24 @@
             "id": "isAutocompound",
             "name": "isAutocompound",
             "type": "switch",
+            "help": "Automatically restake rewards",
             "label": "Autocompound",
             "value": false,
             "step": "setup"
           },
-          {
-            "id": "txFee",
-            "name": "txFee",
-            "type": "text",
-            "label": "Transaction Fee",
-            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}",
-            "readOnly": true,
-            "step": "setup"
-          },
-
-
 
           {
             "id": "selectCommittees",
             "name": "selectCommittees",
             "type": "tableSelect",
             "label": "Select Committees",
+            "required": true,
+            "help": "Select committees you want to delegate to.",
+            "validation": {
+              "messages": {
+                "required": "Please select at least one committee"
+              }
+            },
             "multiple": true,
             "rowKey": "id",
             "rows": [
@@ -457,6 +527,14 @@
               },
               { "key": "name", "title": "Committee", "expr": "{{ row.name }}", "align": "left"  }
             ],
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{account.address}}"
+                }
+              }
+            },
+
 
             "step": "committees"
           },
@@ -471,8 +549,16 @@
             "help": "Enter comma separated committee ids",
             "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}",
             "step": "committees"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "text",
+            "label": "Transaction Fee",
+            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}",
+            "readOnly": true,
+            "step": "committees"
           }
-
         ],
         "confirmation": {
           "title": "Confirmations",
@@ -491,14 +577,14 @@
             },
             {
               "label": "Committees IDs",
-              "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}"
+              "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}"
             },
             {
               "label": "Rewards Address",
               "value": "{{shortAddress<{{form.rewardsAddress}}>}}"
             },
             {
-              "label": "Edit Stake",
+              "label": "Transaction Fee",
               "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}"
             }
           ],
@@ -515,8 +601,8 @@
           "value": "{{account.address}}",
           "coerce": "string"
         },
-        "output": {
-          "value": "{{form.output}}",
+        "netAddress": {
+          "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}",
           "coerce": "string"
         },
         "amount": {
@@ -524,27 +610,24 @@
           "coerce": "number"
         },
         "delegate": {
-          "value": false,
+          "value": "{{form.isDelegate}}",
           "coerce": "boolean"
         },
         "earlyWithdrawal": {
-          "value": false,
+          "value": "{{form.isAutocompound}}",
           "coerce": "boolean"
         },
-        "pubKey": {
-          "value": "",
-          "coerce": "string"
-        },
+
         "committees": {
-          "value": "",
+          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}}",
           "coerce": "string"
         },
         "signer": {
-          "value": "",
+          "value": "{{form.rewardsAddress}}",
           "coerce": "string"
         },
         "memo": {
-          "value": "{{form.memo}}",
+          "value": "",
           "coerce": "string"
         },
         "fee": {
@@ -562,7 +645,7 @@
       },
       "submit": {
         "base": "admin",
-        "path": "/v1/admin/tx-send",
+        "path": "/v1/admin/tx-stake",
         "method": "POST"
       },
       "notifications": {

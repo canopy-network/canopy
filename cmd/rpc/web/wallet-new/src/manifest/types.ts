@@ -2,6 +2,8 @@
  * Manifest & UI Core Types
  * =========================== */
 
+import React from "react";
+
 export type Manifest = {
     version: string;
     ui?: {
@@ -33,7 +35,7 @@ export type Action = {
     requiresFeature?: string;
     hidden?: boolean;
 
-    ui?: { variant?: 'modal' | 'page'; icon?: string, slots?: { modal?: { className?: string } }; };
+    ui?: { variant?: 'modal' | 'page'; icon?: string, slots?: { modal?: { style:  React.CSSProperties , className?: string } }; };
 
     // dynamic form
     form?: {
@@ -83,6 +85,7 @@ export type FieldBase = {
     placeholder?: string;
     readOnly?: boolean;
     required?: boolean;
+    disabled?: boolean;
     value?: string;
     // features: copy / paste / set (Max)
     features?: FieldOp[];
@@ -111,6 +114,18 @@ export type SwitchField = FieldBase & {
 export type OptionCardField = FieldBase & {
     type: "optionCard",
 }
+
+export type DynamicHtml = FieldBase & {
+    type: "dynamicHtml",
+    html: string,
+}
+
+
+export type OptionField = FieldBase & {
+    type: "option",
+    inLine?: boolean,
+}
+
 
 
 export type TableSelectColumn = {
@@ -149,19 +164,30 @@ export type TableSelectField = FieldBase & {
 
 export type SelectField = FieldBase & {
     type: 'select';
-    options?: Array<{ label: string; value: string }>;
-    // opciones desde una fuente dinámica (ds/fees/chain…)
-    source?: SourceRef;
+    // Could be a json string or a list of options
+    options?: String | Array<{ label: string; value: string }>;
 };
+
+export type AdvancedSelectField = FieldBase  & {
+    type: 'advancedSelect';
+    allowCreate?: boolean;
+    allowFreeInput?: boolean;
+    options?: Array<{ label: string; value: string }>;
+
+}
 
 export type Field =
     | AddressField
     | AmountField
     | SwitchField
     | OptionCardField
+    | OptionField
     | TextField
     | SelectField
     | TableSelectField
+    | AdvancedSelectField
+    | DynamicHtml;
+
 
 /* ===========================
  * Field Features (Ops)
@@ -199,7 +225,7 @@ export type Submit = {
 
 export type SourceRef = {
     // de dónde sale el dato que vas a interpolar
-    uses: 'chain' | 'ds' | 'fees' | 'form' | 'account' | 'session';
+    uses: string;
     // ruta dentro de la fuente (p.ej. 'fee.sendFee', 'amount', 'address')
     selector?: string;
 };
