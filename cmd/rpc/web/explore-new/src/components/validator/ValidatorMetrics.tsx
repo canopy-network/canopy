@@ -4,11 +4,10 @@ import validatorDetailTexts from '../../data/validatorDetail.json'
 import AnimatedNumber from '../AnimatedNumber'
 
 interface ValidatorDetail {
-    totalStake: number
-    networkShare: number
-    apy: number
-    blocksProduced: number
-    uptime: number
+    stakedAmount: number // in micro denomination
+    committees: number[]
+    maxPausedHeight: number
+    unstakingHeight: number
 }
 
 interface ValidatorMetricsProps {
@@ -16,66 +15,53 @@ interface ValidatorMetricsProps {
 }
 
 const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
-    const getApyStatus = (apy: number) => {
-        return apy > 10 ? 'Above avg' : 'Below avg'
+    // Helper function to convert micro denomination to CNPY
+    const toCNPY = (micro: number): number => {
+        return micro / 1000000
     }
 
-    const getUptimeStatus = (uptime: number) => {
-        if (uptime >= 99) return 'Excellent'
-        if (uptime >= 95) return 'Good'
-        if (uptime >= 90) return 'Fair'
-        return 'Poor'
+    const stakedAmountCNPY = toCNPY(validator.stakedAmount)
+
+    // Format height display
+    const formatHeight = (height: number) => {
+        if (height === 0) return 'Not set'
+        return height.toLocaleString()
     }
 
-    const getUptimeColor = (uptime: number) => {
-        if (uptime >= 99) return 'text-green-400'
-        if (uptime >= 95) return 'text-yellow-400'
-        if (uptime >= 90) return 'text-orange-400'
-        return 'text-red-400'
-    }
-
-    // Array with metrics information
+    // Array with metrics information (using real data only from endpoint)
     const metricsData = [
         {
             title: validatorDetailTexts.metrics.totalStake,
-            value: validator.totalStake,
+            value: stakedAmountCNPY,
             suffix: ` ${validatorDetailTexts.metrics.units.cnpy}`,
             icon: 'fa-solid fa-lock',
             subtitle: null
         },
         {
-            title: validatorDetailTexts.metrics.networkShare,
-            value: validator.networkShare,
-            suffix: '%',
-            icon: 'fa-solid fa-chart-pie',
-            subtitle: '+0.12% today'
-        },
-        {
-            title: validatorDetailTexts.metrics.apy,
-            value: validator.apy,
-            suffix: '%',
-            icon: 'fa-solid fa-percentage',
-            subtitle: getApyStatus(validator.apy)
-        },
-        {
-            title: validatorDetailTexts.metrics.blocksProduced,
-            value: validator.blocksProduced,
+            title: 'Committees',
+            value: validator.committees.length,
             suffix: '',
-            icon: 'fa-solid fa-cube',
-            subtitle: validatorDetailTexts.metrics.last24h
+            icon: 'fa-solid fa-network-wired',
+            subtitle: validator.committees.length > 0 ? `${validator.committees.join(', ')}` : 'None'
         },
         {
-            title: validatorDetailTexts.metrics.uptime,
-            value: validator.uptime,
-            suffix: '%',
-            icon: 'fa-solid fa-clock',
-            subtitle: getUptimeStatus(validator.uptime),
-            subtitleColor: getUptimeColor(validator.uptime)
+            title: 'Max Paused Height',
+            value: validator.maxPausedHeight > 0 ? validator.maxPausedHeight : 0,
+            suffix: '',
+            icon: 'fa-solid fa-pause-circle',
+            subtitle: validator.maxPausedHeight > 0 ? `Height: ${formatHeight(validator.maxPausedHeight)}` : 'Not paused'
+        },
+        {
+            title: 'Unstaking Height',
+            value: validator.unstakingHeight > 0 ? validator.unstakingHeight : 0,
+            suffix: '',
+            icon: 'fa-solid fa-arrow-down',
+            subtitle: validator.unstakingHeight > 0 ? `Height: ${formatHeight(validator.unstakingHeight)}` : 'Not unstaking'
         }
     ]
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {metricsData.map((metric, index) => (
                 <motion.div
                     key={index}
@@ -93,15 +79,19 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         </div>
                     </div>
                     <div className="text-xl font-bold text-white">
-                        <AnimatedNumber
-                            value={metric.value}
-                            format={{ maximumFractionDigits: 2 }}
-                            className="text-white"
-                        />
+                        {typeof metric.value === 'string' ? (
+                            <span className="text-white">{metric.value}</span>
+                        ) : (
+                            <AnimatedNumber
+                                value={metric.value}
+                                format={{ maximumFractionDigits: 2 }}
+                                className="text-white"
+                            />
+                        )}
                         {metric.suffix}
                     </div>
                     {metric.subtitle && (
-                        <div className={`text-xs mt-1 ${metric.subtitleColor || 'text-green-400'}`}>
+                        <div className={`text-xs mt-1 ${metric.subtitleColor || 'text-gray-400'}`}>
                             {metric.subtitle}
                         </div>
                     )}

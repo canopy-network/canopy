@@ -29,7 +29,7 @@ interface Rewards {
 }
 
 interface ValidatorDetail {
-    rewards: Rewards
+    rewards?: Rewards
 }
 
 interface ValidatorRewardsProps {
@@ -96,14 +96,16 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                         {validatorDetailTexts.rewards.title}
                     </h2>
                     <div className="flex items-center gap-4">
-                        <div className="text-lg font-bold text-white">
-                            <span className="text-sm text-gray-400 font-normal mr-2">
-                                Total Earned:
-                            </span>
-                            <span className="text-sm font-normal text-primary">
-                                {formatNumber(validator.rewards.totalEarned)} {validatorDetailTexts.metrics.units.cnpy}
-                            </span>
-                        </div>
+                        {validator.rewards && (
+                            <div className="text-lg font-bold text-white">
+                                <span className="text-sm text-gray-400 font-normal mr-2">
+                                    Total Earned:
+                                </span>
+                                <span className="text-sm font-normal text-primary">
+                                    {formatNumber(validator.rewards.totalEarned)} {validatorDetailTexts.metrics.units.cnpy}
+                                </span>
+                            </div>
+                        )}
                         <div className="flex items-center gap-1 bg-green-500/10 rounded-full p-2 py-0.5">
                             <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
                             <span className="text-sm text-primary">
@@ -119,82 +121,95 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                 activeTab === 'rewardsHistory' && (
                     <div className="space-y-8">
                         {/* Resumen de ganancias */}
-                        <div className="flex items-center gap-6 text-sm text-gray-400">
-                            <span>
-                                {formatReward(validator.rewards.last30Days)} {validatorDetailTexts.metrics.units.cnpy} {validatorDetailTexts.rewards.last30Days}
-                            </span>
-                        </div>
+                        {validator.rewards && (
+                            <div className="flex items-center gap-6 text-sm text-gray-400">
+                                <span>
+                                    {formatReward(validator.rewards.last30Days)} {validatorDetailTexts.metrics.units.cnpy} {validatorDetailTexts.rewards.last30Days}
+                                </span>
+                            </div>
+                        )}
 
                         {/* Recompensas de producción de bloques */}
-                        <div>
-                            <TableCard
-                                title={<div className="flex items-center flex-col justify-center"><div className="flex items-center justify-center gap-2"><div className="text-sm translate-y-3 bg-green-500/10 rounded-lg p-2 py-2 font-normal mr-2">
-                                    <i className="fa-solid fa-leaf text-primary text-sm"></i>
-                                </div>Canopy Main Chain</div><p className="text-xs text-gray-400 font-normal translate-x-5.5 -translate-y-1">Block Production Rewards</p></div>}
-                                className="rounded-none border-none shadow-none p-5"
-                                live={false}
-                                columns={[
-                                    { label: validatorDetailTexts.rewards.table.blockHeight },
-                                    { label: validatorDetailTexts.rewards.table.timestamp },
-                                    { label: validatorDetailTexts.rewards.table.reward },
-                                    { label: validatorDetailTexts.rewards.table.commission },
-                                    { label: validatorDetailTexts.rewards.table.netReward }
-                                ]}
-                                rows={validator.rewards.blockRewards.map((reward) => [
-                                    <span className="text-primary">{formatNumber(reward.blockHeight)}</span>,
-                                    <span className="text-gray-400">{reward.timestamp}</span>,
-                                    <span className="text-primary">{formatReward(reward.reward)} {validatorDetailTexts.metrics.units.cnpy}</span>,
-                                    <span className="text-gray-400">{formatCommission(reward.commission, 5)}</span>,
-                                    <span className="text-primary">{formatReward(reward.netReward)} {validatorDetailTexts.metrics.units.cnpy}</span>
-                                ])}
-                                paginate={true}
-                                pageSize={10}
-                            />
-                        </div>
+                        {validator.rewards && validator.rewards.blockRewards && validator.rewards.blockRewards.length > 0 ? (
+                            <div>
+                                <TableCard
+                                    title={<div className="flex items-center flex-col justify-center"><div className="flex items-center justify-center gap-2"><div className="text-sm translate-y-3 bg-green-500/10 rounded-lg p-2 py-2 font-normal mr-2">
+                                        <i className="fa-solid fa-leaf text-primary text-sm"></i>
+                                    </div>Canopy Main Chain</div><p className="text-xs text-gray-400 font-normal translate-x-5.5 -translate-y-1">Block Production Rewards</p></div>}
+                                    className="rounded-none border-none shadow-none p-5"
+                                    live={false}
+                                    columns={[
+                                        { label: validatorDetailTexts.rewards.table.blockHeight },
+                                        { label: validatorDetailTexts.rewards.table.timestamp },
+                                        { label: validatorDetailTexts.rewards.table.reward },
+                                        { label: validatorDetailTexts.rewards.table.commission },
+                                        { label: validatorDetailTexts.rewards.table.netReward }
+                                    ]}
+                                    rows={validator.rewards.blockRewards.map((reward) => [
+                                        <span className="text-primary">{formatNumber(reward.blockHeight)}</span>,
+                                        <span className="text-gray-400">{reward.timestamp}</span>,
+                                        <span className="text-primary">{formatReward(reward.reward)} {validatorDetailTexts.metrics.units.cnpy}</span>,
+                                        <span className="text-gray-400">{formatCommission(reward.commission, 5)}</span>,
+                                        <span className="text-primary">{formatReward(reward.netReward)} {validatorDetailTexts.metrics.units.cnpy}</span>
+                                    ])}
+                                    paginate={true}
+                                    pageSize={10}
+                                />
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 text-gray-400">
+                                <p>Reward history data is not available from the endpoint.</p>
+                                <p className="text-xs mt-2">According to the API documentation, reward history is not included in the validator endpoint response.</p>
+                            </div>
+                        )}
 
                         {/* Recompensas de cadenas anidadas */}
-                        <div>
-                            <div className="mb-4 text-sm text-gray-400">
-                                {formatReward(400.66)} Tokens {validatorDetailTexts.rewards.last30Days}
+                        {validator.rewards && validator.rewards.crossChainRewards && validator.rewards.crossChainRewards.length > 0 && (
+                            <div>
+                                <div className="mb-4 text-sm text-gray-400">
+                                    {formatReward(400.66)} Tokens {validatorDetailTexts.rewards.last30Days}
+                                </div>
+                                <TableCard
+                                    title={<div className="flex items-center flex-col justify-center"><div className="flex items-center justify-center gap-2"><div className="text-sm translate-y-3 bg-blue-500/10 rounded-lg p-2 py-2 font-normal mr-2">
+                                        <i className="fa-solid fa-bars text-blue-500 text-sm"></i>
+                                    </div>Nested Chain Rewards</div><p className="text-xs text-gray-400 font-normal translate-x-5.5 -translate-y-1">Cross-chain validation rewards</p></div>}
+                                    live={false}
+                                    className="rounded-none border-none shadow-none p-5"
+                                    columns={[
+                                        { label: validatorDetailTexts.rewards.table.chain },
+                                        { label: validatorDetailTexts.rewards.table.committeeId },
+                                        { label: validatorDetailTexts.rewards.table.timestamp },
+                                        { label: validatorDetailTexts.rewards.table.reward },
+                                        { label: validatorDetailTexts.rewards.table.type }
+                                    ]}
+                                    rows={validator.rewards.crossChainRewards.map((reward) => [
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-6 h-6 ${reward.color} rounded-sm flex items-center justify-center`}>
+                                                <i className={`${reward.icon} text-xs`}></i>
+                                            </div>
+                                            <span className="text-sm text-white">{reward.chain}</span>
+                                        </div>,
+                                        <span className="text-gray-400">{reward.committeeId}</span>,
+                                        <span className="text-gray-400">{reward.timestamp}</span>,
+                                        <span className="text-green-400">{formatReward(reward.reward)} {reward.chain.split(' ')[0].toUpperCase()}</span>,
+                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-normal ${getProgressBarColor(reward.color)}`}>
+                                            {validatorDetailTexts.rewards.types.tag}
+                                        </span>
+                                    ])}
+                                    paginate={true}
+                                    pageSize={10}
+                                />
                             </div>
-                            <TableCard
-                                title={<div className="flex items-center flex-col justify-center"><div className="flex items-center justify-center gap-2"><div className="text-sm translate-y-3 bg-blue-500/10 rounded-lg p-2 py-2 font-normal mr-2">
-                                    <i className="fa-solid fa-bars text-blue-500 text-sm"></i>
-                                </div>Nested Chain Rewards</div><p className="text-xs text-gray-400 font-normal translate-x-5.5 -translate-y-1">Cross-chain validation rewards</p></div>}
-                                live={false}
-                                className="rounded-none border-none shadow-none p-5"
-                                columns={[
-                                    { label: validatorDetailTexts.rewards.table.chain },
-                                    { label: validatorDetailTexts.rewards.table.committeeId },
-                                    { label: validatorDetailTexts.rewards.table.timestamp },
-                                    { label: validatorDetailTexts.rewards.table.reward },
-                                    { label: validatorDetailTexts.rewards.table.type }
-                                ]}
-                                rows={validator.rewards.crossChainRewards.map((reward) => [
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-6 h-6 ${reward.color} rounded-sm flex items-center justify-center`}>
-                                            <i className={`${reward.icon} text-xs`}></i>
-                                        </div>
-                                        <span className="text-sm text-white">{reward.chain}</span>
-                                    </div>,
-                                    <span className="text-gray-400">{reward.committeeId}</span>,
-                                    <span className="text-gray-400">{reward.timestamp}</span>,
-                                    <span className="text-green-400">{formatReward(reward.reward)} {reward.chain.split(' ')[0].toUpperCase()}</span>,
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-normal ${getProgressBarColor(reward.color)}`}>
-                                        {validatorDetailTexts.rewards.types.tag}
-                                    </span>
-                                ])}
-                                paginate={true}
-                                pageSize={10}
-                            />
-                        </div>
+                        )}
 
                         {/* Promedio diario */}
-                        <div className="pt-6 border-t border-gray-700">
-                            <div className="text-sm text-gray-400 text-center">
-                                {validatorDetailTexts.rewards.averageDaily}: {formatNumber(validator.rewards.averageDaily)} {validatorDetailTexts.metrics.units.cnpy}/day
+                        {validator.rewards && validator.rewards.averageDaily && (
+                            <div className="pt-6 border-t border-gray-700">
+                                <div className="text-sm text-gray-400 text-center">
+                                    {validatorDetailTexts.rewards.averageDaily}: {formatNumber(validator.rewards.averageDaily)} {validatorDetailTexts.metrics.units.cnpy}/day
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )
             }

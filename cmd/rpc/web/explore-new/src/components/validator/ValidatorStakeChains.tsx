@@ -3,15 +3,15 @@ import validatorDetailTexts from '../../data/validatorDetail.json'
 
 interface NestedChain {
     name: string
-    committeeId: string
-    delegated: number
+    committeeId: number
+    stakedAmount: number
     percentage: number
     icon: string
     color: string
 }
 
 interface ValidatorDetail {
-    totalStake: number
+    stakedAmount: number
     nestedChains: NestedChain[]
 }
 
@@ -20,12 +20,17 @@ interface ValidatorStakeChainsProps {
 }
 
 const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }) => {
+    // Helper function to convert micro denomination to CNPY
+    const toCNPY = (micro: number): number => {
+        return micro / 1000000
+    }
+
     const formatNumber = (num: number) => {
-        return num.toLocaleString()
+        return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
     }
 
     const formatPercentage = (num: number) => {
-        return `${num}%`
+        return `${num.toFixed(2)}%`
     }
 
     const getProgressBarColor = (color: string) => {
@@ -50,7 +55,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                     {validatorDetailTexts.stakeByChains.title}
                 </h2>
                 <div className="text-sm text-gray-400">
-                    {validatorDetailTexts.stakeByChains.totalDelegated}: {formatNumber(validator.totalStake)} {validatorDetailTexts.metrics.units.cnpy}
+                    {validatorDetailTexts.stakeByChains.totalDelegated}: {formatNumber(toCNPY(validator.stakedAmount))} {validatorDetailTexts.metrics.units.cnpy}
                 </div>
             </div>
 
@@ -89,7 +94,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                         <div className="flex items-center gap-6">
                             <div className="text-right">
                                 <div className="text-white font-medium">
-                                    {formatNumber(chain.delegated)} {validatorDetailTexts.metrics.units.cnpy}
+                                    {formatNumber(toCNPY(chain.stakedAmount))} {validatorDetailTexts.metrics.units.cnpy}
                                 </div>
                                 <div className="text-sm text-gray-400">
                                     {formatPercentage(chain.percentage)}

@@ -52,9 +52,7 @@ const StakingPage: React.FC = () => {
 
     // Function to get validator name from API
     const getValidatorName = (validator: any): string => {
-        if (validator.netAddress && validator.netAddress !== 'N/A') {
-            return 'tcp://delegating'
-        }
+        // Use address as name (netAddress will be shown separately in table)
         if (validator.address && validator.address !== 'N/A') {
             return validator.address
         }
@@ -98,7 +96,7 @@ const StakingPage: React.FC = () => {
             const name = getValidatorName(staker)
             const publicKey = staker.publicKey || 'N/A'
             const committees = staker.committees || []
-            const netAddress = staker.netAddress || 'tcp://delegating'
+            const netAddress = staker.netAddress || ''
             const stakedAmount = staker.stakedAmount || 0
             const maxPausedHeight = staker.maxPausedHeight || 0
             const unstakingHeight = staker.unstakingHeight || 0

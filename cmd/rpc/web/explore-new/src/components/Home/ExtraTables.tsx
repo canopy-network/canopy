@@ -186,7 +186,7 @@ const ExtraTables: React.FC = () => {
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary">
                         <i className={`bi ${getValidatorIcon(address)} text-primary`} style={{ fontSize: '0.875rem' }}></i>
                     </div>
-                    <Link to={`/validator/${address}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
+                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%

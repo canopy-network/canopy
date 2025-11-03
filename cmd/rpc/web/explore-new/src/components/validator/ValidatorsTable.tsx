@@ -130,15 +130,21 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         // Validator Name/Address
         <div
             className="flex items-center gap-2 cursor-pointer hover:bg-gray-800/30 rounded-lg p-2 -m-2 transition-colors"
-            onClick={() => navigate(`/validator/${validator.address}`)}
+            onClick={() => navigate(`/validator/${validator.address}?rank=${validator.rank}`)}
         >
             <div className="w-8 h-8 bg-green-300/10 rounded-full flex items-center justify-center">
                 <i className={`${getValidatorIcon(validator.address)} text-primary text-xs`}></i>
             </div>
             <div className="flex flex-col">
-                <span className="text-white text-sm font-medium">
-                    {validator.name}
-                </span>
+                {validator.netAddress && validator.netAddress !== 'tcp://delegating' && validator.netAddress !== 'N/A' ? (
+                    <span className="text-white text-sm font-medium">
+                        {validator.netAddress}
+                    </span>
+                ) : (
+                    <span className="text-white text-sm font-medium">
+                        {validator.address}
+                    </span>
+                )}
                 <span className="text-gray-400 font-mono text-xs">
                     {truncate(validator.address, 12)}
                 </span>

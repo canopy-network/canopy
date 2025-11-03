@@ -4,11 +4,14 @@ import toast from 'react-hot-toast'
 
 interface ValidatorDetail {
     address: string
-    name: string
-    status: 'active' | 'inactive' | 'jailed'
+    status: 'active' | 'paused' | 'unstaking' | 'inactive'
+    stakedAmount: number
+    committees: number[]
+    delegate: boolean
+    netAddress: string
     rank: number
-    stakeWeight: number
-    validatorName: string
+    maxPausedHeight: number
+    unstakingHeight: number
 }
 
 interface ValidatorDetailHeaderProps {
@@ -16,14 +19,53 @@ interface ValidatorDetailHeaderProps {
 }
 
 const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator }) => {
+    // Helper function to convert micro denomination to CNPY
+    const toCNPY = (micro: number): number => {
+        return micro / 1000000
+    }
+
+    // Generate deterministic icon based on address
+    const getValidatorIcon = (address: string) => {
+        // Create a simple hash from address to get a consistent index
+        let hash = 0
+        for (let i = 0; i < address.length; i++) {
+            const char = address.charCodeAt(i)
+            hash = ((hash << 5) - hash) + char
+            hash = hash & hash // Convert to 32-bit integer
+        }
+
+        const icons = [
+            'fa-solid fa-leaf',
+            'fa-solid fa-tree',
+            'fa-solid fa-seedling',
+            'fa-solid fa-mountain',
+            'fa-solid fa-sun',
+            'fa-solid fa-moon',
+            'fa-solid fa-star',
+            'fa-solid fa-heart',
+            'fa-solid fa-fire',
+            'fa-solid fa-water',
+            'fa-solid fa-wind',
+            'fa-solid fa-snowflake',
+            'fa-solid fa-gem',
+            'fa-solid fa-circle',
+            'fa-solid fa-square',
+            'fa-solid fa-diamond'
+        ]
+
+        return icons[Math.abs(hash) % icons.length]
+    }
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'active':
                 return 'bg-green-500'
+            case 'paused':
+                return 'bg-yellow-500'
+            case 'unstaking':
+                return 'bg-orange-500'
             case 'inactive':
                 return 'bg-gray-500'
-            case 'jailed':
-                return 'bg-red-500'
             default:
                 return 'bg-gray-500'
         }
@@ -33,10 +75,12 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
         switch (status) {
             case 'active':
                 return validatorDetailTexts.header.status.active
+            case 'paused':
+                return 'Paused'
+            case 'unstaking':
+                return 'Unstaking'
             case 'inactive':
                 return validatorDetailTexts.header.status.inactive
-            case 'jailed':
-                return validatorDetailTexts.header.status.jailed
             default:
                 return 'Unknown'
         }
@@ -63,35 +107,65 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
         })
     }
 
+    // Determine button label and icon based on validator type
+    const getValidatorTypeInfo = () => {
+        // Priority: Unstaking > Paused > Delegate > Validator
+        if (validator.unstakingHeight > 0) {
+            return {
+                label: 'Unstaking',
+                icon: 'fa-solid fa-arrow-down',
+                color: 'bg-orange-500 text-white'
+            }
+        }
+        if (validator.maxPausedHeight > 0) {
+            return {
+                label: 'Paused',
+                icon: 'fa-solid fa-pause-circle',
+                color: 'bg-yellow-500 text-white'
+            }
+        }
+        if (validator.delegate) {
+            return {
+                label: 'Delegator',
+                icon: 'fa-solid fa-users',
+                color: 'bg-blue-500 text-white'
+            }
+        }
+        return {
+            label: 'Validator',
+            icon: 'fa-solid fa-shield-halved',
+            color: 'bg-primary text-black'
+        }
+    }
+
+    const typeInfo = getValidatorTypeInfo()
+
     return (
         <div className="bg-card rounded-lg p-6 mb-6">
             <div className="flex items-start justify-between">
                 {/* Información del Validador */}
                 <div className="flex items-center gap-4">
-                    {/* Avatar del Validador */}
+                    {/* Icono determinístico del Validador */}
                     <div className="w-16 h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center">
-                        <span className="text-2xl font-bold text-primary">
-                            {validator.validatorName.charAt(0)}
-                        </span>
+                        <i className={`${getValidatorIcon(validator.address)} text-primary text-2xl`}></i>
                     </div>
 
                     {/* Detalles del Validador */}
                     <div className="flex items-center gap-4 flex-col">
                         <div>
-                            <h1 className="text-2xl font-bold text-white mb-1">
-                                {validator.validatorName}
-                            </h1>
-                            <div className="flex items-center gap-4 text-sm text-gray-400">
-                                <div className="flex items-center gap-2">
-                                    Address:
-                                    <span className="font-mono text-primary">
-                                        {validator.address}
-                                    </span>
-                                    <i className="fa-solid fa-copy cursor-pointer hover:text-white transition-colors"
-                                        onClick={() => copyToClipboard(validator.address)}
-                                        title="Copy address"></i>
-                                </div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <h1 className="text-2xl font-bold text-white">
+                                    {validator.address}
+                                </h1>
+                                <i className="fa-solid fa-copy cursor-pointer hover:text-primary transition-colors text-gray-400"
+                                    onClick={() => copyToClipboard(validator.address)}
+                                    title="Copy address"></i>
                             </div>
+                            {validator.netAddress && (
+                                <div className="text-sm text-gray-400">
+                                    {validator.netAddress}
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-start justify-start gap-4 w-full">
                             {/* Estado */}
@@ -102,21 +176,23 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 </span>
                             </div>
 
-                            {/* Rank */}
+                            {/* Committees */}
                             <div className="text-start flex items-center justify-start gap-2 w-full">
-                                <div className="text-sm text-gray-400">Rank:</div>
+                                <div className="text-sm text-gray-400 text-nowrap">Committees:</div>
                                 <div className="text-sm font-normal text-white">
-                                    #{validator.rank}
+                                    {validator.committees.length > 0 ? validator.committees.join(', ') : 'None'}
                                 </div>
                             </div>
 
-                            {/* Stake Weight */}
-                            <div className="text-start flex items-center justify-start gap-2 w-full">
-                                <div className="text-sm text-gray-400 text-nowrap">Stake Weight:</div>
-                                <div className="text-sm font-normal text-white">
-                                    {validator.stakeWeight}%
+                            {/* Rank */}
+                            {validator.rank > 0 && (
+                                <div className="text-start flex items-center justify-start gap-2 w-full">
+                                    <div className="text-sm text-gray-400">Rank:</div>
+                                    <div className="text-sm font-normal text-white">
+                                        #{validator.rank}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
 
@@ -127,10 +203,10 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
 
                     {/* Botones de Acción */}
                     <div className="flex items-start gap-3">
-                        <button className="flex items-center gap-2 bg-primary text-black px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
-                            <i className="fa-solid fa-coins text-sm"></i>
+                        <button className={`flex items-center gap-2 ${typeInfo.color} px-4 py-2 rounded-lg hover:opacity-90 transition-colors`}>
+                            <i className={`${typeInfo.icon} text-sm`}></i>
                             <span className="text-sm font-medium">
-                                {validatorDetailTexts.header.actions.delegate}
+                                {typeInfo.label}
                             </span>
                         </button>
                         <button type="button" onClick={() => {
