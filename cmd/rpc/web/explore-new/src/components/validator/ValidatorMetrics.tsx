@@ -79,8 +79,16 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         </div>
                     </div>
                     <div className="text-xl font-bold text-white">
-                        {typeof metric.value === 'string' ? (
-                            <span className="text-white">{metric.value}</span>
+                        {(metric.title === 'Max Paused Height' || metric.title === 'Unstaking Height') ? (
+                            metric.value === 0 ? (
+                                <span className="text-gray-400 text-lg">-</span>
+                            ) : (
+                                <AnimatedNumber
+                                    value={metric.value}
+                                    format={{ maximumFractionDigits: 0, minimumFractionDigits: 0 }}
+                                    className="text-white"
+                                />
+                            )
                         ) : (
                             <AnimatedNumber
                                 value={metric.value}
