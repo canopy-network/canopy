@@ -133,13 +133,12 @@ func (p *P2P) ListenForPeerBookResponses() {
 					p.log.Warnf("public key already connected from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 					continue
 				}
-				// try to dial
-				if err := p.DialAndDisconnect(bp.Address, true); err != nil {
-					p.log.Debugf("DialAndDisconnect failed with err: %s", err.Error())
-					continue
-				}
-				// add peer to list
-				p.book.Add(bp)
+				// try to dial, now async so we don't block processing messages'
+				go func(address *lib.PeerAddress) {
+					if err := p.DialAndDisconnect(address, true); err == nil {
+						p.book.Add(bp)
+					}
+				}(bp.Address)
 			}
 			p.ChangeReputation(senderID, GoodPeerBookRespRep)
 		case <-l.TimeToReset(): // fires when the limiter should reset

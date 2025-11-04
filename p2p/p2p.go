@@ -521,31 +521,24 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 			p.log.Errorf("MonitorInboxStats panic: %v, stack: %s", r, string(debug.Stack()))
 		}
 	}()
-
 	p.log.Infof("Starting inbox monitoring with interval: %s", interval)
-
 	//TODO once stable change inboxMonitorInterval to 30-60 seconds to avoid spamming logs
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-
 	tickCount := 0
 	for range ticker.C {
 		tickCount++
-
 		// Log heartbeat every 10 ticks to prove it's running
 		if tickCount%10 == 0 {
 			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
 		}
-
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
-
 		// Calculate total messages across all inboxes
 		totalMessages := 0
 		for _, count := range stats {
 			totalMessages += count
 		}
-
 		// Log even when idle every 60 seconds to confirm monitoring is active
 		if totalMessages == 0 {
 			if tickCount%4 == 0 { // Every 60 seconds with 15s interval
@@ -553,10 +546,8 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 			}
 			continue
 		}
-
 		// Log summary
 		p.log.Infof("Inbox Stats: Total=%d msgs across %d topics", totalMessages, len(stats))
-
 		// Log details for non-empty inboxes
 		for topic, count := range stats {
 			if count > 0 {
@@ -570,7 +561,6 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 			}
 		}
 	}
-
 	p.log.Warnf("MonitorInboxStats exited unexpectedly")
 }
 
@@ -578,11 +568,9 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 // This operation is non-blocking and safe to call concurrently
 func (p *P2P) GetInboxStats() map[lib.Topic]int {
 	stats := make(map[lib.Topic]int)
-
 	// len() on channels is non-blocking and thread-safe
 	for topic, ch := range p.channels {
 		stats[topic] = len(ch)
 	}
-
 	return stats
 }
