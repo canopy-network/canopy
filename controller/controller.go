@@ -20,15 +20,17 @@ var _ bft.Controller = new(Controller)
 
 // Controller acts as the 'manager' of the modules of the application
 type Controller struct {
-	Address    []byte             // self address
-	PublicKey  []byte             // self public key
-	PrivateKey crypto.PrivateKeyI // self private key
-	Config     lib.Config         // node configuration
-	Metrics    *lib.Metrics       // telemetry
-	FSM        *fsm.StateMachine  // the core protocol component responsible for maintaining and updating the state of the blockchain
-	Mempool    *Mempool           // the in memory list of pending transactions
-	Consensus  *bft.BFT           // the async consensus process between the committee members for the chain
-	P2P        *p2p.P2P           // the P2P module the node uses to connect to the network
+	Address          []byte                                  // self address
+	PublicKey        []byte                                  // self public key
+	PrivateKey       crypto.PrivateKeyI                      // self private key
+	Config           lib.Config                              // node configuration
+	Metrics          *lib.Metrics                            // telemetry
+	LastValidatorSet map[uint64]map[uint64]*lib.ValidatorSet // cache [height][chainID] -> set
+
+	FSM       *fsm.StateMachine // the core protocol component responsible for maintaining and updating the state of the blockchain
+	Mempool   *Mempool          // the in memory list of pending transactions
+	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
+	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI // the data manager for the 'root chain'
 	oracle      *oracle.Oracle // witness oracle
@@ -54,27 +56,29 @@ func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey cryp
 		// exit with error
 		return
 	}
-
 	// create the controller
 	controller = &Controller{
-		Address:    address.Bytes(),
-		PublicKey:  valKey.PublicKey().Bytes(),
-		PrivateKey: valKey,
-		Config:     c,
-		Metrics:    metrics,
-		FSM:        fsm,
-		oracle:     oracle,
-		Mempool:    mempool,
-		Consensus:  nil,
-		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:  &atomic.Bool{},
-		log:        l,
-		Mutex:      &sync.Mutex{},
+		Address:          address.Bytes(),
+		PublicKey:        valKey.PublicKey().Bytes(),
+		PrivateKey:       valKey,
+		Config:           c,
+		Metrics:          metrics,
+		FSM:              fsm,
+		oracle:           oracle,
+		Mempool:          mempool,
+		Consensus:        nil,
+		P2P:              p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:        &atomic.Bool{},
+		LastValidatorSet: make(map[uint64]map[uint64]*lib.ValidatorSet),
+		log:              l,
+		Mutex:            &sync.Mutex{},
 	}
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// initialize the mempool controller
 	mempool.controller = controller
+	// add the last validator set reference to the FSM
+	fsm.LastValidatorSet = controller.LastValidatorSet
 	// if an error occurred initializing the bft module
 	if err != nil {
 		// exit with error
@@ -98,6 +102,21 @@ func (c *Controller) Start() {
 		c.log.Warnf("Attempting to connect to the root-chain")
 		// set a timer to go off once per second
 		t := time.NewTicker(time.Second)
+		// pre save the validator sets from previous and current heights
+		lastValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight()-1)
+		if err != nil {
+			c.log.Fatal(err.Error())
+		}
+		currValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight())
+		if err != nil {
+			c.log.Fatal(err.Error())
+		}
+		c.LastValidatorSet[c.ChainHeight()] = map[uint64]*lib.ValidatorSet{
+			c.Config.ChainId: &lastValSet,
+		}
+		c.LastValidatorSet[c.ChainHeight()+1] = map[uint64]*lib.ValidatorSet{
+			c.Config.ChainId: &currValSet,
+		}
 		// once function completes, stop the timer
 		defer t.Stop()
 		// each time the timer fires
@@ -123,10 +142,6 @@ func (c *Controller) Start() {
 					<-syncCh // wait for syncCh to be closed
 					c.log.Info("Oracle is synced to top, starting Canopy")
 				}
-				// start the syncing process (if not synced to top)
-				go c.Sync()
-				// start the bft consensus (if synced to top)
-				go c.Consensus.Start()
 				// exit the loop
 				break
 			}
@@ -135,10 +150,10 @@ func (c *Controller) Start() {
 		go c.CheckMempool()
 		// start internal Controller listeners for P2P
 		c.StartListeners()
-		// // start the syncing process (if not synced to top)
-		// go c.Sync()
-		// // start the bft consensus (if synced to top)
-		// go c.Consensus.Start()
+		// start the syncing process (if not synced to top)
+		go c.Sync()
+		// start the bft consensus (if synced to top)
+		go c.Consensus.Start()
 	}()
 }
 
@@ -181,7 +196,9 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		return
 	}
 	// sync the order store
-	c.oracle.UpdateRootChainInfo(info)
+	if c.Config.OracleEnabled {
+		c.oracle.UpdateRootChainInfo(info)
+	}
 	// set timestamp if included
 	var timestamp time.Time
 	// if timestamp is not 0

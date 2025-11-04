@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,8 +25,9 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	// execute the function call
 	got := DefaultConfig()
-	// compare got vs expected
-	require.EqualExportedValues(t, expected, got)
+	// compare got vs expected, CleanupBlockInterval is randomized so it needs to be ignored
+	diff := cmp.Diff(expected, got, cmpopts.IgnoreFields(Config{}, "CleanupBlockInterval"))
+	require.Empty(t, diff, "config mismatch: %s", diff)
 }
 
 func TestFileConfig(t *testing.T) {

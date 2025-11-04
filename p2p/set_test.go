@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 )
 
@@ -30,9 +29,9 @@ func TestPeerSetAddGetDel(t *testing.T) {
 	got, err := n1.PeerSet.GetPeerInfo(n2.pub)
 	require.NoError(t, err)
 	require.Equal(t, *expected, *got)
-	_, err = n1.PeerSet.Remove(n2.pub)
+	err = n1.PeerSet.Remove(n2.pub, 0)
 	require.NoError(t, err)
-	_, err = n1.PeerSet.Remove(n2.pub)
+	err = n1.PeerSet.Remove(n2.pub, 0)
 	require.Error(t, err)
 	_, err = n1.PeerSet.GetPeerInfo(n2.pub)
 	require.Error(t, err)
@@ -44,9 +43,8 @@ func TestUpdateMustConnects(t *testing.T) {
 	require.NoError(t, n1.Add(&Peer{
 		PeerInfo: &lib.PeerInfo{Address: n2.ID()},
 		conn: &MultiConn{
-			error:          sync.Once{},
-			close:          sync.Once{},
-			addedToPeerSet: atomic.Bool{},
+			error: sync.Once{},
+			close: sync.Once{},
 		},
 	}))
 	toDial := n1.UpdateMustConnects([]*lib.PeerAddress{
@@ -112,6 +110,7 @@ func TestGetAllInfosAndBookPeers(t *testing.T) {
 func newTestMultiConnMock(_ *testing.T, peerPubKey []byte, conn net.Conn, p *P2P) *MultiConn {
 	return &MultiConn{
 		conn: conn,
+		uuid: 0,
 		Address: &lib.PeerAddress{
 			PublicKey:  peerPubKey,
 			NetAddress: "",
@@ -119,14 +118,13 @@ func newTestMultiConnMock(_ *testing.T, peerPubKey []byte, conn net.Conn, p *P2P
 				ChainId: 1,
 			},
 		},
-		streams:        p.NewStreams(),
-		quitSending:    make(chan struct{}, maxChanSize),
-		quitReceiving:  make(chan struct{}, maxChanSize),
-		onError:        func(err error, bytes []byte, s string) { p.log.Error(err.Error()) },
-		error:          sync.Once{},
-		p2p:            p,
-		close:          sync.Once{},
-		addedToPeerSet: atomic.Bool{},
-		log:            p.log,
+		streams:       p.NewStreams(),
+		quitSending:   make(chan struct{}, maxChanSize),
+		quitReceiving: make(chan struct{}, maxChanSize),
+		onError:       func(err error, bytes []byte, s string, u uint64) { p.log.Error(err.Error()) },
+		error:         sync.Once{},
+		p2p:           p,
+		close:         sync.Once{},
+		log:           p.log,
 	}
 }

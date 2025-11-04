@@ -358,9 +358,9 @@ func TestOnPeerError(t *testing.T) {
 	}
 	_, found := n1.book.getIndex(n2PeerAddress)
 	require.True(t, found)
-	_, err := n1.PeerSet.get(n2.pub)
+	peer, err := n1.PeerSet.get(n2.pub)
 	require.NoError(t, err)
-	n1.OnPeerError(errors.New(""), n2.pub, "")
+	n1.OnPeerError(errors.New(""), n2.pub, "", peer.conn.uuid)
 	_, err = n1.PeerSet.get(n2.pub)
 	require.Error(t, err)
 }

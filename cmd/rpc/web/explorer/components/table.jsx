@@ -11,13 +11,14 @@ import {
   convertTx,
   toCNPY,
   formatLocaleNumber,
+  defaultNetAddress,
 } from "@/components/util";
 
 // convertValue() converts the value based on its key and handles different types
 function convertValue(k, v, openModal) {
   if (k === "Id" || k === "Data") return v;
   if (k === "publicKey") return <Truncate text={v} />;
-  if (k === "netAddress") return <span className="net-address">{v}</span>;
+  if (k === "netAddress") return <span className="net-address">{v || defaultNetAddress}</span>;
   if (isHex(v) || k === "height") {
     const content = isNumber(v) ? v : <Truncate text={v} />;
     return (
@@ -195,6 +196,7 @@ export default function DTable(props) {
             min="1"
             onChange={(e) => e.target.value && props.selectTable(6, 0, Number(e.target.value))}
             className="chain-table mb-3"
+            style={{ backgroundImage: 'url("./chain.png")' }}
           />
         )}
         <input
@@ -202,11 +204,19 @@ export default function DTable(props) {
           value={filterText}
           onChange={(e) => props.setState({ ...props.state, filterText: e.target.value })}
           className="search-table mb-3"
+          style={{ backgroundImage: 'url("./filter.png")' }}
         />
         <h5 className="data-table-head">{getHeader(tableData)}</h5>
       </div>
 
-      <Table responsive bordered hover size="sm" className="table" style={{ opacity: tableLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+      <Table
+        responsive
+        bordered
+        hover
+        size="sm"
+        className="table"
+        style={{ opacity: tableLoading ? 0.6 : 1, transition: "opacity 0.2s" }}
+      >
         <thead>
           <tr>
             {Object.keys(getTableBody(tableData)[0]).map((s, i) => (
@@ -231,7 +241,10 @@ export default function DTable(props) {
           {sortedData.map((val, idx) => (
             <tr key={idx}>
               {Object.keys(val).map((k, i) => (
-                <td key={i} className={k === 'Id' ? 'large-table-col' : k === 'netAddress' ? 'net-address-col' : 'table-col'}>
+                <td
+                  key={i}
+                  className={k === "Id" ? "large-table-col" : k === "netAddress" ? "net-address-col" : "table-col"}
+                >
                   {convertValue(k, val[k], props.openModal)}
                 </td>
               ))}

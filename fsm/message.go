@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
@@ -318,14 +319,22 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	if poolBalance == 0 {
 		return ErrNonSubsidizedCommittee()
 	}
-	// get committee for the QC
-	committee, err := s.LoadCommittee(chainId, msg.Qc.Header.RootHeight)
-	if err != nil {
-		return err
+	// get committee for the QC from the cache
+	var committee *lib.ValidatorSet
+	if s.LastValidatorSet != nil {
+		committee = s.LastValidatorSet[msg.Qc.Header.RootHeight+1][chainId]
+	}
+	if committee == nil {
+		// otherwise, retrieve it from the store
+		valSet, err := s.LoadCommittee(chainId, msg.Qc.Header.RootHeight)
+		if err != nil {
+			return err
+		}
+		committee = &valSet
 	}
 	// ensure it's a valid QC
 	// max block size is 0 here because there should not be a block attached to this QC
-	isPartialQC, err := msg.Qc.Check(committee, 0, &lib.View{NetworkId: uint64(s.NetworkID), ChainId: chainId}, false)
+	isPartialQC, err := msg.Qc.Check(*committee, 0, &lib.View{NetworkId: uint64(s.NetworkID), ChainId: chainId}, false)
 	if err != nil {
 		return err
 	}
@@ -334,7 +343,7 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 		return lib.ErrNoMaj23()
 	}
 	// handle the certificate results
-	return s.HandleCertificateResults(msg.Qc, &committee)
+	return s.HandleCertificateResults(msg.Qc, committee)
 }
 
 // HandleMessageSubsidy() is the proper handler for a `Subsidy` message

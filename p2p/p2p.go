@@ -248,6 +248,13 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		if err != nil {
 			p.log.Warn(err.Error())
 			connection.Stop()
+			pk := connection.p2p.publicKey
+			peer, peerErr := p.get(pk)
+			// peer was not added, nothing to do
+			if peerErr != nil {
+				return
+			}
+			p.PeerSet.Remove(pk, peer.conn.uuid)
 		}
 	}()
 	// log the peer add attempt
@@ -273,6 +280,11 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	}
 	p.Lock()
 	defer p.Unlock()
+	// check whether the connection has errors
+	if connection.hasError.Load() {
+		return
+	}
+
 	// check if is must connect
 	for _, item := range p.mustConnect {
 		if bytes.Equal(item.PublicKey, info.Address.PublicKey) {
@@ -281,11 +293,8 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		}
 	}
 	// check if is trusted
-	for _, item := range p.config.TrustedPeerIDs {
-		if item == lib.BytesToString(info.Address.PublicKey) {
-			info.IsTrusted = true
-			break
-		}
+	if slices.Contains(p.config.TrustedPeerIDs, lib.BytesToString(info.Address.PublicKey)) {
+		info.IsTrusted = true
 	}
 	// check if is banned
 	for _, item := range p.config.BannedPeerIDs {
@@ -327,11 +336,10 @@ func (p *P2P) DialAndDisconnect(a *lib.PeerAddress, strictPublicKey bool) lib.Er
 }
 
 // OnPeerError() callback to P2P when a peer errors
-func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string) {
+func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid uint64) {
 	p.log.Warn(PeerError(publicKey, remoteAddr, err))
 	// ignore error: peer may have disconnected before added
-	_, err = p.PeerSet.Remove(publicKey)
-	if err != nil {
+	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
 		p.log.Errorf("Remove error: %s", err.Error())
 	}
 }

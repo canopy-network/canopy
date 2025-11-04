@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -918,4 +919,11 @@ func AtomicWriteFile(filePath string, data []byte) error {
 		return fmt.Errorf("failed to rename temporary file to final destination: %w", err)
 	}
 	return nil
+}
+
+// RandSlice is a helper to generate a random byte slice of the given size.
+func RandSlice(byteSize uint64) []byte {
+	value := make([]byte, byteSize)
+	rand.Read(value)
+	return value
 }

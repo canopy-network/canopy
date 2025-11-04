@@ -240,8 +240,11 @@ func (t *Txn) write(prefix []byte, writeVersion uint64, op valueOp) lib.ErrorI {
 			return ErrStoreSet(err)
 		}
 	case opDelete:
-		// set an entry with a bit that marks it as deleted and prevents it from being discarded
-		if err := t.writer.SetEntryAt(newEntry(k, nil, badgerDeleteBit|badgerNoDiscardBit), writeVersion); err != nil {
+		meta := badgerDeleteBit
+		if t.state && writeVersion != lssVersion {
+			meta |= badgerNoDiscardBit
+		}
+		if err := t.writer.SetEntryAt(newEntry(k, nil, meta), writeVersion); err != nil {
 			return ErrStoreDelete(err)
 		}
 	case opEntry:
@@ -252,8 +255,13 @@ func (t *Txn) write(prefix []byte, writeVersion uint64, op valueOp) lib.ErrorI {
 			ExpiresAt: op.entry.ExpiresAt,
 			UserMeta:  op.entry.UserMeta,
 		}
+		meta := getMeta(op.entry)
+		isDelete := (meta & badgerDeleteBit) != 0
+		if isDelete && t.state && writeVersion != lssVersion {
+			meta |= badgerNoDiscardBit
+		}
 		// set the entry meta
-		setMeta(entry, getMeta(op.entry))
+		setMeta(entry, meta)
 		// setEntry to the underlying writer
 		if err := t.writer.SetEntryAt(entry, writeVersion); err != nil {
 			return ErrStoreSet(err)
@@ -630,6 +638,15 @@ func getMeta(e *badger.Entry) byte {
 	return *(*byte)(unsafe.Pointer(f.UnsafeAddr()))
 }
 
+func getItemMeta(e *badger.Item) byte {
+	if e == nil {
+		return 0
+	}
+	v := reflect.ValueOf(e).Elem()
+	f := v.FieldByName("meta")
+	return *(*byte)(unsafe.Pointer(f.UnsafeAddr()))
+}
+
 // getTxnFromBatch() accesses the private field 'size/count' of badgerDB's `Txn` inside a 'WriteBatch'
 // badger doesn't yet allow users to access this info - though it allows users to avoid
 // TxnTooBig errors
@@ -680,6 +697,19 @@ func entryIsDelete(e *badger.Entry) bool {
 		return false
 	}
 	return (getMeta(e) & badgerDeleteBit) != 0
+}
+
+func entryItemIsDelete(e *badger.Item) bool {
+	if e == nil {
+		return false
+	}
+	return (getItemMeta(e) & badgerDeleteBit) != 0
+}
+func entryItemIsDoNotDiscard(e *badger.Item) bool {
+	if e == nil {
+		return false
+	}
+	return (getItemMeta(e) & badgerNoDiscardBit) != 0
 }
 
 var endBytes = bytes.Repeat([]byte{0xFF}, maxKeyBytes+1)

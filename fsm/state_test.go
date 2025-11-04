@@ -263,8 +263,10 @@ func TestApplyBlock(t *testing.T) {
 				// set the protocol version to not trigger an error
 				sm.ProtocolVersion = 1
 			}
+			// load the last block validator set
+			valSet, _ := sm.LoadCommittee(lib.CanopyChainId, sm.Height()-1)
 			// execute the function call
-			header, txResults, _, failed, e := sm.ApplyBlock(context.Background(), test.block, false)
+			header, txResults, _, failed, e := sm.ApplyBlock(context.Background(), test.block, &valSet, false)
 			// validate the expected error
 			require.Equal(t, test.error != "", e != nil || len(failed) != 0, e)
 			if len(failed) != 0 {

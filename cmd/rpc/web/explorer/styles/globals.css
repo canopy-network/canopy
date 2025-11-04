@@ -98,7 +98,6 @@ input::placeholder {
 }
 
 .main-input {
-  background-image: url("../public/search.png");
   background-repeat: no-repeat;
   background-position: left center;
   background-size: 25px;
@@ -110,7 +109,6 @@ input::placeholder {
   text-align: center;
   border-radius: 2px;
   border: none;
-  background-image: url("../public/filter.png");
   background-repeat: no-repeat;
   background-position: right center;
   background-size: 25px;
@@ -129,7 +127,6 @@ input::placeholder {
   border-radius: 2px;
   width: 50px;
   border: none;
-  background-image: url("../public/chain.png");
   background-repeat: no-repeat;
   background-position: right center;
   background-size: 25px;
@@ -582,7 +579,6 @@ td, th {
 }
 
 #nav-social-icon1 {
-  background-image: url("../public/discord-filled.png");
   margin-right: 10px;
   margin-top: 3px;
   width: 30px;
@@ -590,7 +586,6 @@ td, th {
 }
 
 #nav-social-icon2 {
-  background-image: url("../public/twitter.png");
   width: 25px;
   height: 25px;
 }

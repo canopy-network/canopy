@@ -30,7 +30,7 @@ For more information on the Canopy Network Protocol visit [https://canopynetwork
 
 ## Network Status
 
-⪢ Canopy is in `Alphanet` 🚀 ➝ learn more about the [road-to-mainnet](https://www.canopynetwork.org/learn-more/road-to-mainnet)
+⪢ Canopy is in `Betanet` 🚀 ➝ learn more about the [road-to-mainnet](https://www.canopynetwork.org/learn-more/road-to-mainnet)
 
 ## Protocol Documentation
 

@@ -3,6 +3,7 @@ package p2p
 import (
 	"encoding/binary"
 	"io"
+	"math/rand/v2"
 	"net"
 	"runtime/debug"
 	"sync"
@@ -54,17 +55,18 @@ var (
 
 // MultiConn: A rate-limited, multiplexed connection that utilizes a series streams with varying priority for sending and receiving
 type MultiConn struct {
-	conn           net.Conn                    // underlying connection
-	Address        *lib.PeerAddress            // authenticated peer information
-	streams        map[lib.Topic]*Stream       // multiple independent bi-directional communication channels
-	quitSending    chan struct{}               // signal to quit
-	quitReceiving  chan struct{}               // signal to quit
-	onError        func(error, []byte, string) // callback to call if peer errors
-	error          sync.Once                   // thread safety to ensure MultiConn.onError is only called once
-	p2p            *P2P                        // a pointer reference to the P2P module
-	close          sync.Once                   // flag to identify if MultiConn is closed
-	addedToPeerSet atomic.Bool                 // flag to identify if MultiConn is added to the peer list and should be removed
-	log            lib.LoggerI                 // logging
+	conn          net.Conn                            // underlying connection
+	uuid          uint64                              // the unique connection id to prevent race conditions around peer removal logic
+	Address       *lib.PeerAddress                    // authenticated peer information
+	streams       map[lib.Topic]*Stream               // multiple independent bi-directional communication channels
+	quitSending   chan struct{}                       // signal to quit
+	quitReceiving chan struct{}                       // signal to quit
+	onError       func(error, []byte, string, uint64) // callback to call if peer errors
+	error         sync.Once                           // thread safety to ensure MultiConn.onError is only called once
+	p2p           *P2P                                // a pointer reference to the P2P module
+	close         sync.Once                           // flag to identify if MultiConn is closed
+	log           lib.LoggerI                         // logging
+	hasError      atomic.Bool                         // flag to identify if MultiConn has encountered an error
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -83,17 +85,17 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		return nil, err
 	}
 	c := &MultiConn{
-		conn:           eConn,
-		Address:        eConn.Address,
-		streams:        p.NewStreams(),
-		quitSending:    make(chan struct{}, maxChanSize),
-		quitReceiving:  make(chan struct{}, maxChanSize),
-		onError:        p.OnPeerError,
-		error:          sync.Once{},
-		p2p:            p,
-		close:          sync.Once{},
-		addedToPeerSet: atomic.Bool{},
-		log:            p.log,
+		conn:          eConn,
+		uuid:          rand.Uint64(),
+		Address:       eConn.Address,
+		streams:       p.NewStreams(),
+		quitSending:   make(chan struct{}, maxChanSize),
+		quitReceiving: make(chan struct{}, maxChanSize),
+		onError:       p.OnPeerError,
+		error:         sync.Once{},
+		p2p:           p,
+		close:         sync.Once{},
+		log:           p.log,
 	}
 	_ = c.conn.SetReadDeadline(time.Time{})
 	_ = c.conn.SetWriteDeadline(time.Time{})
@@ -241,13 +243,13 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 		// prevent race between adding to peer set and erroring
 		c.p2p.Lock()
 		defer c.p2p.Unlock()
-		// only try to remove the peer from set if 'was added' to the peer set
-		// set added as 'true' to prevent any 'after-the-fact' addition to the peer set
-		if c.addedToPeerSet.Swap(true) {
-			c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String())
-		} else {
-			c.log.Debug(err.Error())
-		}
+		// set the connection as failed - this marks the underlying net.Conn as invalid
+		// since it's about to be closed. There's no reliable way to check whether a connection
+		// is closed without attempting read/write operations, which can lead to race conditions,
+		// data corruption, and message loss.
+		c.hasError.Store(true)
+		// run the callback
+		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
 		// stop the multi-conn
 		c.Stop()
 	})
