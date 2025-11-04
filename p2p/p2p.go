@@ -29,7 +29,7 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const transport, dialTimeout, minPeerTick = "tcp", time.Second, 100 * time.Millisecond
+const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 60 * time.Second
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
@@ -97,6 +97,8 @@ func (p *P2P) Start() {
 	go p.ListenForInboundPeers(&lib.PeerAddress{NetAddress: p.config.ListenAddress})
 	// Dials external outbound peers
 	go p.DialForOutboundPeers()
+	// Start inbox monitoring
+	go p.MonitorInboxStats(inboxMonitorInterval)
 	// Wait until peers reaches minimum count
 	p.WaitForMinimumPeers()
 }
@@ -379,9 +381,27 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 	// non blocking
 	go func() {
 		bz, _ := lib.Marshal(payload)
-		p.Inbox(topic) <- &lib.MessageAndMetadata{
+		m := &lib.MessageAndMetadata{
 			Message: bz,
 			Sender:  &lib.PeerInfo{Address: &lib.PeerAddress{PublicKey: fromPublicKey}},
+		}
+		select {
+		case p.Inbox(topic) <- m:
+		default:
+			p.log.Errorf("CRITICAL: Inbox %s queue full in self send", lib.Topic_name[int32(topic)])
+			p.log.Error("Dropping all messages")
+			// drain inbox
+			func() {
+				for {
+					select {
+					case <-p.Inbox(topic):
+						// drop
+					default:
+						// channel is empty now
+						return
+					}
+				}
+			}()
 		}
 	}()
 	return nil
@@ -490,4 +510,66 @@ func (p *P2P) catchPanic() {
 	if r := recover(); r != nil {
 		p.log.Error(string(debug.Stack()))
 	}
+}
+
+// MonitorInboxStats continuously monitors and logs inbox channel depths
+// without blocking message processing. Safe to run as a goroutine.
+func (p *P2P) MonitorInboxStats(interval time.Duration) {
+	// Add panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.Errorf("MonitorInboxStats panic: %v, stack: %s", r, string(debug.Stack()))
+		}
+	}()
+	p.log.Infof("Starting inbox monitoring with interval: %s", interval)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	tickCount := 0
+	for range ticker.C {
+		tickCount++
+		// Log heartbeat every 10 ticks to prove it's running
+		if tickCount%10 == 0 {
+			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
+		}
+		// Collect stats without blocking
+		stats := p.GetInboxStats()
+		// Calculate total messages across all inboxes
+		totalMessages := 0
+		for _, count := range stats {
+			totalMessages += count
+		}
+		// Log even when idle every 60 seconds to confirm monitoring is active
+		if totalMessages == 0 {
+			if tickCount%4 == 0 { // Every 60 seconds with 15s interval
+				p.log.Debugf("Inbox Stats: All inboxes empty (monitoring active)")
+			}
+			continue
+		}
+		// Log summary
+		p.log.Infof("Inbox Stats: Total=%d msgs across %d topics", totalMessages, len(stats))
+		// Log details for non-empty inboxes
+		for topic, count := range stats {
+			if count > 0 {
+				percentage := float64(count) / float64(maxInboxQueueSize) * 100
+
+				if percentage > 50 {
+					p.log.Warnf("  ⚠️  %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
+				} else {
+					p.log.Infof("  ✓ %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
+				}
+			}
+		}
+	}
+	p.log.Warnf("MonitorInboxStats exited unexpectedly")
+}
+
+// GetInboxStats returns the current message count for each inbox channel
+// This operation is non-blocking and safe to call concurrently
+func (p *P2P) GetInboxStats() map[lib.Topic]int {
+	stats := make(map[lib.Topic]int)
+	// len() on channels is non-blocking and thread-safe
+	for topic, ch := range p.channels {
+		stats[topic] = len(ch)
+	}
+	return stats
 }
