@@ -22,10 +22,6 @@ func ErrGarbageCollectDB(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeGarbageCollectDB, lib.StorageModule, fmt.Sprintf("garbageCollectDB() failed with err: %s", err.Error()))
 }
 
-func ErrSetEntry(err error) lib.ErrorI {
-	return lib.NewError(lib.CodeSetEntry, lib.StorageModule, fmt.Sprintf("setEntry() failed with err: %s", err.Error()))
-}
-
 func ErrStoreSet(err error) lib.ErrorI {
 	return lib.NewError(lib.CodeStoreSet, lib.StorageModule, fmt.Sprintf("store.set() failed with err: %s", err.Error()))
 }

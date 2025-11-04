@@ -23,8 +23,8 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	// execute the function call
 	got := DefaultConfig()
-	// compare got vs expected, CleanupBlockInterval is randomized so it needs to be ignored
-	diff := cmp.Diff(expected, got, cmpopts.IgnoreFields(Config{}, "CleanupBlockInterval"))
+	// compare got vs expected, LSSCompactionInterval is randomized so it needs to be ignored
+	diff := cmp.Diff(expected, got, cmpopts.IgnoreFields(Config{}, "LSSCompactionInterval"))
 	require.Empty(t, diff, "config mismatch: %s", diff)
 }
 

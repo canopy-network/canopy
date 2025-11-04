@@ -3,16 +3,66 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
+	mathrand "math/rand"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFuzzMultiSet(t *testing.T) {
+	iterations := 1000
+	// create a new SMT
+	smt1, memStore := NewTestSMT(t, nil, nil, 160)
+	unsortedOps := make(map[uint64]valueOp)
+	unsortedOps2 := make(map[uint64]valueOp)
+	// close the store when done
+	defer memStore.Close()
+	// create a compare SMT
+	smt2, memStore2 := NewTestSMT(t, nil, nil, 160)
+	// close the store when done
+	defer memStore2.Close()
+	var keys [][]byte
+	for range iterations {
+		// load 32 random bytes
+		random := make([]byte, 32)
+		_, err := rand.Read(random)
+		require.NoError(t, err)
+		// 50% of the time do a set
+		if mathrand.Intn(2) == 0 {
+			keys = append(keys, random)
+			unsortedOps[lib.MemHash(random)] = valueOp{key: random, value: random, op: opSet}
+			unsortedOps2[lib.MemHash(random)] = valueOp{key: random, value: random, op: opSet}
+		} else {
+			toDelete := random
+			if mathrand.Intn(2) == 0 {
+				if len(keys) != 0 {
+					// choose a random key
+					idx := mathrand.Intn(len(keys))
+					toDelete = keys[idx]
+					// remove it from the keys slice
+					keys = append(keys[:idx], keys[idx+1:]...)
+				}
+			}
+			// 50% of the time do a delete
+			unsortedOps[lib.MemHash(toDelete)] = valueOp{key: toDelete, op: opDelete}
+			unsortedOps2[lib.MemHash(toDelete)] = valueOp{key: toDelete, op: opDelete}
+		}
+		// for smt 2 commit everytime
+		require.NoError(t, smt2.Commit(unsortedOps2))
+	}
+	// commit smt 1
+	require.NoError(t, smt1.CommitParallel(unsortedOps))
+	// compare roots between the two smts
+	require.Equal(t, smt1.Root(), smt2.Root())
+}
 
 func TestSet(t *testing.T) {
 	tests := []struct {
@@ -1972,12 +2022,20 @@ func FuzzKeyDecodeEncode(f *testing.F) {
 
 func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*SMT, *Txn) {
 	// create a new memory store to work with
-	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
 	require.NoError(t, err)
 	// make a writable reader that reads from the last height
-	reader := db.NewTransactionAt(1, true)
-	writer := db.NewWriteBatchAt(1)
-	memStore := NewBadgerTxn(reader, writer, []byte(stateCommitmentPrefix), false, false, 1)
+	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
+	require.NoError(t, err)
+	memStore := NewTxn(versionedStore, versionedStore, []byte(stateCommitmentPrefix), false, false, 1)
 	// if there's no preset - use the default 3 nodes
 	if preset == nil {
 		if root != nil {
@@ -2050,150 +2108,150 @@ func keyBytesFromStr(str string) []byte {
 	return byts
 }
 
-func TestCommitParallel(t *testing.T) {
-	tests := []struct {
-		name        string
-		detail      string
-		keyBitSize  int
-		preset      *NodeList
-		operations  map[uint64]valueOp
-		expected    *NodeList
-		shouldError bool
-	}{
-		{
-			name: "parallel commit with operations across multiple subtrees",
-			detail: `Operations distributed across different 3-bit prefixes should be processed in parallel
-			without conflicts. This tests the core parallelization logic.`,
-			keyBitSize: 160,
-			preset:     nil, // start with empty tree
-			operations: map[uint64]valueOp{
-				// operations for different subtrees based on hash prefixes
-				1:  {key: []byte{1}, value: []byte("value1"), op: opSet},   // will hash to some prefix
-				2:  {key: []byte{2}, value: []byte("value2"), op: opSet},   // will hash to some prefix
-				3:  {key: []byte{3}, value: []byte("value3"), op: opSet},   // will hash to some prefix
-				4:  {key: []byte{4}, value: []byte("value4"), op: opSet},   // will hash to some prefix
-				5:  {key: []byte{5}, value: []byte("value5"), op: opSet},   // will hash to some prefix
-				6:  {key: []byte{6}, value: []byte("value6"), op: opSet},   // will hash to some prefix
-				7:  {key: []byte{7}, value: []byte("value7"), op: opSet},   // will hash to some prefix
-				8:  {key: []byte{8}, value: []byte("value8"), op: opSet},   // will hash to some prefix
-				9:  {key: []byte{9}, value: []byte("value9"), op: opSet},   // will hash to some prefix
-				10: {key: []byte{10}, value: []byte("value10"), op: opSet}, // will hash to some prefix
-				11: {key: []byte{11}, value: []byte("value11"), op: opSet}, // will hash to some prefix
-				12: {key: []byte{12}, value: []byte("value12"), op: opSet}, // will hash to some prefix
-				13: {key: []byte{13}, value: []byte("value13"), op: opSet}, // will hash to some prefix
-				14: {key: []byte{14}, value: []byte("value14"), op: opSet}, // will hash to some prefix
-				15: {key: []byte{15}, value: []byte("value15"), op: opSet}, // will hash to some prefix
-				16: {key: []byte{16}, value: []byte("value16"), op: opSet}, // will hash to some prefix
-			},
-		},
-		{
-			name: "parallel commit with mixed set and delete operations",
-			detail: `Mix of set and delete operations across subtrees to test
-			parallel processing of different operation types.`,
-			keyBitSize: 160,
-			preset:     nil,
-			operations: map[uint64]valueOp{
-				1:  {key: []byte{1}, value: []byte("value1"), op: opSet},
-				2:  {key: []byte{2}, value: []byte("value2"), op: opSet},
-				3:  {key: []byte{3}, value: []byte("value3"), op: opSet},
-				4:  {key: []byte{4}, value: []byte("value4"), op: opSet},
-				5:  {key: []byte{5}, value: []byte("value5"), op: opSet},
-				6:  {key: []byte{6}, value: []byte("value6"), op: opSet},
-				7:  {key: []byte{7}, value: []byte("value7"), op: opSet},
-				8:  {key: []byte{8}, value: []byte("value8"), op: opSet},
-				9:  {key: []byte{9}, op: opDelete},  // delete operation
-				10: {key: []byte{10}, op: opDelete}, // delete operation
-				11: {key: []byte{11}, value: []byte("value11"), op: opSet},
-				12: {key: []byte{12}, value: []byte("value12"), op: opSet},
-				13: {key: []byte{13}, op: opDelete}, // delete operation
-				14: {key: []byte{14}, value: []byte("value14"), op: opSet},
-				15: {key: []byte{15}, value: []byte("value15"), op: opSet},
-				16: {key: []byte{16}, value: []byte("value16"), op: opSet},
-			},
-		},
-		{
-			name: "fallback to sequential for small operation count",
-			detail: `When there are fewer operations than 2*NumSubtrees (16),
-			the function should fall back to sequential processing.`,
-			keyBitSize: 160,
-			preset:     nil,
-			operations: map[uint64]valueOp{
-				1: {key: []byte{1}, value: []byte("value1"), op: opSet},
-				2: {key: []byte{2}, value: []byte("value2"), op: opSet},
-				3: {key: []byte{3}, value: []byte("value3"), op: opSet},
-				// only 3 operations - should use sequential commit
-			},
-		},
-		{
-			name: "parallel commit with concurrent updates to same subtree",
-			detail: `Multiple operations targeting the same subtree prefix
-			should be processed together in that subtree's goroutine.`,
-			keyBitSize: 160,
-			preset:     nil,
-			operations: func() map[uint64]valueOp {
-				ops := make(map[uint64]valueOp)
-				// Generate operations that will hash to similar prefixes
-				for i := 0; i < 20; i++ {
-					ops[uint64(i)] = valueOp{
-						key:   []byte{byte(i)},
-						value: []byte(fmt.Sprintf("value%d", i)),
-						op:    opSet,
-					}
-				}
-				return ops
-			}(),
-		},
-	}
+// func TestCommitParallel(t *testing.T) {
+// 	tests := []struct {
+// 		name        string
+// 		detail      string
+// 		keyBitSize  int
+// 		preset      *NodeList
+// 		operations  map[uint64]valueOp
+// 		expected    *NodeList
+// 		shouldError bool
+// 	}{
+// 		{
+// 			name: "parallel commit with operations across multiple subtrees",
+// 			detail: `Operations distributed across different 3-bit prefixes should be processed in parallel
+// 			without conflicts. This tests the core parallelization logic.`,
+// 			keyBitSize: 160,
+// 			preset:     nil, // start with empty tree
+// 			operations: map[uint64]valueOp{
+// 				// operations for different subtrees based on hash prefixes
+// 				1:  {key: []byte{1}, value: []byte("value1"), op: opSet},   // will hash to some prefix
+// 				2:  {key: []byte{2}, value: []byte("value2"), op: opSet},   // will hash to some prefix
+// 				3:  {key: []byte{3}, value: []byte("value3"), op: opSet},   // will hash to some prefix
+// 				4:  {key: []byte{4}, value: []byte("value4"), op: opSet},   // will hash to some prefix
+// 				5:  {key: []byte{5}, value: []byte("value5"), op: opSet},   // will hash to some prefix
+// 				6:  {key: []byte{6}, value: []byte("value6"), op: opSet},   // will hash to some prefix
+// 				7:  {key: []byte{7}, value: []byte("value7"), op: opSet},   // will hash to some prefix
+// 				8:  {key: []byte{8}, value: []byte("value8"), op: opSet},   // will hash to some prefix
+// 				9:  {key: []byte{9}, value: []byte("value9"), op: opSet},   // will hash to some prefix
+// 				10: {key: []byte{10}, value: []byte("value10"), op: opSet}, // will hash to some prefix
+// 				11: {key: []byte{11}, value: []byte("value11"), op: opSet}, // will hash to some prefix
+// 				12: {key: []byte{12}, value: []byte("value12"), op: opSet}, // will hash to some prefix
+// 				13: {key: []byte{13}, value: []byte("value13"), op: opSet}, // will hash to some prefix
+// 				14: {key: []byte{14}, value: []byte("value14"), op: opSet}, // will hash to some prefix
+// 				15: {key: []byte{15}, value: []byte("value15"), op: opSet}, // will hash to some prefix
+// 				16: {key: []byte{16}, value: []byte("value16"), op: opSet}, // will hash to some prefix
+// 			},
+// 		},
+// 		{
+// 			name: "parallel commit with mixed set and delete operations",
+// 			detail: `Mix of set and delete operations across subtrees to test
+// 			parallel processing of different operation types.`,
+// 			keyBitSize: 160,
+// 			preset:     nil,
+// 			operations: map[uint64]valueOp{
+// 				1:  {key: []byte{1}, value: []byte("value1"), op: opSet},
+// 				2:  {key: []byte{2}, value: []byte("value2"), op: opSet},
+// 				3:  {key: []byte{3}, value: []byte("value3"), op: opSet},
+// 				4:  {key: []byte{4}, value: []byte("value4"), op: opSet},
+// 				5:  {key: []byte{5}, value: []byte("value5"), op: opSet},
+// 				6:  {key: []byte{6}, value: []byte("value6"), op: opSet},
+// 				7:  {key: []byte{7}, value: []byte("value7"), op: opSet},
+// 				8:  {key: []byte{8}, value: []byte("value8"), op: opSet},
+// 				9:  {key: []byte{9}, op: opDelete},  // delete operation
+// 				10: {key: []byte{10}, op: opDelete}, // delete operation
+// 				11: {key: []byte{11}, value: []byte("value11"), op: opSet},
+// 				12: {key: []byte{12}, value: []byte("value12"), op: opSet},
+// 				13: {key: []byte{13}, op: opDelete}, // delete operation
+// 				14: {key: []byte{14}, value: []byte("value14"), op: opSet},
+// 				15: {key: []byte{15}, value: []byte("value15"), op: opSet},
+// 				16: {key: []byte{16}, value: []byte("value16"), op: opSet},
+// 			},
+// 		},
+// 		{
+// 			name: "fallback to sequential for small operation count",
+// 			detail: `When there are fewer operations than 2*NumSubtrees (16),
+// 			the function should fall back to sequential processing.`,
+// 			keyBitSize: 160,
+// 			preset:     nil,
+// 			operations: map[uint64]valueOp{
+// 				1: {key: []byte{1}, value: []byte("value1"), op: opSet},
+// 				2: {key: []byte{2}, value: []byte("value2"), op: opSet},
+// 				3: {key: []byte{3}, value: []byte("value3"), op: opSet},
+// 				// only 3 operations - should use sequential commit
+// 			},
+// 		},
+// 		{
+// 			name: "parallel commit with concurrent updates to same subtree",
+// 			detail: `Multiple operations targeting the same subtree prefix
+// 			should be processed together in that subtree's goroutine.`,
+// 			keyBitSize: 160,
+// 			preset:     nil,
+// 			operations: func() map[uint64]valueOp {
+// 				ops := make(map[uint64]valueOp)
+// 				// Generate operations that will hash to similar prefixes
+// 				for i := 0; i < 20; i++ {
+// 					ops[uint64(i)] = valueOp{
+// 						key:   []byte{byte(i)},
+// 						value: []byte(fmt.Sprintf("value%d", i)),
+// 						op:    opSet,
+// 					}
+// 				}
+// 				return ops
+// 			}(),
+// 		},
+// 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// create a new SMT for this test
-			smt, memStore := NewTestSMT(t, test.preset, nil, test.keyBitSize)
-			defer memStore.Close()
+// 	for _, test := range tests {
+// 		t.Run(test.name, func(t *testing.T) {
+// 			// create a new SMT for this test
+// 			smt, memStore := NewTestSMT(t, test.preset, nil, test.keyBitSize)
+// 			defer memStore.Close()
 
-			// first, commit using the parallel method
-			err := smt.CommitParallel(test.operations)
-			if test.shouldError {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err, "CommitParallel should not error")
+// 			// first, commit using the parallel method
+// 			err := smt.CommitParallel(test.operations)
+// 			if test.shouldError {
+// 				require.Error(t, err)
+// 				return
+// 			}
+// 			require.NoError(t, err, "CommitParallel should not error")
 
-			// get the parallel result root
-			parallelRoot := smt.Root()
+// 			// get the parallel result root
+// 			parallelRoot := smt.Root()
 
-			// now create a fresh SMT and use sequential commit for comparison
-			smtSequential, memStoreSequential := NewTestSMT(t, test.preset, nil, test.keyBitSize)
-			defer memStoreSequential.Close()
+// 			// now create a fresh SMT and use sequential commit for comparison
+// 			smtSequential, memStoreSequential := NewTestSMT(t, test.preset, nil, test.keyBitSize)
+// 			defer memStoreSequential.Close()
 
-			err = smtSequential.Commit(test.operations)
-			require.NoError(t, err, "Sequential commit should not error")
+// 			err = smtSequential.Commit(test.operations)
+// 			require.NoError(t, err, "Sequential commit should not error")
 
-			// get the sequential result root
-			sequentialRoot := smtSequential.Root()
+// 			// get the sequential result root
+// 			sequentialRoot := smtSequential.Root()
 
-			// verify that parallel and sequential commits produce identical results
-			require.Equal(t, sequentialRoot, parallelRoot,
-				"Parallel and sequential commits should produce identical root hashes")
+// 			// verify that parallel and sequential commits produce identical results
+// 			require.Equal(t, sequentialRoot, parallelRoot,
+// 				"Parallel and sequential commits should produce identical root hashes")
 
-			// verify that the final tree state is consistent by checking a few operations
-			for _, op := range test.operations {
-				if op.op == opDelete || entryIsDelete(op.entry) {
-					continue // skip verification for delete operations
-				}
+// 			// verify that the final tree state is consistent by checking a few operations
+// 			for _, op := range test.operations {
+// 				if op.op == opDelete || entryIsDelete(op.entry) {
+// 					continue // skip verification for delete operations
+// 				}
 
-				// verify the value can be retrieved correctly
-				proof, err := smt.GetMerkleProof(op.key)
-				require.NoError(t, err, "Should be able to get merkle proof")
+// 				// verify the value can be retrieved correctly
+// 				proof, err := smt.GetMerkleProof(op.key)
+// 				require.NoError(t, err, "Should be able to get merkle proof")
 
-				// verify membership proof
-				valid, err := smt.VerifyProof(op.key, op.value, true, smt.Root(), proof)
-				require.NoError(t, err, "Should be able to verify proof")
-				require.True(t, valid, "Proof should be valid for set operation")
-			}
-		})
-	}
-}
+// 				// verify membership proof
+// 				valid, err := smt.VerifyProof(op.key, op.value, true, smt.Root(), proof)
+// 				require.NoError(t, err, "Should be able to verify proof")
+// 				require.True(t, valid, "Proof should be valid for set operation")
+// 			}
+// 		})
+// 	}
+// }
 
 func TestCommitParallelStress(t *testing.T) {
 	// stress test with many operations

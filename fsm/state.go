@@ -263,7 +263,7 @@ func (s *StateMachine) ApplyTransactions(
 			failed = append(failed, lib.NewFailedTx(tx, e))
 			// discard the FSM cache
 			s.ResetCaches()
-			//txn.Discard()
+			txn.Discard()
 			s.SetStore(currentStore)
 			continue
 		} else {
@@ -455,6 +455,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 	if err != nil {
 		return nil, err
 	}
+	defer sm.Discard()
 	// if height is equal to latest height, provide the validator cache to the FSM
 	if height == s.height {
 		sm.cache = s.cache
@@ -464,6 +465,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 	if err != nil {
 		return nil, err
 	}
+	defer lastSM.Discard()
 	// get the committee
 	validatorSet, err := sm.GetCommitteeMembers(id)
 	if err != nil {

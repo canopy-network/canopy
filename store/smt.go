@@ -597,7 +597,7 @@ func (s *SMT) valueOpToSMTNode(operation valueOp) *node {
 	// set up the new node as a 'delete'
 	n := &node{Key: newNodeKey(crypto.Hash(operation.key), s.keyBitLength), Node: lib.Node{}, delete: true}
 	// if the operation is not a 'delete'
-	if operation.op != opDelete && !entryIsDelete(operation.entry) {
+	if operation.op != opDelete {
 		// set the value as the hash of the op.value and set 'delete' to false
 		n.Node.Value, n.delete = crypto.Hash(operation.value), false
 	}
