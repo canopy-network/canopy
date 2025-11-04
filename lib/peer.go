@@ -339,19 +339,23 @@ type SimpleLimiter struct {
 	totalRequests   int            // total requests from all requesters
 	maxPerRequester int            // config: max requests per requester
 	maxRequests     int            // config: max total requests
-	reset           *time.Ticker   // a timer that indicates the caller to 'reset' the limiter
+	topic           string
+	reset           *time.Ticker // a timer that indicates the caller to 'reset' the limiter
+	log             LoggerI
 }
 
 // NewLimiter() returns a new instance of SimpleLimiter with
 // - max requests per requester
 // - max total requests
 // - how often to reset the limiter
-func NewLimiter(maxPerRequester, maxRequests, resetWindowS int) *SimpleLimiter {
+func NewLimiter(maxPerRequester, maxRequests, resetWindowS int, topic string, log LoggerI) *SimpleLimiter {
 	return &SimpleLimiter{
 		requests:        map[string]int{},
 		maxPerRequester: maxPerRequester,
 		maxRequests:     maxRequests,
+		topic:           topic,
 		reset:           time.NewTicker(time.Duration(resetWindowS) * time.Second),
+		log:             log,
 	}
 }
 
@@ -359,11 +363,13 @@ func NewLimiter(maxPerRequester, maxRequests, resetWindowS int) *SimpleLimiter {
 func (l *SimpleLimiter) NewRequest(requester string) (requesterBlock, totalBlock bool) {
 	// if the total requests exceed the max requests
 	if l.totalRequests >= l.maxRequests {
+		//l.log.Debugf("Request from %s was total blocked in topic %s", requester, l.topic)
 		// exit with 'block every requester'
 		return false, true
 	}
 	// if the count of requests for this requester is larger than the max per requester
 	if count := l.requests[requester]; count >= l.maxPerRequester {
+		//l.log.Debugf("Request from %s was blocked without total block in topic %s", requester, l.topic)
 		// exit with 'block this requester'
 		return true, false
 	}
@@ -371,6 +377,7 @@ func (l *SimpleLimiter) NewRequest(requester string) (requesterBlock, totalBlock
 	l.requests[requester]++
 	// add to the total requests
 	l.totalRequests++
+	//l.log.Debugf("Request from %s was not blocked in topic %s", requester, l.topic)
 	// exit
 	return
 }
