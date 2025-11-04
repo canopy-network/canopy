@@ -1,8 +1,0 @@
-# aidermacs Prompt File - Command Reference:
-# C-c C-n or C-<return>: Send current line or selected region line by line
-# C-c C-c: Send current block or selected region as a whole
-# C-c C-z: Switch to aidermacs buffer
-
-* Sample task:
-
-/ask what this repo is about?
