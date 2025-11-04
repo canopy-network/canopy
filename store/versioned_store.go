@@ -209,6 +209,7 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 		prefix:      prefix,
 		reverse:     reverse,
 		allVersions: allVersions,
+		seek:        true,
 	}, nil
 }
 
@@ -226,6 +227,7 @@ type VersionedIterator struct {
 	shouldNotPrev  bool // signals the step in iterator to not perform a 'Prev' operation
 	lastEncodedKey []byte
 	valueBuff      []byte
+	seek           bool
 }
 
 // Valid returns true if the iterator is positioned at a valid entry
@@ -360,8 +362,39 @@ func (vi *VersionedIterator) step() {
 			vi.shouldNotPrev = false
 			return
 		}
+		// check if is possible to skip versions in reverse
+		if vi.seek && vi.iter.Valid() && vi.lastEncodedKey != nil {
+			currentEncodedKey := extractEncodedKey(vi.iter.Key())
+			// only seek if iterator is still on the same encoded key
+			if bytes.Equal(currentEncodedKey, vi.lastEncodedKey) {
+				// in reverse, seek backwards to skip all versions of current key
+				// remove the separator [0x00 0x00] from [EncodedKey][0x00 0x00] to get [EncodedKey]
+				// then SeekLT([EncodedKey]) finds the largest key less than [EncodedKey]
+				// since current key versions are [EncodedKey][0x00 0x00][version] > [EncodedKey]
+				// this lands on [PreviousKey][0x00 0x00][version], the previous key's highest version
+				seekKey := make([]byte, len(vi.lastEncodedKey)-len(separator))
+				copy(seekKey, vi.lastEncodedKey[:len(vi.lastEncodedKey)-len(separator)])
+				vi.iter.SeekLT(seekKey)
+				return
+			}
+		}
 		vi.iter.Prev()
 	} else {
+		// check if is possible to skip versions
+		if vi.seek && vi.iter.Valid() && vi.lastEncodedKey != nil {
+			currentEncodedKey := extractEncodedKey(vi.iter.Key())
+			// only seek if iterator is still on the same encoded key
+			if bytes.Equal(currentEncodedKey, vi.lastEncodedKey) {
+				// to skip all versions of current key, increment the last byte of the separator
+				// from [EncodedKey][0x00 0x00] to [EncodedKey][0x00 0x01]
+				// this skips past all [EncodedKey][0x00 0x00][version] entries
+				seekKey := make([]byte, len(vi.lastEncodedKey))
+				copy(seekKey, vi.lastEncodedKey)
+				seekKey[len(seekKey)-1] = 0x01 // change last separator byte from 0x00 to 0x01
+				vi.iter.SeekGE(seekKey)
+				return
+			}
+		}
 		vi.iter.Next()
 	}
 }
