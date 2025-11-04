@@ -2,11 +2,11 @@ package store
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
-	math "math/rand"
+	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
@@ -24,6 +24,11 @@ const (
 	WriteTesting
 	CommitTesting
 )
+
+// for local testing, change to a fixed value
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+// var rng = rand.New(rand.NewSource(10))
 
 func TestFuzz(t *testing.T) {
 	fs := vfs.NewMem()
@@ -73,7 +78,7 @@ func TestFuzzTxn(t *testing.T) {
 }
 
 func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys *[]string) {
-	k, v := getRandomBytes(t, math.Intn(4)+1), getRandomBytes(t, 3)
+	k, v := getRandomBytes(t, rng.Intn(4)+1), getRandomBytes(t, 3)
 	switch getRandomOperation(t) {
 	case SetTesting:
 		testDBSet(t, db, k, v)
@@ -96,7 +101,7 @@ func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys
 		testCompareIterators(t, db, compare, *keys)
 	case WriteTesting:
 		if x, ok := db.(TxnWriterI); ok {
-			switch math.Intn(10) {
+			switch rng.Intn(10) {
 			case 0:
 				require.NoError(t, x.Commit())
 			}
@@ -125,21 +130,21 @@ func deDuplicate(s []string) []string {
 
 func getRandomBytes(t *testing.T, n int) []byte {
 	bz := make([]byte, n)
-	if _, err := rand.Read(bz); err != nil {
+	if _, err := rng.Read(bz); err != nil {
 		t.Fatal(err)
 	}
 	return bz
 }
 
 func getRandomOperation(_ *testing.T) TestingOp {
-	return TestingOp(math.Intn(6))
+	return TestingOp(rng.Intn(6))
 }
 
 func randomTestKey(_ *testing.T, k []byte, keys []string) []byte {
-	if len(keys) != 0 && math.Intn(100) < 85 {
+	if len(keys) != 0 && rng.Intn(100) < 85 {
 		// 85% of time use key already found
 		// else default to the random value
-		k = []byte(keys[math.Intn(len(keys))])
+		k = []byte(keys[rng.Intn(len(keys))])
 	}
 	return k
 }
@@ -163,8 +168,8 @@ func testCompareIterators(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, k
 		it1, it2 lib.IteratorI
 		err      error
 	)
-	isReverse := math.Intn(2)
-	prefix := getRandomBytes(t, math.Intn(4))
+	isReverse := rng.Intn(2)
+	prefix := getRandomBytes(t, rng.Intn(4))
 	require.NoError(t, err)
 	switch isReverse {
 	case 0:
@@ -182,6 +187,7 @@ func testCompareIterators(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, k
 	for i := 0; func() bool { return it1.Valid() || it2.Valid() }(); func() { it1.Next(); it2.Next() }() {
 		i++
 		require.Equal(t, it1.Valid(), it2.Valid(), fmt.Sprintf("it1.valid=%t\ncompare.valid=%t\nisReverse=%d\nprefix=%s\n", it1.Valid(), it2.Valid(), isReverse, prefix))
+		fmt.Printf("reverse %d db: %x txn: %x\n", isReverse, it1.Key(), it2.Key())
 		require.Equal(t, it1.Key(), it2.Key(), fmt.Sprintf("it1.key=%s\ncompare.key=%s\nisReverse=%d\nprefix=%s\n", it1.Key(), it2.Key(), isReverse, prefix))
 		require.Equal(t, it1.Value(), it2.Value(), fmt.Sprintf("it1.value=%s\ncompare.value=%s\nisReverse=%d\nprefix=%s\n", it1.Value(), it2.Value(), isReverse, prefix))
 	}

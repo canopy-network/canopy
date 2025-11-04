@@ -72,6 +72,7 @@ type Store struct {
 	config     lib.Config    // config
 	mu         *sync.Mutex   // mutex for concurrent commits
 	compaction atomic.Bool   // atomic boolean for compaction status
+	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -364,6 +365,7 @@ func (s *Store) NewTxn() lib.StoreI {
 		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, nextVersion), s.config},
 		metrics: s.metrics,
 		mu:      s.mu,
+		isTxn:   true,
 	}
 }
 
@@ -409,14 +411,21 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	// close the latest state store
-	s.ss.Close()
-	s.sc = nil
-	// close the indexer store
-	s.Indexer.db.Close()
-	// close the writer
-	if s.writer != nil {
-		s.writer.Close()
+	// nested transactions share resources with their parent, so closing them
+	// would break the parent
+	if s.isTxn {
+		s.ss.Discard()
+		s.Indexer.db.Discard()
+	} else {
+		// close the latest state store
+		s.ss.Close()
+		s.sc = nil
+		// close the indexer store
+		s.Indexer.db.Close()
+		// close the writer
+		if s.writer != nil {
+			s.writer.Close()
+		}
 	}
 }
 
