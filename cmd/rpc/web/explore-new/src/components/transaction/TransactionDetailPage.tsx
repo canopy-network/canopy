@@ -48,7 +48,7 @@ const TransactionDetailPage: React.FC = () => {
 
     // Get fee params directly from endpoint
     const feeParams = paramsData?.fee || {}
-    
+
     // Map transaction type to fee param key (directly from endpoint)
     const getFeeParamKey = (type: string): string => {
         const typeMap: Record<string, string> = {
@@ -69,7 +69,7 @@ const TransactionDetailPage: React.FC = () => {
         }
         return typeMap[type.toLowerCase()] || 'sendFee'
     }
-    
+
     // Get minimum fee for this transaction type (directly from endpoint)
     const minimumFeeForTxType = feeParams[getFeeParamKey(txType)] || feeParams.sendFee || 0
 
@@ -242,14 +242,14 @@ const TransactionDetailPage: React.FC = () => {
     const blockHeight = transaction?.height || transaction?.blockHeight || transaction?.block || 0
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
-    
+
     const from = transaction.sender || transaction.from || '0x0000000000000000000000000000000000000000'
     const to = transaction.recipient || transaction.to || '0x0000000000000000000000000000000000000000'
     const nonce = transaction.nonce || 0
     const position = transaction?.index || transaction?.msg?.qc?.header?.round || 0
     const confirmations = transaction.confirmations || 142
     const txHash = transaction.txHash || transactionHash || ''
-    
+
     // Extract amount from transaction according to message type (from README)
     let amountMicro = 0
     if (transaction.transaction?.msg) {
@@ -416,6 +416,13 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-orange-400 font-mono">{fee}</span>
                                     </div>
 
+                                    {minimumFeeForTxType > 0 && (
+                                        <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
+                                            <span className="text-gray-400">Minimum Fee ({getFeeParamKey(txType)})</span>
+                                            <span className="text-green-400 font-mono">{formatFee(minimumFeeForTxType)}</span>
+                                        </div>
+                                    )}
+
                                 </div>
 
                                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
@@ -553,14 +560,14 @@ const TransactionDetailPage: React.FC = () => {
                                         </div>
                                         {minimumFeeForTxType > 0 && (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-gray-400 text-sm">Base Fee</span>
-                                                <span className="text-white font-mono text-sm">{formatFee(minimumFeeForTxType)}</span>
+                                                <span className="text-gray-400 text-sm">Minimum Fee ({getFeeParamKey(txType)})</span>
+                                                <span className="text-green-400 font-mono text-sm">{formatFee(minimumFeeForTxType)}</span>
                                             </div>
                                         )}
                                         {transactionFeeMicro > minimumFeeForTxType && minimumFeeForTxType > 0 && (
                                             <div className="flex justify-between items-center">
                                                 <span className="text-gray-400 text-sm">Priority Fee</span>
-                                                <span className="text-white font-mono text-sm">{formatFee(transactionFeeMicro - minimumFeeForTxType)}</span>
+                                                <span className="text-yellow-400 font-mono text-sm">{formatFee(transactionFeeMicro - minimumFeeForTxType)}</span>
                                             </div>
                                         )}
                                     </div>

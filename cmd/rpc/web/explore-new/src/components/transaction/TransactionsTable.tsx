@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import transactionsTexts from '../../data/transactions.json'
 import TableCard from '../Home/TableCard'
 import AnimatedNumber from '../AnimatedNumber'
+import { useParams as useParamsHook } from '../../hooks/useApi'
 
 interface Transaction {
     hash: string
@@ -46,6 +47,38 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     onExportButtonClick
 }) => {
     const navigate = useNavigate()
+    
+    // Get params to access fee information
+    const { data: paramsData } = useParamsHook(0)
+    const feeParams = paramsData?.fee || {}
+    
+    // Map transaction type to fee param key (directly from endpoint)
+    const getFeeParamKey = (type: string): string => {
+        const typeMap: Record<string, string> = {
+            'send': 'sendFee',
+            'stake': 'stakeFee',
+            'edit-stake': 'editStakeFee',
+            'editStake': 'editStakeFee',
+            'unstake': 'unstakeFee',
+            'pause': 'pauseFee',
+            'unpause': 'unpauseFee',
+            'changeParameter': 'changeParameterFee',
+            'daoTransfer': 'daoTransferFee',
+            'certificateResults': 'certificateResultsFee',
+            'subsidy': 'subsidyFee',
+            'createOrder': 'createOrderFee',
+            'editOrder': 'editOrderFee',
+            'deleteOrder': 'deleteOrderFee',
+        }
+        return typeMap[type.toLowerCase()] || 'sendFee'
+    }
+    
+    // Get minimum fee for a transaction type
+    const getMinimumFeeForTxType = (type: string): number => {
+        const feeKey = getFeeParamKey(type)
+        return feeParams[feeKey] || feeParams.sendFee || 0
+    }
+    
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
     const formatAmount = (amount: number) => {
@@ -176,14 +209,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             )}
         </span>,
 
-        // Fee (in micro denomination from endpoint)
-        <span className="text-gray-300 text-sm">
-            {typeof transaction.fee === 'number' ? (
-                formatFee(transaction.fee)
-            ) : (
-                formatFee(transaction.fee || 0)
-            )}
-        </span>,
+        // Fee (in micro denomination from endpoint) with minimum fee info
+        <div className="flex flex-col gap-1">
+            <span className="text-gray-300 text-sm">
+                {typeof transaction.fee === 'number' ? (
+                    formatFee(transaction.fee)
+                ) : (
+                    formatFee(transaction.fee || 0)
+                )}
+            </span>
+        </div>,
 
         // Status
         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
