@@ -210,16 +210,17 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 
 // VersionedIterator implements  iteration with single-pass key deduplication
 type VersionedIterator struct {
-	iter        *pebble.Iterator
-	store       *VersionedStore
-	prefix      []byte
-	reverse     bool
-	key         []byte
-	value       []byte
-	isValid     bool
-	initialized bool
-	lastUserKey []byte
-	allVersions bool
+	iter          *pebble.Iterator
+	store         *VersionedStore
+	prefix        []byte
+	reverse       bool
+	key           []byte
+	value         []byte
+	isValid       bool
+	initialized   bool
+	lastUserKey   []byte
+	allVersions   bool
+	shouldNotPrev bool
 }
 
 // Valid returns true if the iterator is positioned at a valid entry
@@ -282,17 +283,23 @@ func (vi *VersionedIterator) advanceToNextKey() {
 			bytes.Equal(userKey, vi.lastUserKey)) {
 			continue
 		}
+		var prevValue []byte
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
+			prevValue, _ = vi.iter.ValueAndErr()
+			prevValue = bytes.Clone(prevValue)
 			for vi.iter.Prev() {
+				vi.shouldNotPrev = true
 				prevUserKey, prevVersion, err := parseVersionedKey(vi.iter.Key())
 				if err != nil || !bytes.Equal(userKey, prevUserKey) || prevVersion > vi.store.version {
 					break
 				}
-			}
-			vi.iter.Next()
-			if version > vi.store.version {
-				continue
+				var valErr error
+				val, valErr := vi.iter.ValueAndErr()
+				if valErr != nil {
+					break
+				}
+				prevValue = bytes.Clone(val)
 			}
 		}
 		// reuse buffer if capacity is sufficient
@@ -303,6 +310,9 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		rawValue, valErr := vi.iter.ValueAndErr()
 		if valErr != nil {
 			continue
+		}
+		if vi.reverse {
+			rawValue = prevValue
 		}
 		// now the iterator's current value is the newest visible version for userKey.
 		tomb, val := parseValueWithTombstone(rawValue)
@@ -322,6 +332,10 @@ func (vi *VersionedIterator) advanceToNextKey() {
 // step() increments the iterator to the logical 'next'
 func (vi *VersionedIterator) step() {
 	if vi.reverse {
+		if vi.shouldNotPrev {
+			vi.shouldNotPrev = false
+			return
+		}
 		vi.iter.Prev()
 	} else {
 		vi.iter.Next()
