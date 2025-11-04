@@ -1,3 +1,0 @@
-This is a lockfile that prevent two VM instances to operate on the same directory in parallel.
-See codebase at github.com/CosmWasm/wasmvm for more information.
-Safety first – brought to you by Confio ❤️
