@@ -3,7 +3,8 @@ package store
 import (
 	"crypto/rand"
 	"encoding/hex"
-	math "math/rand"
+	"math"
+	mathrand "math/rand"
 	"slices"
 	"testing"
 
@@ -21,7 +22,7 @@ func newTxn(t *testing.T, prefix []byte) (*Txn, *badger.DB, *badger.WriteBatch) 
 }
 
 func TestNestedTxn(t *testing.T) {
-	baseTxn, db, _ := newTxn(t, []byte("1/"))
+	baseTxn, db, batch := newTxn(t, []byte("1/"))
 	defer func() { baseTxn.Close(); db.Close(); baseTxn.Discard() }()
 	// create a nested transaction
 	nested := NewTxn(baseTxn, baseTxn, []byte("2/"), false, true, baseTxn.writeVersion)
@@ -43,6 +44,57 @@ func TestNestedTxn(t *testing.T) {
 	val, err = baseTxn.Get([]byte("2/b"))
 	require.NoError(t, err)
 	require.Equal(t, []byte("b"), val)
+	// flush the parent transaction
+	require.NoError(t, baseTxn.Flush())
+	// flush the batch
+	require.NoError(t, batch.Flush())
+	// check that the changes are visible in the database
+	reader := db.NewTransactionAt(math.MaxUint64, false)
+	item, readErr := reader.Get([]byte("1/2/b"))
+	require.NoError(t, readErr)
+	val, readErr = item.ValueCopy(nil)
+	require.NoError(t, readErr)
+	require.Equal(t, []byte("b"), val)
+}
+
+func TestNestedTxnMergedIteration(t *testing.T) {
+	baseTxn, db, batch := newTxn(t, []byte(nil))
+	defer func() { baseTxn.Close(); db.Close(); baseTxn.Discard() }()
+	// create a nested transaction
+	nested := NewTxn(baseTxn, baseTxn, nil, false, true, baseTxn.writeVersion)
+	// set and and flush a value in the parent transaction
+	require.NoError(t, nested.Set([]byte("a"), []byte("a")))
+	require.NoError(t, baseTxn.Flush())
+	// set and flush a value in the nested transaction
+	require.NoError(t, nested.Set([]byte("b"), []byte("b")))
+	require.NoError(t, nested.Flush())
+	// flush the batch
+	require.NoError(t, batch.Flush())
+	// set a value in the parent transaction to not be flushed
+	require.NoError(t, baseTxn.Set([]byte("c"), []byte("c")))
+	// set a value in the nested transaction to not be flushed
+	require.NoError(t, nested.Set([]byte("d"), []byte("d")))
+
+	// create a new iterator on the nested transaction
+	iter := nested.NewIterator(nil, false, false)
+	iter.Close()
+	expected := []string{"a", "b", "c", "d"}
+	got := []string{}
+	for ; iter.Valid(); iter.Next() {
+		got = append(got, string(iter.Value()))
+	}
+	// confirm the iterator returns the expected values
+	require.Equal(t, expected, got)
+
+	// create a new reverse iterator on the nested transaction
+	iter = nested.NewIterator(nil, true, false)
+	iter.Close()
+	expected = []string{"d", "c", "b", "a"}
+	got = []string{}
+	for ; iter.Valid(); iter.Next() {
+		got = append(got, string(iter.Value()))
+	}
+	require.Equal(t, expected, got)
 }
 
 func TestTxnWriteSetGet(t *testing.T) {
@@ -329,7 +381,7 @@ func TestIteratorWithDelete(t *testing.T) {
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	bulkSetKV(t, test, "", expectedVals...)
 	for range 10 {
-		randomindex := math.Intn(len(expectedVals))
+		randomindex := mathrand.Intn(len(expectedVals))
 		require.NoError(t, test.Delete([]byte(expectedVals[randomindex])))
 		expectedVals = slices.Delete(expectedVals, randomindex, randomindex+1)
 		cIt, err := test.Iterator(nil)

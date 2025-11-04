@@ -3,8 +3,9 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
-	"golang.org/x/sync/errgroup"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -39,14 +40,22 @@ type Indexer struct {
 // IndexBlock() turns the block into bytes, indexes the block by hash and height
 // and then indexes the transactions
 func (t *Indexer) IndexBlock(b *lib.BlockResult) lib.ErrorI {
+	// marshal result to get the size
+	resultBz, err := lib.Marshal(b)
+	if err != nil {
+		return err
+	}
+	// set meta stats for the block
+	b.Meta = &lib.BlockResultMeta{Size: uint64(len(resultBz))}
 	blockCache.Add(b.BlockHeader.Height, b)
+	// get bytes of block header
+	bz, err := lib.Marshal(b.BlockHeader)
+	if err != nil {
+		return err
+	}
 	var eg errgroup.Group
 	// index block header in its own goroutine
 	eg.Go(func() error {
-		bz, err := lib.Marshal(b.BlockHeader)
-		if err != nil {
-			return err
-		}
 		hashKey, err := t.indexBlockByHash(b.BlockHeader.Hash, bz)
 		if err != nil {
 			return err
@@ -420,20 +429,30 @@ func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult,
 		return nil, err
 	}
 	if !transactions {
-		return &lib.BlockResult{
+		result := &lib.BlockResult{
 			BlockHeader: ptr,
-			Meta:        &lib.BlockResultMeta{Size: uint64(len(bz))},
-		}, nil
+		}
+		resultBz, err := lib.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
+		result.Meta = &lib.BlockResultMeta{Size: uint64(len(resultBz))}
+		return result, nil
 	}
 	txs, err := t.GetTxsByHeightNonPaginated(ptr.Height, false)
 	if err != nil {
 		return nil, err
 	}
-	return &lib.BlockResult{
+	result := &lib.BlockResult{
 		BlockHeader:  ptr,
-		Meta:         &lib.BlockResultMeta{Size: uint64(len(bz))},
 		Transactions: txs,
-	}, nil
+	}
+	resultBz, err := lib.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	result.Meta = &lib.BlockResultMeta{Size: uint64(len(resultBz))}
+	return result, nil
 }
 
 // getTx() gets the tx bytes from the DB and converts it into TxResult object
