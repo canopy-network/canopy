@@ -86,39 +86,44 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 	defer cache.Unref()
 
 	lvl := pebble.LevelOptions{
-		FilterPolicy:   nil,       // no blooms for scans
-		BlockSize:      128 << 10, // 128 KB data blocks
-		IndexBlockSize: 512 << 10, // 512 KB index blocks
+		FilterPolicy:   nil,      // no blooms for scans
+		BlockSize:      64 << 10, // 64 KB data blocks
+		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
-			return sstable.ZstdCompression // Biggest compression at the expense of more CPU resources
+			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
 		},
 	}
 
 	db, err := pebble.Open(path, &pebble.Options{
-		DisableWAL:                  false,    // Keep WAL but optimize other settings
-		MemTableSize:                64 << 20, // Larger memtable to reduce flushes
-		MemTableStopWritesThreshold: 4,
-		L0CompactionThreshold:       10,                          // Delay compaction during bulk writes
-		L0StopWritesThreshold:       16,                          // Much higher threshold
-		MaxOpenFiles:                5000,                        // More file handles
-		Cache:                       cache,                       // Block cache
-		FormatMajorVersion:          pebble.FormatColumnarBlocks, // Current format version
-		LBaseMaxBytes:               512 << 20,                   // [512MB] Maximum size of the LBase level
+		DisableWAL:            false,                       // keep WAL but optimize other settings
+		MemTableSize:          64 << 20,                    // larger memtable to reduce flushes
+		L0CompactionThreshold: 6,                           // keep L0 small to avoid read amplification
+		L0StopWritesThreshold: 12,                          // stop writes when L0 reaches this size
+		MaxOpenFiles:          5000,                        // more file handles
+		Cache:                 cache,                       // block cache
+		FormatMajorVersion:    pebble.FormatColumnarBlocks, // current format version
+		LBaseMaxBytes:         512 << 20,                   // [512MB] maximum size of the LBase level
 		Levels: [7]pebble.LevelOptions{
 			lvl, lvl, lvl, lvl, lvl, lvl, lvl, // apply same scan-optimized blocks across all levels
 		},
+		// allows for smaller blocks and more block properties so versions can be more granular
 		TargetFileSizes: [7]int64{
 			32 << 20,  // L0: 32MB
 			64 << 20,  // L1: 64MB
 			128 << 20, // L2: 128MB
-			256 << 20, // L3: 256MB
-			256 << 20, // L4: 256MB
-			256 << 20, // L5: 256MB
-			256 << 20, // L6: 256MB
+			128 << 20, // L3: 128MB
+			128 << 20, // L4: 128MB
+			128 << 20, // L5: 128MB
+			128 << 20, // L6: 128MB
 		},
 		Logger: log, // Use project's logger
 		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
 			newVersionedPropertyCollector,
+		},
+		// [EXPERIMENTAL] should improve throughput by reducing WAL syncs I/O but my lead to data loss
+		// on the worst case (i.e sudden program crash)
+		WALMinSyncInterval: func() time.Duration {
+			return time.Millisecond * 2
 		},
 	})
 	if err != nil {
