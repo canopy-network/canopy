@@ -252,6 +252,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if s.isTxn {
 		return nil, ErrCommitDB(fmt.Errorf("nested transactions are not supported"))
 	}
+	s.mu.Lock()         // lock commit op
+	defer s.mu.Unlock() // unlock commit op
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -278,11 +280,9 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	// rather than calling batch.Commit() directly, as the DB struct ensures all internal
 	// fields are properly initialized.
 	// Should check again on the batch behavior once pebbleDB releases a new version.
-	s.mu.Lock() // lock commit op
 	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
 		return nil, ErrCommitDB(err)
 	}
-	s.mu.Unlock() // unlock commit op
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
 	// reset the writer for the next height
@@ -477,23 +477,23 @@ func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 
 // setCommitID() stores the CommitID for the specified version and root in the database
 func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
-	vs, err := NewVersionedStore(nil, s.writer, version)
-	if err != nil {
-		return err
-	}
-	w := NewTxn(s.Indexer.db.reader, vs, nil, false, false, version)
+	// prepare the commit ID value
 	value, err := lib.Marshal(&lib.CommitID{Height: version, Root: root})
 	if err != nil {
 		return err
 	}
-	if err = w.Set([]byte(lastCommitIDPrefix), value); err != nil {
+	// create a versioned store that writes directly to s.writer
+	vs, err := NewVersionedStore(nil, s.writer, version)
+	if err != nil {
 		return err
 	}
-	if err = w.Set(s.commitIDKey(version), value); err != nil {
+	// write the lastCommitID
+	if err = vs.SetAt([]byte(lastCommitIDPrefix), value, lssVersion); err != nil {
 		return err
 	}
-	if e := w.Commit(); e != nil {
-		return ErrCommitDB(e)
+	// write the versioned commitID
+	if err = vs.SetAt(s.commitIDKey(version), value, version); err != nil {
+		return err
 	}
 	return nil
 }
