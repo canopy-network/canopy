@@ -243,6 +243,10 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
+	// nested transactions should only flush changes to the parent transaction, not the database
+	if s.isTxn {
+		return nil, ErrCommitDB(fmt.Errorf("nested transactions are not supported"))
+	}
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -411,21 +415,21 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	// nested transactions share resources with their parent, so closing them
-	// would break the parent
+	// nested transactions share resources with their parent, so closing
+	// them would break the parent
 	if s.isTxn {
 		s.ss.Discard()
 		s.Indexer.db.Discard()
-	} else {
-		// close the latest state store
-		s.ss.Close()
-		s.sc = nil
-		// close the indexer store
-		s.Indexer.db.Close()
-		// close the writer
-		if s.writer != nil {
-			s.writer.Close()
-		}
+		return
+	}
+	// close the latest state store
+	s.ss.Close()
+	s.sc = nil
+	// close the indexer store
+	s.Indexer.db.Close()
+	// close the writer
+	if s.writer != nil {
+		s.writer.Close()
 	}
 }
 
