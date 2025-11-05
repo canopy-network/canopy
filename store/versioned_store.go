@@ -203,13 +203,21 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 	if iter == nil || err != nil {
 		return nil, ErrStoreGet(fmt.Errorf("failed to create iterator: %v", err))
 	}
+
+	// seek is optimal for skipping multiple versions of the same key, but committee/delegator
+	// prefixes are sorted by stake so keys aren't contiguous - seek would actually be slower there
+	// TODO: make this configurable instead of hardcoded
+	// []byte{1,4} <- committee prefix
+	// []byte{1,11} <- delegate prefix
+	seek := !(bytes.Contains(prefix, append([]byte(historicStatePrefix), []byte{1, 4}...)) ||
+		bytes.Contains(prefix, append([]byte(historicStatePrefix), []byte{1, 11}...)))
 	return &VersionedIterator{
 		iter:        iter,
 		store:       vs,
 		prefix:      prefix,
 		reverse:     reverse,
 		allVersions: allVersions,
-		seek:        true,
+		seek:        seek,
 	}, nil
 }
 
@@ -390,7 +398,7 @@ func (vi *VersionedIterator) step() {
 				// this skips past all [EncodedKey][0x00 0x00][version] entries
 				seekKey := make([]byte, len(vi.lastEncodedKey))
 				copy(seekKey, vi.lastEncodedKey)
-				seekKey[len(seekKey)-1] = 0x01 // change last separator byte from 0x00 to 0x01
+				seekKey[len(seekKey)-1] = 0x01
 				vi.iter.SeekGE(seekKey)
 				return
 			}
