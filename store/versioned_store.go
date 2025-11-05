@@ -75,52 +75,43 @@ func (vs *VersionedStore) DeleteAt(key []byte, version uint64) (err lib.ErrorI) 
 	return
 }
 
-// Get() retrieves the latest version of a key using reverse seek
+// Get() retrieves the latest version of a key at or before vs.version
 func (vs *VersionedStore) Get(key []byte) ([]byte, lib.ErrorI) {
-	key, _, err := vs.get(key)
-	return key, err
+	val, _, err := vs.get(key)
+	return val, err
 }
 
-// get() retrieves the latest version of a key using reverse seek
-func (vs *VersionedStore) get(key []byte) (value []byte, tombstone byte, err lib.ErrorI) {
-	var seekKey []byte
-	if vs.version != maxVersion {
-		// seek to boundary just above snapshot to land on newest visible
-		seekKey = vs.makeVersionedKey(key, vs.version+1)
-	}
-	// extract encoded user key
-	encodedUserKey := encodeUserKey(key)
-	// strictly iterate over this userKey's versions
-	i, err := vs.newVersionedIterator(encodeUserKey(key), true, false)
+// get() performs SeekGE to ^version and return the first entry.
+func (vs *VersionedStore) get(userKey []byte) (value []byte, tombstone byte, err lib.ErrorI) {
+	encKey := encodeUserKey(userKey)
+	// iterate only over the key's boundary
+	it, err := vs.newVersionedIterator(encKey, false, false)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer i.Close()
-	// position iterator
-	iter := i.iter
-	iter.SeekGE(seekKey)
-	// find latest version ≤ version
-	for ; iter.Valid(); iter.Next() {
-		// validate version
-		ver := parseVersion(iter.Key())
-		if ver > vs.version {
-			continue
-		}
-		// validate user key without decoding
-		key := extractEncodedKey(iter.Key())
-		if key == nil || !bytes.Equal(key, encodedUserKey) {
-			continue
-		}
-		// parse the value to extract tombstone and actual value
-		rawValue, valErr := iter.ValueAndErr()
-		if valErr != nil {
-			return nil, 0, ErrStoreGet(valErr)
-		}
-		tombstone, value = parseValueWithTombstone(rawValue)
-		// exit
-		return
+	defer it.Close()
+	// build seek key: [Enc(UserKey)][0x00,0x00][^version]
+	seekKey := vs.makeVersionedKey(userKey, vs.version)
+	iter := it.iter
+	if !iter.SeekGE(seekKey) {
+		return nil, 0, nil
 	}
-	return nil, 0, nil
+	// iterator is at [encKey, prefixEnd(encKey)), so no need to re-check encoded key.
+	// verify version
+	v := parseVersion(iter.Key())
+	if v > vs.version {
+		return nil, 0, nil
+	}
+	raw, vErr := iter.ValueAndErr()
+	if vErr != nil {
+		return nil, 0, ErrStoreGet(vErr)
+	}
+	// verify tombstone
+	tombstone, value = parseValueWithTombstone(raw)
+	if tombstone == DeadTombstone {
+		return nil, 0, nil
+	}
+	return value, tombstone, nil
 }
 
 // Commit commits the batch to the database
@@ -206,7 +197,7 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 
 	// seek is optimal for skipping multiple versions of the same key, but committee/delegator
 	// prefixes are sorted by stake so keys aren't contiguous - seek would actually be slower there
-	// TODO: make this configurable instead of hardcoded
+	// TODO: make this configurable instead of hardcoded, even better to remove it
 	// []byte{1,4} <- committee prefix
 	// []byte{1,11} <- delegate prefix
 	seek := !(bytes.Contains(prefix, append([]byte(historicStatePrefix), []byte{1, 4}...)) ||
