@@ -89,39 +89,44 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 	defer cache.Unref()
 
 	lvl := pebble.LevelOptions{
-		FilterPolicy:   nil,       // no blooms for scans
-		BlockSize:      128 << 10, // 128 KB data blocks
-		IndexBlockSize: 512 << 10, // 512 KB index blocks
+		FilterPolicy:   nil,      // no blooms for scans
+		BlockSize:      64 << 10, // 64 KB data blocks
+		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
-			return sstable.ZstdCompression // Biggest compression at the expense of more CPU resources
+			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
 		},
 	}
 
 	db, err := pebble.Open(path, &pebble.Options{
-		DisableWAL:                  false,    // Keep WAL but optimize other settings
-		MemTableSize:                64 << 20, // Larger memtable to reduce flushes
-		MemTableStopWritesThreshold: 4,
-		L0CompactionThreshold:       10,                          // Delay compaction during bulk writes
-		L0StopWritesThreshold:       16,                          // Much higher threshold
-		MaxOpenFiles:                5000,                        // More file handles
-		Cache:                       cache,                       // Block cache
-		FormatMajorVersion:          pebble.FormatColumnarBlocks, // Current format version
-		LBaseMaxBytes:               512 << 20,                   // [512MB] Maximum size of the LBase level
+		DisableWAL:            false,                       // keep WAL but optimize other settings
+		MemTableSize:          64 << 20,                    // larger memtable to reduce flushes
+		L0CompactionThreshold: 6,                           // keep L0 small to avoid read amplification
+		L0StopWritesThreshold: 12,                          // stop writes when L0 reaches this size
+		MaxOpenFiles:          5000,                        // more file handles
+		Cache:                 cache,                       // block cache
+		FormatMajorVersion:    pebble.FormatColumnarBlocks, // current format version
+		LBaseMaxBytes:         512 << 20,                   // [512MB] maximum size of the LBase level
 		Levels: [7]pebble.LevelOptions{
 			lvl, lvl, lvl, lvl, lvl, lvl, lvl, // apply same scan-optimized blocks across all levels
 		},
+		// allows for smaller blocks and more block properties so versions can be more granular
 		TargetFileSizes: [7]int64{
 			32 << 20,  // L0: 32MB
 			64 << 20,  // L1: 64MB
 			128 << 20, // L2: 128MB
-			256 << 20, // L3: 256MB
-			256 << 20, // L4: 256MB
-			256 << 20, // L5: 256MB
-			256 << 20, // L6: 256MB
+			128 << 20, // L3: 128MB
+			128 << 20, // L4: 128MB
+			128 << 20, // L5: 128MB
+			128 << 20, // L6: 128MB
 		},
 		Logger: log, // Use project's logger
 		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
 			newVersionedPropertyCollector,
+		},
+		// [EXPERIMENTAL] should improve throughput by reducing WAL syncs I/O but my lead to data loss
+		// on the worst case (i.e sudden program crash)
+		WALMinSyncInterval: func() time.Duration {
+			return time.Millisecond * 2
 		},
 	})
 	if err != nil {
@@ -246,6 +251,12 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
+	// nested transactions should only flush changes to the parent transaction, not the database
+	if s.isTxn {
+		return nil, ErrCommitDB(fmt.Errorf("nested transactions are not supported"))
+	}
+	s.mu.Lock()         // lock commit op
+	defer s.mu.Unlock() // unlock commit op
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -272,11 +283,9 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	// rather than calling batch.Commit() directly, as the DB struct ensures all internal
 	// fields are properly initialized.
 	// Should check again on the batch behavior once pebbleDB releases a new version.
-	s.mu.Lock() // lock commit op
 	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
 		return nil, ErrCommitDB(err)
 	}
-	s.mu.Unlock() // unlock commit op
 	// update the metrics once complete
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
 	// reset the writer for the next height
@@ -414,21 +423,21 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	// nested transactions share resources with their parent, so closing them
-	// would break the parent
+	// nested transactions share resources with their parent, so closing
+	// them would break the parent
 	if s.isTxn {
 		s.ss.Discard()
 		s.Indexer.db.Discard()
-	} else {
-		// close the latest state store
-		s.ss.Close()
-		s.sc = nil
-		// close the indexer store
-		s.Indexer.db.Close()
-		// close the writer
-		if s.writer != nil {
-			s.writer.Close()
-		}
+		return
+	}
+	// close the latest state store
+	s.ss.Close()
+	s.sc = nil
+	// close the indexer store
+	s.Indexer.db.Close()
+	// close the writer
+	if s.writer != nil {
+		s.writer.Close()
 	}
 }
 
@@ -471,23 +480,23 @@ func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 
 // setCommitID() stores the CommitID for the specified version and root in the database
 func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
-	vs, err := NewVersionedStore(nil, s.writer, version)
-	if err != nil {
-		return err
-	}
-	w := NewTxn(s.Indexer.db.reader, vs, nil, false, false, version)
+	// prepare the commit ID value
 	value, err := lib.Marshal(&lib.CommitID{Height: version, Root: root})
 	if err != nil {
 		return err
 	}
-	if err = w.Set([]byte(lastCommitIDPrefix), value); err != nil {
+	// create a versioned store that writes directly to s.writer
+	vs, err := NewVersionedStore(nil, s.writer, version)
+	if err != nil {
 		return err
 	}
-	if err = w.Set(s.commitIDKey(version), value); err != nil {
+	// write the lastCommitID
+	if err = vs.SetAt([]byte(lastCommitIDPrefix), value, lssVersion); err != nil {
 		return err
 	}
-	if e := w.Commit(); e != nil {
-		return ErrCommitDB(e)
+	// write the versioned commitID
+	if err = vs.SetAt(s.commitIDKey(version), value, version); err != nil {
+		return err
 	}
 	return nil
 }
