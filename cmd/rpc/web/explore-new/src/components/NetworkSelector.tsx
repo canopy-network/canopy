@@ -85,18 +85,17 @@ const NetworkSelector: React.FC = () => {
     }
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative max-w-full" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-primary hover:bg-gray-700 transition-colors duration-200"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-primary hover:bg-gray-700 transition-colors duration-200 max-w-full"
             >
-                <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${selectedNetwork.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />
-                    <span className="hidden sm:block">{selectedNetwork.name}</span>
-                    <span className="sm:hidden">{selectedNetwork.name.split(' ')[0]}</span>
+                <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selectedNetwork.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                    <span className="truncate whitespace-nowrap overflow-hidden text-ellipsis">{selectedNetwork.name}</span>
                 </div>
                 <motion.svg
-                    className="h-4 w-4"
+                    className="h-4 w-4 flex-shrink-0"
                     viewBox="0 0 20 20"
                     fill="currentColor"
                     animate={{ rotate: isOpen ? 180 : 0 }}

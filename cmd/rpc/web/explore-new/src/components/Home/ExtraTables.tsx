@@ -37,7 +37,7 @@ const getValidatorIcon = (address: string): string => {
         'bi-zap-fill',
         'bi-zap',
     ]
-    
+
     // Use address to deterministically select an icon
     if (!address || address === 'N/A') return icons[0]
     // Convert address to number using char codes
@@ -55,7 +55,7 @@ const normalizeList = (payload: any) => {
 // Get transaction type icon based on action type
 const getTransactionIcon = (action: string): string => {
     const actionLower = (action || '').toLowerCase()
-    
+
     if (actionLower.includes('stake') || actionLower.includes('delegate') || actionLower.includes('edit-stake')) {
         return 'bi bi-file-lock2'
     } else if (actionLower.includes('send') || actionLower.includes('transfer')) {
@@ -65,7 +65,7 @@ const getTransactionIcon = (action: string): string => {
     } else if (actionLower.includes('swap') || actionLower.includes('exchange')) {
         return 'bi bi-arrow-left-right'
     }
-    
+
     // Default icon
     return 'fa-solid fa-circle'
 }
@@ -183,8 +183,8 @@ const ExtraTables: React.FC = () => {
                     />
                 </span>,
                 <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary">
-                        <i className={`bi ${getValidatorIcon(address)} text-primary`} style={{ fontSize: '0.875rem' }}></i>
+                    <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary font-semibold">
+                        {address && address !== 'N/A' ? address.slice(0, 2).toUpperCase() : 'N/A'}
                     </div>
                     <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
@@ -213,21 +213,25 @@ const ExtraTables: React.FC = () => {
                 <span className="text-gray-200">
                     {typeof totalWeight === 'number' ? (
                         <AnimatedNumber
-                            value={totalWeight}
+                            value={totalWeight / 1000000}
+                            format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                            suffix=" CNPY"
                             className="text-gray-200"
                         />
                     ) : (
-                        totalWeight ? String(totalWeight).toLocaleString() : '0'
+                        totalWeight ? `${(Number(totalWeight) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
                     )}
                 </span>,
                 <span className="text-gray-200">
                     {typeof stake === 'number' ? (
                         <AnimatedNumber
-                            value={stake}
+                            value={stake / 1000000}
+                            format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                            suffix=" CNPY"
                             className="text-gray-200"
                         />
                     ) : (
-                        stake ? String(stake).toLocaleString() : '0'
+                        stake ? `${(Number(stake) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
                     )}
                 </span>,
                 <div className="flex items-center gap-2">
@@ -343,22 +347,22 @@ const ExtraTables: React.FC = () => {
                             {action || 'N/A'}
                         </span>,
                         <span className="text-primary">
-                                  {typeof amount === 'number' ? (
-                                      <>
-                                          <AnimatedNumber
-                                              value={amount}
-                                              format={{ maximumFractionDigits: 4 }}
-                                              className="text-primary"
-                                          />&nbsp; CNPY </>
-                                  ) : (
-                                      <span className="text-primary">{amount} &nbsp;CNPY</span>
-                                  )}
-                              </span>,
+                            {typeof amount === 'number' ? (
+                                <>
+                                    <AnimatedNumber
+                                        value={amount / 1000000}
+                                        format={{ minimumFractionDigits: 2, maximumFractionDigits: 6 }}
+                                        className="text-primary"
+                                    />&nbsp; CNPY </>
+                            ) : (
+                                <span className="text-primary">{amount !== 'N/A' ? `${(Number(amount) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : 'N/A'}</span>
+                            )}
+                        </span>,
                         <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
                         <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
-                           <div className="flex items-center gap-2">
-                           <Logo size={80} showText={false} />
-                       </div>,
+                        <div className="flex items-center gap-2">
+                            <Logo size={80} showText={false} />
+                        </div>,
                     ]
                 })}
             />

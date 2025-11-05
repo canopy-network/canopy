@@ -141,20 +141,22 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             }
         </motion.span>,
 
-        // Fee
+        // Fee (in micro denomination - uCNPY)
         <motion.span
             className="text-gray-400"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.1 }}
         >
-            {transaction.transaction.fee ?
-                `${(transaction.transaction.fee / 1000000).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6
-                })} CNPY`
-                : 'N/A'
-            }
+            {transaction.transaction.fee ? (() => {
+                const feeMicro = transaction.transaction.fee
+                const feeFormatted = feeMicro.toLocaleString('en-US')
+                const feeCNPY = feeMicro / 1000000
+                if (feeCNPY >= 1) {
+                    return `${feeFormatted} uCNPY (${feeCNPY.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
+                }
+                return `${feeFormatted} uCNPY`
+            })() : 'N/A'}
         </motion.span>,
 
         // Status (assuming success for now)

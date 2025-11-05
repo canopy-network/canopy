@@ -145,7 +145,11 @@ const OverviewCards: React.FC = () => {
                                     )}
                                 </div>,
                                 <span className="text-green-400">
-                                    {typeof amount === 'number' ? amount.toFixed(3) : amount}
+                                    {typeof amount === 'number' ? (() => {
+                                        // Amount comes in micro denomination, convert to CNPY
+                                        const cnpy = amount / 1000000
+                                        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
+                                    })() : amount}
                                 </span>,
                                 <span className="text-white">{timeAgo}</span>,
                             ]

@@ -184,10 +184,12 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
             />
         </span>,
 
-        // Total Stake (CNPY)
+        // Total Stake (CNPY - converted from micro denomination)
         <span className="text-gray-300 text-sm">
             <AnimatedNumber
-                value={validator.stakedAmount}
+                value={validator.stakedAmount / 1000000}
+                format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                suffix=" CNPY"
                 className="text-gray-300"
             />
         </span>,

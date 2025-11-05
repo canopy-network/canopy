@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useTxByHash, useBlockByHeight, useParams as useParamsHook } from '../../hooks/useApi'
+import { useTxByHash, useBlockByHeight, useParams as useParamsHook, useAllBlocksCache } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -10,18 +10,25 @@ const toCNPY = (micro: number): number => {
     return micro / 1000000
 }
 
-// Helper function to format fee - shows real value from endpoint in micro denomination
+// Helper function to format fee - shows real value from endpoint in micro denomination (uCNPY)
 const formatFee = (micro: number): string => {
-    if (micro === 0) return '0 CNPY'
+    if (micro === 0) return '0 uCNPY'
     // Always show the real value from endpoint in micro denomination first
     const microFormatted = micro.toLocaleString('en-US')
     const cnpy = toCNPY(micro)
     // If >= 1 CNPY, show both micro and CNPY
     if (cnpy >= 1) {
-        return `${microFormatted} CNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
+        return `${microFormatted} uCNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
     }
     // If < 1 CNPY, show only micro denomination
-    return `${microFormatted} CNPY`
+    return `${microFormatted} uCNPY`
+}
+
+// Helper function to format amount - shows in CNPY (converted from micro denomination)
+const formatAmount = (micro: number): string => {
+    if (micro === 0) return '0 CNPY'
+    const cnpy = toCNPY(micro)
+    return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
 }
 
 const TransactionDetailPage: React.FC = () => {
@@ -37,6 +44,14 @@ const TransactionDetailPage: React.FC = () => {
     // Get block data to find all transactions in the same block
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
+
+    // Get latest block height to calculate confirmations
+    const { data: blocksCache } = useAllBlocksCache()
+    const latestBlockHeight = useMemo(() => {
+        if (!blocksCache) return 0
+        const blocks = Array.isArray(blocksCache) ? blocksCache : (blocksCache as any)
+        return blocks[0]?.blockHeader?.height || blocks[0]?.height || 0
+    }, [blocksCache])
 
     // Get params to access fee information
     const { data: paramsData } = useParamsHook(0)
@@ -246,8 +261,14 @@ const TransactionDetailPage: React.FC = () => {
     const from = transaction.sender || transaction.from || '0x0000000000000000000000000000000000000000'
     const to = transaction.recipient || transaction.to || '0x0000000000000000000000000000000000000000'
     const nonce = transaction.nonce || 0
-    const position = transaction?.index || transaction?.msg?.qc?.header?.round || 0
-    const confirmations = transaction.confirmations || 142
+    // Extract real data from endpoint
+    const position = transaction?.index ?? null // Position in block (index field from endpoint)
+    const createdHeight = transaction?.transaction?.createdHeight ?? null
+    const networkID = transaction?.transaction?.networkID ?? null
+    const chainID = transaction?.transaction?.chainID ?? null
+    const memo = transaction?.transaction?.memo ?? null
+    // Calculate confirmations: latest block height - transaction height
+    const confirmations = blockHeight > 0 && latestBlockHeight > 0 ? Math.max(0, latestBlockHeight - blockHeight + 1) : null
     const txHash = transaction.txHash || transactionHash || ''
 
     // Extract amount from transaction according to message type (from README)
@@ -274,7 +295,7 @@ const TransactionDetailPage: React.FC = () => {
             amountMicro = msg.amount
         }
     }
-    const value = amountMicro > 0 ? formatFee(amountMicro) : '0 CNPY'
+    const value = amountMicro > 0 ? formatAmount(amountMicro) : '0 CNPY'
 
     return (
         <motion.div
@@ -590,14 +611,42 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-gray-400 text-sm">Transaction Type</span>
                                         <span className="text-white text-sm">{txType}</span>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-400 text-sm">Position in Block</span>
-                                        <span className="text-white text-sm">{position}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-400 text-sm">Confirmations</span>
-                                        <span className="text-primary text-sm">{confirmations}</span>
-                                    </div>
+                                    {position !== null && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Position in Block</span>
+                                            <span className="text-white text-sm">{position}</span>
+                                        </div>
+                                    )}
+                                    {createdHeight !== null && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Created Height</span>
+                                            <span className="text-white text-sm">{createdHeight.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {networkID !== null && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Network ID</span>
+                                            <span className="text-white text-sm">{networkID}</span>
+                                        </div>
+                                    )}
+                                    {chainID !== null && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Chain ID</span>
+                                            <span className="text-white text-sm">{chainID}</span>
+                                        </div>
+                                    )}
+                                    {memo !== null && memo !== '' && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Memo</span>
+                                            <span className="text-white text-sm break-all text-right max-w-[200px]">{memo}</span>
+                                        </div>
+                                    )}
+                                    {confirmations !== null && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Confirmations</span>
+                                            <span className="text-primary text-sm">{confirmations.toLocaleString()}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         </div>

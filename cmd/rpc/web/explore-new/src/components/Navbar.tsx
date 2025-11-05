@@ -49,6 +49,13 @@ const Navbar = () => {
     const [mobileOpenIndex, setMobileOpenIndex] = React.useState<number | null>(null)
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
     const blocks = useAllBlocksCache()
+
+    // Función para verificar si la ruta actual está en las rutas hijas de un item
+    const isActiveRoute = (item: MenuItem): boolean => {
+        if (!item.children || item.children.length === 0) return false
+        return item.children.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'))
+    }
+
     React.useEffect(() => {
         // Close dropdowns when changing route
         handleClose()
@@ -108,7 +115,7 @@ const Navbar = () => {
                             >
                                 <button
                                     onClick={() => handleToggle(index)}
-                                    className={`relative z-20 px-3 py-2 rounded-md text-xl font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-primary hover:bg-gray-700'}`}
+                                    className={`relative z-20 px-3 py-2 rounded-md text-md font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-primary hover:bg-gray-700'}`}
                                 >
                                     {item.label}
                                     <motion.svg
@@ -122,7 +129,7 @@ const Navbar = () => {
                                     </motion.svg>
                                     <motion.span
                                         className="pointer-events-none absolute left-2 right-2 -bottom-0.5 h-0.5 rounded bg-primary/70"
-                                        animate={{ scaleX: openIndex === index ? 1 : 0 }}
+                                        animate={{ scaleX: openIndex === index || isActiveRoute(item) ? 1 : 0 }}
                                         initial={false}
                                         transition={{ duration: 0.16, ease: 'easeOut' }}
                                         style={{ transformOrigin: 'left center' }}
@@ -153,7 +160,7 @@ const Navbar = () => {
                                                     >
                                                         <Link
                                                             to={child.path}
-                                                            className="block px-3 py-2 text-sm font-normal text-gray-300 hover:text-primary hover:bg-gray-700/70"
+                                                            className={`block px-3 py-2 text-sm font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-gray-700/70'}`}
                                                         >
                                                             {child.label}
                                                         </Link>
@@ -192,7 +199,7 @@ const Navbar = () => {
                     <div className="hidden md:flex items-center space-x-2 relative w-4/12">
                         {/* Network Selector - Only show in production */}
                         {import.meta.env.VITE_NODE_ENV === 'production' && (
-                            <div className='w-6/12'>
+                            <div className='w-6/12 min-w-0'>
                                 <NetworkSelector />
                             </div>
                         )}
@@ -229,19 +236,19 @@ const Navbar = () => {
                             <div key={item.label} className="mb-1">
                                 <button
                                     onClick={() => toggleMobileIndex(index)}
-                                    className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index ? 'bg-primary/20 text-primary' : 'text-gray-300 hover:text-primary hover:bg-gray-700'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-300 hover:text-primary hover:bg-gray-700'}`}
                                 >
                                     <span>{item.label}</span>
                                     <svg className={`h-4 w-4 transition-transform ${mobileOpenIndex === index ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" /></svg>
                                 </button>
                                 {item.children && item.children.length > 0 && (
-                                    <div className={`${mobileOpenIndex === index ? 'block' : 'hidden'} mt-1 ml-2 border-l border-gray-700`}>
+                                    <div className={`${mobileOpenIndex === index || isActiveRoute(item) ? 'block' : 'hidden'} mt-1 ml-2 border-l border-gray-700`}>
                                         <ul className="py-1">
                                             {item.children.map((child) => (
                                                 <li key={child.path}>
                                                     <Link
                                                         to={child.path}
-                                                        className="block px-3 py-2 text-sm text-gray-300 hover:text-primary hover:bg-gray-700 rounded-md"
+                                                        className={`block px-3 py-2 text-sm rounded-md ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-gray-700'}`}
                                                         onClick={() => setMobileOpenIndex(null)}
                                                     >
                                                         {child.label}
