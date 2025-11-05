@@ -268,11 +268,22 @@ func (vi *VersionedIterator) Close() { _ = vi.iter.Close() }
 // first() positions the iterator at the first valid entry
 func (vi *VersionedIterator) first() {
 	vi.initialized = true
-	// seek to proper position
+	// seek is used to take advantage of block property filters to skip
+	// sst blocks with versions outside the store version range
 	if vi.reverse {
-		vi.iter.Last()
+		// position at the last key strictly below UpperBound
+		ub := prefixEnd(vi.prefix)
+		if !vi.iter.SeekLT(ub) {
+			// nothing below ub, iterator invalid
+			vi.isValid = false
+			return
+		}
 	} else {
-		vi.iter.First()
+		// position at first key >= LowerBound (prefix)
+		if !vi.iter.SeekGE(vi.prefix) {
+			vi.isValid = false
+			return
+		}
 	}
 	// go to the next 'user key'
 	vi.advanceToNextKey()
@@ -371,9 +382,8 @@ func (vi *VersionedIterator) step() {
 				// then SeekLT([EncodedKey]) finds the largest key less than [EncodedKey]
 				// since current key versions are [EncodedKey][0x00 0x00][version] > [EncodedKey]
 				// this lands on [PreviousKey][0x00 0x00][version], the previous key's highest version
-				seekKey := make([]byte, len(vi.lastEncodedKey)-len(separator))
-				copy(seekKey, vi.lastEncodedKey[:len(vi.lastEncodedKey)-len(separator)])
-				vi.iter.SeekLT(seekKey)
+				trimLen := len(vi.lastEncodedKey) - len(separator)
+				vi.iter.SeekLT(vi.lastEncodedKey[:trimLen])
 				return
 			}
 		}
@@ -384,13 +394,15 @@ func (vi *VersionedIterator) step() {
 			currentEncodedKey := extractEncodedKey(vi.iter.Key())
 			// only seek if iterator is still on the same encoded key
 			if bytes.Equal(currentEncodedKey, vi.lastEncodedKey) {
-				// to skip all versions of current key, increment the last byte of the separator
+				// to skip all versions of current key, temporarily
+				// increment the lastByte byte of the separator
 				// from [EncodedKey][0x00 0x00] to [EncodedKey][0x00 0x01]
 				// this skips past all [EncodedKey][0x00 0x00][version] entries
-				seekKey := make([]byte, len(vi.lastEncodedKey))
-				copy(seekKey, vi.lastEncodedKey)
-				seekKey[len(seekKey)-1] = 0x01
-				vi.iter.SeekGE(seekKey)
+				lastByte := len(vi.lastEncodedKey) - 1
+				orig := vi.lastEncodedKey[lastByte]
+				vi.lastEncodedKey[lastByte] = 0x01
+				vi.iter.SeekGE(vi.lastEncodedKey)
+				vi.lastEncodedKey[lastByte] = orig // restore
 				return
 			}
 		}
@@ -431,7 +443,8 @@ func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []
 
 // parseVersionedKey() extracts components and converts back from inverted version
 // k = [Enc(UserKey)][0x00,0x00][InvertedVersion]
-func parseVersionedKey(versionedKey []byte, versionParse bool) (userKey []byte, version uint64, err lib.ErrorI) {
+func parseVersionedKey(versionedKey []byte, versionParse bool) (userKey []byte, version uint64,
+	err lib.ErrorI) {
 	// validate key length
 	min := len(separator) + VersionSize
 	if len(versionedKey) < min {
@@ -458,6 +471,16 @@ func parseVersionedKey(versionedKey []byte, versionParse bool) (userKey []byte, 
 	return decoded, version, nil
 }
 
+// parseVersion extracts version directly from the last 8 bytes without full parsing
+func parseVersion(versionedKey []byte) uint64 {
+	if len(versionedKey) < VersionSize {
+		return 0
+	}
+	// extract inverted version from last 8 bytes
+	offset := len(versionedKey) - VersionSize
+	return ^binary.BigEndian.Uint64(versionedKey[offset:])
+}
+
 // parseValueWithTombstone() extracts tombstone and actual value
 // v = [1-byte Tombstone][ActualValue]
 func parseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
@@ -470,28 +493,6 @@ func parseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
 	}
 	// first byte is tombstone indicator
 	return v[0], bytes.Clone(value)
-}
-
-// parseVersion extracts version directly from the last 8 bytes without full parsing
-func parseVersion(versionedKey []byte) uint64 {
-	if len(versionedKey) < VersionSize {
-		return 0
-	}
-	// extract inverted version from last 8 bytes
-	offset := len(versionedKey) - VersionSize
-	return ^binary.BigEndian.Uint64(versionedKey[offset:])
-}
-
-// extractEncodedKey returns the key portion without version
-// Returns: [Enc(UserKey)][0x00,0x00] (includes separator, excludes version)
-// Note: returns a reference, clone if needed
-func extractEncodedKey(versionedKey []byte) []byte {
-	minLen := len(separator) + VersionSize
-	if len(versionedKey) < minLen {
-		return nil
-	}
-	// return everything except the last 8 bytes (version)
-	return versionedKey[:len(versionedKey)-VersionSize]
 }
 
 // encodeUserKey escapes 0x00 as 0x00 0xFF and appends 0x00 0x00 terminator.
@@ -529,6 +530,18 @@ func decodeUserKey(enc []byte) ([]byte, error) {
 		out = append(out, escByte)
 	}
 	return out, nil
+}
+
+// extractEncodedKey returns the key portion without version
+// Returns: [Enc(UserKey)][0x00,0x00] (includes separator, excludes version)
+// Note: returns a reference, clone if needed
+func extractEncodedKey(versionedKey []byte) []byte {
+	minLen := len(separator) + VersionSize
+	if len(versionedKey) < minLen {
+		return nil
+	}
+	// return everything except the last 8 bytes (version)
+	return versionedKey[:len(versionedKey)-VersionSize]
 }
 
 // ensureCapacity() ensures the buffer has sufficient capacity for the key size (n)
