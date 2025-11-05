@@ -249,16 +249,11 @@ const TransactionsPage: React.FC = () => {
     const isLoadingData = isHashSearch ? isHashLoading : isLoading
     const displayTotalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : totalTransactions
 
-    // Helper function to format fee from micro denomination to display format (uCNPY)
+    // Helper function to format fee - shows in CNPY (converted from micro denomination)
     const formatFeeDisplay = (micro: number): string => {
-        if (micro === 0) return '0 uCNPY'
-        const microFormatted = micro.toLocaleString('en-US')
+        if (micro === 0) return '0 CNPY'
         const cnpy = micro / 1000000
-        // If >= 1 CNPY, show both micro and CNPY, otherwise just micro
-        if (cnpy >= 1) {
-            return `${microFormatted} uCNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
-        }
-        return `${microFormatted} uCNPY`
+        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
     const averageFee = React.useMemo(() => {
@@ -290,7 +285,7 @@ const TransactionsPage: React.FC = () => {
         {
             title: 'Average Fee',
             value: averageFee,
-            subValue: 'uCNPY',
+            subValue: 'CNPY',
             icon: 'fa-solid fa-coins text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-gray-400',

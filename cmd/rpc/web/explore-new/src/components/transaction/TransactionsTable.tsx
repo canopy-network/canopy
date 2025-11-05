@@ -93,14 +93,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
     const formatFee = (fee: number) => {
         if (!fee || fee === 0) return '0 CNPY'
-        // Fee comes in micro denomination (uCNPY) from endpoint according to README
-        const microFormatted = fee.toLocaleString('en-US')
+        // Fee comes in micro denomination from endpoint, convert to CNPY
         const cnpy = toCNPY(fee)
-        // If >= 1 CNPY, show both micro and CNPY, otherwise just micro
-        if (cnpy >= 1) {
-            return `${microFormatted} uCNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
-        }
-        return `${microFormatted} uCNPY`
+        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
     const getStatusColor = (status: string) => {

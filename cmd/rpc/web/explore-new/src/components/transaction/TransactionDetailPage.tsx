@@ -10,18 +10,11 @@ const toCNPY = (micro: number): number => {
     return micro / 1000000
 }
 
-// Helper function to format fee - shows real value from endpoint in micro denomination (uCNPY)
+// Helper function to format fee - shows in CNPY (converted from micro denomination)
 const formatFee = (micro: number): string => {
-    if (micro === 0) return '0 uCNPY'
-    // Always show the real value from endpoint in micro denomination first
-    const microFormatted = micro.toLocaleString('en-US')
+    if (micro === 0) return '0 CNPY'
     const cnpy = toCNPY(micro)
-    // If >= 1 CNPY, show both micro and CNPY
-    if (cnpy >= 1) {
-        return `${microFormatted} uCNPY (${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY)`
-    }
-    // If < 1 CNPY, show only micro denomination
-    return `${microFormatted} uCNPY`
+    return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
 }
 
 // Helper function to format amount - shows in CNPY (converted from micro denomination)
