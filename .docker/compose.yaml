@@ -60,7 +60,7 @@ services:
       - 40001:40001 # Explorer
       - 40002:40002 # RPC
       - 40003:40003 # Admin RPC
-      - 9002:9002   # TCP P2P
+      - 9003:9003   # TCP P2P
       - 6061:6060   # Debug
       - 9091:9091   # Metrics
     networks:
