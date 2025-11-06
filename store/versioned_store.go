@@ -194,21 +194,13 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 	if iter == nil || err != nil {
 		return nil, ErrStoreGet(fmt.Errorf("failed to create iterator: %v", err))
 	}
-
-	// seek is optimal for skipping multiple versions of the same key, but committee/delegator
-	// prefixes are sorted by stake so keys aren't contiguous - seek would actually be slower there
-	// TODO: make this configurable instead of hardcoded, even better to remove it
-	// []byte{1,4} <- committee prefix
-	// []byte{1,11} <- delegate prefix
-	seek := !(bytes.Contains(prefix, append([]byte(historicStatePrefix), []byte{1, 4}...)) ||
-		bytes.Contains(prefix, append([]byte(historicStatePrefix), []byte{1, 11}...)))
 	return &VersionedIterator{
 		iter:        iter,
 		store:       vs,
 		prefix:      prefix,
 		reverse:     reverse,
 		allVersions: allVersions,
-		seek:        seek,
+		seek:        true,
 	}, nil
 }
 
@@ -223,7 +215,6 @@ type VersionedIterator struct {
 	isValid        bool
 	initialized    bool
 	allVersions    bool
-	shouldNotPrev  bool // signals the step in iterator to not perform a 'Prev' operation
 	lastEncodedKey []byte
 	valueBuff      []byte
 	seek           bool
@@ -327,27 +318,21 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		vi.valueBuff = vi.valueBuff[:len(rawValue)]
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
-			for vi.iter.Prev() {
-				vi.shouldNotPrev = true
-				rawPrevKey := vi.iter.Key()
-				prevVersion := parseVersion(rawPrevKey)
-				// validate version
-				if prevVersion > vi.store.version {
-					break
+			// build the synthetic seek key for this userKey at the target store.version:
+			// [Enc(userKey)][0x00,0x00][^version]
+			seekKey := vi.store.makeVersionedKey(userKey, vi.store.version)
+			// this lands at the first entry with ^ver >= ^target within this user key,
+			// i.e. the greatest original version <= target.
+			if vi.iter.SeekGE(seekKey) {
+				// Ensure we’re still on the same encoded key (we should be, since we already
+				// observed at least one version <= target for this user key).
+				if bytes.Equal(extractEncodedKey(vi.iter.Key()), vi.lastEncodedKey) {
+					if val, valErr := vi.iter.ValueAndErr(); valErr == nil {
+						vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
+						copy(vi.valueBuff, val)
+						vi.valueBuff = vi.valueBuff[:len(val)]
+					}
 				}
-				// validate key
-				prevEncodedKey := extractEncodedKey(rawPrevKey)
-				if prevEncodedKey == nil || !bytes.Equal(vi.lastEncodedKey, prevEncodedKey) {
-					break
-				}
-				var valErr error
-				val, valErr := vi.iter.ValueAndErr()
-				if valErr != nil {
-					break
-				}
-				vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
-				copy(vi.valueBuff, val)
-				vi.valueBuff = vi.valueBuff[:len(val)]
 			}
 		}
 		// now the iterator's current value is the newest visible version for userKey.
@@ -368,10 +353,6 @@ func (vi *VersionedIterator) advanceToNextKey() {
 // step() increments the iterator to the logical 'next'
 func (vi *VersionedIterator) step() {
 	if vi.reverse {
-		if vi.shouldNotPrev {
-			vi.shouldNotPrev = false
-			return
-		}
 		// check if is possible to skip versions in reverse
 		if vi.seek && vi.iter.Valid() && vi.lastEncodedKey != nil {
 			currentEncodedKey := extractEncodedKey(vi.iter.Key())

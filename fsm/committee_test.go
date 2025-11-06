@@ -1053,6 +1053,8 @@ func TestUpdateCommittees(t *testing.T) {
 				// retrieve the old validator
 				val, err := sm.GetValidator(addr)
 				require.NoError(t, err)
+				// update the validator committeee
+				require.NoError(t, sm.SetValidator(v))
 				// run the function
 				require.NoError(t, sm.UpdateCommittees(addr, val, v.StakedAmount, v.Committees))
 			}
@@ -1121,17 +1123,16 @@ func TestDeleteCommittees(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
-			// for each test validator
-			for _, v := range test.validators {
-				// set the validator in state
-				require.NoError(t, sm.SetValidator(v))
-				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
-			}
-			// for each update
+			// create a supply tracker
+			supply := &Supply{}
+			// set the validators with proper supply tracking
+			require.NoError(t, sm.SetValidators(test.validators, supply))
+			// update the supply in state
+			require.NoError(t, sm.SetSupply(supply))
+			// for each validator to delete
 			for _, v := range test.delete {
-				// run the function
-				require.NoError(t, sm.DeleteCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				// DeleteValidator internally calls DeleteCommittees, so we don't need to call it explicitly
+				require.NoError(t, sm.DeleteValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -1143,10 +1144,10 @@ func TestDeleteCommittees(t *testing.T) {
 				// get the committee pool from the supply object
 				p, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
+				// compare got supply vs total tokens
+				require.Equal(t, test.expectedTotalPower[id], p.Amount)
 				// for each expected public key
 				for i, expectedPublicKey := range publicKeys {
-					// compare got supply vs total tokens
-					require.Equal(t, test.expectedTotalPower[id], p.Amount)
 					// compare got vs expected
 					require.Equal(t, expectedPublicKey, got.ValidatorSet.ValidatorSet[i].PublicKey)
 				}

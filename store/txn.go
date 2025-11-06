@@ -108,6 +108,10 @@ func (t *Txn) Get(key []byte) ([]byte, lib.ErrorI) {
 	defer t.txn.l.Unlock()
 	// first retrieve from the in-memory txn
 	if v, found := t.txn.ops[lib.MemHash(key)]; found {
+		if v.op == opDelete {
+			return nil, nil
+		}
+		// TODO: should a sentinel value be returned when a key is found but the value is nil
 		return v.value, nil
 	}
 	// if not found, retrieve from the parent reader
