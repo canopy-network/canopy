@@ -8,6 +8,7 @@ interface ValidatorDetail {
     stakedAmount: number
     committees: number[]
     delegate: boolean
+    compound: boolean
     netAddress: string
     rank: number
     maxPausedHeight: number
@@ -193,6 +194,15 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                     </div>
                                 </div>
                             )}
+
+                            {/* Auto-Compound */}
+                            <div className="text-start flex items-center justify-start gap-2 w-full">
+                                <div className="text-sm text-gray-400 text-nowrap">Auto-Compound:</div>
+                                <div className={`text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-green-400' : 'text-gray-500'}`}>
+                                    <i className={`fa-solid ${validator.compound ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
+                                    <span>{validator.compound ? 'Enabled' : 'Disabled'}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

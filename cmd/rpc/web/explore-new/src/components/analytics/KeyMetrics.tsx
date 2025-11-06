@@ -68,8 +68,8 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
         }
 
         // 7. Network Uptime - Calculate based on validator status
-        if (validatorsData?.results || validatorsData?.validators) {
-            const validatorsList = validatorsData.results || validatorsData.validators || []
+        if (validatorsData?.results) {
+            const validatorsList = validatorsData.results
             const activeValidators = validatorsList.filter((v: any) => {
                 const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
                 const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
