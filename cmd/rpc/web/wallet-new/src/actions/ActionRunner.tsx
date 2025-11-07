@@ -20,6 +20,7 @@ import {LucideIcon} from "@/components/ui/LucideIcon";
 import {cx} from "@/ui/cx";
 import {motion} from "framer-motion";
 import {ToastTemplateOptions} from "@/toast/types";
+import {useActionDs} from './useActionDs';
 
 
 
@@ -45,6 +46,33 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         () => manifest?.actions.find((a) => a.id === actionId),
         [manifest, actionId]
     )
+
+    // NEW: Load action-level DS (replaces per-field DS for better performance)
+    const actionDsConfig = React.useMemo(() => (action as any)?.ds, [action]);
+
+    // Build context for DS (without ds itself to avoid circular dependency)
+    const dsCtx = React.useMemo(() => ({
+        form,
+        chain,
+        account: selectedAccount ? {
+            address: selectedAccount.address,
+            nickname: selectedAccount.nickname,
+        } : undefined,
+        params,
+    }), [form, chain, selectedAccount, params]);
+
+    const { ds: actionDs } = useActionDs(
+        actionDsConfig,
+        dsCtx,
+        actionId,
+        selectedAccount?.address
+    );
+
+    // Merge action-level DS with field-level DS (for backwards compatibility)
+    const mergedDs = React.useMemo(() => ({
+        ...actionDs,
+        ...localDs,
+    }), [actionDs, localDs]);
     const feesResolved = useResolvedFees(chain?.fees, {
         actionId: action?.id,
         bucket: 'avg',
@@ -78,11 +106,11 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         params: {
             ...params
         },
-        ds: localDs,
+        ds: mergedDs,  // Use merged DS (action-level + field-level)
         session: {password: session?.password},
         // Unique scope for this action instance to prevent cache collisions
         __scope: `action:${actionId}:${selectedAccount?.address || 'no-account'}`,
-    }), [debouncedForm, chain, selectedAccount, feesResolved, session?.password, params, localDs, actionId])
+    }), [debouncedForm, chain, selectedAccount, feesResolved, session?.password, params, mergedDs, actionId])
 
 
 

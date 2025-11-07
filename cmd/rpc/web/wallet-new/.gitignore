@@ -2,3 +2,9 @@ node_modules
 vite.config.ts.*
 .idea
 .env
+dist
+*.tsbuildinfo
+
+# Compiled JS files (TypeScript generates these)
+src/**/*.js
+src/**/*.jsx

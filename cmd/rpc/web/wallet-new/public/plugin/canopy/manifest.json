@@ -21,6 +21,19 @@
       "relatedActions": [
         "receive"
       ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchIntervalMs": 20000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
       "ui": {
         "slots": {
           "modal": {
@@ -67,20 +80,7 @@
             "type": "text",
             "label": "Asset",
             "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
-            "readOnly": true,
-            "ds": {
-              "account": {
-                "account": {
-                  "address": "{{account.address}}"
-                }
-              },
-              "__options": {
-                "staleTimeMs": 10000,
-                "refetchIntervalMs": 20000,
-                "refetchOnMount": true,
-                "refetchOnWindowFocus": false
-              }
-            }
+            "readOnly": true
           },
           {
             "id": "amount",
@@ -239,6 +239,19 @@
       "relatedActions": [
         "send"
       ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchIntervalMs": 20000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
       "ui": {
         "variant": "modal",
         "icon": "Send",
@@ -280,20 +293,7 @@
             "type": "text",
             "label": "Asset",
             "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
-            "readOnly": true,
-            "ds": {
-              "account": {
-                "account": {
-                  "address": "{{account.address}}"
-                }
-              },
-              "__options": {
-                "staleTimeMs": 10000,
-                "refetchIntervalMs": 20000,
-                "refetchOnMount": true,
-                "refetchOnWindowFocus": false
-              }
-            }
+            "readOnly": true
           }
         ],
         "info": {
@@ -315,6 +315,25 @@
       "id": "stake",
       "title": "Stake",
       "icon": "Lock",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+          }
+        },
+        "validator": {
+          "account": {
+            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+          }
+        },
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchIntervalMs": 20000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
       "ui": {
         "slots": {
           "modal": {
@@ -355,15 +374,6 @@
             "label": "Staking (Operator) Address",
             "placeholder": "Select Staking Address",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
-            "ds": {
-              "keystore": {},
-              "__options": {
-                "staleTimeMs": 300000,
-                "gcTimeMs": 600000,
-                "refetchOnMount": false,
-                "refetchOnWindowFocus": false
-              }
-            },
             "step": "setup"
           },
           {
@@ -379,15 +389,6 @@
             "placeholder": "Select Rewards Address",
             "value": "{{ ds.validator ? ds.validator.output : '' }}",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
-            "ds": {
-              "keystore": {},
-              "__options": {
-                "staleTimeMs": 300000,
-                "gcTimeMs": 600000,
-                "refetchOnMount": false,
-                "refetchOnWindowFocus": false
-              }
-            },
             "step": "setup"
           },
           {
@@ -413,46 +414,11 @@
             "step": "setup"
           },
           {
-            "id": "_validatorLoader",
-            "name": "_validatorLoader",
-            "type": "text",
-            "showIf": "{{ false }}",
-            "ds": {
-              "validator": {
-                "account": {
-                  "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
-                },
-                "__options": {
-                  "enabled": "{{ form.signerResponsible && (form.signerResponsible === 'operator' ? form.operator : form.output) }}",
-                  "staleTimeMs": 0,
-                  "refetchIntervalMs": 20000,
-                  "watch": ["form.signerResponsible", "form.operator", "form.output"],
-                  "refetchOnWindowFocus": false
-                }
-              }
-            },
-            "step": "setup"
-          },
-          {
             "id": "asset",
             "name": "asset",
             "type": "dynamicHtml",
             "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Signer Address Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Liquid:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Staked:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div></div></div>",
             "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
-            "ds": {
-              "account": {
-                "account": {
-                  "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
-                },
-                "__options": {
-                  "enabled": "{{ form.signerResponsible && (form.signerResponsible === 'operator' ? form.operator : form.output) }}",
-                  "staleTimeMs": 0,
-                  "refetchIntervalMs": 20000,
-                  "watch": ["form.signerResponsible", "form.operator", "form.output"],
-                  "refetchOnWindowFocus": false
-                }
-              }
-            },
             "step": "setup",
             "span": { "base": 12 }
           },
