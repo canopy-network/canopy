@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"cmp"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -244,35 +245,61 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 	if err != nil {
 		return
 	}
-	// iterate through the prefix for the committee, from the highest stake amount to lowest
-	it, err := s.RevIterator(CommitteePrefix(chainId))
+	// retrieve the validators from the store in reverse order to preserve the same ordering
+	// of committees (from highest stake to lowest)
+	validators := make([]*Validator, 0)
+	it, err := s.RevIterator(ValidatorPrefix())
 	if err != nil {
-		return
+		return vs, err
 	}
+	// ensure memory cleanup
 	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		// convert the bytes into a validator object reference
+		val, e := s.unmarshalValidator(it.Value())
+		if e != nil {
+			return vs, e
+		}
+		// add it to the list
+		validators = append(validators, val)
+	}
+	// filter out validators not part of the committee
+	filtered := slices.Collect(func(yield func(*Validator) bool) {
+		for _, v := range validators {
+			// exclude validators not part of the committee
+			if !v.PassesFilter(lib.ValidatorFilters{
+				Unstaking: lib.FilterOption_Exclude,
+				Paused:    lib.FilterOption_Exclude,
+				Delegate:  lib.FilterOption_Exclude,
+				Committee: chainId,
+			}) {
+				continue
+			}
+			// add validator to filtered list
+			if !yield(v) {
+				return
+			}
+		}
+	})
+	// sort by highest stake then address
+	slices.SortFunc(filtered, func(a, b *Validator) int {
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
+	})
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
-	// for each item of the iterator up to MaxCommitteeSize
-	for i := uint64(0); it.Valid() && i < p.MaxCommitteeSize; func() { it.Next(); i++ }() {
-		// extract the address from the iterator key
-		address, e := AddressFromKey(it.Key())
-		if e != nil {
-			return vs, e
-		}
-		// load the validator from the state using the address
-		val, e := s.GetValidator(address)
-		if e != nil {
-			return vs, e
-		}
-		// ensure the validator is not included in the committee if it's paused or unstaking
-		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
-			continue
-		}
+	// return only the top MaxCommitteeSize validators
+	// for each validator up to MaxCommitteeSize
+	for _, validator := range filtered[:min(uint64(len(filtered)), p.MaxCommitteeSize)] {
 		// add the member to the list
 		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   val.PublicKey,
-			VotingPower: val.StakedAmount,
-			NetAddress:  val.NetAddress,
+			PublicKey:   validator.PublicKey,
+			VotingPower: validator.StakedAmount,
+			NetAddress:  validator.NetAddress,
 		})
 	}
 	// convert list to a validator set (includes shared public key)
@@ -363,38 +390,63 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // GetAllDelegates() returns all delegates for a certain chainId
 // It is heavily cached to improve performance as the delegates are used for each block commit
 func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// iterate from highest stake to lowest
-	it, err := s.RevIterator(DelegatePrefix(chainId))
+	// retrieve the validators from the store in reverse order to preserve the same ordering
+	// of delegates (from highest stake to lowest)
+	validators := make([]*Validator, 0)
+	it, err := s.RevIterator(ValidatorPrefix())
 	if err != nil {
 		return vs, err
 	}
+	// ensure memory cleanup
 	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		// convert the bytes into a validator object reference
+		val, e := s.unmarshalValidator(it.Value())
+		if e != nil {
+			return vs, e
+		}
+		// add it to the list
+		validators = append(validators, val)
+	}
+	// filter out validators that are not delegates for the given chainId
+	delegates := slices.Collect(func(yield func(*Validator) bool) {
+		for _, v := range validators {
+			// exclude validators not part of the committee
+			if !v.PassesFilter(lib.ValidatorFilters{
+				Delegate:  lib.FilterOption_MustBe,
+				Paused:    lib.FilterOption_Exclude,
+				Unstaking: lib.FilterOption_Exclude,
+				Committee: chainId,
+			}) {
+				continue
+			}
+			// add validator to filtered list
+			if !yield(v) {
+				return
+			}
+		}
+	})
+	// sort by highest stake then address
+	slices.SortFunc(delegates, func(a, b *Validator) int {
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
+	})
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
 	var totalPower uint64
-	// loop through the iterator
-	for ; it.Valid(); it.Next() {
-		// get the address from the iterator key
-		address, e := AddressFromKey(it.Key())
-		if e != nil {
-			return vs, e
-		}
-		// get the validator from the address
-		val, e := s.GetValidator(address)
-		if e != nil {
-			return vs, e
-		}
-		// ensure the validator is not included in the committee if it's paused or unstaking
-		if val.MaxPausedHeight != 0 || val.UnstakingHeight != 0 {
-			continue
-		}
+	// loop through the delegates
+	for _, delegate := range delegates {
 		// increment the total power
-		totalPower += val.StakedAmount
+		totalPower += delegate.StakedAmount
 		// add the member to the list
 		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   val.PublicKey,
-			VotingPower: val.StakedAmount,
-			NetAddress:  val.NetAddress,
+			PublicKey:   delegate.PublicKey,
+			VotingPower: delegate.StakedAmount,
+			NetAddress:  delegate.NetAddress,
 		})
 	}
 	return lib.ValidatorSet{

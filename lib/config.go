@@ -246,7 +246,7 @@ func DefaultStoreConfig() StoreConfig {
 		DBName:                "canopy",                       // 'canopy' database name
 		IndexByAccount:        true,                           // index transactions by account
 		InMemory:              false,                          // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 100), // clean every 100-200 blocks (random)
+		LSSCompactionInterval: uint64(rand.Int32N(501) + 600), // clean every 500-600 blocks (random)
 	}
 }
 

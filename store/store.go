@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -275,6 +276,16 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
+
+	// use reflection to check the internal 'committing' field
+	writerValue := reflect.ValueOf(s.writer).Elem()
+	committingField := writerValue.FieldByName("committing")
+	if committingField.IsValid() {
+		isCommitting := committingField.Bool()
+		if isCommitting {
+			return nil, ErrCloseDB(fmt.Errorf("batch is still committing"))
+		}
+	}
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	// NOTE: PebbleDB has a non deterministic issue where batch.Commit(pebble.WriteOptions{})
 	// could panic with a nil pointer dereference in applyInternal(). This occurs because the batch's
