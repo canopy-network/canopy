@@ -68,8 +68,12 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 	}
 	// for each ws client
 	for _, subscriber := range r.subscribers[chainId] {
+		// lock to prevent concurrent writes to the websocket connection
+		subscriber.writeMux.Lock()
 		// publish to each client
-		if e := subscriber.conn.WriteMessage(websocket.BinaryMessage, protoBytes); e != nil {
+		e := subscriber.conn.WriteMessage(websocket.BinaryMessage, protoBytes)
+		subscriber.writeMux.Unlock()
+		if e != nil {
 			// defer the Stop() call to prevent the slice modification during iteration.
 			// since Stop() removes the subscriber from r.subscribers, immediate execution
 			// would affect the slice that is currently being iterated.
@@ -411,10 +415,11 @@ func (r *RCSubscription) Stop(err error) {
 
 // RCSubscriber (Root Chain Subscriber) implements an efficient publishing service to nested chain subscribers
 type RCSubscriber struct {
-	chainId uint64          // the chain id of the publisher
-	manager *RCManager      // a reference to the manager of the ws clients
-	conn    *websocket.Conn // the underlying ws connection
-	log     lib.LoggerI     // stdout log
+	chainId  uint64          // the chain id of the publisher
+	manager  *RCManager      // a reference to the manager of the ws clients
+	conn     *websocket.Conn // the underlying ws connection
+	log      lib.LoggerI     // stdout log
+	writeMux sync.Mutex      // protects concurrent writes to the websocket connection
 }
 
 // WebSocket() upgrades a http request to a websockets connection
@@ -474,6 +479,9 @@ func (r *RCManager) RemoveSubscriber(chainId uint64, subscriber *RCSubscriber) {
 func (r *RCSubscriber) Stop(err error) {
 	// log the error
 	r.log.Errorf("WS Failed with err: %s", err.Error())
+	// lock to prevent concurrent writes during close
+	r.writeMux.Lock()
+	defer r.writeMux.Unlock()
 	// close the connection
 	if err = r.conn.Close(); err != nil {
 		r.log.Error(err.Error())
