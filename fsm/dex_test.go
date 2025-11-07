@@ -524,10 +524,9 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			}},
 		},
 		{
-			name:          "locked batch: no receipts",
-			detail:        "test handling a batch without receipts when locked",
-			errorContains: "the dex batch receipt doesn't correspond to the last batch",
-			chainId:       1,
+			name:    "locked batch: no receipts",
+			detail:  "test handling a batch without receipts when locked",
+			chainId: 1,
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
 				Orders: []*lib.DexLimitOrder{
@@ -563,10 +562,9 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			}},
 		},
 		{
-			name:          "locked batch: mismatch receipts",
-			detail:        "test handling a batch with mismatched when locked",
-			chainId:       1,
-			errorContains: "the dex batch receipt doesn't correspond to the last batch",
+			name:    "locked batch: mismatch receipts",
+			detail:  "test handling a batch with mismatched when locked",
+			chainId: 1,
 			buyBatch: &lib.DexBatch{
 				Committee: 1,
 				Orders: []*lib.DexLimitOrder{

@@ -295,23 +295,21 @@ func TestEndBlock(t *testing.T) {
 			}()
 
 			// STEP 3) validate the distribution of the committee rewards based on the various Committee Data
-			func() {
-				for _, d := range test.committeeData {
-					for _, paymentPercents := range d.PaymentPercents {
-						valParams, err := sm.GetParamsVal()
-						require.NoError(t, err)
-						// get the account that should have been minted to
-						account, err := sm.GetAccount(crypto.NewAddress(paymentPercents.Address))
-						// full_reward = ROUND_DOWN( percentage / number_of_samples * available_reward )
-						fullReward := uint64(float64(paymentPercents.Percent) / float64(len(committeeData)*100) * float64(test.committeeRewardAmount))
-						// if not compounding, use the early withdrawal reward
-						earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
-						require.NoError(t, err)
-						// compare got and expected
-						require.Equal(t, earlyWithdrawalReward, account.Amount)
-					}
+			for _, d := range test.committeeData {
+				for _, paymentPercents := range d.PaymentPercents {
+					valParams, e := sm.GetParamsVal()
+					require.NoError(t, e)
+					// get the account that should have been minted to
+					acc, e := sm.GetAccount(crypto.NewAddress(paymentPercents.Address))
+					require.NoError(t, e)
+					// full_reward = ROUND_DOWN( percentage / number_of_samples * available_reward )
+					fullReward := uint64(float64(paymentPercents.Percent) / float64(len(committeeData)*100) * float64(test.committeeRewardAmount))
+					// if not compounding, use the early withdrawal reward
+					earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
+					// compare got and expected
+					require.Equal(t, earlyWithdrawalReward, acc.Amount)
 				}
-			}()
+			}
 
 			// STEP 4) validate the force unstaking of validators who have been paused for MaxPauseBlocks
 			func() {

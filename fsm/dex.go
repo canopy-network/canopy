@@ -124,7 +124,7 @@ func (s *StateMachine) HandleDexBatchReceipt(remoteBatch *lib.DexBatch, chainId 
 	// ensure receipt not mismatch
 	if !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts) {
 		s.log.Debug(ErrMismatchDexBatchReceipt().Error())
-		return false, nil
+		return true, nil
 	}
 	// for each order, move the funds in the holding pool depending on the success or failure
 	for i, o := range localBatch.Orders {
