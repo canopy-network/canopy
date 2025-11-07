@@ -44,8 +44,8 @@ var (
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
 	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
 
-	lockedBatchSegment = []byte("l")
-	nextBatchSement    = []byte("n")
+	lockedBatchSegment = []byte{1}
+	nextBatchSement    = []byte{2}
 )
 
 /*

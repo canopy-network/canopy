@@ -325,6 +325,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 		address  []byte
 		orderId  []byte
 		amount   uint64
+		points   uint64
 		chainId  uint64
 		inbound  bool
 		expected string
@@ -336,6 +337,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 			address:  newTestAddressBytes(t),
 			orderId:  []byte("order123"),
 			amount:   1000,
+			points:   1,
 			chainId:  1,
 			inbound:  true,
 			expected: string(lib.EventTypeDexLiquidityDeposit),
@@ -346,7 +348,7 @@ func TestEventDexLiquidityDeposit(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexLiquidityDeposit(test.address, test.orderId, test.amount, test.chainId, test.inbound)
+			err := sm.EventDexLiquidityDeposit(test.address, test.orderId, test.amount, test.points, test.chainId, test.inbound)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
@@ -371,6 +373,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 		orderId      []byte
 		localAmount  uint64
 		remoteAmount uint64
+		points       uint64
 		chainId      uint64
 		expected     string
 		error        string
@@ -381,6 +384,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 			address:      newTestAddressBytes(t),
 			localAmount:  500,
 			remoteAmount: 250,
+			points:       1,
 			chainId:      1,
 			expected:     string(lib.EventTypeDexLiquidityWithdraw),
 		},
@@ -390,7 +394,7 @@ func TestEventDexLiquidityWithdraw(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
 			// execute the function call
-			err := sm.EventDexLiquidityWithdraw(test.address, test.orderId, test.localAmount, test.remoteAmount, test.chainId)
+			err := sm.EventDexLiquidityWithdraw(test.address, test.orderId, test.localAmount, test.remoteAmount, test.points, test.chainId)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

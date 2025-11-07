@@ -302,6 +302,7 @@ type eventDexLiquidityDeposit struct {
 	Amount      uint64   `json:"amount"`
 	LocalOrigin bool     `json:"localOrigin"`
 	OrderId     HexBytes `json:"orderId"`
+	Points      uint64   `json:"points"`
 }
 
 // MarshalJSON() implements custom JSON marshalling for EventLiquidityDeposit, converting []byte fields to HexBytes
@@ -310,6 +311,7 @@ func (e EventDexLiquidityDeposit) MarshalJSON() ([]byte, error) {
 		Amount:      e.Amount,
 		LocalOrigin: e.LocalOrigin,
 		OrderId:     e.OrderId,
+		Points:      e.Points,
 	}
 	return json.Marshal(temp)
 }
@@ -324,6 +326,7 @@ func (e *EventDexLiquidityDeposit) UnmarshalJSON(b []byte) error {
 		Amount:      temp.Amount,
 		LocalOrigin: temp.LocalOrigin,
 		OrderId:     temp.OrderId,
+		Points:      temp.Points,
 	}
 	return nil
 }
@@ -333,6 +336,7 @@ type eventDexLiquidityWithdrawal struct {
 	LocalAmount  uint64   `json:"localAmount"`
 	RemoteAmount uint64   `json:"remoteAmount"`
 	OrderId      HexBytes `json:"orderId"`
+	PointsBurned uint64   `json:"pointsBurned"`
 }
 
 // MarshalJSON() implements custom JSON marshalling for EventDexLiquidityWithdrawal, converting []byte fields to HexBytes
@@ -341,6 +345,7 @@ func (e EventDexLiquidityWithdrawal) MarshalJSON() ([]byte, error) {
 		LocalAmount:  e.LocalAmount,
 		RemoteAmount: e.RemoteAmount,
 		OrderId:      e.OrderId,
+		PointsBurned: e.PointsBurned,
 	}
 	return json.Marshal(temp)
 }
@@ -355,6 +360,7 @@ func (e *EventDexLiquidityWithdrawal) UnmarshalJSON(b []byte) error {
 		LocalAmount:  temp.LocalAmount,
 		RemoteAmount: temp.RemoteAmount,
 		OrderId:      temp.OrderId,
+		PointsBurned: temp.PointsBurned,
 	}
 	return nil
 }

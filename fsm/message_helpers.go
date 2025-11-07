@@ -968,7 +968,7 @@ func checkChainId(i uint64) lib.ErrorI {
 		}
 	}
 	// ensure the chain id doesn't exceed max
-	if i > uint64(MaxChainId) {
+	if i > MaxChainId {
 		return ErrInvalidChainId()
 	}
 	return nil

@@ -105,8 +105,8 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidatorSet *lib.ValidatorSet, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
 	// catch in case there's a panic
 	defer func() {
-		if rec := recover(); rec != nil {
-			s.log.Errorf("panic recovered, err: %s, stack: %s", rec, string(debug.Stack()))
+		if r := recover(); r != nil {
+			s.log.Errorf("panic recovered, err: %s, stack: %s", r, string(debug.Stack()))
 			// handle the panic and set the error
 			err = lib.ErrPanic()
 		}
@@ -510,7 +510,6 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		RCManager:          s.RCManager,
 		events:             new(lib.EventsTracker),
 		Config:             s.Config,
-		Metrics:            nil,
 		log:                s.log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),

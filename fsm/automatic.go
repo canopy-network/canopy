@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"github.com/canopy-network/canopy/lib"
-	"slices"
 )
 
 /* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
@@ -68,19 +67,6 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
-	// handle last certificate results
-	qc, err := s.LoadCertificate(s.Height() - 1)
-	if err != nil {
-		return nil, err
-	}
-	// ensure the certificate results are not nil
-	if qc == nil || qc.Results == nil {
-		if s.Height() > 1 {
-			s.log.Errorf(lib.ErrNilCertResults().Error())
-		}
-		// return the events
-		return s.events.Reset(), nil
-	}
 	// if not exiting prematurely - calculate 'is own root'
 	ownRoot, err := s.LoadIsOwnRoot()
 	if err != nil {
@@ -88,12 +74,16 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	}
 	// if not independent
 	if !ownRoot {
-		// trigger the dex batch
-		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
-			if err.Error() != ErrMismatchDexBatchReceipt().Error() {
+		// handle last certificate results
+		qc, e := s.LoadCertificate(s.Height() - 1)
+		if e != nil {
+			return nil, e
+		}
+		// ensure the certificate results are not nil
+		if qc != nil && qc.Results != nil {
+			// trigger the dex batch
+			if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
 				s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
-			} else {
-				s.log.Debug(ErrMismatchDexBatchReceipt().Error())
 			}
 		}
 	}
@@ -152,11 +142,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId {
 		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, results.DexBatch); err != nil {
-			if err.Error() != ErrMismatchDexBatchReceipt().Error() {
-				s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
-			} else {
-				s.log.Debug(ErrMismatchDexBatchReceipt().Error())
-			}
+			s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
 		}
 	}
 	// handle the token swaps ordered by the quorum
@@ -165,19 +151,10 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if err = s.HandleCheckpoint(chainId, results); err != nil {
 		return err
 	}
-	// ensure the committee is subsidized to perform slashing
-	subsidizedCommittees, err := s.GetSubsidizedCommittees()
+	// handle byzantine evidence
+	nonSignerPercent, err := s.HandleByzantine(qc, committee)
 	if err != nil {
 		return err
-	}
-	var nonSignerPercent int
-	// ensure the committee is subsidized to allow slashing
-	if slices.Contains(subsidizedCommittees, qc.Header.ChainId) {
-		// handle byzantine evidence
-		nonSignerPercent, err = s.HandleByzantine(qc, committee)
-		if err != nil {
-			return err
-		}
 	}
 	// reduce all payment percents proportional to the non-signer percent
 	for i, p := range results.RewardRecipients.PaymentPercents {

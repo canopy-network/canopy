@@ -379,7 +379,9 @@ type EventDexLiquidityDeposit struct {
 	// local_origin: was the deposit made on this chain or the counter
 	LocalOrigin bool `protobuf:"varint,2,opt,name=local_origin,json=localOrigin,proto3" json:"localOrigin"` // @gotags: json:"localOrigin"
 	// order_id: the unique identifier of the order
-	OrderId       []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
+	OrderId []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
+	// points: the amount of points created
+	Points        uint64 `protobuf:"varint,4,opt,name=points,proto3" json:"points,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -435,6 +437,13 @@ func (x *EventDexLiquidityDeposit) GetOrderId() []byte {
 	return nil
 }
 
+func (x *EventDexLiquidityDeposit) GetPoints() uint64 {
+	if x != nil {
+		return x.Points
+	}
+	return 0
+}
+
 type EventDexLiquidityWithdrawal struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// local_amount: the amount of liquidity received on this chain
@@ -442,7 +451,9 @@ type EventDexLiquidityWithdrawal struct {
 	// counter_amount: the amount of liquidity received on the counter chain
 	RemoteAmount uint64 `protobuf:"varint,2,opt,name=remote_amount,json=remoteAmount,proto3" json:"remoteAmount"` // @gotags: json:"remoteAmount"
 	// order_id: the unique identifier of the order
-	OrderId       []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
+	OrderId []byte `protobuf:"bytes,3,opt,name=order_id,json=orderId,proto3" json:"orderId"` // @gotags: json:"orderId"
+	// pointsBurned: the amount of points burned
+	PointsBurned  uint64 `protobuf:"varint,4,opt,name=points_burned,json=pointsBurned,proto3" json:"pointsBurned"` // @gotags: json:"pointsBurned"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -496,6 +507,13 @@ func (x *EventDexLiquidityWithdrawal) GetOrderId() []byte {
 		return x.OrderId
 	}
 	return nil
+}
+
+func (x *EventDexLiquidityWithdrawal) GetPointsBurned() uint64 {
+	if x != nil {
+		return x.PointsBurned
+	}
+	return 0
 }
 
 type EventDexSwap struct {
@@ -817,15 +835,17 @@ const file_event_proto_rawDesc = "" +
 	"\x06amount\x18\x01 \x01(\x04R\x06amount\"$\n" +
 	"\n" +
 	"EventSlash\x12\x16\n" +
-	"\x06amount\x18\x01 \x01(\x04R\x06amount\"p\n" +
+	"\x06amount\x18\x01 \x01(\x04R\x06amount\"\x88\x01\n" +
 	"\x18EventDexLiquidityDeposit\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x04R\x06amount\x12!\n" +
 	"\flocal_origin\x18\x02 \x01(\bR\vlocalOrigin\x12\x19\n" +
-	"\border_id\x18\x03 \x01(\fR\aorderId\"\x80\x01\n" +
+	"\border_id\x18\x03 \x01(\fR\aorderId\x12\x16\n" +
+	"\x06points\x18\x04 \x01(\x04R\x06points\"\xa5\x01\n" +
 	"\x1bEventDexLiquidityWithdrawal\x12!\n" +
 	"\flocal_amount\x18\x01 \x01(\x04R\vlocalAmount\x12#\n" +
 	"\rremote_amount\x18\x02 \x01(\x04R\fremoteAmount\x12\x19\n" +
-	"\border_id\x18\x03 \x01(\fR\aorderId\"\xac\x01\n" +
+	"\border_id\x18\x03 \x01(\fR\aorderId\x12#\n" +
+	"\rpoints_burned\x18\x04 \x01(\x04R\fpointsBurned\"\xac\x01\n" +
 	"\fEventDexSwap\x12\x1f\n" +
 	"\vsold_amount\x18\x01 \x01(\x04R\n" +
 	"soldAmount\x12#\n" +

@@ -36,6 +36,9 @@
 - /v1/query/txs-by-sender
 - /v1/query/txs-by-rec
 - /v1/query/tx-by-hash
+- /v1/query/events-by-height
+- /v1/query/events-by-address
+- /v1/query/events-by-chain
 - /v1/query/order
 - /v1/query/orders
 - /v1/query/dex-batch
@@ -919,6 +922,65 @@ $ curl -X POST localhost:50002/v1/query/params \
 }
 ```
 
+## Supply
+
+**Route:** `/v1/query/supply`
+
+**Description**: responds with the token supply information for the blockchain
+
+**HTTP Method**: `POST`
+
+**Request**:
+
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**:
+- **total**: `uint64` - the total tokens existing in the system (minted tokens are added, burned tokens are removed)
+- **staked**: `uint64` - the total locked tokens in the protocol (includes delegated)
+- **delegatedOnly**: `uint64` - the total locked tokens that are delegated only
+- **committeeStaked**: `array` - a list of committees and their committed (staked + delegated) tokens, sorted by stake
+  - **id**: `uint64` - the unique identifier of the committee
+  - **amount**: `uint64` - the total amount of tokens committed to this committee
+  - **poolPoints**: `array` - the list of pool share holders and their respective points
+  - **totalPoolPoints**: `uint64` - the total number of pool points for this committee
+- **committeeDelegatedOnly**: `array` - a list of committees and their delegated only tokens, sorted by stake
+  - **id**: `uint64` - the unique identifier of the committee
+  - **amount**: `uint64` - the total amount of delegated tokens to this committee
+  - **poolPoints**: `array` - the list of pool share holders and their respective points
+  - **totalPoolPoints**: `uint64` - the total number of pool points for this committee
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/supply \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 1000
+      }'
+
+> {
+  "total": 1000000000000,
+  "staked": 500000000000,
+  "delegatedOnly": 100000000000,
+  "committeeStaked": [
+    {
+      "id": 1,
+      "amount": 150000000000,
+      "poolPoints": [],
+      "totalPoolPoints": 0
+    }
+  ],
+  "committeeDelegatedOnly": [
+    {
+      "id": 1,
+      "amount": 100000000000,
+      "poolPoints": [],
+      "totalPoolPoints": 0
+    }
+  ]
+}
+```
+
 ## Fee Params
 
 **Route:** `/v1/query/fee-params`
@@ -1783,8 +1845,8 @@ $ curl -X POST localhost:50002/v1/query/block-by-hash \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
     - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object
@@ -1880,8 +1942,8 @@ $ curl -X POST localhost:50002/v1/query/events-by-height \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
     - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object
@@ -1977,8 +2039,8 @@ $ curl -X POST localhost:50002/v1/query/events-by-address \
   - **msg**: `object` - the actual event message payload, which varies by event type:
     - **reward**: `{ "amount": uint64 }` - amount of reward
     - **slash**: `{ "amount": uint64 }` - amount of slash
-    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string }` - deposit amount, whether it was made on this chain or the counter, and unique order identifier
-    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string }` - amount of liquidity received on local and remote chains, and unique order identifier
+    - **dex-liquidity-deposit**: `{ "amount": uint64, "localOrigin": bool, "orderId": hex string, "points": uint64 }` - deposit amount, whether it was made on this chain or the counter, unique order identifier, and amount of points created
+    - **dex-liquidity-withdraw**: `{ "localAmount": uint64, "remoteAmount": uint64, "orderId": hex string, "pointsBurned": uint64 }` - amount of liquidity received on local and remote chains, unique order identifier, and amount of points burned
     - **dex-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "localOrigin": bool, "success": bool, "orderId": hex string }` - amounts sold/bought, direction, success status, and unique order identifier
     - **order-book-swap**: `{ "soldAmount": uint64, "boughtAmount": uint64, "data": hex string, "sellerReceiveAddress": hex string, "buyerReceiveAddress": hex string, "sellersSendAddress": hex string, "orderId": hex string }` - order book swap details including addresses and order information
     - **automatic-pause**: `{}` - empty object

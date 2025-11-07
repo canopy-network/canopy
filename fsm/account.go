@@ -761,3 +761,45 @@ func (x *Pool) RemovePoints(address []byte, points uint64) (err lib.ErrorI) {
 	// exit
 	return lib.ErrPointHolderNotFound()
 }
+
+// pool is the json.Marshaller and json.Unmarshaler implementation for the Pool object
+type pool struct {
+	ID          uint64       `json:"id"`
+	Amount      uint64       `json:"amount"`
+	Points      []poolPoints `json:"points"`
+	TotalPoints uint64       `json:"totalPoints"`
+}
+
+type poolPoints struct {
+	Address lib.HexBytes
+	Points  uint64
+}
+
+// MarshalJSON() is the json.Marshaller implementation for the Pool object
+func (x *Pool) MarshalJSON() ([]byte, error) {
+	var points []poolPoints
+	for _, p := range x.Points {
+		points = append(points, poolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	return json.Marshal(pool{x.Id, x.Amount, points, x.TotalPoolPoints})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the Pool object
+func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
+	a := new(pool)
+	if err = json.Unmarshal(bz, a); err != nil {
+		return err
+	}
+	var points []*lib.PoolPoints
+	for _, p := range a.Points {
+		points = append(points, &lib.PoolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	x.Id, x.Amount, x.Points, x.TotalPoolPoints = a.ID, a.Amount, points, a.TotalPoints
+	return
+}

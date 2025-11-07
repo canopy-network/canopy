@@ -146,10 +146,6 @@ type addressRequest struct {
 	Address lib.HexBytes `json:"address"`
 }
 
-type eventTypeRequest struct {
-	EventType string `json:"eventType"`
-}
-
 type committeesRequest struct {
 	Committees string
 }

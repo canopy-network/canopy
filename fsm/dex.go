@@ -123,7 +123,8 @@ func (s *StateMachine) HandleDexBatchReceipt(remoteBatch *lib.DexBatch, chainId 
 	}
 	// ensure receipt not mismatch
 	if !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts) {
-		return false, ErrMismatchDexBatchReceipt()
+		s.log.Debug(ErrMismatchDexBatchReceipt().Error())
+		return false, nil
 	}
 	// for each order, move the funds in the holding pool depending on the success or failure
 	for i, o := range localBatch.Orders {
@@ -309,7 +310,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 		// update the batch pool size
 		batch.PoolSize += order.Amount
 		// add dex deposit event
-		if err = s.EventDexLiquidityDeposit(order.Address, order.OrderId, order.Amount, chainId, local); err != nil {
+		if err = s.EventDexLiquidityDeposit(order.Address, order.OrderId, order.Amount, share, chainId, local); err != nil {
 			return err
 		}
 	}
@@ -375,7 +376,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 				return err
 			}
 			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, xShare, yShare, chainId); err != nil {
+			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, xShare, yShare, points, chainId); err != nil {
 				return err
 			}
 		} else {
@@ -384,7 +385,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 				return err
 			}
 			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, yShare, xShare, chainId); err != nil {
+			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, yShare, xShare, points, chainId); err != nil {
 				return err
 			}
 		}

@@ -54,20 +54,22 @@ func (s *StateMachine) EventDexSwap(address, orderId []byte, soldAmount, boughtA
 }
 
 // EventDexLiquidityDeposit() adds an AMM liquidity deposit event to the indexer
-func (s *StateMachine) EventDexLiquidityDeposit(address, orderId []byte, amount, chainId uint64, localOrigin bool) lib.ErrorI {
+func (s *StateMachine) EventDexLiquidityDeposit(address, orderId []byte, amount, pointsAdded, chainId uint64, localOrigin bool) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexLiquidityDeposit, &lib.EventDexLiquidityDeposit{
 		Amount:      amount,
 		LocalOrigin: localOrigin,
 		OrderId:     orderId,
+		Points:      pointsAdded,
 	}, address, chainId)
 }
 
 // EventDexLiquidityWithdraw() adds a liquidity withdraw event to the indexer
-func (s *StateMachine) EventDexLiquidityWithdraw(address, orderId []byte, localAmount, remoteAmount, chainId uint64) lib.ErrorI {
+func (s *StateMachine) EventDexLiquidityWithdraw(address, orderId []byte, localAmount, remoteAmount, pointsBurned, chainId uint64) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexLiquidityWithdraw, &lib.EventDexLiquidityWithdrawal{
 		LocalAmount:  localAmount,
 		RemoteAmount: remoteAmount,
 		OrderId:      orderId,
+		PointsBurned: pointsBurned,
 	}, address, chainId)
 }
 

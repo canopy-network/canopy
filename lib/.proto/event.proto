@@ -51,6 +51,8 @@ message EventDexLiquidityDeposit {
   bool local_origin = 2; // @gotags: json:"localOrigin"
   // order_id: the unique identifier of the order
   bytes order_id = 3; // @gotags: json:"orderId"
+  // points: the amount of points created
+  uint64 points = 4;
 }
 
 message EventDexLiquidityWithdrawal {
@@ -60,6 +62,8 @@ message EventDexLiquidityWithdrawal {
   uint64 remote_amount = 2; // @gotags: json:"remoteAmount"
   // order_id: the unique identifier of the order
   bytes order_id = 3; // @gotags: json:"orderId"
+  // pointsBurned: the amount of points burned
+  uint64 points_burned = 4; // @gotags: json:"pointsBurned"
 }
 
 message EventDexSwap {
