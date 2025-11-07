@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/canopy-network/canopy/lib"
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/cockroachdb/pebble/v2/vfs"
 	"github.com/stretchr/testify/require"
@@ -32,11 +33,11 @@ func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 }
 
 func TestNestedTxn(t *testing.T) {
-	const (
-		basePrefix   = "1/"
-		nestedPrefix = "2/"
-		keyA         = "a"
-		keyB         = "b"
+	var (
+		basePrefix   = lib.JoinLenPrefix([]byte("1/"))
+		nestedPrefix = lib.JoinLenPrefix([]byte("2/"))
+		keyA         = lib.JoinLenPrefix([]byte("a"))
+		keyB         = lib.JoinLenPrefix([]byte("b"))
 		valueA       = "a"
 		valueB       = "b"
 	)
@@ -53,13 +54,13 @@ func TestNestedTxn(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, val)
 	// confirm value is not visible in the parent transaction
-	val, err = baseTxn.Get([]byte(nestedPrefix + keyB))
+	val, err = baseTxn.Get(append(basePrefix, keyB...))
 	require.NoError(t, err)
 	require.Nil(t, val)
 	// commit the nested transaction
 	require.NoError(t, nested.Commit())
 	// check that the changes are visible in the parent transaction
-	val, err = baseTxn.Get([]byte(nestedPrefix + keyB))
+	val, err = baseTxn.Get(append(nestedPrefix, keyB...))
 	require.NoError(t, err)
 	require.Equal(t, []byte(valueB), val)
 	// flush the parent transaction
@@ -69,7 +70,7 @@ func TestNestedTxn(t *testing.T) {
 	// check that the changes are visible in the database
 	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), baseTxn.writeVersion)
 	require.NoError(t, err)
-	val, readErr := vs.Get([]byte(basePrefix + nestedPrefix + keyB))
+	val, readErr := vs.Get(append(basePrefix, append(nestedPrefix, keyB...)...))
 	require.NoError(t, readErr)
 	require.Equal(t, []byte(valueB), val)
 }
@@ -80,17 +81,17 @@ func TestNestedTxnMergedIteration(t *testing.T) {
 	// create a nested transaction
 	nested := NewTxn(baseTxn, baseTxn, nil, false, true, baseTxn.writeVersion)
 	// set and and flush a value in the parent transaction
-	require.NoError(t, nested.Set([]byte("a"), []byte("a")))
+	require.NoError(t, nested.Set(lib.JoinLenPrefix([]byte("a")), []byte("a")))
 	require.NoError(t, baseTxn.Commit())
 	// set and flush a value in the nested transaction
-	require.NoError(t, nested.Set([]byte("b"), []byte("b")))
+	require.NoError(t, nested.Set(lib.JoinLenPrefix([]byte("b")), []byte("b")))
 	require.NoError(t, nested.Commit())
 	// flush the batch
 	require.NoError(t, batch.Commit(&pebble.WriteOptions{Sync: false}))
 	// set a value in the parent transaction to not be flushed
-	require.NoError(t, baseTxn.Set([]byte("c"), []byte("c")))
+	require.NoError(t, baseTxn.Set(lib.JoinLenPrefix([]byte("c")), []byte("c")))
 	// set a value in the nested transaction to not be flushed
-	require.NoError(t, nested.Set([]byte("d"), []byte("d")))
+	require.NoError(t, nested.Set(lib.JoinLenPrefix([]byte("d")), []byte("d")))
 
 	// create a new iterator on the nested transaction
 	iter, err := nested.NewIterator(nil, false, false)
@@ -98,7 +99,7 @@ func TestNestedTxnMergedIteration(t *testing.T) {
 	expected := []string{"a", "b", "c", "d"}
 	got := []string{}
 	for ; iter.Valid(); iter.Next() {
-		got = append(got, string(iter.Key()))
+		got = append(got, string(iter.Value()))
 	}
 	iter.Close()
 	// confirm the iterator returns the expected values
@@ -110,17 +111,17 @@ func TestNestedTxnMergedIteration(t *testing.T) {
 	expected = []string{"d", "c", "b", "a"}
 	got = []string{}
 	for ; iter.Valid(); iter.Next() {
-		got = append(got, string(iter.Key()))
+		got = append(got, string(iter.Value()))
 	}
 	iter.Close()
 	require.Equal(t, expected, got)
 }
 
 func TestTxnWriteSetGet(t *testing.T) {
-	prefix := "1/"
+	prefix := lib.JoinLenPrefix([]byte("1/"))
 	test, db, writer := newTxn(t, []byte(prefix))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
-	key := []byte("a")
+	key := lib.JoinLenPrefix([]byte("a"))
 	value := []byte("a")
 	require.NoError(t, test.Set(key, value))
 	// test get from ops before write()
@@ -143,8 +144,8 @@ func TestTxnWriteSetGet(t *testing.T) {
 }
 
 func TestTxnWriteDelete(t *testing.T) {
-	prefix := "1/"
-	key, value := []byte("a"), []byte("a")
+	prefix := lib.JoinLenPrefix([]byte("1/"))
+	key, value := lib.JoinLenPrefix([]byte("a")), []byte("a")
 	test, db, writer := newTxn(t, []byte(prefix))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// set value and delete in the ops
@@ -174,19 +175,19 @@ func TestTxnWriteDelete(t *testing.T) {
 func TestTxnIterateNilPrefix(t *testing.T) {
 	test, db, _ := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
-	bulkSetKV(t, test, "", "c", "a", "b")
+	bulkSetPrefixedKV(t, test, "", "c", "a", "b")
 	it1, err := test.Iterator(nil)
 	require.NoError(t, err)
 	for i := 0; it1.Valid(); it1.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("a"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("a")), it1.Key())
 			require.Equal(t, []byte("a"), it1.Value())
 		case 1:
-			require.Equal(t, []byte("b"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("b")), it1.Key())
 			require.Equal(t, []byte("b"), it1.Value())
 		case 2:
-			require.Equal(t, []byte("c"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("c")), it1.Key())
 			require.Equal(t, []byte("c"), it1.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -199,13 +200,13 @@ func TestTxnIterateNilPrefix(t *testing.T) {
 	for i := 0; it2.Valid(); it2.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("c"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("c")), it2.Key())
 			require.Equal(t, []byte("c"), it2.Value())
 		case 1:
-			require.Equal(t, []byte("b"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("b")), it2.Key())
 			require.Equal(t, []byte("b"), it2.Value())
 		case 2:
-			require.Equal(t, []byte("a"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("a")), it2.Key())
 			require.Equal(t, []byte("a"), it2.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -218,21 +219,21 @@ func TestTxnIterateNilPrefix(t *testing.T) {
 func TestTxnIterateBasic(t *testing.T) {
 	test, db, _ := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
-	bulkSetKV(t, test, "0/", "c", "a", "b")
-	bulkSetKV(t, test, "1/", "f", "d", "e")
-	bulkSetKV(t, test, "2/", "i", "h", "g")
-	it1, err := test.Iterator([]byte("1/"))
+	bulkSetPrefixedKV(t, test, "0/", "c", "a", "b")
+	bulkSetPrefixedKV(t, test, "1/", "f", "d", "e")
+	bulkSetPrefixedKV(t, test, "2/", "i", "h", "g")
+	it1, err := test.Iterator(lib.JoinLenPrefix([]byte("1/")))
 	require.NoError(t, err)
 	for i := 0; it1.Valid(); it1.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("1/d"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("d")), it1.Key())
 			require.Equal(t, []byte("d"), it1.Value())
 		case 1:
-			require.Equal(t, []byte("1/e"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("e")), it1.Key())
 			require.Equal(t, []byte("e"), it1.Value())
 		case 2:
-			require.Equal(t, []byte("1/f"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("f")), it1.Key())
 			require.Equal(t, []byte("f"), it1.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -240,18 +241,18 @@ func TestTxnIterateBasic(t *testing.T) {
 		i++
 	}
 	it1.Close()
-	it2, err := test.RevIterator([]byte("2"))
+	it2, err := test.RevIterator(lib.JoinLenPrefix([]byte("2")))
 	require.NoError(t, err)
 	for i := 0; it2.Valid(); it2.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("2/i"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("2/"), []byte("i")), it2.Key())
 			require.Equal(t, []byte("i"), it2.Value())
 		case 1:
-			require.Equal(t, []byte("2/h"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("2/"), []byte("h")), it2.Key())
 			require.Equal(t, []byte("h"), it2.Value())
 		case 2:
-			require.Equal(t, []byte("2/g"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("2/"), []byte("g")), it2.Key())
 			require.Equal(t, []byte("g"), it2.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -262,15 +263,15 @@ func TestTxnIterateBasic(t *testing.T) {
 }
 
 func TestTxnIterateMixed(t *testing.T) {
-	test, db, writer := newTxn(t, []byte("s/"))
+	test, db, writer := newTxn(t, lib.JoinLenPrefix([]byte("s/")))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// first write to the memory txn and flush it
-	bulkSetKV(t, test, "1/", "f", "e", "d")
+	bulkSetPrefixedKV(t, test, "1/", "f", "e", "d")
 	require.NoError(t, test.Commit())
 	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
 	// update the txn versioned store reader with a new snapshot to access the latest data
 	test.reader.(*VersionedStore).db = db.NewSnapshot()
-	bulkSetKV(t, test, "1/", "i", "h", "g")
+	bulkSetPrefixedKV(t, test, "1/", "i", "h", "g")
 	// confirm that the only data in the memory txn are the last 3 entries
 	require.Len(t, test.txn.ops, 3)
 	it1, err := test.Iterator([]byte(""))
@@ -279,22 +280,22 @@ func TestTxnIterateMixed(t *testing.T) {
 	for ; it1.Valid(); it1.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("1/d"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("d")), it1.Key())
 			require.Equal(t, []byte("d"), it1.Value())
 		case 1:
-			require.Equal(t, []byte("1/e"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("e")), it1.Key())
 			require.Equal(t, []byte("e"), it1.Value())
 		case 2:
-			require.Equal(t, []byte("1/f"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("f")), it1.Key())
 			require.Equal(t, []byte("f"), it1.Value())
 		case 3:
-			require.Equal(t, []byte("1/g"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("g")), it1.Key())
 			require.Equal(t, []byte("g"), it1.Value())
 		case 4:
-			require.Equal(t, []byte("1/h"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("h")), it1.Key())
 			require.Equal(t, []byte("h"), it1.Value())
 		case 5:
-			require.Equal(t, []byte("1/i"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("i")), it1.Key())
 			require.Equal(t, []byte("i"), it1.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -309,22 +310,22 @@ func TestTxnIterateMixed(t *testing.T) {
 	for ; it2.Valid(); it2.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("1/i"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("i")), it2.Key())
 			require.Equal(t, []byte("i"), it2.Value())
 		case 1:
-			require.Equal(t, []byte("1/h"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("h")), it2.Key())
 			require.Equal(t, []byte("h"), it2.Value())
 		case 2:
-			require.Equal(t, []byte("1/g"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("g")), it2.Key())
 			require.Equal(t, []byte("g"), it2.Value())
 		case 3:
-			require.Equal(t, []byte("1/f"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("f")), it2.Key())
 			require.Equal(t, []byte("f"), it2.Value())
 		case 4:
-			require.Equal(t, []byte("1/e"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("e")), it2.Key())
 			require.Equal(t, []byte("e"), it2.Value())
 		case 5:
-			require.Equal(t, []byte("1/d"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("d")), it2.Key())
 			require.Equal(t, []byte("d"), it2.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -339,25 +340,25 @@ func TestTxnIterateMixedWithDeletedValues(t *testing.T) {
 	test, db, writer := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// first write to the db writer and flush it
-	bulkSetKV(t, test, "1/", "f", "e", "d")
+	bulkSetPrefixedKV(t, test, "1/", "f", "e", "d")
 	require.NoError(t, test.Commit())
 	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
 	// update the txn versioned store reader with a new snapshot to access the latest data
 	test.reader.(*VersionedStore).db = db.NewSnapshot()
 	// add the values to the memory txn
-	bulkSetKV(t, test, "1/", "h", "g", "f")
-	require.NoError(t, test.Delete([]byte("1/f"))) // shared and shadowed
-	require.NoError(t, test.Delete([]byte("1/d"))) // first
-	require.NoError(t, test.Delete([]byte("1/h"))) // last
-	it1, err := test.Iterator([]byte("1/"))
+	bulkSetPrefixedKV(t, test, "1/", "h", "g", "f")
+	require.NoError(t, test.Delete(lib.JoinLenPrefix([]byte("1/"), []byte("f")))) // shared and shadowed
+	require.NoError(t, test.Delete(lib.JoinLenPrefix([]byte("1/"), []byte("d")))) // first
+	require.NoError(t, test.Delete(lib.JoinLenPrefix([]byte("1/"), []byte("h")))) // last
+	it1, err := test.Iterator(lib.JoinLenPrefix([]byte("1/")))
 	require.NoError(t, err)
 	for i := 0; it1.Valid(); it1.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("1/e"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("e")), it1.Key())
 			require.Equal(t, []byte("e"), it1.Value())
 		case 1:
-			require.Equal(t, []byte("1/g"), it1.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("g")), it1.Key())
 			require.Equal(t, []byte("g"), it1.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -365,15 +366,15 @@ func TestTxnIterateMixedWithDeletedValues(t *testing.T) {
 		i++
 	}
 	it1.Close()
-	it2, err := test.RevIterator([]byte("1"))
+	it2, err := test.RevIterator(lib.JoinLenPrefix([]byte("1/")))
 	require.NoError(t, err)
 	for i := 0; it2.Valid(); it2.Next() {
 		switch i {
 		case 0:
-			require.Equal(t, []byte("1/g"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("g")), it2.Key())
 			require.Equal(t, []byte("g"), it2.Value())
 		case 1:
-			require.Equal(t, []byte("1/e"), it2.Key())
+			require.Equal(t, lib.JoinLenPrefix([]byte("1/"), []byte("e")), it2.Key())
 			require.Equal(t, []byte("e"), it2.Value())
 		default:
 			t.Fatal("too many iterations")
@@ -386,9 +387,9 @@ func TestTxnIterateMixedWithDeletedValues(t *testing.T) {
 func TestIteratorBasic(t *testing.T) {
 	test, db, writer := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
-	expectedVals := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
-	expectedValsReverse := []string{"h", "g", "f", "e", "d", "c", "b", "a"}
-	bulkSetKV(t, test, "", expectedVals...)
+	expectedKeys := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+	expectedKeysReverse := []string{"h", "g", "f", "e", "d", "c", "b", "a"}
+	bulkSetPrefixedKV(t, test, "", expectedKeys...)
 	require.NoError(t, test.Commit())
 	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
 	// update the txn versioned store reader with a new snapshot to access the latest data
@@ -396,25 +397,25 @@ func TestIteratorBasic(t *testing.T) {
 	it, err := test.Iterator(nil)
 	require.NoError(t, err)
 	defer it.Close()
-	validateIterators(t, expectedVals, it)
+	validateIterators(t, "", expectedKeys, it)
 	rIt, err := test.RevIterator(nil)
 	require.NoError(t, err)
 	defer rIt.Close()
-	validateIterators(t, expectedValsReverse, rIt)
+	validateIterators(t, "", expectedKeysReverse, rIt)
 }
 
 func TestIteratorWithDelete(t *testing.T) {
 	expectedVals := []string{"a", "b", "c", "d", "e", "f", "g"}
 	test, db, _ := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
-	bulkSetKV(t, test, "", expectedVals...)
+	bulkSetPrefixedKV(t, test, "", expectedVals...)
 	for range 10 {
-		randomindex := mathrand.Intn(len(expectedVals))
-		require.NoError(t, test.Delete([]byte(expectedVals[randomindex])))
-		expectedVals = slices.Delete(expectedVals, randomindex, randomindex+1)
+		randomIndex := mathrand.Intn(len(expectedVals))
+		require.NoError(t, test.Delete(lib.JoinLenPrefix([]byte(expectedVals[randomIndex]))))
+		expectedVals = slices.Delete(expectedVals, randomIndex, randomIndex+1)
 		cIt, err := test.Iterator(nil)
 		require.NoError(t, err)
-		validateIterators(t, expectedVals, cIt)
+		validateIterators(t, "", expectedVals, cIt)
 		cIt.Close()
 		add := make([]byte, 1)
 		_, er := rand.Read(add)
@@ -427,7 +428,7 @@ func TestTxnIterateWithDeleteDuringIteration(t *testing.T) {
 	test, db, _ := newTxn(t, []byte(""))
 	defer func() { test.Close(); db.Close(); test.Discard() }()
 	// set up initial data
-	bulkSetKV(t, test, "", "a", "b", "c", "d", "e")
+	bulkSetPrefixedKV(t, test, "", "a", "b", "c", "d", "e")
 	// get an iterator
 	it, err := test.Iterator(nil)
 	require.NoError(t, err)
@@ -445,7 +446,7 @@ func TestTxnIterateWithDeleteDuringIteration(t *testing.T) {
 	}
 	// delete those keys
 	for _, key := range keysToDelete {
-		require.NoError(t, test.Delete(key))
+		require.NoError(t, test.Delete(lib.JoinLenPrefix(key)))
 	}
 	// Continue iterating - shouldn't see deleted keys again
 	for ; it.Valid(); it.Next() {
@@ -456,6 +457,7 @@ func TestTxnIterateWithDeleteDuringIteration(t *testing.T) {
 	}
 	// Verify all keys were seen exactly once
 	for _, k := range []string{"a", "b", "c", "d", "e"} {
-		require.Equal(t, 1, seen[k], "key %s was not iterated or was seen multiple times", k)
+		require.Equal(t, 1, seen[string(lib.JoinLenPrefix([]byte(k)))],
+			"key %s was not iterated or was seen multiple times", k)
 	}
 }

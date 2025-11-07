@@ -1311,7 +1311,7 @@ func TestNewSMT(t *testing.T) {
 					nodeBytes, e := n.bytes()
 					require.NoError(t, e)
 					// set the node in the db
-					require.NoError(t, memStore.Set(n.Key.bytes(), nodeBytes))
+					require.NoError(t, memStore.Set(lib.JoinLenPrefix(n.Key.bytes()), nodeBytes))
 				}
 			}
 			// execute the function call
