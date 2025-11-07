@@ -281,9 +281,13 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 			}
 		}
 	})
-	// sort by highest stake
+	// sort by highest stake then address
 	slices.SortFunc(filtered, func(a, b *Validator) int {
-		return cmp.Compare(b.StakedAmount, a.StakedAmount)
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
 	})
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
@@ -422,9 +426,13 @@ func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err
 			}
 		}
 	})
-	// sort by highest stake
+	// sort by highest stake then address
 	slices.SortFunc(delegates, func(a, b *Validator) int {
-		return cmp.Compare(b.StakedAmount, a.StakedAmount)
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
 	})
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
