@@ -40,6 +40,7 @@ import (
 // Accepted input for Set/Get/Delete/Iterator:
 //   - Fully encoded length-prefixed stream (e.g. "\x02s/\x02a/\x07account")
 //   - Keys MUST be fully encoded length-prefixed streams. Otherwise a panic will occur.
+//   - Maximum key length is 255 bytes.
 //   - Use lib.JoinLenPrefix to encode keys.
 
 // Final layout: [length-prefixed-key][^version]
@@ -54,12 +55,6 @@ const (
 	DeadTombstone  = byte(1)
 	AliveTombstone = byte(0)
 	maxVersion     = math.MaxUint64
-)
-
-var (
-	separator = []byte{0x00, 0x00} // separator between EncUserKey and version
-	escByte   = byte(0x00)         // escape byte inside userKey
-	escEsc    = byte(0xFF)         // escape continuation
 )
 
 // VersionedStore uses inverted version encoding and reverse seeks for maximum performance
@@ -141,7 +136,7 @@ func (vs *VersionedStore) get(userKey []byte) (value []byte, tombstone byte, err
 	if tombstone == DeadTombstone {
 		return nil, 0, nil
 	}
-	return value, tombstone, nil
+	return bytes.Clone(value), tombstone, nil
 }
 
 // Commit commits the batch to the database
@@ -232,7 +227,7 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 		prefix:      prefix,
 		reverse:     reverse,
 		allVersions: allVersions,
-		// experimental to test whether linear prev/next is faster than seeking
+		// [EXPERIMENTAL] test of whether linear prev/next is faster than seeking
 		// on a small number of keys
 		seek: vs.version != maxVersion,
 	}, nil
@@ -331,7 +326,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		if err != nil {
 			continue
 		}
-		// validate encoded key and avoid duplicates
+		// validate userKey and avoid duplicates
 		if userKey == nil || (vi.lastUserKey != nil &&
 			bytes.Equal(userKey, vi.lastUserKey)) {
 			continue
@@ -354,14 +349,15 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
 			// build the synthetic seek key for this userKey at the target store.version:
-			// [Enc(userKey)][0x00,0x00][^version]
+			// [length-prefixed-key][^version]
 			seekKey := vi.store.makeVersionedKey(userKey, vi.store.version)
 			// this lands at the first entry with ^ver >= ^target within this user key,
 			// i.e. the greatest original version <= target.
 			if vi.iter.SeekGE(seekKey) {
-				// Ensure we’re still on the same encoded key (we should be, since we already
-				// observed at least one version <= target for this user key).
-				if bytes.Equal(vi.iter.Key(), vi.lastUserKey) {
+				// ensure the iterator is still on the same key (it should be, since at least
+				// one version <= target for this user key was already observed).
+				k, _, _ := parseVersionedKey(vi.iter.Key(), false)
+				if bytes.Equal(k, vi.lastUserKey) {
 					if val, valErr := vi.iter.ValueAndErr(); valErr == nil {
 						vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
 						copy(vi.valueBuff, val)
@@ -387,43 +383,35 @@ func (vi *VersionedIterator) advanceToNextKey() {
 
 // step() increments the iterator to the logical 'next'
 func (vi *VersionedIterator) step() {
-	if vi.reverse {
-		// check if is possible to skip versions in reverse
-		if vi.seek && vi.iter.Valid() && vi.lastUserKey != nil {
-			currentKey, _, err := parseVersionedKey(vi.iter.Key(), false)
-			if err != nil {
-				vi.isValid = false
-				return
-			}
-			// only seek if iterator is still on the same encoded key
-			if bytes.Equal(currentKey, vi.lastUserKey) {
+	// attempt to skip versions if seeking is enabled
+	if vi.seek && vi.iter.Valid() && vi.lastUserKey != nil {
+		currentKey, _, err := parseVersionedKey(vi.iter.Key(), false)
+		if err != nil {
+			vi.isValid = false
+			return
+		}
+		// only seek if iterator is still on the same encoded key
+		if bytes.Equal(currentKey, vi.lastUserKey) {
+			if vi.reverse {
 				// seek backwards to skip all versions of current key
 				vi.iter.SeekLT(vi.lastUserKey)
-				return
-			}
-		}
-		vi.iter.Prev()
-	} else {
-		// check if is possible to skip versions
-		if vi.seek && vi.iter.Valid() && vi.lastUserKey != nil {
-			currentKey, _, err := parseVersionedKey(vi.iter.Key(), false)
-			if err != nil {
-				vi.isValid = false
-				return
-			}
-			// only seek if iterator is still on the same encoded key
-			if bytes.Equal(currentKey, vi.lastUserKey) {
+			} else {
 				// seek over the prefix end to skip all versions of current key
 				vi.iter.SeekGE(prefixEnd(vi.lastUserKey))
-				return
 			}
+			return
 		}
+	}
+	// normal iteration
+	if vi.reverse {
+		vi.iter.Prev()
+	} else {
 		vi.iter.Next()
 	}
 }
 
 // makeVersionedKey() creates a versioned key with inverted version encoding
-// k = [Enc(UserKey)][0x00,0x00][InvertedVersion]
+// k = [length-prefixed-key][InvertedVersion]
 func (vs *VersionedStore) makeVersionedKey(userKey []byte, version uint64) []byte {
 	// validate key is length-prefixed
 	_ = lib.DecodeLengthPrefixed(userKey)
@@ -455,7 +443,7 @@ func (vs *VersionedStore) valueWithTombstone(tombstone byte, value []byte) (v []
 }
 
 // parseVersionedKey() extracts components and converts back from inverted version
-// k = [UserKey][InvertedVersion]
+// k = [length-prefixed-key][InvertedVersion]
 // The caller should not modify the returned userKey slice as it points to the original buffer,
 // instead it should make a copy if needed.
 func parseVersionedKey(versionedKey []byte, getVersion bool) (userKey []byte,
@@ -486,6 +474,8 @@ func parseVersion(versionedKey []byte) uint64 {
 
 // parseValueWithTombstone() extracts tombstone and actual value
 // v = [1-byte Tombstone][ActualValue]
+// The caller should not modify the returned userKey slice as it points to the original buffer,
+// instead it should make a copy if needed.
 func parseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
 	if len(v) == 0 {
 		return DeadTombstone, nil
@@ -495,7 +485,7 @@ func parseValueWithTombstone(v []byte) (tombstone byte, value []byte) {
 		value = v[1:]
 	}
 	// first byte is tombstone indicator
-	return v[0], bytes.Clone(value)
+	return v[0], value
 }
 
 // ensureCapacity() ensures the buffer has sufficient capacity for the key size (n)
