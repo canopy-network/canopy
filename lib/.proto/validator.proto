@@ -55,7 +55,7 @@ message Validator {
 
 // ValidatorsList is stored as a single blob (instead of using prefixed keys) for the following reasons:
 //
-// - Filesystem database iterators (e.g., in LevelDB/BadgerDB) introduce significant overhead and are often slow,
+// - Filesystem database iterators (e.g., in LevelDB/PebbleDB) introduce significant overhead and are often slow,
 //   especially when reading or updating large sets of keys every block.
 //
 // - The total number of validators is expected to remain below 100,000, and each entry is relatively small (~200 bytes),

@@ -17,17 +17,20 @@ import (
 )
 
 const (
-	latestStatePrefix     = "s/"           // prefix designated for the LatestStateStore where the most recent blobs of state data are held
-	historicStatePrefix   = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
-	stateCommitmentPrefix = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
-	indexerPrefix         = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
-	stateCommitIDPrefix   = "x/"           // prefix designated for the commit ID (height and state merkle root)
-	lastCommitIDPrefix    = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
-	maxKeyBytes           = 256            // maximum size of a key
-	lssVersion            = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
+	maxKeyBytes = 256            // maximum size of a key
+	lssVersion  = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
 )
 
-var _ lib.StoreI = &Store{} // enforce the Store interface
+var (
+	latestStatePrefix     = lib.JoinLenPrefix([]byte("s/")) // prefix designated for the LatestStateStore where the most recent blobs of state data are held
+	historicStatePrefix   = lib.JoinLenPrefix([]byte("h/")) // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
+	stateCommitmentPrefix = lib.JoinLenPrefix([]byte("c/")) // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
+	indexerPrefix         = lib.JoinLenPrefix([]byte("i/")) // prefix designated for indexer (transactions, blocks, and quorum certificates)
+	stateCommitIDPrefix   = lib.JoinLenPrefix([]byte("x/")) // prefix designated for the commit ID (height and state merkle root)
+	lastCommitIDPrefix    = lib.JoinLenPrefix([]byte("a/")) // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
+
+	_ lib.StoreI = &Store{} // enforce the Store interface
+)
 
 /*
 The Store struct is a high-level abstraction layer built on top of a single PebbleDB instance,
@@ -274,18 +277,22 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if e := s.Flush(); e != nil {
 		return nil, e
 	}
-	// extract the internal metrics from the pebble batch
-	size, count := len(s.writer.Repr()), s.writer.Count()
-
-	// use reflection to check the internal 'committing' field
+	// [EXPERIMENTAL] use reflection to check the internal 'committing' field.
+	// During chain synchronization, a pebbleDB batch may be returned while still committing,
+	// which causes a panic due to the invalid batch state and potential database corruption.
+	// If a committing batch is detected, the writer must be reset to prevent further corruption,
+	// as any attempt to reuse a corrupted writer may result in data loss.
 	writerValue := reflect.ValueOf(s.writer).Elem()
 	committingField := writerValue.FieldByName("committing")
 	if committingField.IsValid() {
 		isCommitting := committingField.Bool()
 		if isCommitting {
+			defer s.Reset()
 			return nil, ErrCloseDB(fmt.Errorf("batch is still committing"))
 		}
 	}
+	// extract the internal metrics from the pebble batch
+	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
 	// NOTE: PebbleDB has a non deterministic issue where batch.Commit(pebble.WriteOptions{})
 	// could panic with a nil pointer dereference in applyInternal(). This occurs because the batch's
@@ -473,7 +480,7 @@ func (s *Store) Close() lib.ErrorI {
 
 // commitIDKey() returns the key for the commitID at a specific version
 func (s *Store) commitIDKey(version uint64) []byte {
-	return fmt.Appendf(nil, "%s/%d", stateCommitIDPrefix, version)
+	return append(stateCommitIDPrefix, lib.JoinLenPrefix(fmt.Appendf(nil, "%d", version))...)
 }
 
 // getCommitID() retrieves the CommitID value for the specified version from the database
@@ -502,7 +509,7 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 		return err
 	}
 	// write the lastCommitID
-	if err = vs.SetAt([]byte(lastCommitIDPrefix), value, lssVersion); err != nil {
+	if err = vs.SetAt(lastCommitIDPrefix, value, lssVersion); err != nil {
 		return err
 	}
 	// write the versioned commitID
@@ -570,6 +577,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	// commit the batch
 	s.mu.Lock() // lock commit op
 	if err := s.db.Apply(batch, pebble.Sync); err != nil {
+		s.mu.Unlock() // unlock commit op
 		return ErrCommitDB(err)
 	}
 	s.mu.Unlock() // unlock commit op

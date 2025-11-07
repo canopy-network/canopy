@@ -150,15 +150,15 @@ func randomTestKey(_ *testing.T, k []byte, keys []string) []byte {
 }
 
 func testDBSet(t *testing.T, db lib.WStoreI, k, v []byte) {
-	require.NoError(t, db.Set(k, v))
+	require.NoError(t, db.Set(lib.JoinLenPrefix(k), v))
 }
 
 func testDBDelete(t *testing.T, db lib.WStoreI, k []byte) {
-	require.NoError(t, db.Delete(k))
+	require.NoError(t, db.Delete(lib.JoinLenPrefix(k)))
 }
 
 func testDBGet(t *testing.T, db lib.RWStoreI, k []byte) (value []byte) {
-	value, err := db.Get(k)
+	value, err := db.Get(lib.JoinLenPrefix(k))
 	require.NoError(t, err)
 	return
 }
@@ -169,7 +169,7 @@ func testCompareIterators(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, k
 		err      error
 	)
 	isReverse := rng.Intn(2)
-	prefix := getRandomBytes(t, rng.Intn(4))
+	prefix := lib.JoinLenPrefix(getRandomBytes(t, rng.Intn(4)))
 	require.NoError(t, err)
 	switch isReverse {
 	case 0:

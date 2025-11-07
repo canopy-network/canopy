@@ -14,7 +14,7 @@ type StoreI interface {
 	RWIndexerI                                   // reading and writing indexer
 	NewTxn() StoreI                              // wrap the store in a discardable nested store
 	Root() ([]byte, ErrorI)                      // get the merkle root from the store
-	DB() *pebble.DB                              // retrieve the underlying badger db
+	DB() *pebble.DB                              // retrieve the underlying pebble db
 	Version() uint64                             // access the height of the store
 	Copy() (StoreI, ErrorI)                      // make a clone of the store
 	NewReadOnly(version uint64) (StoreI, ErrorI) // historical read only version of the store

@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
 
 	"github.com/google/btree"
 )
@@ -501,37 +500,6 @@ func (ti *TxnIterator) seek() *TxnIterator {
 func (ti *TxnIterator) revSeek() *TxnIterator {
 	ti.tree.Move(&CacheItem{Key: prefixEnd(ti.prefix)})
 	return ti
-}
-
-// Iterator implements a wrapper around BadgerDB's iterator with the in-memory store but satisfies the IteratorI interface
-type Iterator struct {
-	reader *badger.Iterator
-	prefix []byte
-	err    error
-}
-
-func (i *Iterator) Valid() bool     { return i.reader.Valid() }
-func (i *Iterator) Next()           { i.reader.Next() }
-func (i *Iterator) Close()          { i.reader.Close() }
-func (i *Iterator) Version() uint64 { return i.reader.Item().Version() }
-func (i *Iterator) Deleted() bool   { return i.reader.Item().IsDeletedOrExpired() }
-func (i *Iterator) Key() (key []byte) {
-	// get the key from the parent
-	key = i.reader.Item().Key()
-	// make a copy of the key
-	c := make([]byte, len(key))
-	copy(c, key)
-	// remove the prefix and return
-	return removePrefix(c, []byte(i.prefix))
-}
-
-// Value() retrieves the current value from the iterator
-func (i *Iterator) Value() (value []byte) {
-	value, err := i.reader.Item().ValueCopy(nil)
-	if err != nil {
-		i.err = err
-	}
-	return
 }
 
 // removePrefix() removes the prefix from the key
