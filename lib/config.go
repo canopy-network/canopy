@@ -256,10 +256,14 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath           string `json:"dataDirPath"`           // path of the designated folder where the application stores its data
-	DBName                string `json:"dbName"`                // name of the database
-	IndexByAccount        bool   `json:"indexByAccount"`        // index transactions by account
-	InMemory              bool   `json:"inMemory"`              // non-disk database, only for testing
+	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
+	DBName         string `json:"dbName"`         // name of the database
+	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
+	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
+	// recommended range: 500-2000 for optimal performance. Values below 500 increase disk I/O
+	// by several orders of magnitude, reducing performance and accelerating disk degradation during
+	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
+	// returned before commit completion when compaction runs concurrently with commits.
 	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
 }
 
