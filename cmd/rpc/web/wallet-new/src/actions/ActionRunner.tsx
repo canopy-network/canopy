@@ -19,6 +19,7 @@ import { genericResultMap } from "@/toast/mappers";
 import {LucideIcon} from "@/components/ui/LucideIcon";
 import {cx} from "@/ui/cx";
 import {motion} from "framer-motion";
+import {ToastTemplateOptions} from "@/toast/types";
 
 
 
@@ -34,6 +35,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
     const [form, setForm] = React.useState<Record<string, any>>({})
     const debouncedForm = useDebouncedValue(form, 250)
     const [txRes, setTxRes] = React.useState<any>(null)
+    const [localDs, setLocalDs] = React.useState<Record<string, any>>({})
 
     const {manifest, chain, params, isLoading} = useConfig()
     const {selectedAccount} = useAccounts?.() ?? {selectedAccount: undefined}
@@ -63,7 +65,8 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
 
 
     const templatingCtx = React.useMemo(() => ({
-        form,
+        form: debouncedForm,
+        layout: (action as any)?.form?.layout,
         chain,
         account: selectedAccount ? {
             address: selectedAccount.address,
@@ -75,8 +78,11 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         params: {
             ...params
         },
+        ds: localDs,
         session: {password: session?.password},
-    }), [form, chain, selectedAccount, feesResolved, session?.password, params])
+        // Unique scope for this action instance to prevent cache collisions
+        __scope: `action:${actionId}:${selectedAccount?.address || 'no-account'}`,
+    }), [debouncedForm, chain, selectedAccount, feesResolved, session?.password, params, localDs, actionId])
 
 
 
@@ -182,7 +188,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
                 result: res,
                 ctx: templatingCtx,
                 map: (r, c) => genericResultMap(r, c),
-                fallback: { title: "Processed", variant: "neutral", ctx: templatingCtx }
+                fallback: { title: "Processed", variant: "neutral", ctx: templatingCtx } as ToastTemplateOptions
             })
         }
         const fin = resolveToastFromManifest(action, "onFinally", templatingCtx, res);
@@ -318,8 +324,9 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
                                         fields={visibleFieldsForStep}
                                         value={form}
                                         onChange={onFormChange}
-                                        ctx={{ ...templatingCtx, form: debouncedForm, layout: (action as any)?.form?.layout }} // <-- aquí
+                                        ctx={templatingCtx}
                                         onErrorsChange={handleErrorsChange}
+                                        onDsChange={setLocalDs}
                                     />
 
                                     {wizard && steps.length > 0 && (

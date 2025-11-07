@@ -1,232 +1,156 @@
-// useFieldsDs.ts
-import * as React from "react";
-import { useDS } from "@/core/useDs";
-import {applyTypes, normalizeDsConfig} from "@/core/normalizeDsConfig";
-import {resolveTemplatesDeep} from "@/core/templater";
+import React from "react";
+import { Field } from "@/manifest/types";
+import { useDS, type DSOptions } from "@/core/useDs";
+import { template } from "@/core/templater";
 
-type DsConfig = Record<string, any> | undefined | null;
+export function useFieldDs(field: Field, ctx: any) {
+    const fieldName = (field as any)?.name || (field as any)?.id || 'unknown';
 
-export type UseFieldsDsResult = {
-    dsValue: Record<string, any> | undefined;
-    dsLoading: boolean;
-    dsError: Record<string, any> | null;
-};
+    const dsConfig = React.useMemo(() => {
+        const dsObj = (field as any)?.ds;
+        if (!dsObj || typeof dsObj !== "object") return null;
 
-export type UseFieldsDsOptions = {
-    keyScope?: string | string[]; // para separar cache por componente/field
-};
+        // Filter out __options to get only DS keys
+        const keys = Object.keys(dsObj).filter(k => k !== "__options");
+        if (keys.length === 0) return null;
 
-function normalizeFieldDs(fieldDs: DsConfig): Record<string, any> {
-    if (!fieldDs || typeof fieldDs !== "object") return {};
-    return fieldDs;
-}
+        // Get the first DS key (e.g., "account", "keystore")
+        const dsKey = keys[0];
+        const dsParams = dsObj[dsKey];
+        const options = dsObj.__options || {};
 
-function getByPath(obj: any, path: string) {
-    return path.split(".").reduce((acc, k) => acc?.[k], obj);
-}
+        return { dsKey, dsParams, options };
+    }, [field]);
 
-/** Render simple de plantillas {{ a.b.c }} contra el ctx */
-function renderWithCtx<T = any>(params: T, ctx: Record<string, any>): T {
-    try {
-        const json = JSON.stringify(params).replace(/{{(.*?)}}/g, (_, k) => {
-            const path = String(k).trim().split(".");
-            const v = path.reduce((acc: any, cur: string) => acc?.[cur], ctx);
-            return v ?? "";
-        });
-        return JSON.parse(json);
-    } catch {
-        return params as T;
-    }
-}
+    const enabled = !!dsConfig;
 
-function stableStringify(obj: any): string {
-    try {
-        return JSON.stringify(obj, Object.keys(obj || {}).sort());
-    } catch {
-        return JSON.stringify(obj || {});
-    }
-}
+    // Extract watch paths for reactivity
+    const watchPaths = React.useMemo(() => {
+        if (!dsConfig?.options?.watch) return [];
+        const watch = dsConfig.options.watch;
+        return Array.isArray(watch) ? watch : [];
+    }, [dsConfig]);
 
-type DsOptions = {
-    enabled?: boolean;
-    refetchIntervalMs?: number;
-    /** Rutas a observar (p. ej. ["form.operator","form.output"]) */
-    watchArr?: string[];
-    /** Mapa de coerción de tipos, p. ej. { "limit": "number", "flag": "boolean" } */
-    types?: Record<string, "string" | "number" | "boolean" | "array">;
-    /** Si false, desactiva la autodetección de dependencias en templates (si la usas) */
-    autoWatch?: boolean;
-};
-
-type SplitResult = {
-    /** Params “planos” sólo para compatibilidad con código previo */
-    params: Record<string, any> | undefined;
-    /** Opciones normalizadas provenientes de __options */
-    options: DsOptions;
-};
-
-/** Claves reservadas que no deben ir a params cuando llegan “suelto” desde el manifest */
-const RESERVED = new Set([
-    "__options",
-    "method",
-    "path",
-    "query",
-    "body",
-    "headers",
-    "baseUrl",
-]);
-
-function isPlainObject(x: any): x is Record<string, any> {
-    return !!x && typeof x === "object" && !Array.isArray(x);
-}
-
-function toStringArray(x: any): string[] | undefined {
-    if (!x) return undefined;
-    if (Array.isArray(x)) return x.filter((v) => typeof v === "string");
-    if (typeof x === "string") return [x];
-    return undefined;
-}
-
-/** Extrae params + opciones por-DS (templadas) */
-function splitDsParamsAndOptions(renderedCfg: any) {
-    const optionsRaw = isPlainObject(renderedCfg?.__options) ? renderedCfg.__options : {};
-
-    const enabled =
-        optionsRaw.enabled === undefined ? true : Boolean(optionsRaw.enabled);
-
-    const refetchIntervalMs =
-        typeof optionsRaw.refetchIntervalMs === "number" && isFinite(optionsRaw.refetchIntervalMs)
-            ? optionsRaw.refetchIntervalMs
-            : undefined;
-
-    const watchArr = toStringArray(optionsRaw.watch);
-
-    const types = isPlainObject(optionsRaw.types)
-        ? (optionsRaw.types as Record<string, "string" | "number" | "boolean" | "array">)
-        : undefined;
-
-    const autoWatch =
-        optionsRaw.autoWatch === undefined ? true : Boolean(optionsRaw.autoWatch);
-
-    // -------- Params (compat) ----------
-    // Caso 1: forma estándar → preferimos query/body como “params” para compatibilidad previa
-    if (
-        isPlainObject(renderedCfg) &&
-        ("method" in renderedCfg || "path" in renderedCfg || "query" in renderedCfg || "body" in renderedCfg)
-    ) {
-        const q = isPlainObject(renderedCfg.query) ? renderedCfg.query : undefined;
-        const b = isPlainObject(renderedCfg.body) ? renderedCfg.body : undefined;
-        const params = q ?? b ?? undefined;
-        return {
-            params,
-            options: { enabled, refetchIntervalMs, watchArr, types, autoWatch },
-        };
-    }
-
-    // Caso 2: shorthand { account: {...} } → si hay una sola clave no reservada, úsala como params
-    if (isPlainObject(renderedCfg)) {
-        const keys = Object.keys(renderedCfg).filter((k) => !RESERVED.has(k));
-        if (keys.length === 1) {
-            const k = keys[0];
-            const params = isPlainObject(renderedCfg[k]) ? renderedCfg[k] : renderedCfg[k];
-            return {
-                params,
-                options: { enabled, refetchIntervalMs, watchArr, types, autoWatch },
-            };
-        }
-
-        // Caso 3: objeto con varias claves no reservadas → quita __options y devuelve el resto como params
-        if (keys.length > 1) {
-            const clone: Record<string, any> = {};
-            for (const k of keys) clone[k] = renderedCfg[k];
-            return {
-                params: clone,
-                options: { enabled, refetchIntervalMs, watchArr, types, autoWatch },
-            };
-        }
-    }
-
-    // Fallback: sin params claros
-    return {
-        params: undefined,
-        options: { enabled, refetchIntervalMs, watchArr, types, autoWatch },
-    };
-}
-
-/**
- * Soporta 0..N DS por field con:
- * - templating de params/opciones,
- * - queryKey por componente (keyScope),
- * - watch de paths del contexto (para refetch por cambio de contexto aunque params no cambien).
- */
-export function useFieldsDs(fieldDs: DsConfig, ctx: Record<string, any>, options?: UseFieldsDsOptions): UseFieldsDsResult {
-    const dsMap = normalizeFieldDs(fieldDs);
-    const entries = React.useMemo(() => Object.entries(dsMap), [dsMap]);
-
-    if (entries.length === 0) return { dsValue: undefined, dsLoading: false, dsError: null };
-
-    const scopeArr = React.useMemo(() => {
-        const s = options?.keyScope;
-        return Array.isArray(s) ? s : s != null ? [s] : [];
-    }, [options?.keyScope]);
-
-    const RESERVED = new Set(["__options","method","path","query","body","headers","baseUrl"]);
-
-// dentro de useFieldsDs, en el map(entries):
-    const results = entries.map(([name, rawCfg]) => {
-        // 1) templar DS COMPLETO en profundo con el ctx (clave para que "address" no quede vacío)
-        const renderedCfg = React.useMemo(() => resolveTemplatesDeep(rawCfg, ctx), [rawCfg, ctx]);
-
-        // 2) opciones (si ya las tienes, mantén tu split actual)
-        const { params, options: dsOpts } = React.useMemo(
-            () => splitDsParamsAndOptions(renderedCfg),
-            [renderedCfg]
-        );
-
-        // 3) ⚠️ flatten del shorthand cuando la clave coincide con el nombre del DS
-        //    p. ej. { account: { address: "..." } } -> params = { address: "..." }
-        const flatParams = React.useMemo(() => {
-            if (!params || typeof params !== "object") return params;
-            const keys = Object.keys(params).filter(k => !RESERVED.has(k));
-            if (keys.length === 1 && keys[0] === name && typeof params[name] === "object") {
-                return params[name];
+    // Build watched values snapshot for reactivity
+    const watchSnapshot = React.useMemo(() => {
+        const snapshot: Record<string, any> = {};
+        for (const path of watchPaths) {
+            const keys = path.split('.');
+            let value = ctx;
+            for (const key of keys) {
+                value = value?.[key];
             }
-            return params;
-        }, [params, name]);
+            snapshot[path] = value;
+        }
+        return snapshot;
+    }, [watchPaths, ctx]);
 
-        // 4) firma de watch (igual que antes)
-        const watchSig = React.useMemo(() => {
-            if (!dsOpts.watchArr?.length) return null;
-            const shape: Record<string, any> = {};
-            for (const p of dsOpts.watchArr) shape[p] = getByPath(ctx, p);
-            return stableStringify(shape);
-        }, [dsOpts.watchArr, ctx]);
+    // Serialize watch snapshot for triggering refetch
+    const watchKey = React.useMemo(() => {
+        try {
+            return JSON.stringify(watchSnapshot);
+        } catch {
+            return '';
+        }
+    }, [watchSnapshot]);
 
-        // 5) queryKey incluye params ya templados y aplanados
-        const queryKey = React.useMemo(
-            () => ["field-ds", ...scopeArr, name, stableStringify(flatParams), watchSig],
-            [scopeArr, name, flatParams, watchSig]
-        );
+    // Resolve templates in DS params using the proper templater
+    const renderedParams = React.useMemo(() => {
+        if (!enabled || !dsConfig) return {};
 
-        // 6) llama a useDS con los params correctos (useDs ya sabe construir el request)
-        const { data, isLoading, error } = useDS(name, flatParams, {
-            enabled: dsOpts.enabled,
-            refetchIntervalMs: dsOpts.refetchIntervalMs,
-            key: queryKey,
-        });
+        try {
+            // Deep resolve all templates in the params object
+            const deepResolve = (obj: any): any => {
+                if (obj == null) return obj;
+                if (typeof obj === "string") {
+                    return template(obj, ctx);
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(deepResolve);
+                }
+                if (typeof obj === "object") {
+                    const result: Record<string, any> = {};
+                    for (const [k, v] of Object.entries(obj)) {
+                        // Skip __options key
+                        if (k === "__options") continue;
+                        result[k] = deepResolve(v);
+                    }
+                    return result;
+                }
+                return obj;
+            };
 
-        return { name, data, loading: isLoading, error };
-    });
-    const dsLoading = results.some(r => r.loading);
-    const rawError: Record<string, any> = {};
-    const rawValue: Record<string, any> = {};
-    results.forEach(r => {
-        if (r.error) rawError[r.name] = r.error;
-        if (r.data !== undefined) rawValue[r.name] = r.data;
-    });
+            return deepResolve(dsConfig.dsParams);
+        } catch (err) {
+            console.warn("Error resolving DS params:", err);
+            return {};
+        }
+    }, [dsConfig, ctx, enabled]);
 
-    const dsError = React.useMemo(() => (Object.keys(rawError).length ? rawError : null), [stableStringify(rawError)]);
-    const dsValue = React.useMemo(() => (Object.keys(rawValue).length ? rawValue : undefined), [stableStringify(rawValue)]);
+    // Build DS options from __options in manifest
+    const dsOptions = React.useMemo((): DSOptions => {
+        if (!dsConfig?.options) return { enabled };
 
-    return { dsValue, dsLoading, dsError };
+        const opts = dsConfig.options;
+
+        // Check if DS should be enabled based on template condition
+        let isEnabled = enabled;
+        if (opts.enabled !== undefined) {
+            if (typeof opts.enabled === 'string') {
+                // Template-based enabled (e.g., "{{ form.operator }}")
+                try {
+                    const resolved = template(opts.enabled, ctx);
+                    isEnabled = enabled && !!resolved && resolved !== 'false';
+                } catch {
+                    isEnabled = false;
+                }
+            } else {
+                // Boolean value
+                isEnabled = enabled && !!opts.enabled;
+            }
+        }
+
+        // Scope by action/form only (not by field) for better cache sharing
+        // The ctxKey in useDs already handles param differentiation
+        const actionScope = ctx?.__scope ?? 'global';
+
+        return {
+            enabled: isEnabled,
+            // Use action-level scope so fields in the same form share cache
+            scope: actionScope,
+            // Caching options - use shorter staleTime when watching values for better reactivity
+            staleTimeMs: watchPaths.length > 0 ? 0 : (opts.staleTimeMs ?? 5000),
+            gcTimeMs: opts.gcTimeMs,
+            refetchIntervalMs: opts.refetchIntervalMs,
+            refetchOnWindowFocus: opts.refetchOnWindowFocus ?? false,
+            refetchOnMount: opts.refetchOnMount ?? true,
+            refetchOnReconnect: opts.refetchOnReconnect ?? false,
+            // Error handling
+            retry: opts.retry ?? 1,
+            retryDelay: opts.retryDelay,
+        };
+    }, [dsConfig, enabled, ctx?.__scope, watchPaths.length]);
+
+    const { data, isLoading, error, refetch } = useDS(
+        dsConfig?.dsKey ?? "__disabled__",
+        renderedParams,
+        dsOptions
+    );
+
+    // Force refetch when watch values change
+    const prevWatchKeyRef = React.useRef<string>(watchKey);
+    React.useEffect(() => {
+        if (enabled && prevWatchKeyRef.current !== watchKey && prevWatchKeyRef.current !== '') {
+            // watchKey changed, force refetch
+            refetch();
+        }
+        prevWatchKeyRef.current = watchKey;
+    }, [watchKey, enabled, refetch]);
+
+    return {
+        data: enabled ? data : null,
+        isLoading: enabled ? isLoading : false,
+        error: enabled ? error : null,
+        refetch,
+    };
 }

@@ -3,7 +3,7 @@ export const templateFns = {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return (n / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 6 })
+        return (n / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 3 })
     },
     toBaseDenom: (v: any) => {
         if (v === '' || v == null) return ''
@@ -15,7 +15,7 @@ export const templateFns = {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return n.toLocaleString(undefined, { maximumFractionDigits: 6 })
+        return n.toLocaleString(undefined, { maximumFractionDigits: 3 })
     },
     toUpper: (v: any) => String(v ?? "")?.toUpperCase(),
     shortAddress: (v: any) => String(v ?? "")?.slice(0, 6) + "..." + String(v ?? "")?.slice(-6),

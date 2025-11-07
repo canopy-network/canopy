@@ -54,12 +54,12 @@ export const Dashboard = () => {
                     <div className="flex lg:flex-row flex-col gap-6 mb-8 w-full items-stretch">
                         <div className="flex-1">
                             <ErrorBoundary>
-                                <TotalBalanceCard/>
+                                {/*<TotalBalanceCard/>*/}
                             </ErrorBoundary>
                         </div>
                         <div className="lg:w-80 w-full">
                             <ErrorBoundary>
-                                <StakedBalanceCard/>
+                                {/*<StakedBalanceCard/>*/}
                             </ErrorBoundary>
                         </div>
                         <div className="lg:w-80 w-full">

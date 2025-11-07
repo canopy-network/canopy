@@ -3,13 +3,14 @@ import { templateBool } from '@/core/templater' // ajusta la ruta si aplica
 
 /** Tipos básicos del manifest */
 type ColAlign = 'left' | 'center' | 'right'
-type ColumnType = 'text' | 'image' | 'html'
+type ColumnType = 'text' | 'image' | 'html' | 'committee'
 
 export type TableSelectColumn = {
     key?: string
     title?: string
     align?: ColAlign
     type?: ColumnType
+    className?: string             // custom CSS classes for the cell
 
     /** TEXT */
     expr?: string
@@ -171,7 +172,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
             <button
                 type="button"
                 onClick={onClick}
-                className="px-2 py-1 rounded border border-primary text-primary hover:bg-primary hover:text-secondary text-xs font-bold"
+                className="px-4 py-1.5 rounded-full border border-emerald-400 text-emerald-400 hover:bg-emerald-400/20 transition-colors text-xs font-semibold"
             >
                 {safe(btnLabel)}
             </button>
@@ -216,28 +217,60 @@ const TableSelect: React.FC<TableSelectProps> = ({
         )
     }
 
+    const renderCommitteeCell = (row: any) => {
+        const name = row.name ?? '—'
+        const minStake = row.minStake ?? ''
+        const initials = getInitials(name)
+        const color = hashColor(name)
+        const size = 36
+
+        return (
+            <div className="flex items-center gap-3">
+                <span
+                    className="inline-flex items-center justify-center rounded-full text-sm font-semibold flex-shrink-0"
+                    style={{ width: size, height: size, background: color, color: 'white' }}
+                    aria-label={name}
+                >
+                    {initials}
+                </span>
+                <div className="flex flex-col">
+                    <span className="text-white font-medium">{name}</span>
+                    <span className="text-neutral-400 text-xs">Min: {minStake}</span>
+                </div>
+            </div>
+        )
+    }
+
     const renderCell = (c: TableSelectColumn, row: any) => {
         const local = { ...templateContext, row }
+
+        if (c.type === 'committee') return renderCommitteeCell(row)
         if (c.type === 'image') return renderImageCell(c, row)
 
         if (c.type === 'html' && c.html) {
             const htmlString = template(c.html, local)
-            return <div className="truncate" dangerouslySetInnerHTML={{ __html: htmlString }} />
+            return <div className={cx("truncate", c.className)} dangerouslySetInnerHTML={{ __html: htmlString }} />
         }
 
         const cellVal = c.expr
             ? template(c.expr, local)
             : (c.key ? row[c.key] : '')
-        return <span className="truncate">{safe(cellVal ?? '—')}</span>
+
+        // Format numbers with locale and currency if it's a staked amount
+        const formattedVal = typeof cellVal === 'number' && c.key === 'stakedAmount'
+            ? `${cellVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${templateContext?.chain?.denom?.symbol ?? 'CNPY'}`
+            : safe(cellVal ?? '—')
+
+        return <span className={cx("truncate", c.className)}>{formattedVal}</span>
     }
 
     return (
         <div className="col-span-12 w-full">
-            {!!label && <div className="text-sm mb-2 text-text-muted">{label}</div>}
+            {!!label && <div className="text-sm mb-3 text-neutral-300 font-medium">{label}</div>}
 
-            <div className="rounded-lg border border-neutral-700 overflow-hidden">
+            <div className="rounded-lg bg-[#1a1d24] overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-muted text-[11px] uppercase tracking-wide text-neutral-400">
+                <div className="grid grid-cols-12 gap-4 px-4 py-3 text-xs text-neutral-400 font-medium">
                     {columns.map((c, i) => (
                         <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align), 'truncate')}>
                             {safe(c.title)}
@@ -251,7 +284,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
                 </div>
 
                 {/* Rows */}
-                <div className="divide-y divide-neutral-800">
+                <div className="space-y-0">
                     {rows.map((row: any) => {
                         const k = String(row[keyField] ?? row.__idx)
                         const selected = selectedKeys.includes(k)
@@ -261,9 +294,9 @@ const TableSelect: React.FC<TableSelectProps> = ({
                                 key={k}
                                 onClick={() => toggleRow(row)}
                                 className={cx(
-                                    'w-full grid grid-cols-12 gap-2 items-center px-3 py-2 text-sm hover:bg-bg-primary/40 transition-colors text-canopy-50',
-                                    selected && 'bg-primary/10',
-                                    selectMode !== 'row' && 'cursor-default' // si no se permite click en fila
+                                    'w-full grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-white/5 transition-colors text-white',
+                                    selected && 'bg-emerald-500/10 hover:bg-emerald-500/15',
+                                    selectMode !== 'row' && 'cursor-default'
                                 )}
                                 aria-pressed={selected}
                             >
@@ -281,13 +314,13 @@ const TableSelect: React.FC<TableSelectProps> = ({
                         )
                     })}
                     {rows.length === 0 && (
-                        <div className="px-3 py-6 text-center text-xs text-neutral-500">No data</div>
+                        <div className="px-4 py-8 text-center text-sm text-neutral-500">No data</div>
                     )}
                 </div>
             </div>
 
             {(errors[tf.name]) && (
-                <div className={cx('text-xs mt-1', errors[tf.name] ? 'text-red-400' : 'text-text-muted')}>
+                <div className={cx('text-xs mt-1.5', errors[tf.name] ? 'text-red-400' : 'text-neutral-400')}>
                     {errors[tf.name]}
                 </div>
             )}

@@ -163,7 +163,7 @@ export async function validateField(
 
         const safeValue = Number.isNaN(n) ? 0 : n;
 
-        const min = evalNumeric(f.min ?? vconf.validation.min, ctx);
+        const min = evalNumeric(f.min ?? vconf.min, ctx);
         const max = evalNumeric(f.max ?? vconf.max, ctx);
 
         if (typeof min === "number" && safeValue < min) {

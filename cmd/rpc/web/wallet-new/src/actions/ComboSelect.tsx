@@ -48,6 +48,7 @@ export default function ComboSelect({
     const [open, setOpen] = React.useState(false);
     const [query, setQuery] = React.useState("");
     const inputRef = React.useRef<HTMLInputElement>(null);
+    const isClosingRef = React.useRef(false);
 
     // 🔹 Opción temporal “extra” cuando se asigna un valor libre
     const [tempOption, setTempOption] = React.useState<ComboOption | null>(null);
@@ -83,6 +84,16 @@ export default function ComboSelect({
         return mergedOptions.filter((o) => (o.label + " " + o.value).toLowerCase().includes(q));
     }, [mergedOptions, query]);
 
+    const closePopover = React.useCallback(() => {
+        if (isClosingRef.current) return;
+        isClosingRef.current = true;
+        setOpen(false);
+        setQuery("");
+        setTimeout(() => {
+            isClosingRef.current = false;
+        }, 100);
+    }, []);
+
     const assignValue = (text: string) => {
         const v = text.trim();
         if (!v) return;
@@ -90,14 +101,12 @@ export default function ComboSelect({
         const opt = {value: v, label: v};
         setTempOption(opt);
         onChange(v, {assigned: true}); // <- solo asigna; no persiste en options global
-        setOpen(false);
-        setQuery("");
+        closePopover();
     };
 
     const handlePick = (val: string) => {
         onChange(val, {assigned: false});
-        setOpen(false);
-        setQuery("");
+        closePopover();
     };
 
     const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
@@ -105,15 +114,26 @@ export default function ComboSelect({
             e.preventDefault();
             assignValue(query);
         }
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            closePopover();
+        }
     };
 
     return (
         <Popover.Root
             open={open}
+            modal={true}
             onOpenChange={(o) => {
-                setOpen(o);
-                if (o) setTimeout(() => inputRef.current?.focus(), 0);
+                if (!o) {
+                    closePopover();
+                } else {
+                    if (!isClosingRef.current) {
+                        setOpen(true);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                    }
+                }
             }}
         >
             <Popover.Trigger asChild>
@@ -138,6 +158,19 @@ export default function ComboSelect({
             <Popover.Content
                 sideOffset={6}
                 align="start"
+                onInteractOutside={(e) => {
+                    // Prevent closing when clicking on the trigger
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[role="combobox"]')) {
+                        e.preventDefault();
+                        return;
+                    }
+                    closePopover();
+                }}
+                onEscapeKeyDown={(e) => {
+                    e.preventDefault();
+                    closePopover();
+                }}
                 className={
                     className ??
                     "z-50 w-[--radix-popover-trigger-width] min-w-56 rounded-xl p-2 shadow-xl bg-bg-tertiary border border-bg-accent"

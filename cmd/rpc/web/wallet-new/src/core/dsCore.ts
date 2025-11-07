@@ -30,24 +30,12 @@ export type DsNode = DsLeaf | Record<string, any>
 export type ChainLike = any
 
 export const getAt = (o: any, p?: string) => (!p ? o : p.split('.').reduce((a,k)=>a?.[k], o))
-const readCtx = (p: string, ctx: any) => p.trim().split('.').reduce((a,k)=>a?.[k], ctx)
 
+// Import the main templating system
+import { resolveTemplatesDeep } from './templater'
 
-export const renderDeep = (val: any, ctx: any): any => {
-    if (val == null) return val
-    if (typeof val === 'string') {
-        const m = val.match(/^\s*\{\{([^}]+)\}\}\s*$/)
-        if (m) return readCtx(m[1], ctx)
-        return val.replace(/\{\{([^}]+)\}\}/g, (_,p)=> String(readCtx(p, ctx) ?? ''))
-    }
-    if (Array.isArray(val)) return val.map(v => renderDeep(v, ctx))
-    if (typeof val === 'object') {
-        const out: any = {}
-        for (const [k,v] of Object.entries(val)) out[k] = renderDeep(v, ctx)
-        return out
-    }
-    return val
-}
+// Use the main templating system instead of custom implementation
+export const renderDeep = resolveTemplatesDeep
 
 export const coerceValue = (v: any, t: string) => {
     switch (t) {

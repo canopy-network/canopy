@@ -73,6 +73,12 @@
                 "account": {
                   "address": "{{account.address}}"
                 }
+              },
+              "__options": {
+                "staleTimeMs": 10000,
+                "refetchIntervalMs": 20000,
+                "refetchOnMount": true,
+                "refetchOnWindowFocus": false
               }
             }
           },
@@ -83,12 +89,12 @@
             "label": "Amount",
             "required": true,
             "min": 0,
-            "max": "{{ds.account.amount}}",
+            "max": "{{formatToCoin<{{ds.account.amount}}>}}",
             "validation": {
               "messages": {
                 "required": "Amount is required",
                 "min": "Amount must be greater than 0",
-                "max": "Amount must be less than {{ds.account.amount}}"
+                "max": "Amount must be less than {{formatToCoin<{{ds.account.amount}}>}} {{chain.denom.symbol}}"
               }
             },
             "help": "Available ",
@@ -97,7 +103,7 @@
                 "id": "maxBtn",
                 "op": "set",
                 "field": "amount",
-                "value": "{{ds.account.amount}} - {{fees.raw.sendFee}}"
+                "value": "{{formatToCoin<{{ds.account.amount - fees.raw.sendFee}}>}}"
               }
             ]
           }
@@ -280,6 +286,12 @@
                 "account": {
                   "address": "{{account.address}}"
                 }
+              },
+              "__options": {
+                "staleTimeMs": 10000,
+                "refetchIntervalMs": 20000,
+                "refetchOnMount": true,
+                "refetchOnWindowFocus": false
               }
             }
           }
@@ -342,9 +354,14 @@
             "allowCreate": true,
             "label": "Staking (Operator) Address",
             "placeholder": "Select Staking Address",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "ds": {
-              "keystore": {
+              "keystore": {},
+              "__options": {
+                "staleTimeMs": 300000,
+                "gcTimeMs": 600000,
+                "refetchOnMount": false,
+                "refetchOnWindowFocus": false
               }
             },
             "step": "setup"
@@ -360,12 +377,15 @@
             "allowCreate": true,
             "label": "Rewards Address",
             "placeholder": "Select Rewards Address",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "value": "{{ ds.validator ? ds.validator.output : '' }}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "ds": {
-              "keystore": {
-                "__options": {
-                  "refetchIntervalMs": 20000
-                }
+              "keystore": {},
+              "__options": {
+                "staleTimeMs": 300000,
+                "gcTimeMs": 600000,
+                "refetchOnMount": false,
+                "refetchOnWindowFocus": false
               }
             },
             "step": "setup"
@@ -393,31 +413,43 @@
             "step": "setup"
           },
           {
-            "id": "asset",
-            "name": "asset",
-            "type": "dynamicHtml",
-            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg '><h4 class='text-canopy-50 text-md mb-2'>Signer Address Information</h4><div class='flex justify-between'><div class='flex-col'><p>Liquid:</p> <p>{{formatToCoin<{{ds.account.amount}}>}} {{chain.denom.symbol}}</p></div> <div class='flex-col'> <p>Staked:</p> <p>{{ds.validator.stakedAmount ?? 0}} {{chain.denom.symbol}}</p></div> <div class='flex-col'><p>Committees:</p> <p>{{ds.validator.address ? ds.validator.committees : 'N/A'}}</p></div> </div></div>",
+            "id": "_validatorLoader",
+            "name": "_validatorLoader",
+            "type": "text",
+            "showIf": "{{ false }}",
             "ds": {
-              "account": {
-                "account": {
-                  "address": "{{form.operator}}"
-                },
-
-                "__options": {
-                  "refetchIntervalMs": 5000,
-                  "watch": ["form.signerResponsible", "form.operator", "form.output"]
-                }
-
-              },
               "validator": {
                 "account": {
                   "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
                 },
-
                 "__options": {
+                  "enabled": "{{ form.signerResponsible && (form.signerResponsible === 'operator' ? form.operator : form.output) }}",
+                  "staleTimeMs": 0,
                   "refetchIntervalMs": 20000,
-                  "watch": ["form.signerResponsible", "form.operator", "form.output"]
-
+                  "watch": ["form.signerResponsible", "form.operator", "form.output"],
+                  "refetchOnWindowFocus": false
+                }
+              }
+            },
+            "step": "setup"
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Signer Address Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Liquid:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Staked:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div></div></div>",
+            "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
+            "ds": {
+              "account": {
+                "account": {
+                  "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+                },
+                "__options": {
+                  "enabled": "{{ form.signerResponsible && (form.signerResponsible === 'operator' ? form.operator : form.output) }}",
+                  "staleTimeMs": 0,
+                  "refetchIntervalMs": 20000,
+                  "watch": ["form.signerResponsible", "form.operator", "form.output"],
+                  "refetchOnWindowFocus": false
                 }
               }
             },
@@ -430,8 +462,9 @@
             "type": "amount",
             "placeholder": "0.00",
             "label": "Amount",
-            "value": "{{params.networkParams.validator.minimumOrderSize}}",
+            "value": "{{ ds.validator ? formatToCoin<{{ds.validator.stakedAmount}}> : params.networkParams.validator.minimumOrderSize }}",
             "required": true,
+            "min": 0,
             "max": "{{formatToCoin<{{ds.account.amount}}>}}",
             "validation": {
               "messages": {
@@ -439,17 +472,12 @@
                 "max": "You cannot send more than your balance {{numberToLocaleString<{{max}}>}} {{chain.denom.symbol}}"
               }
             },
-            "ds": {
-              "account": {
-                "account": {
-                  "address": "{{account.address}}"
-                }
-              }
-            },
             "features": [
               {
                 "id": "max",
-                "op": "max"
+                "op": "set",
+                "field": "amount",
+                "value": "{{formatToCoin<{{ds.account.amount - fees.raw.stakeFee}}>}}"
               }
             ],
             "span": {
@@ -463,6 +491,7 @@
             "type": "optionCard",
             "label": "Stake Type",
             "required": true,
+            "value": "{{ ds.validator ? ds.validator.delegate : false }}",
             "options": [
               {
                 "label": "Validation",
@@ -480,23 +509,12 @@
             "step": "setup"
           },
           {
-            "id": "validatorAddress",
-            "name": "validatorAddress",
-            "type": "text",
-            "label": "Validator Address",
-            "required": true,
-            "showIf": "{{ form.isDelegate && form.isDelegate != 'true' }}",
-            "step": "setup",
-            "placeholder": "tcp://127.0.0.1:xxxx",
-            "help": "Put the url of the validator you want to delegate to."
-          },
-          {
             "id": "isAutocompound",
             "name": "isAutocompound",
             "type": "switch",
             "help": "Automatically restake rewards",
             "label": "Autocompound",
-            "value": false,
+            "value": "{{ ds.validator ? ds.validator.compound : false }}",
             "step": "setup"
           },
 
@@ -514,28 +532,34 @@
             },
             "multiple": true,
             "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ ds.validator?.committees ?? [] }}",
             "rows": [
-              { "id": 1, "name": "Canopy"},
-              { "id": 2, "name": "Canary" }
+              { "id": 1, "name": "Canopy", "minStake": "1 CNPY" },
+              { "id": 2, "name": "Canary", "minStake": "1 CNPY" }
+
             ],
             "columns": [
               {
-                "type": "image",
-                "title": "",
-                "initialsFrom": "{{ row.name }}",
-                "size": 28
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
               },
-              { "key": "name", "title": "Committee", "expr": "{{ row.name }}", "align": "left"  }
+              {
+                "key": "stakedAmount",
+                "title": "Staked Amount",
+                "expr": "{{ ds.validator?.committees?.includes(row.id) ? formatToCoin<{{ds.validator.stakedAmount}}> + ' ' + chain.denom.symbol : '0 ' + chain.denom.symbol }}",
+                "align": "left",
+                "className": "text-emerald-400 font-medium"
+              }
             ],
-            "ds": {
-              "account": {
-                "account": {
-                  "address": "{{account.address}}"
-                }
+            "rowAction": {
+              "title": "Action",
+              "label": "Stake",
+              "emit": {
+                "op": "select"
               }
             },
-
-
             "step": "committees"
           },
 
@@ -544,19 +568,30 @@
             "id": "manualCommittees",
             "name": "manualCommittees",
             "type": "text",
-            "label": "Manually Enter Committee ID",
+            "label": "Committees Summary",
             "placeholder": "1,2,3",
             "help": "Enter comma separated committee ids",
             "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}",
             "step": "committees"
           },
           {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "showIf": "{{ form.isDelegate && form.isDelegate != 'true' }}",
+            "placeholder": "tcp://127.0.0.1:xxxx",
+            "help": "Put the url of the validator you want to delegate to.",
+            "step": "committees"
+          },
+          {
             "id": "txFee",
             "name": "txFee",
-            "type": "text",
+            "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}",
-            "readOnly": true,
+            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}}",
+            "suffix": "{{chain.denom.symbol}}",
             "step": "committees"
           }
         ],
@@ -581,7 +616,7 @@
             },
             {
               "label": "Rewards Address",
-              "value": "{{shortAddress<{{form.rewardsAddress}}>}}"
+              "value": "{{shortAddress<{{form.output}}>}}"
             },
             {
               "label": "Transaction Fee",
@@ -623,7 +658,7 @@
           "coerce": "string"
         },
         "signer": {
-          "value": "{{form.rewardsAddress}}",
+          "value": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}",
           "coerce": "string"
         },
         "memo": {

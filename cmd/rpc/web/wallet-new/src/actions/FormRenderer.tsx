@@ -18,27 +18,42 @@ type Props = {
     onChange: (patch: Record<string, any>) => void
     gridCols?: number
     ctx?: Record<string, any>
-    onErrorsChange?: (errors: Record<string,string>, hasErrors: boolean) => void   // 👈 NUEVO
+    onErrorsChange?: (errors: Record<string,string>, hasErrors: boolean) => void
     onFormOperation?: (fieldOperation: FieldOp) => void
-
+    onDsChange?: React.Dispatch<React.SetStateAction<Record<string, any>>>
 }
 
-export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx, onErrorsChange }: Props) {
+export default function FormRenderer({ fields, value, onChange, gridCols = 12, ctx, onErrorsChange, onDsChange }: Props) {
     const [errors, setErrors] = React.useState<Record<string, string>>({})
     const [localDs, setLocalDs] = React.useState<Record<string, any>>({})
-    const { chain, account } = (window as any).__configCtx ?? {}
     const session = useSession()
 
-    const debouncedForm = useDebouncedValue(value, 250) // <-- nuevo
+    const debouncedForm = useDebouncedValue(value, 100)
 
+    // When localDs changes, notify parent (ActionRunner)
+    React.useEffect(() => {
+        if (onDsChange && Object.keys(localDs).length > 0) {
+            onDsChange(prev => {
+                const merged = { ...prev, ...localDs };
+                // Only update if actually changed
+                if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+                return merged;
+            });
+        }
+    }, [localDs, onDsChange]);
+
+    // For DS-critical fields (option, optionCard, switch), use immediate form values
+    // For text input fields, use debounced values
     const templateContext = React.useMemo(() => ({
-        form: debouncedForm,
-        chain,
-        account,
+        form: value, // Use immediate form values for DS reactivity
+        chain: ctx?.chain,
+        account: ctx?.account,
         ds: { ...(ctx?.ds || {}), ...localDs },
-        ...(ctx || {}),
+        fees: ctx?.fees,
+        params: ctx?.params,
+        layout: ctx?.layout,
         session: { password: session?.password },
-    }), [debouncedForm, chain, account, ctx?.ds, ctx, session?.password, localDs])
+    }), [value, ctx?.chain, ctx?.account, ctx?.ds, ctx?.fees, ctx?.params, ctx?.layout, session?.password, localDs])
 
     const resolveTemplate = React.useCallback(
         (s?: any) => (typeof s === 'string' ? template(s, templateContext) : s),
@@ -72,7 +87,7 @@ export default function FormRenderer({ fields, value, onChange, gridCols = 12, c
                 )
             })()
         },
-        [onChange, chain, fieldsKeyed]
+        [onChange, ctx?.chain, fieldsKeyed]
     )
 
     const hasActiveErrors = React.useMemo(() => {
