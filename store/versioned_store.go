@@ -171,7 +171,6 @@ func (vs *VersionedStore) Close() lib.ErrorI {
 
 // NewIterator is a wrapper around the underlying iterators to conform to the TxnReaderI interface
 func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
-	// Encode raw user-key prefix for correct bounds (no terminator)
 	return vs.newVersionedIterator(prefix, reverse, allVersions)
 }
 

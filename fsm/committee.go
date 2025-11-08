@@ -244,10 +244,23 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 	if err != nil {
 		return
 	}
-	// retrieve the full list of validators
-	validators, err := s.GetValidators()
+	validators := make([]*Validator, 0)
+	// reverse iterator is slightly more efficient than forward iterator for large datasets
+	it, err := s.RevIterator(ValidatorPrefix())
 	if err != nil {
-		return
+		return vs, err
+	}
+	// ensure memory cleanup
+	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		// convert the bytes into a validator object reference
+		val, e := s.unmarshalValidator(it.Value())
+		if e != nil {
+			return vs, e
+		}
+		// add it to the list
+		validators = append(validators, val)
 	}
 	// filter out validators not part of the committee
 	filtered := slices.Collect(func(yield func(*Validator) bool) {
