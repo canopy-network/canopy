@@ -89,7 +89,7 @@ message EventOrderBookSwap {
   // sellers_receive_address: the address of the seller where the 'counter asset' will be received
   bytes SellerReceiveAddress = 4; // @gotags: json:"sellerReceiveAddress"
   // buyer_send_address: the address of the buyer where the 'counter asset' will be sent from
-  bytes BuyerSendAddress = 5; // @gotags: json:"sellerReceiveAddress"
+  bytes BuyerSendAddress = 5; // @gotags: json:"buyerSendAddress"
   // sellers_send_address: the Canopy address the seller is selling and signing from
   bytes SellersSendAddress = 6; // @gotags: json:"sellersSendAddress"
   // OrderId: auto-populated by the state machine to assign the unique bytes to the order
