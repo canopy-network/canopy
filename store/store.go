@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -528,15 +527,16 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	// create a batch to set the keys to be removed by the compaction
+	batch := s.db.NewBatch()
+	defer batch.Close()
 	// set metrics to log
-	toDelete := make([][]byte, 0)
-	total, toDeleteCount := 0, 0
-	// collect tombstone entries to delete
+	total, toDelete := 0, 0
+	// collect and delete tombstone entries
 	err := s.withIterator(startPrefix, endPrefix, func(it *pebble.Iterator) {
 		tombstone, _ := parseValueWithTombstone(it.Value())
 		if tombstone == DeadTombstone {
-			toDelete = append(toDelete, bytes.Clone(it.Key()))
-			toDeleteCount++
+			batch.Delete(it.Key(), pebble.NoSync)
+			toDelete++
 		} else {
 			total++
 		}
@@ -544,13 +544,16 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	if err != nil {
 		return ErrCommitDB(err)
 	}
-	// set the values to be deleted on the current batch
+	// if nothing to delete, skip compaction
+	if batch.Empty() {
+		s.log.Debugf("key compaction finished [%d], no values to delete", version)
+		return nil
+	}
+	// commit the batch
 	s.mu.Lock() // lock commit op
-	for _, key := range toDelete {
-		if err := s.writer.Delete(key, pebble.NoSync); err != nil {
-			s.mu.Unlock() // unlock commit op
-			return ErrCommitDB(err)
-		}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		s.mu.Unlock() // unlock commit op
+		return ErrCommitDB(err)
 	}
 	s.mu.Unlock() // unlock commit op
 	batchTime := time.Since(now)
@@ -564,7 +567,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	}
 	lssTime := time.Since(now)
 	s.log.Debugf("key compaction finished [LSS] [%d], total keys: %d, deleted: %d batch: %s elapsed: %s",
-		version, total, toDeleteCount, batchTime, lssTime)
+		version, total, toDelete, batchTime, lssTime)
 	// second compaction: historic state keys
 	if compactHSS {
 		startPrefix, endPrefix = []byte(historicStatePrefix), prefixEnd([]byte(historicStatePrefix))
