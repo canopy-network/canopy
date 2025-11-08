@@ -2115,7 +2115,7 @@ func TestGetTopDelegates(t *testing.T) {
 				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
 			}
 			// execute the function call
-			got, err := sm.GetTopDelegates(chainId)
+			got, err := sm.GetDelegates(chainId)
 			require.NoError(t, err)
 			// validate the returned validator set is not nil
 			require.NotNil(t, got.ValidatorSet)

@@ -99,7 +99,6 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	if err != nil {
 		return err
 	}
-
 	// adjust the state if necessary
 	return s.ConformStateToParamUpdate(previousParams)
 }
@@ -133,18 +132,17 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 	// if either minimum stake has increased, force unstake those below the new minimum
 	if validatorMinStakeIncreased || delegateMinStakeIncreased {
 		// iterate through all validators and delegates
-		if err = s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) lib.ErrorI {
+		if err = s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) (e lib.ErrorI) {
 			// convert bytes into a validator object
 			v, e := s.unmarshalValidator(value)
 			if e != nil {
 				return e
 			}
 			// set validator to unstaking if below minium
-			_, err := s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator)
-			if err != nil {
-				return err
+			if _, e = s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator); err != nil {
+				return e
 			}
-			return nil
+			return
 		}); err != nil {
 			return err
 		}

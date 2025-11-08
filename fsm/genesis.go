@@ -2,12 +2,11 @@ package fsm
 
 import (
 	"encoding/json"
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* GENESIS LOGIC: implements logic to import a json file to create the state at height 0 and export the state at any height */

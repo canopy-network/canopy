@@ -1,10 +1,9 @@
 package fsm
 
 import (
-	"slices"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"slices"
 )
 
 /* This file contains logic regarding byzantine actor handling and bond slashes */
@@ -342,19 +341,9 @@ func (s *StateMachine) SlashValidator(address []byte, chainId, percent uint64, p
 	validator.Committees = newCommittees
 	// update the stake amount and set the validator
 	validator.StakedAmount = stakeAfterSlash
-	// get val params for validation
-	params, err := s.GetParamsVal()
-	if err != nil {
-		return err
-	}
-	// set validator to unstaking if below minium
-	isSet, err := s.SetValidatorUnstakingIfBelowMinimum(validator, params)
-	if err != nil {
-		return err
-	}
 	// in case it was set to unstaking do not set the validator again
-	if isSet {
-		return nil
+	if isSet, e := s.SetValidatorUnstakingIfBelowMinimum(validator, p); isSet || e != nil {
+		return e
 	}
 	// update the validator
 	return s.SetValidator(validator)
