@@ -62,8 +62,8 @@ func (ps *PeerSet) Add(p *Peer) (err lib.ErrorI) {
 	}
 	// if not trusted and not must connect, check inbound/outbound limits
 	if !p.IsTrusted && !p.IsMustConnect {
-		if err := ps.validateRegularPeerLimits(p); err != nil {
-			return err
+		if err = ps.validateRegularPeerLimits(p); err != nil {
+			return
 		}
 	}
 	// increment counts
