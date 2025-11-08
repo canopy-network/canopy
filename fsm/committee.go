@@ -244,24 +244,10 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 	if err != nil {
 		return
 	}
-	// retrieve the validators from the store in reverse order to preserve the same ordering
-	// of committees (from highest stake to lowest)
-	validators := make([]*Validator, 0)
-	it, err := s.RevIterator(ValidatorPrefix())
+	// retrieve the full list of validators
+	validators, err := s.GetValidators()
 	if err != nil {
-		return vs, err
-	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
+		return
 	}
 	// filter out validators not part of the committee
 	filtered := slices.Collect(func(yield func(*Validator) bool) {
@@ -389,24 +375,10 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // GetAllDelegates() returns all delegates for a certain chainId
 // It is heavily cached to improve performance as the delegates are used for each block commit
 func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// retrieve the validators from the store in reverse order to preserve the same ordering
-	// of delegates (from highest stake to lowest)
-	validators := make([]*Validator, 0)
-	it, err := s.RevIterator(ValidatorPrefix())
+	// retrieve the full list of validators
+	validators, err := s.GetValidators()
 	if err != nil {
-		return vs, err
-	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
+		return
 	}
 	// filter out validators that are not delegates for the given chainId
 	delegates := slices.Collect(func(yield func(*Validator) bool) {
