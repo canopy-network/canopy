@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -276,20 +275,6 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		return nil, e
-	}
-	// [EXPERIMENTAL] use reflection to check the internal 'committing' field.
-	// During chain synchronization, a pebbleDB batch may be returned while still committing,
-	// which causes a panic due to the invalid batch state and potential database corruption.
-	// If a committing batch is detected, the writer must be reset to prevent further corruption,
-	// as any attempt to reuse a corrupted writer may result in data loss.
-	writerValue := reflect.ValueOf(s.writer).Elem()
-	committingField := writerValue.FieldByName("committing")
-	if committingField.IsValid() {
-		isCommitting := committingField.Bool()
-		if isCommitting {
-			defer s.Reset()
-			return nil, ErrCloseDB(fmt.Errorf("batch is still committing"))
-		}
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
@@ -576,7 +561,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	}
 	// commit the batch
 	s.mu.Lock() // lock commit op
-	if err := s.db.Apply(batch, pebble.Sync); err != nil {
+	if err := batch.Commit(pebble.Sync); err != nil {
 		s.mu.Unlock() // unlock commit op
 		return ErrCommitDB(err)
 	}
