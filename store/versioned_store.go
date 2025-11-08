@@ -67,8 +67,8 @@ type VersionedStore struct {
 }
 
 // NewVersionedStore creates a new  versioned store
-func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) (*VersionedStore, lib.ErrorI) {
-	return &VersionedStore{db: db, batch: batch, version: version, keyBuffer: make([]byte, 0, 256)}, nil
+func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *VersionedStore {
+	return &VersionedStore{db: db, batch: batch, version: version, keyBuffer: make([]byte, 0, 256)}
 }
 
 // Set() stores a key-value pair at the current version

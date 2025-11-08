@@ -267,7 +267,7 @@ func (s *StateMachine) ApplyTransactions(
 			failed = append(failed, lib.NewFailedTx(tx, e))
 			// discard the FSM cache
 			s.ResetCaches()
-			txn.Discard()
+			//txn.Discard()
 			s.SetStore(currentStore)
 			continue
 		} else {

@@ -119,10 +119,8 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 			128 << 20, // L5: 128MB
 			128 << 20, // L6: 128MB
 		},
-		Logger: log, // Use project's logger
-		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
-			newVersionedPropertyCollector,
-		},
+		Logger:                  log, // Use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{newVersionedPropertyCollector},
 		// [EXPERIMENTAL] should improve throughput by reducing WAL syncs I/O but my lead to data loss
 		// on the worst case (i.e sudden program crash)
 		WALMinSyncInterval: func() time.Duration {
@@ -165,22 +163,16 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 	writer := db.NewBatch()
 	// make a versioned store from the current height and the latest height
 	// note: version for the versioned store may be overridden by the SetAt() and DeleteAt() code
-	hssStore, err := NewVersionedStore(db.NewSnapshot(), writer, version)
-	if err != nil {
-		return nil, ErrOpenDB(err)
-	}
-	lssStore, err := NewVersionedStore(db.NewSnapshot(), writer, lssVersion)
-	if err != nil {
-		return nil, ErrOpenDB(err)
-	}
+	hssStore := NewVersionedStore(db.NewSnapshot(), writer, version)
+	lssStore := NewVersionedStore(db.NewSnapshot(), writer, lssVersion)
 	// return the store object
 	return &Store{
 		version:    version,
 		log:        log,
 		db:         db,
 		writer:     writer,
-		ss:         NewTxn(lssStore, lssStore, []byte(latestStatePrefix), true, true, nextVersion),
-		Indexer:    &Indexer{NewTxn(hssStore, hssStore, []byte(indexerPrefix), false, false, nextVersion), config},
+		ss:         NewTxn(lssStore, lssStore, latestStatePrefix, true, true, nextVersion),
+		Indexer:    &Indexer{NewTxn(hssStore, hssStore, indexerPrefix, false, false, nextVersion), config},
 		metrics:    metrics,
 		config:     config,
 		mu:         &sync.Mutex{},
@@ -193,19 +185,13 @@ func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log 
 func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 	var stateReader *Txn
 	// make a reader for the specified version
-	hssReader, err := NewVersionedStore(s.db.NewSnapshot(), nil, queryVersion)
-	if err != nil {
-		return nil, err
-	}
+	hssReader := NewVersionedStore(s.db.NewSnapshot(), nil, queryVersion)
 	// if the query is for the latest version use the HSS over the LSS
 	if s.version == queryVersion {
-		lssReader, err := NewVersionedStore(s.db.NewSnapshot(), nil, lssVersion)
-		if err != nil {
-			return nil, err
-		}
-		stateReader = NewTxn(lssReader, nil, []byte(latestStatePrefix), false, false)
+		lssReader := NewVersionedStore(s.db.NewSnapshot(), nil, lssVersion)
+		stateReader = NewTxn(lssReader, nil, latestStatePrefix, false, false)
 	} else {
-		stateReader = NewTxn(hssReader, nil, []byte(historicStatePrefix), false, false)
+		stateReader = NewTxn(hssReader, nil, historicStatePrefix, false, false)
 	}
 	// return the store object
 	return &Store{
@@ -213,8 +199,8 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 		log:        s.log,
 		db:         s.db,
 		ss:         stateReader,
-		sc:         NewDefaultSMT(NewTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
-		Indexer:    &Indexer{NewTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
+		sc:         NewDefaultSMT(NewTxn(hssReader, nil, stateCommitmentPrefix, false, false)),
+		Indexer:    &Indexer{NewTxn(hssReader, nil, indexerPrefix, false, false), s.config},
 		metrics:    s.metrics,
 		mu:         &sync.Mutex{},
 		compaction: atomic.Bool{},
@@ -227,14 +213,8 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 	// create a comparable writer and reader
 	writer := s.db.NewBatch()
-	reader, err := NewVersionedStore(s.db.NewSnapshot(), writer, s.version)
-	if err != nil {
-		return nil, err
-	}
-	lssReader, err := NewVersionedStore(s.db.NewSnapshot(), writer, lssVersion)
-	if err != nil {
-		return nil, err
-	}
+	reader := NewVersionedStore(s.db.NewSnapshot(), writer, s.version)
+	lssReader := NewVersionedStore(s.db.NewSnapshot(), writer, lssVersion)
 	// return the store object
 	return &Store{
 		version:    s.version,
@@ -385,7 +365,7 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	if s.sc == nil {
 		nextVersion := s.version + 1
 		// set up the state commit store
-		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, []byte(stateCommitIDPrefix), false, false, nextVersion))
+		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, nextVersion))
 		// commit the SMT directly using the txn ops
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
 			return nil, err
@@ -401,11 +381,11 @@ func (s *Store) Reset() {
 	nextVersion := s.version + 1
 	newWriter := s.db.NewBatch()
 	// create new versioned stores first before discarding old ones
-	newLSSStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
-	newStore, _ := NewVersionedStore(s.db.NewSnapshot(), newWriter, s.version)
+	newLSSStore := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
+	newStore := NewVersionedStore(s.db.NewSnapshot(), newWriter, s.version)
 	// create all new transaction-dependent objects
-	newLSS := NewTxn(newLSSStore, newStore, []byte(latestStatePrefix), true, true, nextVersion)
-	newIndexer := NewTxn(newStore, newStore, []byte(indexerPrefix), false, false, nextVersion)
+	newLSS := NewTxn(newLSSStore, newStore, latestStatePrefix, true, true, nextVersion)
+	newIndexer := NewTxn(newStore, newStore, indexerPrefix, false, false, nextVersion)
 	// only after creating all new objects, discard old transactions
 	s.Discard()
 	// update all references
@@ -478,16 +458,10 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 	if err != nil {
 		return err
 	}
-	// create a versioned store that writes directly to s.writer
-	vs, err := NewVersionedStore(nil, s.writer, version)
-	if err != nil {
-		return err
-	}
-	// write the lastCommitID
+	vs := NewVersionedStore(nil, s.writer, version)
 	if err = vs.SetAt(lastCommitIDPrefix, value, lssVersion); err != nil {
 		return err
 	}
-	// write the versioned commitID
 	if err = vs.SetAt(s.commitIDKey(version), value, version); err != nil {
 		return err
 	}
@@ -498,12 +472,9 @@ func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
 func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 	reader := db.NewSnapshot()
 	defer reader.Close()
-	vs, err := NewVersionedStore(reader, nil, lssVersion)
-	if err != nil {
-		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())
-	}
+	vs := NewVersionedStore(reader, nil, lssVersion)
 	tx := NewTxn(vs, nil, nil, false, false, 0)
-	bz, err := tx.Get([]byte(lastCommitIDPrefix))
+	bz, err := tx.Get(lastCommitIDPrefix)
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())
 	}
@@ -518,7 +489,7 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 // it iterates over the prefix, deletes tombstone entries, and performs DB compaction
 func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 	// first compaction: latest state  keys
-	startPrefix, endPrefix := []byte(latestStatePrefix), prefixEnd([]byte(latestStatePrefix))
+	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
 	// track current time and version
 	now, version := time.Now(), s.Version()
 	s.log.Debugf("key compaction started at height %d", version)
@@ -570,7 +541,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 		version, total, toDelete, batchTime, lssTime)
 	// second compaction: historic state keys
 	if compactHSS {
-		startPrefix, endPrefix = []byte(historicStatePrefix), prefixEnd([]byte(historicStatePrefix))
+		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
 		hssTime := time.Now()
 		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
 			return ErrCommitDB(err)

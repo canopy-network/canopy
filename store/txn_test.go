@@ -27,7 +27,7 @@ func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 	require.NoError(t, err)
 	var version uint64 = 1
 	writer := db.NewBatch()
-	vs, err := NewVersionedStore(db.NewSnapshot(), writer, version)
+	vs := NewVersionedStore(db.NewSnapshot(), writer, version)
 	require.NoError(t, err)
 	return NewTxn(vs, vs, prefix, false, true, version), db, writer
 }
@@ -68,7 +68,7 @@ func TestNestedTxn(t *testing.T) {
 	// flush the batch
 	require.NoError(t, batch.Commit(&pebble.WriteOptions{Sync: false}))
 	// check that the changes are visible in the database
-	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), baseTxn.writeVersion)
+	vs := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), baseTxn.writeVersion)
 	require.NoError(t, err)
 	val, readErr := vs.Get(append(basePrefix, append(nestedPrefix, keyB...)...))
 	require.NoError(t, readErr)
@@ -136,7 +136,7 @@ func TestTxnWriteSetGet(t *testing.T) {
 	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
 	// test get from db after write()
 	require.Len(t, test.txn.ops, 0)
-	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
+	vs := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
 	require.NoError(t, err)
 	val, err = vs.Get(append([]byte(prefix), key...))
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestTxnWriteDelete(t *testing.T) {
 	require.NoError(t, test.Commit())
 	require.NoError(t, writer.Commit(&pebble.WriteOptions{Sync: false}))
 
-	vs, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
+	vs := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), math.MaxUint64)
 	require.NoError(t, err)
 	dbVal, dbErr = vs.Get(append([]byte(prefix), key...))
 	require.NoError(t, dbErr)
