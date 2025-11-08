@@ -87,18 +87,14 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 	cache := pebble.NewCache(256 << 20) // 256 MB cache
 	defer cache.Unref()
-
 	lvl := pebble.LevelOptions{
-		FilterPolicy:   nil,      // no blooms for scans
 		BlockSize:      64 << 10, // 64 KB data blocks
 		IndexBlockSize: 32 << 10, // 32 KB index blocks
 		Compression: func() *sstable.CompressionProfile {
 			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
 		},
 	}
-
 	db, err := pebble.Open(path, &pebble.Options{
-		DisableWAL:            false,                       // keep WAL but optimize other settings
 		MemTableSize:          64 << 20,                    // larger memtable to reduce flushes
 		L0CompactionThreshold: 6,                           // keep L0 small to avoid read amplification
 		L0StopWritesThreshold: 12,                          // stop writes when L0 reaches this size
@@ -135,9 +131,8 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 
 // NewStoreInMemory() creates a new instance of a mem DB
 func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	fs := vfs.NewMem()
 	db, err := pebble.Open("", &pebble.Options{
-		FS:                    fs,                          // memory file system
+		FS:                    vfs.NewMem(),                // memory file system
 		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
 		L0StopWritesThreshold: 40,                          // Much higher threshold
 		FormatMajorVersion:    pebble.FormatColumnarBlocks, // Current format version
@@ -263,26 +258,8 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
 	// reset the writer for the next height
 	s.Reset()
-	// check if the current version is a multiple of the cleanup block interval
-	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
-	version := s.Version()
-	if compactionInterval > 0 && version%compactionInterval == 0 {
-		go func() {
-			// compactions are not allowed to run concurrently to not intertwine with the keys
-			if s.compaction.Load() {
-				s.log.Debugf("key compaction skipped [%d]: already in progress", s.Version())
-				return
-			}
-			s.compaction.Store(true)
-			defer s.compaction.Store(false)
-			// perform HSS compaction every 4th compaction
-			hssCompaction := (version/compactionInterval)%4 == 0
-			// trigger compaction of store keys
-			if err := s.Compact(hssCompaction); err != nil {
-				s.log.Errorf("key compaction failed: %s", err)
-			}
-		}()
-	}
+	// compact if necessary
+	s.MaybeCompact()
 	// return the root
 	return
 }
@@ -396,19 +373,14 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	// nested transactions share resources with their parent, so closing
-	// them would break the parent
 	if s.isTxn {
 		s.ss.Discard()
 		s.Indexer.db.Discard()
 		return
 	}
-	// close the latest state store
 	s.ss.Close()
 	s.sc = nil
-	// close the indexer store
 	s.Indexer.db.Close()
-	// close the writer
 	if s.writer != nil {
 		s.writer.Close()
 	}
@@ -416,20 +388,15 @@ func (s *Store) Discard() {
 
 // Close() discards the writer and closes the database connection
 func (s *Store) Close() lib.ErrorI {
-	// lock for thread safety
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// stop the current writer/readers
 	s.Discard()
-	// Optionally ensure latest memtable is flushed (helps make state visible on disk).
 	if err := s.db.Flush(); err != nil {
 		return ErrCloseDB(fmt.Errorf("flush error: %v", err))
 	}
-	// close the database connection
 	if err := s.db.Close(); err != nil {
 		return ErrCloseDB(err)
 	}
-	// exit
 	return nil
 }
 
@@ -483,6 +450,30 @@ func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
 		log.Fatalf("unmarshalCommitID() failed with err: %s", err.Error())
 	}
 	return
+}
+
+// MaybeCompact() checks if it is time to compact the LSS and HSS respectively
+func (s *Store) MaybeCompact() {
+	// check if the current version is a multiple of the cleanup block interval
+	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
+	version := s.Version()
+	if compactionInterval > 0 && version%compactionInterval == 0 {
+		go func() {
+			// compactions are not allowed to run concurrently to not intertwine with the keys
+			if s.compaction.Load() {
+				s.log.Debugf("key compaction skipped [%d]: already in progress", s.Version())
+				return
+			}
+			s.compaction.Store(true)
+			defer s.compaction.Store(false)
+			// perform HSS compaction every 4th compaction
+			hssCompaction := (version/compactionInterval)%4 == 0
+			// trigger compaction of store keys
+			if err := s.Compact(hssCompaction); err != nil {
+				s.log.Errorf("key compaction failed: %s", err)
+			}
+		}()
+	}
 }
 
 // Compact deletes all entries marked for compaction on the given prefix range.
@@ -557,10 +548,7 @@ func (s *Store) Compact(compactHSS bool) lib.ErrorI {
 func (s *Store) withIterator(startPrefix, endPrefix []byte, cb func(it *pebble.Iterator)) lib.ErrorI {
 	db := s.db.NewSnapshot()
 	defer db.Close()
-	it, err := db.NewIter(&pebble.IterOptions{
-		LowerBound: startPrefix,
-		UpperBound: endPrefix,
-	})
+	it, err := db.NewIter(&pebble.IterOptions{LowerBound: startPrefix, UpperBound: endPrefix})
 	if err != nil {
 		return ErrOpenDB(err)
 	}

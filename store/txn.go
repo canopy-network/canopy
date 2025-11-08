@@ -29,7 +29,6 @@ import (
 const (
 	opDelete op = iota // delete the key
 	opSet              // set the key
-	opEntry            // custom badger entry
 )
 
 // Txn is an in memory database transaction
@@ -302,9 +301,10 @@ func (t *txn) copy() *txn {
 
 // copy() deep copies a value operation
 func (o valueOp) copy() valueOp {
+	k, v := bytes.Clone(o.key), bytes.Clone(o.value)
 	return valueOp{
-		key:     bytes.Clone(o.key),
-		value:   bytes.Clone(o.value),
+		key:     k,
+		value:   v,
 		version: o.version,
 		op:      o.op,
 	}
@@ -341,8 +341,8 @@ func newTxnIterator(parent lib.IteratorI, t *txn, prefix []byte, parentPrefix []
 		tree:         tree,
 		txn:          t,
 		prefix:       prefix,
-		parentPrefix: parentPrefix,
 		reverse:      reverse,
+		parentPrefix: parentPrefix,
 	}).First()
 }
 
