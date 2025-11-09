@@ -524,6 +524,9 @@ func parseVersionedKey(versionedKey []byte, getVersion bool) (userKey []byte,
 	version uint64, err lib.ErrorI) {
 	// extract user key (everything between history prefix and suffix)
 	userKeyEnd := len(versionedKey) - VersionSize
+	if userKeyEnd <= 0 {
+		return nil, 0, ErrInvalidKey()
+	}
 	// extract the userKey and the version
 	userKey = versionedKey[:userKeyEnd]
 	if !getVersion {

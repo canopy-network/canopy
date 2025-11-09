@@ -461,7 +461,7 @@ func (s *Store) MaybeCompact() {
 		go func() {
 			// compactions are not allowed to run concurrently to not intertwine with the keys
 			if s.compaction.Load() {
-				s.log.Debugf("key compaction skipped [%d]: already in progress", s.Version())
+				s.log.Debugf("key compaction skipped [%d]: already in progress", version)
 				return
 			}
 			s.compaction.Store(true)
@@ -469,7 +469,7 @@ func (s *Store) MaybeCompact() {
 			// perform HSS compaction every 4th compaction
 			hssCompaction := (version/compactionInterval)%4 == 0
 			// trigger compaction of store keys
-			if err := s.Compact(hssCompaction); err != nil {
+			if err := s.Compact(version, hssCompaction); err != nil {
 				s.log.Errorf("key compaction failed: %s", err)
 			}
 		}()
@@ -478,11 +478,11 @@ func (s *Store) MaybeCompact() {
 
 // Compact deletes all entries marked for compaction on the given prefix range.
 // it iterates over the prefix, deletes tombstone entries, and performs DB compaction
-func (s *Store) Compact(compactHSS bool) lib.ErrorI {
+func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// first compaction: latest state  keys
 	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
 	// track current time and version
-	now, version := time.Now(), s.Version()
+	now := time.Now()
 	s.log.Debugf("key compaction started at height %d", version)
 	// create a timeout to limit the duration of the compaction process
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
