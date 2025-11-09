@@ -93,9 +93,10 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                                 initial={{opacity: 0, y: 20}}
                                 animate={{opacity: 1, y: 0}}
                                 transition={{duration: 0.5, delay: 0.4}}
+                                className="max-h-[80vh] overflow-y-auto scrollbar-hide hover:scrollbar-default"
                             >
                                 <ActionRunner actionId={selectedTab.value} onFinish={onClose}
-                                              className="max-h-[80vh] max-w-[40vw] overflow-y-auto p-4 scrollbar-hide hover:scrollbar-default"
+                                              className="p-4"
                                 />
                             </motion.div>
                         )}

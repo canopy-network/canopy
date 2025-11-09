@@ -30,6 +30,7 @@ export type TableRowAction = {
     label?: string                 // template del label del botón
     icon?: string                  // (reservado) por si luego usas un icon set central
     showIf?: string                // template condicional
+    disabledIf?: string            // template condicional para deshabilitar el botón
     emit?: {
         op: 'set' | 'copy' | 'select'        // select: marcar selección; set: setear otro field; copy: al portapapeles
         field?: string                        // requerido para 'set'
@@ -152,9 +153,13 @@ const TableSelect: React.FC<TableSelectProps> = ({
         const visible = ra.showIf == null ? true : templateBool(ra.showIf, localCtx)
         if (!visible) return null
 
+        const k = String(row[keyField] ?? row.__idx)
+        const selected = selectedKeys.includes(k)
+        const disabled = ra.disabledIf != null ? templateBool(ra.disabledIf, localCtx) : false
         const btnLabel = ra.label ? template(ra.label, localCtx) : 'Action'
         const onClick = async (e: React.MouseEvent) => {
             e.stopPropagation()
+            if (disabled) return
             if (!ra.emit) return
             if (ra.emit.op === 'set') {
                 const val = ra.emit.value ? template(ra.emit.value, localCtx) : undefined
@@ -164,7 +169,6 @@ const TableSelect: React.FC<TableSelectProps> = ({
                 await navigator.clipboard.writeText(String(val ?? ''))
             } else if (ra.emit.op === 'select') {
                 if (tf.readOnly) return
-                const k = String(row[keyField] ?? row.__idx)
                 setSelectedKey(k)
             }
         }
@@ -172,7 +176,15 @@ const TableSelect: React.FC<TableSelectProps> = ({
             <button
                 type="button"
                 onClick={onClick}
-                className="px-4 py-1.5 rounded-full border border-emerald-400 text-emerald-400 hover:bg-emerald-400/20 transition-colors text-xs font-semibold"
+                disabled={disabled}
+                className={cx(
+                    "px-4 py-1.5 rounded-full border text-xs font-semibold transition-colors",
+                    disabled
+                        ? "border-neutral-600 text-neutral-600 cursor-not-allowed opacity-50"
+                        : selected
+                            ? "border-emerald-400 bg-emerald-400/20 text-emerald-400"
+                            : "border-emerald-400 text-emerald-400 hover:bg-emerald-400/20"
+                )}
             >
                 {safe(btnLabel)}
             </button>
@@ -295,7 +307,6 @@ const TableSelect: React.FC<TableSelectProps> = ({
                                 onClick={() => toggleRow(row)}
                                 className={cx(
                                     'w-full grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-white/5 transition-colors text-white',
-                                    selected && 'bg-emerald-500/10 hover:bg-emerald-500/15',
                                     selectMode !== 'row' && 'cursor-default'
                                 )}
                                 aria-pressed={selected}

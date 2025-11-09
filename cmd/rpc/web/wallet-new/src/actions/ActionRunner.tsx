@@ -37,6 +37,8 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
     const debouncedForm = useDebouncedValue(form, 250)
     const [txRes, setTxRes] = React.useState<any>(null)
     const [localDs, setLocalDs] = React.useState<Record<string, any>>({})
+    // Track which fields have been auto-populated at least once
+    const [autoPopulatedOnce, setAutoPopulatedOnce] = React.useState<Set<string>>(new Set())
 
     const {manifest, chain, params, isLoading} = useConfig()
     const {selectedAccount} = useAccounts?.() ?? {selectedAccount: undefined}
@@ -295,6 +297,74 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
             }
         })
     }, [fieldsForStep, templatingCtx, form])
+
+    // Auto-populate form with default values from field.value when DS data or visible fields change
+    const prevStateRef = React.useRef<{ ds: string; fieldNames: string }>({ ds: '', fieldNames: '' })
+    React.useEffect(() => {
+        const dsSnapshot = JSON.stringify(mergedDs)
+        const fieldNamesSnapshot = visibleFieldsForStep.map((f: any) => f.name).join(',')
+        const stateSnapshot = { ds: dsSnapshot, fieldNames: fieldNamesSnapshot }
+
+        // Only run when DS or visible fields change
+        if (prevStateRef.current.ds === dsSnapshot && prevStateRef.current.fieldNames === fieldNamesSnapshot) {
+            return
+        }
+        prevStateRef.current = stateSnapshot
+
+        setForm(prev => {
+            const defaults: Record<string, any> = {}
+            let hasDefaults = false
+
+            // Build template context with current form state
+            const ctx = {
+                form: prev,
+                chain,
+                account: selectedAccount ? {
+                    address: selectedAccount.address,
+                    nickname: selectedAccount.nickname,
+                } : undefined,
+                fees: { ...feesResolved },
+                params: { ...params },
+                ds: mergedDs,
+            }
+
+            for (const field of visibleFieldsForStep) {
+                const fieldName = (field as any).name
+                const fieldValue = (field as any).value
+                const autoPopulate = (field as any).autoPopulate ?? 'always' // 'always' | 'once' | false
+
+                // Skip auto-population if field has autoPopulate: false
+                if (autoPopulate === false) {
+                    continue
+                }
+
+                // Skip if autoPopulate: 'once' and field was already populated
+                if (autoPopulate === 'once' && autoPopulatedOnce.has(fieldName)) {
+                    continue
+                }
+
+                // Only set default if form doesn't have a value and field has a default
+                if (fieldValue != null && (prev[fieldName] === undefined || prev[fieldName] === '' || prev[fieldName] === null)) {
+                    try {
+                        const resolved = template(fieldValue, ctx)
+                        if (resolved !== undefined && resolved !== '' && resolved !== null) {
+                            defaults[fieldName] = resolved
+                            hasDefaults = true
+
+                            // Mark as populated if autoPopulate is 'once'
+                            if (autoPopulate === 'once') {
+                                setAutoPopulatedOnce(prev => new Set([...prev, fieldName]))
+                            }
+                        }
+                    } catch (e) {
+                        // Template resolution failed, skip
+                    }
+                }
+            }
+
+            return hasDefaults ? { ...prev, ...defaults } : prev
+        })
+    }, [mergedDs, visibleFieldsForStep, chain, selectedAccount, feesResolved, params])
 
     const handleErrorsChange = React.useCallback((errs: Record<string,string>, hasErrors: boolean) => {
         setErrorsMap(errs)

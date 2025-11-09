@@ -171,7 +171,7 @@
           "coerce": "string"
         },
         "amount": {
-          "value": "{{toBaseDenom<{{form.amount}}>}}",
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
           "coerce": "number"
         },
         "delegate": {
@@ -319,11 +319,17 @@
         "account": {
           "account": {
             "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+          },
+          "__options": {
+            "enabled": "{{ form.signerResponsible && form.operator && form.output }}"
           }
         },
         "validator": {
           "account": {
-            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+            "address": "{{form.operator}}"
+          },
+          "__options": {
+            "enabled": "{{ form.operator }}"
           }
         },
         "keystore": {},
@@ -377,6 +383,15 @@
             "step": "setup"
           },
           {
+            "id": "validatorInfo",
+            "name": "validatorInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Validator Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Staked Amount:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Type:</p><p class='text-canopy-50 font-semibold'>{{ ds.validator.delegate ? 'Delegation' : 'Validation' }}</p></div></div></div>",
+            "showIf": "{{ form.operator && ds.validator }}",
+            "step": "setup",
+            "span": { "base": 12 }
+          },
+          {
             "id": "output",
             "span": {
               "base": 12
@@ -388,6 +403,7 @@
             "label": "Rewards Address",
             "placeholder": "Select Rewards Address",
             "value": "{{ ds.validator ? ds.validator.output : '' }}",
+            "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "step": "setup"
           },
@@ -397,6 +413,7 @@
             "type": "option",
             "label": "Signer Address",
             "required": true,
+            "value": "operator",
             "inLine": true,
             "borders": false,
             "options": [
@@ -414,10 +431,10 @@
             "step": "setup"
           },
           {
-            "id": "asset",
-            "name": "asset",
+            "id": "signerBalance",
+            "name": "signerBalance",
             "type": "dynamicHtml",
-            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Signer Address Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Liquid:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Staked:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div></div></div>",
+            "html": "<div class='flex-col col-span-12 p-3 bg-blue-950/30 border border-blue-800/30 rounded-lg'><div class='flex items-center gap-2 mb-1'><svg class='w-4 h-4 text-blue-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><p class='text-blue-300 text-sm font-medium'>Signer Account Balance</p></div><p class='text-canopy-50 font-semibold text-lg'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p><p class='text-text-muted text-xs mt-1'>Available balance for transaction fees and additional stake</p></div>",
             "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
             "step": "setup",
             "span": { "base": 12 }
@@ -427,15 +444,18 @@
             "name": "amount",
             "type": "amount",
             "placeholder": "0.00",
-            "label": "Amount",
-            "value": "{{ ds.validator ? formatToCoin<{{ds.validator.stakedAmount}}> : params.networkParams.validator.minimumOrderSize }}",
+            "label": "{{ ds.validator ? 'New Stake Amount' : 'Amount' }}",
+            "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
+            "autoPopulate": "once",
             "required": true,
-            "min": 0,
-            "max": "{{formatToCoin<{{ds.account.amount}}>}}",
+            "min": "{{ fromMicroDenom<{{ds.validator.stakedAmount ?? 0}}> }}",
+            "max": "{{ fromMicroDenom<{{ds.account.amount + (ds.validator.stakedAmount ?? 0)}}> }}",
+            "help": "{{ ds.validator ? '' : 'Minimum stake amount applies' }}",
             "validation": {
+              "min": "{{ fromMicroDenom<{{ds.validator.stakedAmount ?? 0}}> }}",
               "messages": {
-                "min": "Minimum you can send is {{min}} {{chain.denom.symbol}}",
-                "max": "You cannot send more than your balance {{numberToLocaleString<{{max}}>}} {{chain.denom.symbol}}"
+                "min": "Stakes can only increase. Current stake: {{min}} {{chain.denom.symbol}}",
+                "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
               }
             },
             "features": [
@@ -443,7 +463,7 @@
                 "id": "max",
                 "op": "set",
                 "field": "amount",
-                "value": "{{formatToCoin<{{ds.account.amount - fees.raw.stakeFee}}>}}"
+                "value": "{{ fromMicroDenom<{{ds.account.amount - fees.raw.stakeFee}}> }}"
               }
             ],
             "span": {
@@ -452,12 +472,22 @@
             "step": "setup"
           },
           {
+            "id": "currentStakeInfo",
+            "name": "currentStakeInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 -mt-3 mb-3 flex items-center gap-3'><div class='inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-full text-xs'><svg class='w-4 h-4 text-emerald-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><span class='text-emerald-300 font-medium'>Current:</span><span class='text-white font-semibold'>{{numberToLocaleString<{{fromMicroDenom<{{ds.validator.stakedAmount}}>}}>}} CNPY</span></div><div class='flex-1 h-px bg-gradient-to-r from-emerald-500/20 to-transparent'></div><span class='text-xs text-emerald-400/60'>↑ Increase only</span></div>",
+            "showIf": "{{ ds.validator }}",
+            "step": "setup",
+            "span": { "base": 12 }
+          },
+          {
             "id": "isDelegate",
             "name": "isDelegate",
             "type": "optionCard",
             "label": "Stake Type",
             "required": true,
             "value": "{{ ds.validator ? ds.validator.delegate : false }}",
+            "autoPopulate": "once",
             "options": [
               {
                 "label": "Validation",
@@ -480,7 +510,8 @@
             "type": "switch",
             "help": "Automatically restake rewards",
             "label": "Autocompound",
-            "value": "{{ ds.validator ? ds.validator.compound : false }}",
+            "value": "{{ ds.validator ? ds.validator.compound === true : false }}",
+            "autoPopulate": "once",
             "step": "setup"
           },
 
@@ -500,6 +531,7 @@
             "rowKey": "id",
             "selectMode": "action",
             "value": "{{ ds.validator?.committees ?? [] }}",
+            "autoPopulate": "once",
             "rows": [
               { "id": 1, "name": "Canopy", "minStake": "1 CNPY" },
               { "id": 2, "name": "Canary", "minStake": "1 CNPY" }
@@ -512,16 +544,16 @@
                 "align": "left"
               },
               {
-                "key": "stakedAmount",
                 "title": "Staked Amount",
-                "expr": "{{ ds.validator?.committees?.includes(row.id) ? formatToCoin<{{ds.validator.stakedAmount}}> + ' ' + chain.denom.symbol : '0 ' + chain.denom.symbol }}",
-                "align": "left",
-                "className": "text-emerald-400 font-medium"
+                "type": "html",
+                "html": "{{ (() => { const isStaked = ds.validator?.committees?.includes(row.id); const isSelected = Array.isArray(form.selectCommittees) && (form.selectCommittees.includes(row.id) || form.selectCommittees.includes(String(row.id))); const amt = Number(form.amount) || 0; if (isStaked) { const current = ds.validator.stakedAmount / 1000000; const diff = amt - current; return '<span class=\"text-white font-medium\">' + current.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY <span class=\"text-emerald-400 text-xs font-semibold\">+ ' + (diff > 0 ? diff : 0).toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span></span>'; } else if (isSelected) { return '<span class=\"text-emerald-400 font-medium\">' + amt.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span>'; } else { return '<span class=\"text-neutral-400\">0 CNPY</span>'; } })() }}",
+                "align": "left"
               }
             ],
             "rowAction": {
               "title": "Action",
-              "label": "Stake",
+              "label": "{{ ds.validator?.committees?.includes(row.id) ? 'Staked' : 'Stake' }}",
+              "disabledIf": "{{ ds.validator?.committees?.includes(row.id) }}",
               "emit": {
                 "op": "select"
               }
@@ -537,7 +569,7 @@
             "label": "Committees Summary",
             "placeholder": "1,2,3",
             "help": "Enter comma separated committee ids",
-            "value": "{{form.selectCommittees.filter(c => c !== '').map(c => c).join(',')}}",
+            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : '' }}",
             "step": "committees"
           },
           {
@@ -547,6 +579,8 @@
             "label": "Validator Address",
             "required": true,
             "showIf": "{{ form.isDelegate && form.isDelegate != 'true' }}",
+            "value": "{{ ds.validator?.netAddress ?? '' }}",
+            "autoPopulate": "once",
             "placeholder": "tcp://127.0.0.1:xxxx",
             "help": "Put the url of the validator you want to delegate to.",
             "step": "committees"
@@ -556,8 +590,16 @@
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}}",
-            "suffix": "{{chain.denom.symbol}}",
+            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}",
             "step": "committees"
           }
         ],
@@ -586,7 +628,7 @@
             },
             {
               "label": "Transaction Fee",
-              "value": "{{formatToCoin<{{fees.raw.stakeFee}}>}} {{chain.denom.symbol}}"
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
             }
           ],
           "btns": {
@@ -607,7 +649,7 @@
           "coerce": "string"
         },
         "amount": {
-          "value": "{{toBaseDenom<{{form.amount}}>}}",
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
           "coerce": "number"
         },
         "delegate": {
@@ -615,7 +657,7 @@
           "coerce": "boolean"
         },
         "earlyWithdrawal": {
-          "value": "{{form.isAutocompound}}",
+          "value": "{{!form.isAutocompound}}",
           "coerce": "boolean"
         },
 
@@ -632,7 +674,7 @@
           "coerce": "string"
         },
         "fee": {
-          "value": "{{fees.raw.sendFee}}",
+          "value": "{{ toMicroDenom<{{form.txFee}}> }}",
           "coerce": "number"
         },
         "submit": {

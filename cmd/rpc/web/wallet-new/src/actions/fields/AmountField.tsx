@@ -23,7 +23,7 @@ export const AmountField: React.FC<BaseFieldProps> = ({
     // Calculate padding based on features and denom
     const paddingRight = hasFeatures && showDenom ? 'pr-32' : hasFeatures ? 'pr-20' : showDenom ? 'pr-16' : ''
 
-    const common = 'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none'
+    const common = 'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
     const border = error ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
 
     return (
