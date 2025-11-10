@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -31,13 +33,14 @@ type Controller struct {
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
 	RCManager   lib.RCManagerI // the data manager for the 'root chain'
+	oracle      *oracle.Oracle // witness oracle
 	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
 	log         lib.LoggerI    // object for logging
 	*sync.Mutex                // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
@@ -61,6 +64,7 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Config:           c,
 		Metrics:          metrics,
 		FSM:              fsm,
+		oracle:           oracle,
 		Mempool:          mempool,
 		Consensus:        nil,
 		P2P:              p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
@@ -126,6 +130,18 @@ func (c *Controller) Start() {
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				// oracle specific initialization
+				if c.Config.OracleEnabled {
+					// update oracle's order book so it can start processing blocks
+					c.oracle.UpdateRootChainInfo(rootChainInfo)
+					c.log.Info("Starting Oracle, waiting for source chain sync")
+					// channel to indicate source chain is synced
+					syncCh := make(chan bool)
+					// start the oracle with context and a channel to wait for source chain sync
+					c.oracle.Start(context.Background(), syncCh)
+					<-syncCh // wait for syncCh to be closed
+					c.log.Info("Oracle is synced to top, starting Canopy")
+				}
 				// exit the loop
 				break
 			}
@@ -179,6 +195,10 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
+	// sync the order store
+	if c.Config.OracleEnabled {
+		c.oracle.UpdateRootChainInfo(info)
+	}
 	// set timestamp if included
 	var timestamp time.Time
 	// if timestamp is not 0
@@ -205,6 +225,11 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
+}
+
+// GetOrderBook fetches the root chain order book at the latest height
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut
