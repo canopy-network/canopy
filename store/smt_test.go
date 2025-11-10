@@ -2034,7 +2034,7 @@ func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*S
 	// make a writable reader that reads from the last height
 	versionedStore := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
-	memStore := NewTxn(versionedStore, versionedStore, []byte(stateCommitmentPrefix), false, false, 1)
+	memStore := NewTxn(versionedStore, versionedStore, []byte(stateCommitmentPrefix), false, false, true, 1)
 	// if there's no preset - use the default 3 nodes
 	if preset == nil {
 		if root != nil {

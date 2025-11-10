@@ -29,7 +29,7 @@ func newTxn(t *testing.T, prefix []byte) (*Txn, *pebble.DB, *pebble.Batch) {
 	writer := db.NewBatch()
 	vs := NewVersionedStore(db.NewSnapshot(), writer, version)
 	require.NoError(t, err)
-	return NewTxn(vs, vs, prefix, false, true, version), db, writer
+	return NewTxn(vs, vs, prefix, false, true, true, version), db, writer
 }
 
 func TestNestedTxn(t *testing.T) {
@@ -44,7 +44,7 @@ func TestNestedTxn(t *testing.T) {
 	baseTxn, db, batch := newTxn(t, []byte(basePrefix))
 	defer func() { baseTxn.Close(); db.Close(); baseTxn.Discard() }()
 	// create a nested transaction
-	nested := NewTxn(baseTxn, baseTxn, []byte(nestedPrefix), false, true, baseTxn.writeVersion)
+	nested := NewTxn(baseTxn, baseTxn, []byte(nestedPrefix), false, true, true, baseTxn.writeVersion)
 	// set some values in the nested transaction
 	require.NoError(t, nested.Set([]byte(keyA), []byte(valueA)))
 	require.NoError(t, nested.Set([]byte(keyB), []byte(valueB)))
@@ -79,7 +79,7 @@ func TestNestedTxnMergedIteration(t *testing.T) {
 	baseTxn, db, batch := newTxn(t, []byte(nil))
 	defer func() { baseTxn.Close(); db.Close(); baseTxn.Discard() }()
 	// create a nested transaction
-	nested := NewTxn(baseTxn, baseTxn, nil, false, true, baseTxn.writeVersion)
+	nested := NewTxn(baseTxn, baseTxn, nil, false, true, true, baseTxn.writeVersion)
 	// set and and flush a value in the parent transaction
 	require.NoError(t, nested.Set(lib.JoinLenPrefix([]byte("a")), []byte("a")))
 	require.NoError(t, baseTxn.Commit())

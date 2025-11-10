@@ -178,8 +178,8 @@ func (vs *VersionedStore) Close() lib.ErrorI {
 }
 
 // NewIterator is a wrapper around the underlying iterators to conform to the TxnReaderI interface
-func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, reverse, true)
+func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, seek bool) (lib.IteratorI, lib.ErrorI) {
+	return vs.newVersionedIterator(prefix, reverse, seek)
 }
 
 // Iterator returns an iterator for all keys with the given prefix
@@ -202,7 +202,7 @@ func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.Err
 //
 // Iterator Strategies:
 //
-// Sequential (seek=false):
+// Linear (seek=false):
 //   - Walks through all versions linearly using Prev()/Next() calls
 //   - For each user key, scans backwards/forwards through versions until finding one <= store.version
 //   - Optimal for dense iteration where most keys in the prefix range are accessed
