@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/alecthomas/units"
 	"net"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alecthomas/units"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -531,4 +532,327 @@ func newTestP2PConfig(_ *testing.T) lib.Config {
 	config.ListenAddress = ":0"
 	config.DataDirPath = os.TempDir()
 	return config
+}
+
+func TestGetInboxStats(t *testing.T) {
+	tests := []struct {
+		name     string
+		detail   string
+		setup    func(*P2P)
+		expected map[lib.Topic]int
+	}{
+		{
+			name:   "empty inboxes",
+			detail: "all inboxes are empty",
+			setup:  func(p *P2P) {},
+			expected: map[lib.Topic]int{
+				lib.Topic_CONSENSUS:      0,
+				lib.Topic_BLOCK:          0,
+				lib.Topic_BLOCK_REQUEST:  0,
+				lib.Topic_TX:             0,
+				lib.Topic_PEERS_RESPONSE: 0,
+				lib.Topic_PEERS_REQUEST:  0,
+			},
+		},
+		{
+			name:   "single message in TX inbox",
+			detail: "one transaction message queued",
+			setup: func(p *P2P) {
+				// Create a fake peer info
+				peerInfo := &lib.PeerInfo{
+					Address: &lib.PeerAddress{
+						PublicKey:  []byte("test-peer"),
+						NetAddress: "localhost:9001",
+						PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+					},
+				}
+				// Send a message to TX channel
+				txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte("test-tx")}}
+				msgBytes, _ := lib.Marshal(txMsg)
+				p.channels[lib.Topic_TX] <- &lib.MessageAndMetadata{
+					Message: msgBytes,
+					Sender:  peerInfo,
+				}
+			},
+			expected: map[lib.Topic]int{
+				lib.Topic_CONSENSUS:      0,
+				lib.Topic_BLOCK:          0,
+				lib.Topic_BLOCK_REQUEST:  0,
+				lib.Topic_TX:             1,
+				lib.Topic_PEERS_RESPONSE: 0,
+				lib.Topic_PEERS_REQUEST:  0,
+			},
+		},
+		{
+			name:   "multiple messages in different inboxes",
+			detail: "messages spread across multiple topics",
+			setup: func(p *P2P) {
+				peerInfo := &lib.PeerInfo{
+					Address: &lib.PeerAddress{
+						PublicKey:  []byte("test-peer"),
+						NetAddress: "localhost:9001",
+						PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+					},
+				}
+
+				// Add 3 messages to TX
+				txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte("test-tx")}}
+				msgBytes, _ := lib.Marshal(txMsg)
+				for i := 0; i < 3; i++ {
+					p.channels[lib.Topic_TX] <- &lib.MessageAndMetadata{
+						Message: msgBytes,
+						Sender:  peerInfo,
+					}
+				}
+
+				// Add 2 messages to BLOCK
+				blockMsg := &lib.BlockMessage{ChainId: 1, MaxHeight: 100}
+				blockBytes, _ := lib.Marshal(blockMsg)
+				for i := 0; i < 2; i++ {
+					p.channels[lib.Topic_BLOCK] <- &lib.MessageAndMetadata{
+						Message: blockBytes,
+						Sender:  peerInfo,
+					}
+				}
+
+				// Add 1 message to PEERS_RESPONSE
+				peerBookMsg := &PeerBookResponseMessage{Book: []*BookPeer{}}
+				peerBookBytes, _ := lib.Marshal(peerBookMsg)
+				p.channels[lib.Topic_PEERS_RESPONSE] <- &lib.MessageAndMetadata{
+					Message: peerBookBytes,
+					Sender:  peerInfo,
+				}
+			},
+			expected: map[lib.Topic]int{
+				lib.Topic_CONSENSUS:      0,
+				lib.Topic_BLOCK:          2,
+				lib.Topic_BLOCK_REQUEST:  0,
+				lib.Topic_TX:             3,
+				lib.Topic_PEERS_RESPONSE: 1,
+				lib.Topic_PEERS_REQUEST:  0,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Create a test P2P node
+			p2pNode := newTestP2PNode(t)
+			defer p2pNode.Stop()
+
+			// Setup test scenario
+			test.setup(p2pNode.P2P)
+
+			// Give a small delay for messages to be queued
+			time.Sleep(10 * time.Millisecond)
+
+			// Execute function call
+			stats := p2pNode.GetInboxStats()
+
+			// Verify results
+			require.Equal(t, test.expected, stats, test.detail)
+		})
+	}
+}
+
+func TestGetInboxStatsThreadSafety(t *testing.T) {
+	// Create test P2P node
+	p2pNode := newTestP2PNode(t)
+	defer p2pNode.Stop()
+
+	peerInfo := &lib.PeerInfo{
+		Address: &lib.PeerAddress{
+			PublicKey:  []byte("test-peer"),
+			NetAddress: "localhost:9001",
+			PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+		},
+	}
+
+	// Concurrently send messages and read stats
+	done := make(chan bool)
+	errs := make(chan error, 100)
+
+	// Writer goroutines - send messages
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			defer func() { done <- true }()
+			for j := 0; j < 50; j++ {
+				txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte(fmt.Sprintf("tx-%d-%d", id, j))}}
+				msgBytes, err := lib.Marshal(txMsg)
+				if err != nil {
+					errs <- err
+					return
+				}
+				p2pNode.channels[lib.Topic_TX] <- &lib.MessageAndMetadata{
+					Message: msgBytes,
+					Sender:  peerInfo,
+				}
+				time.Sleep(time.Millisecond)
+			}
+		}(i)
+	}
+
+	// Reader goroutines - read stats
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer func() { done <- true }()
+			for j := 0; j < 50; j++ {
+				stats := p2pNode.GetInboxStats()
+				// Just verify it doesn't panic and returns a valid map
+				require.NotNil(t, stats)
+				require.GreaterOrEqual(t, len(stats), 6)
+				time.Sleep(time.Millisecond)
+			}
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 20; i++ {
+		select {
+		case <-done:
+		case err := <-errs:
+			t.Fatal(err)
+		case <-time.After(10 * time.Second):
+			t.Fatal("timeout waiting for goroutines")
+		}
+	}
+
+	// Verify no errs occurred
+	select {
+	case err := <-errs:
+		t.Fatal(err)
+	default:
+		// No errs - good
+	}
+}
+
+func TestMonitorInboxStats(t *testing.T) {
+	// Create test P2P node
+	p2pNode := newTestP2PNode(t)
+	defer p2pNode.Stop()
+
+	// Start monitoring in background
+	done := make(chan bool)
+	go func() {
+		// Run for 3 seconds (3 monitoring cycles)
+		time.Sleep(3 * time.Second)
+		done <- true
+	}()
+
+	// Start the monitor (it will run until test completes)
+	go p2pNode.MonitorInboxStats(1 * time.Second)
+
+	// Simulate message flow
+	peerInfo := &lib.PeerInfo{
+		Address: &lib.PeerAddress{
+			PublicKey:  []byte("test-peer"),
+			NetAddress: "localhost:9001",
+			PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+		},
+	}
+
+	// sending some messages
+	go func() {
+		for i := 0; i < 10; i++ {
+			txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte(fmt.Sprintf("tx-%d", i))}}
+			msgBytes, _ := lib.Marshal(txMsg)
+			p2pNode.channels[lib.Topic_TX] <- &lib.MessageAndMetadata{
+				Message: msgBytes,
+				Sender:  peerInfo,
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+
+	<-done
+}
+
+func TestGetInboxStatsPerformance(t *testing.T) {
+	// Create test P2P node
+	p2pNode := newTestP2PNode(t)
+	defer p2pNode.Stop()
+
+	// Fill channels with messages
+	peerInfo := &lib.PeerInfo{
+		Address: &lib.PeerAddress{
+			PublicKey:  []byte("test-peer"),
+			NetAddress: "localhost:9001",
+			PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+		},
+	}
+
+	// Add 1000 messages to each channel
+	for topic := lib.Topic_CONSENSUS; topic < lib.Topic_INVALID; topic++ {
+		for i := 0; i < 1000; i++ {
+			txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte("test")}}
+			msgBytes, _ := lib.Marshal(txMsg)
+			p2pNode.channels[topic] <- &lib.MessageAndMetadata{
+				Message: msgBytes,
+				Sender:  peerInfo,
+			}
+		}
+	}
+
+	// Measure performance of GetInboxStats
+	iterations := 1000
+	start := time.Now()
+
+	for i := 0; i < iterations; i++ {
+		stats := p2pNode.GetInboxStats()
+		require.NotNil(t, stats)
+	}
+
+	elapsed := time.Since(start)
+	avgTime := elapsed / time.Duration(iterations)
+
+	// GetInboxStats should be very fast (< 1 ms per call)
+	require.Less(t, avgTime, time.Millisecond,
+		fmt.Sprintf("GetInboxStats too slow: %v per call", avgTime))
+
+	t.Logf("GetInboxStats performance: %v per call (%d iterations)", avgTime, iterations)
+}
+
+func TestInboxStatsWithFullChannel(t *testing.T) {
+	// Create test P2P node
+	p2pNode := newTestP2PNode(t)
+	defer p2pNode.Stop()
+
+	peerInfo := &lib.PeerInfo{
+		Address: &lib.PeerAddress{
+			PublicKey:  []byte("test-peer"),
+			NetAddress: "localhost:9001",
+			PeerMeta:   &lib.PeerMeta{NetworkId: 1, ChainId: 1},
+		},
+	}
+
+	// Fill TX channel to capacity (500,000)
+	// For testing, use a smaller number to avoid timeout
+	fillAmount := 1000
+
+	for i := 0; i < fillAmount; i++ {
+		txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte(fmt.Sprintf("tx-%d", i))}}
+		msgBytes, _ := lib.Marshal(txMsg)
+		p2pNode.channels[lib.Topic_TX] <- &lib.MessageAndMetadata{
+			Message: msgBytes,
+			Sender:  peerInfo,
+		}
+	}
+
+	// Get stats
+	stats := p2pNode.GetInboxStats()
+
+	// Verify TX channel count
+	require.Equal(t, fillAmount, stats[lib.Topic_TX])
+
+	// Calculate percentage
+	percentage := float64(stats[lib.Topic_TX]) / float64(maxInboxQueueSize) * 100
+
+	t.Logf("TX channel: %d messages (%.4f%% full)", stats[lib.Topic_TX], percentage)
+
+	// Verify other channels are empty
+	for topic := lib.Topic_CONSENSUS; topic < lib.Topic_INVALID; topic++ {
+		if topic != lib.Topic_TX {
+			require.Equal(t, 0, stats[topic])
+		}
+	}
 }

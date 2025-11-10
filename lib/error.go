@@ -262,6 +262,7 @@ const (
 	CodeEmptyOrderBook           ErrorCode = 91
 	CodeNoSubsidizedCommittees   ErrorCode = 92
 	CodeEmptyLotteryWinner       ErrorCode = 93
+	CodeStakeBelowMinimum        ErrorCode = 94
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"

@@ -23,6 +23,12 @@ go.work
 # Jetbrains
 .idea
 
+# Zed
+.zed
+
+# Visual Studio Code
+.vscode
+
 # Vendoring
 vendor
 

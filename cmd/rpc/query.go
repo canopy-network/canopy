@@ -431,6 +431,8 @@ func (s *Server) StateDiff(w http.ResponseWriter, r *http.Request, p httprouter.
 	if !ok {
 		return
 	}
+	defer sm1.Discard()
+	defer sm2.Discard()
 	state1, e := sm1.ExportState()
 	if e != nil {
 		write(w, e.Error(), http.StatusInternalServerError)

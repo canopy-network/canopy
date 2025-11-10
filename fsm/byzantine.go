@@ -333,6 +333,10 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 	validator.Committees = newCommittees
 	// update the stake amount and set the validator
 	validator.StakedAmount = stakeAfterSlash
+	// in case it was set to unstaking do not set the validator again
+	if isSet, e := s.SetValidatorUnstakingIfBelowMinimum(validator, p); isSet || e != nil {
+		return e
+	}
 	// update the validator
 	return s.SetValidator(validator)
 }

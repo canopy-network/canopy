@@ -60,16 +60,11 @@ func (ps *PeerSet) Add(p *Peer) (err lib.ErrorI) {
 	if bytes.Equal(p.Address.PublicKey, ps.publicKey) {
 		return nil
 	}
-	// if trusted or must connect, don't check inbound/outbound limits nor increment counts
-	if p.IsTrusted || p.IsMustConnect {
-		ps.set(p)
-		return nil
-	}
-	// check limits
-	if p.IsOutbound && ps.outbound >= ps.config.MaxOutbound {
-		return ErrMaxOutbound()
-	} else if !p.IsOutbound && ps.inbound >= ps.config.MaxInbound {
-		return ErrMaxInbound()
+	// if not trusted and not must connect, check inbound/outbound limits
+	if !p.IsTrusted && !p.IsMustConnect {
+		if err = ps.validateRegularPeerLimits(p); err != nil {
+			return
+		}
 	}
 	// increment counts
 	if p.IsOutbound {
@@ -80,7 +75,30 @@ func (ps *PeerSet) Add(p *Peer) (err lib.ErrorI) {
 	// set the peer
 	ps.set(p)
 	// update metrics
-	ps.metrics.UpdatePeerMetrics(ps.outbound+ps.inbound, ps.inbound, ps.outbound)
+	ps.updateMetrics()
+	return nil
+}
+
+// validateRegularPeerLimits checks if adding a regular peer exceeds configured limits
+func (ps *PeerSet) validateRegularPeerLimits(p *Peer) lib.ErrorI {
+	// count only regular peers (non-trusted, non-mustConnect) against limits
+	regularOutbound := 0
+	regularInbound := 0
+	for _, peer := range ps.m {
+		if !peer.IsTrusted && !peer.IsMustConnect {
+			if peer.IsOutbound {
+				regularOutbound++
+			} else {
+				regularInbound++
+			}
+		}
+	}
+	if p.IsOutbound && regularOutbound >= ps.config.MaxOutbound {
+		return ErrMaxOutbound()
+	}
+	if !p.IsOutbound && regularInbound >= ps.config.MaxInbound {
+		return ErrMaxInbound()
+	}
 	return nil
 }
 
@@ -95,7 +113,7 @@ func (ps *PeerSet) Remove(publicKey []byte, uuid uint64) (err lib.ErrorI) {
 	}
 	ps.remove(peer)
 	// update metrics
-	ps.metrics.UpdatePeerMetrics(ps.outbound+ps.inbound, ps.inbound, ps.outbound)
+	ps.updateMetrics()
 	return
 }
 
@@ -277,12 +295,10 @@ func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
 
 // remove() decrements the in/out counters, and deletes it from the set
 func (ps *PeerSet) remove(peer *Peer) {
-	if !peer.IsTrusted && !peer.IsMustConnect {
-		if peer.IsOutbound {
-			ps.outbound--
-		} else {
-			ps.inbound--
-		}
+	if peer.IsOutbound {
+		ps.outbound--
+	} else {
+		ps.inbound--
 	}
 	ps.del(peer.PeerInfo.Address.PublicKey)
 }
@@ -302,7 +318,13 @@ func (ps *PeerSet) changeIOCount(increment, outbound bool) {
 			ps.inbound--
 		}
 	}
-	ps.metrics.UpdatePeerMetrics(ps.outbound+ps.inbound, ps.inbound, ps.outbound)
+	ps.updateMetrics()
+}
+
+// updateMetrics is a helper to update peer metrics
+func (ps *PeerSet) updateMetrics() {
+	//ps.logger.Debugf("METRICS Inbound: %d, Outbound: %d", ps.inbound, ps.outbound)
+	ps.metrics.UpdatePeerMetrics(ps.inbound+ps.outbound, ps.inbound, ps.outbound)
 }
 
 // map based CRUD operations below

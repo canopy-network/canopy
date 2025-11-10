@@ -560,7 +560,7 @@ func (s *SMT) valueOpToSMTNode(operation valueOp) *node {
 	// set up the new node as a 'delete'
 	n := &node{Key: newNodeKey(crypto.Hash(operation.key), s.keyBitLength), Node: lib.Node{}, delete: true}
 	// if the operation is not a 'delete'
-	if operation.op != opDelete && !entryIsDelete(operation.entry) {
+	if operation.op != opDelete {
 		// set the value as the hash of the op.value and set 'delete' to false
 		n.Node.Value, n.delete = crypto.Hash(operation.value), false
 	}
@@ -593,13 +593,13 @@ func (s *SMT) setNode(n *node) lib.ErrorI {
 		return err
 	}
 	// set the bytes under the key in the store
-	return s.store.Set(n.Key.bytes(), nodeBytes)
+	return s.store.Set(lib.JoinLenPrefix(n.Key.bytes()), nodeBytes)
 }
 
 // delNode() remove a node from the database given its unique identifier
 func (s *SMT) delNode(key []byte) lib.ErrorI {
 	delete(s.nodeCache, string(key))
-	return s.store.Delete(key)
+	return s.store.Delete(lib.JoinLenPrefix(key))
 }
 
 // getNode() retrieves a node object from the database
@@ -612,7 +612,7 @@ func (s *SMT) getNode(key []byte) (n *node, err lib.ErrorI) {
 	// initialize a reference to a node object
 	n = newNode()
 	// get the bytes of the node from the kv store
-	nodeBytes, err := s.store.Get(key)
+	nodeBytes, err := s.store.Get(lib.JoinLenPrefix(key))
 	if err != nil || nodeBytes == nil {
 		return
 	}
