@@ -83,7 +83,7 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 		if qc != nil && qc.Results != nil {
 			// trigger the dex batch
 			if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
-				s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
+				s.log.Error(err.Error()) // log error only - allow endblock to continue
 			}
 		}
 	}
@@ -142,7 +142,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId {
 		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, results.DexBatch); err != nil {
-			s.log.Error(err.Error()) // log error only - it's possible to have an issue here due to async issues
+			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
 		}
 	}
 	// handle the token swaps ordered by the quorum

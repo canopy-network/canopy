@@ -469,8 +469,8 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
 		return ErrInvalidLiquidityPool()
 	}
-	// hard limit orders to 50K per batch to prevent unchecked state growth
-	if len(batch.Orders) >= 50_000 {
+	// hard limit orders to 10K per batch to prevent unchecked state growth
+	if len(batch.Orders) >= 10_000 {
 		return ErrMaxDexBatchSize()
 	}
 	// move funds from user

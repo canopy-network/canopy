@@ -716,7 +716,7 @@ func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
 
 // AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
 // Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
-func (x *Pool) AddPoints(address []byte, points uint64) (err lib.ErrorI) {
+func (x *Pool) AddPoints(address []byte, points uint64) {
 	// add to total points
 	x.TotalPoolPoints += points
 	// add to existing if found
