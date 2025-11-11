@@ -50,7 +50,7 @@ export const TotalBalanceCard = () => {
             </div>
 
             {/* 24h Change */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2">
                 {historyLoading ? (
                     <span className="text-sm text-text-muted">Loading 24h change...</span>
                 ) : historyData ? (

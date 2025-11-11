@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useManifest } from '@/hooks/useManifest';
+import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
 
 interface StatsCardsProps {
     totalStaked: number;
@@ -32,13 +32,30 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                                                           chainCount,
                                                           activeValidatorsCount
                                                       }) => {
+    const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
+    const stakedChangePercentage = stakedHistory?.changePercentage || 0;
 
     const statsData = [
         {
             id: 'totalStaked',
             title: 'Total Staked',
             value: `${formatStakedAmount(totalStaked)} CNPY`,
-            subtitle: `Across ${validatorsCount} validators`,
+            subtitle: stakedHistoryLoading ? (
+                'Loading 24h change...'
+            ) : stakedHistory ? (
+                <span className={`flex items-center gap-1 ${stakedChangePercentage >= 0 ? 'text-primary' : 'text-status-error'}`}>
+                    <svg
+                        className={`w-3 h-3 ${stakedChangePercentage < 0 ? 'rotate-180' : ''}`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                    >
+                        <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(1)}% 24h change
+                </span>
+            ) : (
+                `Across ${validatorsCount} validators`
+            ),
             icon: 'fa-solid fa-coins',
             iconColor: 'text-primary',
             valueColor: 'text-white'

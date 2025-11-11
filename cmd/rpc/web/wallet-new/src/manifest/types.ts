@@ -11,6 +11,7 @@ export type Manifest = {
         tx: {
             typeMap: Record<string, string>;
             typeIconMap: Record<string, string>;
+            fundsWay: Record<string, "in" | "out">
         }
     };
     actions: Action[];

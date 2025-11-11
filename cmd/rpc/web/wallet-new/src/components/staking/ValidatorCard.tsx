@@ -132,7 +132,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                     </div>
 
                     <div className="w-36 h-12 mx-6">
-                        <Line data={rewardsChartData} options={chartOptions} />
+                        <Line key={`validator-chart-${validator.address}`} data={rewardsChartData} options={chartOptions} />
                     </div>
 
                     <div className="flex items-center gap-2">

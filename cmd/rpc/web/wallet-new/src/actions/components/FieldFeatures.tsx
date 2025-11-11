@@ -49,13 +49,13 @@ export const FieldFeatures: React.FC<FieldFeaturesProps> = ({ features, ctx, set
     }
 
     return (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 z-10">
             {features.map((op) => (
                 <button
                     key={op.id}
                     type="button"
                     onClick={() => handle(op)}
-                    className="text-xs px-2 py-1 rounded font-semibold border border-primary text-primary hover:bg-primary hover:text-secondary transition-colors"
+                    className="text-xs px-3 py-1.5 rounded-md font-semibold border border-primary/60 bg-primary/10 text-primary hover:bg-primary hover:text-bg-primary transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
                 >
                     {labelFor(op)}
                 </button>

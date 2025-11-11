@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useAccountData } from '@/hooks/useAccountData';
-import { useManifest } from '@/hooks/useManifest';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
+import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
+import { useBalanceChart } from '@/hooks/useBalanceChart';
+import { useActionModal } from '@/app/providers/ActionModalProvider';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
-import { Button } from '@/components/ui/Button';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -18,7 +19,6 @@ import {
     Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-// FontAwesome icons will be used via CDN
 
 ChartJS.register(
     CategoryScale,
@@ -32,9 +32,13 @@ ChartJS.register(
 );
 
 export const Accounts = () => {
-    const { accounts, loading: accountsLoading, activeAccount } = useAccounts();
+    const { accounts, loading: accountsLoading, activeAccount, setSelectedAccount } = useAccounts();
     const { totalBalance, totalStaked, balances, stakingData, loading: dataLoading } = useAccountData();
-    const { data: historyData } = useBalanceHistory();
+    const { data: balanceHistory, isLoading: balanceHistoryLoading } = useBalanceHistory();
+    const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
+    const { data: balanceChartData = [], isLoading: balanceChartLoading } = useBalanceChart({ points: 6, type: 'balance' });
+    const { data: stakedChartData = [], isLoading: stakedChartLoading } = useBalanceChart({ points: 6, type: 'staked' });
+    const { openAction } = useActionModal();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedNetwork, setSelectedNetwork] = useState('All Networks');
@@ -47,15 +51,15 @@ export const Accounts = () => {
         return (amount / 1000000).toFixed(2);
     };
 
-    const getAccountType = (index: number) => {
-        const types = [
-            { name: "Primary Address", icon: 'fa-solid fa-wallet', bg: 'bg-gradient-to-r from-primary/80 to-primary/40' },
-            { name: "Staking Address", icon: 'fa-solid fa-layer-group', bg: 'bg-gradient-to-r from-blue-500/80 to-blue-500/40' },
-            { name: "Trading Address", icon: 'fa-solid fa-exchange-alt', bg: 'bg-gradient-to-r from-purple-500/80 to-purple-500/40' },
-            { name: "Validator Address", icon: 'fa-solid fa-circle', bg: 'bg-gradient-to-r from-green-500/80 to-green-500/40' },
-            { name: "Treasury Address", icon: 'fa-solid fa-box', bg: 'bg-gradient-to-r from-red-500/80 to-red-500/40' }
+    const getAccountIcon = (index: number) => {
+        const icons = [
+            { icon: 'fa-solid fa-wallet', bg: 'bg-gradient-to-r from-primary/80 to-primary/40' },
+            { icon: 'fa-solid fa-layer-group', bg: 'bg-gradient-to-r from-blue-500/80 to-blue-500/40' },
+            { icon: 'fa-solid fa-exchange-alt', bg: 'bg-gradient-to-r from-purple-500/80 to-purple-500/40' },
+            { icon: 'fa-solid fa-shield', bg: 'bg-gradient-to-r from-green-500/80 to-green-500/40' },
+            { icon: 'fa-solid fa-box', bg: 'bg-gradient-to-r from-red-500/80 to-red-500/40' }
         ];
-        return types[index % types.length];
+        return icons[index % icons.length];
     };
 
     const getAccountStatus = (address: string) => {
@@ -134,63 +138,16 @@ export const Accounts = () => {
         return changes[index % changes.length];
     };
 
-    // Calculate real percentage change for balance based on actual data
-    const getRealBalanceChange = () => {
-        if (balances.length === 0) return 0;
+    // Get real 24h changes from unified history hooks
+    const balanceChangePercentage = balanceHistory?.changePercentage || 0;
+    const stakedChangePercentage = stakedHistory?.changePercentage || 0;
 
-        // Use the first balance as baseline and calculate change from total
-        const firstBalance = balances[0]?.amount || 0;
-        const currentTotal = totalBalance;
-
-        if (firstBalance === 0) return 0;
-
-        // Calculate percentage change based on actual balance data
-        const change = ((currentTotal - firstBalance) / firstBalance) * 100;
-        return Math.max(-100, Math.min(100, change)); // Clamp between -100% and 100%
-    };
-
-    // Calculate real percentage change for staking based on actual data
-    const getRealStakingChange = () => {
-        if (stakingData.length === 0) return 0;
-
-        // Use the first staking amount as baseline
-        const firstStaked = stakingData[0]?.staked || 0;
-        const currentTotal = totalStaked;
-
-        if (firstStaked === 0) return 0;
-
-        // Calculate percentage change based on actual staking data
-        const change = ((currentTotal - firstStaked) / firstStaked) * 100;
-        return Math.max(-100, Math.min(100, change)); // Clamp between -100% and 100%
-    };
-
-    // Calculate real percentage change for individual address balance
-    const getRealAddressChange = (address: string, index: number) => {
-        const balanceInfo = balances.find(b => b.address === address);
-        if (!balanceInfo) return '0.0%';
-
-        // Use a small variation based on the address index to simulate real changes
-        // This creates realistic variations between addresses
-        const baseChange = (index % 3) * 0.5 + 0.2; // 0.2%, 0.7%, 1.2%
-        const isPositive = index % 2 === 0; // Alternate between positive and negative
-
-        const change = isPositive ? baseChange : -baseChange;
-        return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
-    };
-
-    // Real chart data from actual balance data
-    const balanceChartData = {
-        labels: ['6h', '12h', '18h', '24h', '30h', '36h'],
+    // Prepare chart data from useBalanceChart hook
+    const balanceChart = {
+        labels: balanceChartData.map(d => d.label),
         datasets: [
             {
-                data: balances.length > 0 ? [
-                    (totalBalance / 1000000) * 0.95,
-                    (totalBalance / 1000000) * 0.97,
-                    (totalBalance / 1000000) * 0.99,
-                    (totalBalance / 1000000) * 1.0,
-                    (totalBalance / 1000000) * 1.02,
-                    (totalBalance / 1000000) * 1.024
-                ] : [0, 0, 0, 0, 0, 0],
+                data: balanceChartData.map(d => d.value / 1000000),
                 borderColor: '#6fe3b4',
                 backgroundColor: 'rgba(111, 227, 180, 0.1)',
                 borderWidth: 2,
@@ -202,19 +159,11 @@ export const Accounts = () => {
         ]
     };
 
-    // Real chart data from actual staking data
-    const stakedChartData = {
-        labels: ['6h', '12h', '18h', '24h', '30h', '36h'],
+    const stakedChart = {
+        labels: stakedChartData.map(d => d.label),
         datasets: [
             {
-                data: stakingData.length > 0 ? [
-                    (totalStaked / 1000000) * 0.98,
-                    (totalStaked / 1000000) * 0.99,
-                    (totalStaked / 1000000) * 1.01,
-                    (totalStaked / 1000000) * 1.0,
-                    (totalStaked / 1000000) * 0.995,
-                    (totalStaked / 1000000) * 1.012
-                ] : [0, 0, 0, 0, 0, 0],
+                data: stakedChartData.map(d => d.value / 1000000),
                 borderColor: '#6fe3b4',
                 backgroundColor: 'rgba(111, 227, 180, 0.1)',
                 borderWidth: 2,
@@ -252,8 +201,48 @@ export const Accounts = () => {
         }
     };
 
+    // Calculate real percentage change for individual address balance
+    const getRealAddressChange = (address: string, index: number) => {
+        const balanceInfo = balances.find(b => b.address === address);
+        if (!balanceInfo) return '0.0%';
+
+        // Use a small variation based on the address index to simulate real changes
+        // This creates realistic variations between addresses
+        const baseChange = (index % 3) * 0.5 + 0.2; // 0.2%, 0.7%, 1.2%
+        const isPositive = index % 2 === 0; // Alternate between positive and negative
+
+        const change = isPositive ? baseChange : -baseChange;
+        return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+    };
+
+
     const getChangeColor = (change: string) => {
         return change.startsWith('+') ? 'text-primary' : 'text-red-400';
+    };
+
+    // Handle action button clicks
+    const handleViewDetails = (address: string) => {
+        // TODO: Navigate to address details page
+        console.log('View details for:', address);
+    };
+
+    const handleSendAction = (address: string) => {
+        // Set the account as selected before opening the action
+        const account = accounts.find(a => a.address === address);
+        if (account && setSelectedAccount) {
+            setSelectedAccount(account);
+        }
+        // Open send action modal
+        openAction('send', {
+            onFinish: () => {
+                console.log('Send action completed');
+            }
+        });
+    };
+
+    const handleMoreActions = (address: string) => {
+        // TODO: Show more actions menu
+        console.log('More actions for:', address);
     };
 
     const processedAddresses = accounts.map((account, index) => {
@@ -268,14 +257,14 @@ export const Accounts = () => {
         const stakedPercentage = getStakedPercentage(account.address);
         const liquidPercentage = getLiquidPercentage(account.address);
         const statusInfo = getAccountStatus(account.address);
-        const accountType = getAccountType(index);
+        const accountIcon = getAccountIcon(index);
         const change = getRealAddressChange(account.address, index);
 
         return {
             id: account.address,
             address: formatAddress(account.address),
             fullAddress: account.address,
-            nickname: account.nickname,
+            nickname: account.nickname || formatAddress(account.address),
             balance: formattedBalance,
             staked: stakedFormatted,
             liquid: liquidFormatted,
@@ -284,9 +273,8 @@ export const Accounts = () => {
             status: statusInfo.status,
             statusColor: getStatusColor(statusInfo.status),
             change: change,
-            type: accountType.name,
-            icon: accountType.icon,
-            iconBg: accountType.bg
+            icon: accountIcon.icon,
+            iconBg: accountIcon.bg
         };
     });
 
@@ -397,13 +385,28 @@ export const Accounts = () => {
                             &nbsp;CNPY
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${getRealBalanceChange() >= 0 ? 'text-primary' : 'text-red-400'}`}>
-                                {getRealBalanceChange() >= 0 ? '+' : ''}{getRealBalanceChange().toFixed(1)}%     <span className="text-text-muted text-sm font-medium">24h change</span>
-                            </span>
-
-                            <div className="w-20 h-12">
-                                <Line data={balanceChartData} options={chartOptions} />
-                            </div>
+                            {balanceHistoryLoading ? (
+                                <span className="text-sm text-text-muted">Loading...</span>
+                            ) : balanceHistory ? (
+                                <span className={`text-sm flex items-center gap-1 ${balanceChangePercentage >= 0 ? 'text-primary' : 'text-status-error'}`}>
+                                    <svg
+                                        className={`w-4 h-4 ${balanceChangePercentage < 0 ? 'rotate-180' : ''}`}
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                    >
+                                        <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    {balanceChangePercentage >= 0 ? '+' : ''}{balanceChangePercentage.toFixed(1)}%
+                                    <span className="text-text-muted ml-1">24h change</span>
+                                </span>
+                            ) : (
+                                <span className="text-sm text-text-muted">No data</span>
+                            )}
+                            {!balanceChartLoading && balanceChartData.length > 0 && (
+                                <div className="w-20 h-12">
+                                    <Line key="balance-chart" data={balanceChart} options={chartOptions} />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -424,12 +427,28 @@ export const Accounts = () => {
                             &nbsp;CNPY
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${getRealStakingChange() >= 0 ? 'text-primary' : 'text-red-400'}`}>
-                                {getRealStakingChange() >= 0 ? '+' : ''}{getRealStakingChange().toFixed(1)}% 24h change
-                            </span>
-                            <div className="w-20 h-12">
-                                <Line data={stakedChartData} options={chartOptions} />
-                            </div>
+                            {stakedHistoryLoading ? (
+                                <span className="text-sm text-text-muted">Loading...</span>
+                            ) : stakedHistory ? (
+                                <span className={`text-sm flex items-center gap-1 ${stakedChangePercentage >= 0 ? 'text-primary' : 'text-status-error'}`}>
+                                    <svg
+                                        className={`w-4 h-4 ${stakedChangePercentage < 0 ? 'rotate-180' : ''}`}
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                    >
+                                        <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(1)}%
+                                    <span className="text-text-muted ml-1">24h change</span>
+                                </span>
+                            ) : (
+                                <span className="text-sm text-text-muted">No data</span>
+                            )}
+                            {!stakedChartLoading && stakedChartData.length > 0 && (
+                                <div className="w-20 h-12">
+                                    <Line key="staked-chart" data={stakedChart} options={chartOptions} />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -452,11 +471,11 @@ export const Accounts = () => {
 
                 {/* Address Portfolio Section */}
                 <motion.div
-                    className="bg-bg-secondary rounded-xl border border-bg-accent overflow-hidden p-2"
+                    className="bg-bg-secondary rounded-xl border border-bg-accent overflow-hidden"
                     variants={cardVariants}
                 >
-                    <div className="p-6 border-b border-bg-accent">
-                        <div className="flex items-center justify-between">
+                    <div className="p-4 md:p-6 border-b border-bg-accent">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <h2 className="text-xl font-bold text-white">Address Portfolio</h2>
                             <div className="flex items-center gap-2">
                                 <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
@@ -468,16 +487,16 @@ export const Accounts = () => {
                     </div>
 
                     {/* Table */}
-                    <div className="overflow-x-auto translate-x-16">
-                        <table className="w-full">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[800px]">
                             <thead className="bg-bg-tertiary">
                             <tr className="text-sm">
-                                <th className="text-left p-4 text-text-muted font-medium">Address</th>
-                                <th className="text-left p-4 text-text-muted font-medium">Total Balance</th>
-                                <th className="text-left p-4 text-text-muted font-medium">Staked</th>
-                                <th className="text-left p-4 text-text-muted font-medium">Liquid</th>
-                                <th className="text-left p-4 text-text-muted font-medium">Status</th>
-                                <th className="text-left p-4 text-text-muted font-medium">Actions</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Address</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Total Balance</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Staked</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Liquid</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Status</th>
+                                <th className="text-left p-3 md:p-4 text-text-muted font-medium">Actions</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -490,52 +509,64 @@ export const Accounts = () => {
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: index * 0.1 }}
                                     >
-                                        <td className="p-4">
+                                        <td className="p-3 md:p-4">
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 ${address.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
-                                                    <i className={`${address.icon} text-white text-sm`}></i>
+                                                <div className={`w-8 h-8 md:w-10 md:h-10 ${address.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                                                    <i className={`${address.icon} text-white text-xs md:text-sm`}></i>
                                                 </div>
-                                                <div>
-                                                    <div className="text-white font-medium font-mono">{address.address}</div>
-                                                    <div className="text-text-muted text-xs">{address.type}</div>
+                                                <div className="min-w-0">
+                                                    <div className="text-white font-medium text-sm md:text-base truncate">{address.nickname}</div>
+                                                    <div className="text-text-muted text-xs font-mono truncate">{address.address}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className='w-6/12'>
-                                                <div className="text-white font-medium font-mono">{Number(address.balance).toLocaleString()} CNPY</div>
-                                                <div className={`text-xs font-medium ${getChangeColor(address.change)} text-right`}>
+                                        <td className="p-3 md:p-4">
+                                            <div>
+                                                <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.balance).toLocaleString()} CNPY</div>
+                                                <div className={`text-xs font-medium ${getChangeColor(address.change)}`}>
                                                     {address.change}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className='w-6/12'>
-                                                <div className="text-white font-medium font-mono">{Number(address.staked).toLocaleString()} CNPY</div>
-                                                <div className="text-text-muted text-xs text-right">{address.stakedPercentage.toFixed(1)}%</div>
+                                        <td className="p-3 md:p-4">
+                                            <div>
+                                                <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.staked).toLocaleString()} CNPY</div>
+                                                <div className="text-text-muted text-xs">{address.stakedPercentage.toFixed(1)}%</div>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className='w-6/12'>
-                                                <div className="text-white font-medium font-mono">{Number(address.liquid).toLocaleString()} CNPY</div>
-                                                <div className="text-text-muted text-xs text-right">{address.liquidPercentage.toFixed(1)}%</div>
+                                        <td className="p-3 md:p-4">
+                                            <div>
+                                                <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.liquid).toLocaleString()} CNPY</div>
+                                                <div className="text-text-muted text-xs">{address.liquidPercentage.toFixed(1)}%</div>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${address.statusColor}`}>
+                                        <td className="p-3 md:p-4">
+                                                <span className={`px-2 md:px-3 py-1 rounded-full text-xs md:text-sm font-medium ${address.statusColor} whitespace-nowrap`}>
                                                     {address.status}
                                                 </span>
                                         </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-2">
-                                                <button className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors">
-                                                    <i className="fa-solid fa-eye w-4 h-4 text-text-muted"></i>
+                                        <td className="p-3 md:p-4">
+                                            <div className="flex items-center gap-1 md:gap-2">
+                                                <button
+                                                    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
+                                                    onClick={() => handleViewDetails(address.fullAddress)}
+                                                    title="View Details"
+                                                >
+                                                    <i className="fa-solid fa-eye w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
                                                 </button>
-                                                <button className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors">
-                                                    <i className="fa-solid fa-paper-plane w-4 h-4 text-text-muted"></i>
+                                                <button
+                                                    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
+                                                    onClick={() => handleSendAction(address.fullAddress)}
+                                                    title="Send"
+                                                >
+                                                    <i className="fa-solid fa-paper-plane w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
                                                 </button>
-                                                <button className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors">
-                                                    <i className="fa-solid fa-ellipsis-h w-4 h-4 text-text-muted"></i>
+                                                <button
+                                                    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
+                                                    onClick={() => handleMoreActions(address.fullAddress)}
+                                                    title="More Actions"
+                                                >
+                                                    <i className="fa-solid fa-ellipsis-h w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
                                                 </button>
                                             </div>
                                         </td>

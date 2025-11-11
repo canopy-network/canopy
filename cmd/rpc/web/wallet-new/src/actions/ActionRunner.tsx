@@ -59,6 +59,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         account: selectedAccount ? {
             address: selectedAccount.address,
             nickname: selectedAccount.nickname,
+            pubKey: selectedAccount.publicKey,
         } : undefined,
         params,
     }), [form, chain, selectedAccount, params]);
@@ -101,6 +102,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         account: selectedAccount ? {
             address: selectedAccount.address,
             nickname: selectedAccount.nickname,
+            pubKey: selectedAccount.publicKey,
         } : undefined,
         fees: {
             ...feesResolved
@@ -132,12 +134,13 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
     }, [action])
 
     const summaryTitle = React.useMemo(() => {
-        return (action as any)?.form?.confirmation?.summary?.title
-    }, [action])
+        const title = (action as any)?.form?.confirmation?.title
+        return typeof title === 'string' ? template(title, templatingCtx) : title
+    }, [action, templatingCtx])
 
     const resolvedSummary = React.useMemo(() => {
         return rawSummary.map((item: any) => ({
-            label: item.label,
+            label: typeof item.label === 'string' ? template(item.label, templatingCtx) : item.label,
             icon: item.icon, // opcional
             value: typeof item.value === 'string' ? template(item.value, templatingCtx) : item.value,
         }))
@@ -147,12 +150,13 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
 
     const confirmBtn = React.useMemo(() => {
         const btn = (action as any)?.form?.confirmation?.btns?.submit
+            ?? (action as any)?.form?.confirmation?.btn
             ?? {}
         return {
-            label: btn.label ?? 'Confirm',
+            label: typeof btn.label === 'string' ? template(btn.label, templatingCtx) : (btn.label ?? 'Confirm'),
             icon: btn.icon ?? undefined,
         }
-    }, [action])
+    }, [action, templatingCtx])
 
     const isReady = React.useMemo(() => !!action && !!chain, [action, chain])
 
@@ -176,12 +180,14 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
             account: selectedAccount ? {
                 address: selectedAccount.address,
                 nickname: selectedAccount.nickname,
+                pubKey: selectedAccount.publicKey,
             } : undefined,
             fees: {
                 ...feesResolved
             },
+            ds: mergedDs,
         }),
-        [action, normForm, chain, session.password, feesResolved]
+        [action, normForm, chain, session.password, feesResolved, selectedAccount, mergedDs]
     )
 
     const host = React.useMemo(() => {
@@ -201,7 +207,10 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         const before = resolveToastFromManifest(action, "onBeforeSubmit", templatingCtx);
         if (before) toast.neutral(before);
         setStage('executing')
-        const res = await fetch(host + action!.submit?.path, {
+        const submitPath = typeof action!.submit?.path === 'string'
+            ? template(action!.submit.path, templatingCtx)
+            : action!.submit?.path
+        const res = await fetch(host + submitPath, {
             method: action!.submit?.method,
             headers: action!.submit?.headers ?? {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
@@ -322,6 +331,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
                 account: selectedAccount ? {
                     address: selectedAccount.address,
                     nickname: selectedAccount.nickname,
+                    pubKey: selectedAccount.publicKey,
                 } : undefined,
                 fees: { ...feesResolved },
                 params: { ...params },
@@ -438,7 +448,7 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
                                     {infoItems.length > 0 && (
                                         <div className="flex-col h-full p-4 rounded-lg bg-bg-primary">
                                             {action?.form?.info?.title && (
-                                                <h4 className="text-canopy-50">{action?.form?.info?.title}</h4>
+                                                <h4 className="text-canopy-50">{template(action?.form?.info?.title, templatingCtx)}</h4>
                                             )}
                                             <div className="mt-3 space-y-2">
                                                 {infoItems.map((d: { icon: string | undefined; label: string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | null | undefined; value: any }, i: React.Key | null | undefined) => (

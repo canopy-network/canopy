@@ -24,7 +24,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
 
     const hasFeatures = !!(field.features?.length)
     const common = 'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none'
-    const paddingRight = hasFeatures ? 'pr-20' : ''
+    const paddingRight = hasFeatures ? 'pr-24' : '' // Increased padding for better button spacing
     const border = error ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
 
     return (

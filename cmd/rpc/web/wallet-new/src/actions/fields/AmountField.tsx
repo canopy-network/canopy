@@ -21,7 +21,8 @@ export const AmountField: React.FC<BaseFieldProps> = ({
     const showDenom = !!denom
 
     // Calculate padding based on features and denom
-    const paddingRight = hasFeatures && showDenom ? 'pr-32' : hasFeatures ? 'pr-20' : showDenom ? 'pr-16' : ''
+    // Increased padding for better spacing with the MAX button
+    const paddingRight = hasFeatures && showDenom ? 'pr-36' : hasFeatures ? 'pr-24' : showDenom ? 'pr-16' : ''
 
     const common = 'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
     const border = error ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
@@ -49,8 +50,8 @@ export const AmountField: React.FC<BaseFieldProps> = ({
             />
             {showDenom && (
                 <div className={cx(
-                    "absolute top-1/2 -translate-y-1/2 text-neutral-400 text-sm pointer-events-none",
-                    hasFeatures ? "right-20" : "right-3"
+                    "absolute top-1/2 -translate-y-1/2 text-text-muted text-sm font-medium pointer-events-none",
+                    hasFeatures ? "right-24" : "right-3"
                 )}>
                     {denom}
                 </div>

@@ -54,6 +54,12 @@
       "coerce": { "body": { "height": "int" } },
       "selector": ""
     },
+    "validatorByHeight": {
+      "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },
+      "body": { "height": "{{height}}", "address": "{{address}}" },
+      "coerce": { "ctx": { "height": "number" }, "body": { "height": "int" } },
+      "selector": ""
+    },
     "validators": {
       "source": { "base": "rpc", "path": "/v1/query/validators", "method": "POST" },
       "body": { "height": 0, "pageNumber": 1, "perPage": 1000 },

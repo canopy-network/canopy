@@ -77,7 +77,6 @@ export const useDashboard = () => {
                     transaction: {
                         // @ts-ignore
                         ...i.transaction,
-                        type: 'send',
                     },
                 }))
             ) ?? [];

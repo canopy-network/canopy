@@ -52,14 +52,14 @@ export const Dashboard = () => {
             >
                 <div className="px-6 py-8">
                     <div className="flex lg:flex-row flex-col gap-6 mb-8 w-full items-stretch">
-                        <div className="flex-1">
+                        <div className="flex-1 lg:w-72 w-full">
                             <ErrorBoundary>
-                                {/*<TotalBalanceCard/>*/}
+                                <TotalBalanceCard/>
                             </ErrorBoundary>
                         </div>
                         <div className="lg:w-80 w-full">
                             <ErrorBoundary>
-                                {/*<StakedBalanceCard/>*/}
+                                <StakedBalanceCard/>
                             </ErrorBoundary>
                         </div>
                         <div className="lg:w-80 w-full">

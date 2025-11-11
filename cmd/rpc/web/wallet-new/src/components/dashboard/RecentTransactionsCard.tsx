@@ -57,6 +57,11 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
         [manifest]
     );
 
+    const getFundWay = useCallback(
+        (txType: string) => manifest?.ui?.tx?.fundsWay?.[txType] ?? txType,
+        [manifest]
+    );
+
 
     const getTxTimeAgo = useCallback((): (tx: Transaction) => String => {
         return (tx: Transaction) => {
@@ -146,9 +151,9 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
             {/* Rows */}
             <div className="space-y-3">
                 {transactions.length > 0 ? transactions.map((tx, i) => {
-                    const prefix = tx?.type === 'send' ? '-' : '+'
+                    const fundsWay = getFundWay(tx?.type)
+                    const prefix = fundsWay === 'out' ? '-' : fundsWay === 'in' ? '+' : ''
                     const amountTxt = `${prefix}${toDisplay(Number(tx.amount || 0)).toFixed(2)} ${symbol}`
-                    const hashShort = tx.hash?.length > 14 ? `${tx.hash.slice(0, 10)}...${tx.hash.slice(-4)}` : tx.hash
 
                     return (
                         <motion.div key={`${tx.hash}-${i}`}
@@ -162,8 +167,8 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
                                 <span className="text-text-primary text-sm">{getTxMap(tx?.type)}</span>
                             </div>
                             <div className={`text-sm font-medium ${
-                                amountTxt.startsWith('+') ? 'text-green-400' :
-                                    amountTxt.startsWith('-') ? 'text-red-400' : 'text-text-primary'
+                                fundsWay === 'in' ? 'text-green-400' :
+                                    fundsWay === 'out' ? 'text-red-400' : 'text-text-primary'
                             }`}>
                                 {amountTxt}
                             </div>

@@ -3,13 +3,21 @@
     "tx": {
       "typeMap": {
         "send": "Send",
+        "editStake": "Edit Stake",
         "stake": "Stake",
         "receive": "Receive"
       },
       "typeIconMap": {
+        "editStake": "Lock",
         "send": "Send",
         "stake": "Lock",
         "receive": "Download"
+      },
+      "fundsWay": {
+        "editStake": "out",
+        "send": "out",
+        "stake": "out",
+        "receive": "in"
       }
     }
   },
@@ -389,7 +397,9 @@
             "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Validator Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Staked Amount:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Type:</p><p class='text-canopy-50 font-semibold'>{{ ds.validator.delegate ? 'Delegation' : 'Validation' }}</p></div></div></div>",
             "showIf": "{{ form.operator && ds.validator }}",
             "step": "setup",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "output",
@@ -424,7 +434,7 @@
               },
               {
                 "label": "Reward",
-                "value":  "reward",
+                "value": "reward",
                 "help": "Output Address"
               }
             ],
@@ -437,7 +447,9 @@
             "html": "<div class='flex-col col-span-12 p-3 bg-blue-950/30 border border-blue-800/30 rounded-lg'><div class='flex items-center gap-2 mb-1'><svg class='w-4 h-4 text-blue-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><p class='text-blue-300 text-sm font-medium'>Signer Account Balance</p></div><p class='text-canopy-50 font-semibold text-lg'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p><p class='text-text-muted text-xs mt-1'>Available balance for transaction fees and additional stake</p></div>",
             "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
             "step": "setup",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -478,7 +490,9 @@
             "html": "<div class='col-span-12 -mt-3 mb-3 flex items-center gap-3'><div class='inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-full text-xs'><svg class='w-4 h-4 text-emerald-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><span class='text-emerald-300 font-medium'>Current:</span><span class='text-white font-semibold'>{{numberToLocaleString<{{fromMicroDenom<{{ds.validator.stakedAmount}}>}}>}} CNPY</span></div><div class='flex-1 h-px bg-gradient-to-r from-emerald-500/20 to-transparent'></div><span class='text-xs text-emerald-400/60'>↑ Increase only</span></div>",
             "showIf": "{{ ds.validator }}",
             "step": "setup",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "isDelegate",
@@ -497,7 +511,7 @@
               },
               {
                 "label": "Delegation",
-                "value":  true,
+                "value": true,
                 "help": "Delegate to committee",
                 "toolTip": "This will delegate your tokens to a committee."
               }
@@ -514,7 +528,6 @@
             "autoPopulate": "once",
             "step": "setup"
           },
-
           {
             "id": "selectCommittees",
             "name": "selectCommittees",
@@ -533,9 +546,16 @@
             "value": "{{ ds.validator?.committees ?? [] }}",
             "autoPopulate": "once",
             "rows": [
-              { "id": 1, "name": "Canopy", "minStake": "1 CNPY" },
-              { "id": 2, "name": "Canary", "minStake": "1 CNPY" }
-
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
             ],
             "columns": [
               {
@@ -560,16 +580,15 @@
             },
             "step": "committees"
           },
-
-
           {
             "id": "manualCommittees",
             "name": "manualCommittees",
             "type": "text",
             "label": "Committees Summary",
             "placeholder": "1,2,3",
-            "help": "Enter comma separated committee ids",
-            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : '' }}",
+            "help": "{{ ds.validator ? 'Current committees (from validator)' : 'Enter comma separated committee ids' }}",
+            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : (ds.validator?.committees ? (Array.isArray(ds.validator.committees) ? ds.validator.committees.join(',') : ds.validator.committees) : '') }}",
+            "readOnly": true,
             "step": "committees"
           },
           {
@@ -607,24 +626,32 @@
           "title": "Confirmations",
           "summary": [
             {
-              "label": "Staking Address",
-              "value": "{{shortAddress<{{account.address}}>}}"
+              "label": "Staking (Operator) Address",
+              "value": "{{shortAddress<{{form.operator}}>}}"
             },
             {
-              "label": "Stake Amount",
+              "label": "Rewards Address",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{form.signerResponsible == 'operator' ? 'Operator Address' : 'Rewards Address'}} | {{shortAddress<{{form.signerResponsible == 'operator' ? form.operator : form.output}}>}}"
+            },
+            {
+              "label": "{{ ds.validator ? 'Edit Stake' : 'New Stake' }}",
               "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
             },
             {
-              "label": "Stake Type",
-              "value": "{{form.isDelegate ? 'Delegation' : 'Validation'}} {{form.isAutocompound ? 'with autocompounding' : ''}}"
+              "label": "Transaction Type",
+              "value": "{{ds.validator ? 'Edit Stake' : 'New Stake'}}"
             },
             {
               "label": "Committees IDs",
               "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}"
             },
             {
-              "label": "Rewards Address",
-              "value": "{{shortAddress<{{form.output}}>}}"
+              "label": "Net Address",
+              "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}"
             },
             {
               "label": "Transaction Fee",
@@ -641,7 +668,15 @@
       },
       "payload": {
         "address": {
-          "value": "{{account.address}}",
+          "value": "{{form.operator}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "{{ ds.validator ? '' : account.pubKey }}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}",
           "coerce": "string"
         },
         "netAddress": {
@@ -653,16 +688,15 @@
           "coerce": "number"
         },
         "delegate": {
-          "value": "{{form.isDelegate}}",
+          "value": "{{ ds.validator ? false : form.isDelegate }}",
           "coerce": "boolean"
         },
         "earlyWithdrawal": {
           "value": "{{!form.isAutocompound}}",
           "coerce": "boolean"
         },
-
-        "committees": {
-          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}}",
+        "output": {
+          "value": "{{form.output}}",
           "coerce": "string"
         },
         "signer": {
@@ -688,7 +722,7 @@
       },
       "submit": {
         "base": "admin",
-        "path": "/v1/admin/tx-stake",
+        "path": "{{ ds.validator ? '/v1/admin/tx-edit-stake' : '/v1/admin/tx-stake' }}",
         "method": "POST"
       },
       "notifications": {
