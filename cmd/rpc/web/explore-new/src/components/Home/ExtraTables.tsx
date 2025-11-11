@@ -80,6 +80,10 @@ const ExtraTables: React.FC = () => {
     const txs = normalizeList(txsPage)
     const blocks = normalizeList(blocksPage)
 
+    // Check if all transactions are from Canopy
+    const allChains = txs.map((t: any) => t.chain || 'Canopy')
+    const allCanopy = allChains.every((chain: string) => chain === 'Canopy' || !chain)
+
     // Calculate total stake for percentages
     const totalStake = React.useMemo(() => allValidators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0), [allValidators])
 
@@ -250,8 +254,8 @@ const ExtraTables: React.FC = () => {
                 title="Validator Ranking"
                 live={false}
                 viewAllPath="/validators"
-                paginate
-                pageSize={10}
+                paginate={false}
+                compactFooter={true}
                 columns={[
                     { label: 'Rank' },
                     { label: 'Name/Address' },
@@ -275,10 +279,11 @@ const ExtraTables: React.FC = () => {
                     { label: 'Amount' },
                     { label: 'From' },
                     { label: 'To' },
-                    { label: 'Chain' },
+                    ...(allCanopy ? [] : [{ label: 'Chain' }]),
                 ]}
-                paginate
-                pageSize={10}
+                paginate={false}
+                compactFooter={true}
+                viewAllPath="/transactions"
                 rows={txs.map((t: any) => {
                     const ts = t.time || t.timestamp || t.blockTime
                     let timeAgo = 'N/A'
@@ -337,7 +342,8 @@ const ExtraTables: React.FC = () => {
 
                     const hash = t.txHash || t.hash || 'N/A'
                     const actionIcon = getTransactionIcon(action)
-                    return [
+
+                    const baseRow = [
                         <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
                         <span className="text-gray-400">
                             {timeAgo}
@@ -360,10 +366,20 @@ const ExtraTables: React.FC = () => {
                         </span>,
                         <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
                         <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
-                        <div className="flex items-center gap-2">
-                            <Logo size={80} showText={false} />
-                        </div>,
                     ]
+
+                    if (!allCanopy) {
+                        baseRow.push(
+                            <div className="flex items-center gap-2">
+                                <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center">
+                                    <Logo size={20} showText={false} />
+                                </div>
+                                <span className="text-gray-200 text-sm">{chain}</span>
+                            </div>
+                        )
+                    }
+
+                    return baseRow
                 })}
             />
         </div>

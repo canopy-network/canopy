@@ -86,96 +86,126 @@ const Navbar = () => {
     return (
         <nav ref={navRef} className="bg-navbar shadow-lg">
             <div className="mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between h-16">
-                    {/* Logo */}
+                <div className="flex justify-between items-center h-16 gap-4">
+                    {/* Section 1: Left - Logo + Block # */}
                     <div className="flex items-center">
                         <Link to="/" className="flex items-center space-x-3">
                             <Logo size={180} showText={false} />
-                            <div className="flex items-center gap-3">
-                                <motion.span
-                                    whileHover={{ scale: 1.03 }}
-                                    className="font-semibold text-white text-2xl"
-                                >
-                                    {menu.title}
-                                </motion.span>
-                                <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-sm">
-                                    <p className='text-gray-500 font-light'>Block:</p>
-                                    <p className="font-medium text-primary">#{blocks.data?.[0]?.blockHeader?.height?.toLocaleString() || '0'}</p>
-                                </div>
+                            <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-base">
+                                <p className='text-gray-500 font-light'>Block:</p>
+                                <p className="font-medium text-primary">#{blocks.data?.[0]?.blockHeader?.height?.toLocaleString() || '0'}</p>
                             </div>
                         </Link>
                     </div>
 
-                    {/* Navigation Items */}
-                    <div className="hidden md:flex items-center space-x-2">
-                        {menu.root.map((item, index) => (
-                            <div
-                                key={item.label}
-                                className="relative z-10"
-                            >
-                                <button
-                                    onClick={() => handleToggle(index)}
-                                    className={`relative z-20 px-3 py-2 rounded-md text-md font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-primary hover:bg-gray-700'}`}
+                    {/* Section 2: Center - Search Bar */}
+                    <div className="hidden md:flex items-center justify-center w-full">
+                        <div className="relative w-full max-w-lg mx-auto">
+                            <input
+                                type="text"
+                                placeholder="Search blocks, transactions, addresses..."
+                                className="bg-card rounded-full p-2 py-2.5 pl-10 text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40 w-full"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+                                        if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
+                                            navigate('/token-swaps');
+                                            setSearchTerm(''); // Clear input after search
+                                        } else if (searchTerm.trim()) {
+                                            // Navigate to search page with the term
+                                            navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+                                            setSearchTerm(''); // Clear input after search
+                                        }
+                                    }
+                                }}
+                            />
+                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 flex items-center justify-center"></i>
+                        </div>
+                    </div>
+
+                    {/* Section 3: Right - Navigation Items + Network Selector */}
+                    <div className="hidden md:flex items-center justify-end space-x-4">
+                        {/* Navigation Items */}
+                        <div className="flex items-center space-x-2">
+                            {menu.root.map((item, index) => (
+                                <div
+                                    key={item.label}
+                                    className="relative z-10"
                                 >
-                                    {item.label}
-                                    <motion.svg
-                                        className="h-4 w-4"
-                                        viewBox="0 0 20 20"
-                                        fill="currentColor"
-                                        animate={{ rotate: openIndex === index ? 180 : 0 }}
-                                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                    <button
+                                        onClick={() => handleToggle(index)}
+                                        className={`relative z-20 px-3 py-2 rounded-md text-base font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-primary hover:bg-gray-700'}`}
                                     >
-                                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                                    </motion.svg>
-                                    <motion.span
-                                        className="pointer-events-none absolute left-2 right-2 -bottom-0.5 h-0.5 rounded bg-primary/70"
-                                        animate={{ scaleX: openIndex === index || isActiveRoute(item) ? 1 : 0 }}
-                                        initial={false}
-                                        transition={{ duration: 0.16, ease: 'easeOut' }}
-                                        style={{ transformOrigin: 'left center' }}
-                                    />
-                                </button>
-                                <AnimatePresence>
-                                    {item.children && item.children.length > 0 && openIndex === index && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="absolute left-0 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-gray-700/70 bg-card shadow-2xl"
+                                        {item.label}
+                                        <motion.svg
+                                            className="h-4 w-4"
+                                            viewBox="0 0 20 20"
+                                            fill="currentColor"
+                                            animate={{ rotate: openIndex === index ? 180 : 0 }}
+                                            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                         >
+                                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                                        </motion.svg>
+                                        <motion.span
+                                            className="pointer-events-none absolute left-2 right-2 -bottom-0.5 h-0.5 rounded bg-primary/70"
+                                            animate={{ scaleX: openIndex === index || isActiveRoute(item) ? 1 : 0 }}
+                                            initial={false}
+                                            transition={{ duration: 0.16, ease: 'easeOut' }}
+                                            style={{ transformOrigin: 'left center' }}
+                                        />
+                                    </button>
+                                    <AnimatePresence>
+                                        {item.children && item.children.length > 0 && openIndex === index && (
                                             <motion.div
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/2 to-transparent"
-                                            />
-                                            <ul className="py-1 relative">
-                                                {item.children.map((child, i) => (
-                                                    <motion.li
-                                                        key={child.path}
-                                                        initial={{ opacity: 0, y: -6 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        transition={{ delay: 0.03 * i, duration: 0.14 }}
-                                                    >
-                                                        <Link
-                                                            to={child.path}
-                                                            className={`block px-3 py-2 text-sm font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-gray-700/70'}`}
+                                                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="absolute right-0 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-gray-700/70 bg-card shadow-2xl"
+                                            >
+                                                <motion.div
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/2 to-transparent"
+                                                />
+                                                <ul className="py-1 relative">
+                                                    {item.children.map((child, i) => (
+                                                        <motion.li
+                                                            key={child.path}
+                                                            initial={{ opacity: 0, y: -6 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: 0.03 * i, duration: 0.14 }}
                                                         >
-                                                            {child.label}
-                                                        </Link>
-                                                    </motion.li>
-                                                ))}
-                                            </ul>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        ))}
+                                                            <Link
+                                                                to={child.path}
+                                                                className={`block px-3 py-2 text-base font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-gray-700/70'}`}
+                                                            >
+                                                                {child.label}
+                                                            </Link>
+                                                        </motion.li>
+                                                    ))}
+                                                </ul>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Spacer */}
+                        <div className="w-4"></div>
+
+                        {/* Network Selector */}
+                        {import.meta.env.VITE_NODE_ENV === 'production' && (
+                            <NetworkSelector />
+                        )}
                     </div>
 
                     {/* Mobile menu button */}
-                    <div className="md:hidden flex items-center">
+                    <div className="md:hidden flex items-center justify-end col-start-3">
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                             className="text-gray-300 hover:text-primary focus:outline-none focus:text-primary"
@@ -195,35 +225,6 @@ const Navbar = () => {
                                 )}
                             </motion.svg>
                         </button>
-                    </div>
-                    <div className="hidden md:flex items-center space-x-2 relative w-4/12">
-                        {/* Network Selector - Only show in production */}
-                        {import.meta.env.VITE_NODE_ENV === 'production' && (
-                            <div className='w-6/12 min-w-0'>
-                                <NetworkSelector />
-                            </div>
-                        )}
-                        <input
-                            type="text"
-                            placeholder="Search blocks, transactions, addresses..."
-                            className="bg-card rounded-md p-2 text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40 pr-12 w-full"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    const lowerCaseSearchTerm = searchTerm.toLowerCase();
-                                    if (lowerCaseSearchTerm.includes('swap') || lowerCaseSearchTerm.includes('token')) {
-                                        navigate('/token-swaps');
-                                        setSearchTerm(''); // Clear input after search
-                                    } else if (searchTerm.trim()) {
-                                        // Navigate to search page with the term
-                                        navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
-                                        setSearchTerm(''); // Clear input after search
-                                    }
-                                }
-                            }}
-                        />
-                        <i className="fa-solid fa-magnifying-glass absolute right-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -297,7 +298,7 @@ const Navbar = () => {
                                         }
                                     }}
                                 />
-                                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 flex items-center justify-center"></i>
                             </div>
                         </div>
                     </div>

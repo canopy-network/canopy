@@ -6,43 +6,7 @@ import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
-const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
-
-// List of Font Awesome icons for addresses
-const addressIcons = [
-    'fa-user',
-    'fa-user-tie',
-    'fa-user-shield',
-    'fa-user-circle',
-    'fa-user-ninja',
-    'fa-user-astronaut',
-    'fa-user-graduate',
-    'fa-user-md',
-    'fa-user-cog',
-    'fa-user-friends',
-    'fa-id-badge',
-    'fa-id-card',
-    'fa-id-card-alt',
-    'fa-briefcase',
-    'fa-briefcase-medical',
-    'fa-building',
-    'fa-landmark',
-    'fa-university',
-    'fa-hospital',
-    'fa-store'
-]
-
-// Generate a deterministic icon based on address hash
-const getIconForAddress = (address: string): string => {
-    if (!address || address === 'N/A') return 'fa-user'
-    // Simple hash function to get consistent icon for same address
-    let hash = 0
-    for (let i = 0; i < address.length; i++) {
-        hash = address.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    const index = Math.abs(hash) % addressIcons.length
-    return addressIcons[index]
-}
+const truncate = (s: string, n: number = 4) => s.length <= n ? s : `${s.slice(0, n)}...${s.slice(-4)}`
 
 const OverviewCards: React.FC = () => {
     // Data hooks
@@ -72,7 +36,7 @@ const OverviewCards: React.FC = () => {
                         title={c.title}
                         live
                         viewAllPath="/transactions"
-                        columns={[{ label: 'From' }, { label: 'To' }, { label: 'Amount' }, { label: 'Time' }]}
+                        columns={[{ label: 'Hash' }, { label: 'From' }, { label: 'To' }, { label: 'Amount' }, { label: 'Time' }]}
                         rows={txs.slice(0, 5).map((t: any) => {
                             const from = t.sender || t.from || t.source || ''
 
@@ -90,6 +54,7 @@ const OverviewCards: React.FC = () => {
                             }
 
                             const amount = t.amount ?? t.value ?? t.fee ?? 0
+                            const hash = t.hash || t.txHash || t.transactionHash || ''
 
                             // Format time using date-fns
                             const timestamp = t.time || t.timestamp || t.blockTime
@@ -121,25 +86,16 @@ const OverviewCards: React.FC = () => {
                             const displayTo = to || 'N/A'
                             const displayFrom = from || 'N/A'
 
-                            // Get icons for addresses
-                            const fromIcon = getIconForAddress(displayFrom)
-                            const toIcon = getIconForAddress(displayTo)
-
                             return [
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-primary">
-                                        <i className={`fa-solid ${fromIcon}`}></i>
-                                    </div>
-                                    <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>
-                                </div>,
-                                <div className="flex items-center gap-2">
+                                hash ? (
+                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>
+                                ) : (
+                                    <span className="text-gray-400">-</span>
+                                ),
+                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>,
+                                <div>
                                     {to ? (
-                                        <>
-                                            <div className="w-6 h-6 rounded-full bg-input flex items-center justify-center text-xs text-primary">
-                                                <i className={`fa-solid ${toIcon}`}></i>
-                                            </div>
-                                            <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
-                                        </>
+                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
                                     ) : (
                                         <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
                                     )}
@@ -271,7 +227,7 @@ const OverviewCards: React.FC = () => {
         .filter(Boolean) as React.ReactNode[]
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
             {cards}
         </div>
     )

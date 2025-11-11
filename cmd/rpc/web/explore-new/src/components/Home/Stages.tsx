@@ -12,6 +12,7 @@ interface StageCardProps {
     isProgressBar: boolean
     icon: React.ReactNode
     metric: string // Added for key and differentiation
+    category?: string // Category for hierarchy
 }
 
 const Stages = () => {
@@ -122,25 +123,64 @@ const Stages = () => {
 
 
     const stages: StageCardProps[] = [
-        { 
-            title: 'Staking %', 
-            data: `${stakingPercent.toFixed(1)}%`, 
-            isProgressBar: true, 
-            icon: <i className="fa-solid fa-chart-pie text-primary"></i>, 
-            metric: 'stakingPercent',
-        },
-        { title: 'CNPY Staking', data: `+${convertNumber(delegatedOnlyCNPY)}`, isProgressBar: false, subtitle: <p className="text-sm text-primary">delta</p>, icon: <i className="fa-solid fa-coins text-primary"></i>, metric: 'cnpyStakingDelta' },
-        { title: 'Total Supply', data: convertNumber(totalSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-wallet text-primary"></i>, metric: 'totalSupply' },
-        { title: 'Liquid Supply', data: convertNumber(liquidSupplyCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-droplet text-primary"></i>, metric: 'liquidSupply' },
         {
-            title: 'Blocks', data: latestBlockHeight.toString(), isProgressBar: false, subtitle: (
+            title: 'Staking %',
+            data: `${stakingPercent.toFixed(1)}%`,
+            isProgressBar: true,
+            icon: <i className="fa-solid fa-chart-pie"></i>,
+            metric: 'stakingPercent',
+            category: 'Staking'
+        },
+        {
+            title: 'CNPY Staking',
+            data: `+${convertNumber(delegatedOnlyCNPY)}`,
+            isProgressBar: false,
+            subtitle: <p className="text-sm text-primary">delta</p>,
+            icon: <i className="fa-solid fa-coins"></i>,
+            metric: 'cnpyStakingDelta',
+            category: 'Staking'
+        },
+        {
+            title: 'Total Supply',
+            data: convertNumber(totalSupplyCNPY),
+            isProgressBar: false,
+            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            icon: <i className="fa-solid fa-wallet"></i>,
+            metric: 'totalSupply',
+            category: 'Supply'
+        },
+        {
+            title: 'Liquid Supply',
+            data: convertNumber(liquidSupplyCNPY),
+            isProgressBar: false,
+            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            icon: <i className="fa-solid fa-droplet"></i>,
+            metric: 'liquidSupply',
+            category: 'Supply'
+        },
+        {
+            title: 'Blocks',
+            data: latestBlockHeight.toString(),
+            isProgressBar: false,
+            subtitle: (
                 <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400"></span>
                     Live
                 </span>
-            ), icon: <i className="fa-solid fa-cube text-primary"></i>, metric: 'blocks'
+            ),
+            icon: <i className="fa-solid fa-cube"></i>,
+            metric: 'blocks',
+            category: 'Network'
         },
-        { title: 'Total Stake', data: convertNumber(totalStakeCNPY), isProgressBar: false, subtitle: <p className="text-sm text-gray-500">CNPY</p>, icon: <i className="fa-solid fa-lock text-primary"></i>, metric: 'totalStake' },
+        {
+            title: 'Total Stake',
+            data: convertNumber(totalStakeCNPY),
+            isProgressBar: false,
+            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
+            icon: <i className="fa-solid fa-lock"></i>,
+            metric: 'totalStake',
+            category: 'Staking'
+        },
         {
             title: 'Total Accounts',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
@@ -150,8 +190,9 @@ const Stages = () => {
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
                 </div>
             ) : <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>,
-            icon: <i className="fa-solid fa-users text-primary"></i>,
-            metric: 'accounts'
+            icon: <i className="fa-solid fa-users"></i>,
+            metric: 'accounts',
+            category: 'Network Activity'
         },
         {
             title: 'Total Txs',
@@ -162,8 +203,9 @@ const Stages = () => {
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
                 </div>
             ) : <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>,
-            icon: <i className="fa-solid fa-arrow-right-arrow-left text-primary"></i>,
-            metric: 'txs'
+            icon: <i className="fa-solid fa-arrow-right-arrow-left"></i>,
+            metric: 'txs',
+            category: 'Network Activity'
         },
     ]
 
@@ -208,7 +250,7 @@ const Stages = () => {
                         <div className="flex items-start justify-between">
                             <h3 className="text-sm text-gray-300">{stage.title}</h3>
                             <div className="h-7 w-7 rounded-md grid place-items-center">
-                                <span className="text-primary text-base leading-none">{stage.icon}</span>
+                                <span className="text-[#1B4435] text-base leading-none">{stage.icon}</span>
                             </div>
                         </div>
 
@@ -231,11 +273,19 @@ const Stages = () => {
                             </div>
                         </div>
 
-                        {stage.subtitle && (
-                            <div className="mt-2">
-                                {stage.subtitle}
-                            </div>
-                        )}
+                        <div className="flex items-center justify-between">
+                            {stage.subtitle && (
+                                <div className="mt-2">
+                                    {stage.subtitle}
+                                </div>
+                            )}
+
+                            {stage.category && (
+                                <div className="mt-2">
+                                    <p className="text-xs text-gray-400 font-light uppercase tracking-wider">{stage.category}</p>
+                                </div>
+                            )}
+                        </div>
 
                         {(stage.isProgressBar || /%/.test(stage.data)) && (
                             <div className="mt-2">

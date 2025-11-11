@@ -31,6 +31,7 @@ export interface TableCardProps {
     theadClassName?: string
     tbodyClassName?: string
     className?: string
+    compactFooter?: boolean // When true, shows "Showing..." and "View All" in same row
 }
 
 const TableCard: React.FC<TableCardProps> = ({
@@ -56,7 +57,8 @@ const TableCard: React.FC<TableCardProps> = ({
     tableClassName,
     theadClassName,
     tbodyClassName,
-    className
+    className,
+    compactFooter = false
 }) => {
     // Internal pagination for when external pagination is not provided
     const [internalPage, setInternalPage] = React.useState(1)
@@ -122,7 +124,7 @@ const TableCard: React.FC<TableCardProps> = ({
             initial={{ opacity: 1, y: 10, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={` p-5 ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
+            className={`p-5 flex flex-col h-full ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
         >
             {title && (
                 <div className="flex items-center justify-between mb-4">
@@ -167,12 +169,12 @@ const TableCard: React.FC<TableCardProps> = ({
                 </div>
             )}
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto flex-1">
                 <table className={`min-w-full divide-y divide-gray-400/20 ${tableClassName}`}>
                     <thead className={theadClassName}>
                         <tr>
                             {columns.map((c) => (
-                                <th key={c.label} className="px-2 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider">
+                                <th key={c.label} className="px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider">
                                     {c.label}
                                 </th>
                             ))}
@@ -183,7 +185,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={`s-${i}`} className="animate-pulse">
                                     {columns.map((_, j) => (
-                                        <td key={j} className="px-2 py-3">
+                                        <td key={j} className="px-4 py-3">
                                             <div className="h-3 w-20 sm:w-32 bg-gray-700/60 rounded"></div>
                                         </td>
                                     ))}
@@ -191,7 +193,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             ))
                         ) : pageRows.length === 0 ? (
                             <tr>
-                                <td colSpan={columns.length} className="px-4 py-12 text-center">
+                                <td colSpan={columns.length} className="px-4 py-6 text-center">
                                     <div className="flex flex-col items-center gap-3 max-w-md mx-auto">
                                         <div className="w-12 h-12 bg-gray-700/40 rounded-lg flex items-center justify-center">
                                             <i className="fa-solid fa-database text-xl text-gray-400"></i>
@@ -202,7 +204,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                                 Try adjusting your filters or check back later
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                             <i className="fa-solid fa-clock text-xs"></i>
                                             <span>Data updates in real-time</span>
                                         </div>
@@ -222,7 +224,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                         className="hover:bg-gray-800/30"
                                     >
                                         {cells.map((node, j) => (
-                                            <motion.td key={j} layout className={`px-2 text-sm text-gray-200 whitespace-nowrap ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'}`}>{node}</motion.td>
+                                            <motion.td key={j} layout className={`px-4 text-sm text-gray-200 whitespace-nowrap ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'}`}>{node}</motion.td>
                                         ))}
                                     </motion.tr>
                                 ))}
@@ -232,63 +234,78 @@ const TableCard: React.FC<TableCardProps> = ({
                 </table>
             </div>
 
-            {paginate && !loading && (
-                <div className="mt-3">
-                    {/* Mobile Pagination */}
-                    <div className="md:hidden">
-                        <div className="flex items-center justify-between mb-3">
-                            <button
-                                onClick={prev}
-                                disabled={currentPaginatedPage === 1}
-                                className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
-                            >
-                                <i className="fa-solid fa-angle-left mr-1"></i>Previous
-                            </button>
-                            <span className="text-sm text-gray-400">
-                                Page {currentPaginatedPage} of {totalPages}
-                            </span>
-                            <button
-                                onClick={next}
-                                disabled={currentPaginatedPage === totalPages}
-                                className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
-                            >
-                                Next<i className="fa-solid fa-angle-right ml-1"></i>
-                            </button>
-                        </div>
-                        <div className="text-center text-xs text-gray-500">
-                            Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
-                        </div>
+            {compactFooter ? (
+                <div className="mt-auto pt-3 flex items-center flex-row-reverse justify-between">
+                    <div className="text-gray-400 text-sm">
+                        Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
                     </div>
-
-                    {/* Desktop Pagination */}
-                    <div className="hidden md:flex items-center justify-between text-sm text-gray-400">
-                        <div className="flex items-center gap-2">
-                            <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
-                            {visiblePages.map((p, idx, arr) => {
-                                const prevNum = arr[idx - 1]
-                                const needDots = idx > 0 && p - (prevNum || 0) > 1
-                                return (
-                                    <React.Fragment key={p}>
-                                        {needDots && <span className="px-1">…</span>}
-                                        <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
-                                    </React.Fragment>
-                                )
-                            })}
-                            <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
-                        </div>
-                        <div>
-                            Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
-                        </div>
-                    </div>
+                    {viewAllPath && (
+                        <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
+                            View All <i className="fa-solid fa-arrow-right-long"></i>
+                        </Link>
+                    )}
                 </div>
-            )}
+            ) : (
+                <>
+                    {paginate && !loading && (
+                        <div className="">
+                            {/* Mobile Pagination */}
+                            <div className="md:hidden">
+                                <div className="flex items-center justify-between mb-3">
+                                    <button
+                                        onClick={prev}
+                                        disabled={currentPaginatedPage === 1}
+                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                    >
+                                        <i className="fa-solid fa-angle-left mr-1"></i>Previous
+                                    </button>
+                                    <span className="text-sm text-gray-400">
+                                        Page {currentPaginatedPage} of {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={next}
+                                        disabled={currentPaginatedPage === totalPages}
+                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                    >
+                                        Next<i className="fa-solid fa-angle-right ml-1"></i>
+                                    </button>
+                                </div>
+                                <div className="text-center text-xs text-gray-500">
+                                    Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                                </div>
+                            </div>
 
-            {viewAllPath && (
-                <div className="mt-3 text-center">
-                    <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
-                        View All <i className="fa-solid fa-arrow-right-long"></i>
-                    </Link>
-                </div>
+                            {/* Desktop Pagination */}
+                            <div className="hidden md:flex items-center justify-between text-sm text-gray-400">
+                                <div className="flex items-center gap-2">
+                                    <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
+                                    {visiblePages.map((p, idx, arr) => {
+                                        const prevNum = arr[idx - 1]
+                                        const needDots = idx > 0 && p - (prevNum || 0) > 1
+                                        return (
+                                            <React.Fragment key={p}>
+                                                {needDots && <span className="px-1">…</span>}
+                                                <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
+                                            </React.Fragment>
+                                        )
+                                    })}
+                                    <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                                </div>
+                                <div>
+                                    Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {viewAllPath && (
+                        <div className="mt-auto pt-3 text-center">
+                            <Link to={viewAllPath} className="text-primary text-sm inline-flex items-center gap-1">
+                                View All <i className="fa-solid fa-arrow-right-long"></i>
+                            </Link>
+                        </div>
+                    )}
+                </>
             )}
         </motion.section>
     )

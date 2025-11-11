@@ -434,16 +434,16 @@ const TransactionsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                 {overviewCards.map((card, index) => (
                     <div key={index} className="bg-card p-4 rounded-lg border border-gray-800/60 flex flex-col gap-2 justify-between">
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex justify-between items-center">
                             <span className="text-gray-400 text-sm">{card.title}</span>
                             <i className={`${card.icon} text-gray-500`}></i>
                         </div>
-                        <div className="flex items-end justify-between">
-                            <span className={`text-white text-3xl font-bold ${card.valueColor}`}>{card.value}</span>
+                        <div className="flex items-center justify-between">
+                            <p className={`text-white text-3xl font-bold ${card.valueColor}`}>{card.value}</p>
                         </div>
                         {card.subValue && <span className={`text-sm ${card.subValueColor}`}>{card.subValue}</span>}
                         {card.progressBar !== undefined && (
-                            <div className="w-full bg-gray-700 h-2 rounded-full mt-4">
+                            <div className="w-full bg-gray-700 rounded-full flex items-start justify-center mb-1">
                                 <div
                                     className="h-2 rounded-full bg-primary"
                                     style={{ width: `${card.progressBar}%` }}
@@ -459,7 +459,7 @@ const TransactionsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Transaction Type Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filterConfigs[0].label}</label>
+                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[0].label}</label>
                         <select
                             className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
                             value={(filterConfigs[0] as SelectFilter).value}
@@ -473,18 +473,18 @@ const TransactionsPage: React.FC = () => {
 
                     {/* Block Range Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filterConfigs[1].label}</label>
+                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[1].label}</label>
                         <div className="grid grid-cols-2 gap-2">
                             <input
                                 type="number"
-                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
                                 placeholder="From Block"
                                 value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
                                 onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
                             />
                             <input
                                 type="number"
-                                className="w-full px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white"
+                                className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
                                 placeholder="To Block"
                                 value={(filterConfigs[1] as BlockRangeFilter).toBlock}
                                 onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
@@ -494,7 +494,7 @@ const TransactionsPage: React.FC = () => {
 
                     {/* Status Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filterConfigs[2].label}</label>
+                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[2].label}</label>
                         <div className="flex flex-wrap justify-between items-center gap-2">
                             <div className="flex flex-wrap gap-2">
                                 {(filterConfigs[2] as StatusFilter).options.map((option, idx) => (
@@ -512,7 +512,7 @@ const TransactionsPage: React.FC = () => {
                                             }
                                         `}
                                     >
-                                        {option.status === 'success' && <i className="fa-solid fa-check text-xs mr-1 text-primary"></i>}
+                                        {option.status === 'success' && <i className="fa-solid fa-check text-xs mr-1"></i>}
                                         {option.status === 'failed' && <i className="fa-solid fa-times text-xs mr-1"></i>}
                                         {option.status === 'pending' && <i className="fa-solid fa-clock text-xs mr-1"></i>}
                                         {option.label}
@@ -525,28 +525,23 @@ const TransactionsPage: React.FC = () => {
 
                     {/* Amount Range Filter */}
                     <div className="flex flex-col gap-2 col-span-1 md:col-span-2">
-                        <label className="text-gray-400 text-sm">{filterConfigs[3].label}</label>
+                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[3].label}</label>
                         <div className="relative pt-4">
-                            <div className="relative">
-                                <input
-                                    type="range"
-                                    min={(filterConfigs[3] as AmountRangeFilter).min}
-                                    max={(filterConfigs[3] as AmountRangeFilter).max}
-                                    step={(filterConfigs[3] as AmountRangeFilter).step}
-                                    value={(filterConfigs[3] as AmountRangeFilter).value}
-                                    onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
-                                    className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
-                                    style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
-                                />
-
-                                {/* Current value tooltip */}
-                                <div
-                                    className="absolute top-0 transform -translate-y-8 px-2 py-1 bg-primary text-black text-xs font-medium rounded shadow-lg"
-                                    style={{
-                                        left: `${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%`,
-                                        transform: 'translateX(-50%) translateY(-8px)'
-                                    }}
-                                >
+                            <div className="relative flex items-center gap-3">
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="range"
+                                        min={(filterConfigs[3] as AmountRangeFilter).min}
+                                        max={(filterConfigs[3] as AmountRangeFilter).max}
+                                        step={(filterConfigs[3] as AmountRangeFilter).step}
+                                        value={(filterConfigs[3] as AmountRangeFilter).value}
+                                        onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
+                                        className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
+                                        style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
+                                    />
+                                </div>
+                                {/* Current value tag - fixed on the right */}
+                                <div className="px-2 py-1 bg-primary text-black text-xs font-medium rounded shadow-lg whitespace-nowrap">
                                     {(filterConfigs[3] as AmountRangeFilter).value >= 1000 ? "1000+" : (filterConfigs[3] as AmountRangeFilter).value} CNPY
                                 </div>
                             </div>
@@ -565,23 +560,20 @@ const TransactionsPage: React.FC = () => {
 
                     {/* Address Search Filter */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm">{filterConfigs[4].label}</label>
+                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[4].label}</label>
                         <div className="relative">
                             <input
                                 type="text"
                                 placeholder={(filterConfigs[4] as SearchFilter).placeholder}
-                                className="w-full px-3 py-2 pl-10 bg-input border border-gray-800/80 rounded-md text-white"
+                                className="w-full px-3 py-2.5 pl-10 bg-input border border-gray-800/80 rounded-md text-white"
                                 value={(filterConfigs[4] as SearchFilter).value}
                                 onChange={(e) => (filterConfigs[4] as SearchFilter).onChange(e.target.value)}
                             />
                             <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
                         </div>
                         <div className="flex items-center justify-end gap-2 mt-4">
-                            <button onClick={handleResetFilters} className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded text-gray-300">
+                            <button onClick={handleResetFilters} className="px-3 py-1 text-sm bg-gray-700/50 hover:bg-gray-600 rounded text-gray-300">
                                 Reset
-                            </button>
-                            <button onClick={handleApplyFilters} className="px-3 py-1 text-sm bg-primary hover:bg-primary/90 rounded text-black inline-flex items-center gap-2">
-                                <i className="fa-solid fa-filter text-xs"></i>Apply Filters
                             </button>
                         </div>
                     </div>
