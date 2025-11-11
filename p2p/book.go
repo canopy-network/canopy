@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	MaxFailedDialAttempts        = int32(1)         // maximum times a peer may fail a churn management dial attempt before evicted from the peer book
+	MaxFailedDialAttempts        = int32(10)        // maximum times a peer may fail a churn management dial attempt before evicted from the peer book
 	MaxPeersExchanged            = 1                // maximum number of peers per chain that may be sent/received during a peer exchange
 	MaxPeerBookRequestsPerWindow = 2                // maximum peer book request per window
 	PeerBookRequestWindowS       = 30               // seconds in a peer book request

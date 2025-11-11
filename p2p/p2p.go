@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"runtime/debug"
 	"slices"
@@ -166,14 +167,22 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 func (p *P2P) DialForOutboundPeers() {
 	// create a tracking variable to ensure not 'over dialing'
 	dialing := 0
+	getPeerFromString := func(address string) (*lib.PeerAddress, error) {
+		// start a peer address structure using the basic configurations
+		peer := &lib.PeerAddress{PeerMeta: &lib.PeerMeta{NetworkId: p.meta.NetworkId, ChainId: p.meta.ChainId}}
+		// try to populate the peer address using the peer string from the given string
+		if err := peer.FromString(address); err != nil {
+			return nil, fmt.Errorf("invalid dial peer %s: %s", address, err.Error())
+		}
+		// exit
+		return peer, nil
+	}
 	// Try to connect to the DialPeers in the config
 	for _, peerString := range p.config.DialPeers {
-		// start a peer address structure using the basic configurations
-		peerAddress := &lib.PeerAddress{PeerMeta: &lib.PeerMeta{NetworkId: p.meta.NetworkId, ChainId: p.meta.ChainId}}
-		// try to populate the peer address using the peer string from the config
-		if err := peerAddress.FromString(peerString); err != nil {
+		peerAddress, err := getPeerFromString(peerString)
+		if err != nil {
 			// log the invalid format
-			p.log.Errorf("invalid dial peer %s: %s", peerString, err.Error())
+			p.log.Errorf(err.Error())
 			// continue with the next
 			continue
 		}
@@ -191,12 +200,26 @@ func (p *P2P) DialForOutboundPeers() {
 		// for each supported plugin, try to max out peer config by dialing
 		func() {
 			// exit if maxed out config or none left to dial
-			if (p.PeerSet.outbound+dialing >= p.config.MaxOutbound) || p.book.GetBookSize() == 0 {
+			outbound := p.PeerSet.outbound
+			if outbound > 0 && outbound+dialing >= p.config.MaxOutbound {
 				return
 			}
-			// get random peer for chain
-			rand := p.book.GetRandom()
-			if rand == nil || p.IsSelf(rand.Address) || p.Has(rand.Address.PublicKey) {
+			// try to get a peer to dial
+			var peer *lib.PeerAddress
+			// first try to get a random peer from the book
+			if randPeer := p.book.GetRandom(); randPeer != nil && !p.IsSelf(randPeer.Address) &&
+				!p.Has(randPeer.Address.PublicKey) {
+				peer = randPeer.Address
+			} else if len(p.config.DialPeers) > 0 {
+				// otherwise, fallback to config's dial peers
+				dialPeer, err := getPeerFromString(p.config.DialPeers[rand.Intn(len(p.config.DialPeers))])
+				if err != nil {
+					p.log.Errorf(err.Error())
+					return
+				}
+				peer = dialPeer
+			} else {
+				// no available peers to dial
 				return
 			}
 			p.log.Debugf("Executing P2P Dial for more outbound peers")
@@ -204,13 +227,13 @@ func (p *P2P) DialForOutboundPeers() {
 			// the peer should be added before the next execution of the loop
 			dialing++
 			defer func() { dialing-- }()
-			if err := p.Dial(rand.Address, false, false); err != nil {
-				p.book.AddFailedDialAttempt(rand.Address)
+			if err := p.Dial(peer, false, false); err != nil {
+				p.book.AddFailedDialAttempt(peer)
 				p.log.Debug(err.Error())
 				return
 			} else {
 				// if succeeded, reset failed attempts
-				p.book.ResetFailedDialAttempts(rand.Address)
+				p.book.ResetFailedDialAttempts(peer)
 			}
 		}()
 	}
