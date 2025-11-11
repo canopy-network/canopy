@@ -203,8 +203,9 @@ func (ps *PeerSet) IsMustConnect(publicKey []byte) bool {
 // GetAllInfos() returns the information on connected peers and the total inbound / outbound counts
 func (ps *PeerSet) GetAllInfos() (res []*lib.PeerInfo, numInbound, numOutbound int) {
 	// copy the current set to avoid race conditions
-	set := make(map[string]*Peer)
-	maps.Copy(set, ps.m)
+	ps.RLock()
+	set := maps.Clone(ps.m)
+	ps.RUnlock()
 	// iterate over the copied set
 	for _, p := range set {
 		if p.IsOutbound {
