@@ -108,10 +108,10 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
 
             {/* Total Network Control */}
             <div className="mt-6 pt-4 border-t border-gray-700">
-                <div className="text-sm text-gray-400 text-center flex justify-between items-center gap-2 w-full">
+                <div className="text-sm text-gray-400 text-center flex  items-center gap-2 w-full">
                     <p>{validatorDetailTexts.stakeByChains.totalNetworkControl}: </p>
                     <p className="text-primary">
-                        {formatPercentage(Number(validator.nestedChains.reduce((sum, chain) => sum + chain.percentage, 0).toFixed(2)))} of total network stake
+                        {validator.nestedChains.length > 0 ? formatPercentage(validator.nestedChains[0].percentage) : '0.00%'} of total network stake
                     </p>
                 </div>
             </div>

@@ -21,9 +21,13 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
         }
 
         // Categorize validators based on real data
-        const activeValidators = validators.filter((v: any) => 
-            !v.unstakingHeight || v.unstakingHeight === 0
-        )
+        // Active = not paused, not unstaking, and not delegate
+        const activeValidators = validators.filter((v: any) => {
+            const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
+            const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
+            const isDelegate = v?.delegate === true
+            return !isUnstaking && !isPaused && !isDelegate
+        })
         const pausedValidators = validators.filter((v: any) => 
             v.maxPausedHeight && v.maxPausedHeight > 0
         )

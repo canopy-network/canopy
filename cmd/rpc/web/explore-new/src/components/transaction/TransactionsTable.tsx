@@ -47,11 +47,11 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     onExportButtonClick
 }) => {
     const navigate = useNavigate()
-    
+
     // Get params to access fee information
     const { data: paramsData } = useParamsHook(0)
     const feeParams = paramsData?.fee || {}
-    
+
     // Map transaction type to fee param key (directly from endpoint)
     const getFeeParamKey = (type: string): string => {
         const typeMap: Record<string, string> = {
@@ -72,13 +72,13 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         }
         return typeMap[type.toLowerCase()] || 'sendFee'
     }
-    
+
     // Get minimum fee for a transaction type
     const getMinimumFeeForTxType = (type: string): number => {
         const feeKey = getFeeParamKey(type)
         return feeParams[feeKey] || feeParams.sendFee || 0
     }
-    
+
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
     const formatAmount = (amount: number) => {
@@ -229,7 +229,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         </span>
     ])
 
-    const headers = Object.values(transactionsTexts.table.headers).map(header => ({ label: header }))
+    const headers = [
+        { label: transactionsTexts.table.headers.hash, width: 'w-[15%]' },
+        { label: transactionsTexts.table.headers.type, width: 'w-[12%]' },
+        { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
+        { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
+        { label: transactionsTexts.table.headers.amount, width: 'w-[8%]' },
+        { label: transactionsTexts.table.headers.fee, width: 'w-[8%]' },
+        { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
+        { label: transactionsTexts.table.headers.age, width: 'w-[10%]' }
+    ]
 
     return (
         <TableCard

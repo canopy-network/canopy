@@ -1,11 +1,11 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import blockDetailTexts from '../../data/blockDetail.json'
 
 interface BlockDetailHeaderProps {
     blockHeight: number
     status: string
-    minedTime: string
+    proposedTime: string
     onPreviousBlock: () => void
     onNextBlock: () => void
     hasPrevious: boolean
@@ -15,19 +15,25 @@ interface BlockDetailHeaderProps {
 const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
     blockHeight,
     status,
-    minedTime,
+    proposedTime,
     onPreviousBlock,
     onNextBlock,
     hasPrevious,
     hasNext
 }) => {
+    const navigate = useNavigate()
+    
     return (
         <div className="mb-8">
             {/* Breadcrumb */}
             <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
-                <Link to="/blocks" className="text-primary transition-colors">
+                <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
+                    {blockDetailTexts.page.breadcrumb.home}
+                </button>
+                <i className="fa-solid fa-chevron-right text-xs"></i>
+                <button onClick={() => navigate('/blocks')} className="hover:text-primary transition-colors">
                     {blockDetailTexts.page.breadcrumb.blocks}
-                </Link>
+                </button>
                 <i className="fa-solid fa-chevron-right text-xs"></i>
                 <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
                     Block #{blockHeight.toLocaleString()}
@@ -40,7 +46,7 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                                <i className="fa-solid fa-cube text-white text-lg"></i>
+                                <i className="fa-solid fa-cube text-background text-lg"></i>
                             </div>
                             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white break-words">
                                 {blockDetailTexts.page.title}{blockHeight.toLocaleString()}
@@ -54,7 +60,7 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                                 {status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}
                             </span>
                             <span className="text-gray-400 text-sm">
-                                Mined {minedTime}
+                                Proposed {proposedTime}
                             </span>
                         </div>
                     </div>

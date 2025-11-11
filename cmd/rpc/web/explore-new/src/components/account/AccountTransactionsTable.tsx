@@ -1,8 +1,10 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import TableCard from '../Home/TableCard'
 import accountDetailTexts from '../../data/accountDetail.json'
+import transactionsTexts from '../../data/transactions.json'
+import AnimatedNumber from '../AnimatedNumber'
 
 interface Transaction {
     txHash: string
@@ -41,19 +43,53 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
 
-    const getTypeColor = (type: string) => {
+    const getTypeIcon = (type: string) => {
         switch (type.toLowerCase()) {
             case 'send':
-                return 'bg-blue-500/20 text-blue-400'
+                return 'bi bi-send'
+            case 'transfer':
+                return 'bi bi-send'
+            case 'stake':
+                return 'bi bi-file-lock2'
+            case 'edit-stake':
+                return 'bi bi-file-lock2'
+            case 'unstake':
+                return 'fa-solid fa-unlock'
+            case 'swap':
+                return 'bi bi-arrow-left-right'
+            case 'governance':
+                return 'fa-solid fa-vote-yea'
+            case 'delegate':
+                return 'bi bi-file-lock2'
+            case 'undelegate':
+                return 'fa-solid fa-user-times'
             case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
+            case 'certificate':
+                return 'bi bi-c-circle-fill'
+            default:
+                return 'fa-solid fa-circle'
+        }
+    }
+
+    const getTypeColor = (type: string) => {
+        switch (type.toLowerCase()) {
+            case 'transfer':
+                return 'bg-blue-500/20 text-blue-400'
             case 'stake':
                 return 'bg-green-500/20 text-green-400'
             case 'unstake':
                 return 'bg-orange-500/20 text-orange-400'
             case 'swap':
                 return 'bg-purple-500/20 text-purple-400'
-            case 'transfer':
+            case 'governance':
+                return 'bg-indigo-500/20 text-indigo-400'
+            case 'delegate':
+                return 'bg-cyan-500/20 text-cyan-400'
+            case 'undelegate':
+                return 'bg-pink-500/20 text-pink-400'
+            case 'certificateresults':
+                return 'bg-green-500/20 text-primary'
+            case 'send':
                 return 'bg-blue-500/20 text-blue-400'
             default:
                 return 'bg-gray-500/20 text-gray-400'
@@ -87,108 +123,118 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         return `${diffDays}d ago`
     }
 
-    const rows = (Array.isArray(transactions) ? transactions : []).map((transaction, index) => [
-        // Hash
-        <motion.span
-            className="text-primary cursor-pointer hover:underline"
-            onClick={() => navigate(`/transaction/${transaction.txHash}`)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {truncate(transaction.txHash, 12)}
-        </motion.span>,
+    // Helper function to convert micro denomination to CNPY
+    const toCNPY = (micro: number): number => {
+        return micro / 1000000
+    }
 
-        // Type
-        <motion.span
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(transaction.messageType)}`}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {transaction.messageType}
-        </motion.span>,
+    const formatFee = (fee: number) => {
+        if (!fee || fee === 0) return '0 CNPY'
+        // Fee comes in micro denomination from endpoint, convert to CNPY
+        const cnpy = toCNPY(fee)
+        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
+    }
 
-        // From/To (depending on type)
-        <motion.span
-            className="text-gray-400 font-mono text-sm"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {type === 'sent'
-                ? truncate(transaction.recipient || transaction.transaction.msg.toAddress || '', 8)
-                : truncate(transaction.sender || transaction.transaction.msg.fromAddress || '', 8)
-            }
-        </motion.span>,
+    const rows = (Array.isArray(transactions) ? transactions : []).map((transaction) => {
+        const txType = transaction.messageType || transaction.transaction?.type || 'send'
+        const fromAddress = transaction.sender || transaction.transaction?.msg?.fromAddress || 'N/A'
+        const toAddress = transaction.recipient || transaction.transaction?.msg?.toAddress || 'N/A'
+        const amountMicro = transaction.transaction?.msg?.amount || 0
+        const amountCNPY = amountMicro > 0 ? amountMicro / 1000000 : 0
+        const feeMicro = transaction.transaction?.fee || 0
 
-        // Amount
-        <motion.span
-            className={`font-medium ${type === 'sent' ? 'text-red' : 'text-primary'}`}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {type === 'sent' ? '-' : '+'}
-            {transaction.transaction.msg.amount
-                ? `${(transaction.transaction.msg.amount / 1000000).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6
-                })} CNPY`
-                : 'N/A'
-            }
-        </motion.span>,
+        return [
+            // Hash
+            <span
+                key="hash"
+                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
+                onClick={() => navigate(`/transaction/${transaction.txHash}`)}
+            >
+                {truncate(transaction.txHash, 12)}
+            </span>,
 
-        // Fee (in CNPY - converted from micro denomination)
-        <motion.span
-            className="text-gray-400"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {transaction.transaction.fee ? (() => {
-                const feeMicro = transaction.transaction.fee
-                const feeCNPY = feeMicro / 1000000
-                return `${feeCNPY.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
-            })() : 'N/A'}
-        </motion.span>,
+            // Type
+            <div
+                key="type"
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(txType)}`}
+            >
+                <i className={`${getTypeIcon(txType)} text-xs`} style={{ fontSize: '0.875rem' }}></i>
+                <span>{txType}</span>
+            </div>,
 
-        // Status (assuming success for now)
-        <motion.div
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor('success')}`}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            <motion.i
-                className="fa-solid fa-check text-xs mr-1"
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-            ></motion.i>
-            <span>Success</span>
-        </motion.div>,
+            // From
+            <Link
+                key="from"
+                to={`/account/${fromAddress}`}
+                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+            >
+                {truncate(fromAddress, 12)}
+            </Link>,
 
-        // Age
-        <motion.span
-            className="text-gray-400 text-sm"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-        >
-            {formatTime(transaction.transaction.time)}
-        </motion.span>
-    ])
+            // To
+            <Link
+                key="to"
+                to={`/account/${toAddress}`}
+                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+            >
+                {toAddress === 'N/A' ? (
+                    <span className="text-gray-500">{truncate('0x00000000000000000000000000000000000', 12)}</span>
+                ) : (
+                    truncate(toAddress, 12)
+                )}
+            </Link>,
+
+            // Amount
+            <span key="amount" className="text-white text-sm font-medium">
+                {typeof amountCNPY === 'number' && amountCNPY > 0 ? (
+                    <>
+                        <AnimatedNumber
+                            value={amountCNPY}
+                            format={{ maximumFractionDigits: 4 }}
+                            className="text-white"
+                        />&nbsp; CNPY
+                    </>
+                ) : (
+                    '0 CNPY'
+                )}
+            </span>,
+
+            // Fee (in micro denomination from endpoint) with minimum fee info
+            <div key="fee" className="flex flex-col gap-1">
+                <span className="text-gray-300 text-sm">
+                    {typeof feeMicro === 'number' ? (
+                        formatFee(feeMicro)
+                    ) : (
+                        formatFee(feeMicro || 0)
+                    )}
+                </span>
+            </div>,
+
+            // Status
+            <div
+                key="status"
+                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor('success')}`}
+            >
+                <i className="fa-solid fa-check text-xs mr-1"></i>
+                <span>Success</span>
+            </div>,
+
+            // Age
+            <span key="age" className="text-gray-400 text-sm">
+                {formatTime(transaction.transaction.time)}
+            </span>
+        ]
+    })
 
     const columns = [
-        { label: accountDetailTexts.table.headers.hash },
-        { label: accountDetailTexts.table.headers.type },
-        { label: type === 'sent' ? accountDetailTexts.table.headers.to : accountDetailTexts.table.headers.from },
-        { label: accountDetailTexts.table.headers.amount },
-        { label: accountDetailTexts.table.headers.fee },
-        { label: accountDetailTexts.table.headers.status },
-        { label: accountDetailTexts.table.headers.age }
+        { label: transactionsTexts.table.headers.hash, width: 'w-[15%]' },
+        { label: transactionsTexts.table.headers.type, width: 'w-[12%]' },
+        { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
+        { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
+        { label: transactionsTexts.table.headers.amount, width: 'w-[8%]' },
+        { label: transactionsTexts.table.headers.fee, width: 'w-[8%]' },
+        { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
+        { label: transactionsTexts.table.headers.age, width: 'w-[10%]' }
     ]
 
     // Show message when no data

@@ -309,7 +309,7 @@ const TransactionDetailPage: React.FC = () => {
                     <button onClick={() => navigate('/transactions')} className="hover:text-primary transition-colors">
                         Transactions
                     </button>
-                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                    <i className="fa-solid fa-chevron-right  text-xs"></i>
                     <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
                         {truncate(transactionHash || '', window.innerWidth < 640 ? 6 : 8)}
                     </span>
@@ -322,7 +322,7 @@ const TransactionDetailPage: React.FC = () => {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <i className="fa-solid fa-left-right text-white text-lg"></i>
+                                        <i className="fa-solid fa-left-right text-background text-lg"></i>
                                     </div>
                                     <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words">
                                         Transaction Details
@@ -383,12 +383,12 @@ const TransactionDetailPage: React.FC = () => {
                             </h2>
 
                             <div className="space-y-4">
-                                {/* Left Column */}
+                                {/* All fields aligned to left axis */}
                                 <div className="space-y-4">
-                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-gray-400/30 pb-4 gap-2">
-                                        <span className="text-gray-400">Transaction Hash</span>
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <span className="text-primary font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Transaction Hash</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-primary font-mono text-sm">
                                                 {txHash}
                                             </span>
                                             <button
@@ -400,9 +400,9 @@ const TransactionDetailPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Status</span>
-                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status === 'success' || status === 'Success'
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Status</span>
+                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium w-fit ${status === 'success' || status === 'Success'
                                             ? 'bg-green-500/20 text-green-400'
                                             : 'bg-yellow-500/20 text-yellow-400'
                                             }`}>
@@ -410,75 +410,74 @@ const TransactionDetailPage: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Block</span>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Block</span>
                                         <span className="text-primary font-mono">{blockHeight.toLocaleString()}</span>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Timestamp</span>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Timestamp</span>
                                         <span className="text-white font-mono text-sm">{formatTimestamp(timestamp)}</span>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Value</span>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Value</span>
                                         <span className="text-primary font-mono">{value}</span>
                                     </div>
 
-                                    <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                        <span className="text-gray-400">Transaction Fee</span>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">Transaction Fee</span>
                                         <span className="text-orange-400 font-mono">{fee}</span>
                                     </div>
 
                                     {minimumFeeForTxType > 0 && (
-                                        <div className="flex justify-between items-center border-b border-gray-400/30 pb-4">
-                                            <span className="text-gray-400">Minimum Fee ({getFeeParamKey(txType)})</span>
+                                        <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                            <span className="text-gray-400 text-sm">Minimum Fee ({getFeeParamKey(txType)})</span>
                                             <span className="text-green-400 font-mono">{formatFee(minimumFeeForTxType)}</span>
                                         </div>
                                     )}
 
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400">From</span>
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        <span className="text-gray-400 font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
-                                            {from}
-                                        </span>
-                                        <button
-                                            onClick={() => copyToClipboard(from)}
-                                            className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
-                                        >
-                                            <i className="fa-solid fa-copy text-xs"></i>
-                                        </button>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">From</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 font-mono text-sm">
+                                                {from}
+                                            </span>
+                                            <button
+                                                onClick={() => copyToClipboard(from)}
+                                                className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
+                                            >
+                                                <i className="fa-solid fa-copy text-xs"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center col-span-2 border-b border-gray-400/30 pb-4 gap-2">
-                                    <span className="text-gray-400">To</span>
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        <span className="text-gray-400 font-mono text-xs sm:text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-full">
-                                            {to}
-                                        </span>
-                                        <button
-                                            onClick={() => copyToClipboard(to)}
-                                            className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
-                                        >
-                                            <i className="fa-solid fa-copy text-xs"></i>
-                                        </button>
+                                    <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
+                                        <span className="text-gray-400 text-sm">To</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-400 font-mono text-sm">
+                                                {to}
+                                            </span>
+                                            <button
+                                                onClick={() => copyToClipboard(to)}
+                                                className="text-primary hover:text-green-400 transition-colors flex-shrink-0"
+                                            >
+                                                <i className="fa-solid fa-copy text-xs"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-400">Nonce</span>
-                                    <span className="text-white">{nonce}</span>
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-gray-400 text-sm">Nonce</span>
+                                        <span className="text-white">{nonce}</span>
+                                    </div>
+
                                 </div>
 
                             </div>
                         </motion.div>
 
                     </div>
-
                     {/* Sidebar */}
                     <div className="w-full lg:w-4/12">
                         <div className="space-y-6">
@@ -645,8 +644,9 @@ const TransactionDetailPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                {/* Message Information */}
-                <motion.div
+       <div>
+                 {/* Message Information */}
+                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: 0.1 }}
@@ -772,6 +772,8 @@ const TransactionDetailPage: React.FC = () => {
                         )}
                     </div>
                 </motion.div>
+       </div>
+       
             </div>
 
         </motion.div>

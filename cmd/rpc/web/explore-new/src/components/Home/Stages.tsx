@@ -27,6 +27,20 @@ const Stages = () => {
         return Number(height) || 0
     }, [cardData])
 
+    // Get totalTxs from the latest block's blockHeader
+    const totalTxsFromBlock: number | null = React.useMemo(() => {
+        const list = (cardData as any)?.blocks
+        const arr = list?.results || list?.blocks || list?.list || list?.data || list
+        if (Array.isArray(arr) && arr.length > 0) {
+            const latestBlock = arr[0]
+            const totalTxs = latestBlock?.blockHeader?.totalTxs
+            if (typeof totalTxs === 'number' && totalTxs > 0) {
+                return totalTxs
+            }
+        }
+        return null
+    }, [cardData])
+
 
     const totalSupplyCNPY: number = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
@@ -71,31 +85,40 @@ const Stages = () => {
             try {
                 setIsLoadingStats(true)
 
-                // Check if this network has real transactions
-                const hasRealTransactions = cardData?.hasRealTransactions ?? true
+                // Use totalTxs from block if available, otherwise fetch from API
+                if (totalTxsFromBlock !== null) {
+                    setTotalTxs(totalTxsFromBlock)
+                    // For last24h, we still need to fetch from API if available
+                    try {
+                        const txStats = await getTotalTransactionCount()
+                        setTxsLast24h(txStats.last24h)
+                    } catch (error) {
+                        console.error('Error fetching tx stats for last24h:', error)
+                        setTxsLast24h(0)
+                    }
+                } else {
+                    // Check if this network has real transactions
+                    const hasRealTransactions = cardData?.hasRealTransactions ?? true
 
-                if (hasRealTransactions) {
-                    const [txStats, accountStats] = await Promise.all([
-                        getTotalTransactionCount(),
-                        getTotalAccountCount()
-                    ])
+                    if (hasRealTransactions) {
+                        const txStats = await getTotalTransactionCount()
+                        setTotalTxs(txStats.total)
+                        setTxsLast24h(txStats.last24h)
+                    } else {
+                        setTotalTxs(0)
+                        setTxsLast24h(0)
+                    }
+                }
 
-                    setTotalTxs(txStats.total)
-                    setTxsLast24h(txStats.last24h)
+                // Always fetch account stats
+                try {
+                    const accountStats = await getTotalAccountCount()
                     setTotalAccounts(accountStats.total)
                     setAccountsLast24h(accountStats.last24h)
-                } else {
-                    setTotalTxs(0)
-                    setTxsLast24h(0)
-                    try {
-                        const accountStats = await getTotalAccountCount()
-                        setTotalAccounts(accountStats.total)
-                        setAccountsLast24h(accountStats.last24h)
-                    } catch (error) {
-                        console.error('Error fetching account stats:', error)
-                        setTotalAccounts(0)
-                        setAccountsLast24h(0)
-                    }
+                } catch (error) {
+                    console.error('Error fetching account stats:', error)
+                    setTotalAccounts(0)
+                    setAccountsLast24h(0)
                 }
             } catch (error) {
                 console.error('Error fetching stats:', error)
@@ -112,7 +135,7 @@ const Stages = () => {
         if (cardData) {
             fetchStats()
         }
-    }, [cardData])
+    }, [cardData, totalTxsFromBlock])
 
     // delegated only as staking delta proxy
     const delegatedOnlyCNPY: number = React.useMemo(() => {
@@ -129,7 +152,7 @@ const Stages = () => {
             isProgressBar: true,
             icon: <i className="fa-solid fa-chart-pie"></i>,
             metric: 'stakingPercent',
-            category: 'Staking'
+
         },
         {
             title: 'CNPY Staking',

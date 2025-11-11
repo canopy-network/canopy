@@ -52,9 +52,9 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-card rounded-xl border border-gray-800/60 p-6 mb-6"
+            className="bg-card rounded-xl border border-gray-800/60 p-6"
         >
-            <h2 className="text-xl font-semibold text-white mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4">
                 {blockDetailTexts.blockDetails.title}
             </h2>
 

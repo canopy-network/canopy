@@ -3,12 +3,7 @@ import { motion } from 'framer-motion'
 import blockDetailTexts from '../../data/blockDetail.json'
 
 interface BlockSidebarProps {
-    blockStats: {
-        gasUsed: number
-        gasLimit: number
-    }
     networkInfo: {
-        difficulty: number
         nonce: string
         extraData: string
     }
@@ -16,54 +11,17 @@ interface BlockSidebarProps {
         name: string
         avatar: string
         activeSince: string
-        stake: number
-        stakeWeight: number
     }
     blockData?: any // Add complete block data
 }
 
 const BlockSidebar: React.FC<BlockSidebarProps> = ({
-    blockStats,
     networkInfo,
     validatorInfo,
     blockData
 }) => {
-    const gasUsedPercentage = (blockStats.gasUsed / blockStats.gasLimit) * 100
-
     return (
         <div className="space-y-6">
-            {/* Block Statistics */}
-            <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                className="bg-card rounded-xl border border-gray-800/60 p-6"
-            >
-                <h3 className="text-lg font-semibold text-white mb-4">
-                    {blockDetailTexts.blockStatistics.title}
-                </h3>
-
-                <div className="space-y-4">
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-gray-400 text-sm">VDF Iterations</span>
-                            <span className="text-white font-mono text-sm">{blockStats.gasUsed.toLocaleString()}</span>
-                        </div>
-                        <div className="w-full bg-gray-700/50 rounded-full h-2">
-                            <div
-                                className="bg-primary h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(gasUsedPercentage, 100)}%` }}
-                            ></div>
-                        </div>
-                        <div className="flex justify-between items-center mt-1 text-xs text-gray-400">
-                            <span>0</span>
-                            <span>{blockStats.gasLimit.toLocaleString()} (Max Iterations)</span>
-                        </div>
-                    </div>
-
-                </div>
-            </motion.div>
-
             {/* Network Info */}
             <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -115,7 +73,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 <div className="space-y-3">
                     <div className="flex flex-wrap justify-between items-center">
                         <span className="text-gray-400 text-sm mr-2">Proposer Address</span>
-                        <span className="text-white font-mono text-xs truncate max-w-[180px] sm:max-w-full">{blockData?.blockHeader?.proposerAddress?.slice(0, 16)}...</span>
+                        <span className="text-white font-mono text-sm truncate max-w-[180px] sm:max-w-full">{blockData?.blockHeader?.proposerAddress?.slice(0, 16)}...</span>
                     </div>
                     <div className="flex flex-wrap justify-between items-center">
                         <span className="text-gray-400 text-sm mr-2">Committee Height</span>

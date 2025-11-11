@@ -5,6 +5,7 @@ import AnimatedNumber from '../AnimatedNumber'
 
 export interface TableColumn {
     label: string
+    width?: string //  width optional for the column (ej: "w-16", "w-32", "min-w-[120px]")
 }
 
 export interface TableCardProps {
@@ -124,57 +125,58 @@ const TableCard: React.FC<TableCardProps> = ({
             initial={{ opacity: 1, y: 10, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={`p-5 flex flex-col h-full ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
+            className={`p-5 flex flex-col ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
         >
-            {title && (
-                <div className="flex items-center justify-between mb-4">
+            <div className={`flex items-center ${title ? 'justify-between ' : 'justify-end'} mb-4`}>
+                {title && (
                     <h3 className="text-lg text-white/90 inline-flex items-center gap-2">
                         {title}
                         {loading && <i className="fa-solid fa-circle-notch fa-spin text-gray-400 text-sm" aria-hidden="true"></i>}
                     </h3>
-                    <div className="flex items-center gap-2">
-                        {live && (
-                            <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
-                                <i className="fa-solid fa-circle text-[6px] animate-pulse"></i>
-                                Live
-                            </span>
-                        )}
-                        {(showEntriesSelector || showExportButton) && (
-                            <div className="flex items-center gap-2 ml-4">
-                                {showEntriesSelector && (
-                                    <>
-                                        <span className="text-gray-400 text-sm">Show:</span>
-                                        <select
-                                            className="px-3 py-1 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                                            value={currentEntriesPerPage}
-                                            onChange={(e) => onEntriesPerPageChange && onEntriesPerPageChange(Number(e.target.value))}
-                                        >
-                                            {entriesPerPageOptions.map(option => (
-                                                <option key={option} value={option}>{option}</option>
-                                            ))}
-                                        </select>
-                                    </>
-                                )}
-                                {showExportButton && (
-                                    <button
-                                        onClick={onExportButtonClick}
-                                        className="px-3 py-1 text-sm bg-input hover:bg-gray-700 rounded text-gray-300"
+                )}
+                <div className="flex items-center gap-2">
+                    {live && (
+                        <span className="inline-flex items-center gap-1 text-sm text-primary bg-green-500/10 rounded-full px-2 py-0.5">
+                            <i className="fa-solid fa-circle text-[6px] animate-pulse"></i>
+                            Live
+                        </span>
+                    )}
+                    {(showEntriesSelector || showExportButton) && (
+                        <div className="flex items-center gap-2 ml-4">
+                            {showEntriesSelector && (
+                                <>
+                                    <span className="text-gray-400 text-sm">Show:</span>
+                                    <select
+                                        className="px-3 py-1 bg-input border border-gray-800/80 rounded-md text-white text-sm"
+                                        value={currentEntriesPerPage}
+                                        onChange={(e) => onEntriesPerPageChange && onEntriesPerPageChange(Number(e.target.value))}
                                     >
-                                        <i className="fa-solid fa-download mr-2"></i>Export
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                                        {entriesPerPageOptions.map(option => (
+                                            <option key={option} value={option}>{option}</option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
+                            {showExportButton && (
+                                <button
+                                    onClick={onExportButtonClick}
+                                    className="px-3 py-1 text-sm bg-input hover:bg-gray-700 rounded text-gray-300"
+                                >
+                                    <i className="fa-solid fa-download mr-2"></i>Export
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
+
 
             <div className="overflow-x-auto flex-1">
-                <table className={`min-w-full divide-y divide-gray-400/20 ${tableClassName}`}>
+                <table className={`w-full divide-y divide-gray-400/20 ${tableClassName}`} style={{ tableLayout: 'fixed' }}>
                     <thead className={theadClassName}>
                         <tr>
                             {columns.map((c) => (
-                                <th key={c.label} className="px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider">
+                                <th key={c.label} className={`px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider ${c.width || ''}`}>
                                     {c.label}
                                 </th>
                             ))}
@@ -185,7 +187,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={`s-${i}`} className="animate-pulse">
                                     {columns.map((_, j) => (
-                                        <td key={j} className="px-4 py-3">
+                                        <td key={j} className={`px-4 py-3 ${columns[j]?.width || ''}`}>
                                             <div className="h-3 w-20 sm:w-32 bg-gray-700/60 rounded"></div>
                                         </td>
                                     ))}
@@ -224,7 +226,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                         className="hover:bg-gray-800/30"
                                     >
                                         {cells.map((node, j) => (
-                                            <motion.td key={j} layout className={`px-4 text-sm text-gray-200 whitespace-nowrap ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'}`}>{node}</motion.td>
+                                            <motion.td key={j} layout className={`px-4 text-sm text-gray-200 whitespace-nowrap overflow-hidden text-ellipsis ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'} ${columns[j]?.width || ''}`}>{node}</motion.td>
                                         ))}
                                     </motion.tr>
                                 ))}

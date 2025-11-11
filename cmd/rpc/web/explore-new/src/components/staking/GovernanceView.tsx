@@ -1,7 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import TableCard from '../Home/TableCard'
-import { useDAO } from '../../hooks/useApi'
+import { useParams } from '../../hooks/useApi'
 import stakingConfig from '../../data/staking.json'
 
 interface GovernanceParam {
@@ -12,34 +12,121 @@ interface GovernanceParam {
 }
 
 const GovernanceView: React.FC = () => {
-    // Use endpoint configuration from JSON
-    const daoEndpoint = stakingConfig.endpoints.dao
-    const { data: daoData, isLoading, error } = useDAO(daoEndpoint.params.id)
+    // Get governance parameters from the /v1/query/params endpoint
+    const { data: paramsData, isLoading, error } = useParams(0)
 
-
-    // Function to get governance parameters from config
+    // Function to get governance parameters from API data
     const getGovernanceParams = (): GovernanceParam[] => {
-        // Filter visible parameters from config
-        const visibleParams = stakingConfig.governance.parameters.filter(param => param.visible)
+        if (!paramsData) {
+            // Fallback to config if no API data
+            return stakingConfig.governance.parameters.filter(param => param.visible)
+        }
 
-        // If there's real DAO data, try to use some real values
-        if (daoData && daoData.id && daoData.amount) {
-            return visibleParams.map(param => {
-                const updatedParam = { ...param }
+        const params: GovernanceParam[] = []
 
-                if (param.paramName === 'rootChainID' && daoData.id) {
-                    updatedParam.paramValue = daoData.id.toString()
+        // Consensus parameters
+        if (paramsData.consensus) {
+            if (paramsData.consensus.blockSize !== undefined) {
+                params.push({
+                    paramName: 'blockSize',
+                    paramValue: paramsData.consensus.blockSize,
+                    paramSpace: 'consensus',
+                    visible: true
+                })
+            }
+            if (paramsData.consensus.protocolVersion !== undefined) {
+                params.push({
+                    paramName: 'protocolVersion',
+                    paramValue: paramsData.consensus.protocolVersion,
+                    paramSpace: 'consensus',
+                    visible: true
+                })
+            }
+            if (paramsData.consensus.rootChainID !== undefined) {
+                params.push({
+                    paramName: 'rootChainID',
+                    paramValue: paramsData.consensus.rootChainID,
+                    paramSpace: 'consensus',
+                    visible: true
+                })
+            }
+        }
+
+        // Validator parameters
+        if (paramsData.validator) {
+            const validatorParams = [
+                'unstakingBlocks',
+                'maxPauseBlocks',
+                'doubleSignSlashPercentage',
+                'nonSignSlashPercentage',
+                'maxNonSign',
+                'nonSignWindow',
+                'maxCommittees',
+                'maxCommitteeSize',
+                'earlyWithdrawalPenalty',
+                'delegateUnstakingBlocks',
+                'minimumOrderSize',
+                'stakePercentForSubsidizedCommittee',
+                'maxSlashPerCommittee',
+                'delegateRewardPercentage',
+                'buyDeadlineBlocks',
+                'lockOrderFeeMultiplier'
+            ]
+
+            validatorParams.forEach(paramName => {
+                if (paramsData.validator[paramName] !== undefined) {
+                    params.push({
+                        paramName,
+                        paramValue: paramsData.validator[paramName],
+                        paramSpace: 'validator',
+                        visible: true
+                    })
                 }
-                if (param.paramName === 'minimumOrderSize' && daoData.amount) {
-                    const minOrder = Math.floor(daoData.amount / 1000000) // Convert to CNPY
-                    updatedParam.paramValue = minOrder.toLocaleString()
-                }
-
-                return updatedParam
             })
         }
 
-        return visibleParams
+        // Fee parameters
+        if (paramsData.fee) {
+            const feeParams = [
+                'sendFee',
+                'stakeFee',
+                'editStakeFee',
+                'pauseFee',
+                'unpauseFee',
+                'changeParameterFee',
+                'daoTransferFee',
+                'certificateResultsFee',
+                'subsidyFee',
+                'createOrderFee',
+                'editOrderFee',
+                'deleteOrderFee'
+            ]
+
+            feeParams.forEach(paramName => {
+                if (paramsData.fee[paramName] !== undefined) {
+                    params.push({
+                        paramName,
+                        paramValue: paramsData.fee[paramName],
+                        paramSpace: 'fee',
+                        visible: true
+                    })
+                }
+            })
+        }
+
+        // Governance parameters
+        if (paramsData.governance) {
+            if (paramsData.governance.daoRewardPercentage !== undefined) {
+                params.push({
+                    paramName: 'daoRewardPercentage',
+                    paramValue: paramsData.governance.daoRewardPercentage,
+                    paramSpace: 'governance',
+                    visible: true
+                })
+            }
+        }
+
+        return params
     }
 
     const governanceParams = getGovernanceParams()
@@ -48,8 +135,17 @@ const GovernanceView: React.FC = () => {
         return stakingConfig.ui.colors[space] || stakingConfig.ui.colors.default
     }
 
-    const formatParamValue = (value: string | number) => {
+    const formatParamValue = (value: string | number, paramName: string) => {
         if (typeof value === 'number') {
+            // Convert fees from micro denomination to CNPY
+            if (paramName.includes('Fee') || paramName === 'minimumOrderSize') {
+                const cnpyValue = value / 1000000
+                return cnpyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
+            }
+            // Format percentages
+            if (paramName.includes('Percentage') || paramName.includes('Percent') || paramName.includes('Cut')) {
+                return `${value}%`
+            }
             return value.toLocaleString()
         }
         return value.toString()
@@ -80,7 +176,7 @@ const GovernanceView: React.FC = () => {
                     cellAnimation.animate = { opacity: 1, scale: 1 }
                     break
                 case 'paramValue':
-                    cellContent = formatParamValue(param.paramValue)
+                    cellContent = formatParamValue(param.paramValue, param.paramName)
                     cellClassName = stakingConfig.governance.table.styling.paramValue
                     break
                 case 'paramSpace':
@@ -192,7 +288,7 @@ const GovernanceView: React.FC = () => {
                     <p className="text-gray-400">
                         {stakingConfig.governance.description}
                     </p>
-                    {daoData ? (
+                    {paramsData ? (
                         <p className="text-primary text-sm mt-2">
                             <i className="fa-solid fa-database mr-1"></i>
                             {stakingConfig.governance.daoDataText}
@@ -245,6 +341,10 @@ const GovernanceView: React.FC = () => {
                                 return governanceParams.filter(p => p.paramSpace === 'consensus').length
                             } else if (card.title === 'Validator Parameters') {
                                 return governanceParams.filter(p => p.paramSpace === 'validator').length
+                            } else if (card.title === 'Fee Parameters') {
+                                return governanceParams.filter(p => p.paramSpace === 'fee').length
+                            } else if (card.title === 'Governance Parameters') {
+                                return governanceParams.filter(p => p.paramSpace === 'governance').length
                             } else {
                                 return governanceParams.length
                             }

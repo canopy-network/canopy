@@ -12,8 +12,8 @@ interface Block {
     hash: string
     producer: string
     transactions: number
-    gasPrice: number
-    blockTime: number
+    networkID?: number
+    size?: number
 }
 
 interface DynamicFilter {
@@ -57,8 +57,8 @@ const BlocksPage: React.FC = () => {
             const hash = blockHeader.hash || 'N/A'
             const producer = blockHeader.proposerAddress || blockHeader.proposer || 'N/A'
             const transactions = blockHeader.numTxs || blockHeader.totalTxs || block.transactions?.length || 0
-            const gasPrice = 0.025 // Default value since it's not in the data
-            const blockTime = 6.2 // Default value
+            const networkID = blockHeader.networkID
+            const size = block.meta?.size
 
             // Calculate age
             let age = 'N/A'
@@ -93,8 +93,8 @@ const BlocksPage: React.FC = () => {
                 hash,
                 producer,
                 transactions,
-                gasPrice,
-                blockTime
+                networkID,
+                size
             }
         })
     }

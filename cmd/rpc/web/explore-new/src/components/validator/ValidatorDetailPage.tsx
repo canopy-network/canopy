@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import ValidatorDetailHeader from './ValidatorDetailHeader'
 import ValidatorStakeChains from './ValidatorStakeChains'
 import ValidatorRewards from './ValidatorRewards'
-import { useValidator } from '../../hooks/useApi'
+import { useValidator, useAllValidators } from '../../hooks/useApi'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import ValidatorMetrics from './ValidatorMetrics'
 
@@ -38,7 +38,7 @@ const ValidatorDetailPage: React.FC = () => {
     const location = useLocation()
     const [validator, setValidator] = useState<ValidatorDetail | null>(null)
     const [loading, setLoading] = useState(true)
-    
+
     // Get rank from query params
     const searchParams = new URLSearchParams(location.search)
     const rankParam = searchParams.get('rank')
@@ -47,22 +47,31 @@ const ValidatorDetailPage: React.FC = () => {
     // Hook to get specific validator data
     const { data: validatorData, isLoading } = useValidator(0, validatorAddress || '')
 
+    // Hook to get all validators to calculate total stake
+    const { data: allValidatorsData } = useAllValidators()
+
     // Helper function to convert micro denomination to CNPY
     const toCNPY = (micro: number): number => {
         return micro / 1000000
     }
 
+    // Calculate total stake from all validators
+    const totalNetworkStake = React.useMemo(() => {
+        const allValidators = allValidatorsData?.results || []
+        return allValidators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0)
+    }, [allValidatorsData])
+
     // Generate nested chains from real committees data
-    const generateNestedChains = (committees: number[], totalStake: number) => {
+    // Restakes aren't split amongst chains, but instead the full amount is applied against each
+    const generateNestedChains = (committees: number[], validatorStake: number, totalStake: number) => {
         if (!committees || committees.length === 0) {
             return []
         }
-        
-        // Distribute stake equally across committees
-        const stakePerCommittee = totalStake / committees.length
-        
+
+        // Staking power = Your stake / total stake
+        const stakingPower = totalStake > 0 ? (validatorStake / totalStake) * 100 : 0
+
         return committees.map((committeeId, index) => {
-            const percentage = (100 / committees.length)
             const icons = [
                 'fa-solid fa-leaf',
                 'fa-brands fa-ethereum',
@@ -79,12 +88,12 @@ const ValidatorDetailPage: React.FC = () => {
                 'bg-red-300/10 text-red-500 text-lg',
                 'bg-cyan-300/10 text-cyan-500 text-lg'
             ]
-            
+
             return {
                 name: `Committee ${committeeId}`,
                 committeeId: committeeId,
-                stakedAmount: stakePerCommittee,
-                percentage: percentage,
+                stakedAmount: validatorStake, // Full amount applied to each committee
+                percentage: stakingPower, // Staking power percentage
                 icon: icons[index % icons.length],
                 color: colors[index % colors.length]
             }
@@ -136,13 +145,13 @@ const ValidatorDetailPage: React.FC = () => {
                 compound,
                 status,
                 rank: rank || 0, // Use rank from query param, 0 if not provided
-                nestedChains: generateNestedChains(committees, stakedAmount)
+                nestedChains: generateNestedChains(committees, stakedAmount, totalNetworkStake)
             }
 
             setValidator(validatorDetail)
             setLoading(false)
         }
-    }, [validatorData, validatorAddress, rank])
+    }, [validatorData, validatorAddress, rank, totalNetworkStake])
 
     if (loading || isLoading) {
         return (
@@ -182,6 +191,11 @@ const ValidatorDetailPage: React.FC = () => {
         )
     }
 
+    // Helper function to truncate address
+    const truncate = (str: string, n: number = 12) => {
+        return str.length > n * 2 ? `${str.slice(0, n)}…${str.slice(-8)}` : str
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -191,10 +205,19 @@ const ValidatorDetailPage: React.FC = () => {
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Breadcrumb */}
-            <div className="mb-6">
-                <nav className="flex items-center gap-2 text-sm text-gray-400">
-                    <span>{validatorDetailTexts.page.breadcrumb}</span>
-                    <span className="text-white font-medium">{validator.address}</span>
+            <div className="mb-8">
+                <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
+                    <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
+                        Home
+                    </button>
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                    <button onClick={() => navigate('/validators')} className="hover:text-primary transition-colors">
+                        {validator.delegate ? 'Delegators' : 'Validators'}
+                    </button>
+                    <i className="fa-solid fa-chevron-right text-xs"></i>
+                    <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
+                        {truncate(validator.address || '', window.innerWidth < 640 ? 6 : 8)}
+                    </span>
                 </nav>
             </div>
 

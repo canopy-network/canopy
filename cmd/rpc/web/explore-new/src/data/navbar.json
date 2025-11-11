@@ -48,11 +48,11 @@
         "children": [
           {
             "label": "Supply",
-            "path": "/staking/supply"
+            "path": "/supply"
           },
           {
             "label": "Governance",
-            "path": "/staking/governance"
+            "path": "/governance"
           },
           {
             "label": "Network Charts",

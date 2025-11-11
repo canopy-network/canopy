@@ -145,9 +145,9 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
         <div className="bg-card rounded-lg p-6 mb-6">
             <div className="flex items-start justify-between">
                 {/* Información del Validador */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-start gap-4">
                     {/* Icono determinístico del Validador */}
-                    <div className="w-16 h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center">
+                    <div className="w-16 h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center flex-shrink-0">
                         <i className={`${getValidatorIcon(validator.address)} text-primary text-2xl`}></i>
                     </div>
 
@@ -158,7 +158,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 <h1 className="text-2xl font-bold text-white">
                                     {validator.address}
                                 </h1>
-                                <i className="fa-solid fa-copy cursor-pointer hover:text-primary transition-colors text-gray-400"
+                                <i className="fa-solid fa-copy cursor-pointer hover:text-green-600 transition-colors text-primary"
                                     onClick={() => copyToClipboard(validator.address)}
                                     title="Copy address"></i>
                             </div>
@@ -212,7 +212,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                 <div className="flex items-start justify-start gap-4 h-full">
 
                     {/* Botones de Acción */}
-                    <div className="flex items-start gap-3">
+                    {/* <div className="flex items-start gap-3">
                         <button className={`flex items-center gap-2 ${typeInfo.color} px-4 py-2 rounded-lg hover:opacity-90 transition-colors`}>
                             <i className={`${typeInfo.icon} text-sm`}></i>
                             <span className="text-sm font-medium">
@@ -227,7 +227,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 {validatorDetailTexts.header.actions.share}
                             </span>
                         </button>
-                    </div>
+                    </div> */}
                 </div>
             </div>
         </div>

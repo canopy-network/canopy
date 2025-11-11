@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 import BlockDetailHeader from './BlockDetailHeader'
 import BlockDetailInfo from './BlockDetailInfo'
 import BlockTransactions from './BlockTransactions'
@@ -30,14 +31,16 @@ interface Block {
 
 interface Transaction {
     hash: string
+    type?: string
     from: string
     to: string
     value: number
     fee: number
-    messageType: string
-    height: number
-    sender: string
-    txHash: string
+    messageType?: string
+    height?: number
+    sender?: string
+    txHash?: string
+    status?: 'success' | 'failed' | 'pending'
 }
 
 const BlockDetailPage: React.FC = () => {
@@ -71,7 +74,7 @@ const BlockDetailPage: React.FC = () => {
                     height: blockHeader.height,
                     builderName: `Validator ${blockHeader.proposerAddress.slice(0, 8)}...`,
                     status: 'confirmed',
-                    blockReward: 12.5, // This value could come from reward results
+                    blockReward: 0, // This value could come from reward results
                     timestamp: new Date(blockHeader.time / 1000).toISOString(),
                     size: meta.size || 0,
                     transactionCount: blockHeader.numTxs || blockTransactions.length,
@@ -89,17 +92,59 @@ const BlockDetailPage: React.FC = () => {
                 }
 
                 // Process real transactions
-                const realTransactions: Transaction[] = blockTransactions.map((tx: any) => ({
-                    hash: tx.txHash,
-                    from: tx.sender,
-                    to: tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents?.[0]?.address || 'N/A',
-                    value: tx.amount || tx.value || 0,
-                    fee: tx.fee || 0.025,
-                    messageType: tx.messageType,
-                    height: tx.height,
-                    sender: tx.sender,
-                    txHash: tx.txHash
-                }))
+                const realTransactions: Transaction[] = blockTransactions.map((tx: any) => {
+                    // Get transaction type from messageType or transaction.type
+                    const txType = tx.messageType || tx.transaction?.type || 'send'
+                    
+                    // Get fee from transaction (in micro denomination)
+                    // Fee can be in transaction.fee or transaction.transaction.fee
+                    const feeMicro = tx.transaction?.fee || tx.fee || 0
+                    
+                    // Get amount (in micro denomination from endpoint, convert to CNPY)
+                    const amountMicro = tx.transaction?.msg?.amount || tx.amount || 0
+                    const amountCNPY = amountMicro > 0 ? amountMicro / 1000000 : 0
+                    
+                    // Get 'to' address from transaction message
+                    let toAddress = 'N/A'
+                    if (tx.transaction?.msg?.toAddress) {
+                        toAddress = tx.transaction.msg.toAddress
+                    } else if (tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents?.[0]?.address) {
+                        toAddress = tx.transaction.msg.qc.results.rewardRecipients.paymentPercents[0].address
+                    }
+                    
+                    // Calculate age from block timestamp
+                    let age = 'N/A'
+                    if (blockHeader.time) {
+                        try {
+                            // Timestamp comes in microseconds, convert to milliseconds
+                            const blockTimeMs = typeof blockHeader.time === 'number' ?
+                                (blockHeader.time > 1e12 ? blockHeader.time / 1000 : blockHeader.time) :
+                                new Date(blockHeader.time).getTime()
+                            
+                            const blockDate = new Date(blockTimeMs)
+                            if (isValid(blockDate)) {
+                                age = formatDistanceToNow(blockDate, { addSuffix: true })
+                            }
+                        } catch (error) {
+                            age = 'N/A'
+                        }
+                    }
+                    
+                    return {
+                        hash: tx.txHash || tx.hash,
+                        type: txType,
+                        from: tx.sender || tx.transaction?.msg?.fromAddress || 'N/A',
+                        to: toAddress,
+                        value: amountCNPY,
+                        fee: feeMicro, // Fee in micro denomination
+                        messageType: tx.messageType || txType,
+                        height: tx.height || blockHeader.height,
+                        sender: tx.sender,
+                        txHash: tx.txHash || tx.hash,
+                        status: 'success' as const, // Transactions in blocks are confirmed
+                        age: age
+                    }
+                })
 
                 setBlock(blockInfo)
                 setTransactions(realTransactions)
@@ -185,14 +230,7 @@ const BlockDetailPage: React.FC = () => {
         )
     }
 
-    // Use real data from the endpoint
-    const blockStats = {
-        gasUsed: blockData?.blockHeader?.totalVDFIterations || 0,
-        gasLimit: 10000000 // This value could come from network configuration
-    }
-
     const networkInfo = {
-        difficulty: 15.2, // This value could be calculated based on VDF iterations
         nonce: blockData?.blockHeader?.hash?.slice(0, 16) || '0x0000000000000000',
         extraData: `Canopy Network ID: ${blockData?.blockHeader?.networkID || 1}`
     }
@@ -201,8 +239,6 @@ const BlockDetailPage: React.FC = () => {
         name: `Validator ${blockData?.blockHeader?.proposerAddress?.slice(0, 8)}...`,
         avatar: '',
         activeSince: '2023', // This value could come from historical validator data
-        stake: 1200000, // This value could come from validator data
-        stakeWeight: 5 // This value could be calculated based on the total network stake
     }
 
     return (
@@ -216,7 +252,7 @@ const BlockDetailPage: React.FC = () => {
             <BlockDetailHeader
                 blockHeight={block.height}
                 status={block.status}
-                minedTime={formatMinedTime(block.timestamp)}
+                proposedTime={formatMinedTime(block.timestamp)}
                 onPreviousBlock={handlePreviousBlock}
                 onNextBlock={handleNextBlock}
                 hasPrevious={block.height > 1}
@@ -227,21 +263,18 @@ const BlockDetailPage: React.FC = () => {
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
                     <BlockDetailInfo block={block} />
+                    <BlockTransactions
+                        transactions={transactions}
+                        totalTransactions={block.transactionCount}
+                    />
                 </div>
 
                 {/* Sidebar */}
                 <div className="lg:col-span-1">
                     <BlockSidebar
-                        blockStats={blockStats}
                         networkInfo={networkInfo}
                         validatorInfo={validatorInfo}
                         blockData={blockData}
-                    />
-                </div>
-                <div className='lg:col-span-3'>
-                    <BlockTransactions
-                        transactions={transactions}
-                        totalTransactions={block.transactionCount}
                     />
                 </div>
             </div>

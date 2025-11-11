@@ -186,7 +186,7 @@ const ExtraTables: React.FC = () => {
                         className="text-gray-400"
                     />
                 </span>,
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" >
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary font-semibold">
                         {address && address !== 'N/A' ? address.slice(0, 2).toUpperCase() : 'N/A'}
                     </div>
@@ -257,14 +257,14 @@ const ExtraTables: React.FC = () => {
                 paginate={false}
                 compactFooter={true}
                 columns={[
-                    { label: 'Rank' },
-                    { label: 'Name/Address' },
-                    { label: 'Rewards %' },
-                    { label: 'Chains Staked' },
-                    { label: '24h Change' },
-                    { label: 'Total Weight' },
-                    { label: 'Total Stake' },
-                    { label: 'Staking Power' },
+                    { label: 'Rank', width: 'w-[5%]' },
+                    { label: 'Name/Address', width: 'w-[18%]' },
+                    { label: 'Rewards %', width: 'w-[10%]' },
+                    { label: 'Chains Staked', width: 'w-[12%]' },
+                    { label: '24h Change', width: 'w-[12%]' },
+                    { label: 'Total Weight', width: 'w-[14%]' },
+                    { label: 'Total Stake', width: 'w-[14%]' },
+                    { label: 'Staking Power', width: 'w-[15%]' },
                 ]}
                 rows={validatorRows}
             />

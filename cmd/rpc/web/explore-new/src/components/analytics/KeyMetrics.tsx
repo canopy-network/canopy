@@ -68,16 +68,19 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
         }
 
         // 7. Network Uptime - Calculate based on validator status
-        if (validatorsData?.results) {
-            const validatorsList = validatorsData.results
+        // Uptime = Active Validators / Total Validators
+        // Active = not paused, not unstaking, and not delegate
+        if (validatorsData?.results || validatorsData?.validators) {
+            const validatorsList = validatorsData.results || validatorsData.validators || []
             const activeValidators = validatorsList.filter((v: any) => {
                 const isUnstaking = !!(v?.unstakingHeight && v.unstakingHeight > 0)
                 const isPaused = !!(v?.maxPausedHeight && v.maxPausedHeight > 0)
                 const isDelegate = v?.delegate === true
                 return !isUnstaking && !isPaused && !isDelegate
             })
-            const uptimePercentage = validatorsList.length > 0
-                ? (activeValidators.length / validatorsList.length) * 100
+            const totalValidators = validatorsList.length
+            const uptimePercentage = totalValidators > 0
+                ? (activeValidators.length / totalValidators) * 100
                 : 0
             realMetrics.networkUptime = Math.min(99.99, Math.max(0, uptimePercentage))
         }
@@ -114,7 +117,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
 
             <div className="space-y-4">
                 {/* Network Uptime */}
-                <div>
+                {/* <div>
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Network Uptime</span>
                         <span className="text-sm font-medium text-primary">
@@ -132,7 +135,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                             style={{ width: `${realMetrics.networkUptime}%` }}
                         ></div>
                     </div>
-                </div>
+                </div> */}
 
                 {/* Average Transaction Fee */}
                 <div>

@@ -22,16 +22,48 @@ interface FieldConfig {
 }
 
 const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
-    const [activeTab, setActiveTab] = useState('all')
+    // Sync activeTab with filter.type if filter is set
+    const initialTab = filters?.type !== 'all' ? filters.type : 'all'
+    const [activeTab, setActiveTab] = useState(initialTab)
     const [currentPage, setCurrentPage] = useState(1)
     const itemsPerPage = 5
 
+    // Update activeTab when filter changes
+    React.useEffect(() => {
+        if (filters?.type && filters.type !== 'all') {
+            setActiveTab(filters.type)
+        } else if (filters?.type === 'all') {
+            setActiveTab('all')
+        }
+    }, [filters?.type])
+
+    // Calculate actual counts from filtered results
+    const getActualCounts = () => {
+        if (!results) return { all: 0, blocks: 0, transactions: 0, addresses: 0, validators: 0 }
+
+        // Remove duplicates to get accurate counts
+        const uniqueBlocks = new Set(results.blocks?.map((b: any) => b.id || b.data?.blockHeader?.hash || b.data?.hash) || [])
+        const uniqueTx = new Set(results.transactions?.map((t: any) => t.id || t.data?.txHash || t.data?.hash) || [])
+        const uniqueAddresses = new Set(results.addresses?.map((a: any) => a.id || a.data?.address) || [])
+        const uniqueValidators = new Set(results.validators?.map((v: any) => v.id || v.data?.address) || [])
+
+        return {
+            all: uniqueBlocks.size + uniqueTx.size + uniqueAddresses.size + uniqueValidators.size,
+            blocks: uniqueBlocks.size,
+            transactions: uniqueTx.size,
+            addresses: uniqueAddresses.size,
+            validators: uniqueValidators.size
+        }
+    }
+
+    const actualCounts = getActualCounts()
+
     const tabs = [
-        { id: 'all', label: 'All Results', count: results.total },
-        { id: 'blocks', label: 'Blocks', count: results.blocks?.length || 0 },
-        { id: 'transactions', label: 'Transactions', count: results.transactions?.length || 0 },
-        { id: 'addresses', label: 'Addresses', count: results.addresses?.length || 0 },
-        { id: 'validators', label: 'Validators', count: results.validators?.length || 0 }
+        { id: 'all', label: 'All Results', count: actualCounts.all },
+        { id: 'blocks', label: 'Blocks', count: actualCounts.blocks },
+        { id: 'transactions', label: 'Transactions', count: actualCounts.transactions },
+        { id: 'addresses', label: 'Addresses', count: actualCounts.addresses },
+        { id: 'validators', label: 'Validators', count: actualCounts.validators }
     ]
 
     const formatTimestamp = (timestamp: string) => {
@@ -170,11 +202,11 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 copyValue: item.address || 'N/A',
                 copyLabel: 'Copy Address',
                 fields: [
-                    { label: 'Address:', value: truncateHash(item.address || 'N/A', 6), truncate: true },
-                    { label: 'Name:', value: item.name || 'Unknown' },
+                    { label: 'Address:', value: truncateHash(item.address || 'N/A', 18), truncate: true },
                     { label: 'Status:', value: item.status || 'Active' },
-                    { label: 'Stake:', value: `${(item.stake ?? 0).toFixed(2)} CNPY` },
-                    { label: 'Commission:', value: `${(item.commission ?? 0).toFixed(2)}%` }
+                    { label: 'Stake:', value: `${(item.stakedAmount / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CNPY` },
+                    { label: 'Auto-Compound:', value: `${(item.compound ?? false) ? 'Yes' : 'No'}` },
+                    { label: 'Net Address:', value: `${item.netAddress ?? 'tcp://delegation'}` }
                 ] as FieldConfig[]
             }
         }
@@ -204,20 +236,53 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                         </div>
 
                         <div className={`space-y-2 ${type === 'address' ? 'flex justify-between' : 'grid grid-cols-1 lg:grid-cols-3 gap-2'}`}>
-                            {config.fields.map((field, index) => (
-                                <div key={index} className={field.fullWidth ? 'flex items-start flex-col' : ''}>
-                                    <span className="text-gray-400 text-sm">{field.label}</span>
-                                    <span className={`${field.fullWidth ? 'text-white font-mono text-lg' : 'text-white text-sm ml-2'} ${field.truncate ? 'truncate' : ''}`}>
-                                        {field.value}
-                                    </span>
-                                </div>
-                            ))}
+                            {config.fields.map((field, index) => {
+                                // Determine if this field should be a link
+                                let linkTo: string | null = null
+                                let linkValue = field.value
+
+                                if (type === 'block' && field.label === 'Hash:') {
+                                    linkTo = `/block/${item.blockHeader?.height ?? item.height}`
+                                } else if (type === 'transaction') {
+                                    if (field.label === 'Hash:') {
+                                        linkTo = `/transaction/${item.txHash || item.hash}`
+                                    } else if (field.label === 'From:' && item.sender) {
+                                        linkTo = `/account/${item.sender || item.from}`
+                                        linkValue = truncateHash(item.sender || item.from || '', 6)
+                                    } else if (field.label === 'To:' && item.recipient) {
+                                        linkTo = `/account/${item.recipient || item.to}`
+                                        linkValue = truncateHash(item.recipient || item.to || '', 6)
+                                    }
+                                } else if (type === 'address' && field.label === 'Address:') {
+                                    linkTo = `/account/${item.address}`
+                                } else if (type === 'validator' && field.label === 'Address:') {
+                                    linkTo = `/validator/${item.address}`
+                                }
+
+                                return (
+                                    <div key={index} className={field.fullWidth ? 'flex items-start flex-col' : ''}>
+                                        <span className="text-gray-400 text-sm">{field.label}</span>
+                                        {linkTo ? (
+                                            <Link
+                                                to={linkTo}
+                                                className={`${field.fullWidth ? 'text-white font-mono text-lg' : 'text-white text-sm ml-2'} ${field.truncate ? 'truncate' : ''} hover:text-green-400 hover:underline transition-colors`}
+                                            >
+                                                {linkValue}
+                                            </Link>
+                                        ) : (
+                                            <span className={`${field.fullWidth ? 'text-white font-mono text-lg' : 'text-white text-sm ml-2'} ${field.truncate ? 'truncate' : ''}`}>
+                                                {field.value}
+                                            </span>
+                                        )}
+                                    </div>
+                                )
+                            })}
                         </div>
 
                         <div className="flex gap-2">
                             <Link
                                 to={config.linkTo}
-                                className="px-3 py-1 bg-input text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+                                className="px-3 py-1 bg-input text-white rounded-md text-sm font-medium transition-colors"
                             >
                                 <i className="fa-solid fa-eye text-white mr-2"></i> View Details
                             </Link>
@@ -243,11 +308,13 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         const uniqueAddressesMap = new Map()
         const uniqueValidatorsMap = new Map()
 
-        // Process blocks and remove duplicates
+        // Process blocks and remove duplicates - filter out invalid blocks
         results.blocks?.forEach((block: any) => {
             if (block && block.data) {
                 const blockId = block.id || block.data.blockHeader?.hash || block.data.hash
-                if (blockId && !uniqueBlocksMap.has(blockId)) {
+                const blockHeight = block.data.blockHeader?.height ?? block.data.height
+                // Only add if it has a valid hash (not 'N/A') and valid height
+                if (blockId && blockId !== 'N/A' && blockHeight && blockHeight !== 'N/A' && !uniqueBlocksMap.has(blockId)) {
                     uniqueBlocksMap.set(blockId, { ...block.data, resultType: 'block' })
                 }
             }
@@ -263,22 +330,25 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             }
         })
 
-        // Process addresses and remove duplicates
-        results.addresses?.forEach((addr: any) => {
-            if (addr && addr.data) {
-                const addrId = addr.id || addr.data.address
-                if (addrId && !uniqueAddressesMap.has(addrId)) {
-                    uniqueAddressesMap.set(addrId, { ...addr.data, resultType: 'address' })
-                }
-            }
-        })
-
-        // Process validators and remove duplicates
+        // Process validators FIRST (they take priority over addresses)
         results.validators?.forEach((val: any) => {
             if (val && val.data) {
                 const valId = val.id || val.data.address
                 if (valId && !uniqueValidatorsMap.has(valId)) {
                     uniqueValidatorsMap.set(valId, { ...val.data, resultType: 'validator' })
+                }
+            }
+        })
+
+        // Process addresses and remove duplicates - EXCLUDE addresses that are validators
+        const validatorAddresses = new Set(Array.from(uniqueValidatorsMap.values()).map((v: any) => (v.address || '').toLowerCase()))
+        results.addresses?.forEach((addr: any) => {
+            if (addr && addr.data) {
+                const addrId = addr.id || addr.data.address
+                const addrIdLower = (addrId || '').toLowerCase()
+                // Only add if it's NOT a validator
+                if (addrId && !validatorAddresses.has(addrIdLower) && !uniqueAddressesMap.has(addrId)) {
+                    uniqueAddressesMap.set(addrId, { ...addr.data, resultType: 'address' })
                 }
             }
         })
@@ -289,8 +359,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         const uniqueAddresses = Array.from(uniqueAddressesMap.values())
         const uniqueValidators = Array.from(uniqueValidatorsMap.values())
 
-        // Apply tab filter
+        // Determine which results to show based on activeTab
         let filteredResults = []
+
         if (activeTab === 'all') {
             filteredResults = [
                 ...uniqueBlocks,
@@ -308,14 +379,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             filteredResults = uniqueValidators
         }
 
-        // Apply custom filters if provided
+        // Apply filters if provided
         if (filters) {
-            // Apply type filter
-            if (filters.type !== 'all') {
-                // We've already filtered by tab, but double-check
-                const filterType = filters.type.slice(0, -1) // remove 's' from end (e.g. 'blocks' -> 'block')
-                filteredResults = filteredResults.filter(item => item.resultType === filterType)
-            }
 
             // Apply date filter if available
             if (filters.date !== 'all') {

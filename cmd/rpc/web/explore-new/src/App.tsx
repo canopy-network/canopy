@@ -40,8 +40,8 @@ function AnimatedRoutes() {
         <Route path="/analytics" element={<NetworkAnalyticsPage />} />
         <Route path="/token-swaps" element={<TokenSwapsPage />} />
         <Route path="/staking" element={<StakingPage />} />
-        <Route path="/staking/governance" element={<GovernancePage />} />
-        <Route path="/staking/supply" element={<SupplyPage />} />
+        <Route path="/governance" element={<GovernancePage />} />
+        <Route path="/supply" element={<SupplyPage />} />
         <Route path="/governance" element={<HomePage />} />
         <Route path="/orders" element={<HomePage />} />
       </Routes>

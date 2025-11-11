@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useTxByHash } from './useApi'
+import { useTxByHash, useAllValidators } from './useApi'
 import {
     getModalData,
     BlockByHeight,
@@ -36,6 +36,9 @@ export const useSearch = (searchTerm: string) => {
     // Solo usa el hook para hash exactos
     const { data: hashSearchData } = useTxByHash(isHashSearch ? searchTerm : '')
 
+    // Get all validators for partial address search
+    const { data: allValidatorsData } = useAllValidators()
+
     const searchInData = async (term: string) => {
         if (!term.trim()) {
             setResults(null)
@@ -44,6 +47,9 @@ export const useSearch = (searchTerm: string) => {
 
         setLoading(true)
         setError(null)
+
+        // Clear previous results immediately
+        setResults(null)
 
         try {
             const searchResults: SearchResults = {
@@ -57,8 +63,15 @@ export const useSearch = (searchTerm: string) => {
             // DIRECT SEARCH FOR BLOCKS, TRANSACTIONS, ACCOUNTS, AND VALIDATORS
             const searchPromises: Promise<any>[] = []
 
-            // 1. If it looks like a transaction hash (32+ hexadecimal characters)
-            if (term.length >= 32 && /^[a-fA-F0-9]+$/.test(term)) {
+            // Check if term is hexadecimal (could be address, hash, etc.)
+            const isHex = /^[a-fA-F0-9]+$/.test(term)
+
+            // Check if it's likely an address (8-40 hex chars) - addresses take priority
+            const isLikelyAddress = isHex && term.length >= 8 && term.length <= 40
+
+            // 1. If it looks like a transaction/block hash (32+ hexadecimal characters, but NOT an address)
+            // Only search for blocks/transactions if it's NOT a partial address
+            if (isHex && term.length >= 32 && !isLikelyAddress) {
                 searchPromises.push(
                     TxByHash(term)
                         .then(tx => {
@@ -75,11 +88,11 @@ export const useSearch = (searchTerm: string) => {
                         .catch(err => console.log('Transaction search error:', err))
                 )
 
-                // It could also be a block hash
+                // It could also be a block hash (only if NOT an address)
                 searchPromises.push(
                     BlockByHash(term)
                         .then(block => {
-                            if (block && block.blockHeader) {
+                            if (block && block.blockHeader && block.blockHeader.hash) {
                                 searchResults.blocks.push({
                                     type: 'block' as const,
                                     id: block.blockHeader.hash || term,
@@ -93,80 +106,222 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
-            // 2. If it is an address (40 hexadecimal characters)
-            if (term.length === 40) {
-                searchPromises.push(
-                    getModalData(term, 1)
-                        .then(result => {
-                            if (result && result !== "no result found") {
-                                // Si es una cuenta
-                                if (result.account) {
-                                    searchResults.addresses.push({
-                                        type: 'address' as const,
-                                        id: result.account.address,
-                                        title: 'Account',
-                                        subtitle: `Balance: ${(result.account.amount / 1000000).toLocaleString()} CNPY`,
-                                        data: result.account
-                                    })
-                                }
-
-                                // Si es un validador
-                                if (result.validator) {
-                                    searchResults.validators.push({
+            // 2. If it is an address (40 hexadecimal characters) OR a partial address (8-39 hex chars)
+            // PRIORITY: Validators first, then addresses
+            if (isLikelyAddress) {
+                // If it's exactly 40 chars, try as complete address
+                if (term.length === 40) {
+                    // First check if it's a validator (validators take priority)
+                    searchPromises.push(
+                        Validator(0, term)
+                            .then(validator => {
+                                if (validator && validator.address) {
+                                    const validatorResult = {
                                         type: 'validator' as const,
-                                        id: result.validator.address,
-                                        title: result.validator.name || 'Validator',
-                                        subtitle: `Address: ${result.validator.address.slice(0, 16)}...`,
-                                        data: result.validator
-                                    })
-                                }
-                            }
-                        })
-                        .catch(err => console.log('Address search error:', err))
-                )
+                                        id: validator.address,
+                                        title: validator.name || 'Validator',
+                                        subtitle: `Address: ${validator.address.slice(0, 16)}...`,
+                                        data: validator
+                                    }
 
-                // Direct search as validator and as account
-                searchPromises.push(
-                    Validator(0, term)
-                        .then(validator => {
-                            if (validator && validator.address) {
+                                    // Verificar duplicados
+                                    if (!searchResults.validators.some(v => v.id === validator.address)) {
+                                        searchResults.validators.push(validatorResult)
+                                    }
+                                } else {
+                                    // Only search as account if it's NOT a validator
+                                    return Account(0, term)
+                                        .then(account => {
+                                            if (account && account.address) {
+                                                const accountResult = {
+                                                    type: 'address' as const,
+                                                    id: account.address,
+                                                    title: 'Account',
+                                                    subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                                    data: account
+                                                }
+
+                                                // Verificar duplicados
+                                                if (!searchResults.addresses.some(a => a.id === account.address)) {
+                                                    searchResults.addresses.push(accountResult)
+                                                }
+                                            }
+                                        })
+                                        .catch(err => console.log('Account search error:', err))
+                                }
+                            })
+                            .catch(() => {
+                                // If validator search fails, try as account
+                                return Account(0, term)
+                                    .then(account => {
+                                        if (account && account.address) {
+                                            const accountResult = {
+                                                type: 'address' as const,
+                                                id: account.address,
+                                                title: 'Account',
+                                                subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                                data: account
+                                            }
+
+                                            // Verificar duplicados
+                                            if (!searchResults.addresses.some(a => a.id === account.address)) {
+                                                searchResults.addresses.push(accountResult)
+                                            }
+                                        }
+                                    })
+                                    .catch(err => console.log('Account search error:', err))
+                            })
+                    )
+
+                    // Also try getModalData as fallback
+                    searchPromises.push(
+                        getModalData(term, 1)
+                            .then(result => {
+                                if (result && result !== "no result found") {
+                                    // Si es un validador, agregarlo solo como validador
+                                    if (result.validator) {
+                                        const validatorId = result.validator.address
+                                        // Solo agregar si no existe ya como validador
+                                        if (!searchResults.validators.some(v => v.id === validatorId)) {
+                                            searchResults.validators.push({
+                                                type: 'validator' as const,
+                                                id: validatorId,
+                                                title: result.validator.name || 'Validator',
+                                                subtitle: `Address: ${validatorId.slice(0, 16)}...`,
+                                                data: result.validator
+                                            })
+                                        }
+                                    } else if (result.account) {
+                                        // Solo agregar como address si NO es un validador
+                                        const accountId = result.account.address
+                                        const isValidator = searchResults.validators.some(v => v.id === accountId)
+                                        if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                            searchResults.addresses.push({
+                                                type: 'address' as const,
+                                                id: accountId,
+                                                title: 'Account',
+                                                subtitle: `Balance: ${(result.account.amount / 1000000).toLocaleString()} CNPY`,
+                                                data: result.account
+                                            })
+                                        }
+                                    }
+                                }
+                            })
+                            .catch(err => console.log('Address search error:', err))
+                    )
+                } else {
+                    // For partial addresses (8-39 chars), search in loaded validators first
+                    const termLower = term.toLowerCase()
+
+                    // Search in validators list if available (validators take priority)
+                    const foundValidatorAddresses = new Set<string>()
+
+                    if (allValidatorsData?.results) {
+                        const matchingValidators = allValidatorsData.results.filter((v: any) => {
+                            const address = (v.address || '').toLowerCase()
+                            return address.startsWith(termLower)
+                        })
+
+                        matchingValidators.forEach((validator: any) => {
+                            if (validator.address) {
+                                foundValidatorAddresses.add(validator.address.toLowerCase())
                                 const validatorResult = {
                                     type: 'validator' as const,
                                     id: validator.address,
-                                    title: validator.name || 'Validator',
+                                    title: validator.name || validator.netAddress || 'Validator',
                                     subtitle: `Address: ${validator.address.slice(0, 16)}...`,
                                     data: validator
                                 }
-
-                                // Verificar duplicados
                                 if (!searchResults.validators.some(v => v.id === validator.address)) {
                                     searchResults.validators.push(validatorResult)
                                 }
                             }
                         })
-                        .catch(err => console.log('Validator search error:', err))
-                )
+                    }
 
-                searchPromises.push(
-                    Account(0, term)
-                        .then(account => {
-                            if (account && account.address) {
-                                const accountResult = {
-                                    type: 'address' as const,
-                                    id: account.address,
-                                    title: 'Account',
-                                    subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
-                                    data: account
-                                }
+                    // Also try API calls for exact matches (in case the validator list doesn't have it)
+                    // Try with padded address (might work for some cases)
+                    const paddedAddress = term.padEnd(40, '0')
 
-                                // Verificar duplicados
-                                if (!searchResults.addresses.some(a => a.id === account.address)) {
-                                    searchResults.addresses.push(accountResult)
+                    searchPromises.push(
+                        getModalData(paddedAddress, 1)
+                            .then(result => {
+                                if (result && result !== "no result found") {
+                                    // Si es un validador, agregarlo solo como validador
+                                    if (result.validator && result.validator.address && result.validator.address.toLowerCase().startsWith(termLower)) {
+                                        const validatorId = result.validator.address
+                                        foundValidatorAddresses.add(validatorId.toLowerCase())
+                                        if (!searchResults.validators.some(v => v.id === validatorId)) {
+                                            searchResults.validators.push({
+                                                type: 'validator' as const,
+                                                id: validatorId,
+                                                title: result.validator.name || 'Validator',
+                                                subtitle: `Address: ${validatorId.slice(0, 16)}...`,
+                                                data: result.validator
+                                            })
+                                        }
+                                    } else if (result.account && result.account.address && result.account.address.toLowerCase().startsWith(termLower)) {
+                                        // Solo agregar como address si NO es un validador
+                                        const accountId = result.account.address
+                                        const isValidator = foundValidatorAddresses.has(accountId.toLowerCase()) ||
+                                            searchResults.validators.some(v => v.id === accountId)
+                                        if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                            searchResults.addresses.push({
+                                                type: 'address' as const,
+                                                id: accountId,
+                                                title: 'Account',
+                                                subtitle: `Balance: ${(result.account.amount / 1000000).toLocaleString()} CNPY`,
+                                                data: result.account
+                                            })
+                                        }
+                                    }
                                 }
-                            }
-                        })
-                        .catch(err => console.log('Account search error:', err))
-                )
+                            })
+                            .catch(() => { }) // Silently fail
+                    )
+
+                    // Try direct API calls (these might fail for partial addresses, but worth trying)
+                    searchPromises.push(
+                        Validator(0, term)
+                            .then(validator => {
+                                if (validator && validator.address && validator.address.toLowerCase().startsWith(termLower)) {
+                                    foundValidatorAddresses.add(validator.address.toLowerCase())
+                                    if (!searchResults.validators.some(v => v.id === validator.address)) {
+                                        searchResults.validators.push({
+                                            type: 'validator' as const,
+                                            id: validator.address,
+                                            title: validator.name || 'Validator',
+                                            subtitle: `Address: ${validator.address.slice(0, 16)}...`,
+                                            data: validator
+                                        })
+                                    }
+                                }
+                            })
+                            .catch(() => { }) // Silently fail for partial searches
+                    )
+
+                    searchPromises.push(
+                        Account(0, term)
+                            .then(account => {
+                                if (account && account.address && account.address.toLowerCase().startsWith(termLower)) {
+                                    const accountId = account.address
+                                    // Solo agregar como address si NO es un validador
+                                    const isValidator = foundValidatorAddresses.has(accountId.toLowerCase()) ||
+                                        searchResults.validators.some(v => v.id === accountId)
+                                    if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                        searchResults.addresses.push({
+                                            type: 'address' as const,
+                                            id: accountId,
+                                            title: 'Account',
+                                            subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                            data: account
+                                        })
+                                    }
+                                }
+                            })
+                            .catch(() => { }) // Silently fail for partial searches
+                    )
+                }
             }
 
             // 3. If it is a number (block height)
@@ -217,7 +372,7 @@ export const useSearch = (searchTerm: string) => {
 
         return () => clearTimeout(timeoutId)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchTerm, hashSearchData, isHashSearch])
+    }, [searchTerm, hashSearchData, isHashSearch, allValidatorsData])
 
     return {
         results,
