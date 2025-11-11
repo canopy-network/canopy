@@ -3,6 +3,7 @@ package p2p
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 
@@ -201,9 +202,11 @@ func (ps *PeerSet) IsMustConnect(publicKey []byte) bool {
 
 // GetAllInfos() returns the information on connected peers and the total inbound / outbound counts
 func (ps *PeerSet) GetAllInfos() (res []*lib.PeerInfo, numInbound, numOutbound int) {
-	ps.RLock()
-	defer ps.RUnlock()
-	for _, p := range ps.m {
+	// copy the current set to avoid race conditions
+	set := make(map[string]*Peer)
+	maps.Copy(set, ps.m)
+	// iterate over the copied set
+	for _, p := range set {
 		if p.IsOutbound {
 			numOutbound++
 		} else {
