@@ -99,8 +99,8 @@ func (p *P2P) Start() {
 	go p.DialForOutboundPeers()
 	// Start inbox monitoring
 	go p.MonitorInboxStats(inboxMonitorInterval)
-	// Start critical peers health check
-	go p.DialCriticalPeers()
+	// Start dialing config peers health check
+	go p.DialConfigPeers()
 	// Wait until peers reaches minimum count
 	p.WaitForMinimumPeers()
 }
@@ -218,55 +218,29 @@ func (p *P2P) DialForOutboundPeers() {
 	}
 }
 
-// DialCriticalPeers() periodically checks and reconnects critical peers
-func (p *P2P) DialCriticalPeers() {
+// DialConfigPeers() periodically checks and reconnects critical peers
+func (p *P2P) DialConfigPeers() {
 	// could be configurable
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		p.checkAndReconnectMustConnects()
-		p.checkAndReconnectDialPeers()
-	}
-}
-
-// checkAndReconnectMustConnects() verifies all mustConnect peers are connected
-func (p *P2P) checkAndReconnectMustConnects() {
-	p.PeerSet.RLock()
-	mustConnects := p.PeerSet.mustConnect
-	p.PeerSet.RUnlock()
-
-	for _, peerAddr := range mustConnects {
-		// skip self
-		if bytes.Equal(peerAddr.PublicKey, p.privateKey.PublicKey().Bytes()) {
-			continue
-		}
-		// if not currently connected, attempt reconnection
-		if !p.Has(peerAddr.PublicKey) {
-			p.log.Infof("reconnecting to mustConnect peer: %s@%s",
-				lib.BytesToTruncatedString(peerAddr.PublicKey), peerAddr.NetAddress)
-			go p.DialWithBackoff(peerAddr, false)
-		}
-	}
-}
-
-// checkAndReconnectDialPeers() verifies all config DialPeers are connected
-func (p *P2P) checkAndReconnectDialPeers() {
-	for _, peerString := range p.config.DialPeers {
-		peerAddress := &lib.PeerAddress{
-			PeerMeta: &lib.PeerMeta{
-				NetworkId: p.meta.NetworkId,
-				ChainId:   p.meta.ChainId,
-			},
-		}
-		if err := peerAddress.FromString(peerString); err != nil {
-			continue
-		}
-		// if not currently connected, attempt reconnection
-		if !p.Has(peerAddress.PublicKey) {
-			p.log.Infof("reconnecting to dial peer: %s@%s",
-				lib.BytesToTruncatedString(peerAddress.PublicKey), peerAddress.NetAddress)
-			go p.DialWithBackoff(peerAddress, true)
+		for _, peerString := range p.config.DialPeers {
+			peerAddress := &lib.PeerAddress{
+				PeerMeta: &lib.PeerMeta{
+					NetworkId: p.meta.NetworkId,
+					ChainId:   p.meta.ChainId,
+				},
+			}
+			if err := peerAddress.FromString(peerString); err != nil {
+				continue
+			}
+			// if not currently connected, attempt reconnection
+			if !p.Has(peerAddress.PublicKey) {
+				p.log.Infof("reconnecting to dial peer: %s@%s",
+					lib.BytesToTruncatedString(peerAddress.PublicKey), peerAddress.NetAddress)
+				go p.DialWithBackoff(peerAddress, true)
+			}
 		}
 	}
 }
