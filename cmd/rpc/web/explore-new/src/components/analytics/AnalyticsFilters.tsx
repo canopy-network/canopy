@@ -12,10 +12,10 @@ interface AnalyticsFiltersProps {
 }
 
 const blockRangeFilters = [
-    { key: '10', oldLabel: '10 Blocks', recentLabel: 'the last 1 minute' },
-    { key: '25', oldLabel: '25 Blocks', recentLabel: 'the last 5 minutes' },
-    { key: '50', oldLabel: '50 Blocks', recentLabel: 'the last 15 minutes' },
-    { key: '100', oldLabel: '100 Blocks', recentLabel: 'the last 30 minutes' }
+    { key: '10', oldLabel: '10 Blocks', recentLabel: 'Last 1 minute' },
+    { key: '25', oldLabel: '25 Blocks', recentLabel: 'Last 5 minutes' },
+    { key: '50', oldLabel: '50 Blocks', recentLabel: 'Last 15 minutes' },
+    { key: '100', oldLabel: '100 Blocks', recentLabel: 'Last 30 minutes' }
 ]
 
 const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
