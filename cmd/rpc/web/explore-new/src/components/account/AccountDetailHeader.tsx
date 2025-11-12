@@ -41,16 +41,10 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-                        <i className="fa-solid fa-wallet text-primary text-2xl"></i>
-                    </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white mb-1">
                             {accountDetailTexts.header.title}
                         </h1>
-                        <p className="text-gray-400 font-mono">
-                            {truncateAddress(account.address, 8, 8)}
-                        </p>
                     </div>
                 </div>
                 <motion.div
@@ -77,7 +71,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
 
             {/* Account Info Grid */}
             <motion.div
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                className="grid grid-cols-1 md:grid-cols-2 gap-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
@@ -87,7 +81,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                     className="bg-input rounded-lg p-4 border border-gray-800/50"
                     transition={{ duration: 0.2 }}
                 >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 relative">
                         <div className="flex items-center gap-2">
                             <i className="fa-solid fa-hashtag text-primary text-sm"></i>
                             <span className="text-sm text-gray-400">
@@ -96,15 +90,15 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         </div>
                         <motion.button
                             onClick={copyToClipboard}
-                            className="text-primary hover:text-green-500/80 transition-colors"
+                            className="bg-gray-700/50 hover:bg-gray-700/70 rounded-lg py-1 px-2 absolute right-0 top-1/2 -translate-y-1/2 text-primary hover:text-green-500/80 transition-colors border border-gray-800/50"
                             title="Copy address"
-                            whileHover={{ scale: 1.1 }}
+                            whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                         >
                             {copied ? (
-                                <i className="fa-solid fa-check text-primary"></i>
+                                <i className="fa-solid fa-check text-primary text-sm"></i>
                             ) : (
-                                <i className="fa-solid fa-copy"></i>
+                                <i className="fa-solid fa-copy text-sm"></i>
                             )}
                         </motion.button>
                     </div>
@@ -113,28 +107,6 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                     </p>
                 </motion.div>
 
-                {/* Balance */}
-                <motion.div
-                    className="bg-input rounded-lg p-4 border border-gray-800/50"
-                    transition={{ duration: 0.2 }}
-                >
-                    <div className="flex items-center gap-2 mb-2">
-                        <i className="fa-solid fa-coins text-primary text-sm"></i>
-                        <span className="text-sm text-gray-400">
-                            {accountDetailTexts.header.totalBalance}
-                        </span>
-                    </div>
-                    <p className="text-white font-semibold">
-                        <AnimatedNumber
-                            value={account.amount / 1000000}
-                            format={{
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 6
-                            }}
-                            className="text-white"
-                        /> CNPY
-                    </p>
-                </motion.div>
 
                 {/* Status */}
                 <motion.div

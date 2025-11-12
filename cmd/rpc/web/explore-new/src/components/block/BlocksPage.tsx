@@ -122,44 +122,85 @@ const BlocksPage: React.FC = () => {
 
         const mostRecent = blockTimestamps[0]
         const oldest = blockTimestamps[blockTimestamps.length - 1]
+        
+        // Calculate age of most recent block from now
+        const ageOfMostRecentMs = now - mostRecent
+        const ageOfMostRecentHours = ageOfMostRecentMs / (60 * 60 * 1000)
+        const ageOfMostRecentDays = ageOfMostRecentMs / (24 * 60 * 60 * 1000)
+        
+        // Calculate total time range covered by cached blocks
         const totalRangeMs = mostRecent - oldest
-
         const totalRangeHours = totalRangeMs / (60 * 60 * 1000)
         const totalRangeDays = totalRangeMs / (24 * 60 * 60 * 1000)
 
-        // Generate filters based on actual range
-        if (totalRangeHours >= 168) { // >= 1 week
-            // Add multiple time options for weeks
-            filters.push({ key: '24h', label: 'Last 24h' })
-            filters.push({ key: '3d', label: 'Last 3 days' })
-            filters.push({ key: 'week', label: 'Last week' })
+        // Only show time filters if the most recent block is recent enough
+        // If blocks are from months ago, don't show short-term filters
+        if (ageOfMostRecentDays >= 30) {
+            // Blocks are very old (months), show only longer-term filters
             if (totalRangeDays >= 14) {
                 filters.push({ key: '2w', label: 'Last 2 weeks' })
             }
-        } else if (totalRangeDays >= 3) { // >= 3 days but < 1 week
-            filters.push({ key: '12h', label: 'Last 12h' })
-            filters.push({ key: '24h', label: 'Last 24h' })
-            filters.push({ key: '3d', label: 'Last 3 days' })
-        } else if (totalRangeDays >= 1) { // >= 1 day but < 3 days
-            filters.push({ key: '6h', label: 'Last 6h' })
-            filters.push({ key: '12h', label: 'Last 12h' })
-            filters.push({ key: '24h', label: 'Last 24h' })
-        } else if (totalRangeHours >= 6) { // >= 6 hours but < 1 day
-            filters.push({ key: '1h', label: 'Last 1h' })
-            filters.push({ key: '3h', label: 'Last 3h' })
-            filters.push({ key: '6h', label: 'Last 6h' })
-        } else if (totalRangeHours >= 2) { // >= 2 hours but < 6 hours
-            filters.push({ key: '30m', label: 'Last 30min' })
-            filters.push({ key: '1h', label: 'Last 1h' })
-            filters.push({ key: '2h', label: 'Last 2h' })
-        } else if (totalRangeHours >= 1) { // >= 1 hour but < 2 hours
-            filters.push({ key: '30m', label: 'Last 30min' })
-            filters.push({ key: '1h', label: 'Last 1h' })
-        } else if (totalRangeMs >= 30 * 60 * 1000) { // >= 30 minutes
-            filters.push({ key: '15m', label: 'Last 15min' })
-            filters.push({ key: '30m', label: 'Last 30min' })
-        } else if (totalRangeMs >= 15 * 60 * 1000) { // >= 15 minutes
-            filters.push({ key: '15m', label: 'Last 15min' })
+            if (totalRangeDays >= 7) {
+                filters.push({ key: 'week', label: 'Last week' })
+            }
+            if (totalRangeDays >= 3) {
+                filters.push({ key: '3d', label: 'Last 3 days' })
+            }
+        } else if (ageOfMostRecentDays >= 7) {
+            // Blocks are weeks old
+            if (totalRangeDays >= 7) {
+                filters.push({ key: 'week', label: 'Last week' })
+            }
+            if (totalRangeDays >= 3) {
+                filters.push({ key: '3d', label: 'Last 3 days' })
+            }
+            if (totalRangeDays >= 1) {
+                filters.push({ key: '24h', label: 'Last 24h' })
+            }
+        } else if (ageOfMostRecentDays >= 1) {
+            // Blocks are days old
+            if (totalRangeDays >= 3) {
+                filters.push({ key: '3d', label: 'Last 3 days' })
+            }
+            if (totalRangeDays >= 1) {
+                filters.push({ key: '24h', label: 'Last 24h' })
+            }
+            if (totalRangeHours >= 12) {
+                filters.push({ key: '12h', label: 'Last 12h' })
+            }
+            if (totalRangeHours >= 6) {
+                filters.push({ key: '6h', label: 'Last 6h' })
+            }
+        } else if (ageOfMostRecentHours >= 6) {
+            // Blocks are hours old
+            if (totalRangeHours >= 6) {
+                filters.push({ key: '6h', label: 'Last 6h' })
+            }
+            if (totalRangeHours >= 3) {
+                filters.push({ key: '3h', label: 'Last 3h' })
+            }
+            if (totalRangeHours >= 1) {
+                filters.push({ key: '1h', label: 'Last 1h' })
+            }
+        } else if (ageOfMostRecentHours >= 1) {
+            // Blocks are less than 6 hours old
+            if (totalRangeHours >= 2) {
+                filters.push({ key: '2h', label: 'Last 2h' })
+            }
+            if (totalRangeHours >= 1) {
+                filters.push({ key: '1h', label: 'Last 1h' })
+            }
+            if (totalRangeMs >= 30 * 60 * 1000) {
+                filters.push({ key: '30m', label: 'Last 30min' })
+            }
+        } else {
+            // Blocks are very recent (less than 1 hour old)
+            if (totalRangeMs >= 30 * 60 * 1000) {
+                filters.push({ key: '30m', label: 'Last 30min' })
+            }
+            if (totalRangeMs >= 15 * 60 * 1000) {
+                filters.push({ key: '15m', label: 'Last 15min' })
+            }
         }
 
         return filters

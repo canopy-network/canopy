@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import AccountsTable from './AccountsTable'
-import { useAccounts } from '../../hooks/useApi'
+import { useAccounts, useAllValidators } from '../../hooks/useApi'
 import { getTotalAccountCount } from '../../lib/api'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
@@ -15,6 +15,30 @@ const AccountsPage: React.FC = () => {
     const [isLoadingStats, setIsLoadingStats] = useState(true)
 
     const { data: accountsData, isLoading, error } = useAccounts(currentPage)
+    const { data: validatorsData } = useAllValidators()
+
+    // Create a map of addresses to staking type
+    const stakingTypeMap = useMemo(() => {
+        const map = new Map<string, 'validator' | 'delegator' | 'unstaked'>()
+        
+        if (validatorsData?.results && Array.isArray(validatorsData.results)) {
+            validatorsData.results.forEach((validator: any) => {
+                const address = validator.address
+                if (!address) return
+                
+                // Check if unstaking
+                if (validator.unstakingHeight && validator.unstakingHeight > 0) {
+                    map.set(address.toLowerCase(), 'unstaked')
+                } else if (validator.delegate === true) {
+                    map.set(address.toLowerCase(), 'delegator')
+                } else {
+                    map.set(address.toLowerCase(), 'validator')
+                }
+            })
+        }
+        
+        return map
+    }, [validatorsData])
 
     // Fetch account statistics
     useEffect(() => {
@@ -143,41 +167,51 @@ const AccountsPage: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Stage Card */}
-                <div className="mb-8">
-                    <StageCard
-                        title="Total Accounts"
-                        data={totalAccounts.toLocaleString()}
-                        subtitle={<p className="text-sm text-primary">+ {accountsLast24h.toLocaleString()} last 24h</p>}
-                        icon={<i className="fa-solid fa-users text-primary"></i>}
-                        isLoading={isLoadingStats}
-                    />
-                </div>
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column */}
+                    <div className="lg:col-span-1 space-y-6">
+                        {/* Search */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Search by address
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search by address..."
+                                    className="w-full px-4 py-3 pl-10 bg-card border border-gray-800/80 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                            </div>
+                        </div>
 
-                {/* Search */}
-                <div className="mb-6">
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Search by address..."
-                            className="w-full px-4 py-3 pl-10 bg-card border border-gray-800/80 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                        {/* Total Accounts Card */}
+                        <StageCard
+                            title="Total Accounts"
+                            data={totalAccounts.toLocaleString()}
+                            subtitle={<p className="text-sm text-primary">+ {accountsLast24h.toLocaleString()} last 24h</p>}
+                            icon={<i className="fa-solid fa-users text-primary"></i>}
+                            isLoading={isLoadingStats}
                         />
-                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                    </div>
+
+                    {/* Right Column - Accounts Table */}
+                    <div className="lg:col-span-2">
+                        <AccountsTable
+                            accounts={isSearching ? paginatedAccounts : (accountsData?.results || [])}
+                            loading={isLoading}
+                            totalCount={totalCount}
+                            currentPage={currentPage}
+                            onPageChange={handlePageChange}
+                            currentEntriesPerPage={currentEntriesPerPage}
+                            onEntriesPerPageChange={handleEntriesPerPageChange}
+                            stakingTypeMap={stakingTypeMap}
+                        />
                     </div>
                 </div>
-
-                {/* Accounts Table */}
-                <AccountsTable
-                    accounts={isSearching ? paginatedAccounts : (accountsData?.results || [])}
-                    loading={isLoading}
-                    totalCount={totalCount}
-                    currentPage={currentPage}
-                    onPageChange={handlePageChange}
-                    currentEntriesPerPage={currentEntriesPerPage}
-                    onEntriesPerPageChange={handleEntriesPerPageChange}
-                />
             </div>
         </motion.div>
     )

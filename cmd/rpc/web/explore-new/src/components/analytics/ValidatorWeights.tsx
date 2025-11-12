@@ -28,13 +28,13 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
             const isDelegate = v?.delegate === true
             return !isUnstaking && !isPaused && !isDelegate
         })
-        const pausedValidators = validators.filter((v: any) => 
+        const pausedValidators = validators.filter((v: any) =>
             v.maxPausedHeight && v.maxPausedHeight > 0
         )
-        const unstakingValidators = validators.filter((v: any) => 
+        const unstakingValidators = validators.filter((v: any) =>
             v.unstakingHeight && v.unstakingHeight > 0
         )
-        const delegateValidators = validators.filter((v: any) => 
+        const delegateValidators = validators.filter((v: any) =>
             v.delegate === true
         )
 
@@ -46,7 +46,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
 
         // Create distribution array with real data
         const distribution = []
-        
+
         if (activePercent > 0) {
             distribution.push({
                 label: 'Active',
@@ -55,7 +55,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                 count: activeValidators.length
             })
         }
-        
+
         if (delegatePercent > 0) {
             distribution.push({
                 label: 'Delegates',
@@ -64,7 +64,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                 count: delegateValidators.length
             })
         }
-        
+
         if (pausedPercent > 0) {
             distribution.push({
                 label: 'Paused',
@@ -73,7 +73,7 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                 count: pausedValidators.length
             })
         }
-        
+
         if (unstakingPercent > 0) {
             distribution.push({
                 label: 'Unstaking',
@@ -127,9 +127,9 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
             <h3 className="text-lg font-semibold text-white mb-1">Validator Weights</h3>
             <p className="text-sm text-gray-400 mb-4">Distribution by status</p>
 
-            <div className="flex items-center justify-center">
-                <div className="relative w-48 h-48">
-                    <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
+            <div className="h-[10rem] flex items-center justify-center">
+                <div className="relative w-[10rem] h-[10rem]">
+                    <svg className="w-[10rem] h-[10rem] transform -rotate-90" viewBox="0 0 100 100">
                         {validatorData.map((segment, index) => {
                             const radius = 40
                             const circumference = 2 * Math.PI * radius
@@ -173,11 +173,11 @@ const ValidatorWeights: React.FC<ValidatorWeightsProps> = ({ validatorsData, loa
                 </div>
             </div>
 
-            {/* Legend */}
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            {/* Legend - Always in one line */}
+            <div className="mt-4 flex flex-nowrap justify-center items-center gap-x-4 text-xs overflow-x-auto">
                 {validatorData.map((segment, index) => (
-                    <div key={index} className="flex items-center">
-                        <div className="w-3 h-3 rounded mr-2" style={{ backgroundColor: segment.color }}></div>
+                    <div key={index} className="flex items-center whitespace-nowrap flex-shrink-0">
+                        <div className="w-3 h-3 rounded mr-2 flex-shrink-0" style={{ backgroundColor: segment.color }}></div>
                         <span className="text-gray-400">{segment.label} ({segment.count})</span>
                     </div>
                 ))}

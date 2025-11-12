@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 
 interface AnalyticsFiltersProps {
     fromBlock: string
@@ -8,14 +8,14 @@ interface AnalyticsFiltersProps {
     onSearch?: () => void
     isLoading?: boolean
     errorMessage?: string
+    blocksData?: any
 }
 
 const blockRangeFilters = [
     { key: '10', label: '10 Blocks' },
     { key: '25', label: '25 Blocks' },
     { key: '50', label: '50 Blocks' },
-    { key: '100', label: '100 Blocks' },
-    { key: 'custom', label: 'Custom Range' }
+    { key: '100', label: '100 Blocks' }
 ]
 
 const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
@@ -25,9 +25,89 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     onToBlockChange,
     onSearch,
     isLoading = false,
-    errorMessage = ''
+    errorMessage = '',
+    blocksData
 }) => {
     const [selectedRange, setSelectedRange] = useState<string>('')
+
+    // Calculate time range for each block filter based on cached blocks
+    const getTimeRangeForBlocks = useMemo(() => {
+        return (blockCount: number, filterLabel: string): string => {
+            if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
+                return filterLabel
+            }
+
+            // Get the most recent block
+            const sortedBlocks = [...blocksData.results].sort((a: any, b: any) => {
+                const heightA = a.blockHeader?.height || a.height || 0
+                const heightB = b.blockHeader?.height || b.height || 0
+                return heightB - heightA
+            })
+
+            if (sortedBlocks.length === 0) {
+                return filterLabel
+            }
+
+            const mostRecentBlock = sortedBlocks[0]
+            const mostRecentTime = mostRecentBlock.blockHeader?.time || mostRecentBlock.time || 0
+
+            if (!mostRecentTime) {
+                return filterLabel
+            }
+
+            // Convert timestamp (may be in microseconds)
+            const mostRecentTimeMs = mostRecentTime > 1e12 ? mostRecentTime / 1000 : mostRecentTime
+            const now = Date.now()
+            
+            // Calculate age of most recent block from now
+            const ageOfMostRecentMs = now - mostRecentTimeMs
+            const ageOfMostRecentDays = ageOfMostRecentMs / (24 * 60 * 60 * 1000)
+
+            // If blocks are old (more than 1 day), just show block count
+            if (ageOfMostRecentDays >= 1) {
+                return filterLabel
+            }
+
+            // For recent blocks, calculate time range
+            const mostRecentHeight = mostRecentBlock.blockHeader?.height || mostRecentBlock.height || 0
+            const targetHeight = Math.max(0, mostRecentHeight - blockCount + 1)
+
+            // Find the target block
+            const targetBlock = sortedBlocks.find((block: any) => {
+                const height = block.blockHeader?.height || block.height || 0
+                return height <= targetHeight
+            }) || sortedBlocks[sortedBlocks.length - 1]
+
+            if (!targetBlock) {
+                return filterLabel
+            }
+
+            // Get timestamps
+            const targetTime = targetBlock.blockHeader?.time || targetBlock.time || 0
+
+            if (!targetTime) {
+                return filterLabel
+            }
+
+            // Convert timestamps (may be in microseconds)
+            const targetTimeMs = targetTime > 1e12 ? targetTime / 1000 : targetTime
+
+            // Calculate time difference
+            const diffMs = mostRecentTimeMs - targetTimeMs
+            const diffMins = Math.floor(diffMs / (60 * 1000))
+            const diffHours = Math.floor(diffMs / (60 * 60 * 1000))
+
+            // Format as "Last X minutes/hours" only if blocks are recent
+            if (diffMins < 60) {
+                return `Last ${diffMins} ${diffMins === 1 ? 'minute' : 'minutes'}`
+            } else if (diffHours < 24) {
+                return `Last ${diffHours} ${diffHours === 1 ? 'hour' : 'hours'}`
+            } else {
+                // If time range is more than 24 hours, just show block count
+                return filterLabel
+            }
+        }
+    }, [blocksData])
 
     // Detect when custom range is being used
     useEffect(() => {
@@ -66,6 +146,9 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                 {blockRangeFilters.map((filter) => {
                     const isSelected = selectedRange === filter.key
                     const isCustom = filter.key === 'custom'
+                    const displayText = filter.key !== 'custom' 
+                        ? getTimeRangeForBlocks(parseInt(filter.key), filter.label) 
+                        : filter.label
 
                     return (
                         <button
@@ -78,65 +161,27 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                                     : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
                                 }`}
                         >
-                            {filter.label}
+                            <div className="flex flex-col items-center">
+                                <span>{displayText}</span>
+                            </div>
                         </button>
                     )
                 })}
             </div>
-            <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs">From</span>
-                <div className="flex flex-col gap-1 relative">
-                    <input
-                        type="text"
-                        className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                        placeholder="From"
-                        value={fromBlock}
-                        onChange={(e) => onFromBlockChange(e.target.value)}
-                        min="0"
-                        disabled={isLoading}
-                    />
+            {/* Sync animation */}
+            {isLoading && (
+                <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
+                    <span className="ml-2 text-xs text-primary">Syncing...</span>
                 </div>
-                <span className="text-gray-400 text-xs">To</span>
-                <div className="flex flex-col gap-1 relative">
-                    <input
-                        type="text"
-                        className="w-24 px-3 py-2 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                        placeholder="To"
-                        value={toBlock}
-                        onChange={(e) => onToBlockChange(e.target.value)}
-                        min="0"
-                        disabled={isLoading}
-                    />
+            )}
+
+            {/* Error message */}
+            {errorMessage && (
+                <div className="flex items-center">
+                    <span className="text-xs text-red-500">{errorMessage}</span>
                 </div>
-
-                {/* Sync animation */}
-                {isLoading && (
-                    <div className="flex items-center ml-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
-                        <span className="ml-2 text-xs text-primary">Syncing...</span>
-                    </div>
-                )}
-
-                {/* Error message */}
-                {errorMessage && (
-                    <div className="flex items-center ml-2">
-                        <span className="text-xs text-red-500">{errorMessage}</span>
-                    </div>
-                )}
-
-                {/* Search button */}
-                <button
-                    onClick={onSearch}
-                    disabled={isLoading || !fromBlock || !toBlock || !!errorMessage}
-                    className={`ml-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 
-                        ${(isLoading || !fromBlock || !toBlock || !!errorMessage)
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-primary text-black hover:bg-primary/80'}`}
-                >
-                    <i className="fas fa-search mr-2"></i>
-                    Search
-                </button>
-            </div>
+            )}
         </div>
     )
 }

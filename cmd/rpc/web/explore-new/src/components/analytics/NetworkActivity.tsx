@@ -20,7 +20,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
     // Use real block data and group by time like BlockProductionRate
     const getTransactionData = () => {
         if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
-            return { txCounts: [], timeKeys: [], timeLabels: [] }
+            return { txCounts: [], timeKeys: [], timeLabels: [], timeInterval: 'minute' }
         }
 
         const realBlocks = blocksData.results
@@ -34,7 +34,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
         })
 
         if (filteredBlocks.length === 0) {
-            return { txCounts: [], timeKeys: [], timeLabels: [] }
+            return { txCounts: [], timeKeys: [], timeLabels: [], timeInterval: 'minute' }
         }
 
         // Sort blocks by timestamp (oldest first)
@@ -44,52 +44,93 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             return timeA - timeB
         })
 
-        // Group transactions by time (similar to BlockProductionRate)
-        const txByTime: { [hour: string]: number } = {}
+        // Always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = 4
+        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        const txCounts: number[] = []
+        const timeLabels: string[] = []
+        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
 
-        filteredBlocks.forEach((block: any) => {
-            const blockTime = block.blockHeader?.time || block.time || 0
-            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
-            const blockDate = new Date(blockTimeMs)
+        for (let i = 0; i < numPoints; i++) {
+            const startIdx = i * blocksPerGroup
+            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
-            // Group by hour:minute (rounding to 10-minute intervals if there are many blocks)
-            const minute = filteredBlocks.length < 20 ?
-                blockDate.getMinutes() :
-                Math.floor(blockDate.getMinutes() / 10) * 10
-
-            const timeKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-
-            if (!txByTime[timeKey]) {
-                txByTime[timeKey] = 0
+            if (groupBlocks.length === 0) {
+                txCounts.push(0)
+                timeLabels.push('')
+                groupTimeRanges.push(0)
+                continue
             }
 
-            // Count transactions in this block - use numTxs from blockHeader
-            const txCount = block.blockHeader?.numTxs || 0
-            txByTime[timeKey] += txCount
-        })
+            // Count total transactions in this group
+            const groupTxCount = groupBlocks.reduce((sum: number, block: any) => {
+                return sum + (block.blockHeader?.numTxs || 0)
+            }, 0)
+            txCounts.push(groupTxCount)
 
-        // Convert the object to an array sorted by hour
-        const timeKeys = Object.keys(txByTime).sort()
-        const txCounts = timeKeys.map(key => txByTime[key])
+            // Get time label from first and last block in group
+            const firstBlock = groupBlocks[0]
+            const lastBlock = groupBlocks[groupBlocks.length - 1]
+            
+            const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
+            const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
+            
+            const firstTimeMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
+            const lastTimeMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
+            
+            // Calculate time range for this group in minutes
+            const groupTimeRangeMs = lastTimeMs - firstTimeMs
+            const groupTimeRangeMins = groupTimeRangeMs / (60 * 1000)
+            groupTimeRanges.push(groupTimeRangeMins)
+            
+            const firstDate = new Date(firstTimeMs)
+            const lastDate = new Date(lastTimeMs)
 
-        // Create time labels (HH:MM or HH:MM-HH:MM)
-        const timeLabels = timeKeys.map(key => {
-            if (filteredBlocks.length < 20) {
-                return key
+            const formatTime = (date: Date) => {
+                const hours = date.getHours().toString().padStart(2, '0')
+                const minutes = date.getMinutes().toString().padStart(2, '0')
+                return `${hours}:${minutes}`
             }
 
-            const [hour, minute] = key.split(':').map(Number)
-            const endMinute = (minute + 10) % 60
-            const endHour = endMinute < minute ? (hour + 1) % 24 : hour
+            const startTime = formatTime(firstDate)
+            const endTime = formatTime(lastDate)
 
-            return `${key}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
-        })
+            if (startTime === endTime) {
+                timeLabels.push(startTime)
+            } else {
+                timeLabels.push(`${startTime}-${endTime}`)
+            }
+        }
 
+        // Calculate average time interval per group for subtitle
+        const validTimeRanges = groupTimeRanges.filter(range => range > 0)
+        const avgTimeRangeMins = validTimeRanges.length > 0 
+            ? validTimeRanges.reduce((sum, range) => sum + range, 0) / validTimeRanges.length 
+            : 0
 
-        return { txCounts, timeKeys, timeLabels }
+        // Format time interval for subtitle
+        let timeInterval = 'minute'
+        if (avgTimeRangeMins < 1) {
+            timeInterval = 'minute'
+        } else if (avgTimeRangeMins < 1.5) {
+            timeInterval = 'minute'
+        } else if (avgTimeRangeMins < 2.5) {
+            timeInterval = '2 minutes'
+        } else if (avgTimeRangeMins < 3.5) {
+            timeInterval = '3 minutes'
+        } else if (avgTimeRangeMins < 5) {
+            timeInterval = `${Math.round(avgTimeRangeMins)} minutes`
+        } else if (avgTimeRangeMins < 10) {
+            timeInterval = `${Math.round(avgTimeRangeMins)} minutes`
+        } else {
+            timeInterval = `${Math.round(avgTimeRangeMins)} minutes`
+        }
+
+        return { txCounts, timeKeys: timeLabels, timeLabels, timeInterval }
     }
 
-    const { txCounts, timeKeys, timeLabels } = getTransactionData()
+    const { txCounts, timeKeys, timeLabels, timeInterval } = getTransactionData()
     const maxValue = txCounts.length > 0 ? Math.max(...txCounts, 1) : 1
     const minValue = txCounts.length > 0 ? Math.min(...txCounts, 0) : 0
     const range = maxValue - minValue || 1
@@ -117,7 +158,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     Network Activity
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Transactions per minute
+                    Transactions per {timeInterval}
                 </p>
             </div>
 
@@ -195,9 +236,9 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {blockGroups.slice(0, 6).map((group: any, index: number) => (
+                {timeLabels.map((timeLabel: string, index: number) => (
                     <span key={index} className="text-center flex-1 px-1 truncate">
-                        {group.start}-{group.end}
+                        {timeLabel}
                     </span>
                 ))}
             </div>

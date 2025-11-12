@@ -8,42 +8,6 @@ import Logo from '../Logo'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
-// Get random icon for validator based on address (deterministic)
-const getValidatorIcon = (address: string): string => {
-    // List of Bootstrap Icons for validators
-    const icons = [
-        'bi-shield-fill',
-        'bi-shield-check',
-        'bi-shield-lock',
-        'bi-star-fill',
-        'bi-star',
-        'bi-award-fill',
-        'bi-award',
-        'bi-trophy-fill',
-        'bi-trophy',
-        'bi-gem',
-        'bi-diamond-fill',
-        'bi-lightning-fill',
-        'bi-lightning',
-        'bi-fire',
-        'bi-heart-fill',
-        'bi-heart',
-        'bi-gift-fill',
-        'bi-gift',
-        'bi-rocket-fill',
-        'bi-rocket',
-        'bi-flash-fill',
-        'bi-flash',
-        'bi-zap-fill',
-        'bi-zap',
-    ]
-
-    // Use address to deterministically select an icon
-    if (!address || address === 'N/A') return icons[0]
-    // Convert address to number using char codes
-    const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    return icons[hash % icons.length]
-}
 
 const normalizeList = (payload: any) => {
     if (!payload) return [] as any[]
@@ -260,8 +224,8 @@ const ExtraTables: React.FC = () => {
                     { label: 'Rank', width: 'w-[5%]' },
                     { label: 'Name/Address', width: 'w-[18%]' },
                     { label: 'Rewards %', width: 'w-[10%]' },
-                    { label: 'Chains Staked', width: 'w-[12%]' },
-                    { label: '24h Change', width: 'w-[12%]' },
+                    { label: 'Chains Staked', width: 'w-[8%]' },
+                    { label: '24h Change', width: 'w-[8%]' },
                     { label: 'Total Weight', width: 'w-[14%]' },
                     { label: 'Total Stake', width: 'w-[14%]' },
                     { label: 'Staking Power', width: 'w-[15%]' },

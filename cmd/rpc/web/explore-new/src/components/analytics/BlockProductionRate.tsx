@@ -13,7 +13,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
     const getBlockData = () => {
         if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
             // Silently return empty array without logging errors
-            return []
+            return { blockData: [], timeKeys: [], timeLabels: [], timeInterval: 'minute' }
         }
 
         const realBlocks = blocksData.results
@@ -28,7 +28,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
 
         // If no blocks in range, return empty array
         if (filteredBlocks.length === 0) {
-            return []
+            return { blockData: [], timeKeys: [], timeLabels: [], timeInterval: 'minute' }
         }
 
         // Sort blocks by timestamp (oldest first)
@@ -38,68 +38,92 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return timeA - timeB
         })
 
-        // Extract real block times and group them by hour
-        const blocksByHour: { [hour: string]: number } = {}
+        // Always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = 4
+        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        const blockData: number[] = []
+        const timeLabels: string[] = []
+        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
 
-        filteredBlocks.forEach((block: any) => {
-            const blockTime = block.blockHeader?.time || block.time || 0
-            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
-            const blockDate = new Date(blockTimeMs)
+        for (let i = 0; i < numPoints; i++) {
+            const startIdx = i * blocksPerGroup
+            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
-            // Group by hour:minute (rounding to 10-minute intervals if there are many blocks)
-            const minute = filteredBlocks.length < 20 ?
-                blockDate.getMinutes() :
-                Math.floor(blockDate.getMinutes() / 10) * 10
-
-            const hourKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-
-            if (!blocksByHour[hourKey]) {
-                blocksByHour[hourKey] = 0
+            if (groupBlocks.length === 0) {
+                blockData.push(0)
+                timeLabels.push('')
+                groupTimeRanges.push(0)
+                continue
             }
-            blocksByHour[hourKey]++
-        })
 
-        // Convert the object to an array sorted by hour
-        const timeKeys = Object.keys(blocksByHour).sort()
-        const timeGroups = timeKeys.map(key => blocksByHour[key])
+            // Count blocks in this group
+            blockData.push(groupBlocks.length)
 
-        // Save time keys to use them in labels
-        // @ts-ignore - Add temporary property to share with getTimeIntervalLabels
-        getBlockData.timeKeys = timeKeys
+            // Get time label from first and last block in group
+            const firstBlock = groupBlocks[0]
+            const lastBlock = groupBlocks[groupBlocks.length - 1]
+            
+            const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
+            const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
+            
+            const firstTimeMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
+            const lastTimeMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
+            
+            // Calculate time range for this group in minutes
+            const groupTimeRangeMs = lastTimeMs - firstTimeMs
+            const groupTimeRangeMins = groupTimeRangeMs / (60 * 1000)
+            groupTimeRanges.push(groupTimeRangeMins)
+            
+            const firstDate = new Date(firstTimeMs)
+            const lastDate = new Date(lastTimeMs)
 
-        return timeGroups
-    }
+            const formatTime = (date: Date) => {
+                const hours = date.getHours().toString().padStart(2, '0')
+                const minutes = date.getMinutes().toString().padStart(2, '0')
+                return `${hours}:${minutes}`
+            }
 
-    const blockData = getBlockData()
-    const maxValue = Math.max(...blockData, 0)
-    const minValue = Math.min(...blockData, 0)
+            const startTime = formatTime(firstDate)
+            const endTime = formatTime(lastDate)
 
-    // Get time interval labels for the x-axis
-    const getTimeIntervalLabels = () => {
-        // @ts-ignore - Access the temporary property we saved in getBlockData
-        const timeKeys = getBlockData.timeKeys || []
-
-        if (!timeKeys.length) {
-            return []
+            if (startTime === endTime) {
+                timeLabels.push(startTime)
+            } else {
+                timeLabels.push(`${startTime}-${endTime}`)
+            }
         }
 
-        // For each time key (HH:MM), create a label
-        return timeKeys.map(key => {
-            // If there are few blocks (< 20), show only hour:minute
-            if (blocksData?.results?.length < 20) {
-                return key
-            }
+        // Calculate average time interval per group for subtitle
+        const validTimeRanges = groupTimeRanges.filter(range => range > 0)
+        const avgTimeRangeMins = validTimeRanges.length > 0 
+            ? validTimeRanges.reduce((sum, range) => sum + range, 0) / validTimeRanges.length 
+            : 0
 
-            // If there are many blocks, show the 10-minute range
-            const [hour, minute] = key.split(':').map(Number)
-            const endMinute = (minute + 10) % 60
-            const endHour = endMinute < minute ? (hour + 1) % 24 : hour
+        // Format time interval for subtitle
+        let timeInterval = '1-minute'
+        if (avgTimeRangeMins < 1) {
+            timeInterval = '1-minute'
+        } else if (avgTimeRangeMins < 1.5) {
+            timeInterval = '1-minute'
+        } else if (avgTimeRangeMins < 2.5) {
+            timeInterval = '2-minute'
+        } else if (avgTimeRangeMins < 3.5) {
+            timeInterval = '3-minute'
+        } else if (avgTimeRangeMins < 5) {
+            timeInterval = `${Math.round(avgTimeRangeMins)}-minute`
+        } else if (avgTimeRangeMins < 10) {
+            timeInterval = `${Math.round(avgTimeRangeMins)}-minute`
+        } else {
+            timeInterval = `${Math.round(avgTimeRangeMins)}-minute`
+        }
 
-            return `${key}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
-        })
+        return { blockData, timeKeys: timeLabels, timeLabels, timeInterval }
     }
 
-    const timeIntervalLabels = getTimeIntervalLabels()
+    const { blockData, timeKeys, timeLabels, timeInterval } = getBlockData()
+    const maxValue = blockData.length > 0 ? Math.max(...blockData, 0) : 0
+    const minValue = blockData.length > 0 ? Math.min(...blockData, 0) : 0
 
     if (loading) {
         return (
@@ -148,7 +172,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     Block Production Rate
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Blocks per {blocksData?.results?.length < 20 ? '1-minute' : '10-minute'} interval
+                    Blocks per {timeInterval} interval
                 </p>
             </div>
 
@@ -176,7 +200,8 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                                 fill="url(#blockGradient)"
                                 d={`M 10,110 ${blockData.map((value, index) => {
                                     const x = (index / (blockData.length - 1)) * 280 + 10
-                                    const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
+                                    const range = maxValue - minValue || 1
+                                    const y = 110 - ((value - minValue) / range) * 100
                                     return `${x},${y}`
                                 }).join(' ')} L 290,110 Z`}
                             />
@@ -188,7 +213,8 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                                 strokeWidth="2"
                                 points={blockData.map((value, index) => {
                                     const x = (index / (blockData.length - 1)) * 280 + 10
-                                    const y = 110 - ((value - minValue) / (maxValue - minValue)) * 100
+                                    const range = maxValue - minValue || 1
+                                    const y = 110 - ((value - minValue) / range) * 100
                                     return `${x},${y}`
                                 }).join(' ')}
                             />
@@ -215,7 +241,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {timeIntervalLabels.map((label: string, index: number) => (
+                {timeLabels.map((label: string, index: number) => (
                     <span key={index} className="text-center flex-1 px-1 truncate">{label}</span>
                 ))}
             </div>

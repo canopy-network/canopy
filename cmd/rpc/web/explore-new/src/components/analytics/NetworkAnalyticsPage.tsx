@@ -406,28 +406,28 @@ const NetworkAnalyticsPage: React.FC = () => {
                         <button
                             onClick={handleExportData}
                             disabled={isExporting}
-                            className={`flex items-center gap-2 border rounded-md px-3 py-2 text-sm transition-colors ${isExporting
-                                ? 'bg-primary border-gray-800/40 text-gray-400 cursor-not-allowed'
+                            className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${isExporting
+                                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                                 : 'bg-card border-gray-800/40 text-gray-300 hover:bg-card/80'
                                 }`}
                         >
                             {isExporting ? (
                                 <>
-                                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                                    <i className="fas fa-spinner fa-spin mr-2"></i>
                                     Exporting...
                                 </>
                             ) : (
                                 <>
-                                    <i className="fa-solid fa-download text-xs"></i>
-                                    Export Data
+                                    <i className="fas fa-download mr-2"></i>
+                                    Export
                                 </>
                             )}
                         </button>
                         <button
                             onClick={handleRefresh}
-                            className="flex items-center gap-2 bg-primary border border-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
+                            className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors duration-200 font-medium"
                         >
-                            <i className="fa-solid fa-refresh text-xs"></i>
+                            <i className="fas fa-sync-alt mr-2"></i>
                             Refresh
                         </button>
                     </div>
@@ -443,6 +443,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                 onSearch={handleSearch}
                 isLoading={filteredBlocksLoading}
                 errorMessage={errorMessage}
+                blocksData={filteredBlocksData || analyticsBlocksData || blocksData}
             />
 
             {/* Analytics Grid - 3 columns layout */}
@@ -476,6 +477,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                         toBlock={toBlock}
                         loading={isLoading}
                         validatorsData={validatorsData}
+                        blocksData={filteredBlocksData || analyticsBlocksData}
                         blockGroups={fromBlock && toBlock ? generateBlockGroups(parseInt(fromBlock), parseInt(toBlock)) : []}
                     />
                 </div>
@@ -496,6 +498,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                         toBlock={toBlock}
                         loading={isLoading}
                         transactionsData={filteredTransactionsData}
+                        blocksData={filteredBlocksData || analyticsBlocksData}
                         blockGroups={fromBlock && toBlock ? generateBlockGroups(parseInt(fromBlock), parseInt(toBlock)) : []}
                     />
 
@@ -506,6 +509,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                         loading={isLoading}
                         paramsData={paramsData}
                         transactionsData={filteredTransactionsData}
+                        blocksData={filteredBlocksData || analyticsBlocksData}
                         blockGroups={fromBlock && toBlock ? generateBlockGroups(parseInt(fromBlock), parseInt(toBlock)) : []}
                     />
                 </div>
