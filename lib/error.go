@@ -278,6 +278,11 @@ const (
 	CodeStakeBelowMinimum         ErrorCode = 102
 	CodeMaxDexBatchSize           ErrorCode = 103
 	CodeEventTypeEmpty            ErrorCode = 104
+	CodeTooManyDexWithdrawsError  ErrorCode = 105
+	CodeTooManyDexDepositsError   ErrorCode = 106
+	CodeTooManyDexOrdersError     ErrorCode = 107
+	CodeTooManyDexReceiptsError   ErrorCode = 108
+	CodeNonNilPoolPointsError     ErrorCode = 109
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -881,4 +886,24 @@ func ErrZeroLiquidityPool() ErrorI {
 
 func ErrEmptyEventsTracker() ErrorI {
 	return NewError(CodeEmptyEventsTracker, StateMachineModule, "events tracker nil")
+}
+
+func ErrTooManyDexDeposits() ErrorI {
+	return NewError(CodeTooManyDexDepositsError, StateMachineModule, "too many dex deposits")
+}
+
+func ErrTooManyDexWithdraws() ErrorI {
+	return NewError(CodeTooManyDexWithdrawsError, StateMachineModule, "too many dex withdrawals")
+}
+
+func ErrTooManyDexOrders() ErrorI {
+	return NewError(CodeTooManyDexOrdersError, StateMachineModule, "too many dex orders")
+}
+
+func ErrTooManyDexReceipts() ErrorI {
+	return NewError(CodeTooManyDexReceiptsError, StateMachineModule, "too many dex receipts")
+}
+
+func ErrNonNilPoolPoints() ErrorI {
+	return NewError(CodeNonNilPoolPointsError, StateMachineModule, "non nil pool points")
 }

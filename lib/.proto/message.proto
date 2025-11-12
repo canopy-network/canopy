@@ -28,7 +28,7 @@ message MessageSend {
   bytes from_address = 1; // @gotags: json:"fromAddress"
   // to_address: is the recipient of the funds
   bytes to_address = 2; // @gotags: json:"toAddress"
-  // amount: is the amount of tokens in micro-denomination (uAsset)
+  // amount: is the amount of tokens in micro-denomination (uCNPY)
   uint64 amount = 3;
 }
 
@@ -170,11 +170,11 @@ message MessageSubsidy {
 // MessageCreateOrder creates a new token swap 'sell order', removing tokens from the sender
 // account and transferring them to an escrow pool while awaiting a buyer
 message MessageCreateOrder {
-  // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+  // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   uint64 ChainId = 1; // @gotags: json:"chainID"
   // data: a generic data field which can allow a committee to execute specific functionality for the swap
   bytes data = 2; // @gotags: json:"data"
-  // amount_for_sale: the amount of uAsset listed for sale, transferred to escrow
+  // amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
   uint64 AmountForSale = 3; // @gotags: json:"amountForSale"
   // requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
   uint64 RequestedAmount = 4; // @gotags: json:"requestAmount"
@@ -193,12 +193,12 @@ message MessageEditOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   // not modifiable, used for order identification only
   bytes OrderId = 1; // @gotags: json:"orderID"
-  // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+  // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   // not modifiable, used for order identification only
   uint64 ChainId = 2; // @gotags: json:"chainID"
   // data: a generic data field which can allow a committee to execute specific functionality for the swap
   bytes data = 3; // @gotags: json:"data"
-  // amount_for_sale: the updated amount of uAsset listed for sale, a reduction will return escrowed tokens to the seller's
+  // amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
   // send address
   uint64 AmountForSale = 4; // @gotags: json:"amountForSale"
   // requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
@@ -212,7 +212,7 @@ message MessageEditOrder {
 message MessageDeleteOrder {
   // order_id: is the number id that is unique to this committee to identify the order
   bytes OrderId = 1; // @gotags: json:"orderID"
-  // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+  // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   uint64 ChainId = 2; // @gotags: json:"chainID"
 }
 
