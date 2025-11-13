@@ -61,7 +61,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                             value={account.amount / 1000000}
                             format={{
                                 minimumFractionDigits: 2,
-                                maximumFractionDigits: 6
+                                maximumFractionDigits: 2
                             }}
                             className="text-primary mr-2"
                         /> CNPY

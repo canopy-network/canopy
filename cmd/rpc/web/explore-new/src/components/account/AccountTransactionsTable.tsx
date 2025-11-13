@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 import TableCard from '../Home/TableCard'
 import accountDetailTexts from '../../data/accountDetail.json'
 import transactionsTexts from '../../data/transactions.json'
@@ -44,7 +45,8 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
 
 
     const getTypeIcon = (type: string) => {
-        switch (type.toLowerCase()) {
+        const typeLower = type.toLowerCase()
+        switch (typeLower) {
             case 'send':
                 return 'bi bi-send'
             case 'transfer':
@@ -52,6 +54,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             case 'stake':
                 return 'bi bi-file-lock2'
             case 'edit-stake':
+            case 'editstake':
                 return 'bi bi-file-lock2'
             case 'unstake':
                 return 'fa-solid fa-unlock'
@@ -66,13 +69,18 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             case 'certificateresults':
             case 'certificate':
                 return 'bi bi-c-circle-fill'
+            case 'pause':
+                return 'fa-solid fa-pause-circle'
+            case 'unpause':
+                return 'fa-solid fa-play-circle'
             default:
                 return 'fa-solid fa-circle'
         }
     }
 
     const getTypeColor = (type: string) => {
-        switch (type.toLowerCase()) {
+        const typeLower = type.toLowerCase()
+        switch (typeLower) {
             case 'transfer':
                 return 'bg-blue-500/20 text-blue-400'
             case 'stake':
@@ -91,6 +99,13 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                 return 'bg-green-500/20 text-primary'
             case 'send':
                 return 'bg-blue-500/20 text-blue-400'
+            case 'edit-stake':
+            case 'editstake':
+                return 'bg-green-500/20 text-green-400'
+            case 'pause':
+                return 'bg-yellow-500/20 text-yellow-400'
+            case 'unpause':
+                return 'bg-green-500/20 text-green-400'
             default:
                 return 'bg-gray-500/20 text-gray-400'
         }
@@ -109,18 +124,22 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         }
     }
 
-    const formatTime = (timestamp: number) => {
-        const date = new Date(timestamp / 1000000) // Convert from microseconds to milliseconds
-        const now = new Date()
-        const diffMs = now.getTime() - date.getTime()
-        const diffMins = Math.floor(diffMs / 60000)
-        const diffHours = Math.floor(diffMins / 60)
-        const diffDays = Math.floor(diffHours / 24)
+    const formatAge = (timestamp: number) => {
+        if (!timestamp || timestamp === 0) return 'N/A'
 
-        if (diffMins < 1) return 'Just now'
-        if (diffMins < 60) return `${diffMins}m ago`
-        if (diffHours < 24) return `${diffHours}h ago`
-        return `${diffDays}d ago`
+        try {
+            // Convert from microseconds to milliseconds, then to Date
+            const timestampMs = timestamp / 1000000
+            const date = new Date(timestampMs)
+
+            if (isValid(date)) {
+                return formatDistanceToNow(date, { addSuffix: true })
+            }
+        } catch (error) {
+            // Fallback if conversion fails
+        }
+
+        return 'N/A'
     }
 
     // Helper function to convert micro denomination to CNPY
@@ -135,8 +154,18 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
+    const normalizeType = (type: string): string => {
+        const typeLower = type.toLowerCase()
+        // Normalize editStake variations
+        if (typeLower === 'editstake' || typeLower === 'edit-stake') {
+            return 'edit-stake'
+        }
+        return type
+    }
+
     const rows = (Array.isArray(transactions) ? transactions : []).map((transaction) => {
-        const txType = transaction.messageType || transaction.transaction?.type || 'send'
+        const rawTxType = transaction.messageType || transaction.transaction?.type || 'send'
+        const txType = normalizeType(rawTxType)
         const fromAddress = transaction.sender || transaction.transaction?.msg?.fromAddress || 'N/A'
         const toAddress = transaction.recipient || transaction.transaction?.msg?.toAddress || 'N/A'
         const amountMicro = transaction.transaction?.msg?.amount || 0
@@ -221,7 +250,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
 
             // Age
             <span key="age" className="text-gray-400 text-sm">
-                {formatTime(transaction.transaction.time)}
+                {formatAge(transaction.transaction.time)}
             </span>
         ]
     })
