@@ -222,7 +222,7 @@ func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
 		ss:         s.ss.Copy(lssReader, lssReader),
 		Indexer:    &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
 		metrics:    s.metrics,
-		mu:         &sync.Mutex{},
+		mu:         s.mu,
 		compaction: atomic.Bool{},
 	}, nil
 }
