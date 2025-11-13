@@ -482,6 +482,8 @@ func (s *Store) MaybeCompact() {
 // Compact deletes all entries marked for compaction on the given prefix range.
 // it iterates over the prefix, deletes tombstone entries, and performs DB compaction
 func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
+	s.mu.Lock()         // lock compact op
+	defer s.mu.Unlock() // unlock compact op
 	// first compaction: latest state  keys
 	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
 	// track current time and version
@@ -515,12 +517,9 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 		return nil
 	}
 	// commit the batch
-	s.mu.Lock() // lock commit op
 	if err := batch.Commit(pebble.Sync); err != nil {
-		s.mu.Unlock() // unlock commit op
 		return ErrCommitDB(err)
 	}
-	s.mu.Unlock() // unlock commit op
 	batchTime := time.Since(now)
 	// perform a flush to ensure memtables are flushed to disk
 	if err := s.db.Flush(); err != nil {
