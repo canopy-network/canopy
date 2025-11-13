@@ -7,10 +7,12 @@ import { KeyManagement } from '@/app/pages/KeyManagement'
 import { Accounts } from '@/app/pages/Accounts'
 import Staking from '@/app/pages/Staking'
 import Monitoring from '@/app/pages/Monitoring'
+import Governance from '@/app/pages/Governance'
+import AllTransactions from '@/app/pages/AllTransactions'
+import AllAddresses from '@/app/pages/AllAddresses'
 
 // Placeholder components for the new routes
 const Portfolio = () => <div className="min-h-screen bg-bg-primary flex items-center justify-center"><div className="text-white text-xl">Portfolio - Próximamente</div></div>
-const Governance = () => <div className="min-h-screen bg-bg-primary flex items-center justify-center"><div className="text-white text-xl">Governance - Próximamente</div></div>
 
 const router = createBrowserRouter([
     {
@@ -23,6 +25,8 @@ const router = createBrowserRouter([
             { path: '/governance', element: <Governance /> },
             { path: '/monitoring', element: <Monitoring /> },
             { path: '/key-management', element: <KeyManagement /> },
+            { path: '/all-transactions', element: <AllTransactions /> },
+            { path: '/all-addresses', element: <AllAddresses /> },
         ],
     },
 ], {

@@ -5,19 +5,29 @@
         "send": "Send",
         "editStake": "Edit Stake",
         "stake": "Stake",
-        "receive": "Receive"
+        "receive": "Receive",
+        "vote": "Vote",
+        "unpause": "Unpause",
+        "pause": "Pause",
+        "createProposal": "Create Proposal"
       },
       "typeIconMap": {
         "editStake": "Lock",
         "send": "Send",
         "stake": "Lock",
-        "receive": "Download"
+        "unpause": "Play",
+        "pause": "Pause",
+        "receive": "Download",
+        "vote": "Vote",
+        "createProposal": "FileText"
       },
       "fundsWay": {
         "editStake": "out",
         "send": "out",
         "stake": "out",
-        "receive": "in"
+        "receive": "in",
+        "vote": "neutral",
+        "createProposal": "out"
       }
     }
   },
@@ -739,6 +749,572 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "vote",
+      "title": "Vote on Proposal",
+      "icon": "Vote",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchIntervalMs": 20000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "text",
+            "label": "Proposal ID",
+            "required": true,
+            "validation": {
+              "messages": {
+                "required": "Proposal ID is required"
+              }
+            }
+          },
+          {
+            "id": "vote",
+            "name": "vote",
+            "type": "option",
+            "label": "Your Vote",
+            "required": true,
+            "options": [
+              {
+                "label": "Yes",
+                "value": "yes",
+                "help": "Vote in favor of the proposal"
+              },
+              {
+                "label": "No",
+                "value": "no",
+                "help": "Vote against the proposal"
+              },
+              {
+                "label": "Abstain",
+                "value": "abstain",
+                "help": "Abstain from voting"
+              }
+            ]
+          },
+          {
+            "id": "voterAddress",
+            "name": "voterAddress",
+            "type": "text",
+            "label": "Voter Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Vote",
+          "summary": [
+            {
+              "label": "Proposal ID",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Your Vote",
+              "value": "{{form.vote}}"
+            },
+            {
+              "label": "Voter Address",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckCircle",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "proposalId": {
+          "value": "{{form.proposalId}}",
+          "coerce": "number"
+        },
+        "vote": {
+          "value": "{{form.vote}}",
+          "coerce": "string"
+        },
+        "voterAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Vote Submitted!",
+          "description": "Your vote has been recorded",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "createProposal",
+      "title": "Create Proposal",
+      "icon": "FileText",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchIntervalMs": 20000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "title",
+            "name": "title",
+            "type": "text",
+            "label": "Proposal Title",
+            "required": true,
+            "validation": {
+              "messages": {
+                "required": "Title is required"
+              }
+            }
+          },
+          {
+            "id": "description",
+            "name": "description",
+            "type": "textarea",
+            "label": "Description",
+            "required": true,
+            "rows": 5,
+            "validation": {
+              "messages": {
+                "required": "Description is required"
+              }
+            }
+          },
+          {
+            "id": "proposerAddress",
+            "name": "proposerAddress",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          },
+          {
+            "id": "deposit",
+            "name": "deposit",
+            "type": "amount",
+            "label": "Deposit Amount",
+            "required": true,
+            "min": 0,
+            "validation": {
+              "messages": {
+                "required": "Deposit is required",
+                "min": "Deposit must be greater than 0"
+              }
+            },
+            "help": "Minimum deposit required to submit proposal"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Proposal",
+          "summary": [
+            {
+              "label": "Title",
+              "value": "{{form.title}}"
+            },
+            {
+              "label": "Description",
+              "value": "{{form.description}}"
+            },
+            {
+              "label": "Deposit",
+              "value": "{{numberToLocaleString<{{form.deposit}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Proposer",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Submit Proposal"
+          }
+        }
+      },
+      "payload": {
+        "title": {
+          "value": "{{form.title}}",
+          "coerce": "string"
+        },
+        "description": {
+          "value": "{{form.description}}",
+          "coerce": "string"
+        },
+        "proposerAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "deposit": {
+          "value": "{{toMicroDenom<{{form.deposit}}>}}",
+          "coerce": "number"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-create-proposal",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Created!",
+          "description": "Your proposal has been submitted",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "pauseValidator",
+      "title": "Pause Validator",
+      "icon": "Pause",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to pause"
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this pause action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.pauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Pause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Pause",
+            "label": "Pause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-pause",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "unpauseValidator",
+      "title": "Unpause Validator",
+      "icon": "Play",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 10000,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unpause"
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unpause action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unpauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unpause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Play",
+            "label": "Unpause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unpause",
+        "method": "POST"
       }
     }
   ]

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Copy, Eye, EyeOff, Download, Key, AlertTriangle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import {  Copy, Eye, EyeOff, Download, Key } from 'lucide-react';
 import { useAccounts } from '@/hooks/useAccounts';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { useToast } from '@/toast/ToastContext';
 
 export const CurrentWallet = (): JSX.Element => {
     const {
@@ -14,6 +15,8 @@ export const CurrentWallet = (): JSX.Element => {
     } = useAccounts();
 
     const [showPrivateKey, setShowPrivateKey] = useState(false);
+    const { copyToClipboard } = useCopyToClipboard();
+    const toast = useToast();
 
     const panelVariants = {
         hidden: { opacity: 0, y: 20 },
@@ -27,22 +30,27 @@ export const CurrentWallet = (): JSX.Element => {
     const handleDownloadKeyfile = () => {
         if (activeAccount) {
             // Implement keyfile download functionality
-            toast.success('Keyfile download functionality would be implemented here');
+            toast.success({
+                title: 'Download Ready',
+                description: 'Keyfile download functionality would be implemented here',
+            });
         } else {
-            toast.error('No active account selected');
+            toast.error({
+                title: 'No Account Selected',
+                description: 'Please select an active account first',
+            });
         }
     };
 
     const handleRevealPrivateKeys = () => {
         if (confirm('Are you sure you want to reveal your private keys? This is a security risk.')) {
             setShowPrivateKey(!showPrivateKey);
-            toast.success(showPrivateKey ? 'Private keys hidden' : 'Private keys revealed');
+            toast.success({
+                title: showPrivateKey ? 'Private Keys Hidden' : 'Private Keys Revealed',
+                description: showPrivateKey ? 'Your keys are now hidden' : 'Be careful! Your private keys are visible',
+                icon: showPrivateKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />,
+            });
         }
-    };
-
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        toast.success('Copied to clipboard');
     };
 
     return (
@@ -86,7 +94,7 @@ export const CurrentWallet = (): JSX.Element => {
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
                         />
                         <button
-                            onClick={() => copyToClipboard(activeAccount?.address || '')}
+                            onClick={() => copyToClipboard(activeAccount?.address || '', 'Wallet address')}
                             className="text-primary-foreground hover:text-white bg-primary rounded-lg px-3 py-2.5"
                         >
                             <Copy className="w-4 h-4" />

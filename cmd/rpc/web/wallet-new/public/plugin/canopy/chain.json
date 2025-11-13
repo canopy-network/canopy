@@ -127,8 +127,40 @@
     "gov": {
       "proposals": {
         "source": { "base": "rpc", "path": "/v1/gov/proposals", "method": "GET" },
-        "selector": "proposals"
+        "selector": ""
       }
+    },
+    "events": {
+      "byAddress": {
+        "source": { "base": "rpc", "path": "/v1/query/events-by-address", "method": "POST" },
+        "body": { "height": 0, "address": "{{address}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
+        "coerce": { "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
+        "selector": "results",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results", "totalPages": "paging.totalPages" },
+          "defaults": { "perPage": 100, "startPage": 1 }
+        }
+      },
+      "byHeight": {
+        "source": { "base": "rpc", "path": "/v1/query/events-by-height", "method": "POST" },
+        "body": { "height": "{{height}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
+        "coerce": { "ctx": { "height": "int" }, "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
+        "selector": "results",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 100, "startPage": 1 }
+        }
+      }
+    },
+    "lastProposers": {
+      "source": { "base": "rpc", "path": "/v1/query/last-proposers", "method": "POST" },
+      "body": { "height": 0, "count": "{{count}}" },
+      "coerce": { "body": { "height": "int", "count": "int" } },
+      "selector": ""
     }
   },
   "params": {

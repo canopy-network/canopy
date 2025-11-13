@@ -50,19 +50,20 @@ export const Dashboard = () => {
                 animate="visible"
                 variants={containerVariants}
             >
-                <div className="px-6 py-8">
-                    <div className="flex lg:flex-row flex-col gap-6 mb-8 w-full items-stretch">
-                        <div className="flex-1 lg:w-72 w-full">
+                <div className="px-4 sm:px-6 py-6 sm:py-8">
+                    {/* Top Section - Balance Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                        <div className="w-full">
                             <ErrorBoundary>
                                 <TotalBalanceCard/>
                             </ErrorBoundary>
                         </div>
-                        <div className="lg:w-80 w-full">
+                        <div className="w-full">
                             <ErrorBoundary>
                                 <StakedBalanceCard/>
                             </ErrorBoundary>
                         </div>
-                        <div className="lg:w-80 w-full">
+                        <div className="w-full md:col-span-2 xl:col-span-1">
                             <ErrorBoundary>
                                 <QuickActionsCard onRunAction={onRunAction} actions={manifest?.actions}/>
                             </ErrorBoundary>
@@ -70,13 +71,13 @@ export const Dashboard = () => {
                     </div>
 
                     {/* Middle Section - Transactions and Addresses */}
-                    <div className="flex flex-col lg:flex-row gap-6 mb-8 w-full">
-                        <div className="flex-1 lg:w-9/12">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                        <div className="lg:col-span-8 xl:col-span-9">
                             <ErrorBoundary>
                                 <RecentTransactionsCard transactions={allTxs} isLoading={isTxLoading}/>
                             </ErrorBoundary>
                         </div>
-                        <div className="lg:w-3/12 ">
+                        <div className="lg:col-span-4 xl:col-span-3">
                             <ErrorBoundary>
                                 <AllAddressesCard/>
                             </ErrorBoundary>
@@ -84,7 +85,7 @@ export const Dashboard = () => {
                     </div>
 
                     {/* Bottom Section - Node Management */}
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="w-full">
                         <ErrorBoundary>
                             <NodeManagementCard/>
                         </ErrorBoundary>

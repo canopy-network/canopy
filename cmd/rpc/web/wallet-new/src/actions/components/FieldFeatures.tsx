@@ -1,6 +1,7 @@
 import React from 'react'
 import { FieldOp } from '@/manifest/types'
 import { template } from '@/core/templater'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 type FieldFeaturesProps = {
     fieldId: string
@@ -10,6 +11,8 @@ type FieldFeaturesProps = {
 }
 
 export const FieldFeatures: React.FC<FieldFeaturesProps> = ({ features, ctx, setVal, fieldId }) => {
+    const { copyToClipboard } = useCopyToClipboard()
+
     if (!features?.length) return null
 
     const resolve = (s?: any) => (typeof s === 'string' ? template(s, ctx) : s)
@@ -30,7 +33,7 @@ export const FieldFeatures: React.FC<FieldFeaturesProps> = ({ features, ctx, set
         switch (opAny.op) {
             case 'copy': {
                 const txt = String(resolve(opAny.from) ?? '')
-                await navigator.clipboard.writeText(txt)
+                await copyToClipboard(txt, opAny.label || 'Field value')
                 return
             }
             case 'paste': {

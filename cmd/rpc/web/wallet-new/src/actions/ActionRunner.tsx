@@ -15,7 +15,7 @@ import {useAccounts} from '@/app/providers/AccountsProvider'
 import {template, templateBool} from '@/core/templater'
 import { resolveToastFromManifest, resolveRedirectFromManifest } from "@/toast/manifestRuntime";
 import { useToast } from "@/toast/ToastContext";
-import { genericResultMap } from "@/toast/mappers";
+import { genericResultMap, pauseValidatorMap, unpauseValidatorMap } from "@/toast/mappers";
 import {LucideIcon} from "@/components/ui/LucideIcon";
 import {cx} from "@/ui/cx";
 import {motion} from "framer-motion";
@@ -27,18 +27,21 @@ import {useActionDs} from './useActionDs';
 type Stage = 'form' | 'confirm' | 'executing' | 'result'
 
 
-export default function ActionRunner({actionId, onFinish, className}: { actionId: string, onFinish?: () => void, className?: string}) {
+export default function ActionRunner({actionId, onFinish, className, prefilledData}: { actionId: string, onFinish?: () => void, className?: string, prefilledData?: Record<string, any> }) {
     const toast = useToast();
 
 
     const [formHasErrors, setFormHasErrors] = React.useState(false)
     const [stage, setStage] = React.useState<Stage>('form')
-    const [form, setForm] = React.useState<Record<string, any>>({})
+    const [form, setForm] = React.useState<Record<string, any>>(prefilledData || {})
     const debouncedForm = useDebouncedValue(form, 250)
     const [txRes, setTxRes] = React.useState<any>(null)
     const [localDs, setLocalDs] = React.useState<Record<string, any>>({})
     // Track which fields have been auto-populated at least once
-    const [autoPopulatedOnce, setAutoPopulatedOnce] = React.useState<Set<string>>(new Set())
+    // Initialize with prefilled field names to prevent auto-populate from overriding them
+    const [autoPopulatedOnce, setAutoPopulatedOnce] = React.useState<Set<string>>(
+        new Set(prefilledData ? Object.keys(prefilledData) : [])
+    )
 
     const {manifest, chain, params, isLoading} = useConfig()
     const {selectedAccount} = useAccounts?.() ?? {selectedAccount: undefined}
@@ -223,10 +226,18 @@ export default function ActionRunner({actionId, onFinish, className}: { actionId
         if (t) {
             toast.toast(t);
         } else {
+            // Select appropriate mapper based on action ID
+            let mapper = genericResultMap;
+            if (action?.id === 'pauseValidator') {
+                mapper = pauseValidatorMap;
+            } else if (action?.id === 'unpauseValidator') {
+                mapper = unpauseValidatorMap;
+            }
+
             toast.fromResult({
                 result: res,
                 ctx: templatingCtx,
-                map: (r, c) => genericResultMap(r, c),
+                map: (r, c) => mapper(r, c),
                 fallback: { title: "Processed", variant: "neutral", ctx: templatingCtx } as ToastTemplateOptions
             })
         }

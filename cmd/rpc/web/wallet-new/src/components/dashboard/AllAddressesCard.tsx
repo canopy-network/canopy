@@ -24,16 +24,7 @@ export const AllAddressesCard = () => {
         return 'Liquid';
     };
 
-    const getAccountIcon = (index: number) => {
-        const icons = [
-            { icon: 'fa-solid fa-wallet', bg: 'bg-gradient-to-r from-primary/80 to-primary/40' },
-            { icon: 'fa-solid fa-layer-group', bg: 'bg-gradient-to-r from-blue-500/80 to-blue-500/40' },
-            { icon: 'fa-solid fa-left-right', bg: 'bg-gradient-to-r  from-purple-500/80 to-purple-500/40' },
-            { icon: 'fa-solid fa-shield-check', bg: 'bg-gradient-to-r from-green-500/80 to-green-500/40' },
-            { icon: 'fa-solid fa-box', bg: 'bg-red-500' }
-        ];
-        return icons[index % icons.length];
-    };
+    // Removed mocked images - using consistent wallet icon
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -54,23 +45,21 @@ export const AllAddressesCard = () => {
         return change.startsWith('+') ? 'text-green-400' : 'text-red-400';
     };
 
-    const processedAddresses = accounts.map((account, index) => {
+    const processedAddresses = accounts.map((account) => {
         // Find the balance for this account
         const balanceInfo = balances.find(b => b.address === account.address);
         const balance = balanceInfo?.amount || 0;
         const formattedBalance = formatBalance(balance);
         const status = getAccountStatus(account.address);
-        const iconData = getAccountIcon(index);
 
         return {
             id: account.address,
             address: formatAddress(account.address),
+            fullAddress: account.address,
+            nickname: account.nickname || 'Unnamed',
             balance: `${formattedBalance} CNPY`,
             totalValue: formattedBalance,
-            change: '+0.0%', // This would need historical data
-            status: status,
-            icon: iconData.icon,
-            iconBg: iconData.bg
+            status: status
         };
     });
 
@@ -102,53 +91,53 @@ export const AllAddressesCard = () => {
                     All Addresses
                 </h3>
                 <a
-                    href="#"
+                    href="/all-addresses"
                     className="text-text-muted hover:text-primary/80 text-sm font-medium transition-colors"
                 >
-                    See All
+                    See All ({processedAddresses.length})
                 </a>
             </div>
 
             {/* Addresses List */}
-            <div className="space-y-4">
-                {processedAddresses.length > 0 ? processedAddresses.map((address, index) => (
+            <div className="space-y-3">
+                {processedAddresses.length > 0 ? processedAddresses.slice(0, 4).map((address, index) => (
                     <motion.div
                         key={address.id}
-                        className="flex items-center gap-4 p-3 bg-bg-tertiary/30 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
+                        className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-bg-tertiary/30 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
                     >
-                        {/* Icon */}
-                        <div className={`w-10 h-10 ${address.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
-                            <i className={`${address.icon} text-white text-sm`}></i>
-                        </div>
-
-                        {/* Address Info */}
-                        <div className="flex-1 min-w-0">
-                            <div className="text-text-primary text-sm font-medium mb-1">
-                                {address.address}
+                        {/* Icon and Address Info */}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-10 h-10 bg-gradient-to-r from-primary/80 to-primary/40 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i className="fa-solid fa-wallet text-white text-sm"></i>
                             </div>
-                            <div className="text-text-muted text-xs">
-                                {address.balance}
-                            </div>
-                        </div>
-
-                        {/* Balance and Value */}
-                        <div className="text-right flex-shrink-0">
-                            <div className="text-text-primary text-sm font-medium">
-                                {address.totalValue}
-                            </div>
-                            <div className={`text-xs font-medium ${getChangeColor(address.change)}`}>
-                                {address.change}
+                            <div className="flex-1 min-w-0">
+                                <div className="text-text-primary text-sm font-medium mb-0.5 truncate">
+                                    {address.nickname}
+                                </div>
+                                <div className="text-text-muted text-xs font-mono">
+                                    {address.address}
+                                </div>
                             </div>
                         </div>
 
-                        {/* Status */}
-                        <div className="flex-shrink-0">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(address.status)}`}>
-                                {address.status}
-                            </span>
+                        {/* Balance and Status */}
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <div className="text-right flex-1 sm:flex-initial">
+                                <div className="text-text-primary text-sm font-medium">
+                                    {address.totalValue} CNPY
+                                </div>
+                                <div className="text-text-muted text-xs">
+                                    Balance
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(address.status)}`}>
+                                    {address.status}
+                                </span>
+                            </div>
                         </div>
                     </motion.div>
                 )) : (

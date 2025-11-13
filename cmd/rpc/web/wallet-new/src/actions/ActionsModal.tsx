@@ -8,7 +8,7 @@ import {XIcon} from 'lucide-react'
 import {cx} from '@/ui/cx'
 
 interface ActionModalProps {
-    actions?: ManifestAction[]
+    actions?: (ManifestAction & { prefilledData?: Record<string, any> })[]
     isOpen: boolean
     onClose: () => void
 }
@@ -95,8 +95,11 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                                 transition={{duration: 0.5, delay: 0.4}}
                                 className="max-h-[80vh] overflow-y-auto scrollbar-hide hover:scrollbar-default"
                             >
-                                <ActionRunner actionId={selectedTab.value} onFinish={onClose}
-                                              className="p-4"
+                                <ActionRunner
+                                    actionId={selectedTab.value}
+                                    onFinish={onClose}
+                                    className="p-4"
+                                    prefilledData={actions?.find(a => a.id === selectedTab.value)?.prefilledData}
                                 />
                             </motion.div>
                         )}

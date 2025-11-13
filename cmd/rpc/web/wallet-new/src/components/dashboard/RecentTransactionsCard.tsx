@@ -140,8 +140,8 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
                 </div>
             </div>
 
-            {/* Header */}
-            <div className="grid grid-cols-4 gap-4 mb-4 text-text-muted text-sm font-medium">
+            {/* Header - Hidden on mobile */}
+            <div className="hidden md:grid md:grid-cols-4 gap-4 mb-4 text-text-muted text-sm font-medium">
                 <div>Time</div>
                 <div>Action</div>
                 <div>Amount</div>
@@ -150,36 +150,58 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
 
             {/* Rows */}
             <div className="space-y-3">
-                {transactions.length > 0 ? transactions.map((tx, i) => {
+                {transactions.length > 0 ? transactions.slice(0, 5).map((tx, i) => {
                     const fundsWay = getFundWay(tx?.type)
                     const prefix = fundsWay === 'out' ? '-' : fundsWay === 'in' ? '+' : ''
                     const amountTxt = `${prefix}${toDisplay(Number(tx.amount || 0)).toFixed(2)} ${symbol}`
 
                     return (
                         <motion.div key={`${tx.hash}-${i}`}
-                                    className="grid grid-cols-4 gap-4 items-center py-3 border-b border-bg-accent/30 last:border-b-0"
+                                    className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 items-start md:items-center py-3 border-b border-bg-accent/30 last:border-b-0"
                                     initial={{opacity: 0, x: -20}} animate={{opacity: 1, x: 0}}
                                     transition={{duration: 0.3, delay: 0.4 + (i * 0.06)}}
                         >
-                            <div className="text-text-primary text-sm">{getTxTimeAgo()(tx)}</div>
-                            <div className="flex items-center gap-2">
+                            {/* Mobile: All info stacked */}
+                            <div className="md:hidden space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <LucideIcon name={getIcon(tx?.type)} className={'w-5 text-text-primary'}/>
+                                        <span className="text-text-primary text-sm font-medium">{getTxMap(tx?.type)}</span>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                                        {tx.status}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-text-muted text-xs">{getTxTimeAgo()(tx)}</span>
+                                    <span className={`text-sm font-medium ${
+                                        fundsWay === 'in' ? 'text-green-400' :
+                                        fundsWay === 'out' ? 'text-red-400' : 'text-text-primary'
+                                    }`}>
+                                        {amountTxt}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Desktop: Row layout */}
+                            <div className="hidden md:block text-text-primary text-sm">{getTxTimeAgo()(tx)}</div>
+                            <div className="hidden md:flex items-center gap-2">
                                 <LucideIcon name={getIcon(tx?.type)} className={'w-6 text-text-primary'}/>
                                 <span className="text-text-primary text-sm">{getTxMap(tx?.type)}</span>
                             </div>
-                            <div className={`text-sm font-medium ${
+                            <div className={`hidden md:block text-sm font-medium ${
                                 fundsWay === 'in' ? 'text-green-400' :
-                                    fundsWay === 'out' ? 'text-red-400' : 'text-text-primary'
+                                fundsWay === 'out' ? 'text-red-400' : 'text-text-primary'
                             }`}>
                                 {amountTxt}
                             </div>
-                            <div className="flex items-center justify-between">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
-                  {tx.status}
-                </span>
+                            <div className="hidden md:flex items-center justify-between">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                                    {tx.status}
+                                </span>
                                 <a href={chain?.explorer + tx.hash} target="_blank" rel="noopener noreferrer"
                                    className="text-primary hover:text-primary/80 text-xs font-medium flex items-center gap-1 transition-colors">
-                                    View on the explorer
-                                    <i className="fa-solid fa-arrow-right text-xs"></i>
+                                    <i className="fa-solid fa-external-link-alt text-xs"></i>
                                 </a>
                             </div>
                         </motion.div>
@@ -191,8 +213,9 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
 
             {/* See All */}
             <div className="text-center mt-6">
-                <a href="#" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">See
-                    All</a>
+                <a href="/all-transactions" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">
+                    See All ({transactions.length})
+                </a>
             </div>
         </motion.div>
     )

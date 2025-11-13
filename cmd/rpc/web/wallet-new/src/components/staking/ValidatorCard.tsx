@@ -2,6 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
 import { useManifest } from '@/hooks/useManifest';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { useValidatorRewards } from '@/hooks/useValidatorRewards';
+import { useBlockProducers } from '@/hooks/useBlockProducers';
 
 interface ValidatorCardProps {
     validator: {
@@ -59,6 +62,14 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                                                                 index,
                                                                 onPauseUnpause
                                                             }) => {
+    const { copyToClipboard } = useCopyToClipboard();
+
+    // Fetch real rewards data
+    const { last24hRewards, totalRewards, isLoading: rewardsLoading } = useValidatorRewards(validator.address);
+
+    // Fetch block production stats
+    const { getStatsForValidator } = useBlockProducers(1000);
+    const blockStats = getStatsForValidator(validator.address);
 
     const handlePauseUnpause = () => {
         const action = validator.status === 'Staked' ? 'pause' : 'unpause';
@@ -86,7 +97,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                         <div className="flex items-center mt-1">
                             <button
                                 className="text-primary text-xs"
-                                onClick={() => navigator.clipboard.writeText(validator.address)}
+                                onClick={() => copyToClipboard(validator.address, `Validator ${validator.nickname || 'address'}`)}
                             >
                                 <i className="fa-solid fa-copy"></i> Copy
                             </button>
@@ -124,10 +135,28 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
                     <div className="flex flex-col items-end mx-4">
                         <div className="text-primary font-medium text-right">
-                            {formatRewards(validator.rewards24h)}
+                            {rewardsLoading ? '...' : formatRewards(last24hRewards)}
                         </div>
                         <div className="text-text-muted text-xs text-right">
                             {'24h Rewards'}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col items-end mx-4">
+                        <div className="text-blue-400 font-medium text-right">
+                            {blockStats.blocksProduced}
+                        </div>
+                        <div className="text-text-muted text-xs text-right">
+                            {`Blocks (${blockStats.totalBlocksQueried})`}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col items-end mx-4">
+                        <div className="text-green-400 font-medium text-right">
+                            {blockStats.productionRate.toFixed(2)}%
+                        </div>
+                        <div className="text-text-muted text-xs text-right">
+                            {'Reliability'}
                         </div>
                     </div>
 
