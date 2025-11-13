@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {  Copy, Eye, EyeOff, Download, Key } from 'lucide-react';
-import { useAccounts } from '@/hooks/useAccounts';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useToast } from '@/toast/ToastContext';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 export const CurrentWallet = (): JSX.Element => {
     const {
         accounts,
-        activeAccount,
+        selectedAccount,
         switchAccount
     } = useAccounts();
 
@@ -28,7 +28,7 @@ export const CurrentWallet = (): JSX.Element => {
     };
 
     const handleDownloadKeyfile = () => {
-        if (activeAccount) {
+        if (selectedAccount) {
             // Implement keyfile download functionality
             toast.success({
                 title: 'Download Ready',
@@ -68,7 +68,7 @@ export const CurrentWallet = (): JSX.Element => {
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                         Wallet Name
                     </label>
-                    <Select value={activeAccount?.id || ''} onValueChange={switchAccount}>
+                    <Select value={selectedAccount?.id || ''} onValueChange={switchAccount}>
                         <SelectTrigger className="w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg">
                             <SelectValue placeholder="Select wallet" />
                         </SelectTrigger>
@@ -89,12 +89,12 @@ export const CurrentWallet = (): JSX.Element => {
                     <div className="relative flex items-center justify-between gap-2">
                         <input
                             type="text"
-                            value={activeAccount?.address || ''}
+                            value={selectedAccount?.address || ''}
                             readOnly
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
                         />
                         <button
-                            onClick={() => copyToClipboard(activeAccount?.address || '', 'Wallet address')}
+                            onClick={() => copyToClipboard(selectedAccount?.address || '', 'Wallet address')}
                             className="text-primary-foreground hover:text-white bg-primary rounded-lg px-3 py-2.5"
                         >
                             <Copy className="w-4 h-4" />
@@ -109,7 +109,7 @@ export const CurrentWallet = (): JSX.Element => {
                     <div className="relative flex items-center justify-between gap-2">
                         <input
                             type={showPrivateKey ? 'text' : 'password'}
-                            value={activeAccount?.publicKey || ''}
+                            value={selectedAccount?.publicKey || ''}
                             readOnly
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
                         />

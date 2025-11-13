@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAccounts } from './useAccounts'
 import { useDSFetcher } from '@/core/dsFetch'
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation'
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 export function useStakedBalanceHistory() {
     const { accounts, loading: accountsLoading } = useAccounts()

@@ -1,13 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useGovernance, useVotingPower, Poll, Proposal } from '@/hooks/useGovernance';
-import { useAccounts } from '@/hooks/useAccounts';
 import { ProposalTable } from '@/components/governance/ProposalTable';
 import { PollCard } from '@/components/governance/PollCard';
 import { ProposalDetailsModal } from '@/components/governance/ProposalDetailsModal';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ActionsModal } from '@/actions/ActionsModal';
 import { useManifest } from '@/hooks/useManifest';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 const containerVariants = {
     hidden: { opacity: 0 },

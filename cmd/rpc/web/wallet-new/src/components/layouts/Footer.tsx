@@ -33,19 +33,19 @@ export const Footer = (): JSX.Element => {
 
     return (
         <motion.footer
-            className="bg-secondary border-t border-bg-accent mt-auto"
+            className="bg-bg-secondary/50 border-t border-bg-accent mt-8 w-full"
             initial="hidden"
             animate="visible"
             variants={containerVariants}
         >
-            <div className="px-6 py-6">
+            <div className="px-3 py-4 sm:px-4 sm:py-5 md:px-6">
                 <motion.div
-                    className="flex flex-wrap justify-center items-center gap-8"
+                    className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8"
                     variants={containerVariants}
                 >
                     <motion.a
                         href="#"
-                        className="text-gray-300 hover:text-[#6fe3b4] transition-colors duration-200 text-sm font-medium"
+                        className="text-gray-400 hover:text-[#6fe3b4] transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
                         variants={itemVariants}
                         whileHover="hover"
                         animate="visible"
@@ -56,7 +56,7 @@ export const Footer = (): JSX.Element => {
 
                     <motion.a
                         href="#"
-                        className="text-gray-300 hover:text-[#6fe3b4] transition-colors duration-200 text-sm font-medium"
+                        className="text-gray-400 hover:text-[#6fe3b4] transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
                         variants={itemVariants}
                         whileHover="hover"
                         animate="visible"
@@ -67,7 +67,7 @@ export const Footer = (): JSX.Element => {
 
                     <motion.a
                         href="#"
-                        className="text-gray-300 hover:text-[#6fe3b4] transition-colors duration-200 text-sm font-medium"
+                        className="text-gray-400 hover:text-[#6fe3b4] transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
                         variants={itemVariants}
                         whileHover="hover"
                         animate="visible"
@@ -78,7 +78,7 @@ export const Footer = (): JSX.Element => {
 
                     <motion.a
                         href="#"
-                        className="text-gray-300 hover:text-[#6fe3b4] transition-colors duration-200 text-sm font-medium"
+                        className="text-gray-400 hover:text-[#6fe3b4] transition-colors duration-200 text-xs sm:text-sm font-medium whitespace-nowrap"
                         variants={itemVariants}
                         whileHover="hover"
                         animate="visible"

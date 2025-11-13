@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAccounts } from '@/hooks/useAccounts';
 import { Button } from '@/components/ui/Button';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 export const NewKey = (): JSX.Element => {
     const { createNewAccount } = useAccounts();

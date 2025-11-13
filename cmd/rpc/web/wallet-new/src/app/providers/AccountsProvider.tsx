@@ -35,6 +35,8 @@ type AccountsContextValue = {
     isReady: boolean
 
     switchAccount: (id: string | null) => void
+    createNewAccount: (nickname: string, password: string) => Promise<string>
+    deleteAccount: (accountId: string) => Promise<void>
     refetch: () => Promise<any>
 }
 
@@ -45,6 +47,8 @@ const STORAGE_KEY = 'activeAccountId'
 export function AccountsProvider({ children }: { children: React.ReactNode }) {
     const { data: ks, isLoading, isFetching, error, refetch } =
         useDS<KeystoreResponse>('keystore', {}, { refetchIntervalMs: 30 * 1000 })
+
+    const { dsFetch } = useConfig()
 
     const accounts: Account[] = useMemo(() => {
         const map = ks?.addressMap ?? {}
@@ -102,6 +106,53 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
         }
     }, [])
 
+    const createNewAccount = useCallback(async (nickname: string, password: string): Promise<string> => {
+        try {
+            // Use the keystoreNewKey datasource
+            const response = await dsFetch<string>('keystoreNewKey', {
+                nickname,
+                password
+            })
+
+            // Refetch accounts after creating a new one
+            await refetch()
+
+            // Return the new address (remove quotes if present)
+            return typeof response === 'string' ? response.replace(/"/g, '') : response
+        } catch (err) {
+            console.error('Error creating account:', err)
+            throw err
+        }
+    }, [dsFetch, refetch])
+
+    const deleteAccount = useCallback(async (accountId: string): Promise<void> => {
+        try {
+            const account = accounts.find(acc => acc.id === accountId)
+            if (!account) {
+                throw new Error('Account not found')
+            }
+
+            // Use the keystoreDelete datasource
+            await dsFetch('keystoreDelete', {
+                nickname: account.nickname
+            })
+
+            // If we deleted the active account, switch to another one
+            if (selectedId === accountId && accounts.length > 1) {
+                const nextAccount = accounts.find(acc => acc.id !== accountId)
+                if (nextAccount) {
+                    setSelectedId(nextAccount.id)
+                }
+            }
+
+            // Refetch accounts after deleting
+            await refetch()
+        } catch (err) {
+            console.error('Error deleting account:', err)
+            throw err
+        }
+    }, [accounts, selectedId, dsFetch, refetch])
+
     const loading = isLoading || isFetching
 
     const value: AccountsContextValue = useMemo(() => ({
@@ -113,8 +164,10 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
         error: stableError,
         isReady,
         switchAccount,
+        createNewAccount,
+        deleteAccount,
         refetch,
-    }), [accounts, selectedId, selectedAccount, selectedAddress, loading, stableError, isReady, switchAccount, refetch])
+    }), [accounts, selectedId, selectedAccount, selectedAddress, loading, stableError, isReady, switchAccount, createNewAccount, deleteAccount, refetch])
 
     return (
         <AccountsContext.Provider value={value}>

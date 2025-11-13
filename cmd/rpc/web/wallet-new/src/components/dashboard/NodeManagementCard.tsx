@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useValidators } from '@/hooks/useValidators';
-import { useMultipleBlockProducerData } from '@/hooks/useBlockProducerData';
+import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
 import { ActionsModal } from '@/actions/ActionsModal';
 import { useManifest } from '@/hooks/useManifest';
 import { useMultipleValidatorBlockStats } from '@/hooks/useBlockProducers';
@@ -11,7 +11,7 @@ export const NodeManagementCard = (): JSX.Element => {
     const { manifest } = useManifest();
 
     const validatorAddresses = validators.map(v => v.address);
-    const { data: blockProducerData = {} } = useMultipleBlockProducerData(validatorAddresses);
+    const { data: rewardsData = {} } = useMultipleValidatorRewardsHistory(validatorAddresses);
     const { stats: blockStats } = useMultipleValidatorBlockStats(validatorAddresses, 1000);
 
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -194,7 +194,7 @@ export const NodeManagementCard = (): JSX.Element => {
             status: getStatus(validator),
             blocksProduced: validatorBlockStats.blocksProduced,
             productionRate: validatorBlockStats.productionRate,
-            rewards24h: formatRewards(blockProducerData[validator.address]?.rewards24h || 0),
+            rewards24h: formatRewards(rewardsData[validator.address]?.change24h || 0),
             stakeWeight: formatStakeWeight(validator.stakeWeight || 0),
             weightChange: formatWeightChange(validator.weightChange || 0),
             originalValidator: validator

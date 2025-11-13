@@ -133,14 +133,14 @@
     "events": {
       "byAddress": {
         "source": { "base": "rpc", "path": "/v1/query/events-by-address", "method": "POST" },
-        "body": { "height": 0, "address": "{{address}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
-        "coerce": { "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
+        "body": { "height": "{{height}}", "address": "{{address}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
+        "coerce": { "ctx": { "height": "number" }, "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
         "selector": "results",
         "page": {
           "strategy": "page",
           "param": { "page": "pageNumber", "perPage": "perPage" },
           "response": { "items": "results", "totalPages": "paging.totalPages" },
-          "defaults": { "perPage": 100, "startPage": 1 }
+          "defaults": { "perPage": 100, "startPage": 1, "height": 0 }
         }
       },
       "byHeight": {
@@ -174,7 +174,7 @@
         "body": "{\"height\":0,\"address\":\"\"}"
       }
     ],
-    "avgBlockTimeSec": 20,
+    "avgBlockTimeSec": 50,
     "refresh": {
       "staleTimeMs": 3000,
       "refetchIntervalMs": 3000

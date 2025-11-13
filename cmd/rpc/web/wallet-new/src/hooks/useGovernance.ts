@@ -132,7 +132,6 @@ export const useGovernance = () => {
                         };
                     });
 
-                    console.log('Transformed proposals:', proposals);
                     return proposals;
                 }
 

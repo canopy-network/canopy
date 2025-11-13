@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useAccounts } from '@/hooks/useAccounts';
 import { useAccountData } from '@/hooks/useAccountData';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 export const AllAddressesCard = () => {
     const { accounts, loading: accountsLoading } = useAccounts();
@@ -103,40 +103,38 @@ export const AllAddressesCard = () => {
                 {processedAddresses.length > 0 ? processedAddresses.slice(0, 4).map((address, index) => (
                     <motion.div
                         key={address.id}
-                        className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-bg-tertiary/30 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
+                        className="p-3 bg-bg-tertiary/30 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: 0.5 + (index * 0.1) }}
                     >
-                        {/* Icon and Address Info */}
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="flex items-start gap-3">
+                            {/* Icon */}
                             <div className="w-10 h-10 bg-gradient-to-r from-primary/80 to-primary/40 rounded-full flex items-center justify-center flex-shrink-0">
                                 <i className="fa-solid fa-wallet text-white text-sm"></i>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="text-text-primary text-sm font-medium mb-0.5 truncate">
-                                    {address.nickname}
-                                </div>
-                                <div className="text-text-muted text-xs font-mono">
-                                    {address.address}
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Balance and Status */}
-                        <div className="flex items-center gap-3 w-full sm:w-auto">
-                            <div className="text-right flex-1 sm:flex-initial">
-                                <div className="text-text-primary text-sm font-medium">
-                                    {address.totalValue} CNPY
+                            {/* Content Container */}
+                            <div className="flex-1 min-w-0 space-y-2">
+                                {/* Top Row: Nickname and Address */}
+                                <div>
+                                    <div className="text-text-primary text-sm font-medium mb-1 truncate">
+                                        {address.nickname}
+                                    </div>
+                                    <div className="text-text-muted text-xs font-mono truncate">
+                                        {address.address}
+                                    </div>
                                 </div>
-                                <div className="text-text-muted text-xs">
-                                    Balance
+
+                                {/* Bottom Row: Balance and Status */}
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="text-text-primary text-sm font-medium whitespace-nowrap">
+                                        {address.totalValue} CNPY
+                                    </div>
+                                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ${getStatusColor(address.status)}`}>
+                                        {address.status}
+                                    </span>
                                 </div>
-                            </div>
-                            <div className="flex-shrink-0">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(address.status)}`}>
-                                    {address.status}
-                                </span>
                             </div>
                         </div>
                     </motion.div>

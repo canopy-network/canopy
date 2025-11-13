@@ -15,6 +15,7 @@ interface Validator {
 interface ValidatorListProps {
     validators: Validator[];
     onPauseUnpause: (address: string, nickname?: string, action?: 'pause' | 'unpause') => void;
+    onEditStake?: (validator: Validator) => void;
 }
 
 const itemVariants = {
@@ -24,7 +25,8 @@ const itemVariants = {
 
 export const ValidatorList: React.FC<ValidatorListProps> = ({
                                                                 validators,
-                                                                onPauseUnpause
+                                                                onPauseUnpause,
+                                                                onEditStake
                                                             }) => {
 
     if (validators.length === 0) {
@@ -48,6 +50,7 @@ export const ValidatorList: React.FC<ValidatorListProps> = ({
                     validator={validator}
                     index={index}
                     onPauseUnpause={onPauseUnpause}
+                    onEditStake={onEditStake}
                 />
             ))}
         </div>

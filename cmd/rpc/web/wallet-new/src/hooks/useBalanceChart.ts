@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAccounts } from './useAccounts'
 import { useDSFetcher } from '@/core/dsFetch'
 import { useHistoryCalculation } from './useHistoryCalculation'
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 export interface ChartDataPoint {
     timestamp: number;

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Line } from 'react-chartjs-2';
 import { useManifest } from '@/hooks/useManifest';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
-import { useValidatorRewards } from '@/hooks/useValidatorRewards';
+import { useValidatorRewardsHistory } from '@/hooks/useValidatorRewardsHistory';
 import { useBlockProducers } from '@/hooks/useBlockProducers';
 
 interface ValidatorCardProps {
@@ -18,6 +18,7 @@ interface ValidatorCardProps {
     };
     index: number;
     onPauseUnpause: (address: string, nickname?: string, action?: 'pause' | 'unpause') => void;
+    onEditStake?: (validator: any) => void;
 }
 
 const formatStakedAmount = (amount: number) => {
@@ -60,12 +61,15 @@ const chartOptions = {
 export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                                                                 validator,
                                                                 index,
-                                                                onPauseUnpause
+                                                                onPauseUnpause,
+                                                                onEditStake
                                                             }) => {
     const { copyToClipboard } = useCopyToClipboard();
 
-    // Fetch real rewards data
-    const { last24hRewards, totalRewards, isLoading: rewardsLoading } = useValidatorRewards(validator.address);
+    // Fetch real rewards data using block height comparison
+    const { data: rewardsHistory, isLoading: rewardsLoading } = useValidatorRewardsHistory(validator.address);
+
+    console.log(rewardsHistory)
 
     // Fetch block production stats
     const { getStatsForValidator } = useBlockProducers(1000);
@@ -135,7 +139,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
                     <div className="flex flex-col items-end mx-4">
                         <div className="text-primary font-medium text-right">
-                            {rewardsLoading ? '...' : formatRewards(last24hRewards)}
+                            {rewardsLoading ? '...' : formatRewards(rewardsHistory?.rewards24h || 0)}
                         </div>
                         <div className="text-text-muted text-xs text-right">
                             {'24h Rewards'}
@@ -183,8 +187,11 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                         >
                             <i className="fa-solid fa-pause text-white text-sm group-hover:text-primary"></i>
                         </button>
-                        <button className="p-2 py-0.5 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors">
-                            <i className="fa-solid fa-ellipsis text-white text-sm group-hover:text-primary"></i>
+                        <button
+                            className="p-2 py-0.5 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
+                            onClick={() => onEditStake?.(validator)}
+                        >
+                            <i className="fa-solid fa-pen-to-square text-white text-sm group-hover:text-primary"></i>
                         </button>
                     </div>
                 </div>

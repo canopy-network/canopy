@@ -107,7 +107,6 @@ export const useDashboard = () => {
                 }))
             ) ?? [];
 
-        console.log(failed)
 
         const mergedTxs = [...sent, ...received, ...failed]
 

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAccounts } from '@/hooks/useAccounts';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
 import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
@@ -19,6 +18,7 @@ import {
     Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 ChartJS.register(
     CategoryScale,
@@ -32,7 +32,7 @@ ChartJS.register(
 );
 
 export const Accounts = () => {
-    const { accounts, loading: accountsLoading, activeAccount, setSelectedAccount } = useAccounts();
+    const { accounts, loading: accountsLoading, selectedAccount, switchAccount } = useAccounts();
     const { totalBalance, totalStaked, balances, stakingData, loading: dataLoading } = useAccountData();
     const { data: balanceHistory, isLoading: balanceHistoryLoading } = useBalanceHistory();
     const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
@@ -229,8 +229,8 @@ export const Accounts = () => {
     const handleSendAction = (address: string) => {
         // Set the account as selected before opening the action
         const account = accounts.find(a => a.address === address);
-        if (account && setSelectedAccount) {
-            setSelectedAccount(account);
+        if (account && selectedAccount !== account) {
+            switchAccount(account.id);
         }
         // Open send action modal
         openAction('send', {

@@ -4,12 +4,14 @@ import { useStakingData } from '@/hooks/useStakingData';
 import { useValidators } from '@/hooks/useValidators';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useMultipleBlockProducerData } from '@/hooks/useBlockProducerData';
+import { useManifest } from '@/hooks/useManifest';
 import { Validators as ValidatorsAPI } from '@/core/api';
 import { PauseUnpauseModal } from '@/components/ui/PauseUnpauseModal';
-// import { SendModal } from '@/components/ui/SendModal';
 import { StatsCards } from '@/components/staking/StatsCards';
 import { Toolbar } from '@/components/staking/Toolbar';
 import { ValidatorList } from '@/components/staking/ValidatorList';
+import { ActionsModal } from '@/actions/ActionsModal';
+import type { Action as ManifestAction } from '@/manifest/types';
 
 type ValidatorRow = {
     address: string;
@@ -41,6 +43,7 @@ export default function Staking(): JSX.Element {
     const { data: staking = { totalStaked: 0, totalRewards: 0, chartData: [] } as any } = useStakingData();
     const { totalStaked } = useAccountData();
     const { data: validators = [] } = useValidators();
+    const { manifest, loading: manifestLoading } = useManifest();
 
     const csvRef = useRef<HTMLAnchorElement>(null);
 
@@ -55,7 +58,10 @@ export default function Staking(): JSX.Element {
     const [searchTerm, setSearchTerm] = useState('');
     const [chainCount, setChainCount] = useState<number>(0);
 
-    // 🔒 Memoizar direcciones para no disparar refetch infinito
+    // Action modal state
+    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [selectedActions, setSelectedActions] = useState<ManifestAction[]>([]);
+
     const validatorAddresses = useMemo(
         () => validators.map((v: any) => v.address),
         [validators]
@@ -63,7 +69,6 @@ export default function Staking(): JSX.Element {
 
     const { data: blockProducerData = {} } = useMultipleBlockProducerData(validatorAddresses);
 
-    // 📊 Traer comités (solo cuando haya cambios reales en "validators")
     useEffect(() => {
         let isCancelled = false;
 
@@ -113,7 +118,6 @@ export default function Staking(): JSX.Element {
         }));
     }, [validators, blockProducerData]);
 
-    // 🔍 Filtro memoizado
     const filtered: ValidatorRow[] = useMemo(() => {
         const q = searchTerm.toLowerCase();
         if (!q) return rows;
@@ -122,7 +126,6 @@ export default function Staking(): JSX.Element {
         );
     }, [rows, searchTerm]);
 
-    // 📤 CSV estable
     const prepareCSVData = useCallback(() => {
         const header = ['address', 'nickname', 'stakedAmount', 'rewards24h', 'status'];
         const lines = [header.join(',')].concat(
@@ -163,6 +166,37 @@ export default function Staking(): JSX.Element {
         [validators]
     );
 
+    // Handler para abrir action modal
+    const onRunAction = useCallback((action: ManifestAction) => {
+        const actions = [action];
+        if (action.relatedActions) {
+            const relatedActions = manifest?.actions.filter(a => action?.relatedActions?.includes(a.id));
+            if (relatedActions) {
+                actions.push(...relatedActions);
+            }
+        }
+        setSelectedActions(actions);
+        setIsActionModalOpen(true);
+    }, [manifest]);
+
+    // Handler para agregar stake - abre el action "stake" del manifest
+    const handleAddStake = useCallback(() => {
+        const stakeAction = manifest?.actions.find(a => a.id === 'stake');
+        if (stakeAction) {
+            onRunAction(stakeAction);
+        }
+    }, [manifest, onRunAction]);
+
+    // Handler para editar stake de un validator existente
+    const handleEditStake = useCallback((validator: any) => {
+        const stakeAction = manifest?.actions.find(a => a.id === 'stake');
+        if (stakeAction) {
+            // El action runner detectará automáticamente que ya existe un validator
+            // y mostrará el formulario en modo "edit stake"
+            onRunAction(stakeAction);
+        }
+    }, [manifest, onRunAction]);
+
     return (
         <motion.div
             className="min-h-screen bg-bg-primary"
@@ -188,18 +222,28 @@ export default function Staking(): JSX.Element {
                     <Toolbar
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
-                        onAddStake={() => setAddStakeOpen(true)}
+                        onAddStake={handleAddStake}
                         onExportCSV={exportCSV}
                         activeValidatorsCount={activeValidatorsCount}
                     />
 
                     {/* Validator List */}
-                    <ValidatorList validators={filtered} onPauseUnpause={handlePauseUnpause} />
+                    <ValidatorList
+                        validators={filtered}
+                        onPauseUnpause={handlePauseUnpause}
+                        onEditStake={handleEditStake}
+                    />
                 </div>
             </div>
 
-            {/* Modals */}
-            {/* <SendModal isOpen={addStakeOpen} onClose={() => setAddStakeOpen(false)} defaultTab="stake" /> */}
+            {/* Actions Modal */}
+            <ActionsModal
+                actions={selectedActions}
+                isOpen={isActionModalOpen}
+                onClose={() => setIsActionModalOpen(false)}
+            />
+
+            {/* Pause/Unpause Modal */}
             {/*<PauseUnpauseModal*/}
             {/*    isOpen={pauseModal.isOpen}*/}
             {/*    onClose={handleClosePauseModal}*/}

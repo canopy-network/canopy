@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAccounts } from './useAccounts'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import {useDSFetcher} from "@/core/dsFetch";
 import {hasDsKey} from "@/core/dsCore";
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 interface AccountBalance {
     address: string

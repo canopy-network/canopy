@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAccounts } from './useAccounts';
 import { Validators as ValidatorsAPI } from '@/core/api';
+import {useAccounts} from "@/app/providers/AccountsProvider";
 
 interface Validator {
     address: string;
