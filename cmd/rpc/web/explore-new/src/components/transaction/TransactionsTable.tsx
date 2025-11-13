@@ -4,6 +4,7 @@ import transactionsTexts from '../../data/transactions.json'
 import TableCard from '../Home/TableCard'
 import AnimatedNumber from '../AnimatedNumber'
 import { useParams as useParamsHook } from '../../hooks/useApi'
+import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
 interface Transaction {
     hash: string
@@ -71,12 +72,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             'deleteOrder': 'deleteOrderFee',
         }
         return typeMap[type.toLowerCase()] || 'sendFee'
-    }
-
-    // Get minimum fee for a transaction type
-    const getMinimumFeeForTxType = (type: string): number => {
-        const feeKey = getFeeParamKey(type)
-        return feeParams[feeKey] || feeParams.sendFee || 0
     }
 
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
@@ -162,6 +157,49 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         }
     }
 
+    const formatAge = (age: string | number | undefined) => {
+        if (!age) return 'N/A'
+
+        // If it's already a formatted string, return it
+        if (typeof age === 'string') {
+            // Check if it's already in the format "X ago" (from formatDistanceToNow)
+            if (age.includes('ago') || age === 'N/A') {
+                return age
+            }
+            // If it's a timestamp string, try to parse it
+            try {
+                const date = parseISO(age)
+                if (isValid(date)) {
+                    return formatDistanceToNow(date, { addSuffix: true })
+                }
+            } catch {
+                // If parsing fails, return as is
+                return age
+            }
+        }
+
+        // If it's a number (timestamp), format it
+        if (typeof age === 'number') {
+            try {
+                let date: Date
+                // If it's a timestamp in microseconds (like in Canopy)
+                if (age > 1e12) {
+                    date = new Date(age / 1000) // Convert microseconds to milliseconds
+                } else {
+                    date = new Date(age * 1000) // Convert seconds to milliseconds
+                }
+
+                if (isValid(date)) {
+                    return formatDistanceToNow(date, { addSuffix: true })
+                }
+            } catch {
+                return 'N/A'
+            }
+        }
+
+        return 'N/A'
+    }
+
     const rows = transactions.map((transaction) => [
         // Hash
         <span className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
@@ -225,7 +263,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
         // Age
         <span className="text-gray-400 text-sm">
-            {transaction.age}
+            {formatAge(transaction.age)}
         </span>
     ])
 

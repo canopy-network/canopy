@@ -124,22 +124,29 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         }
     }
 
-    const formatAge = (timestamp: number) => {
-        if (!timestamp || timestamp === 0) return 'N/A'
-
+    const formatTime = (timestamp: number) => {
         try {
-            // Convert from microseconds to milliseconds, then to Date
-            const timestampMs = timestamp / 1000000
-            const date = new Date(timestampMs)
+            let date: Date
+            if (typeof timestamp === 'number') {
+                // If it's a timestamp in microseconds (like in Canopy)
+                if (timestamp > 1e12) {
+                    date = new Date(timestamp / 1000) // Convert microseconds to milliseconds
+                } else {
+                    date = new Date(timestamp * 1000) // Convert seconds to milliseconds
+                }
+            } else if (typeof timestamp === 'string') {
+                date = parseISO(timestamp)
+            } else {
+                date = new Date(timestamp)
+            }
 
             if (isValid(date)) {
                 return formatDistanceToNow(date, { addSuffix: true })
             }
-        } catch (error) {
-            // Fallback if conversion fails
+            return 'N/A'
+        } catch {
+            return 'N/A'
         }
-
-        return 'N/A'
     }
 
     // Helper function to convert micro denomination to CNPY
@@ -250,7 +257,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
 
             // Age
             <span key="age" className="text-gray-400 text-sm">
-                {formatAge(transaction.transaction.time)}
+                {formatTime(transaction.transaction.time)}
             </span>
         ]
     })
