@@ -529,7 +529,9 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 			return nil
 		}
 	} else {
-		s.log.Debugf("key compaction reflect error: db field empty") // this comment for now is just to debug the reflect itself just in case
+		s.mu.Unlock() // unlock commit op
+		s.log.Debugf("key compaction skipped [%d]: db field is nil", version)
+		return nil
 	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		s.mu.Unlock() // unlock commit op
