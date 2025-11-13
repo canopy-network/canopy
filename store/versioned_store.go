@@ -59,16 +59,24 @@ const (
 
 // VersionedStore uses inverted version encoding and reverse seeks for maximum performance
 type VersionedStore struct {
-	db        pebble.Reader
-	batch     *pebble.Batch
-	closed    bool
-	version   uint64
-	keyBuffer []byte
+	db           pebble.Reader
+	batch        *pebble.Batch
+	closed       bool
+	version      uint64
+	keyBuffer    []byte
+	decodeBuffer [][]byte
 }
 
 // NewVersionedStore creates a new  versioned store
-func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) (*VersionedStore, lib.ErrorI) {
-	return &VersionedStore{db: db, batch: batch, version: version, keyBuffer: make([]byte, 0, 256)}, nil
+func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *VersionedStore {
+	return &VersionedStore{
+		db:           db,
+		batch:        batch,
+		closed:       false,
+		version:      version,
+		keyBuffer:    make([]byte, 0, 256),
+		decodeBuffer: make([][]byte, 0, 5),
+	}
 }
 
 // Set() stores a key-value pair at the current version
@@ -170,29 +178,56 @@ func (vs *VersionedStore) Close() lib.ErrorI {
 }
 
 // NewIterator is a wrapper around the underlying iterators to conform to the TxnReaderI interface
-func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
-	// Encode raw user-key prefix for correct bounds (no terminator)
-	return vs.newVersionedIterator(prefix, reverse, allVersions)
+func (vs *VersionedStore) NewIterator(prefix []byte, reverse bool, seek bool) (lib.IteratorI, lib.ErrorI) {
+	return vs.newVersionedIterator(prefix, reverse, seek)
 }
 
 // Iterator returns an iterator for all keys with the given prefix
 func (vs *VersionedStore) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, false, false)
+	return vs.newVersionedIterator(prefix, false, true)
 }
 
 // RevIterator returns a reverse iterator for all keys with the given prefix
 func (vs *VersionedStore) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, true, false)
+	return vs.newVersionedIterator(prefix, true, true)
 }
 
 // ArchiveIterator returns an iterator for all keys with the given prefix
 // TODO: Currently not working, VersionedIterator must be modified to support archive iteration
 func (vs *VersionedStore) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return vs.newVersionedIterator(prefix, false, true)
+	panic("not implemented")
 }
 
-// newVersionedIterator creates a new  versioned iterator
-func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allVersions bool) (*VersionedIterator, lib.ErrorI) {
+// newVersionedIterator creates a versioned iterator with configurable iteration strategy.
+//
+// Iterator Strategies:
+//
+// Linear (seek=false):
+//   - Walks through all versions linearly using Prev()/Next() calls
+//   - For each user key, scans backwards/forwards through versions until finding one <= store.version
+//   - Optimal for dense iteration where most keys in the prefix range are accessed
+//   - Best performance characteristics:
+//   - Prefixes with many keys that all need to be visited (e.g., iterating all blocks)
+//   - Keys with few versions per user key (low version churn)
+//   - Performance degrades with high version churn (many versions per key)
+//
+// Seek-based (seek=true):
+//   - Uses SeekGE/SeekLT to jump directly to the target version for each user key
+//   - Skips intermediate versions entirely, landing at the first version <= store.version
+//   - Optimal for sparse iteration or high version churn scenarios
+//   - Best performance characteristics:
+//   - Keys with many versions per user key (e.g., frequently updated accounts/validators)
+//   - Sparse iteration where only a subset of keys in prefix range are accessed
+//   - Benefits from block property filters to skip entire SST blocks with incompatible versions
+//
+// Direction:
+//   - Forward (reverse=false): iterate keys in ascending lexicographic order
+//   - Reverse (reverse=true): iterate keys in descending lexicographic order
+//
+// The iterator automatically deduplicates user keys, returning only the latest version
+// <= store.version for each unique user key within the prefix range.
+func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, seek bool) (
+	*VersionedIterator, lib.ErrorI) {
 	// validate prefix
 	_ = lib.DecodeLengthPrefixed(prefix)
 	// use property filter if possible
@@ -222,31 +257,29 @@ func (vs *VersionedStore) newVersionedIterator(prefix []byte, reverse bool, allV
 		return nil, ErrStoreGet(fmt.Errorf("failed to create iterator: %v", err))
 	}
 	return &VersionedIterator{
-		iter:        iter,
-		store:       vs,
-		prefix:      prefix,
-		reverse:     reverse,
-		allVersions: allVersions,
-		// [EXPERIMENTAL] test of whether linear prev/next is faster than seeking
-		// on a small number of keys
-		seek: vs.version != maxVersion,
+		iter:    iter,
+		store:   vs,
+		prefix:  prefix,
+		reverse: reverse,
+		seek:    seek,
 	}, nil
 }
 
 // VersionedIterator implements  iteration with single-pass key deduplication
 type VersionedIterator struct {
-	iter        *pebble.Iterator
-	store       *VersionedStore
-	prefix      []byte
-	key         []byte
-	value       []byte
-	reverse     bool
-	isValid     bool
-	initialized bool
-	allVersions bool
-	lastUserKey []byte
-	valueBuff   []byte
-	seek        bool
+	iter          *pebble.Iterator
+	store         *VersionedStore
+	prefix        []byte
+	key           []byte
+	value         []byte
+	reverse       bool
+	isValid       bool
+	initialized   bool
+	allVersions   bool
+	lastUserKey   []byte
+	valueBuff     []byte
+	seek          bool
+	shouldNotPrev bool
 }
 
 // Valid returns true if the iterator is positioned at a valid entry
@@ -348,23 +381,7 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		vi.valueBuff = vi.valueBuff[:len(rawValue)]
 		// in reverse mode, when a new key is found, seek to its highest version
 		if vi.reverse {
-			// build the synthetic seek key for this userKey at the target store.version:
-			// [length-prefixed-key][^version]
-			seekKey := vi.store.makeVersionedKey(userKey, vi.store.version)
-			// this lands at the first entry with ^ver >= ^target within this user key,
-			// i.e. the greatest original version <= target.
-			if vi.iter.SeekGE(seekKey) {
-				// ensure the iterator is still on the same key (it should be, since at least
-				// one version <= target for this user key was already observed).
-				k, _, _ := parseVersionedKey(vi.iter.Key(), false)
-				if bytes.Equal(k, vi.lastUserKey) {
-					if val, valErr := vi.iter.ValueAndErr(); valErr == nil {
-						vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
-						copy(vi.valueBuff, val)
-						vi.valueBuff = vi.valueBuff[:len(val)]
-					}
-				}
-			}
+			vi.rewindToLatestVersion(userKey)
 		}
 		// now the iterator's current value is the newest visible version for userKey.
 		tomb, val := parseValueWithTombstone(vi.valueBuff)
@@ -378,6 +395,59 @@ func (vi *VersionedIterator) advanceToNextKey() {
 		vi.key, vi.value, vi.isValid = vi.key[:len(userKey)], val, true
 		// exit
 		return
+	}
+}
+
+// rewindToLatestVersion() positions the iterator at the latest version <= store.version
+// for the current user key in reverse iteration mode
+func (vi *VersionedIterator) rewindToLatestVersion(userKey []byte) {
+	if vi.seek {
+		// build the synthetic seek key for this userKey at the target store.version:
+		// [length-prefixed-key][^version]
+		seekKey := vi.store.makeVersionedKey(userKey, vi.store.version)
+		// this lands at the first entry with ^ver >= ^target within this user key,
+		// i.e. the greatest original version <= target.
+		if valid := vi.iter.SeekGE(seekKey); !valid {
+			return
+		}
+		// ensure the iterator is still on the same key (it should be, since at least
+		// one version <= target for this user key was already observed).
+		k, _, _ := parseVersionedKey(vi.iter.Key(), false)
+		if !bytes.Equal(k, vi.lastUserKey) {
+			return
+		}
+		if val, valErr := vi.iter.ValueAndErr(); valErr == nil {
+			vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
+			copy(vi.valueBuff, val)
+			vi.valueBuff = vi.valueBuff[:len(val)]
+		}
+		return
+	}
+	// linear backwards scan to find the latest version <= store.version
+	for vi.iter.Prev() {
+		// prevent step() from calling Prev() again since the iterator already moved backwards
+		// and should resume forward iteration from the current position
+		vi.shouldNotPrev = true
+		rawPrevKey := vi.iter.Key()
+		prevVersion := parseVersion(rawPrevKey)
+		// validate version
+		if prevVersion > vi.store.version {
+			break
+		}
+		// validate key
+		k, _, _ := parseVersionedKey(rawPrevKey, false)
+		if !bytes.Equal(k, vi.lastUserKey) {
+			break
+		}
+		var valErr error
+		val, valErr := vi.iter.ValueAndErr()
+		if valErr != nil {
+			break
+		}
+		// copy last valid value
+		vi.valueBuff = ensureCapacity(vi.valueBuff, len(val))
+		copy(vi.valueBuff, val)
+		vi.valueBuff = vi.valueBuff[:len(val)]
 	}
 }
 
@@ -404,6 +474,10 @@ func (vi *VersionedIterator) step() {
 	}
 	// normal iteration
 	if vi.reverse {
+		if vi.shouldNotPrev {
+			vi.shouldNotPrev = false
+			return
+		}
 		vi.iter.Prev()
 	} else {
 		vi.iter.Next()
@@ -450,6 +524,9 @@ func parseVersionedKey(versionedKey []byte, getVersion bool) (userKey []byte,
 	version uint64, err lib.ErrorI) {
 	// extract user key (everything between history prefix and suffix)
 	userKeyEnd := len(versionedKey) - VersionSize
+	if userKeyEnd <= 0 {
+		return nil, 0, ErrInvalidKey()
+	}
 	// extract the userKey and the version
 	userKey = versionedKey[:userKeyEnd]
 	if !getVersion {

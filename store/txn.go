@@ -29,7 +29,6 @@ import (
 const (
 	opDelete op = iota // delete the key
 	opSet              // set the key
-	opEntry            // custom badger entry
 )
 
 // Txn is an in memory database transaction
@@ -40,6 +39,7 @@ type Txn struct {
 	state        bool       // whether the flush should go to the HSS and LSS
 	sort         bool       // whether to sort the keys in the txn; used for iteration
 	writeVersion uint64     // the version to commit the data to
+	seek         bool       // whether to use seek or linear iteration (required for pebbleDB implementation)
 	txn          *txn       // the internal structure maintaining the write operations
 }
 
@@ -67,7 +67,7 @@ type op uint8
 // Txn implements this itself to allow for nested transactions
 type TxnReaderI interface {
 	Get(key []byte) ([]byte, lib.ErrorI)
-	NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI)
+	NewIterator(prefix []byte, reverse bool, seek bool) (lib.IteratorI, lib.ErrorI)
 	Close() lib.ErrorI
 }
 
@@ -80,8 +80,9 @@ type TxnWriterI interface {
 	Close() lib.ErrorI
 }
 
+// TODO: New Txn has a lot of options, refactor the constructor to use the options pattern
 // NewTxn() creates a new instance of Txn with the specified reader and writer
-func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort bool, version ...uint64) *Txn {
+func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort, seek bool, version ...uint64) *Txn {
 	var v uint64
 	if len(version) != 0 {
 		v = version[0]
@@ -92,6 +93,7 @@ func NewTxn(reader TxnReaderI, writer TxnWriterI, prefix []byte, state, sort boo
 		prefix:       prefix,
 		state:        state,
 		sort:         sort,
+		seek:         seek,
 		writeVersion: v,
 		txn: &txn{
 			ops:    make(map[uint64]valueOp),
@@ -156,7 +158,7 @@ func (t *Txn) addToSorted(key []byte, hashedKey uint64) {
 
 // Iterator() returns a new iterator for merged iteration of both the in-memory operations and parent store with the given prefix
 func (t *Txn) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	it, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), false, false)
+	it, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), false, t.seek)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +167,7 @@ func (t *Txn) Iterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
 
 // RevIterator() returns a new reverse iterator for merged iteration of both the in-memory operations and parent store with the given prefix
 func (t *Txn) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	it, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), true, false)
+	it, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), true, t.seek)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func (t *Txn) RevIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
 
 // ArchiveIterator() creates a new iterator for all versions under the given prefix in the BadgerDB transaction
 func (t *Txn) ArchiveIterator(prefix []byte) (lib.IteratorI, lib.ErrorI) {
-	return t.reader.NewIterator(lib.Append(t.prefix, prefix), false, true)
+	return t.reader.NewIterator(lib.Append(t.prefix, prefix), false, t.seek)
 }
 
 // Discard() clears all in-memory operations and resets the sorted key list
@@ -262,9 +264,9 @@ func (t *Txn) write(prefix []byte, writeVersion uint64, op valueOp) lib.ErrorI {
 }
 
 // NewIterator() creates a merged iterator with the reader and writer
-func (t *Txn) NewIterator(prefix []byte, reverse bool, allVersions bool) (lib.IteratorI, lib.ErrorI) {
+func (t *Txn) NewIterator(prefix []byte, reverse bool, seek bool) (lib.IteratorI, lib.ErrorI) {
 	// create an iterator for the parent
-	parentIterator, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), reverse, allVersions)
+	parentIterator, err := t.reader.NewIterator(lib.Append(t.prefix, prefix), reverse, seek)
 	if err != nil {
 		return nil, err
 	}
@@ -302,9 +304,10 @@ func (t *txn) copy() *txn {
 
 // copy() deep copies a value operation
 func (o valueOp) copy() valueOp {
+	k, v := bytes.Clone(o.key), bytes.Clone(o.value)
 	return valueOp{
-		key:     bytes.Clone(o.key),
-		value:   bytes.Clone(o.value),
+		key:     k,
+		value:   v,
 		version: o.version,
 		op:      o.op,
 	}
@@ -341,8 +344,8 @@ func newTxnIterator(parent lib.IteratorI, t *txn, prefix []byte, parentPrefix []
 		tree:         tree,
 		txn:          t,
 		prefix:       prefix,
-		parentPrefix: parentPrefix,
 		reverse:      reverse,
+		parentPrefix: parentPrefix,
 	}).First()
 }
 

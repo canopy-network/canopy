@@ -158,7 +158,7 @@ const RenderAmountInput = ({ amount, onClick, input, inputValue }) => {
         Available: <span className="fw-bold">{formatNumber(amount)} CNPY </span>
         <Button
           aria-label="max-button"
-          onClick={() => onClick(input.label, Math.ceil(amount).toString(), input.type)}
+          onClick={() => onClick(input.label, Math.floor(amount).toString(), input.type)}
           variant="link"
           bsPrefix="max-amount-btn"
         >

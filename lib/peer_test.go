@@ -3,9 +3,11 @@ package lib
 import (
 	"container/list"
 	"encoding/json"
-	"github.com/canopy-network/canopy/lib/crypto"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -158,6 +160,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   1,
 				maxPerRequester: 1,
 				maxRequests:     3,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "a",
 			expectedRequesterBlock: true,
@@ -173,6 +176,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   1,
 				maxPerRequester: 1,
 				maxRequests:     1,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "b",
 			expectedRequesterBlock: false,
@@ -186,6 +190,7 @@ func TestSimpleLimiterNewRequest(t *testing.T) {
 				totalRequests:   0,
 				maxPerRequester: 1,
 				maxRequests:     1,
+				log:             NewDefaultLogger(),
 			},
 			requester:              "b",
 			expectedRequesterBlock: false,
@@ -370,6 +375,51 @@ func TestResolveAndReplacePort(t *testing.T) {
 			netaddr:  "tcp://[2001:db8::1]",
 			expected: "[2001:db8::1]:9002",
 			chainId:  2,
+		},
+		{
+			name:     "with port chain 20",
+			netaddr:  "tcp://example.com:9000",
+			expected: "example.com:9020",
+			chainId:  20,
+		},
+		{
+			name:        "with port chain 20 on port lower than 1024",
+			netaddr:     "tcp://example.com:80",
+			expected:    "",
+			chainId:     20,
+			expectedErr: fmt.Sprintf("port must be greater than %d", MinAllowedPort),
+		},
+		{
+			name:     "with port chain 5",
+			netaddr:  "tcp://example.com:1025",
+			expected: "example.com:1030",
+			chainId:  5,
+		},
+		{
+			name:     "default with chain 56,535 ",
+			netaddr:  "tcp://example.com",
+			expected: "example.com:65535",
+			chainId:  56535,
+		},
+		{
+			name:        "default with chain 56,536 ",
+			netaddr:     "tcp://example.com",
+			expected:    "",
+			chainId:     56536,
+			expectedErr: "max port exceeded",
+		},
+		{
+			name:     "port 1025 with chain 64,510 ",
+			netaddr:  "tcp://example.com:1025",
+			expected: "example.com:65535",
+			chainId:  64510,
+		},
+		{
+			name:        "port 1025 with chain 64,511 ",
+			netaddr:     "tcp://example.com:1025",
+			expected:    "",
+			chainId:     64511,
+			expectedErr: "max port exceeded",
 		},
 	}
 	for _, test := range tests {

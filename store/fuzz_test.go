@@ -42,13 +42,13 @@ func TestFuzz(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// make a writable reader that reads from the last height
-	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
+	versionedStore := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, _, cleanup := testStore(t)
 	defer cleanup()
 	defer db.Close()
 	keys := make([]string, 0)
-	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
@@ -66,11 +66,11 @@ func TestFuzzTxn(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// make a writable reader that reads from the last height
-	versionedStore, err := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
+	versionedStore := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
-	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
