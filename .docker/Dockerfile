@@ -6,6 +6,7 @@ WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
 
 RUN make build/wallet
+RUN make build/new-wallet
 RUN make build/explorer
 RUN go build -a -o bin ./cmd/main/...
 

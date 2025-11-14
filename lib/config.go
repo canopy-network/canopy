@@ -105,13 +105,14 @@ func (m *MainConfig) GetLogLevel() int32 {
 // RPC CONFIG BELOW
 
 type RPCConfig struct {
-	WalletPort   string `json:"walletPort"`   // the port where the web wallet is hosted
-	ExplorerPort string `json:"explorerPort"` // the port where the block explorer is hosted
-	RPCPort      string `json:"rpcPort"`      // the port where the rpc server is hosted
-	AdminPort    string `json:"adminPort"`    // the port where the admin rpc server is hosted
-	RPCUrl       string `json:"rpcURL"`       // the url where the rpc server is hosted
-	AdminRPCUrl  string `json:"adminRPCUrl"`  // the url where the admin rpc server is hosted
-	TimeoutS     int    `json:"timeoutS"`     // the rpc request timeout in seconds
+	WalletPort    string `json:"walletPort"`    // the port where the web wallet is hosted
+	WalletNewPort string `json:"walletNewPort"` // the port where the new web wallet is hosted
+	ExplorerPort  string `json:"explorerPort"`  // the port where the block explorer is hosted
+	RPCPort       string `json:"rpcPort"`       // the port where the rpc server is hosted
+	AdminPort     string `json:"adminPort"`     // the port where the admin rpc server is hosted
+	RPCUrl        string `json:"rpcURL"`        // the url where the rpc server is hosted
+	AdminRPCUrl   string `json:"adminRPCUrl"`   // the url where the admin rpc server is hosted
+	TimeoutS      int    `json:"timeoutS"`      // the rpc request timeout in seconds
 }
 
 // RootChain defines a rpc url to a possible 'root chain' which is used if the governance parameter RootChainId == ChainId
@@ -123,13 +124,14 @@ type RootChain struct {
 // DefaultRPCConfig() sets rpc url to localhost and sets wallet, explorer, rpc, and admin ports from [50000-50003]
 func DefaultRPCConfig() RPCConfig {
 	return RPCConfig{
-		WalletPort:   "50000",                  // find the wallet on localhost:50000
-		ExplorerPort: "50001",                  // find the explorer on localhost:50001
-		RPCPort:      "50002",                  // the rpc is served on localhost:50002
-		AdminPort:    "50003",                  // the admin rpc is served on localhost:50003
-		RPCUrl:       "http://localhost:50002", // use a local rpc by default
-		AdminRPCUrl:  "http://localhost:50003", // use a local admin rpc by default
-		TimeoutS:     3,                        // the rpc timeout is 3 seconds
+		WalletPort:    "50000",                  // find the wallet on localhost:50000
+		WalletNewPort: "50004",                  // find the new wallet on localhost:50004
+		ExplorerPort:  "50001",                  // find the explorer on localhost:50001
+		RPCPort:       "50002",                  // the rpc is served on localhost:50002
+		AdminPort:     "50003",                  // the admin rpc is served on localhost:50003
+		RPCUrl:        "http://localhost:50002", // use a local rpc by default
+		AdminRPCUrl:   "http://localhost:50003", // use a local admin rpc by default
+		TimeoutS:      3,                        // the rpc timeout is 3 seconds
 	}
 }
 

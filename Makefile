@@ -2,6 +2,7 @@
 GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
 WALLET_DIR := ./cmd/rpc/web/wallet
+NEW_WALLET_DIR := ./cmd/rpc/web/wallet-new
 EXPLORER_DIR := ./cmd/rpc/web/explorer
 DOCKER_DIR := ./.docker/compose.yaml
 
@@ -16,7 +17,7 @@ help:
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 # Targets, this is a list of all available commands which can be executed using the make command.
-.PHONY: build/canopy build/canopy-full build/wallet build/explorer test/all dev/deps docker/up \
+.PHONY: build/canopy build/canopy-full build/wallet build/wallet-new build/explorer test/all dev/deps docker/up \
 	docker/down docker/build docker/up-fast docker/down docker/logs
 
 # ==================================================================================== #
@@ -28,11 +29,15 @@ build/canopy:
 	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
 
 ## build/canopy-full: build the canopy binary and its wallet and explorer altogether
-build/canopy-full: build/wallet build/explorer build/canopy
+build/canopy-full: build/wallet build/new-wallet build/explorer build/canopy
 
 ## build/wallet: build the canopy's wallet project
 build/wallet:
 	npm install --prefix $(WALLET_DIR) && npm run build --prefix $(WALLET_DIR)
+
+## build/wallet-new: build the canopy's wallet project
+build/new-wallet:
+	npm install --prefix $(NEW_WALLET_DIR) && npm run build --prefix $(NEW_WALLET_DIR)
 
 ## build/explorer: build the canopy's explorer project
 build/explorer:
