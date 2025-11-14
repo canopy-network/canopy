@@ -37,8 +37,9 @@ const (
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
-	walletStaticDir   = "web/wallet/out"
-	explorerStaticDir = "web/explorer/out"
+	walletStaticDir    = "web/wallet/out"
+	walletNewStaticDir = "web/wallet-new/out"
+	explorerStaticDir  = "web/explorer/out"
 )
 
 // Server represents a Canopy RPC server with configuration options.
@@ -171,6 +172,8 @@ func (s *Server) updatePollResults() {
 func (s *Server) startStaticFileServers() {
 	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
+	s.logger.Infof("Starting New Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletNewPort)
+	s.runStaticFileServer(walletNewFS, walletNewStaticDir, s.config.WalletNewPort, s.config)
 	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
@@ -316,6 +319,9 @@ var explorerFS embed.FS
 
 //go:embed all:web/wallet/out
 var walletFS embed.FS
+
+//go:embed all:web/wallet-new/out
+var walletNewFS embed.FS
 
 // runStaticFileServer creates a web server serving static files
 func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.Config) {

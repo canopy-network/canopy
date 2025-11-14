@@ -8,8 +8,8 @@
     "decimals": 6
   },
   "rpc": {
-    "base": "http://216.158.229.206:30002",
-    "admin": "http://216.158.229.206:30003"
+    "base": "http://localhost:50002",
+    "admin": "http://localhost:50003"
   },
   "explorer": "http://localhost:50001/",
   "address": {
