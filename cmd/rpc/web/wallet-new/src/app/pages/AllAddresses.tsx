@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
+import { Search, Wallet, Copy } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useAccounts } from "@/app/providers/AccountsProvider";
-import { Search, Wallet, Copy } from "lucide-react";
 
 export const AllAddresses = () => {
   const { accounts, loading: accountsLoading } = useAccounts();

@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
+import { Search, ExternalLink } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
-import { Search, ExternalLink } from "lucide-react";
 
 const getStatusColor = (s: string) =>
   s === "Confirmed"

@@ -1,11 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Plus, BarChart3 } from "lucide-react";
-import {
-  useGovernance,
-  Poll,
-  Proposal,
-} from "@/hooks/useGovernance";
+import { useGovernance, Poll, Proposal } from "@/hooks/useGovernance";
 import { ProposalTable } from "@/components/governance/ProposalTable";
 import { PollCard } from "@/components/governance/PollCard";
 import { ProposalDetailsModal } from "@/components/governance/ProposalDetailsModal";
@@ -27,7 +23,7 @@ const containerVariants = {
 
 export const Governance = () => {
   const { selectedAccount } = useAccounts();
-  const { data: proposals = []} = useGovernance();
+  const { data: proposals = [] } = useGovernance();
   const { manifest } = useManifest();
 
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);

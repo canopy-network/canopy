@@ -1,8 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Line } from "react-chartjs-2";
 import { Wallet, Lock, Gift } from "lucide-react";
-import { useManifest } from "@/hooks/useManifest";
+import { Line } from "react-chartjs-2";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 
 interface StatsCardsProps {

@@ -1,23 +1,17 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { useAccountData } from "@/hooks/useAccountData";
-import { useBalanceHistory } from "@/hooks/useBalanceHistory";
-import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
-import { useBalanceChart } from "@/hooks/useBalanceChart";
-import { useActionModal } from "@/app/providers/ActionModalProvider";
-import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import {
-  Wallet,
-  Lock,
-  CheckCircle,
-  Circle,
-  Search,
-  ChevronDown,
-  Layers,
   ArrowLeftRight,
-  Shield,
   Box,
+  CheckCircle,
+  ChevronDown,
+  Circle,
+  Layers,
+  Lock,
+  Search,
   Send,
+  Shield,
+  Wallet,
 } from "lucide-react";
 import {
   Chart as ChartJS,
@@ -31,7 +25,13 @@ import {
   Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { useAccountData } from "@/hooks/useAccountData";
+import { useBalanceHistory } from "@/hooks/useBalanceHistory";
+import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
+import { useBalanceChart } from "@/hooks/useBalanceChart";
+import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
+import AnimatedNumber from "@/components/ui/AnimatedNumber";
 
 ChartJS.register(
   CategoryScale,
@@ -224,7 +224,6 @@ export const Accounts = () => {
     },
   };
 
-
   const handleSendAction = (address: string) => {
     // Set the account as selected before opening the action
     const account = accounts.find((a) => a.address === address);
@@ -238,8 +237,6 @@ export const Accounts = () => {
       },
     });
   };
-
-
 
   const processedAddresses = accounts.map((account, index) => {
     const balanceInfo = balances.find((b) => b.address === account.address);

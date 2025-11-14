@@ -4,8 +4,8 @@ import { Play, Pause } from "lucide-react";
 import { useValidators } from "@/hooks/useValidators";
 import { useMultipleValidatorRewardsHistory } from "@/hooks/useMultipleValidatorRewardsHistory";
 import { useMultipleValidatorSets } from "@/hooks/useValidatorSet";
-import { ActionsModal } from "@/actions/ActionsModal";
 import { useManifest } from "@/hooks/useManifest";
+import { ActionsModal } from "@/actions/ActionsModal";
 
 export const NodeManagementCard = (): JSX.Element => {
   const { data: validators = [], isLoading, error } = useValidators();
@@ -46,10 +46,35 @@ export const NodeManagementCard = (): JSX.Element => {
     return `+${(rewards / 1000000).toFixed(2)} CNPY`;
   };
 
+  const getWeight = (validator: any): number => {
+    if (!validator.committees || validator.committees.length === 0) return 0;
+    if (!validator.publicKey) return 0;
+
+    // Check all committees this validator is part of
+    for (const committeeId of validator.committees) {
+      const validatorSet = validatorSetsData[committeeId];
+      if (!validatorSet || !validatorSet.validatorSet) continue;
+
+      // Find this validator by matching public key
+      const member = validatorSet.validatorSet.find(
+        (m: any) => m.publicKey === validator.publicKey,
+      );
+
+      if (member) {
+        // Return the voting power directly (it's already the weight)
+        return member.votingPower;
+      }
+    }
 
     return 0;
   };
 
+  const formatWeight = (weight: number) => {
+    return weight.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  };
 
   const getStatus = (validator: any) => {
     if (validator.unstaking) return "Unstaking";
@@ -341,7 +366,6 @@ export const NodeManagementCard = (): JSX.Element => {
                           {node.status}
                         </span>
                       </td>
-
                       <td className="py-4">
                         <span className="text-primary text-sm font-medium">
                           {node.rewards24h}
