@@ -31,8 +31,8 @@ func (c *Client) Version() (version *string, err lib.ErrorI) {
 	return
 }
 
-func (c *Client) Height() (p *uint64, err lib.ErrorI) {
-	p = new(uint64)
+func (c *Client) Height() (p *lib.HeightResult, err lib.ErrorI) {
+	p = new(lib.HeightResult)
 	err = c.post(HeightRouteName, nil, p)
 	return
 }

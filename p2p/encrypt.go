@@ -267,8 +267,8 @@ func peerMetaSwap(conn net.Conn, meta *lib.PeerMeta, timeout time.Duration) (pee
 // waits for both functions to complete, and returns if either has an error
 func parallelSendReceive(conn net.Conn, a, b proto.Message, timeout time.Duration) lib.ErrorI {
 	var g errgroup.Group
-	g.Go(func() error { return sendProtoMsg(conn, a, timeout) })
-	g.Go(func() error { return receiveProtoMsg(conn, b, timeout) })
+	g.Go(func() error { _, err := sendProtoMsg(conn, a, timeout); return err })
+	g.Go(func() error { _, err := receiveProtoMsg(conn, b, timeout); return err })
 	if er := g.Wait(); er != nil {
 		return ErrErrorGroup(er)
 	}
