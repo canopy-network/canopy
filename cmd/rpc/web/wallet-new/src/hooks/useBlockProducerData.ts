@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { LastProposers, Height, EcoParams } from '../core/api';
+import { useQuery } from "@tanstack/react-query";
+import { useDSFetcher } from "@/core/dsFetch";
 
 interface BlockProducerData {
   blocksProduced: number;
@@ -12,46 +12,57 @@ interface UseBlockProducerDataProps {
   enabled?: boolean;
 }
 
-export function useBlockProducerData({ validatorAddress, enabled = true }: UseBlockProducerDataProps) {
+export function useBlockProducerData({
+  validatorAddress,
+  enabled = true,
+}: UseBlockProducerDataProps) {
+  const dsFetch = useDSFetcher();
+
   return useQuery({
-    queryKey: ['blockProducerData', validatorAddress],
+    queryKey: ["blockProducerData", validatorAddress],
     queryFn: async (): Promise<BlockProducerData> => {
       try {
-        // Get current height
-        const currentHeight = await Height();
-        
+        // Get current height using DS pattern
+        const currentHeight = await dsFetch("height");
+
         // Get last proposers (this gives us recent block proposers)
-        const lastProposersResponse = await LastProposers(0);
+        const lastProposersResponse = await dsFetch("lastProposers", {
+          height: 0,
+          count: 100,
+        });
         const proposers = lastProposersResponse.addresses || [];
-        
+
         // Count how many times this validator has proposed blocks recently
-        const blocksProduced = proposers.filter((addr: string) => addr === validatorAddress).length;
-        
-        // Get economic parameters for accurate reward calculation
-        const ecoParams = await EcoParams(0);
-        const mintPerBlock = ecoParams.MintPerBlock || 80000000; // 80 CNPY per block
-        const proposerCut = ecoParams.ProposerCut || 70; // 70% goes to proposer
-        
+        const blocksProduced = proposers.filter(
+          (addr: string) => addr === validatorAddress,
+        ).length;
+
+        // Get parameters for accurate reward calculation
+        const params = await dsFetch("params");
+        const mintPerBlock = params.MintPerBlock || 80000000; // 80 CNPY per block
+        const proposerCut = params.ProposerCut || 70; // 70% goes to proposer
+
         // Calculate rewards per block for this validator
         // Proposer gets a percentage of the mint per block
-        const rewardsPerBlock = (mintPerBlock * proposerCut / 100) / 1000000; // Convert to CNPY
+        const rewardsPerBlock = (mintPerBlock * proposerCut) / 100 / 1000000; // Convert to CNPY
         const rewards24h = blocksProduced * rewardsPerBlock;
-        
+
         // Find the last height this validator proposed
-        const lastProposedHeight = proposers.lastIndexOf(validatorAddress) >= 0 
-          ? currentHeight - proposers.lastIndexOf(validatorAddress)
-          : undefined;
-        
+        const lastProposedHeight =
+          proposers.lastIndexOf(validatorAddress) >= 0
+            ? currentHeight - proposers.lastIndexOf(validatorAddress)
+            : undefined;
+
         return {
           blocksProduced,
           rewards24h,
-          lastProposedHeight
+          lastProposedHeight,
         };
       } catch (error) {
-        console.error('Error fetching block producer data:', error);
+        console.error("Error fetching block producer data:", error);
         return {
           blocksProduced: 0,
-          rewards24h: 0
+          rewards24h: 0,
         };
       }
     },
@@ -63,40 +74,48 @@ export function useBlockProducerData({ validatorAddress, enabled = true }: UseBl
 
 // Hook for multiple validators
 export function useMultipleBlockProducerData(validatorAddresses: string[]) {
+  const dsFetch = useDSFetcher();
+
   return useQuery({
-    queryKey: ['multipleBlockProducerData', validatorAddresses],
+    queryKey: ["multipleBlockProducerData", validatorAddresses],
     queryFn: async (): Promise<Record<string, BlockProducerData>> => {
       try {
-        const currentHeight = await Height();
-        const lastProposersResponse = await LastProposers(0);
+        const currentHeight = await dsFetch("height");
+        const lastProposersResponse = await dsFetch("lastProposers", {
+          height: 0,
+          count: 100,
+        });
         const proposers = lastProposersResponse.addresses || [];
-        
+
         const results: Record<string, BlockProducerData> = {};
-        
-        // Get economic parameters for accurate reward calculation
-        const ecoParams = await EcoParams(0);
-        const mintPerBlock = ecoParams.MintPerBlock || 80000000; // 80 CNPY per block
-        const proposerCut = ecoParams.ProposerCut || 70; // 70% goes to proposer
-        
+
+        // Get parameters for accurate reward calculation
+        const params = await dsFetch("params");
+        const mintPerBlock = params.MintPerBlock || 80000000; // 80 CNPY per block
+        const proposerCut = params.ProposerCut || 70; // 70% goes to proposer
+
         for (const address of validatorAddresses) {
-          const blocksProduced = proposers.filter((addr: string) => addr === address).length;
-          const rewardsPerBlock = (mintPerBlock * proposerCut / 100) / 1000000; // Convert to CNPY
+          const blocksProduced = proposers.filter(
+            (addr: string) => addr === address,
+          ).length;
+          const rewardsPerBlock = (mintPerBlock * proposerCut) / 100 / 1000000; // Convert to CNPY
           const rewards24h = blocksProduced * rewardsPerBlock;
-          
-          const lastProposedHeight = proposers.lastIndexOf(address) >= 0 
-            ? currentHeight - proposers.lastIndexOf(address)
-            : undefined;
-          
+
+          const lastProposedHeight =
+            proposers.lastIndexOf(address) >= 0
+              ? currentHeight - proposers.lastIndexOf(address)
+              : undefined;
+
           results[address] = {
             blocksProduced,
             rewards24h,
-            lastProposedHeight
+            lastProposedHeight,
           };
         }
-        
+
         return results;
       } catch (error) {
-        console.error('Error fetching multiple block producer data:', error);
+        console.error("Error fetching multiple block producer data:", error);
         return {};
       }
     },

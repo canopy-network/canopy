@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { TxPause, TxUnpause } from '@/core/api';
-import { useAccounts } from '@/hooks/useAccounts';
-import { AlertModal } from './AlertModal';
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useDSFetcher } from "@/core/dsFetch";
+import { useConfig } from "@/app/providers/ConfigProvider";
+import { useAccounts } from "@/app/providers/AccountsProvider";
+import { AlertModal } from "./AlertModal";
 
 interface PauseUnpauseModalProps {
   isOpen: boolean;
   onClose: () => void;
   validatorAddress: string;
   validatorNickname?: string;
-  action: 'pause' | 'unpause';
+  action: "pause" | "unpause";
   allValidators?: Array<{
     address: string;
     nickname?: string;
@@ -24,24 +25,25 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
   validatorNickname,
   action,
   allValidators = [],
-  isBulkAction = false
+  isBulkAction = false,
 }) => {
   const { accounts } = useAccounts();
+  const { chain } = useConfig();
   const [formData, setFormData] = useState({
-    account: validatorNickname || accounts[0]?.nickname || '',
-    signer: validatorNickname || accounts[0]?.nickname || '',
-    memo: '',
+    account: validatorNickname || accounts[0]?.nickname || "",
+    signer: validatorNickname || accounts[0]?.nickname || "",
+    memo: "",
     fee: 0.01,
-    password: ''
+    password: "",
   });
 
   // Update form data when validator changes
   React.useEffect(() => {
     if (validatorNickname) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         account: validatorNickname,
-        signer: validatorNickname
+        signer: validatorNickname,
       }));
     }
   }, [validatorNickname]);
@@ -54,25 +56,25 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
     isOpen: boolean;
     title: string;
     message: string;
-    type: 'success' | 'error' | 'warning' | 'info';
+    type: "success" | "error" | "warning" | "info";
   }>({
     isOpen: false,
-    title: '',
-    message: '',
-    type: 'info'
+    title: "",
+    message: "",
+    type: "info",
   });
 
   const handleInputChange = (field: string, value: string | number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
   const handleValidatorSelect = (validatorAddress: string) => {
-    setSelectedValidators(prev => {
+    setSelectedValidators((prev) => {
       if (prev.includes(validatorAddress)) {
-        return prev.filter(addr => addr !== validatorAddress);
+        return prev.filter((addr) => addr !== validatorAddress);
       } else {
         return [...prev, validatorAddress];
       }
@@ -84,7 +86,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
       setSelectedValidators([]);
       setSelectAll(false);
     } else {
-      const allAddresses = sortedValidators.map(v => v.address);
+      const allAddresses = sortedValidators.map((v) => v.address);
       setSelectedValidators(allAddresses);
       setSelectAll(true);
     }
@@ -93,15 +95,15 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
   // Sort validators by node number
   const sortedValidators = React.useMemo(() => {
     if (!allValidators || allValidators.length === 0) return [];
-    
+
     return [...allValidators].sort((a, b) => {
       // Extract node number from nickname (e.g., "node_1" -> 1, "node_2" -> 2)
       const getNodeNumber = (validator: any) => {
-        const nickname = validator.nickname || '';
+        const nickname = validator.nickname || "";
         const match = nickname.match(/node_(\d+)/);
         return match ? parseInt(match[1]) : 999; // Put nodes without numbers at the end
       };
-      
+
       return getNodeNumber(a) - getNodeNumber(b);
     });
   }, [allValidators]);
@@ -109,7 +111,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
   // Initialize selected validators when modal opens
   React.useEffect(() => {
     if (isBulkAction && sortedValidators.length > 0) {
-      setSelectedValidators(sortedValidators.map(v => v.address));
+      setSelectedValidators(sortedValidators.map((v) => v.address));
       setSelectAll(true);
     } else {
       setSelectedValidators([validatorAddress]);
@@ -124,15 +126,20 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
     try {
       // Find the account by nickname
-      const account = accounts.find(acc => acc.nickname === formData.account);
-      const signer = accounts.find(acc => acc.nickname === formData.signer);
+      const account = accounts.find(
+        (acc: any) => acc.nickname === formData.account,
+      );
+      const signer = accounts.find(
+        (acc: any) => acc.nickname === formData.signer,
+      );
 
       if (!account || !signer) {
         setAlertModal({
           isOpen: true,
-          title: 'Account Not Found',
-          message: 'The selected account or signer was not found. Please check your selection.',
-          type: 'error'
+          title: "Account Not Found",
+          message:
+            "The selected account or signer was not found. Please check your selection.",
+          type: "error",
         });
         return;
       }
@@ -140,9 +147,9 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
       if (selectedValidators.length === 0) {
         setAlertModal({
           isOpen: true,
-          title: 'No Validators Selected',
-          message: 'Please select at least one validator to proceed.',
-          type: 'warning'
+          title: "No Validators Selected",
+          message: "Please select at least one validator to proceed.",
+          type: "warning",
         });
         return;
       }
@@ -151,24 +158,43 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
       // Process each selected validator
       const promises = selectedValidators.map(async (validatorAddr) => {
-        if (action === 'pause') {
-          return TxPause(
-            validatorAddr,
-            signer.address,
-            formData.memo,
-            feeInMicroUnits,
-            formData.password,
-            true
+        // Note: These transaction endpoints would need to be added to chain.json DS config
+        // For now, using direct admin endpoint calls with DS pattern structure
+        const txEndpoint = action === "pause" ? "tx-pause" : "tx-unpause";
+
+        try {
+          // This would ideally use DS pattern once tx endpoints are added to chain.json
+          const response = await fetch(
+            `${chain?.rpc?.admin}/v1/admin/${txEndpoint}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                address: validatorAddr,
+                pubKey: "",
+                netAddress: "",
+                committees: "",
+                amount: 0,
+                delegate: false,
+                earlyWithdrawal: false,
+                output: "",
+                signer: signer.address,
+                memo: formData.memo,
+                fee: feeInMicroUnits,
+                submit: true,
+                password: formData.password,
+              }),
+            },
           );
-        } else {
-          return TxUnpause(
-            validatorAddr,
-            signer.address,
-            formData.memo,
-            feeInMicroUnits,
-            formData.password,
-            true
-          );
+
+          if (!response.ok) {
+            throw new Error(`Transaction failed: ${response.status}`);
+          }
+
+          return await response.json();
+        } catch (error) {
+          console.error(`Error executing ${action} transaction:`, error);
+          throw error;
         }
       });
 
@@ -179,11 +205,11 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
         onClose();
         setSuccess(false);
         setFormData({
-          account: validatorNickname || accounts[0]?.nickname || '',
-          signer: validatorNickname || accounts[0]?.nickname || '',
-          memo: '',
+          account: validatorNickname || accounts[0]?.nickname || "",
+          signer: validatorNickname || accounts[0]?.nickname || "",
+          memo: "",
           fee: 0.01,
-          password: ''
+          password: "",
         });
         setSelectedValidators([]);
         setSelectAll(false);
@@ -191,9 +217,12 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
     } catch (err) {
       setAlertModal({
         isOpen: true,
-        title: 'Transaction Failed',
-        message: err instanceof Error ? err.message : 'An unexpected error occurred while processing the transaction.',
-        type: 'error'
+        title: "Transaction Failed",
+        message:
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred while processing the transaction.",
+        type: "error",
       });
     } finally {
       setIsLoading(false);
@@ -256,10 +285,11 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                       Select Validators
                     </label>
                     <span className="text-xs text-text-muted bg-bg-accent px-2 py-1 rounded-full">
-                      {selectedValidators.length} of {sortedValidators.length} selected
+                      {selectedValidators.length} of {sortedValidators.length}{" "}
+                      selected
                     </span>
                   </div>
-                  
+
                   {/* Simple Select All */}
                   <div className="mb-3">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -274,27 +304,43 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                       </span>
                     </label>
                   </div>
-                  
+
                   {/* Simple Validator List */}
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {sortedValidators.map((validator) => {
-                      const matchingAccount = accounts?.find(acc => acc.address === validator.address);
-                      const displayName = matchingAccount?.nickname || validator.nickname || `Node ${validator.address.substring(0, 8)}`;
-                      const isSelected = selectedValidators.includes(validator.address);
-                      
+                      const matchingAccount = accounts?.find(
+                        (acc: any) => acc.address === validator.address,
+                      );
+                      const displayName =
+                        matchingAccount?.nickname ||
+                        validator.nickname ||
+                        `Node ${validator.address.substring(0, 8)}`;
+                      const isSelected = selectedValidators.includes(
+                        validator.address,
+                      );
+
                       return (
-                        <label key={validator.address} className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-bg-accent/30 transition-colors">
+                        <label
+                          key={validator.address}
+                          className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-bg-accent/30 transition-colors"
+                        >
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => handleValidatorSelect(validator.address)}
+                            onChange={() =>
+                              handleValidatorSelect(validator.address)
+                            }
                             className="w-4 h-4 text-primary bg-bg-secondary border-bg-accent rounded focus:ring-primary focus:ring-2"
                           />
                           <span className="text-sm text-text-primary">
                             {displayName}
                           </span>
                           <span className="text-xs text-text-muted font-mono">
-                            ({validator.address.substring(0, 8)}...{validator.address.substring(validator.address.length - 4)})
+                            ({validator.address.substring(0, 8)}...
+                            {validator.address.substring(
+                              validator.address.length - 4,
+                            )}
+                            )
                           </span>
                         </label>
                       );
@@ -313,11 +359,13 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                   </label>
                   <select
                     value={formData.account}
-                    onChange={(e) => handleInputChange('account', e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("account", e.target.value)
+                    }
                     className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   >
-                    {accounts.map((account) => (
+                    {accounts.map((account: any) => (
                       <option key={account.address} value={account.nickname}>
                         {account.nickname}
                       </option>
@@ -333,11 +381,13 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                   </label>
                   <select
                     value={formData.signer}
-                    onChange={(e) => handleInputChange('signer', e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("signer", e.target.value)
+                    }
                     className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   >
-                    {accounts.map((account) => (
+                    {accounts.map((account: any) => (
                       <option key={account.address} value={account.nickname}>
                         {account.nickname}
                       </option>
@@ -355,7 +405,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                 <input
                   type="text"
                   value={formData.memo}
-                  onChange={(e) => handleInputChange('memo', e.target.value)}
+                  onChange={(e) => handleInputChange("memo", e.target.value)}
                   placeholder="Optional note attached with the transaction"
                   className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                   maxLength={200}
@@ -375,14 +425,18 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                   <input
                     type="number"
                     value={formData.fee}
-                    onChange={(e) => handleInputChange('fee', parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleInputChange("fee", parseFloat(e.target.value) || 0)
+                    }
                     step="0.001"
                     min="0"
                     className="w-full px-3 py-2 pr-12 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <span className="text-xs text-text-muted font-medium">CNPY</span>
+                    <span className="text-xs text-text-muted font-medium">
+                      CNPY
+                    </span>
                   </div>
                 </div>
                 <p className="text-xs text-text-muted mt-1">
@@ -399,7 +453,9 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                 <input
                   type="password"
                   value={formData.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
                   placeholder="Enter your key password"
                   className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                   required
@@ -433,7 +489,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
       {/* Alert Modal */}
       <AlertModal
         isOpen={alertModal.isOpen}
-        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
         title={alertModal.title}
         message={alertModal.message}
         type={alertModal.type}
