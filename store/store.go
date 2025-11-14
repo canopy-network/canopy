@@ -514,7 +514,10 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	}
 	// commit the batch
 	s.mu.Lock() // lock commit op
-	// check if batch's db closed field is not nil using reflection
+	// check if batch's db closed field is not nil using reflection, this is due to a possible issue
+	// on pebbleDB where the batch may come as nil due to their internal sync.Pool implementation.
+	// The issue is currently being investigated and this may be removed in the future.
+	// Issue: https://github.com/cockroachdb/pebble/issues/5563
 	batchValue := reflect.ValueOf(batch).Elem()
 	batchDBField := batchValue.FieldByName("db")
 	if !batchDBField.IsValid() || batchDBField.IsNil() {
