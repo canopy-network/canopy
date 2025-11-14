@@ -52,6 +52,7 @@ export const peerInfoPath = "/v1/admin/peer-info";
 const accountPath = "/v1/query/account";
 const validatorPath = "/v1/query/validator";
 const validatorsPath = "/v1/query/validators";
+const validatorSetPath = "/v1/query/validator-set";
 const lastProposersPath = "/v1/query/last-proposers";
 const ecoParamsPath = "/v1/query/eco-params";
 const txsBySender = "/v1/query/txs-by-sender";
@@ -176,6 +177,11 @@ export async function Validator(height: number, address: string) {
 
 export async function Validators(height: number) {
   return POST(rpcURL, validatorsPath, heightAndAddrRequest(height, ""));
+}
+
+export async function ValidatorSet(height: number, committeeId: number) {
+  const request = JSON.stringify({ height: height, id: committeeId });
+  return POST(rpcURL, validatorSetPath, request);
 }
 
 export async function LastProposers(height: number) {

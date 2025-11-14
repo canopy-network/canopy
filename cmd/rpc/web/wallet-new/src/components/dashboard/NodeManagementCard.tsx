@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
+import { useMultipleValidatorSets } from '@/hooks/useValidatorSet';
 import { ActionsModal } from '@/actions/ActionsModal';
 import { useManifest } from '@/hooks/useManifest';
-import { useMultipleValidatorBlockStats } from '@/hooks/useBlockProducers';
 
 export const NodeManagementCard = (): JSX.Element => {
     const { data: validators = [], isLoading, error } = useValidators();
@@ -12,7 +12,19 @@ export const NodeManagementCard = (): JSX.Element => {
 
     const validatorAddresses = validators.map(v => v.address);
     const { data: rewardsData = {} } = useMultipleValidatorRewardsHistory(validatorAddresses);
-    const { stats: blockStats } = useMultipleValidatorBlockStats(validatorAddresses, 1000);
+
+    // Get unique committee IDs from validators
+    const committeeIds = useMemo(() => {
+        const ids = new Set<number>();
+        validators.forEach((v: any) => {
+            if (Array.isArray(v.committees)) {
+                v.committees.forEach((id: number) => ids.add(id));
+            }
+        });
+        return Array.from(ids);
+    }, [validators]);
+
+    const { data: validatorSetsData = {} } = useMultipleValidatorSets(committeeIds);
 
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [selectedActions, setSelectedActions] = useState<any[]>([]);
@@ -29,14 +41,33 @@ export const NodeManagementCard = (): JSX.Element => {
         return `+${(rewards / 1000000).toFixed(2)} CNPY`;
     };
 
-    const formatStakeWeight = (weight: number) => {
-        return `${weight.toFixed(2)}%`;
+    const getWeight = (validator: any): number => {
+        if (!validator.committees || validator.committees.length === 0) return 0;
+        if (!validator.publicKey) return 0;
+
+        // Check all committees this validator is part of
+        for (const committeeId of validator.committees) {
+            const validatorSet = validatorSetsData[committeeId];
+            if (!validatorSet || !validatorSet.validatorSet) continue;
+
+            // Find this validator by matching public key
+            const member = validatorSet.validatorSet.find((m: any) =>
+                m.publicKey === validator.publicKey
+            );
+
+            if (member) {
+                // Return the voting power directly (it's already the weight)
+                return member.votingPower;
+            }
+        }
+
+        return 0;
     };
 
-    const formatWeightChange = (change: number) => {
-        const sign = change >= 0 ? '+' : '';
-        return `${sign}${change.toFixed(2)}%`;
+    const formatWeight = (weight: number) => {
+        return weight.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     };
+
 
     const getStatus = (validator: any) => {
         if (validator.unstaking) return 'Unstaking';
@@ -67,9 +98,6 @@ export const NodeManagementCard = (): JSX.Element => {
         return colors[index % colors.length];
     };
 
-    const getWeightChangeColor = (change: number) => {
-        return change >= 0 ? 'text-green-400' : 'text-red-400';
-    };
 
     const handlePauseUnpause = useCallback((validator: any, action: 'pause' | 'unpause') => {
         const actionId = action === 'pause' ? 'pauseValidator' : 'unpauseValidator';
@@ -181,22 +209,13 @@ export const NodeManagementCard = (): JSX.Element => {
     });
 
     const processedValidators = sortedValidators.map((validator, index) => {
-        const validatorBlockStats = blockStats[validator.address] || {
-            blocksProduced: 0,
-            totalBlocksQueried: 0,
-            productionRate: 0,
-            lastBlockHeight: 0
-        };
-
+        const weight = getWeight(validator);
         return {
             address: formatAddress(validator.address),
             stakeAmount: formatStakeAmount(validator.stakedAmount),
             status: getStatus(validator),
-            blocksProduced: validatorBlockStats.blocksProduced,
-            productionRate: validatorBlockStats.productionRate,
+            weight: formatWeight(weight),
             rewards24h: formatRewards(rewardsData[validator.address]?.change24h || 0),
-            stakeWeight: formatStakeWeight(validator.stakeWeight || 0),
-            weightChange: formatWeightChange(validator.weightChange || 0),
             originalValidator: validator
         };
     });
@@ -268,18 +287,13 @@ export const NodeManagementCard = (): JSX.Element => {
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Address</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Stake Amount</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Status</th>
-                                <th className="text-left text-text-muted text-sm font-medium pb-3">Blocks</th>
-                                <th className="text-left text-text-muted text-sm font-medium pb-3">Reliability</th>
-                                <th className="text-left text-text-muted text-sm font-medium pb-3">Rewards (24h)</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Weight</th>
-                                <th className="text-left text-text-muted text-sm font-medium pb-3">Change</th>
+                                <th className="text-left text-text-muted text-sm font-medium pb-3">Rewards (24h)</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {processedValidators.length > 0 ? processedValidators.map((node, index) => {
-                                const isWeightPositive = node.weightChange.startsWith('+');
-
                                 return (
                                     <motion.tr
                                         key={node.originalValidator.address}
@@ -313,26 +327,10 @@ export const NodeManagementCard = (): JSX.Element => {
                                             </span>
                                         </td>
                                         <td className="py-4">
-                                            <span className="text-text-primary text-sm">{node.blocksProduced.toLocaleString()}</span>
+                                            <span className="text-text-primary text-sm">{node.weight}</span>
                                         </td>
                                         <td className="py-4">
-                                            <span className="text-blue-400 text-sm font-medium">
-                                                {node.productionRate.toFixed(2)}%
-                                            </span>
-                                        </td>
-                                        <td className="py-4">
-                                            <span className="text-green-400 text-sm font-medium">{node.rewards24h}</span>
-                                        </td>
-                                        <td className="py-4">
-                                            <span className="text-text-primary text-sm">{node.stakeWeight}</span>
-                                        </td>
-                                        <td className="py-4">
-                                            <div className="flex items-center gap-1">
-                                                <i className={`fa-solid fa-${isWeightPositive ? 'arrow-up' : 'arrow-down'} text-xs ${getWeightChangeColor(parseFloat(node.weightChange))}`}></i>
-                                                <span className={`text-xs ${getWeightChangeColor(parseFloat(node.weightChange))}`}>
-                                                    {node.weightChange}
-                                                </span>
-                                            </div>
+                                            <span className="text-primary text-sm font-medium">{node.rewards24h}</span>
                                         </td>
                                         <td className="py-4">
                                             <button
@@ -350,7 +348,7 @@ export const NodeManagementCard = (): JSX.Element => {
                                 );
                             }) : (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-8 text-text-muted">
+                                    <td colSpan={6} className="text-center py-8 text-text-muted">
                                         No validators found
                                     </td>
                                 </tr>
@@ -404,20 +402,12 @@ export const NodeManagementCard = (): JSX.Element => {
                                     </span>
                                 </div>
                                 <div>
-                                    <div className="text-text-muted text-xs mb-1">Blocks</div>
-                                    <div className="text-text-primary text-sm">{node.blocksProduced.toLocaleString()}</div>
-                                </div>
-                                <div>
-                                    <div className="text-text-muted text-xs mb-1">Reliability</div>
-                                    <div className="text-blue-400 text-sm font-medium">{node.productionRate.toFixed(2)}%</div>
+                                    <div className="text-text-muted text-xs mb-1">Weight</div>
+                                    <div className="text-text-primary text-sm">{node.weight}</div>
                                 </div>
                                 <div>
                                     <div className="text-text-muted text-xs mb-1">Rewards (24h)</div>
-                                    <div className="text-green-400 text-sm font-medium">{node.rewards24h}</div>
-                                </div>
-                                <div>
-                                    <div className="text-text-muted text-xs mb-1">Weight</div>
-                                    <div className="text-text-primary text-sm">{node.stakeWeight}</div>
+                                    <div className="text-primary text-sm font-medium">{node.rewards24h}</div>
                                 </div>
                             </div>
                         </motion.div>

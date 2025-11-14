@@ -6,12 +6,10 @@ import { useAccountData } from '@/hooks/useAccountData';
 import { useMultipleBlockProducerData } from '@/hooks/useBlockProducerData';
 import { useManifest } from '@/hooks/useManifest';
 import { Validators as ValidatorsAPI } from '@/core/api';
-import { PauseUnpauseModal } from '@/components/ui/PauseUnpauseModal';
 import { StatsCards } from '@/components/staking/StatsCards';
 import { Toolbar } from '@/components/staking/Toolbar';
 import { ValidatorList } from '@/components/staking/ValidatorList';
-import { ActionsModal } from '@/actions/ActionsModal';
-import type { Action as ManifestAction } from '@/manifest/types';
+import { useActionModal } from '@/app/providers/ActionModalProvider';
 
 type ValidatorRow = {
     address: string;
@@ -43,24 +41,12 @@ export default function Staking(): JSX.Element {
     const { data: staking = { totalStaked: 0, totalRewards: 0, chartData: [] } as any } = useStakingData();
     const { totalStaked } = useAccountData();
     const { data: validators = [] } = useValidators();
-    const { manifest, loading: manifestLoading } = useManifest();
+    const { openAction } = useActionModal();
 
     const csvRef = useRef<HTMLAnchorElement>(null);
 
-    const [addStakeOpen, setAddStakeOpen] = useState(false);
-    const [pauseModal, setPauseModal] = useState<{
-        isOpen: boolean;
-        action: 'pause' | 'unpause';
-        address: string;
-        nickname?: string;
-    }>({ isOpen: false, action: 'pause', address: '' });
-
     const [searchTerm, setSearchTerm] = useState('');
     const [chainCount, setChainCount] = useState<number>(0);
-
-    // Action modal state
-    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
-    const [selectedActions, setSelectedActions] = useState<ManifestAction[]>([]);
 
     const validatorAddresses = useMemo(
         () => validators.map((v: any) => v.address),
@@ -150,52 +136,15 @@ export default function Staking(): JSX.Element {
         setTimeout(() => URL.revokeObjectURL(url), 100);
     }, [prepareCSVData]);
 
-    const handlePauseUnpause = useCallback(
-        (address: string, nickname?: string, action: 'pause' | 'unpause' = 'pause') => {
-            setPauseModal({ isOpen: true, action, address, nickname });
-        },
-        []
-    );
-
-    const handleClosePauseModal = useCallback(() => {
-        setPauseModal({ isOpen: false, action: 'pause', address: '' });
-    }, []);
-
     const activeValidatorsCount = useMemo(
         () => validators.filter((v: any) => !v.paused).length,
         [validators]
     );
 
-    // Handler para abrir action modal
-    const onRunAction = useCallback((action: ManifestAction) => {
-        const actions = [action];
-        if (action.relatedActions) {
-            const relatedActions = manifest?.actions.filter(a => action?.relatedActions?.includes(a.id));
-            if (relatedActions) {
-                actions.push(...relatedActions);
-            }
-        }
-        setSelectedActions(actions);
-        setIsActionModalOpen(true);
-    }, [manifest]);
-
     // Handler para agregar stake - abre el action "stake" del manifest
     const handleAddStake = useCallback(() => {
-        const stakeAction = manifest?.actions.find(a => a.id === 'stake');
-        if (stakeAction) {
-            onRunAction(stakeAction);
-        }
-    }, [manifest, onRunAction]);
-
-    // Handler para editar stake de un validator existente
-    const handleEditStake = useCallback((validator: any) => {
-        const stakeAction = manifest?.actions.find(a => a.id === 'stake');
-        if (stakeAction) {
-            // El action runner detectará automáticamente que ya existe un validator
-            // y mostrará el formulario en modo "edit stake"
-            onRunAction(stakeAction);
-        }
-    }, [manifest, onRunAction]);
+        openAction('stake');
+    }, [openAction]);
 
     return (
         <motion.div
@@ -211,7 +160,7 @@ export default function Staking(): JSX.Element {
                 {/* Top stats */}
                 <StatsCards
                     totalStaked={totalStaked}
-                    totalRewards={staking.totalRewards || 0}
+                    totalRewards={staking.totalRewards24h || 0}
                     validatorsCount={validators.length}
                     chainCount={chainCount}
                     activeValidatorsCount={activeValidatorsCount}
@@ -230,27 +179,9 @@ export default function Staking(): JSX.Element {
                     {/* Validator List */}
                     <ValidatorList
                         validators={filtered}
-                        onPauseUnpause={handlePauseUnpause}
-                        onEditStake={handleEditStake}
                     />
                 </div>
             </div>
-
-            {/* Actions Modal */}
-            <ActionsModal
-                actions={selectedActions}
-                isOpen={isActionModalOpen}
-                onClose={() => setIsActionModalOpen(false)}
-            />
-
-            {/* Pause/Unpause Modal */}
-            {/*<PauseUnpauseModal*/}
-            {/*    isOpen={pauseModal.isOpen}*/}
-            {/*    onClose={handleClosePauseModal}*/}
-            {/*    validatorAddress={pauseModal.address}*/}
-            {/*    validatorNickname={pauseModal.nickname}*/}
-            {/*    action={pauseModal.action}*/}
-            {/*/>*/}
         </motion.div>
     );
 }

@@ -48,7 +48,9 @@ async function fetchValidators(accounts: any[]): Promise<Validator[]> {
                 rewards24h: 0, // This would need to be calculated separately
                 stakeWeight: 0, // This would need to be calculated separately
                 weightChange: 0, // This would need to be calculated separately
-                nickname: account?.nickname
+                nickname: account?.nickname,
+                // Include all raw validator data to preserve committees, netAddress, etc.
+                ...validator
             };
         });
         

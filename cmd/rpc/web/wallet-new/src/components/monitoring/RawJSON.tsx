@@ -1,4 +1,6 @@
 import React from 'react';
+import { useDSFetcher } from '@/core/dsFetch';
+import { useQuery } from '@tanstack/react-query';
 
 interface RawJSONProps {
     activeTab: 'quorum' | 'logger' | 'config' | 'peerInfo' | 'peerBook';
@@ -11,56 +13,122 @@ export default function RawJSON({
                                     onTabChange,
                                     onExportLogs
                                 }: RawJSONProps): JSX.Element {
+    const dsFetch = useDSFetcher();
+
     const tabData = [
         {
             id: 'quorum' as const,
             label: 'Quorum',
-            icon: 'fa-users'
+            icon: 'fa-users',
+            dsKey: 'admin.consensusInfo'
         },
         {
             id: 'logger' as const,
             label: 'Logger',
-            icon: 'fa-list'
+            icon: 'fa-list',
+            dsKey: 'admin.log'
         },
         {
             id: 'config' as const,
             label: 'Config',
-            icon: 'fa-gear'
+            icon: 'fa-gear',
+            dsKey: 'admin.config'
         },
         {
             id: 'peerInfo' as const,
             label: 'Peer Info',
-            icon: 'fa-circle-info'
+            icon: 'fa-circle-info',
+            dsKey: 'admin.peerInfo'
         },
         {
             id: 'peerBook' as const,
             label: 'Peer Book',
-            icon: 'fa-address-book'
+            icon: 'fa-address-book',
+            dsKey: 'admin.peerBook'
         }
     ];
 
+    // Fetch data for active tab
+    const currentTab = tabData.find(t => t.id === activeTab);
+    const { data: tabContentData, isLoading } = useQuery({
+        queryKey: ['rawJSON', activeTab],
+        enabled: !!currentTab,
+        queryFn: async () => {
+            if (!currentTab) return null;
+            try {
+                return await dsFetch(currentTab.dsKey, {});
+            } catch (error) {
+                console.error(`Error fetching ${currentTab.label}:`, error);
+                return null;
+            }
+        },
+        refetchInterval: 10000,
+        staleTime: 5000
+    });
+
+    const handleExportJSON = () => {
+        if (!tabContentData) return;
+
+        const dataStr = JSON.stringify(tabContentData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeTab}-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="bg-bg-secondary rounded-xl border border-bg-accent p-6">
-            <h2 className="text-text-primary text-lg font-bold mb-4">Raw JSON</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-text-primary text-lg font-bold">Raw JSON</h2>
+                <button
+                    onClick={handleExportJSON}
+                    className="text-primary hover:text-primary/80 text-sm flex items-center gap-2"
+                    disabled={!tabContentData}
+                >
+                    <i className="fa-solid fa-download"></i>
+                    Export JSON
+                </button>
+            </div>
+
+            {/* Tab buttons */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
                 {tabData.map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
-                        className={`p-3 rounded-md flex items-center justify-center gap-2 ${activeTab === tab.id ? 'bg-primary text-primary-foreground' : 'bg-gray-600/10 text-text-muted hover:bg-bg-secondary'
+                        className={`p-2 rounded-md flex items-center justify-center gap-2 text-sm ${
+                            activeTab === tab.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-bg-tertiary text-text-muted hover:bg-bg-accent'
                         }`}
                     >
                         <i className={`fa-solid ${tab.icon}`}></i>
-                        {tab.label}
+                        <span className="hidden sm:inline">{tab.label}</span>
                     </button>
                 ))}
-                <button
-                    onClick={onExportLogs}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground w-full py-3 rounded-md flex items-center justify-center gap-2 font-medium"
-                >
-                    <i className="fa-solid fa-download"></i>
-                    Export Logs
-                </button>
+            </div>
+
+            {/* JSON content */}
+            <div className="bg-bg-tertiary rounded-lg p-4 max-h-96 overflow-auto">
+                {isLoading ? (
+                    <div className="text-text-muted text-center py-8">
+                        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                        Loading...
+                    </div>
+                ) : tabContentData ? (
+                    <pre className="text-text-secondary text-xs font-mono whitespace-pre-wrap break-words">
+                        {JSON.stringify(tabContentData, null, 2)}
+                    </pre>
+                ) : (
+                    <div className="text-text-muted text-center py-8">
+                        No data available
+                    </div>
+                )}
             </div>
         </div>
     );

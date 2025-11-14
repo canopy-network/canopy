@@ -66,6 +66,12 @@
       "coerce": { "body": { "height": "int" } },
       "selector": "results"
     },
+    "validatorSet": {
+      "source": { "base": "rpc", "path": "/v1/query/validator-set", "method": "POST" },
+      "body": { "height": "{{height}}", "id": "{{committeeId}}" },
+      "coerce": { "body": { "height": "int", "id": "int" } },
+      "selector": ""
+    },
     "txs": {
       "sent": {
         "source": { "base": "rpc", "path": "/v1/query/txs-by-sender", "method": "POST" },
@@ -161,6 +167,32 @@
       "body": { "height": 0, "count": "{{count}}" },
       "coerce": { "body": { "height": "int", "count": "int" } },
       "selector": ""
+    },
+    "admin": {
+      "consensusInfo": {
+        "source": { "base": "admin", "path": "/v1/admin/consensus-info", "method": "GET" },
+        "selector": ""
+      },
+      "peerInfo": {
+        "source": { "base": "admin", "path": "/v1/admin/peer-info", "method": "GET" },
+        "selector": ""
+      },
+      "resourceUsage": {
+        "source": { "base": "admin", "path": "/v1/admin/resource-usage", "method": "GET" },
+        "selector": ""
+      },
+      "log": {
+        "source": { "base": "admin", "path": "/v1/admin/log", "method": "GET", "encoding": "text" },
+        "selector": ""
+      },
+      "config": {
+        "source": { "base": "admin", "path": "/v1/admin/config", "method": "GET" },
+        "selector": ""
+      },
+      "peerBook": {
+        "source": { "base": "admin", "path": "/v1/admin/peer-book", "method": "GET" },
+        "selector": ""
+      }
     }
   },
   "params": {

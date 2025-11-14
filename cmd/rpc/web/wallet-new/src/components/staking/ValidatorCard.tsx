@@ -5,6 +5,7 @@ import { useManifest } from '@/hooks/useManifest';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidatorRewardsHistory } from '@/hooks/useValidatorRewardsHistory';
 import { useBlockProducers } from '@/hooks/useBlockProducers';
+import { useActionModal } from '@/app/providers/ActionModalProvider';
 
 interface ValidatorCardProps {
     validator: {
@@ -17,8 +18,6 @@ interface ValidatorCardProps {
         isSynced: boolean;
     };
     index: number;
-    onPauseUnpause: (address: string, nickname?: string, action?: 'pause' | 'unpause') => void;
-    onEditStake?: (validator: any) => void;
 }
 
 const formatStakedAmount = (amount: number) => {
@@ -60,24 +59,42 @@ const chartOptions = {
 
 export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                                                                 validator,
-                                                                index,
-                                                                onPauseUnpause,
-                                                                onEditStake
+                                                                index
                                                             }) => {
     const { copyToClipboard } = useCopyToClipboard();
+    const { openAction } = useActionModal();
 
     // Fetch real rewards data using block height comparison
     const { data: rewardsHistory, isLoading: rewardsLoading } = useValidatorRewardsHistory(validator.address);
 
-    console.log(rewardsHistory)
 
     // Fetch block production stats
     const { getStatsForValidator } = useBlockProducers(1000);
     const blockStats = getStatsForValidator(validator.address);
 
     const handlePauseUnpause = () => {
-        const action = validator.status === 'Staked' ? 'pause' : 'unpause';
-        onPauseUnpause(validator.address, validator.nickname, action);
+        const actionId = validator.status === 'Staked' ? 'pauseValidator' : 'unpauseValidator';
+        openAction(actionId, {
+            prefilledData: {
+                validatorAddress: validator.address
+            }
+        });
+    };
+
+    const handleEditStake = () => {
+        openAction('stake', {
+            prefilledData: {
+                operator: validator.address
+            }
+        });
+    };
+
+    const handleUnstake = () => {
+        openAction('unstake', {
+            prefilledData: {
+                validatorAddress: validator.address
+            }
+        });
     };
 
     return (
@@ -139,7 +156,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
                     <div className="flex flex-col items-end mx-4">
                         <div className="text-primary font-medium text-right">
-                            {rewardsLoading ? '...' : formatRewards(rewardsHistory?.rewards24h || 0)}
+                            {rewardsLoading ? '...' : formatRewards(rewardsHistory?.change24h || 0)}
                         </div>
                         <div className="text-text-muted text-xs text-right">
                             {'24h Rewards'}
@@ -180,18 +197,27 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                         <span className={`w-2 h-2 ${validator.isSynced ? 'bg-primary' : 'bg-red-500'} rounded-full`}></span>
                     </div>
 
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-1">
                         <button
-                            className="p-2 py-0.5 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors mx-1"
+                            className="p-2 py-0.5 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
                             onClick={handlePauseUnpause}
+                            title={validator.status === 'Staked' ? 'Pause Validator' : 'Unpause Validator'}
                         >
                             <i className="fa-solid fa-pause text-white text-sm group-hover:text-primary"></i>
                         </button>
                         <button
                             className="p-2 py-0.5 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
-                            onClick={() => onEditStake?.(validator)}
+                            onClick={handleEditStake}
+                            title="Edit Stake"
                         >
                             <i className="fa-solid fa-pen-to-square text-white text-sm group-hover:text-primary"></i>
+                        </button>
+                        <button
+                            className="p-2 py-0.5 hover:bg-bg-accent group hover:border-red-400/40 border border-gray-600/60 rounded-lg transition-colors"
+                            onClick={handleUnstake}
+                            title="Unstake Validator"
+                        >
+                            <i className="fa-solid fa-lock-open text-white text-sm group-hover:text-red-400"></i>
                         </button>
                     </div>
                 </div>

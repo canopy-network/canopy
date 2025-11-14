@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+import { useDSFetcher } from "@/core/dsFetch";
+import { useConfig } from '@/app/providers/ConfigProvider';
 
 export interface NodeInfo {
     id: string;
     name: string;
-    adminPort: string;
-    queryPort: string;
     address: string;
     isActive: boolean;
-    netAddress?: string; // New field for validator netAddress
+    netAddress?: string;
+    adminPort?: string;
+    queryPort?: string;
 }
 
 export interface NodeData {
@@ -19,26 +21,56 @@ export interface NodeData {
     validatorSet: any;
 }
 
-const NODES = [
-    { id: 'node_1', name: 'Node 1', adminPort: '50003', queryPort: '50002' },
-    { id: 'node_2', name: 'Node 2', adminPort: '40003', queryPort: '40002' }
-];
+interface NodeConfig {
+    id: string;
+    adminPort: string;
+    queryPort: string;
+}
 
-// Fetch node availability
+/**
+ * Get node configurations from config or use defaults
+ * This allows discovering multiple nodes dynamically
+ */
+const getNodeConfigs = (config: any): NodeConfig[] => {
+    // Try to get from config first
+    if (config?.nodes && Array.isArray(config.nodes)) {
+        return config.nodes;
+    }
+
+    // Default nodes to probe
+    return [
+        { id: 'node_1', adminPort: '50003', queryPort: '50002' },
+        { id: 'node_2', adminPort: '40003', queryPort: '40002' },
+        { id: 'node_3', adminPort: '30003', queryPort: '30002' },
+    ];
+};
+
+/**
+ * Hook to get available nodes by probing multiple ports
+ * Discovers nodes dynamically instead of relying on single current node
+ */
 export const useAvailableNodes = () => {
+    const config = useConfig();
+    const nodeConfigs = getNodeConfigs(config);
+
     return useQuery({
         queryKey: ['availableNodes'],
         queryFn: async (): Promise<NodeInfo[]> => {
             const availableNodes: NodeInfo[] = [];
 
-            for (const node of NODES) {
+            // Probe each potential node
+            for (const nodeConfig of nodeConfigs) {
                 try {
+                    const adminBaseUrl = `http://localhost:${nodeConfig.adminPort}`;
+                    const queryBaseUrl = `http://localhost:${nodeConfig.queryPort}`;
+
+                    // Try to fetch consensus info and validator set
                     const [consensusResponse, validatorSetResponse] = await Promise.all([
-                        fetch(`http://localhost:${node.adminPort}/v1/admin/consensus-info`, {
+                        fetch(`${adminBaseUrl}/v1/admin/consensus-info`, {
                             method: 'GET',
                             headers: { 'Content-Type': 'application/json' }
                         }),
-                        fetch(`http://localhost:${node.queryPort}/v1/query/validator-set`, {
+                        fetch(`${queryBaseUrl}/v1/query/validator-set`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ height: 0, id: 1 })
@@ -54,86 +86,103 @@ export const useAvailableNodes = () => {
                             v.publicKey === consensusData?.publicKey
                         );
 
-                        const netAddress = validator?.netAddress || `tcp://${node.id}`;
-                        const nodeName = netAddress.replace('tcp://', '').replace('-', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+                        const netAddress = validator?.netAddress || `tcp://${nodeConfig.id}`;
+                        const nodeName = netAddress
+                            .replace('tcp://', '')
+                            .replace(/-/g, ' ')
+                            .replace(/\b\w/g, (l: string) => l.toUpperCase());
 
                         availableNodes.push({
-                            ...node,
+                            id: nodeConfig.id,
+                            name: nodeName,
                             address: consensusData?.address || '',
                             isActive: true,
-                            name: nodeName,
-                            netAddress: netAddress
+                            netAddress: netAddress,
+                            adminPort: nodeConfig.adminPort,
+                            queryPort: nodeConfig.queryPort
                         });
                     }
                 } catch (error) {
-                    console.log(`Node ${node.id} not available`);
+                    console.log(`Node ${nodeConfig.id} not available on ports ${nodeConfig.adminPort}/${nodeConfig.queryPort}`);
                 }
             }
 
             return availableNodes;
         },
-        refetchInterval: 10000, // Refetch every 10 seconds
-        staleTime: 5000, // Consider data stale after 5 seconds
+        refetchInterval: 10000,
+        staleTime: 5000,
+        retry: 1
     });
 };
 
-// Fetch data for a specific node
+/**
+ * Hook to fetch all node data for a specific node
+ * Uses direct fetch with node-specific ports instead of DS pattern
+ * because DS pattern uses global config ports
+ */
 export const useNodeData = (nodeId: string) => {
-    const node = NODES.find(n => n.id === nodeId);
+    const config = useConfig();
+    const { data: availableNodes = [] } = useAvailableNodes();
+    const selectedNode = availableNodes.find(n => n.id === nodeId);
 
     return useQuery({
         queryKey: ['nodeData', nodeId],
+        enabled: !!nodeId && !!selectedNode,
         queryFn: async (): Promise<NodeData> => {
-            if (!node) throw new Error('Node not found');
+            if (!selectedNode) throw new Error('Node not found');
 
-            const adminBaseUrl = `http://localhost:${node.adminPort}`;
-            const queryBaseUrl = `http://localhost:${node.queryPort}`;
+            const adminBaseUrl = `http://localhost:${selectedNode.adminPort}`;
+            const queryBaseUrl = `http://localhost:${selectedNode.queryPort}`;
 
-            const [heightData, consensusData, peerData, resourceData, logsData, validatorSetData] = await Promise.all([
-                fetch(`${queryBaseUrl}/v1/query/height`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: '{}'
-                }).then(res => res.json()),
+            try {
+                const [heightData, consensusData, peerData, resourceData, logsData, validatorSetData] = await Promise.all([
+                    fetch(`${queryBaseUrl}/v1/query/height`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}'
+                    }).then(res => res.json()),
 
-                fetch(`${adminBaseUrl}/v1/admin/consensus-info`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                }).then(res => res.json()),
+                    fetch(`${adminBaseUrl}/v1/admin/consensus-info`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.json()),
 
-                fetch(`${adminBaseUrl}/v1/admin/peer-info`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                }).then(res => res.json()),
+                    fetch(`${adminBaseUrl}/v1/admin/peer-info`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.json()),
 
-                fetch(`${adminBaseUrl}/v1/admin/resource-usage`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                }).then(res => res.json()),
+                    fetch(`${adminBaseUrl}/v1/admin/resource-usage`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.json()),
 
-                fetch(`${adminBaseUrl}/v1/admin/log`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                }).then(res => res.text()),
+                    fetch(`${adminBaseUrl}/v1/admin/log`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    }).then(res => res.text()),
 
-                fetch(`${queryBaseUrl}/v1/query/validator-set`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ height: 0, id: 1 })
-                }).then(res => res.json())
-            ]);
+                    fetch(`${queryBaseUrl}/v1/query/validator-set`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ height: 0, id: 1 })
+                    }).then(res => res.json())
+                ]);
 
-            return {
-                height: heightData,
-                consensus: consensusData,
-                peers: peerData,
-                resources: resourceData,
-                logs: logsData,
-                validatorSet: validatorSetData
-            };
+                return {
+                    height: heightData,
+                    consensus: consensusData,
+                    peers: peerData,
+                    resources: resourceData,
+                    logs: logsData,
+                    validatorSet: validatorSetData
+                };
+            } catch (error) {
+                console.error(`Error fetching node data for ${nodeId}:`, error);
+                throw error;
+            }
         },
-        enabled: !!node,
-        refetchInterval: 20000, // Refetch every 20 seconds (reduced frequency)
-        staleTime: 5000, // Consider data stale after 5 seconds
+        refetchInterval: 20000,
+        staleTime: 5000,
     });
 };

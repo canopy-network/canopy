@@ -58,7 +58,6 @@ export const useGovernance = () => {
             refetchOnMount: true,
             refetchOnWindowFocus: false,
             select: (data) => {
-                console.log('Raw governance data:', data);
 
                 // Handle null or undefined
                 if (!data) {

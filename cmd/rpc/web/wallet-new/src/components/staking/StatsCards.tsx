@@ -88,14 +88,6 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             id: 'chainsStaked',
             title:  'Chains Staked',
             value: (chainCount || 0).toString(),
-            subtitle: (
-                <div className="flex items-center gap-1 mt-1">
-                    <span className="w-4 h-4 rounded-full from-pink-500 to-purple-500 bg-gradient-to-r"></span>
-                    <span className="w-4 h-4 rounded-full from-orange-500 to-yellow-500 bg-gradient-to-r"></span>
-                    <span className="w-4 h-4 rounded-full from-blue-500 to-cyan-500 bg-gradient-to-r"></span>
-                    <span className="text-text-muted text-xs">+3 more</span>
-                </div>
-            ),
             icon: 'fa-solid fa-link',
             iconColor: 'text-text-secondary',
             valueColor: 'text-white'

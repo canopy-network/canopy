@@ -5,6 +5,7 @@
         "send": "Send",
         "editStake": "Edit Stake",
         "stake": "Stake",
+        "unstake": "Unstake",
         "receive": "Receive",
         "vote": "Vote",
         "unpause": "Unpause",
@@ -15,6 +16,7 @@
         "editStake": "Lock",
         "send": "Send",
         "stake": "Lock",
+        "unstake": "Unlock",
         "unpause": "Play",
         "pause": "Pause",
         "receive": "Download",
@@ -25,6 +27,7 @@
         "editStake": "out",
         "send": "out",
         "stake": "out",
+        "unstake": "in",
         "receive": "in",
         "vote": "neutral",
         "createProposal": "out"
@@ -46,10 +49,10 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchIntervalMs": 20000,
-          "refetchOnMount": true,
-          "refetchOnWindowFocus": false
+          "refetchOnMount": "always",
+          "refetchOnWindowFocus": true
         }
       },
       "ui": {
@@ -98,6 +101,7 @@
             "type": "text",
             "label": "Asset",
             "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "autoPopulate": "always",
             "readOnly": true
           },
           {
@@ -121,7 +125,7 @@
                 "id": "maxBtn",
                 "op": "set",
                 "field": "amount",
-                "value": "{{formatToCoin<{{ds.account.amount - fees.raw.sendFee}}>}}"
+                "value": "{{fromMicroDenom<{{ds.account.amount - fees.raw.sendFee}}>}}"
               }
             ]
           }
@@ -264,7 +268,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchIntervalMs": 20000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
@@ -310,6 +314,7 @@
             "name": "asset",
             "type": "text",
             "label": "Asset",
+            "autoPopulate": "always",
             "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
             "readOnly": true
           }
@@ -343,7 +348,7 @@
           }
         },
         "validator": {
-          "account": {
+          "validator": {
             "address": "{{form.operator}}"
           },
           "__options": {
@@ -352,10 +357,11 @@
         },
         "keystore": {},
         "__options": {
-          "staleTimeMs": 0,
+          "staleTimeMs": 1000,
           "refetchIntervalMs": 20000,
           "refetchOnMount": true,
-          "refetchOnWindowFocus": false
+          "refetchOnWindowFocus": false,
+          "watch": ["form.operator", "form.output", "form.signerResponsible"]
         }
       },
       "ui": {
@@ -762,7 +768,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchIntervalMs": 20000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
@@ -887,7 +893,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchIntervalMs": 20000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
@@ -1029,7 +1035,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchOnMount": true
         }
       },
@@ -1181,7 +1187,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 10000,
+          "staleTimeMs": 0,
           "refetchOnMount": true
         }
       },
@@ -1315,6 +1321,244 @@
         "base": "admin",
         "path": "/v1/admin/tx-unpause",
         "method": "POST"
+      }
+    },
+    {
+      "id": "unstake",
+      "title": "Unstake",
+      "icon": "Unlock",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{form.validatorAddress}}"
+          },
+          "__options": {
+            "enabled": "{{ form.validatorAddress }}"
+          }
+        },
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "style": {
+              "minWidth": "34rem",
+              "maxWidth": "40rem",
+              "width": "33vw",
+              "minHeight": "28rem"
+            }
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unstake"
+          },
+          {
+            "id": "validatorInfo",
+            "name": "validatorInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Validator Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Current Stake:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Type:</p><p class='text-canopy-50 font-semibold'>{{ ds.validator.delegate ? 'Delegation' : 'Validation' }}</p></div></div></div>",
+            "showIf": "{{ form.validatorAddress && ds.validator }}",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "earlyWithdrawal",
+            "name": "earlyWithdrawal",
+            "type": "optionCard",
+            "label": "Withdrawal Type",
+            "required": true,
+            "value": false,
+            "options": [
+              {
+                "label": "Normal Unstake",
+                "value": false,
+                "help": "Wait for unstaking period",
+                "toolTip": "Unstake following the normal unstaking period. No penalties applied."
+              },
+              {
+                "label": "Early Withdrawal",
+                "value": true,
+                "help": "Immediate withdrawal with penalty",
+                "toolTip": "Withdraw immediately but pay an early withdrawal penalty fee."
+              }
+            ]
+          },
+          {
+            "id": "earlyWithdrawalWarning",
+            "name": "earlyWithdrawalWarning",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 p-3 bg-red-950/30 border border-red-800/30 rounded-lg'><div class='flex items-center gap-2 mb-1'><svg class='w-4 h-4 text-red-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path></svg><p class='text-red-300 text-sm font-medium'>Early Withdrawal Penalty</p></div><p class='text-text-muted text-xs'>Early withdrawal will incur a penalty fee. Your stake will be available immediately after transaction confirmation.</p></div>",
+            "showIf": "{{ form.earlyWithdrawal }}",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unstake action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }}",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unstake",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Current Stake",
+              "value": "{{formatToCoin<{{ds.validator.stakedAmount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Withdrawal Type",
+              "value": "{{ form.earlyWithdrawal ? 'Early Withdrawal (with penalty)' : 'Normal Unstake' }}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Unlock",
+            "label": "Unstake Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "{{form.earlyWithdrawal}}",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unstake",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Unstake Successful!",
+          "description": "{{ form.earlyWithdrawal ? 'Your stake has been withdrawn immediately with early withdrawal penalty.' : 'Your validator has been unstaked. Funds will be available after the unstaking period.' }}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "View Transaction",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        },
+        "onError": {
+          "variant": "error",
+          "title": "Unstake Failed",
+          "description": "{{result.error || 'An error occurred while processing your unstake request.'}}",
+          "sticky": true
+        }
       }
     }
   ]

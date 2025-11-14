@@ -10,11 +10,11 @@ import RawJSON from '@/components/monitoring/RawJSON';
 import MonitoringSkeleton from '@/components/monitoring/MonitoringSkeleton';
 
 export default function Monitoring(): JSX.Element {
-    const [selectedNode, setSelectedNode] = useState('node_1');
+    const [selectedNode, setSelectedNode] = useState<string>('');
     const [activeTab, setActiveTab] = useState<'quorum' | 'logger' | 'config' | 'peerInfo' | 'peerBook'>('quorum');
     const [isPaused, setIsPaused] = useState(false);
 
-    // Get available nodes
+    // Get available nodes (dynamically discovers nodes on different ports)
     const { data: availableNodes = [], isLoading: nodesLoading } = useAvailableNodes();
 
     // Get data for selected node
@@ -22,8 +22,11 @@ export default function Monitoring(): JSX.Element {
 
     // Auto-select first available node
     useEffect(() => {
-        if (availableNodes.length > 0 && !availableNodes.find(n => n.id === selectedNode)) {
-            setSelectedNode(availableNodes[0].id);
+        if (availableNodes.length > 0) {
+            // If no node is selected or selected node is not available anymore
+            if (!selectedNode || !availableNodes.find(n => n.id === selectedNode)) {
+                setSelectedNode(availableNodes[0].id);
+            }
         }
     }, [availableNodes, selectedNode]);
 
