@@ -4,6 +4,7 @@ import {useManifest} from '@/hooks/useManifest';
 import {useCopyToClipboard} from '@/hooks/useCopyToClipboard';
 import {useValidatorRewardsHistory} from '@/hooks/useValidatorRewardsHistory';
 import {useActionModal} from '@/app/providers/ActionModalProvider';
+import {LockOpen, Pause, Pen} from "lucide-react";
 
 interface ValidatorCardProps {
     validator: {
@@ -162,14 +163,14 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                                     onClick={handlePauseUnpause}
                                     title={validator.status === 'Staked' ? 'Pause Validator' : 'Unpause Validator'}
                                 >
-                                    <i className="fa-solid fa-pause text-white text-sm group-hover:text-primary"></i>
+                                    <Pause className={'w-4 h-4 text-white text-sm group-hover:text-primary'}/>
                                 </button>
                                 <button
                                     className="p-2 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
                                     onClick={handleEditStake}
                                     title="Edit Stake"
                                 >
-                                    <i className="fa-solid fa-pen-to-square text-white text-sm group-hover:text-primary"></i>
+                                    <Pen className={'w-4 h-4 text-white text-sm group-hover:text-primary'}/>
                                 </button>
 
                                 <button
@@ -177,7 +178,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                                     onClick={handleUnstake}
                                     title="Unstake Validator"
                                 >
-                                    <i className="fa-solid fa-lock-open text-white text-sm group-hover:text-red-400"></i>
+                                    <LockOpen className={'w-4 h-4 text-white text-sm group-hover:text-primary'}/>
                                 </button>
 
                             </div>

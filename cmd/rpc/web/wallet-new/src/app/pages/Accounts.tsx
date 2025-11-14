@@ -96,41 +96,33 @@ export const Accounts = () => {
         }
     };
 
-    const getStakedPercentage = (address: string) => {
+    const getRealTotal = (address: string) => {
         const balanceInfo = balances.find(b => b.address === address);
-        const stakingInfo = stakingData.find(data => data.address === address);
+        const stakingInfo = stakingData.find(s => s.address === address);
 
-        if (!balanceInfo || !stakingInfo) return 0;
+        const liquid = balanceInfo?.amount || 0;
+        const staked = stakingInfo?.staked || 0;
 
-        const totalAmount = balanceInfo.amount;
-        const stakedAmount = stakingInfo.staked;
+        return { liquid, staked, total: liquid + staked };
+    };
 
-        return totalAmount > 0 ? (stakedAmount / totalAmount) * 100 : 0;
+    const getStakedPercentage = (address: string) => {
+        const { staked, total } = getRealTotal(address);
+
+        if (total === 0) return 0;
+        return (staked / total) * 100;
     };
 
     const getLiquidPercentage = (address: string) => {
-        const balanceInfo = balances.find(b => b.address === address);
-        const stakingInfo = stakingData.find(data => data.address === address);
+        const { liquid, total } = getRealTotal(address);
 
-        if (!balanceInfo) return 0;
-
-        const totalAmount = balanceInfo.amount;
-        const stakedAmount = stakingInfo?.staked || 0;
-        const liquidAmount = totalAmount - stakedAmount;
-
-        return totalAmount > 0 ? (liquidAmount / totalAmount) * 100 : 0;
+        if (total === 0) return 0;
+        return (liquid / total) * 100;
     };
 
     const getLiquidAmount = (address: string) => {
-        const balanceInfo = balances.find(b => b.address === address);
-        const stakingInfo = stakingData.find(data => data.address === address);
-
-        if (!balanceInfo) return 0;
-
-        const totalAmount = balanceInfo.amount;
-        const stakedAmount = stakingInfo?.staked || 0;
-
-        return totalAmount - stakedAmount;
+        const { liquid } = getRealTotal(address);
+        return liquid;
     };
 
 
@@ -197,19 +189,7 @@ export const Accounts = () => {
         }
     };
 
-    // Calculate real percentage change for individual address balance
-    const getRealAddressChange = (address: string, index: number) => {
-        const balanceInfo = balances.find(b => b.address === address);
-        if (!balanceInfo) return '0.0%';
 
-        // Use a small variation based on the address index to simulate real changes
-        // This creates realistic variations between addresses
-        const baseChange = (index % 3) * 0.5 + 0.2; // 0.2%, 0.7%, 1.2%
-        const isPositive = index % 2 === 0; // Alternate between positive and negative
-
-        const change = isPositive ? baseChange : -baseChange;
-        return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
-    };
 
 
     const getChangeColor = (change: string) => {
@@ -254,7 +234,6 @@ export const Accounts = () => {
         const liquidPercentage = getLiquidPercentage(account.address);
         const statusInfo = getAccountStatus(account.address);
         const accountIcon = getAccountIcon(index);
-        const change = getRealAddressChange(account.address, index);
 
         return {
             id: account.address,
@@ -268,7 +247,6 @@ export const Accounts = () => {
             liquidPercentage: liquidPercentage,
             status: statusInfo.status,
             statusColor: getStatusColor(statusInfo.status),
-            change: change,
             icon: accountIcon.icon,
             iconBg: accountIcon.bg
         };
@@ -392,7 +370,7 @@ export const Accounts = () => {
                                     >
                                         <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
                                     </svg>
-                                    {balanceChangePercentage >= 0 ? '+' : ''}{balanceChangePercentage.toFixed(1)}%
+                                    {balanceChangePercentage >= 0 ? '+' : ''}{balanceChangePercentage.toFixed(2)}%
                                     <span className="text-text-muted ml-1">24h change</span>
                                 </span>
                             ) : (
@@ -434,7 +412,7 @@ export const Accounts = () => {
                                     >
                                         <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
                                     </svg>
-                                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(1)}%
+                                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(2)}%
                                     <span className="text-text-muted ml-1">24h change</span>
                                 </span>
                             ) : (
@@ -518,21 +496,18 @@ export const Accounts = () => {
                                         <td className="p-3 md:p-4">
                                             <div>
                                                 <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.balance).toLocaleString()} CNPY</div>
-                                                <div className={`text-xs font-medium ${getChangeColor(address.change)}`}>
-                                                    {address.change}
-                                                </div>
                                             </div>
                                         </td>
                                         <td className="p-3 md:p-4">
                                             <div>
                                                 <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.staked).toLocaleString()} CNPY</div>
-                                                <div className="text-text-muted text-xs">{address.stakedPercentage.toFixed(1)}%</div>
+                                                <div className="text-text-muted text-xs">{address.stakedPercentage.toFixed(2)}%</div>
                                             </div>
                                         </td>
                                         <td className="p-3 md:p-4">
                                             <div>
                                                 <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">{Number(address.liquid).toLocaleString()} CNPY</div>
-                                                <div className="text-text-muted text-xs">{address.liquidPercentage.toFixed(1)}%</div>
+                                                <div className="text-text-muted text-xs">{address.liquidPercentage.toFixed(2)}%</div>
                                             </div>
                                         </td>
                                         <td className="p-3 md:p-4">
