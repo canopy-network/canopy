@@ -178,7 +178,6 @@ export const AllAddresses = () => {
                                     <th className="text-left px-6 py-4 text-sm font-medium text-text-muted">Staked</th>
                                     <th className="text-left px-6 py-4 text-sm font-medium text-text-muted">Total</th>
                                     <th className="text-left px-6 py-4 text-sm font-medium text-text-muted">Status</th>
-                                    <th className="text-right px-6 py-4 text-sm font-medium text-text-muted">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -232,11 +231,7 @@ export const AllAddresses = () => {
                                                 {addr.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">
-                                                View Details
-                                            </button>
-                                        </td>
+
                                     </motion.tr>
                                 )) : (
                                     <tr>

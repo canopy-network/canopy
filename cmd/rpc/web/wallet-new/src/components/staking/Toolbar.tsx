@@ -25,44 +25,60 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     return (
         <motion.div
             variants={itemVariants}
-            className="mb-6 flex flex-col md:flex-row items-stretch gap-3 md:items-center md:justify-between"
+            className="mb-6 flex flex-col gap-4"
         >
+            {/* Title section */}
             <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    {'All Validators'}
+                <h2 className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
+                    <span>All Validators</span>
                     <span className="bg-primary/20 text-primary text-xs px-2 py-1 font-medium rounded-full">
                         {activeValidatorsCount} active
                     </span>
                 </h2>
             </div>
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={onAddStake}
-                    className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium"
-                >
-                    <i className="fa-solid fa-plus"></i>
-                    { 'Add Stake'}
-                </button>
-                <div className="relative md:w-96">
+
+            {/* Controls section - responsive grid */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                {/* Search bar - grows to take available space */}
+                <div className="relative flex-1 min-w-0">
                     <input
                         type="text"
-                        placeholder={'Search validators...'}
+                        placeholder="Search validators..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         className="w-full bg-bg-secondary border border-gray-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
                     />
                     <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted"></i>
                 </div>
-                <button className="p-2 border border-gray-600 hover:bg-bg-accent/ hover:border-primary/40 rounded-lg">
-                    <i className="fa-solid fa-filter text-text-muted"></i>
-                </button>
-                <button
-                    onClick={onExportCSV}
-                    className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium"
-                >
-                    <i className="fa-solid fa-download"></i>
-                    {'Export CSV'}
-                </button>
+
+                {/* Action buttons - group together */}
+                <div className="flex gap-2 items-center flex-shrink-0">
+                    {/* Filter button */}
+                    <button
+                        className="p-2 border border-gray-600 hover:bg-bg-accent hover:border-primary/40 rounded-lg transition-colors flex-shrink-0"
+                        title="Filter validators"
+                    >
+                        <i className="fa-solid fa-filter text-text-muted"></i>
+                    </button>
+
+                    {/* Add Stake button */}
+                    <button
+                        onClick={onAddStake}
+                        className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                        <i className="fa-solid fa-plus"></i>
+                        <span className="hidden sm:inline">Add Stake</span>
+                    </button>
+
+                    {/* Export CSV button */}
+                    <button
+                        onClick={onExportCSV}
+                        className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                        <i className="fa-solid fa-download"></i>
+                        <span className="hidden sm:inline">Export CSV</span>
+                    </button>
+                </div>
             </div>
         </motion.div>
     );

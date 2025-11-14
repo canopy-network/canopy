@@ -13,7 +13,7 @@ import {
 } from '@/core/actionForm'
 import {useAccounts} from '@/app/providers/AccountsProvider'
 import {template, templateBool} from '@/core/templater'
-import { resolveToastFromManifest, resolveRedirectFromManifest } from "@/toast/manifestRuntime";
+import { resolveToastFromManifest } from "@/toast/manifestRuntime";
 import { useToast } from "@/toast/ToastContext";
 import { genericResultMap, pauseValidatorMap, unpauseValidatorMap } from "@/toast/mappers";
 import {LucideIcon} from "@/components/ui/LucideIcon";
@@ -56,8 +56,9 @@ export default function ActionRunner({actionId, onFinish, className, prefilledDa
     const actionDsConfig = React.useMemo(() => (action as any)?.ds, [action]);
 
     // Build context for DS (without ds itself to avoid circular dependency)
+    // Use debouncedForm to reduce excessive re-renders and refetches
     const dsCtx = React.useMemo(() => ({
-        form,
+        form: debouncedForm,
         chain,
         account: selectedAccount ? {
             address: selectedAccount.address,
@@ -65,7 +66,7 @@ export default function ActionRunner({actionId, onFinish, className, prefilledDa
             pubKey: selectedAccount.publicKey,
         } : undefined,
         params,
-    }), [form, chain, selectedAccount, params]);
+    }), [debouncedForm, chain, selectedAccount, params]);
 
     const { ds: actionDs } = useActionDs(
         actionDsConfig,
@@ -95,6 +96,9 @@ export default function ActionRunner({actionId, onFinish, className, prefilledDa
         (action?.auth?.type ??
             (action?.submit?.base === 'admin' ? 'sessionPassword' : 'none')) === 'sessionPassword'
     const [unlockOpen, setUnlockOpen] = React.useState(false)
+
+    // Check if submit button should be hidden (for view-only actions like "receive")
+    const hideSubmit = (action as any)?.ui?.hideSubmit ?? false
 
 
 
@@ -483,20 +487,22 @@ export default function ActionRunner({actionId, onFinish, className, prefilledDa
                                     )}
 
 
-                                    <div className="flex gap-2">
-                                        {wizard && stepIdx > 0 && (
-                                            <button onClick={goPrev} className="px-3 py-2 rounded border border-muted text-canopy-50">Back</button>
-                                        )}
-                                        <button
-                                            disabled={hasStepErrors}
-                                            onClick={goNext}
-                                            className={cx("flex-1 px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded",
-                                                hasStepErrors && "opacity-50 cursor-not-allowed"
+                                    {!hideSubmit && (
+                                        <div className="flex gap-2">
+                                            {wizard && stepIdx > 0 && (
+                                                <button onClick={goPrev} className="px-3 py-2 rounded border border-muted text-canopy-50">Back</button>
                                             )}
-                                        >
-                                            {(!wizard || isLastStep) ? 'Continue' : 'Next'}
-                                        </button>
-                                    </div>
+                                            <button
+                                                disabled={hasStepErrors}
+                                                onClick={goNext}
+                                                className={cx("flex-1 px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded",
+                                                    hasStepErrors && "opacity-50 cursor-not-allowed"
+                                                )}
+                                            >
+                                                {(!wizard || isLastStep) ? 'Continue' : 'Next'}
+                                            </button>
+                                        </div>
+                                    )}
 
                                 </motion.div>
                             )}

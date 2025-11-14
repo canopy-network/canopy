@@ -133,10 +133,6 @@ export const Accounts = () => {
         return totalAmount - stakedAmount;
     };
 
-    const getMockChange = (index: number) => {
-        const changes = ['+2.4%', '-1.2%', '+5.7%', '+1.8%', '+0.3%'];
-        return changes[index % changes.length];
-    };
 
     // Get real 24h changes from unified history hooks
     const balanceChangePercentage = balanceHistory?.changePercentage || 0;
@@ -481,7 +477,6 @@ export const Accounts = () => {
                                 <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
                                     Live
                                 </div>
-                                <i className="fa-solid fa-refresh w-4 h-4 text-text-muted"></i>
                             </div>
                         </div>
                     </div>
@@ -547,13 +542,13 @@ export const Accounts = () => {
                                         </td>
                                         <td className="p-3 md:p-4">
                                             <div className="flex items-center gap-1 md:gap-2">
-                                                <button
-                                                    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
-                                                    onClick={() => handleViewDetails(address.fullAddress)}
-                                                    title="View Details"
-                                                >
-                                                    <i className="fa-solid fa-eye w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
-                                                </button>
+                                                {/*<button*/}
+                                                {/*    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"*/}
+                                                {/*    onClick={() => handleViewDetails(address.fullAddress)}*/}
+                                                {/*    title="View Details"*/}
+                                                {/*>*/}
+                                                {/*    <i className="fa-solid fa-eye w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>*/}
+                                                {/*</button>*/}
                                                 <button
                                                     className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
                                                     onClick={() => handleSendAction(address.fullAddress)}
@@ -561,13 +556,13 @@ export const Accounts = () => {
                                                 >
                                                     <i className="fa-solid fa-paper-plane w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
                                                 </button>
-                                                <button
-                                                    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
-                                                    onClick={() => handleMoreActions(address.fullAddress)}
-                                                    title="More Actions"
-                                                >
-                                                    <i className="fa-solid fa-ellipsis-h w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>
-                                                </button>
+                                                {/*<button*/}
+                                                {/*    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"*/}
+                                                {/*    onClick={() => handleMoreActions(address.fullAddress)}*/}
+                                                {/*    title="More Actions"*/}
+                                                {/*>*/}
+                                                {/*    <i className="fa-solid fa-ellipsis-h w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>*/}
+                                                {/*</button>*/}
                                             </div>
                                         </td>
                                     </motion.tr>

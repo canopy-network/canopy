@@ -5,6 +5,7 @@ import { useManifest } from '@/hooks/useManifest';
 import { XIcon } from 'lucide-react';
 import { cx } from '@/ui/cx';
 import { ModalTabs, Tab } from '@/actions/ModalTabs';
+import {LucideIcon} from "@/components/ui/LucideIcon";
 
 interface ActionModalContextType {
     openAction: (actionId: string, options?: ActionModalOptions) => void;
@@ -157,12 +158,26 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             />
 
                             {/* Tabs - only show if there are multiple actions */}
-                            {availableTabs.length > 1 && (
+                            {availableTabs.length > 1 ? (
                                 <ModalTabs
                                     activeTab={selectedTab}
                                     onTabChange={setSelectedTab}
                                     tabs={availableTabs}
                                 />
+                            ) : (
+                                /* Single action title */
+                                availableTabs.length === 1 && (
+                                    <div className="mb-6 flex items-center gap-3">
+                                        {availableTabs[0].icon && (
+                                            <div className="flex items-center justify-center w-10 h-10 rounded-lg ">
+                                                <LucideIcon name={availableTabs[0].icon} className="w-6 h-6 text-primary" />
+                                            </div>
+                                        )}
+                                        <h2 className="text-2xl font-semibold text-white">
+                                            {availableTabs[0].label}
+                                        </h2>
+                                    </div>
+                                )
                             )}
 
                             {/* Action Runner with scroll */}

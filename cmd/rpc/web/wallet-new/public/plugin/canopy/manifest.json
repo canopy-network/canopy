@@ -50,9 +50,8 @@
         },
         "__options": {
           "staleTimeMs": 0,
-          "refetchIntervalMs": 20000,
           "refetchOnMount": "always",
-          "refetchOnWindowFocus": true
+          "refetchOnWindowFocus": false
         }
       },
       "ui": {
@@ -110,22 +109,23 @@
             "type": "amount",
             "label": "Amount",
             "required": true,
-            "min": 0,
-            "max": "{{formatToCoin<{{ds.account.amount}}>}}",
+            "min": 0.000001,
+            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
             "validation": {
               "messages": {
                 "required": "Amount is required",
                 "min": "Amount must be greater than 0",
-                "max": "Amount must be less than {{formatToCoin<{{ds.account.amount}}>}} {{chain.denom.symbol}}"
+                "max": "Insufficient balance. Maximum available: {{max}} {{chain.denom.symbol}}"
               }
             },
-            "help": "Available ",
+            "help": "Available balance: {{formatToCoin<{{ds.account?.amount ?? 0}}>}} {{chain.denom.symbol}}",
             "features": [
               {
                 "id": "maxBtn",
                 "op": "set",
                 "field": "amount",
-                "value": "{{fromMicroDenom<{{ds.account.amount - fees.raw.sendFee}}>}}"
+                "label": "Max",
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) - fees.raw.sendFee}}> }}"
               }
             ]
           }
@@ -268,8 +268,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 0,
-          "refetchIntervalMs": 20000,
+          "staleTimeMs": 30000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
         }
@@ -277,6 +276,7 @@
       "ui": {
         "variant": "modal",
         "icon": "Send",
+        "hideSubmit": true,
         "slots": {
           "modal": {
             "className": "w-[20rem]"
@@ -344,11 +344,11 @@
             "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
           },
           "__options": {
-            "enabled": "{{ form.signerResponsible && form.operator && form.output }}"
+            "enabled": "{{ (form.signerResponsible === 'operator' && form.operator) || (form.signerResponsible === 'reward' && form.output) }}"
           }
         },
         "validator": {
-          "validator": {
+          "account": {
             "address": "{{form.operator}}"
           },
           "__options": {
@@ -357,8 +357,7 @@
         },
         "keystore": {},
         "__options": {
-          "staleTimeMs": 1000,
-          "refetchIntervalMs": 20000,
+          "staleTimeMs": 30000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "watch": ["form.operator", "form.output", "form.signerResponsible"]
@@ -476,11 +475,11 @@
             "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
             "autoPopulate": "once",
             "required": true,
-            "min": "{{ fromMicroDenom<{{ds.validator.stakedAmount ?? 0}}> }}",
-            "max": "{{ fromMicroDenom<{{ds.account.amount + (ds.validator.stakedAmount ?? 0)}}> }}",
+            "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
+            "max": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}> }}",
             "help": "{{ ds.validator ? '' : 'Minimum stake amount applies' }}",
             "validation": {
-              "min": "{{ fromMicroDenom<{{ds.validator.stakedAmount ?? 0}}> }}",
+              "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
               "messages": {
                 "min": "Stakes can only increase. Current stake: {{min}} {{chain.denom.symbol}}",
                 "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
@@ -491,7 +490,7 @@
                 "id": "max",
                 "op": "set",
                 "field": "amount",
-                "value": "{{ fromMicroDenom<{{ds.account.amount - fees.raw.stakeFee}}> }}"
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0) - fees.raw.stakeFee}}> }}"
               }
             ],
             "span": {
@@ -550,10 +549,12 @@
             "type": "tableSelect",
             "label": "Select Committees",
             "required": true,
-            "help": "Select committees you want to delegate to.",
+            "help": "Select committees you want to delegate to. Maximum 15 committees per validator.",
             "validation": {
+              "max": 15,
               "messages": {
-                "required": "Please select at least one committee"
+                "required": "Please select at least one committee",
+                "max": "Maximum 15 committees allowed per validator"
               }
             },
             "multiple": true,
@@ -626,6 +627,7 @@
             "type": "amount",
             "label": "Transaction Fee",
             "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
             "validation": {
@@ -768,8 +770,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 0,
-          "refetchIntervalMs": 20000,
+          "staleTimeMs": 30000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
         }
@@ -893,8 +894,7 @@
           }
         },
         "__options": {
-          "staleTimeMs": 0,
-          "refetchIntervalMs": 20000,
+          "staleTimeMs": 30000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false
         }
@@ -1061,6 +1061,15 @@
             "help": "The address that will sign this transaction"
           },
           {
+            "id": "pauseInfo",
+            "name": "pauseInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 p-3 bg-yellow-950/30 border border-yellow-800/30 rounded-lg'><div class='flex items-center gap-2 mb-2'><svg class='w-5 h-5 text-yellow-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><p class='text-yellow-300 text-sm font-bold'>Pause Duration Limit</p></div><p class='text-text-muted text-xs mb-1'>Maximum pause duration: <span class='text-yellow-400 font-semibold'>4,380 blocks (~24.3 hours)</span></p><p class='text-text-muted text-xs'>If not unpaused within this period, the validator will be <span class='text-red-400 font-semibold'>automatically unstaked</span>.</p></div>",
+            "span": {
+              "base": 12
+            }
+          },
+          {
             "id": "memo",
             "name": "memo",
             "type": "text",
@@ -1074,6 +1083,7 @@
             "type": "amount",
             "label": "Transaction Fee",
             "value": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
             "validation": {
@@ -1226,6 +1236,7 @@
             "type": "amount",
             "label": "Transaction Fee",
             "value": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
             "validation": {
@@ -1400,8 +1411,8 @@
               {
                 "label": "Normal Unstake",
                 "value": false,
-                "help": "Wait for unstaking period",
-                "toolTip": "Unstake following the normal unstaking period. No penalties applied."
+                "help": "Wait ~40 seconds (2 blocks)",
+                "toolTip": "Unstake following the normal unstaking period of 2 blocks (~40 seconds). No penalties applied."
               },
               {
                 "label": "Early Withdrawal",
@@ -1415,8 +1426,8 @@
             "id": "earlyWithdrawalWarning",
             "name": "earlyWithdrawalWarning",
             "type": "dynamicHtml",
-            "html": "<div class='col-span-12 p-3 bg-red-950/30 border border-red-800/30 rounded-lg'><div class='flex items-center gap-2 mb-1'><svg class='w-4 h-4 text-red-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path></svg><p class='text-red-300 text-sm font-medium'>Early Withdrawal Penalty</p></div><p class='text-text-muted text-xs'>Early withdrawal will incur a penalty fee. Your stake will be available immediately after transaction confirmation.</p></div>",
-            "showIf": "{{ form.earlyWithdrawal }}",
+            "html": "<div class='col-span-12 p-3 bg-red-950/30 border border-red-800/30 rounded-lg'><div class='flex items-center gap-2 mb-2'><svg class='w-5 h-5 text-red-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path></svg><p class='text-red-300 text-sm font-bold'>20% Early Withdrawal Penalty</p></div><p class='text-text-muted text-xs mb-2'>Early withdrawal incurs a <span class='text-red-400 font-semibold'>20% reduction</span> of your staked amount.</p><div class='flex justify-between text-xs'><span class='text-text-muted'>Current stake:</span><span class='text-white font-medium'>{{formatToCoin<{{ds.validator?.stakedAmount ?? 0}}>}} CNPY</span></div><div class='flex justify-between text-xs mt-1'><span class='text-text-muted'>You will receive:</span><span class='text-emerald-400 font-semibold'>{{formatToCoin<{{(ds.validator?.stakedAmount ?? 0) * 0.8}}>}} CNPY</span></div><p class='text-text-muted text-xs mt-2'>Funds available immediately after confirmation.</p></div>",
+            "showIf": "{{ form.earlyWithdrawal === 'true' && ds.validator }}",
             "span": {
               "base": 12
             }
@@ -1434,16 +1445,17 @@
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }}",
+            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "autoPopulate": "always",
             "required": true,
-            "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }}",
+            "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
                 "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
               }
             },
-            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee ?? fees.raw.stakeFee}}> }} {{chain.denom.symbol}}"
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee}}> }} {{chain.denom.symbol}}"
           }
         ],
         "confirmation": {

@@ -62,22 +62,6 @@ export const Sidebar = (): JSX.Element => {
         setIsMobileOpen(!isMobileOpen);
     };
 
-    const sidebarVariants = {
-        expanded: {
-            width: '16rem',
-            transition: {
-                duration: 0.3,
-                ease: 'easeInOut'
-            }
-        },
-        collapsed: {
-            width: '4.5rem',
-            transition: {
-                duration: 0.3,
-                ease: 'easeInOut'
-            }
-        }
-    } as Variants
 
     const mobileSidebarVariants = {
         open: {
@@ -276,17 +260,7 @@ export const Sidebar = (): JSX.Element => {
 
     return (
         <>
-            {/* Desktop Sidebar */}
-            <motion.aside
-                initial={false}
-                animate={isCollapsed ? 'collapsed' : 'expanded'}
-                variants={sidebarVariants}
-                className="hidden lg:flex flex-col bg-bg-secondary border-r border-bg-accent h-screen sticky top-0"
-            >
-                <SidebarContent />
-            </motion.aside>
-
-            {/* Mobile Header */}
+            {/* Mobile/Tablet Header - Only visible below lg */}
             <div className="lg:hidden bg-bg-secondary border-b border-bg-accent px-4 py-3 flex items-center gap-3 sticky top-0 z-40">
                 <button
                     onClick={toggleMobileSidebar}
@@ -301,7 +275,7 @@ export const Sidebar = (): JSX.Element => {
                 </Link>
             </div>
 
-            {/* Mobile Sidebar */}
+            {/* Mobile/Tablet Sidebar - Only visible below lg */}
             <AnimatePresence>
                 {isMobileOpen && (
                     <>
@@ -314,7 +288,7 @@ export const Sidebar = (): JSX.Element => {
                             className="lg:hidden fixed inset-0 bg-black/50 z-40"
                             onClick={() => setIsMobileOpen(false)}
                         />
-                        {/* Mobile Sidebar */}
+                        {/* Sidebar */}
                         <motion.aside
                             initial="closed"
                             animate="open"

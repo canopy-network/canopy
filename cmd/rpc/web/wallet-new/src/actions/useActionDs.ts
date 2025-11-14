@@ -158,9 +158,14 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
             const isEnabled = isManuallyEnabled && hasValues;
 
             // Build DS options
+            // Create a unique scope that includes action + DS key to avoid cache collisions
+            // Don't include accountAddress here because it's the selected account, not the DS param
+            // The ctxKey (JSON.stringify of params) in useDS already handles param-level uniqueness
+            const uniqueScope = `action:${actionId}:ds:${dsKey}`;
+
             const dsOptions = {
                 enabled: isEnabled,
-                scope: `action:${actionId}:${accountAddress || 'global'}`,
+                scope: uniqueScope,
                 staleTimeMs: dsLocalOptions.staleTimeMs ?? globalOptions.staleTimeMs ?? 5000,
                 gcTimeMs: dsLocalOptions.gcTimeMs ?? globalOptions.gcTimeMs ?? 300000,
                 refetchIntervalMs: dsLocalOptions.refetchIntervalMs ?? globalOptions.refetchIntervalMs,

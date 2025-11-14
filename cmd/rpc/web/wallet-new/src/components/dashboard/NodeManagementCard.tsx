@@ -208,13 +208,11 @@ export const NodeManagementCard = (): JSX.Element => {
         return getNodeNumber(a) - getNodeNumber(b);
     });
 
-    const processedValidators = sortedValidators.map((validator, index) => {
-        const weight = getWeight(validator);
+    const processedValidators = sortedValidators.map((validator) => {
         return {
             address: formatAddress(validator.address),
             stakeAmount: formatStakeAmount(validator.stakedAmount),
             status: getStatus(validator),
-            weight: formatWeight(weight),
             rewards24h: formatRewards(rewardsData[validator.address]?.change24h || 0),
             originalValidator: validator
         };
@@ -287,7 +285,6 @@ export const NodeManagementCard = (): JSX.Element => {
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Address</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Stake Amount</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Status</th>
-                                <th className="text-left text-text-muted text-sm font-medium pb-3">Weight</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Rewards (24h)</th>
                                 <th className="text-left text-text-muted text-sm font-medium pb-3">Actions</th>
                             </tr>
@@ -326,9 +323,7 @@ export const NodeManagementCard = (): JSX.Element => {
                                                 {node.status}
                                             </span>
                                         </td>
-                                        <td className="py-4">
-                                            <span className="text-text-primary text-sm">{node.weight}</span>
-                                        </td>
+
                                         <td className="py-4">
                                             <span className="text-primary text-sm font-medium">{node.rewards24h}</span>
                                         </td>
@@ -400,10 +395,6 @@ export const NodeManagementCard = (): JSX.Element => {
                                     <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(node.status)}`}>
                                         {node.status}
                                     </span>
-                                </div>
-                                <div>
-                                    <div className="text-text-muted text-xs mb-1">Weight</div>
-                                    <div className="text-text-primary text-sm">{node.weight}</div>
                                 </div>
                                 <div>
                                     <div className="text-text-muted text-xs mb-1">Rewards (24h)</div>

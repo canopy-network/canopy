@@ -23,9 +23,9 @@
 
     },
     "account": {
-      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" , "encoding": "text"},
+      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" },
       "body": { "height": 0, "address": "{{account.address}}" },
-      "coerce": { "body": { "height": "number" } },
+      "coerce": { "body": { "height": "number" }, "response": { "amount": "number" } },
       "selector": ""
     },
     "accountByHeight": {

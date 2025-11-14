@@ -62,6 +62,7 @@ export function useDS<T = any>(
         ctxKey
     ]
 
+
     return useQuery({
         queryKey,
         enabled: !!leaf && (opts?.enabled ?? true),
@@ -73,7 +74,8 @@ export function useDS<T = any>(
         refetchOnReconnect: opts?.refetchOnReconnect ?? false,
         retry: opts?.retry ?? 1,
         retryDelay: opts?.retryDelay,
-        placeholderData: (prev) => prev,
+        // Don't use placeholderData - it causes stale data to show when params change
+        // placeholderData: (prev) => prev,
         structuralSharing: (old, data) =>
             (JSON.stringify(old) === JSON.stringify(data) ? old as any : data as any),
         queryFn: async () => {

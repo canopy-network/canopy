@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import {useAccounts} from "@/app/providers/AccountsProvider";
@@ -62,19 +61,6 @@ export const NewKey = (): JSX.Element => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Password
-                        </label>
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={newKeyForm.password}
-                            onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
                             Wallet Name
                         </label>
                         <input
@@ -82,6 +68,18 @@ export const NewKey = (): JSX.Element => {
                             placeholder="Primary Wallet"
                             value={newKeyForm.walletName}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, walletName: e.target.value })}
+                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            placeholder="Password"
+                            value={newKeyForm.password}
+                            onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
                             className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
                         />
                     </div>
