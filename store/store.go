@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -513,6 +514,22 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	}
 	// commit the batch
 	s.mu.Lock() // lock commit op
+	// check if batch's db closed field is not nil using reflection
+	batchValue := reflect.ValueOf(batch).Elem()
+	batchDBField := batchValue.FieldByName("db")
+	if batchDBField.IsValid() && !batchDBField.IsNil() {
+		dbValue := batchDBField.Elem()
+		closedField := dbValue.FieldByName("closed")
+		if closedField.IsNil() {
+			s.mu.Unlock() // unlock commit op
+			s.log.Debugf("key compaction skipped [%d]: closed field is nil", version)
+			return nil
+		}
+	} else {
+		s.mu.Unlock() // unlock commit op
+		s.log.Debugf("key compaction skipped [%d]: db field is nil", version)
+		return nil
+	}
 	if err := batch.Commit(pebble.Sync); err != nil {
 		s.mu.Unlock() // unlock commit op
 		return ErrCommitDB(err)
