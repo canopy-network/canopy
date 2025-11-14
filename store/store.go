@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -494,7 +493,6 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	defer cancel()
 	// create a batch to set the keys to be removed by the compaction
 	batch := s.db.NewBatch()
-	defer batch.Close()
 	// set metrics to log
 	total, toDelete := 0, 0
 	// collect and delete tombstone entries
@@ -508,32 +506,19 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 		}
 	})
 	if err != nil {
+		batch.Close()
 		return ErrCommitDB(err)
 	}
 	// if nothing to delete, skip compaction
 	if batch.Empty() {
+		batch.Close()
 		s.log.Debugf("key compaction finished [%d], no values to delete", version)
 		return nil
 	}
 	// commit the batch
 	s.mu.Lock() // lock commit op
-	// check if batch's db closed field is not nil using reflection
-	batchValue := reflect.ValueOf(batch).Elem()
-	batchDBField := batchValue.FieldByName("db")
-	if batchDBField.IsValid() && !batchDBField.IsNil() {
-		dbValue := batchDBField.Elem()
-		closedField := dbValue.FieldByName("closed")
-		if closedField.IsNil() {
-			s.mu.Unlock() // unlock commit op
-			s.log.Debugf("key compaction skipped [%d]: closed field is nil", version)
-			return nil
-		}
-	} else {
-		s.mu.Unlock() // unlock commit op
-		s.log.Debugf("key compaction skipped [%d]: db field is nil", version)
-		return nil
-	}
 	if err := batch.Commit(pebble.Sync); err != nil {
+		batch.Close()
 		s.mu.Unlock() // unlock commit op
 		return ErrCommitDB(err)
 	}
