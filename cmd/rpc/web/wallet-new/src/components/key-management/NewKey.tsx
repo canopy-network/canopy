@@ -32,10 +32,7 @@ export const NewKey = (): JSX.Element => {
             return;
         }
 
-        if (newKeyForm.password.length < 8) {
-            toast.error('Password must be at least 8 characters long');
-            return;
-        }
+
 
         const loadingToast = toast.loading('Creating wallet...');
 

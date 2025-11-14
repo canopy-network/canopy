@@ -3,6 +3,7 @@
 import React, {createContext, useCallback, useContext, useEffect, useMemo, useState} from 'react'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import {useDS} from "@/core/useDs";
+import {useDSFetcher} from "@/core/dsFetch";
 
 
 
@@ -48,7 +49,7 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
     const { data: ks, isLoading, isFetching, error, refetch } =
         useDS<KeystoreResponse>('keystore', {}, { refetchIntervalMs: 30 * 1000 })
 
-    const { dsFetch } = useConfig()
+    const dsFetch = useDSFetcher()
 
     const accounts: Account[] = useMemo(() => {
         const map = ks?.addressMap ?? {}

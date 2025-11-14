@@ -33,8 +33,8 @@ export const Governance = () => {
 
     // Separate active and past proposals
     const { activeProposals, pastProposals } = useMemo(() => {
-        const active = proposals.filter(p => p.status === 'active' || p.status === 'pending');
-        const past = proposals.filter(p => p.status === 'passed' || p.status === 'rejected');
+        const active = proposals.filter((p: { status: string; }) => p.status === 'active' || p.status === 'pending');
+        const past = proposals.filter((p: { status: string; }) => p.status === 'passed' || p.status === 'rejected');
         return { activeProposals: active, pastProposals: past };
     }, [proposals]);
 
@@ -106,7 +106,7 @@ export const Governance = () => {
     }, []);
 
     const handleViewDetails = useCallback((hash: string) => {
-        const proposal = proposals.find(p => p.hash === hash);
+        const proposal = proposals.find((p: { hash: string; }) => p.hash === hash);
         if (proposal) {
             setSelectedProposal(proposal);
             setIsDetailsModalOpen(true);

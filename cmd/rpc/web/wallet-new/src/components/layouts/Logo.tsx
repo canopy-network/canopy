@@ -23,6 +23,7 @@ const Logo: React.FC<LogoProps> = ({ size = 100, className = '', showText = true
             </svg>
 
 
+
             {showText && (
                 <span className="text-white font-semibold text-lg">
                     Wallet
