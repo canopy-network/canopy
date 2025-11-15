@@ -11,6 +11,7 @@ const sidebarIcons = [
   { src: "./gov.png", label: "Governance" },
   { src: "./swaps.png", label: "Swaps" },
   { src: "./supply.png", label: "Supply" },
+  { src: "./batch.png", label: "Dex Batches" },
 ];
 
 const urls = {

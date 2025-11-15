@@ -148,6 +148,10 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 			if er != nil {
 				return er
 			}
+			// add an event for a reward amount
+			if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
+				return err
+			}
 			totalDistributed += distributed
 		}
 		// ensure the non-distributed (burned) is removed from the 'total supply'
