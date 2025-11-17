@@ -39,9 +39,7 @@
       "id": "send",
       "title": "Send",
       "icon": "Send",
-      "relatedActions": [
-        "receive"
-      ],
+      "relatedActions": ["receive"],
       "ds": {
         "account": {
           "account": {
@@ -61,9 +59,7 @@
           }
         }
       },
-      "tags": [
-        "quick"
-      ],
+      "tags": ["quick"],
       "form": {
         "fields": [
           {
@@ -258,9 +254,7 @@
       "id": "receive",
       "title": "Receive",
       "icon": "Scan",
-      "relatedActions": [
-        "send"
-      ],
+      "relatedActions": ["send"],
       "ds": {
         "account": {
           "account": {
@@ -283,9 +277,7 @@
           }
         }
       },
-      "tags": [
-        "quick"
-      ],
+      "tags": ["quick"],
       "form": {
         "layout": {
           "aside": {
@@ -374,9 +366,7 @@
           }
         }
       },
-      "tags": [
-        "quick"
-      ],
+      "tags": ["quick"],
       "form": {
         "wizard": {
           "steps": [
