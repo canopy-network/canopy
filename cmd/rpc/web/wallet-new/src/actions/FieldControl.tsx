@@ -49,13 +49,7 @@ export const FieldControl: React.FC<Props> = ({
     return Array.from(merged);
   }, [manualWatch, autoWatchFormOnly]);
 
-
-
-
-  const { data: dsValue } = useFieldDs(
-    f,
-    templateContext,
-  );
+  const { data: dsValue } = useFieldDs(f, templateContext);
 
   React.useEffect(() => {
     if (!setLocalDs || dsValue == null) return;
@@ -126,6 +120,7 @@ export const FieldControl: React.FC<Props> = ({
       dsValue={dsValue}
       onChange={(val: any) => setVal(f, val)}
       resolveTemplate={resolveTemplate}
+      setVal={(fieldId: string, v: any) => setVal(fieldId, v)}
     />
   );
 };
