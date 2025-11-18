@@ -363,11 +363,6 @@ export default function ActionRunner({
         mapper = unpauseValidatorMap;
       }
 
-      // Debug the mapper input
-      if (
-        action?.id === "pauseValidator" ||
-        action?.id === "unpauseValidator"
-      ) {
       toast.fromResult({
         result: typeof res === "string" ? res : { ...res, ok: isSuccess },
         ctx: templatingCtx,
