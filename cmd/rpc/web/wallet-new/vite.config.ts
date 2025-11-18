@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   return {
+    // Use relative paths for assets (same as Next.js behavior)
+    // This works with reverse proxies regardless of subdirectory
     base: "./",
     resolve: {
       alias: {
@@ -16,6 +18,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       outDir: "out",
+      // Ensure proper asset handling
+      assetsDir: "assets",
     },
     define: {
       // Ensure environment variables are available at build time
