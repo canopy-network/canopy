@@ -34,6 +34,9 @@ build/canopy-full: build/wallet build/explorer build/canopy
 build/wallet:
 	npm install --prefix $(WALLET_DIR) && npm run build --prefix $(WALLET_DIR)
 
+## build/new-wallet: alias for build/wallet (for backward compatibility)
+build/new-wallet: build/wallet
+
 ## build/explorer: build the canopy's explorer project
 build/explorer:
 	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
