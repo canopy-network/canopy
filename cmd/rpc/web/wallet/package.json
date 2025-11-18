@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 50000",
+    "start": "next start -p 50004",
     "lint": "next lint",
     "prettier": "prettier --write ."
   },

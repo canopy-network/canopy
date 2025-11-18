@@ -124,8 +124,8 @@ type RootChain struct {
 // DefaultRPCConfig() sets rpc url to localhost and sets wallet, explorer, rpc, and admin ports from [50000-50003]
 func DefaultRPCConfig() RPCConfig {
 	return RPCConfig{
-		WalletPort:    "50000",                  // find the wallet on localhost:50000
-		WalletNewPort: "50004",                  // find the new wallet on localhost:50004
+		WalletPort:    "50004",                  // find the wallet on localhost:50004
+		WalletNewPort: "50000",                  // find the new wallet on localhost:50000
 		ExplorerPort:  "50001",                  // find the explorer on localhost:50001
 		RPCPort:       "50002",                  // the rpc is served on localhost:50002
 		AdminPort:     "50003",                  // the admin rpc is served on localhost:50003

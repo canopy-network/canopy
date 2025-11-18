@@ -5,11 +5,11 @@ services:
       context: ..
       dockerfile: .docker/Dockerfile
     ports:
-      - 50000:50000 # Wallet
+      - 50000:50000 # New Wallet
       - 50001:50001 # Explorer
       - 50002:50002 # RPC
       - 50003:50003 # Admin RPC
-      - 50004:50004 # New Wallet
+      - 50004:50004 # Wallet
       - 9001:9001 # TCP P2P
       - 6060:6060 # Debug
       - 9090:9090 # Metrics
@@ -30,11 +30,11 @@ services:
       context: ..
       dockerfile: .docker/Dockerfile
     ports:
-      - 40000:40000 # Wallet
+      - 40004:40004 # Wallet
       - 40001:40001 # Explorer
       - 40002:40002 # RPC
       - 40003:40003 # Admin RPC
-      - 40004:40004 # New Wallet
+      - 40000:40000 # New Wallet
       - 9002:9002 # TCP P2P
       - 6061:6060 # Debug
       - 9091:9091 # Metrics
@@ -56,11 +56,11 @@ services:
 #      args:
 #        BUILD_PATH: cmd/cli
 #    ports:
-#      - 30000:30000 # Wallet
+#      - 30004:30004 # Wallet
 #      - 30001:30001 # Explorer
 #      - 30002:30002 # RPC
 #      - 30003:30003 # Admin RPC
-#      - 30004:30004 # New Wallet
+#      - 30000:30000 # New Wallet
 #      - 9003:9003   # TCP P2P
 #    networks:
 #      - canopy
