@@ -12,6 +12,7 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
     hasFeatures,
     setVal,
     children,
+    currentValue,
 }) => {
     const help = error || resolveTemplate(field.help)
 
@@ -29,6 +30,7 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
                             features={field.features}
                             ctx={templateContext}
                             setVal={setVal}
+                            currentValue={currentValue}
                         />
                     )}
                 </div>

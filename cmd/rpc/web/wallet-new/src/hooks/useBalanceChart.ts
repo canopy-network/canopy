@@ -35,12 +35,9 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
             const blocksPerHour = Math.round((60 * 60) / secondsPerBlock)
             const blocksPerDay = blocksPerHour * 24
 
-            // Distribuir puntos en las últimas 24 horas
-            // Para 4 puntos: 0h, 8h, 16h, 24h
-            // Para 7 puntos: 0h, 4h, 8h, 12h, 16h, 20h, 24h
+
             const hoursInterval = 24 / (points - 1)
 
-            // Generar alturas para cada punto
             const heights: number[] = []
             for (let i = 0; i < points; i++) {
                 const hoursAgo = Math.round(hoursInterval * (points - 1 - i))

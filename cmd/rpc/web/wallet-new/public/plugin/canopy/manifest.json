@@ -213,7 +213,7 @@
           "coerce": "string"
         },
         "memo": {
-          "value": "{{form.memo}}",
+          "value": "{{form.memo || ''}}",
           "coerce": "string"
         },
         "fee": {
@@ -1149,7 +1149,7 @@
           "coerce": "string"
         },
         "memo": {
-          "value": "{{form.memo}}",
+          "value": "{{form.memo || ''}}",
           "coerce": "string"
         },
         "fee": {
@@ -1302,7 +1302,7 @@
           "coerce": "string"
         },
         "memo": {
-          "value": "{{form.memo}}",
+          "value": "{{form.memo || ''}}",
           "coerce": "string"
         },
         "fee": {
@@ -1520,7 +1520,7 @@
           "coerce": "string"
         },
         "memo": {
-          "value": "{{form.memo}}",
+          "value": "{{form.memo || ''}}",
           "coerce": "string"
         },
         "fee": {

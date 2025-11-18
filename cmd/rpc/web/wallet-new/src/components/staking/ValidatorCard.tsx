@@ -4,7 +4,7 @@ import { useManifest } from "@/hooks/useManifest";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useValidatorRewardsHistory } from "@/hooks/useValidatorRewardsHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
-import { LockOpen, Pause, Pen } from "lucide-react";
+import {LockOpen, Pause, Pen, Play} from "lucide-react";
 
 interface ValidatorCardProps {
   validator: {
@@ -184,11 +184,12 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                       : "Unpause Validator"
                   }
                 >
-                  <Pause
-                    className={
-                      "w-4 h-4 text-white text-sm group-hover:text-primary"
+                    {
+                        validator.status === 'Paused' ?
+                        (<Play className={"w-4 h-4 text-white text-sm group-hover:text-primary"}/>) :
+                        (<Pause className={"w-4 h-4 text-white text-sm group-hover:text-primary"}/>)
                     }
-                  />
+
                 </button>
                 <button
                   className="p-2 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"

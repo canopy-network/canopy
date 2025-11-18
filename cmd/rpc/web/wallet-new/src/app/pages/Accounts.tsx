@@ -230,8 +230,11 @@ export const Accounts = () => {
     if (account && selectedAccount !== account) {
       switchAccount(account.id);
     }
-    // Open send action modal
+    // Open send action modal with prefilled output address
     openAction("send", {
+      prefilledData: {
+        output: address,
+      },
       onFinish: () => {
         console.log("Send action completed");
       },

@@ -35,6 +35,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
             resolveTemplate={resolveTemplate}
             hasFeatures={hasFeatures}
             setVal={setVal}
+            currentValue={currentValue}
         >
             <Component
                 className={cx(common, border, paddingRight)}

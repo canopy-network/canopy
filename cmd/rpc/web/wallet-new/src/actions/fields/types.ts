@@ -20,4 +20,5 @@ export type FieldWrapperProps = {
     hasFeatures?: boolean
     setVal?: (fieldId: string, v: any) => void
     children: React.ReactNode
+    currentValue?: any
 }

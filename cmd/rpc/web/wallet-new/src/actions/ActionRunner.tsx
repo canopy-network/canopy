@@ -46,12 +46,19 @@ export default function ActionRunner({
   const [form, setForm] = React.useState<Record<string, any>>(
     prefilledData || {},
   );
-  const debouncedForm = useDebouncedValue(form, 250);
+  // Reduce debounce time from 250ms to 100ms for better responsiveness
+  // especially important for prefilledData and DS-dependent fields
+  const debouncedForm = useDebouncedValue(form, 100);
   const [txRes, setTxRes] = React.useState<any>(null);
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
   // Track which fields have been auto-populated at least once
   // Initialize with prefilled field names to prevent auto-populate from overriding them
   const [autoPopulatedOnce, setAutoPopulatedOnce] = React.useState<Set<string>>(
+    new Set(prefilledData ? Object.keys(prefilledData) : []),
+  );
+  // Track which fields were programmatically prefilled (from prefilledData or modules)
+  // These fields should hide paste button even when they have values
+  const [programmaticallyPrefilled, setProgrammaticallyPrefilled] = React.useState<Set<string>>(
     new Set(prefilledData ? Object.keys(prefilledData) : []),
   );
 
@@ -68,10 +75,11 @@ export default function ActionRunner({
   const actionDsConfig = React.useMemo(() => (action as any)?.ds, [action]);
 
   // Build context for DS (without ds itself to avoid circular dependency)
-  // Use debouncedForm to reduce excessive re-renders and refetches
+  // Use form (not debounced) for DS context to ensure immediate reactivity with prefilledData
+  // The DS hook itself handles debouncing internally where needed
   const dsCtx = React.useMemo(
     () => ({
-      form: debouncedForm,
+      form: form,
       chain,
       account: selectedAccount
         ? {
@@ -82,7 +90,7 @@ export default function ActionRunner({
         : undefined,
       params,
     }),
-    [debouncedForm, chain, selectedAccount, params],
+    [form, chain, selectedAccount, params],
   );
 
   const { ds: actionDs } = useActionDs(
@@ -120,6 +128,41 @@ export default function ActionRunner({
   // Check if submit button should be hidden (for view-only actions like "receive")
   const hideSubmit = (action as any)?.ui?.hideSubmit ?? false;
 
+  /**
+   * Helper function for modules/components to mark fields as programmatically prefilled
+   * This will hide the paste button for those fields
+   *
+   * Usage example in a custom component:
+   * ```tsx
+   * // When programmatically setting a value
+   * setVal('output', someAddress);
+   * ctx.__markFieldsAsPrefilled(['output']);
+   * ```
+   *
+   * @param fieldNames - Array of field names to mark as programmatically prefilled
+   */
+  const markFieldsAsPrefilled = React.useCallback((fieldNames: string[]) => {
+    setProgrammaticallyPrefilled((prev) => {
+      const newSet = new Set(prev);
+      fieldNames.forEach((name) => newSet.add(name));
+      return newSet;
+    });
+  }, []);
+
+  /**
+   * Helper function to unmark fields (allow paste button again)
+   * Use this when user manually clears the field
+   *
+   * @param fieldNames - Array of field names to unmark
+   */
+  const unmarkFieldsAsPrefilled = React.useCallback((fieldNames: string[]) => {
+    setProgrammaticallyPrefilled((prev) => {
+      const newSet = new Set(prev);
+      fieldNames.forEach((name) => newSet.delete(name));
+      return newSet;
+    });
+  }, []);
+
   const templatingCtx = React.useMemo(
     () => ({
       form: debouncedForm,
@@ -142,6 +185,11 @@ export default function ActionRunner({
       session: { password: session?.password },
       // Unique scope for this action instance to prevent cache collisions
       __scope: `action:${actionId}:${selectedAccount?.address || "no-account"}`,
+      // Track programmatically prefilled fields (hide paste button for these)
+      __programmaticallyPrefilled: programmaticallyPrefilled,
+      // Helper functions for custom components
+      __markFieldsAsPrefilled: markFieldsAsPrefilled,
+      __unmarkFieldsAsPrefilled: unmarkFieldsAsPrefilled,
     }),
     [
       debouncedForm,
@@ -152,6 +200,9 @@ export default function ActionRunner({
       params,
       mergedDs,
       actionId,
+      programmaticallyPrefilled,
+      markFieldsAsPrefilled,
+      unmarkFieldsAsPrefilled,
     ],
   );
 
@@ -288,26 +339,16 @@ export default function ActionRunner({
       body: JSON.stringify(payload),
     }).then((r) => r.json());
 
-    // Debug logging for pause/unpause issues
-    if (action?.id === "pauseValidator" || action?.id === "unpauseValidator") {
-      console.log("[ActionRunner] Response received:", {
-        actionId: action?.id,
-        response: res,
-        hasOkProperty: "ok" in res,
-        okValue: res?.ok,
-        status: res?.status,
-        error: res?.error,
-        data: res?.data,
-      });
-    }
 
     setTxRes(res);
 
-    // Fix success detection - check for HTTP status codes as well
+    // Fix success detection - handle both string (tx hash) and object responses
     const isSuccess =
-      res?.ok === true ||
-      (res?.status && res.status >= 200 && res.status < 300) ||
-      (!res?.error && !res?.ok && res?.status !== false);
+      typeof res === "string" // If response is a string (tx hash), it's a success
+        ? true
+        : res?.ok === true ||
+          (res?.status && res.status >= 200 && res.status < 300) ||
+          (!res?.error && !res?.ok && res?.status !== false);
     const key = isSuccess ? "onSuccess" : "onError";
     const t = resolveToastFromManifest(action, key as any, templatingCtx, res);
 
@@ -327,16 +368,8 @@ export default function ActionRunner({
         action?.id === "pauseValidator" ||
         action?.id === "unpauseValidator"
       ) {
-        console.log("[ActionRunner] Calling mapper with:", {
-          actionId: action?.id,
-          isSuccess,
-          result: res,
-          ctx: templatingCtx,
-        });
-      }
-
       toast.fromResult({
-        result: { ...res, ok: isSuccess },
+        result: typeof res === "string" ? res : { ...res, ok: isSuccess },
         ctx: templatingCtx,
         map: (r, c) => mapper(r, c),
         fallback: {
@@ -353,8 +386,18 @@ export default function ActionRunner({
       res,
     );
     if (fin) toast.info(fin);
-    setStage("result");
-    if (onFinish) onFinish();
+
+    // Close modal/finish action after execution with a small delay
+    // to allow toast to be visible before modal closes
+    setTimeout(() => {
+      if (onFinish) {
+        onFinish();
+      } else {
+        // If no onFinish callback, reset to form stage
+        setStage("form");
+        setStepIdx(0);
+      }
+    }, 500);
   }, [isReady, requiresAuth, session, host, action, payload]);
 
   const onContinue = React.useCallback(() => {
@@ -485,13 +528,15 @@ export default function ActionRunner({
           continue;
         }
 
-        // Only set default if form doesn't have a value and field has a default
-        if (
+        // For 'always' mode: always update, for 'once': only if empty
+        const shouldPopulate =
           fieldValue != null &&
-          (prev[fieldName] === undefined ||
+          (autoPopulate === "always" ||
+            prev[fieldName] === undefined ||
             prev[fieldName] === "" ||
-            prev[fieldName] === null)
-        ) {
+            prev[fieldName] === null);
+
+        if (shouldPopulate) {
           try {
             const resolved = template(fieldValue, ctx);
             if (
@@ -713,6 +758,26 @@ export default function ActionRunner({
                     ) : null}
                     <span>{confirmBtn.label}</span>
                   </button>
+                </div>
+              </motion.div>
+            )}
+
+            {stage === "executing" && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center py-12 space-y-4"
+              >
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-lg font-semibold text-text-primary">
+                    Processing Transaction...
+                  </h3>
+                  <p className="text-sm text-text-muted">
+                    Please wait while your transaction is being processed
+                  </p>
                 </div>
               </motion.div>
             )}

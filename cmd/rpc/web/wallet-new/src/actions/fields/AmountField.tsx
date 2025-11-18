@@ -35,6 +35,7 @@ export const AmountField: React.FC<BaseFieldProps> = ({
             resolveTemplate={resolveTemplate}
             hasFeatures={hasFeatures}
             setVal={setVal}
+            currentValue={currentValue}
         >
             <input
                 type="number"

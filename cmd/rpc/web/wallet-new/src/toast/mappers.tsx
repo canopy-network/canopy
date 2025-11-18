@@ -34,11 +34,29 @@ export const genericResultMap = <R extends { ok?: boolean; status?: number; erro
 };
 
 // Mapper for pause validator action
-export const pauseValidatorMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any }>(
+export const pauseValidatorMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any } | string>(
     r: R,
     ctx: any
 ): ToastTemplateOptions => {
-    if (r.ok) {
+    // Handle string response (transaction hash)
+    if (typeof r === 'string') {
+        const validatorAddr = ctx?.form?.validatorAddress || "Validator";
+        const shortAddr = validatorAddr.length > 12
+            ? `${validatorAddr.slice(0, 6)}...${validatorAddr.slice(-4)}`
+            : validatorAddr;
+
+        return {
+            variant: "success",
+            title: "Validator Paused Successfully",
+            description: `Validator ${shortAddr} has been paused. The validator will stop producing blocks until resumed. Transaction: ${r.slice(0, 8)}...${r.slice(-6)}`,
+            icon: <Pause className="h-5 w-5" />,
+            ctx,
+            durationMs: 5000,
+        };
+    }
+
+    // Handle object response
+    if (typeof r === 'object' && r.ok) {
         const validatorAddr = ctx?.form?.validatorAddress || "Validator";
         const shortAddr = validatorAddr.length > 12
             ? `${validatorAddr.slice(0, 6)}...${validatorAddr.slice(-4)}`
@@ -54,11 +72,11 @@ export const pauseValidatorMap = <R extends { ok?: boolean; status?: number; err
         };
     }
 
-    const code = r.status ?? r.error?.code ?? "ERR";
+    const code = (r as any).status ?? (r as any).error?.code ?? "ERR";
     const msg =
-        r.error?.message ??
-        r.error?.reason ??
-        r.data?.message ??
+        (r as any).error?.message ??
+        (r as any).error?.reason ??
+        (r as any).data?.message ??
         "Failed to pause validator. Please check your connection and try again.";
 
     return {
@@ -72,11 +90,29 @@ export const pauseValidatorMap = <R extends { ok?: boolean; status?: number; err
 };
 
 // Mapper for unpause validator action
-export const unpauseValidatorMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any }>(
+export const unpauseValidatorMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any } | string>(
     r: R,
     ctx: any
 ): ToastTemplateOptions => {
-    if (r.ok) {
+    // Handle string response (transaction hash)
+    if (typeof r === 'string') {
+        const validatorAddr = ctx?.form?.validatorAddress || "Validator";
+        const shortAddr = validatorAddr.length > 12
+            ? `${validatorAddr.slice(0, 6)}...${validatorAddr.slice(-4)}`
+            : validatorAddr;
+
+        return {
+            variant: "success",
+            title: "Validator Resumed Successfully",
+            description: `Validator ${shortAddr} is now active and will resume producing blocks. Transaction: ${r.slice(0, 8)}...${r.slice(-6)}`,
+            icon: <Play className="h-5 w-5" />,
+            ctx,
+            durationMs: 5000,
+        };
+    }
+
+    // Handle object response
+    if (typeof r === 'object' && r.ok) {
         const validatorAddr = ctx?.form?.validatorAddress || "Validator";
         const shortAddr = validatorAddr.length > 12
             ? `${validatorAddr.slice(0, 6)}...${validatorAddr.slice(-4)}`
@@ -92,11 +128,11 @@ export const unpauseValidatorMap = <R extends { ok?: boolean; status?: number; e
         };
     }
 
-    const code = r.status ?? r.error?.code ?? "ERR";
+    const code = (r as any).status ?? (r as any).error?.code ?? "ERR";
     const msg =
-        r.error?.message ??
-        r.error?.reason ??
-        r.data?.message ??
+        (r as any).error?.message ??
+        (r as any).error?.reason ??
+        (r as any).data?.message ??
         "Failed to resume validator. Please check your connection and try again.";
 
     return {
