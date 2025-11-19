@@ -7,12 +7,22 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   // Determine base path based on environment
-  // In production, use /wallet/ to match the deployment path
-  // In development, use relative paths for local testing
-  const base = mode === "production" ? "/wallet/" : "./";
+  // Priority: VITE_BASE_PATH env var > production default > development default
+  const getBasePath = () => {
+    // If explicitly set via environment variable, use it
+    if (env.VITE_BASE_PATH) {
+      return env.VITE_BASE_PATH;
+    }
+    // In production, use /wallet/ to match the deployment path
+    if (mode === "production") {
+      return "/wallet/";
+    }
+    // In development, use relative paths for local testing
+    return "./";
+  };
 
   return {
-    base: base,
+    base: getBasePath(),
     resolve: {
       alias: {
         "@": "/src",
