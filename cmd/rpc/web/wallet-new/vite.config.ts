@@ -13,12 +13,12 @@ export default defineConfig(({ mode }) => {
     if (env.VITE_BASE_PATH) {
       return env.VITE_BASE_PATH;
     }
-    // In production, use /wallet/ to match the deployment path
-    if (mode === "production") {
-      return "/wallet/";
+    // In development, use /wallet/ to match the deployment path
+    if (mode === "development") {
+        return "./";
     }
-    // In development, use relative paths for local testing
-    return "./";
+    // In production, use /wallet/ to match the deployment path
+    return "/wallet/";
   };
 
   return {
