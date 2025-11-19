@@ -6,10 +6,13 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, ".", "");
 
+  // Determine base path based on environment
+  // In production, use /wallet/ to match the deployment path
+  // In development, use relative paths for local testing
+  const base = mode === "production" ? "/wallet/" : "./";
+
   return {
-    // Use relative paths for assets (same as Next.js behavior)
-    // This works with reverse proxies regardless of subdirectory
-    base: "./",
+    base: base,
     resolve: {
       alias: {
         "@": "/src",
@@ -18,7 +21,6 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       outDir: "out",
-      // Ensure proper asset handling
       assetsDir: "assets",
     },
     define: {
