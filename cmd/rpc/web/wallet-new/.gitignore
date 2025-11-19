@@ -2,7 +2,6 @@ node_modules
 out
 vite.config.ts.*
 .idea
-.env
 dist
 *.tsbuildinfo
 
