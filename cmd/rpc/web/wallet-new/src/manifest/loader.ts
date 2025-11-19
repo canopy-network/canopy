@@ -6,9 +6,17 @@ const DEFAULT_CHAIN = (import.meta.env.VITE_DEFAULT_CHAIN as string) || 'canopy'
 const MODE = ((import.meta.env.VITE_CONFIG_MODE as string) || 'embedded') as 'embedded' | 'runtime'
 const RUNTIME_URL = import.meta.env.VITE_PLUGIN_URL as string | undefined
 
+// Get the base path from Vite's import.meta.env.BASE_URL
+// This respects the `base` config in vite.config.ts
+const BASE_URL = import.meta.env.BASE_URL || '/'
+
 export function getPluginBase(chain = DEFAULT_CHAIN) {
   if (MODE === 'runtime' && RUNTIME_URL) return `${RUNTIME_URL.replace(/\/$/, '')}/${chain}`
-  return `/plugin/${chain}`
+
+  // Use BASE_URL to construct the plugin path
+  // Remove trailing slash from BASE_URL and ensure proper path construction
+  const basePath = BASE_URL.replace(/\/$/, '')
+  return `${basePath}/plugin/${chain}`
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
