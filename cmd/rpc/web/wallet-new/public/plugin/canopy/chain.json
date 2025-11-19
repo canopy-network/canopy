@@ -11,7 +11,7 @@
     "base": "/rpc",
     "admin": "/adminrpc"
   },
-  "explorer": "http://localhost:50001/",
+  "explorer": "/explorer",
   "address": {
     "format": "evm"
   },
