@@ -13,12 +13,13 @@ export default defineConfig(({ mode }) => {
     if (env.VITE_BASE_PATH) {
       return env.VITE_BASE_PATH;
     }
-    // In development, use /wallet/ to match the deployment path
+    // In development, use ./ for local dev
     if (mode === "development") {
         return "./";
     }
-    // In production, use /wallet/ to match the deployment path
-    return "/wallet/";
+    // In production, use ./ as Traefik will handle the /wallet prefix routing
+    // This ensures assets load correctly when served under /wallet/ path
+    return "./";
   };
 
   return {

@@ -8,6 +8,7 @@
         "unstake": "Unstake",
         "receive": "Receive",
         "vote": "Vote",
+        "certificateResults": "Certificate Results",
         "unpause": "Unpause",
         "pause": "Pause",
         "createProposal": "Create Proposal"
@@ -16,6 +17,7 @@
         "editStake": "Lock",
         "send": "Send",
         "stake": "Lock",
+        "certificateResults": "ShieldCheck",
         "unstake": "Unlock",
         "unpause": "Play",
         "pause": "Pause",
