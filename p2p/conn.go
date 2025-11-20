@@ -259,20 +259,19 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 // waitForAndHandleWireBytes() a rate limited handler of inbound bytes from the wire.
 // Blocks until bytes are received converts bytes into a proto.Message using an Envelope
 func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message, lib.ErrorI) {
-	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	// initialize the wrapper object
 	msg := new(Envelope)
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
 	// will block the execution until at or below the desired rate of flow
-	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
+	//m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
-	lenM, err := receiveProtoMsg(c.conn, msg)
+	_, err := receiveProtoMsg(c.conn, msg)
 	if err != nil {
 		return nil, err
 	}
 	// update the limiter
-	m.Update(lenM)
+	//m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
 }
@@ -479,7 +478,6 @@ var l = lib.NewDefaultLogger()
 
 // receiveLengthPrefixed() reads a length prefixed message from a tcp connection
 func receiveLengthPrefixed(conn net.Conn, timeout ...time.Duration) ([]byte, lib.ErrorI) {
-	defer lib.TimeTrack(l, time.Now(), time.Second)
 	// set the read timeout
 	readTimeout := ReadTimeout
 	if len(timeout) == 1 {
