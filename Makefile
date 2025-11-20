@@ -1,7 +1,7 @@
 # Variables
 GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
-WALLET_DIR := ./cmd/rpc/web/wallet
+WALLET_DIR := ./cmd/rpc/web/wallet-new
 EXPLORER_DIR := ./cmd/rpc/web/explorer
 DOCKER_DIR := ./.docker/compose.yaml
 
@@ -33,6 +33,9 @@ build/canopy-full: build/wallet build/explorer build/canopy
 ## build/wallet: build the canopy's wallet project
 build/wallet:
 	npm install --prefix $(WALLET_DIR) && npm run build --prefix $(WALLET_DIR)
+
+## build/new-wallet: alias for build/wallet (for backward compatibility)
+build/new-wallet: build/wallet
 
 ## build/explorer: build the canopy's explorer project
 build/explorer:

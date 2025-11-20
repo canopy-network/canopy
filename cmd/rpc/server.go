@@ -37,7 +37,7 @@ const (
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
-	walletStaticDir   = "web/wallet/out"
+	walletStaticDir   = "web/wallet-new/out"
 	explorerStaticDir = "web/explorer/out"
 )
 
@@ -305,7 +305,7 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 //go:embed all:web/explorer/out
 var explorerFS embed.FS
 
-//go:embed all:web/wallet/out
+//go:embed all:web/wallet-new/out
 var walletFS embed.FS
 
 // runStaticFileServer creates a web server serving static files
