@@ -88,7 +88,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 		select {
 		// fires when received the response to the request
 		case msg := <-p.Inbox(lib.Topic_PEERS_RESPONSE):
-			// p.log.Debugf("Received peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+			p.log.Debugf("Received peer book response from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 			senderID := msg.Sender.Address.PublicKey
 			// rate limit per requester
 			blocked, totalBlock := l.NewRequest(lib.BytesToString(senderID))
@@ -112,7 +112,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 			}
 			// if they sent too many peers
 			if len(peerBookResponseMsg.Book) > MaxPeersExchanged {
-				//p.log.Warnf("Too many peers sent from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+				p.log.Warnf("Too many peers sent from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 				//p.ChangeReputation(senderID, ExceedMaxPBLenRep)
 				continue
 			}
@@ -120,17 +120,17 @@ func (p *P2P) ListenForPeerBookResponses() {
 			for _, bp := range peerBookResponseMsg.Book {
 				// skip empty
 				if bp == nil || bp.Address == nil || bp.Address.PeerMeta == nil {
-					//p.log.Warnf("empty book response message from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+					p.log.Warnf("empty book response message from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 					continue
 				}
 				// skip max dial failed
 				if bp.ConsecutiveFailedDial >= MaxFailedDialAttempts {
-					//p.log.Warnf("max consecutibe failed dials from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+					p.log.Warnf("max consecutibe failed dials from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 					continue
 				}
 				// skip if already connected
 				if p.Has(bp.Address.PublicKey) {
-					//p.log.Warnf("public key already connected from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+					p.log.Warnf("public key already connected from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 					continue
 				}
 				// try to dial, now async so we don't block processing messages'
@@ -142,7 +142,7 @@ func (p *P2P) ListenForPeerBookResponses() {
 			}
 			p.ChangeReputation(senderID, GoodPeerBookRespRep)
 		case <-l.TimeToReset(): // fires when the limiter should reset
-			//p.log.Info("Limiter reset in book responses")
+			p.log.Info("Limiter reset in book responses")
 			l.Reset()
 		}
 	}
@@ -156,7 +156,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 		select {
 		// fires after receiving a peer request
 		case msg := <-p.Inbox(lib.Topic_PEERS_REQUEST):
-			// p.log.Debugf("Received peer book request from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+			p.log.Debugf("Received peer book request from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 			requesterID := msg.Sender.Address.PublicKey
 			// rate limit per requester
 			blocked, totalBlock := l.NewRequest(lib.BytesToString(requesterID))
@@ -168,7 +168,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 			}
 			// if blocked by total number of requests
 			if totalBlock {
-				//p.log.Warnf("blocked by total block in book requests from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
+				p.log.Warnf("blocked by total block in book requests from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
 				continue // dos defensive
 			}
 			// only should be PeerBookMessage in this channel
@@ -197,7 +197,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 				p.log.Errorf("Error %s in sendTo from %s", err.Error(), lib.BytesToTruncatedString(msg.Sender.Address.PublicKey)) // log error
 			}
 		case <-l.TimeToReset(): // fires when the limiter should reset
-			//p.log.Info("Limiter reset in book requests")
+			p.log.Info("Limiter reset in book requests")
 			l.Reset()
 		}
 	}
@@ -285,10 +285,10 @@ func (p *PeerBook) GetAll() (res []*BookPeer) {
 
 // Add() adds a peer to the book in sorted order by public key
 func (p *PeerBook) Add(peer *BookPeer) {
-	//p.log.Debugf("Try add book peer %s with self %s", lib.BytesToTruncatedString(peer.Address.PublicKey), lib.BytesToTruncatedString(p.publicKey))
+	p.log.Debugf("Try add book peer %s with self %s", lib.BytesToTruncatedString(peer.Address.PublicKey), lib.BytesToTruncatedString(p.publicKey))
 	// if peer is self, ignore
 	if bytes.Equal(p.publicKey, peer.Address.PublicKey) {
-		//p.log.Debugf("Peer %s is self; ignoring", lib.BytesToTruncatedString(peer.Address.PublicKey))
+		p.log.Debugf("Peer %s is self; ignoring", lib.BytesToTruncatedString(peer.Address.PublicKey))
 		return
 	}
 	// lock for thread safety
@@ -299,7 +299,7 @@ func (p *PeerBook) Add(peer *BookPeer) {
 	// if peer already exists in the slice
 	if found {
 		p.Book[i] = peer // overwrite existing in case ip changed
-		//p.log.Debugf("Peer %s already found", lib.BytesToTruncatedString(peer.Address.PublicKey))
+		p.log.Debugf("Peer %s already found", lib.BytesToTruncatedString(peer.Address.PublicKey))
 		return
 	}
 	// if the peer does not yet exist, add it to the slice
@@ -318,7 +318,7 @@ func (p *PeerBook) Remove(address *lib.PeerAddress) {
 	i, found := p.getIndex(address)
 	// if not in the slice, ignore
 	if !found {
-		//p.log.Debugf("Peer %s from PeerBook not found trying to remove", lib.BytesToString(address.PublicKey))
+		p.log.Debugf("Peer %s from PeerBook not found trying to remove", lib.BytesToString(address.PublicKey))
 		return
 	}
 	p.log.Debugf("Removing peer %s from PeerBook", lib.BytesToString(address.PublicKey))
@@ -342,7 +342,7 @@ func (p *PeerBook) ResetFailedDialAttempts(address *lib.PeerAddress) {
 	i, found := p.getIndex(address)
 	// if not in the slice, ignore
 	if !found {
-		//p.log.Debugf("Address %s not found in reset failed dial attempts", address)
+		p.log.Debugf("Address %s not found in reset failed dial attempts", address)
 		return
 	}
 	// set the peer consecutive failed dial attempts to zero

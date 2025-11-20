@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -171,6 +172,7 @@ func (ps *PeerSet) ChangeReputation(publicKey []byte, delta int32) {
 
 // GetPeerInfo() returns a copy of the authenticated information from the peer structure
 func (ps *PeerSet) GetPeerInfo(publicKey []byte) (*lib.PeerInfo, lib.ErrorI) {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	ps.RLock()
 	defer ps.RUnlock()
 	peer, err := ps.get(publicKey)
@@ -234,6 +236,7 @@ func (ps *PeerSet) SendToRandPeer(topic lib.Topic, msg proto.Message) (*lib.Peer
 
 // SendTo() sends a message to a specific peer based on their public key
 func (ps *PeerSet) SendTo(publicKey []byte, topic lib.Topic, msg proto.Message) lib.ErrorI {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	bz, err := lib.Marshal(msg)
 	if err != nil {
 		return err
@@ -249,6 +252,7 @@ func (ps *PeerSet) SendTo(publicKey []byte, topic lib.Topic, msg proto.Message) 
 
 // SendToPeers() sends a message to all peers
 func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys ...string) lib.ErrorI {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	bz, err := lib.Marshal(msg)
 	if err != nil {
 		return err
@@ -270,6 +274,7 @@ func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys .
 
 // Has() returns if the set has a peer with a specific public key
 func (ps *PeerSet) Has(publicKey []byte) bool {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	ps.RLock()
 	defer ps.RUnlock()
 	pubKey := lib.BytesToString(publicKey)
@@ -279,6 +284,7 @@ func (ps *PeerSet) Has(publicKey []byte) bool {
 
 // Stop() stops the entire peer set
 func (ps *PeerSet) Stop() {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	ps.RLock()
 	defer ps.RUnlock()
 	for _, p := range ps.m {
@@ -288,7 +294,7 @@ func (ps *PeerSet) Stop() {
 
 // send() sends a message to a specific peer object
 func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
-	//ps.logger.Debugf("Sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
+	ps.logger.Debugf("Sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
 	ok := peer.conn.Send(topic, bz)
 	if !ok {
 		ps.logger.Errorf("sending %s message to %s failed", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))

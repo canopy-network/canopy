@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"encoding/binary"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -25,8 +26,8 @@ const (
 	maxMessageSize         = uint32(256 * units.MB)              // the maximum total size of a message once all the packets are added up
 	dataFlowRatePerS       = maxMessageSize                      // the maximum number of bytes that may be sent or received per second per MultiConn
 	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
-	maxInboxQueueSize      = 500_000                             // maximum number of items in inbox queue before blocking
-	maxStreamSendQueueSize = 100_000                             // maximum number of items in a stream send queue before blocking
+	maxInboxQueueSize      = 100                                 // maximum number of items in inbox queue before blocking
+	maxStreamSendQueueSize = 100                                 // maximum number of items in a stream send queue before blocking
 
 	// "Peer Reputation Points" are actively maintained for each peer the node is connected to
 	// These points allow a node to track peer behavior over its lifetime, allowing it to disconnect from faulty peers
@@ -127,6 +128,7 @@ func (c *MultiConn) Stop() {
 
 // Send() queues the sending of a message to a specific Stream
 func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	stream, ok := c.streams[topic]
 	if !ok {
 		c.log.Errorf("Stream %s does not exist", topic)
@@ -257,6 +259,7 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 // waitForAndHandleWireBytes() a rate limited handler of inbound bytes from the wire.
 // Blocks until bytes are received converts bytes into a proto.Message using an Envelope
 func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message, lib.ErrorI) {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	// initialize the wrapper object
 	msg := new(Envelope)
 	// restrict the instantaneous data flow to rate bytes per second
@@ -280,14 +283,14 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 	if packet != nil {
-		//c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-		//	lib.BytesToTruncatedString(c.Address.PublicKey),
-		//	lib.Topic_name[int32(packet.StreamId)],
-		//	len(packet.Bytes),
-		//	packet.Eof,
-		//	crypto.ShortHashString(packet.Bytes),
-		//)
-		//defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
+		c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+			lib.BytesToTruncatedString(c.Address.PublicKey),
+			lib.Topic_name[int32(packet.StreamId)],
+			len(packet.Bytes),
+			packet.Eof,
+			crypto.ShortHashString(packet.Bytes),
+		)
+		defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -298,6 +301,7 @@ func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 // sends them across the wire without violating the data flow rate limits
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	// convert the proto.Message into a proto.Any
 	a, err := lib.NewAny(message)
 	if err != nil {
@@ -331,6 +335,7 @@ type Stream struct {
 
 // queueSends() schedules the packets to be sent ensuring coordination with the mutex
 func (s *Stream) queueSends(packets []*Packet) bool {
+	defer lib.TimeTrack(s.logger, time.Now(), time.Second)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, packet := range packets {
@@ -344,11 +349,15 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet) bool {
+	defer lib.TimeTrack(s.logger, time.Now(), time.Second)
 	if s.closed {
 		return false
 	}
 	select {
 	case s.sendQueue <- p: // enqueue to the back of the line
+		if len(s.sendQueue) > 25 {
+			s.logger.Errorf("SEND QUEUE IS FILLING UP: %d", len(s.sendQueue))
+		}
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
 		return false
@@ -388,6 +397,9 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:
+			if len(s.inbox) > 25 {
+				s.logger.Errorf("OVERSIZE INBOX: %d", len(s.inbox))
+			}
 		default:
 			s.logger.Errorf("CRITICAL: Inbox %s queue full in receive service", lib.Topic_name[int32(packet.StreamId)])
 			s.logger.Error("Dropping all messages")
@@ -441,6 +453,7 @@ func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration)
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
 func sendLengthPrefixed(conn net.Conn, bz []byte, timeout ...time.Duration) lib.ErrorI {
+	defer lib.TimeTrack(l, time.Now(), time.Second)
 	// set the write timeout
 	writeTimeout := WriteTimeout
 	if len(timeout) == 1 {
@@ -462,8 +475,11 @@ func sendLengthPrefixed(conn net.Conn, bz []byte, timeout ...time.Duration) lib.
 	return nil
 }
 
+var l = lib.NewDefaultLogger()
+
 // receiveLengthPrefixed() reads a length prefixed message from a tcp connection
 func receiveLengthPrefixed(conn net.Conn, timeout ...time.Duration) ([]byte, lib.ErrorI) {
+	defer lib.TimeTrack(l, time.Now(), time.Second)
 	// set the read timeout
 	readTimeout := ReadTimeout
 	if len(timeout) == 1 {

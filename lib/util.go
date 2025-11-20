@@ -43,9 +43,9 @@ func init() {
 // Page is a pagination wrapper over a slice of data
 type Page struct {
 	PageParams          // the input parameters for the page
-	Results    Pageable `json:"results"`    // the actual returned array of items
-	Type       string   `json:"type"`       // the type of the page
-	Count      int      `json:"count"`      // count of items included in the page
+	Results    Pageable `json:"results"` // the actual returned array of items
+	Type       string   `json:"type"` // the type of the page
+	Count      int      `json:"count"` // count of items included in the page
 	TotalPages int      `json:"totalPages"` // number of pages that exist based on these page parameters
 	TotalCount int      `json:"totalCount"` // count of items that exist
 }
@@ -744,8 +744,11 @@ func (d *DeDuplicator[T]) Delete(k T) { delete(d.m, k) }
 func (d *DeDuplicator[T]) Map() map[T]struct{} { return d.m }
 
 // TimeTrack() a utility function to benchmark the time of caller function
-func TimeTrack(l LoggerI, start time.Time) {
+func TimeTrack(l LoggerI, start time.Time, logOnMax time.Duration) {
 	elapsed, functionName := time.Since(start), "unknown"
+	if elapsed < logOnMax {
+		return
+	}
 	pcs := make([]uintptr, 10)
 	n := runtime.Callers(2, pcs)
 	for _, pc := range pcs[:n] {
@@ -758,7 +761,7 @@ func TimeTrack(l LoggerI, start time.Time) {
 			break
 		}
 	}
-	l.Warnf("%s took %s", functionName, elapsed)
+	l.Errorf("*** %s took %s", functionName, elapsed)
 }
 
 func PrintStackTrace(print bool) (fns []string) {

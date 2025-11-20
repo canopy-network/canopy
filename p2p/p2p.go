@@ -30,7 +30,7 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 60 * time.Second
+const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 5 * time.Second
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
