@@ -137,6 +137,7 @@ func (o *Oracle) Start(ctx context.Context, syncCh chan<- bool) {
 	// log that we're starting the oracle
 	o.log.Info("Starting oracle")
 	go func() {
+		firstRun := true
 		for {
 			// an order book must be present to validate incoming orders
 			// wait for the controller to set it
@@ -145,7 +146,13 @@ func (o *Oracle) Start(ctx context.Context, syncCh chan<- bool) {
 				time.Sleep(1 * time.Second)
 			}
 			// listen for blocks
-			err := o.run(ctx, syncCh)
+			// only pass syncCh on the first run to avoid closing it multiple times
+			var ch chan<- bool
+			if firstRun {
+				ch = syncCh
+				firstRun = false
+			}
+			err := o.run(ctx, ch)
 			if err == nil {
 				// oracle context cancelled
 				return
@@ -219,7 +226,6 @@ func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 				o.log.Errorf("Failed to save block state for height %d: %v", block.Number(), err)
 				return err
 			}
-			o.log.Infof("%v %v\n", syncCh, lastSyncStatus)
 			// close syncCh when provider is synced to top
 			if syncCh != nil && !lastSyncStatus {
 				if o.blockProvider.IsSynced() {
