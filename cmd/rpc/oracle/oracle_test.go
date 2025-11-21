@@ -1290,3 +1290,193 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 		})
 	}
 }
+
+// TestOracle_MultiTokenSupport verifies that USDC and USDT orders can be processed on the same committee
+// This test demonstrates that the oracle is token-agnostic and works with any ERC20 token
+func TestOracle_MultiTokenSupport(t *testing.T) {
+	// Import known token addresses from eth package
+	usdcContract := "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+	usdtContract := "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+
+	buyerReceiveAddress := "0034567890123456789012345678901234567800"
+	sellerReceiveAddress := "seller_receive_address"
+
+	// Create order IDs for different tokens
+	usdcOrderId := "usdc_order_1"
+	usdtOrderId := "usdt_order_1"
+
+	tests := []struct {
+		name                  string
+		orderBook             *lib.OrderBook
+		witnessedOrders       []*types.WitnessedOrder
+		transactions          []types.TransactionI
+		expectedLockOrders    int
+		expectedCloseOrders   int
+		expectedStoreContains []string
+	}{
+		{
+			name: "USDC and USDT lock orders on same committee",
+			orderBook: createOrderBook(
+				createSellOrder(usdcOrderId, usdcContract, ""),
+				createSellOrder(usdtOrderId, usdtContract, ""),
+			),
+			witnessedOrders: []*types.WitnessedOrder{
+				createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
+				createWitnessedLockOrder(usdtOrderId, buyerReceiveAddress),
+			},
+			transactions: []types.TransactionI{
+				&mockTransaction{
+					to:    usdcContract,
+					order: createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
+				},
+				&mockTransaction{
+					to:    usdtContract,
+					order: createWitnessedLockOrder(usdtOrderId, buyerReceiveAddress),
+				},
+			},
+			expectedLockOrders:    2,
+			expectedCloseOrders:   0,
+			expectedStoreContains: []string{usdcOrderId, usdtOrderId},
+		},
+		{
+			name: "USDC and USDT close orders on same committee",
+			orderBook: createOrderBook(
+				createSellOrder(usdcOrderId, usdcContract, buyerReceiveAddress),
+				createSellOrder(usdtOrderId, usdtContract, buyerReceiveAddress),
+			),
+			witnessedOrders: []*types.WitnessedOrder{
+				createWitnessedCloseOrder(usdcOrderId, 1),
+				createWitnessedCloseOrder(usdtOrderId, 1),
+			},
+			transactions: []types.TransactionI{
+				&mockTransaction{
+					to:    usdcContract,
+					order: createWitnessedCloseOrder(usdcOrderId, 1),
+				},
+				&mockTransaction{
+					to:    usdtContract,
+					order: createWitnessedCloseOrder(usdtOrderId, 1),
+				},
+			},
+			expectedLockOrders:    0,
+			expectedCloseOrders:   2,
+			expectedStoreContains: []string{usdcOrderId, usdtOrderId},
+		},
+		{
+			name: "mixed USDC lock and USDT close on same committee",
+			orderBook: createOrderBook(
+				createSellOrder(usdcOrderId, usdcContract, ""),
+				createSellOrder(usdtOrderId, usdtContract, buyerReceiveAddress),
+			),
+			witnessedOrders: []*types.WitnessedOrder{
+				createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
+				createWitnessedCloseOrder(usdtOrderId, 1),
+			},
+			transactions: []types.TransactionI{
+				&mockTransaction{
+					to:    usdcContract,
+					order: createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
+				},
+				&mockTransaction{
+					to:    usdtContract,
+					order: createWitnessedCloseOrder(usdtOrderId, 1),
+				},
+			},
+			expectedLockOrders:    1,
+			expectedCloseOrders:   1,
+			expectedStoreContains: []string{usdcOrderId, usdtOrderId},
+		},
+		{
+			name: "USDT close order validation with exact amount match",
+			orderBook: createOrderBook(
+				// USDT with 6 decimals: 100 USDT = 100,000,000 base units
+				createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress),
+			),
+			witnessedOrders: []*types.WitnessedOrder{
+				createWitnessedCloseOrder(usdtOrderId, 1),
+			},
+			transactions: []types.TransactionI{
+				&mockTransaction{
+					to:    usdtContract,
+					order: createWitnessedCloseOrder(usdtOrderId, 1),
+					tokenTransfer: types.TokenTransfer{
+						TokenBaseAmount:  big.NewInt(100000000), // 100 USDT
+						RecipientAddress: fmt.Sprintf("%x", []byte(sellerReceiveAddress)),
+					},
+				},
+			},
+			expectedLockOrders:    0,
+			expectedCloseOrders:   1,
+			expectedStoreContains: []string{usdtOrderId},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create oracle with empty order store
+			mockStore := NewMockOrderStore()
+			tempDir, _ := os.MkdirTemp("", "oracle_multi_token_test")
+			defer os.RemoveAll(tempDir)
+
+			oracle := &Oracle{
+				orderStore: mockStore,
+				orderBook:  tt.orderBook,
+				state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
+				committee:  1, // Single committee handling both USDC and USDT
+				log:        lib.NewDefaultLogger(),
+				metrics:    lib.NewMetrics(),
+			}
+
+			// Process block with transactions
+			if len(tt.transactions) > 0 {
+				block := createMockBlockWithTransactions(100, "0xblockhash", tt.transactions)
+				// Update sell orders with requested amounts for close order validation
+				for _, order := range tt.orderBook.Orders {
+					order.RequestedAmount = 100000000 // 100 tokens with 6 decimals
+				}
+				err := oracle.processBlock(block)
+				if err != nil {
+					t.Fatalf("processBlock failed: %v", err)
+				}
+			}
+
+			// Get witnessed orders from oracle
+			lockOrders, closeOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+
+			// Verify lock order count
+			if len(lockOrders) != tt.expectedLockOrders {
+				t.Errorf("expected %d lock orders, got %d", tt.expectedLockOrders, len(lockOrders))
+			}
+
+			// Verify close order count
+			if len(closeOrders) != tt.expectedCloseOrders {
+				t.Errorf("expected %d close orders, got %d", tt.expectedCloseOrders, len(closeOrders))
+			}
+
+			// Verify orders are in store
+			for _, expectedId := range tt.expectedStoreContains {
+				// Check lock orders
+				if tt.expectedLockOrders > 0 {
+					_, err := mockStore.ReadOrder([]byte(expectedId), types.LockOrderType)
+					if err != nil {
+						// Try close orders if not a lock order
+						if tt.expectedCloseOrders > 0 {
+							_, err = mockStore.ReadOrder([]byte(expectedId), types.CloseOrderType)
+							if err != nil {
+								t.Errorf("expected order %s not found in store", expectedId)
+							}
+						}
+					}
+				} else if tt.expectedCloseOrders > 0 {
+					_, err := mockStore.ReadOrder([]byte(expectedId), types.CloseOrderType)
+					if err != nil {
+						t.Errorf("expected close order %s not found in store", expectedId)
+					}
+				}
+			}
+
+			t.Logf("✓ Successfully processed %d USDC/USDT orders on committee %d",
+				len(lockOrders)+len(closeOrders), oracle.committee)
+		})
+	}
+}

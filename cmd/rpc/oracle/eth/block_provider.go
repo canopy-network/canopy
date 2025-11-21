@@ -474,7 +474,13 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 1, 0, 0, 0)
 		return false, ErrTransactionReceipt
 	}
-	// check for success
+	// check for success using transaction receipt status
+	// This approach works for ALL ERC20 tokens including non-standard ones like USDT:
+	//   - Receipt status reflects actual on-chain execution success/failure
+	//   - Independent of function return values (USDT returns void, standard returns bool)
+	//   - Also catches failures from paused contracts, blacklisted addresses, etc.
+	// By validating via receipt rather than parsing return values, we sidestep all
+	// token-specific quirks and get a universal success indicator.
 	if receipt.Status == TransactionStatusSuccess {
 		// update receipt fetch metrics on success
 		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 0, 0, 0, 0)

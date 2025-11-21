@@ -146,3 +146,87 @@ func TestParseERC20Transfer(t *testing.T) {
 		})
 	}
 }
+
+// TestParseERC20Transfer_USDT verifies that USDT transfers parse identically to standard ERC20 transfers
+// USDT has a non-standard implementation (returns void instead of bool from transfer()),
+// but this doesn't affect parsing since we parse the INPUT data, not return values
+func TestParseERC20Transfer_USDT(t *testing.T) {
+	// Use USDT mainnet contract address
+	usdtContract := USDTMainnet.Hex()
+	// USDT uses 6 decimals, so 1 USDT = 1,000,000 base units
+	oneUSDT := big.NewInt(1000000)
+	recipient := common.HexToAddress("0x742d35cc6634c0532925a3b8d0c9e3e0c8b0e8c2").Hex()
+	orderJSON := []byte(`{"order_id":"abc123"}`)
+
+	tests := []struct {
+		name              string
+		amount            *big.Int
+		extraData         []byte
+		expectedRecipient string
+		expectedAmount    *big.Int
+		expectedExtra     []byte
+	}{
+		{
+			name:              "USDT transfer with order data",
+			amount:            oneUSDT,
+			extraData:         orderJSON,
+			expectedRecipient: recipient,
+			expectedAmount:    oneUSDT,
+			expectedExtra:     orderJSON,
+		},
+		{
+			name:              "USDT transfer without extra data",
+			amount:            big.NewInt(5000000), // 5 USDT
+			extraData:         nil,
+			expectedRecipient: recipient,
+			expectedAmount:    big.NewInt(5000000),
+			expectedExtra:     nil,
+		},
+		{
+			name:              "USDT zero amount transfer (lock order)",
+			amount:            big.NewInt(0),
+			extraData:         orderJSON,
+			expectedRecipient: recipient,
+			expectedAmount:    big.NewInt(0),
+			expectedExtra:     orderJSON,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create ERC20 transfer data (same format for USDT and standard ERC20)
+			data := createERC20TransferData(tt.expectedRecipient, tt.amount, tt.extraData)
+
+			// Parse the transfer
+			parsedRecipient, parsedAmount, parsedExtra, err := parseERC20Transfer(data)
+
+			// Verify parsing succeeds
+			if err != nil {
+				t.Errorf("USDT transfer parsing failed: %v", err)
+			}
+
+			// Verify recipient matches
+			if parsedRecipient != tt.expectedRecipient {
+				t.Errorf("expected recipient %s, got %s", tt.expectedRecipient, parsedRecipient)
+			}
+
+			// Verify amount matches
+			if parsedAmount.Cmp(tt.expectedAmount) != 0 {
+				t.Errorf("expected amount %s, got %s", tt.expectedAmount.String(), parsedAmount.String())
+			}
+
+			// Verify extra data matches
+			if len(parsedExtra) != len(tt.expectedExtra) {
+				t.Errorf("expected extra data length %d, got %d", len(tt.expectedExtra), len(parsedExtra))
+			}
+			for i, b := range tt.expectedExtra {
+				if parsedExtra[i] != b {
+					t.Errorf("expected extra data byte %d to be %x, got %x", i, b, parsedExtra[i])
+				}
+			}
+
+			// Log success - USDT parsing works identically to standard ERC20
+			t.Logf("✓ USDT transfer parsed successfully (contract: %s, amount: %s)", usdtContract, parsedAmount.String())
+		})
+	}
+}
