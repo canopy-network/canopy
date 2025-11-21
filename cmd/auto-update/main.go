@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -39,12 +38,13 @@ var (
 )
 
 func main() {
-	// check if start was called
-	if len(os.Args) < 2 || os.Args[1] != "start" {
-		log.Fatalf("invalid input, only `start` command is allowed")
-	}
 	// get configs and logger
 	configs, logger := getConfigs()
+	// check if no start was called, this means it was just called as config
+	if len(os.Args) < 2 || os.Args[1] != "start" {
+		logger.Info("config completed")
+		return
+	}
 	// do not run the auto-update process if its disabled
 	if !configs.Coordinator.Canopy.AutoUpdate {
 		logger.Info("auto-update disabled, starting CLI directly")
