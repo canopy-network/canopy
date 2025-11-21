@@ -42,7 +42,7 @@ func main() {
 	configs, logger := getConfigs()
 	// check if no start was called, this means it was just called as config
 	if len(os.Args) < 2 || os.Args[1] != "start" {
-		logger.Info("config completed")
+		logger.Info("Setup complete.\nKey configuration is ready.\nFrom now on, run this service using the 'start' command to launch Canopy with the auto-updater.\nThis message appears because the program was started directly instead of using 'start'.")
 		return
 	}
 	// do not run the auto-update process if its disabled

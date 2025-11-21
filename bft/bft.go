@@ -288,14 +288,16 @@ func (b *BFT) StartProposePhase() {
 	b.log.Info(b.View.ToString())
 	vote, as, err := b.GetMajorityVote()
 	if err != nil {
-		b.log.Debugf("get majority vote in propose phase failed with %s", err.Error()) // this errors can be ignored bc it's expected
+		// this errors can be ignored bc it's expected in the consensus process
+		// b.log.Debugf("get majority vote in propose phase failed with %s", err.Error())
 		return
 	}
 	b.log.Info("Self is the proposer")
 	// select the highest VDF from the cache
 	highVDF, err := b.selectHighestVDF()
 	if err != nil {
-		b.log.Debugf("select highest VDF in propose phase failed with %s", err.Error()) // this errors can be ignored bc it's expected
+		// this errors can be ignored bc it's expected in the consensus process
+		// b.log.Debugf("select highest VDF in propose phase failed with %s", err.Error())
 		return
 	}
 	b.HighVDF = highVDF
