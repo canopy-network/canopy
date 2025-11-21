@@ -330,7 +330,11 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 			return err
 		}
 		// delete the validator structure
-		return s.DeleteValidator(validator)
+		if err = s.DeleteValidator(validator); err != nil {
+			return err
+		}
+		// add finish unstake event
+		return s.EventFinishUnstaking(addr.Bytes())
 	}
 	// for each unstaking key at this height
 	if err := s.IterateAndExecute(UnstakingPrefix(s.Height()), callback); err != nil {
@@ -365,6 +369,12 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 		if err = s.HandleMessagePause(&MessagePause{Address: addr}); err != nil {
 			// log error
 			s.log.Debugf("can't pause validator %s with err %s", lib.BytesToString(addr), err.Error())
+			// move on to the next iteration
+			continue
+		}
+		// index pause event
+		if err = s.EventAutoPause(addr); err != nil {
+			s.log.Debugf("can't index pause validator %s with err %s", lib.BytesToString(addr), err.Error())
 			// move on to the next iteration
 			continue
 		}
