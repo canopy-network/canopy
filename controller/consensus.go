@@ -73,6 +73,7 @@ func (c *Controller) Sync() {
 	c.isSyncing.Store(true)
 	// check if node is alone in the validator set
 	if c.singleNodeNetwork() {
+		c.log.Infof("Single node")
 		// complete syncing
 		c.finishSyncing()
 		// exit
@@ -89,7 +90,7 @@ func (c *Controller) Sync() {
 	maxHeight, minVDFIterations, _ := c.pollMaxHeight(1)
 	c.log.Infof("Starting sync 🔄 at height %d", fsmHeight)
 	// Create a limiter to prevent peers from disconnecting and slashing rep
-	limiter := lib.NewLimiter(p2p.MaxBlockReqPerWindow*rateScaleFactor, c.P2P.MaxPossiblePeers()*p2p.MaxBlockReqPerWindow, p2p.BlockReqWindowS, "SYNC", c.log)
+	limiter := lib.NewLimiter(p2p.MaxBlockReqPerWindow*rateScaleFactor, c.P2P.MaxPossiblePeers()*p2p.MaxBlockReqPerWindow, p2p.BlockReqWindowS)
 
 	// Loop until the sync is complete
 	// The purpose is to keep the queue full and hand the next block to the FSM
@@ -327,7 +328,7 @@ func (c *Controller) ListenForConsensus() {
 // ListenForBlockRequests() listen for inbound block request messages from syncing peers, handles and answer them
 func (c *Controller) ListenForBlockRequests() {
 	// initialize a rate limiter for the inbound syncing messages
-	l := lib.NewLimiter(p2p.MaxBlockReqPerWindow, c.P2P.MaxPossiblePeers()*p2p.MaxBlockReqPerWindow, p2p.BlockReqWindowS, "BLOCK_REQUEST", c.log)
+	l := lib.NewLimiter(p2p.MaxBlockReqPerWindow, c.P2P.MaxPossiblePeers()*p2p.MaxBlockReqPerWindow, p2p.BlockReqWindowS)
 	// for the lifetime of the Controller
 	for {
 		// select one of the following cases

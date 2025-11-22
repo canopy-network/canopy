@@ -12,6 +12,7 @@ import (
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	limiter "github.com/mxk/go-flowrate/flowrate"
 	"google.golang.org/protobuf/proto"
 )
@@ -264,12 +265,9 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	// will block the execution until at or below the desired rate of flow
 	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
-	lenM, err := receiveProtoMsg(c.conn, msg)
-	if err != nil {
+	if err := receiveProtoMsg(c.conn, msg); err != nil {
 		return nil, err
 	}
-	// update the limiter
-	m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
 }
@@ -280,14 +278,14 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 	if packet != nil {
-		//c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-		//	lib.BytesToTruncatedString(c.Address.PublicKey),
-		//	lib.Topic_name[int32(packet.StreamId)],
-		//	len(packet.Bytes),
-		//	packet.Eof,
-		//	crypto.ShortHashString(packet.Bytes),
-		//)
-		//defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
+		c.log.Warnf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+			lib.BytesToTruncatedString(c.Address.PublicKey),
+			lib.Topic_name[int32(packet.StreamId)],
+			len(packet.Bytes),
+			packet.Eof,
+			crypto.ShortHashString(packet.Bytes),
+		)
+		defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -309,12 +307,11 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	//defer lib.TimeTrack(c.log, time.Now())
 	// send the proto message wrapped in an Envelope over the wire
-	lenM, err := sendProtoMsg(c.conn, &Envelope{Payload: a})
-	if err != nil {
+	if err = sendProtoMsg(c.conn, &Envelope{Payload: a}); err != nil {
 		c.Error(err)
 	}
 	// update the rate limiter with how many bytes were written
-	m.Update(lenM)
+	//m.Update(n)
 }
 
 // Stream: an independent, bidirectional communication channel that is scoped to a single topic.
@@ -389,7 +386,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 		select {
 		case s.inbox <- m:
 		default:
-			s.logger.Errorf("CRITICAL: Inbox %s queue full in receive service", lib.Topic_name[int32(packet.StreamId)])
+			s.logger.Errorf("CRITICAL: Inbox %s queue full", lib.Topic_name[int32(packet.StreamId)])
 			s.logger.Error("Dropping all messages")
 			// drain inbox
 			func() {
@@ -413,30 +410,28 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 // HELPERS BELOW
 
 // sendProtoMsg() encodes and sends a length-prefixed proto message to a net.Conn
-// returns length of message bytes
-func sendProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) (int, lib.ErrorI) {
+func sendProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) lib.ErrorI {
 	// marshal into proto bytes
 	bz, err := lib.Marshal(ptr)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	// send the bytes prefixed by length
-	return len(bz), sendLengthPrefixed(conn, bz, timeout...)
+	return sendLengthPrefixed(conn, bz, timeout...)
 }
 
 // receiveProtoMsg() receives and decodes a length-prefixed proto message from a net.Conn
-// returns length of message bytes
-func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) (int, lib.ErrorI) {
+func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration) lib.ErrorI {
 	// read the message from the wire
 	msg, err := receiveLengthPrefixed(conn, timeout...)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	// unmarshal into proto
 	if err = lib.Unmarshal(msg, ptr); err != nil {
-		return 0, err
+		return err
 	}
-	return len(msg), nil
+	return nil
 }
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection

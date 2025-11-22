@@ -153,6 +153,11 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	if err != nil {
 		return
 	}
+	// TODO change 1 to c.config.ChainId
+	orderBook, err := c.LoadRootChainOrderBook(1, rcBuildHeight)
+	if err != nil {
+		return
+	}
 	// replace the VDF and last certificate in the header
 	p.Block.BlockHeader.LastQuorumCertificate, p.Block.BlockHeader.Vdf = lastCertificate, vdf
 	p.Block.BlockHeader.TotalVdfIterations = vdf.GetIterations() + lastBlock.BlockHeader.TotalVdfIterations
@@ -163,6 +168,10 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 		// exit with error
 		return
 	}
+	// append any witnessed orders to the on chain orders
+	lockOrders, closeOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	results.Orders.LockOrders = lockOrders
+	results.Orders.CloseOrders = closeOrders
 	// convert the block reference to bytes
 	blockBytes, err = lib.Marshal(p.Block)
 	if err != nil {
@@ -210,6 +219,18 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
+
+	// // get the root chain order book at latest height
+	// orderBook, err := c.GetOrderBook()
+	// if err != nil {
+	// 	c.log.Errorf("Error getting order book: %v", err)
+	// }
+	// validate the proposed orders were witnessed by the oracle
+	err = c.oracle.ValidateProposedOrders(qc.Results.Orders)
+	if err != nil {
+		return
+	}
+	compareResults.Orders = qc.Results.Orders
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error
@@ -227,6 +248,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+	c.log.Warnf("CommitCertificate block: %d qc %d chain %d", block.BlockHeader.Height, qc.Header.Height, qc.Header.ChainId)
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -282,16 +304,20 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	}
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
-	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+	// execute Oracle CommitCertificate
+	err = c.oracle.CommitCertificate(qc, block, blockResult, ts)
 	if err != nil {
 		// exit with error
 		return err
 	}
+	// set up the finite state machine for the next height
+	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
 	// set the reference to lastCertificate on the new FSM
 	c.FSM.LastValidatorSet = c.LastValidatorSet
-	// reset the current mempool store to prepare for the next height
-	c.Mempool.FSM.Discard()
+	if err != nil {
+		// exit with error
+		return err
+	}
 	// set up the mempool with the actual new FSM for the next height
 	// this makes c.Mempool.FSM.Reset() is unnecessary
 	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
@@ -410,15 +436,8 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 			// exit with error
 			return err
 		}
-		// set the reference to lastCertificate on the new FSM
-		c.FSM.LastValidatorSet = c.LastValidatorSet
-		// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
-		// from RCManager since only these two chains exist. This will be updated to use
-		// dynamic chain discovery when additional chains are added.
-		// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
 		// publish the root chain info to the nested chain subscribers
-		// for _, id := range c.RCManager.ChainIds() {
-		for _, id := range []uint64{1, 2} {
+		for _, id := range c.RCManager.ChainIds() {
 			// get latest validator set
 			valSet, err := c.FSM.GetCommitteeMembers(id)
 			if err != nil {
@@ -464,16 +483,12 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	if e := eg.Wait(); e != nil {
 		return e.(lib.ErrorI)
 	}
-	// reset the current mempool store to prepare for the next height
-	c.Mempool.FSM.Discard()
 	// set up the mempool with the actual new FSM for the next height
 	// this makes c.Mempool.FSM.Reset() is unnecessary
 	if c.Mempool.FSM, err = c.FSM.Copy(); err != nil {
 		// exit with error
 		return err
 	}
-	// remove older validator set heights
-	delete(c.LastValidatorSet, c.ChainHeight()-2)
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
 	// exit
@@ -625,29 +640,26 @@ func (c *Controller) CheckAndSetLastCertificate(candidate *lib.BlockHeader) lib.
 			// exit with error
 			return lib.ErrInvalidLastQuorumCertificate()
 		}
-		// the synced blocks were already validated during consensus, no need to validate again
-		if !c.Syncing().Load() {
-			// define a convenience variable for the 'root height'
-			rHeight, height := candidate.LastQuorumCertificate.Header.RootHeight, candidate.LastQuorumCertificate.Header.Height
-			// get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
-			vs, err := c.LoadCommittee(c.LoadRootChainId(height), rHeight) // TODO investigate - during consensus it works without -1 but during syncing might need -1?
-			if err != nil {
-				// exit with error
-				return err
-			}
-			// ensure the last quorum certificate is valid
-			isPartialQC, err := candidate.LastQuorumCertificate.Check(vs, 0, &lib.View{
-				Height: candidate.Height - 1, RootHeight: rHeight, NetworkId: c.Config.NetworkID, ChainId: c.Config.ChainId,
-			}, true)
-			// if the check failed
-			if err != nil {
-				// exit with error
-				return err
-			}
-			// ensure is a full +2/3rd maj QC
-			if isPartialQC {
-				return lib.ErrNoMaj23()
-			}
+		// define a convenience variable for the 'root height'
+		rHeight, height := candidate.LastQuorumCertificate.Header.RootHeight, candidate.LastQuorumCertificate.Header.Height
+		// get the committee from the 'root chain' from the n-1 height because state heights represent 'end block state' once committed
+		vs, err := c.LoadCommittee(c.LoadRootChainId(height), rHeight) // TODO investigate - during consensus it works without -1 but during syncing might need -1?
+		if err != nil {
+			// exit with error
+			return err
+		}
+		// ensure the last quorum certificate is valid
+		isPartialQC, err := candidate.LastQuorumCertificate.Check(vs, 0, &lib.View{
+			Height: candidate.Height - 1, RootHeight: rHeight, NetworkId: c.Config.NetworkID, ChainId: c.Config.ChainId,
+		}, true)
+		// if the check failed
+		if err != nil {
+			// exit with error
+			return err
+		}
+		// ensure is a full +2/3rd maj QC
+		if isPartialQC {
+			return lib.ErrNoMaj23()
 		}
 		// update the LastQuorumCertificate in the ephemeral store to ensure deterministic last-COMMIT-QC (multiple valid versions can exist)
 		if err = c.FSM.Store().(lib.StoreI).IndexQC(candidate.LastQuorumCertificate); err != nil {

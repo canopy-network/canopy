@@ -32,28 +32,32 @@ const (
 
 // Config is the structure of the user configuration options for a Canopy node
 type Config struct {
-	MainConfig         // main options spanning over all modules
-	LoggerConfig       // logger options
-	RPCConfig          // rpc API options
-	StateMachineConfig // FSM options
-	StoreConfig        // persistence options
-	P2PConfig          // peer-to-peer options
-	ConsensusConfig    // bft options
-	MempoolConfig      // mempool options
-	MetricsConfig      // telemetry options
+	MainConfig                                             // main options spanning over all modules
+	LoggerConfig                                           // logger options
+	RPCConfig                                              // rpc API options
+	StateMachineConfig                                     // FSM options
+	StoreConfig                                            // persistence options
+	P2PConfig                                              // peer-to-peer options
+	ConsensusConfig                                        // bft options
+	MempoolConfig                                          // mempool options
+	MetricsConfig                                          // telemetry options
+	EthBlockProviderConfig `json:"ethBlockProviderConfig"` // ethereum block provider configuration
+	OracleConfig           `json:"oracleConfig"`           // oracle configuration
 }
 
 // DefaultConfig() returns a Config with developer set options
 func DefaultConfig() Config {
 	return Config{
-		MainConfig:         DefaultMainConfig(),
-		RPCConfig:          DefaultRPCConfig(),
-		StateMachineConfig: DefaultStateMachineConfig(),
-		StoreConfig:        DefaultStoreConfig(),
-		P2PConfig:          DefaultP2PConfig(),
-		ConsensusConfig:    DefaultConsensusConfig(),
-		MempoolConfig:      DefaultMempoolConfig(),
-		MetricsConfig:      DefaultMetricsConfig(),
+		MainConfig:             DefaultMainConfig(),
+		RPCConfig:              DefaultRPCConfig(),
+		StateMachineConfig:     DefaultStateMachineConfig(),
+		StoreConfig:            DefaultStoreConfig(),
+		P2PConfig:              DefaultP2PConfig(),
+		ConsensusConfig:        DefaultConsensusConfig(),
+		MempoolConfig:          DefaultMempoolConfig(),
+		MetricsConfig:          DefaultMetricsConfig(),
+		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
+		OracleConfig:           DefaultOracleConfig(),
 	}
 }
 
@@ -217,15 +221,11 @@ func DefaultP2PConfig() P2PConfig {
 
 // StoreConfig is user configurations for the key value database
 type StoreConfig struct {
-	DataDirPath    string `json:"dataDirPath"`    // path of the designated folder where the application stores its data
-	DBName         string `json:"dbName"`         // name of the database
-	IndexByAccount bool   `json:"indexByAccount"` // index transactions by account
-	InMemory       bool   `json:"inMemory"`       // non-disk database, only for testing
-	// recommended range: 500-2000 for optimal performance. Values below 500 increase disk I/O
-	// by several orders of magnitude, reducing performance and accelerating disk degradation during
-	// sync. Lower values also increase the risk of data loss due to a pebble issue where batches are
-	// returned before commit completion when compaction runs concurrently with commits.
-	LSSCompactionInterval uint64 `json:"lssCompactionInterval"` // interval for compacting latest store data
+	DataDirPath          string `json:"dataDirPath"`          // path of the designated folder where the application stores its data
+	DBName               string `json:"dbName"`               // name of the database
+	IndexByAccount       bool   `json:"indexByAccount"`       // index transactions by account
+	InMemory             bool   `json:"inMemory"`             // non-disk database, only for testing
+	CleanupBlockInterval uint64 `json:"cleanupBlockInterval"` // interval for cleaning up stale data, in blocks
 }
 
 // DefaultDataDirPath() is $USERHOME/.canopy
@@ -246,11 +246,11 @@ func DefaultDataDirPath() string {
 // DefaultStoreConfig() returns the developer recommended store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		DataDirPath:           DefaultDataDirPath(),           // use the default data dir path
-		DBName:                "canopy",                       // 'canopy' database name
-		IndexByAccount:        true,                           // index transactions by account
-		InMemory:              false,                          // persist to disk, not memory
-		LSSCompactionInterval: uint64(rand.Int32N(101) + 500), // clean every 500-600 blocks (random)
+		DataDirPath:          DefaultDataDirPath(),           // use the default data dir path
+		DBName:               "canopy",                       // 'canopy' database name
+		IndexByAccount:       true,                           // index transactions by account
+		InMemory:             false,                          // persist to disk, not memory
+		CleanupBlockInterval: uint64(rand.Int32N(101) + 100), // clean every 100-200 blocks (random)
 	}
 }
 
@@ -287,6 +287,51 @@ func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
 		MetricsEnabled:    true,           // enabled by default
 		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
+	}
+}
+
+type EthBlockProviderConfig struct {
+	NodeUrl           string `json:"ethNodeUrl"`        // ethereum rpc node url
+	NodeWSUrl         string `json:"ethNodeWsUrl"`      // ethereum node websocket url
+	EVMChainId        uint64 `json:"evmChainId"`        // ethereum chain id
+	RetryDelay        int    `json:"retryDelay"`        // retry delay in seconds for connection failures
+	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
+}
+
+// DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
+func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
+	return EthBlockProviderConfig{
+		NodeUrl:           "http://localhost:8545",
+		NodeWSUrl:         "ws://localhost:8545",
+		EVMChainId:        1,
+		RetryDelay:        5, // default 5 seconds reconnect retry delay
+		StartupBlockDepth: 1000,
+	}
+}
+
+// OracleConfig represents the configuration of the off-chain order witness oracle
+type OracleConfig struct {
+	OracleEnabled            bool   `json:"oracleEnabled"`            // enables or disables the oracle functionality
+	StateFile                string `json:"stateSaveFile"`            // file to save oracle state
+	OrderResubmitDelayBlocks uint64 `json:"orderResubmitDelayBlocks"` // how many root blocks to wait to resubmit order
+	Committee                uint64 `json:"committee"`                // committee this oracle will witnessed orders for
+	ProposeDelayBlocks       uint64 `json:"proposeDelayBlocks"`       // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
+	ReorgRollbackBlocks      uint64 `json:"reorgRollbackBlocks"`      // how far back to rollback the order store on reorgs
+	LockOrderCooldownBlocks  uint64 `json:"lockOrderCooldownBlocks"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
+	SafeBlockConfirmations   uint64 `json:"safeBlockConfirmations"`   // number of block confirmations required before considering a block safe
+}
+
+// DefaultOracleConfig() returns the default ethereum block provider configuration
+func DefaultOracleConfig() OracleConfig {
+	return OracleConfig{
+		OracleEnabled:            false,
+		StateFile:                "oracle.state",
+		OrderResubmitDelayBlocks: 2,
+		Committee:                2,
+		ProposeDelayBlocks:       3,
+		ReorgRollbackBlocks:      60,
+		LockOrderCooldownBlocks:  2,
+		SafeBlockConfirmations:   5,
 	}
 }
 

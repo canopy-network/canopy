@@ -75,9 +75,10 @@ func NewServer(controller *controller.Controller, config lib.Config, logger lib.
 
 // Start initializes the Canopy RPC servers
 func (s *Server) Start() {
+	hostport := strings.Split(s.config.ListenAddress, ":")
 	// Start the Query and Admin RPC servers concurrently
-	go s.startRPC(createRouter(s), s.config.RPCPort)
-	go s.startRPC(createAdminRouter(s), s.config.AdminPort)
+	go s.startRPC(createRouter(s), hostport[0], s.config.RPCPort)
+	go s.startRPC(createAdminRouter(s), hostport[0], s.config.AdminPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
@@ -108,7 +109,7 @@ func (s *Server) Start() {
 }
 
 // startRPC starts an RPC server with the provided router and port
-func (s *Server) startRPC(router *httprouter.Router, port string) {
+func (s *Server) startRPC(router *httprouter.Router, host, port string) {
 
 	// Create CORS policy
 	cor := cors.New(cors.Options{
@@ -120,9 +121,9 @@ func (s *Server) startRPC(router *httprouter.Router, port string) {
 	timeout := time.Duration(s.config.TimeoutS) * time.Second
 
 	// Start RPC server
-	s.logger.Infof("Starting RPC server at 0.0.0.0:%s", port)
+	s.logger.Infof("Starting RPC server at %s:%s", host, port)
 	s.logger.Fatal((&http.Server{
-		Addr:              colon + port,
+		Addr:              host + colon + port,
 		ReadHeaderTimeout: timeout,
 		ReadTimeout:       timeout,
 		WriteTimeout:      timeout,
@@ -161,7 +162,7 @@ func (s *Server) updatePollResults() {
 			return nil
 
 		}(); err != nil {
-			s.logger.Error(err.Error())
+			// s.logger.Error(err.Error())
 		}
 		time.Sleep(time.Second * 3)
 	}
@@ -169,9 +170,11 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
+	hostport := strings.Split(s.config.ListenAddress, ":")
+	s.logger.Infof("Starting Web Wallet 🔑 http://%s:%s ⬅️", hostport[0], s.config.WalletPort)
+
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
+	s.logger.Infof("Starting Block Explorer 🔍️ http://%s:%s ⬅️", hostport[0], s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
@@ -241,10 +244,12 @@ func (s *Server) getFeeFromState(ptr *txRequest, messageName string, lockorder .
 
 // readOnlyStateFromHeightParams is a helper function to safely wrap TimeMachine access
 func (s *Server) readOnlyStateFromHeightParams(w http.ResponseWriter, r *http.Request, ptr queryWithHeight, callback func(s *fsm.StateMachine) lib.ErrorI) (err lib.ErrorI) {
+
 	// Unmarshal request parameters
 	if ok := unmarshal(w, r, ptr); !ok {
 		return
 	}
+
 	return s.readOnlyState(ptr.GetHeight(), callback)
 }
 
@@ -255,8 +260,10 @@ func (s *Server) readOnlyState(height uint64, callback func(s *fsm.StateMachine)
 	if err != nil {
 		return lib.ErrTimeMachine(err)
 	}
+
 	// Discard state, ensuring proper cleanup is performed
 	defer state.Discard()
+
 	// Execute the provided callback function with the read-only state
 	err = callback(state)
 	if err != nil {
@@ -268,18 +275,23 @@ func (s *Server) readOnlyState(height uint64, callback func(s *fsm.StateMachine)
 // logsHandler writes the Canopy logfile
 func logsHandler(s *Server) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
 		// Construct the full file path to the Canopy log file
 		filePath := filepath.Join(s.config.DataDirPath, lib.LogDirectory, lib.LogFileName)
+
 		// Read the entire contents of the log file and split by newlines
 		f, _ := os.ReadFile(filePath)
 		split := bytes.Split(f, []byte("\n"))
+
 		// Prepare a slice to hold the reversed lines
 		var flipped []byte
+
 		// Iterate over the lines in reverse order
 		for i := len(split) - 1; i >= 0; i-- {
 			// Append each line to the `flipped` slice followed by a newline character
 			flipped = append(append(flipped, split[i]...), []byte("\n")...)
 		}
+
 		// Write the reversed lines to the HTTP response
 		if _, err := w.Write(flipped); err != nil {
 			s.logger.Error(err.Error())
@@ -302,10 +314,8 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 	h.h(resp, req, p)
 }
 
-//go:embed all:web/explorer/out
 var explorerFS embed.FS
 
-//go:embed all:web/wallet/out
 var walletFS embed.FS
 
 // runStaticFileServer creates a web server serving static files

@@ -3,12 +3,13 @@ package fsm
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -63,15 +64,12 @@ func DefaultParams() *Params {
 			MaxCommitteeSize:                   100,
 			EarlyWithdrawalPenalty:             20,
 			DelegateUnstakingBlocks:            2,
-			MinimumOrderSize:                   1000000000,
+			MinimumOrderSize:                   10000,
 			StakePercentForSubsidizedCommittee: 33,
 			MaxSlashPerCommittee:               15,
 			DelegateRewardPercentage:           10,
 			BuyDeadlineBlocks:                  60,
 			LockOrderFeeMultiplier:             2,
-			MinimumStakeForValidators:          0,
-			MinimumStakeForDelegates:           0,
-			MaximumDelegatesPerCommittee:       0,
 		},
 		Fee: &FeeParams{
 			SendFee:               10000,
@@ -88,9 +86,7 @@ func DefaultParams() *Params {
 			EditOrderFee:          10000,
 			DeleteOrderFee:        10000,
 		},
-		Governance: &GovernanceParams{
-			DaoRewardPercentage: 5,
-		},
+		Governance: &GovernanceParams{DaoRewardPercentage: 5},
 	}
 }
 
@@ -233,9 +229,6 @@ const (
 	ParamDelegateRewardPercentage           = "delegateRewardPercentage"           // the percentage of the block reward that is awarded to the delegates
 	ParamBuyDeadlineBlocks                  = "buyDeadlineBlocks"                  // the amount of blocks a 'buyer' has to complete an order they reserved
 	ParamLockOrderFeeMultiplier             = "lockOrderFeeMultiplier"             // the fee multiplier of the 'send' fee that is required to execute a lock order
-	ParamMinimumStakeForValidators          = "minimumStakeForValidators"          // minimum stake required to be a validator
-	ParamMinimumStakeForDelegates           = "minimumStakeForDelegates"           // minimum stake required to be a delegate
-	ParamMaximumDelegatesPerCommittee       = "maximumDelegatesPerCommittee"       // maximum number of delegates per committee
 )
 
 // Check() validates the Validator params
@@ -323,12 +316,6 @@ func (x *ValidatorParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.BuyDeadlineBlocks = value
 	case ParamLockOrderFeeMultiplier:
 		x.LockOrderFeeMultiplier = value
-	case ParamMinimumStakeForValidators:
-		x.MinimumStakeForValidators = value
-	case ParamMinimumStakeForDelegates:
-		x.MinimumStakeForDelegates = value
-	case ParamMaximumDelegatesPerCommittee:
-		x.MaximumDelegatesPerCommittee = value
 	default:
 		return ErrUnknownParam()
 	}
