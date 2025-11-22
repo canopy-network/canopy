@@ -3,9 +3,10 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -20,7 +21,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// think of 'lock orders' like reserving the 'sell order'
 		for _, lockOrder := range orders.LockOrders {
 			if err := s.LockOrder(lockOrder, chainId); err != nil {
-				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("LockOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(lockOrder.OrderId), err.Error())
 			}
 		}
 		// reset orders are a result of the committee witnessing 'no-action' from the buyer of the sell order aka NOT sending the
@@ -35,7 +36,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// buy assets before the 'deadline height' of the 'buyer chain'
 		for _, closeOrderId := range orders.CloseOrders {
 			if err := s.CloseOrder(closeOrderId, chainId); err != nil {
-				s.log.Warnf("CloseOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("CloseOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(closeOrderId), err.Error())
 			}
 		}
 	}
@@ -249,6 +250,7 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
+	// Print full stack trace
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
 	if err != nil {
