@@ -243,13 +243,13 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 			return
 		}
 		// if so, add to the pubkeys and add to the power
-		if !signed && (100*val.VotingPower)/vs.TotalPower >= 5 {
+		if !signed && (val.VotingPower*100 >= vs.TotalPower*5) {
 			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
 			if err != nil {
 				logger.Errorf("Failed to create public key from valset: %s", err.Error())
 				continue
 			}
-			logger.Errorf("NON-SIGNER-CRITICAL:\n%s (%s) did not sign block %d for chainID %d with producerAddress %s (%x)",
+			logger.Errorf("NON-SIGNER-CRITICAL:\n%s (%s) did not sign block %d for chainID %d with producer: %s (%s)",
 				val.NetAddress, bls.Address().String(), height, chainId, producerNetAddress, producerAddress)
 		}
 	}
