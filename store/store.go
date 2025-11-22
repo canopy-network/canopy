@@ -1,42 +1,39 @@
 package store
 
 import (
-	"bytes"
-	"encoding/hex"
-	"errors"
+	"context"
 	"fmt"
 	"math"
 	"path/filepath"
+	"reflect"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/badger/v4/options"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/sstable"
+	"github.com/cockroachdb/pebble/v2/vfs"
 )
 
 const (
-	historicStatePrefix     = "h/"           // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
-	stateCommitmentPrefix   = "c/"           // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
-	indexerPrefix           = "i/"           // prefix designated for indexer (transactions, blocks, and quorum certificates)
-	stateCommitIDPrefix     = "x/"           // prefix designated for the commit ID (height and state merkle root)
-	lastCommitIDPrefix      = "a/"           // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
-	maxKeyBytes             = 256            // maximum size of a key
-	lssVersion              = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
-	evictRandKeySize        = 64             // size of the random key used for eviction
-	valueLogGCDiscardRation = 0.5            // discard ratio for value log GC
+	maxKeyBytes = 256            // maximum size of a key
+	lssVersion  = math.MaxUint64 // the arbitrary version the latest state is written to for optimized queries
 )
 
-var _ lib.StoreI = &Store{} // enforce the Store interface
-
 var (
-	// prefix designated for the LatestStateStore where the most recent blobs of state data are held
-	latestStatePrefix = "s/"
-	// key to obtain the current LSS prefix as it changes on each eviction
-	latestStateKeyPrefix = "s_prefix"
+	latestStatePrefix     = lib.JoinLenPrefix([]byte("s/")) // prefix designated for the LatestStateStore where the most recent blobs of state data are held
+	historicStatePrefix   = lib.JoinLenPrefix([]byte("h/")) // prefix designated for the HistoricalStateStore where the historical blobs of state data are held
+	stateCommitmentPrefix = lib.JoinLenPrefix([]byte("c/")) // prefix designated for the StateCommitmentStore (immutable, tree DB) built of hashes of state store data
+	indexerPrefix         = lib.JoinLenPrefix([]byte("i/")) // prefix designated for indexer (transactions, blocks, and quorum certificates)
+	stateCommitIDPrefix   = lib.JoinLenPrefix([]byte("x/")) // prefix designated for the commit ID (height and state merkle root)
+	lastCommitIDPrefix    = lib.JoinLenPrefix([]byte("a/")) // prefix designated for the latest commit ID for easy access (latest height and latest state merkle root)
+
+	_ lib.StoreI = &Store{} // enforce the Store interface
 )
 
 /*
-The Store struct is a high-level abstraction layer built on top of a single BadgerDB instance,
+The Store struct is a high-level abstraction layer built on top of a single PebbleDB instance,
 providing four main components for managing blockchain-related data.
 
 1. StateStore: This component is responsible for storing the actual blobs of data that represent
@@ -60,23 +57,26 @@ providing four main components for managing blockchain-related data.
    hash of the StateCommitStore corresponding to that version. This separation aids in managing
    the state versioning process.
 
-The Store leverages BadgerDB in Managed Mode to maintain historical versions of the state,
-allowing for time-travel operations and historical state queries. It uses BadgerDB Transactions
-to ensure that all writes to the StateStore, StateCommitStore, Indexer, and CommitIDStore are
-performed atomically in a single commit operation per height. Additionally, the Store uses
-lexicographically ordered prefix keys to facilitate easy and efficient iteration over stored data.
+The store package contains its own multiversion concurrency control system where all the keys are
+managed. PebbleDB is used on top of that to ensure that all writes to the StateStore, StateCommitStore,
+Indexer, and CommitIDStore are performed atomically in a single commit operation per height.
+Additionally, the Store uses lexicographically ordered prefix keys to facilitate easy and efficient
+iteration over stored data.
 */
 
 type Store struct {
-	version  uint64             // version of the store
-	db       *badger.DB         // underlying database
-	writer   *badger.WriteBatch // the shared batch writer that allows committing it all at once
-	ss       *Txn               // reference to the state store
-	sc       *SMT               // reference to the state commitment store
-	*Indexer                    // reference to the indexer store
-	metrics  *lib.Metrics       // telemetry
-	log      lib.LoggerI        // logger
-	config   lib.Config         // config
+	version    uint64        // version of the store
+	db         *pebble.DB    // underlying database
+	writer     *pebble.Batch // the shared batch writer that allows committing it all at once
+	ss         *Txn          // reference to the state store
+	sc         *SMT          // reference to the state commitment store
+	*Indexer                 // reference to the indexer store
+	metrics    *lib.Metrics  // telemetry
+	log        lib.LoggerI   // logger
+	config     lib.Config    // config
+	mu         *sync.Mutex   // mutex for concurrent commits
+	compaction atomic.Bool   // atomic boolean for compaction status
+	isTxn      bool          // flag indicating if the store is in transaction mode
 }
 
 // New() creates a new instance of a StoreI either in memory or an actual disk DB
@@ -87,14 +87,46 @@ func New(config lib.Config, metrics *lib.Metrics, l lib.LoggerI) (lib.StoreI, li
 	return NewStore(config, filepath.Join(config.DataDirPath, config.DBName), metrics, l)
 }
 
-// NewStore() creates a new instance of a disk DB
+// NewStore() creates a new instance of a disk DB˙
 func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	// use badger DB in managed mode to allow efficient versioning
-	db, err := badger.OpenManaged(badger.DefaultOptions(path).WithNumVersionsToKeep(math.MaxInt64).WithLoggingLevel(badger.ERROR).
-		WithValueThreshold(1024).WithCompression(options.None).WithNumMemtables(16).WithMemTableSize(256 << 20).
-		WithNumLevelZeroTables(10).WithNumLevelZeroTablesStall(20).WithBaseTableSize(128 << 20).WithBaseLevelSize(512 << 20).
-		WithNumCompactors(0).WithCompactL0OnClose(true).WithBypassLockGuard(true).WithDetectConflicts(false),
-	)
+	cache := pebble.NewCache(256 << 20) // 256 MB cache
+	defer cache.Unref()
+	lvl := pebble.LevelOptions{
+		BlockSize:      64 << 10, // 64 KB data blocks
+		IndexBlockSize: 32 << 10, // 32 KB index blocks
+		Compression: func() *sstable.CompressionProfile {
+			return sstable.ZstdCompression // biggest compression at the expense of more CPU resources
+		},
+	}
+	db, err := pebble.Open(path, &pebble.Options{
+		MemTableSize:          64 << 20,                    // larger memtable to reduce flushes
+		L0CompactionThreshold: 6,                           // keep L0 small to avoid read amplification
+		L0StopWritesThreshold: 12,                          // stop writes when L0 reaches this size
+		MaxOpenFiles:          5000,                        // more file handles
+		Cache:                 cache,                       // block cache
+		FormatMajorVersion:    pebble.FormatColumnarBlocks, // current format version
+		LBaseMaxBytes:         512 << 20,                   // [512MB] maximum size of the LBase level
+		Levels: [7]pebble.LevelOptions{
+			lvl, lvl, lvl, lvl, lvl, lvl, lvl, // apply same scan-optimized blocks across all levels
+		},
+		// allows for smaller blocks and more block properties so versions can be more granular
+		TargetFileSizes: [7]int64{
+			32 << 20,  // L0: 32MB
+			64 << 20,  // L1: 64MB
+			128 << 20, // L2: 128MB
+			128 << 20, // L3: 128MB
+			128 << 20, // L4: 128MB
+			128 << 20, // L5: 128MB
+			128 << 20, // L6: 128MB
+		},
+		Logger:                  log, // Use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{newVersionedPropertyCollector},
+		// [EXPERIMENTAL] should improve throughput by reducing WAL syncs I/O but may lead to data loss
+		// on the worst case (i.e sudden program crash)
+		WALMinSyncInterval: func() time.Duration {
+			return time.Millisecond * 2
+		},
+	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
@@ -103,7 +135,16 @@ func NewStore(config lib.Config, path string, metrics *lib.Metrics, log lib.Logg
 
 // NewStoreInMemory() creates a new instance of a mem DB
 func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	db, err := pebble.Open("", &pebble.Options{
+		FS:                    vfs.NewMem(),                // memory file system
+		L0CompactionThreshold: 20,                          // Delay compaction during bulk writes
+		L0StopWritesThreshold: 40,                          // Much higher threshold
+		FormatMajorVersion:    pebble.FormatColumnarBlocks, // Current format version
+		Logger:                log,                         // use project's logger
+		BlockPropertyCollectors: []func() pebble.BlockPropertyCollector{
+			func() pebble.BlockPropertyCollector { return newVersionedPropertyCollector() },
+		},
+	})
 	if err != nil {
 		return nil, ErrOpenDB(err)
 	}
@@ -112,29 +153,29 @@ func NewStoreInMemory(log lib.LoggerI) (lib.StoreI, lib.ErrorI) {
 
 // NewStoreWithDB() returns a Store object given a DB and a logger
 // NOTE: to read the state commit store i.e. for merkle proofs, use NewReadOnly()
-func NewStoreWithDB(config lib.Config, db *badger.DB, metrics *lib.Metrics, log lib.LoggerI) (*Store, lib.ErrorI) {
+func NewStoreWithDB(config lib.Config, db *pebble.DB, metrics *lib.Metrics, log lib.LoggerI) (*Store, lib.ErrorI) {
 	// get the latest CommitID (height and hash)
 	id := getLatestCommitID(db, log)
-	// get the current lss prefix
-	latestStatePrefix = getLSSPrefix(db, log)
 	// set the version
 	nextVersion, version := id.Height+1, id.Height
-	// make a reader from the current height and the latest height
-	hssReader := db.NewTransactionAt(version, false)
-	lssReader := db.NewTransactionAt(lssVersion, false)
 	// create a new batch writer for the next version
-	// note: version for WriteBatch may be overridden by the setEntryAt(version) code
-	writer := db.NewWriteBatchAt(nextVersion)
+	writer := db.NewBatch()
+	// make a versioned store from the current height and the latest height
+	// note: version for the versioned store may be overridden by the SetAt() and DeleteAt() code
+	hssStore := NewVersionedStore(db.NewSnapshot(), writer, version)
+	lssStore := NewVersionedStore(db.NewSnapshot(), writer, lssVersion)
 	// return the store object
 	return &Store{
-		version: version,
-		log:     log,
-		db:      db,
-		writer:  writer,
-		ss:      NewBadgerTxn(lssReader, writer, []byte(latestStatePrefix), true, true, nextVersion),
-		Indexer: &Indexer{NewBadgerTxn(hssReader, writer, []byte(indexerPrefix), false, false, nextVersion), config},
-		metrics: metrics,
-		config:  config,
+		version:    version,
+		log:        log,
+		db:         db,
+		writer:     writer,
+		ss:         NewTxn(lssStore, lssStore, latestStatePrefix, true, true, true, nextVersion),
+		Indexer:    &Indexer{NewTxn(hssStore, hssStore, indexerPrefix, false, false, false, nextVersion), config},
+		metrics:    metrics,
+		config:     config,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
@@ -143,23 +184,25 @@ func NewStoreWithDB(config lib.Config, db *badger.DB, metrics *lib.Metrics, log 
 func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 	var stateReader *Txn
 	// make a reader for the specified version
-	hssReader := s.db.NewTransactionAt(queryVersion, false)
+	hssReader := NewVersionedStore(s.db.NewSnapshot(), nil, queryVersion)
 	// if the query is for the latest version use the HSS over the LSS
 	if s.version == queryVersion {
-		lssReader := s.db.NewTransactionAt(lssVersion, false)
-		stateReader = NewBadgerTxn(lssReader, nil, []byte(latestStatePrefix), false, false)
+		lssReader := NewVersionedStore(s.db.NewSnapshot(), nil, lssVersion)
+		stateReader = NewTxn(lssReader, nil, latestStatePrefix, false, false, true)
 	} else {
-		stateReader = NewBadgerTxn(hssReader, nil, []byte(historicStatePrefix), false, false)
+		stateReader = NewTxn(hssReader, nil, historicStatePrefix, false, false, true)
 	}
 	// return the store object
 	return &Store{
-		version: queryVersion,
-		log:     s.log,
-		db:      s.db,
-		ss:      stateReader,
-		sc:      NewDefaultSMT(NewBadgerTxn(hssReader, nil, []byte(stateCommitmentPrefix), false, false)),
-		Indexer: &Indexer{NewBadgerTxn(hssReader, nil, []byte(indexerPrefix), false, false), s.config},
-		metrics: s.metrics,
+		version:    queryVersion,
+		log:        s.log,
+		db:         s.db,
+		ss:         stateReader,
+		sc:         NewDefaultSMT(NewTxn(hssReader, nil, stateCommitmentPrefix, false, false, true)),
+		Indexer:    &Indexer{NewTxn(hssReader, nil, indexerPrefix, false, false, false), s.config},
+		metrics:    s.metrics,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
@@ -167,23 +210,32 @@ func (s *Store) NewReadOnly(queryVersion uint64) (lib.StoreI, lib.ErrorI) {
 // this can be useful for having two simultaneous copies of the store
 // ex: Mempool state and FSM state
 func (s *Store) Copy() (lib.StoreI, lib.ErrorI) {
-	nextVersion := s.version + 1
 	// create a comparable writer and reader
-	writer, reader, lssReader := s.db.NewWriteBatchAt(nextVersion), s.db.NewTransactionAt(s.version, false), s.db.NewTransactionAt(lssVersion, false)
+	writer := s.db.NewBatch()
+	reader := NewVersionedStore(s.db.NewSnapshot(), writer, s.version)
+	lssReader := NewVersionedStore(s.db.NewSnapshot(), writer, lssVersion)
 	// return the store object
 	return &Store{
-		version: s.version,
-		log:     s.log,
-		db:      s.db,
-		writer:  writer,
-		ss:      s.ss.Copy(BadgerTxnReader{lssReader, s.ss.prefix}, writer),
-		Indexer: &Indexer{s.Indexer.db.Copy(BadgerTxnReader{reader, s.Indexer.db.prefix}, writer), s.config},
-		metrics: s.metrics,
+		version:    s.version,
+		log:        s.log,
+		db:         s.db,
+		writer:     writer,
+		ss:         s.ss.Copy(lssReader, lssReader),
+		Indexer:    &Indexer{s.Indexer.db.Copy(reader, reader), s.config},
+		metrics:    s.metrics,
+		mu:         &sync.Mutex{},
+		compaction: atomic.Bool{},
 	}, nil
 }
 
 // Commit() performs a single atomic write of the current state to all stores.
 func (s *Store) Commit() (root []byte, err lib.ErrorI) {
+	// nested transactions should only flush changes to the parent transaction, not the database
+	if s.isTxn {
+		return nil, ErrCommitDB(fmt.Errorf("nested transactions are not supported"))
+	}
+	s.mu.Lock()         // lock commit op
+	defer s.mu.Unlock() // unlock commit op
 	startTime := time.Now()
 	// get the root from the sparse merkle tree at the current state
 	root, err = s.Root()
@@ -196,43 +248,37 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err = s.setCommitID(s.version, root); err != nil {
 		return nil, err
 	}
-	// extract the internal metrics from the badger Txn
-	size, entries := getSizeAndCountFromBatch(s.writer)
-	// commit the in-memory txn to the badger writer
+	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		return nil, e
 	}
+	// extract the internal metrics from the pebble batch
+	size, count := len(s.writer.Repr()), s.writer.Count()
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
-	if e := s.writer.Flush(); e != nil {
-		return nil, ErrCommitDB(e)
-	}
-	// check if the current version is a multiple of the cleanup block interval
-	cleanupInterval := s.config.StoreConfig.CleanupBlockInterval
-	if cleanupInterval > 0 && s.Version()%cleanupInterval == 0 {
-		// trigger eviction of LSS deleted keys
-		if err := s.Evict(); err != nil {
-			s.log.Errorf("failed to evict LSS deleted keys: %s", err)
-		}
+	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
+		return nil, ErrCommitDB(err)
 	}
 	// update the metrics once complete
-	s.metrics.UpdateStoreMetrics(size, entries, time.Time{}, startTime)
+	s.metrics.UpdateStoreMetrics(int64(size), int64(count), time.Time{}, startTime)
 	// reset the writer for the next height
 	s.Reset()
+	// compact if necessary
+	s.MaybeCompact()
 	// return the root
 	return
 }
 
-// Flush() writes the current state to the batch writer without committing it.
+// Flush() writes the current state to the batch writer without actually committing it
 func (s *Store) Flush() lib.ErrorI {
 	if s.sc != nil {
-		if e := s.sc.store.(TxnWriterI).Flush(); e != nil {
+		if e := s.sc.store.(TxnWriterI).Commit(); e != nil {
 			return ErrCommitDB(e)
 		}
 	}
-	if e := s.ss.Flush(); e != nil {
+	if e := s.ss.Commit(); e != nil {
 		return ErrCommitDB(e)
 	}
-	if e := s.Indexer.db.Flush(); e != nil {
+	if e := s.Indexer.db.Commit(); e != nil {
 		return ErrCommitDB(e)
 	}
 	return nil
@@ -281,15 +327,17 @@ func (s *Store) NewTxn() lib.StoreI {
 		log:     s.log,
 		db:      s.db,
 		writer:  s.writer,
-		ss:      NewTxn(s.ss, s.ss, nil, false, true, nextVersion),
-		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, nextVersion), s.config},
+		ss:      NewTxn(s.ss, s.ss, nil, false, true, true, nextVersion),
+		Indexer: &Indexer{NewTxn(s.Indexer.db, s.Indexer.db, nil, false, true, false, nextVersion), s.config},
 		metrics: s.metrics,
+		mu:      s.mu,
+		isTxn:   true,
 	}
 }
 
-// DB() returns the underlying BadgerDB instance associated with the Store, providing access
+// DB() returns the underlying PebbleDB instance associated with the Store, providing access
 // to the database for direct operations and management.
-func (s *Store) DB() *badger.DB { return s.db }
+func (s *Store) DB() *pebble.DB { return s.db }
 
 // Root() retrieves the root hash of the StateCommitStore, representing the current root of the
 // Sparse Merkle Tree. This hash is used for verifying the integrity and consistency of the state.
@@ -298,7 +346,7 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 	if s.sc == nil {
 		nextVersion := s.version + 1
 		// set up the state commit store
-		s.sc = NewDefaultSMT(NewTxn(s.ss.reader.(BadgerTxnReader), s.writer, []byte(stateCommitIDPrefix), false, false, nextVersion))
+		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
 		// commit the SMT directly using the txn ops
 		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
 			return nil, err
@@ -310,16 +358,15 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 
 // Reset() discard and re-sets the stores writer
 func (s *Store) Reset() {
-	// create new transactions first before discarding old ones
-	newReader := s.db.NewTransactionAt(s.version, false)
-	newLSSReader := s.db.NewTransactionAt(lssVersion, false)
-	// create a new batch writer for the next version as the version cannot
-	// be set at the commit time
+	// create a new batch for the next version
 	nextVersion := s.version + 1
-	newWriter := s.db.NewWriteBatchAt(nextVersion)
+	newWriter := s.db.NewBatch()
+	// create new versioned stores first before discarding old ones
+	newLSSStore := NewVersionedStore(s.db.NewSnapshot(), newWriter, lssVersion)
+	newStore := NewVersionedStore(s.db.NewSnapshot(), newWriter, s.version)
 	// create all new transaction-dependent objects
-	newLSS := NewBadgerTxn(newLSSReader, newWriter, []byte(latestStatePrefix), true, true, nextVersion)
-	newIndexer := NewBadgerTxn(newReader, newWriter, []byte(indexerPrefix), false, false, nextVersion)
+	newLSS := NewTxn(newLSSStore, newStore, latestStatePrefix, true, true, true, nextVersion)
+	newIndexer := NewTxn(newStore, newStore, indexerPrefix, false, false, false, nextVersion)
 	// only after creating all new objects, discard old transactions
 	s.Discard()
 	// update all references
@@ -330,32 +377,42 @@ func (s *Store) Reset() {
 
 // Discard() closes the reader and writer
 func (s *Store) Discard() {
-	s.ss.reader.Discard()
+	if s.isTxn {
+		s.ss.Discard()
+		s.Indexer.db.Discard()
+		return
+	}
+	s.ss.Close()
 	s.sc = nil
-	s.Indexer.db.reader.Discard()
+	s.Indexer.db.Close()
 	if s.writer != nil {
-		s.writer.Cancel()
+		s.writer.Close()
 	}
 }
 
 // Close() discards the writer and closes the database connection
 func (s *Store) Close() lib.ErrorI {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Discard()
+	if err := s.db.Flush(); err != nil {
+		return ErrCloseDB(fmt.Errorf("flush error: %v", err))
+	}
 	if err := s.db.Close(); err != nil {
-		return ErrCloseDB(s.db.Close())
+		return ErrCloseDB(err)
 	}
 	return nil
 }
 
 // commitIDKey() returns the key for the commitID at a specific version
 func (s *Store) commitIDKey(version uint64) []byte {
-	return fmt.Appendf(nil, "%s/%d", stateCommitIDPrefix, version)
+	return append(stateCommitIDPrefix, lib.JoinLenPrefix(fmt.Appendf(nil, "%d", version))...)
 }
 
 // getCommitID() retrieves the CommitID value for the specified version from the database
 func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 	var bz []byte
-	bz, err = NewTxn(s.Indexer.db.reader, nil, nil, false, false).Get(s.commitIDKey(version))
+	bz, err = NewTxn(s.Indexer.db.reader, nil, nil, false, false, true).Get(s.commitIDKey(version))
 	if err != nil {
 		return
 	}
@@ -367,167 +424,28 @@ func (s *Store) getCommitID(version uint64) (id lib.CommitID, err lib.ErrorI) {
 
 // setCommitID() stores the CommitID for the specified version and root in the database
 func (s *Store) setCommitID(version uint64, root []byte) lib.ErrorI {
-	w := NewTxn(s.Indexer.db.reader, s.writer, nil, false, false, version)
+	// prepare the commit ID value
 	value, err := lib.Marshal(&lib.CommitID{Height: version, Root: root})
 	if err != nil {
 		return err
 	}
-	if err = w.Set([]byte(lastCommitIDPrefix), value); err != nil {
+	vs := NewVersionedStore(nil, s.writer, version)
+	if err = vs.SetAt(lastCommitIDPrefix, value, lssVersion); err != nil {
 		return err
 	}
-	if err = w.Set(s.commitIDKey(version), value); err != nil {
+	if err = vs.SetAt(s.commitIDKey(version), value, version); err != nil {
 		return err
 	}
-	if e := w.Flush(); e != nil {
-		return ErrCommitDB(e)
-	}
 	return nil
-}
-
-// Evict deletes all entries marked for eviction.
-// It is done by backing up the LSS store, creating a new LSS store with the deleted keys removed,
-// and then updating the latest state prefix to use that new one, while in the background all the keys
-// of the previous LSS store. This allows for efficient garbage collection of old data while not needing
-// to wait for the entire DropPrefix process to complete before proceeding with new operations.
-func (s *Store) Evict() lib.ErrorI {
-	now := time.Now()
-	s.log.Debugf("key eviction started at height %d", s.Version())
-	// backup the LSS store
-	lssBackup, err := s.GetItems(lssVersion, []byte(latestStatePrefix), true)
-	if err != nil {
-		return ErrCommitDB(err)
-	}
-	// save the current LSS prefix
-	currentLSSPrefix := latestStatePrefix
-	// create a new random LSS prefix
-	newLSSPrefix := hex.EncodeToString(fmt.Appendf(nil, "%s/", lib.RandSlice(32)))
-	// create the new LSS store without the deleted keys
-	writer := s.db.NewWriteBatchAt(lssVersion)
-	backupKeys := make([][]byte, 0, len(lssBackup))
-	for _, entry := range lssBackup {
-		// add the current key to the backup list
-		backupKeys = append(backupKeys, bytes.Clone(entry.Key))
-		// replace the old LSS prefix with the new one
-		entry.Key = bytes.Replace(entry.Key, []byte(currentLSSPrefix), []byte(newLSSPrefix), 1)
-		if err := writer.SetEntryAt(entry, lssVersion); err != nil {
-			return ErrStoreSet(err)
-		}
-	}
-	// write the new LSS prefix in the db for reboots
-	entry := &badger.Entry{
-		Key:   []byte(latestStateKeyPrefix),
-		Value: []byte(newLSSPrefix),
-	}
-	if err := writer.SetEntryAt(entry, lssVersion); err != nil {
-		return ErrStoreSet(err)
-	}
-	// commit the new LSS restore
-	if err := writer.Flush(); err != nil {
-		return ErrFlushBatch(err)
-	}
-	// set the latest state prefix to the new one for next reads
-	latestStatePrefix = newLSSPrefix
-	go func() {
-		now := time.Now()
-		// create a new writeBatch for the given version
-		deleteWriter := s.db.NewWriteBatchAt(lssVersion)
-		// set discard timestamp, before evicting entries
-		s.db.SetDiscardTs(lssVersion)
-		// reset discard timestamp after eviction
-		defer s.db.SetDiscardTs(0)
-		// set all the previous keys to be deleted
-		for _, key := range backupKeys {
-			if err := deleteWriter.DeleteAt(key, lssVersion); err != nil {
-				s.log.Errorf("failed to delete key: %v", err)
-			}
-		}
-		// flush the writeBatch
-		if err := deleteWriter.Flush(); err != nil {
-			s.log.Errorf("eviction: failed to flush writeBatch: %v", err)
-		}
-		s.log.Debugf("deleted previous LSS keys took: %s", time.Since(now))
-	}()
-	// log the results
-	total, _ := s.keyCount(lssVersion, []byte(latestStatePrefix), true)
-	s.log.Debugf("key eviction finished [%d], total keys: %d elapsed: %s",
-		s.Version(), total, time.Since(now))
-	// exit
-	return nil
-}
-
-// keyCount counts the number of total keys and those marked for deletion within a version/prefix
-func (s *Store) keyCount(version uint64, prefix []byte, noDiscardBit bool) (count, deleted uint64) {
-	// create a new transaction at the specified version
-	txn := s.db.NewTransactionAt(version, false)
-	defer txn.Discard()
-	// create a new iterator for the transaction on the given prefix
-	it := txn.NewIterator(badger.IteratorOptions{
-		Prefix:      prefix,
-		AllVersions: true,
-	})
-	defer it.Close()
-	for it.Rewind(); it.Valid(); it.Next() {
-		count++
-		if it.Item().IsDeletedOrExpired() {
-			deleted++
-			item := it.Item()
-			deleteBit := entryItemIsDelete(item)
-			discardBit := entryItemIsDoNotDiscard(item)
-			// check if a no discard bit is set to key that should be deleted
-			if discardBit && noDiscardBit {
-				s.log.Warnf("discard bit found, key=%s size=%d delete=%t",
-					lib.BytesToString(item.KeyCopy(nil)), item.EstimatedSize(), deleteBit)
-			}
-		}
-	}
-	// return the counts
-	return count, deleted
-}
-
-// GetItems returns all items in the store with the given version and prefix.
-func (s *Store) GetItems(version uint64, prefix []byte, skipDeleted bool) ([]*badger.Entry, error) {
-	// create the items slice
-	items := make([]*badger.Entry, 0)
-	// create a new transaction at the specified version
-	txn := s.db.NewTransactionAt(version, false)
-	defer txn.Discard()
-	// create a new iterator for the transaction on the given prefix
-	it := txn.NewIterator(badger.IteratorOptions{
-		Prefix:      prefix,
-		AllVersions: true,
-	})
-	// close the iterator when done
-	defer it.Close()
-	// iterate over the items
-	for it.Rewind(); it.Valid(); it.Next() {
-		item := it.Item()
-		// check if the item is deleted or expired
-		if skipDeleted && item.IsDeletedOrExpired() {
-			continue
-		}
-		value, err := item.ValueCopy(nil)
-		if err != nil {
-			return nil, ErrReadBytes(err)
-		}
-		// copy the item's key, value, and metadata
-		newItem := &badger.Entry{
-			Key:   item.KeyCopy(nil),
-			Value: value,
-		}
-		setMeta(newItem, getItemMeta(item))
-		// append the item to the items slice
-		items = append(items, newItem)
-	}
-	// return the items
-	return items, nil
 }
 
 // getLatestCommitID() retrieves the latest CommitID from the database
-func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *lib.CommitID) {
-	reader := db.NewTransactionAt(math.MaxUint64, false)
-	tx := NewBadgerTxn(reader, nil, nil, false, false, 0)
-	defer reader.Discard()
-	bz, err := tx.Get([]byte(lastCommitIDPrefix))
+func getLatestCommitID(db *pebble.DB, log lib.LoggerI) (id *lib.CommitID) {
+	reader := db.NewSnapshot()
+	defer reader.Close()
+	vs := NewVersionedStore(reader, nil, lssVersion)
+	tx := NewTxn(vs, nil, nil, false, false, true, 0)
+	bz, err := tx.Get(lastCommitIDPrefix)
 	if err != nil {
 		log.Fatalf("getLatestCommitID() failed with err: %s", err.Error())
 	}
@@ -538,20 +456,125 @@ func getLatestCommitID(db *badger.DB, log lib.LoggerI) (id *lib.CommitID) {
 	return
 }
 
-// getLSSPrefix() retrieves the current LSS prefix from the database
-func getLSSPrefix(db *badger.DB, log lib.LoggerI) string {
-	reader := db.NewTransactionAt(lssVersion, false)
-	defer reader.Discard()
-	item, err := reader.Get([]byte(latestStateKeyPrefix))
-	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return latestStatePrefix
+// MaybeCompact() checks if it is time to compact the LSS and HSS respectively
+func (s *Store) MaybeCompact() {
+	// check if the current version is a multiple of the cleanup block interval
+	compactionInterval := s.config.StoreConfig.LSSCompactionInterval
+	version := s.Version()
+	if compactionInterval > 0 && version%compactionInterval == 0 {
+		go func() {
+			// compactions are not allowed to run concurrently to not intertwine with the keys
+			if s.compaction.Load() {
+				s.log.Debugf("key compaction skipped [%d]: already in progress", version)
+				return
+			}
+			s.compaction.Store(true)
+			defer s.compaction.Store(false)
+			// perform HSS compaction every 4th compaction
+			hssCompaction := (version/compactionInterval)%4 == 0
+			// trigger compaction of store keys
+			if err := s.Compact(version, hssCompaction); err != nil {
+				s.log.Errorf("key compaction failed: %s", err)
+			}
+		}()
+	}
+}
+
+// Compact deletes all entries marked for compaction on the given prefix range.
+// it iterates over the prefix, deletes tombstone entries, and performs DB compaction
+func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
+	// first compaction: latest state  keys
+	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
+	// track current time and version
+	now := time.Now()
+	s.log.Debugf("key compaction started at height %d", version)
+	// create a timeout to limit the duration of the compaction process
+	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	// create a batch to set the keys to be removed by the compaction
+	batch := s.db.NewBatch()
+	defer batch.Close()
+	// set metrics to log
+	total, toDelete := 0, 0
+	// collect and delete tombstone entries
+	err := s.withIterator(startPrefix, endPrefix, func(it *pebble.Iterator) {
+		tombstone, _ := parseValueWithTombstone(it.Value())
+		if tombstone == DeadTombstone {
+			batch.Delete(it.Key(), pebble.NoSync)
+			toDelete++
+		} else {
+			total++
 		}
-		log.Fatalf("getLSSPrefix() failed with err: %s", err.Error())
-	}
-	val, err := item.ValueCopy(nil)
+	})
 	if err != nil {
-		log.Fatalf("getLSSPrefix() failed with err: %s", err.Error())
+		return ErrCommitDB(err)
 	}
-	return string(val)
+	// if nothing to delete, skip compaction
+	if batch.Empty() {
+		s.log.Debugf("key compaction finished [%d], no values to delete", version)
+		return nil
+	}
+	// commit the batch
+	s.mu.Lock() // lock commit op
+	// check if batch's db closed field is not nil using reflection, this is due to a possible issue
+	// on pebbleDB where the batch may come as nil due to their internal sync.Pool implementation.
+	// The issue is currently being investigated and this may be removed in the future.
+	// Issue: https://github.com/cockroachdb/pebble/issues/5563
+	batchValue := reflect.ValueOf(batch).Elem()
+	batchDBField := batchValue.FieldByName("db")
+	if !batchDBField.IsValid() || batchDBField.IsNil() {
+		s.mu.Unlock() // unlock commit op
+		return ErrCommitDB(fmt.Errorf("db field is nil"))
+	}
+	dbValue := batchDBField.Elem()
+	closedField := dbValue.FieldByName("closed")
+	if !closedField.IsValid() || closedField.IsNil() {
+		s.mu.Unlock() // unlock commit op
+		return ErrCommitDB(fmt.Errorf("closed field is nil"))
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		s.mu.Unlock() // unlock commit op
+		return ErrCommitDB(err)
+	}
+	s.mu.Unlock() // unlock commit op
+	batchTime := time.Since(now)
+	// perform a flush to ensure memtables are flushed to disk
+	if err := s.db.Flush(); err != nil {
+		return ErrCommitDB(fmt.Errorf("failed to flush memtables: %v", err))
+	}
+	// flush and compact the range
+	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
+		return ErrCommitDB(err)
+	}
+	lssTime := time.Since(now)
+	s.log.Debugf("key compaction finished [LSS] [%d], total keys: %d, deleted: %d batch: %s elapsed: %s",
+		version, total, toDelete, batchTime, lssTime)
+	// second compaction: historic state keys
+	if compactHSS {
+		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
+		hssTime := time.Now()
+		if err := s.db.Compact(ctx, startPrefix, endPrefix, false); err != nil {
+			return ErrCommitDB(err)
+		}
+		// log results
+		s.log.Debugf("key compaction finished [HSS] [%d] time: %s, total time: %s", version,
+			time.Since(hssTime), time.Since(now))
+	}
+	return nil
+}
+
+// withIterator iterates over the keys in the given range with the provided callback function.
+func (s *Store) withIterator(startPrefix, endPrefix []byte, cb func(it *pebble.Iterator)) lib.ErrorI {
+	db := s.db.NewSnapshot()
+	defer db.Close()
+	it, err := db.NewIter(&pebble.IterOptions{LowerBound: startPrefix, UpperBound: endPrefix})
+	if err != nil {
+		return ErrOpenDB(err)
+	}
+	defer it.Close()
+	for it.First(); it.Valid(); it.Next() {
+		cb(it)
+	}
+	return nil
 }

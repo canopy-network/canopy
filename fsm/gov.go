@@ -88,20 +88,23 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	// set the param space back in state
 	switch paramSpace {
 	case ParamSpaceCons:
-		return s.SetParamsCons(sp.(*ConsensusParams))
+		err = s.SetParamsCons(sp.(*ConsensusParams))
 	case ParamSpaceVal:
-		return s.SetParamsVal(sp.(*ValidatorParams))
+		err = s.SetParamsVal(sp.(*ValidatorParams))
 	case ParamSpaceFee:
-		return s.SetParamsFee(sp.(*FeeParams))
+		err = s.SetParamsFee(sp.(*FeeParams))
 	case ParamSpaceGov:
-		return s.SetParamsGov(sp.(*GovernanceParams))
+		err = s.SetParamsGov(sp.(*GovernanceParams))
+	}
+	if err != nil {
+		return err
 	}
 	// adjust the state if necessary
 	return s.ConformStateToParamUpdate(previousParams)
 }
 
 // ConformStateToParamUpdate() ensures the state does not violate the new values of the governance parameters
-// - Only MaxCommitteeSize & RootChainId requires an adjustment
+// - Only MaxCommitteeSize, RootChainId, MinimumStakeForValidators & MinimumStakeForDelegates require an adjustment
 // - MinSellOrderSize is purposefully allowed to violate new updates
 func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.ErrorI {
 	// retrieve the params from state
@@ -120,6 +123,27 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		selfCommittee.LastRootHeightUpdated = 0
 		// overwrite the committee data in state
 		if err = s.OverwriteCommitteeData(selfCommittee); err != nil {
+			return err
+		}
+	}
+	// check if minimum stake requirements have increased
+	validatorMinStakeIncreased := previousParams.Validator.MinimumStakeForValidators < params.Validator.MinimumStakeForValidators
+	delegateMinStakeIncreased := previousParams.Validator.MinimumStakeForDelegates < params.Validator.MinimumStakeForDelegates
+	// if either minimum stake has increased, force unstake those below the new minimum
+	if validatorMinStakeIncreased || delegateMinStakeIncreased {
+		// iterate through all validators and delegates
+		if err = s.IterateAndExecute(ValidatorPrefix(), func(key, value []byte) (e lib.ErrorI) {
+			// convert bytes into a validator object
+			v, e := s.unmarshalValidator(value)
+			if e != nil {
+				return e
+			}
+			// set validator to unstaking if below minium
+			if _, e = s.SetValidatorUnstakingIfBelowMinimum(v, params.Validator); err != nil {
+				return e
+			}
+			return
+		}); err != nil {
 			return err
 		}
 	}
@@ -198,6 +222,7 @@ func (s *StateMachine) SetParamsCons(c *ConsensusParams) lib.ErrorI {
 
 // SetParamsVal() sets Validator params into state
 func (s *StateMachine) SetParamsVal(v *ValidatorParams) lib.ErrorI {
+	s.cache.valParams = v
 	return s.setParams(ParamSpaceVal, v)
 }
 
@@ -208,6 +233,7 @@ func (s *StateMachine) SetParamsGov(g *GovernanceParams) lib.ErrorI {
 
 // SetParamsFee() sets Fee params into state
 func (s *StateMachine) SetParamsFee(f *FeeParams) lib.ErrorI {
+	s.cache.feeParams = f
 	return s.setParams(ParamSpaceFee, f)
 }
 
@@ -245,11 +271,12 @@ func (s *StateMachine) GetParams() (*Params, lib.ErrorI) {
 		return nil, err
 	}
 	// return a collective 'parameters' object that holds all the spaces
+	// proto copies are needed for update safety
 	return &Params{
-		Consensus:  cons,
-		Validator:  val,
-		Fee:        fee,
-		Governance: gov,
+		Consensus:  proto.Clone(cons).(*ConsensusParams),
+		Validator:  proto.Clone(val).(*ValidatorParams),
+		Fee:        proto.Clone(fee).(*FeeParams),
+		Governance: proto.Clone(gov).(*GovernanceParams),
 	}, nil
 }
 

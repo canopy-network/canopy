@@ -23,6 +23,12 @@ go.work
 # Jetbrains
 .idea
 
+# Zed
+.zed
+
+# Visual Studio Code
+.vscode
+
 # Vendoring
 vendor
 
@@ -36,6 +42,3 @@ vendor
 cmd/web/explorer/.idea
 **/.DS_Store
 /cmd/tps/data
-
-rag
-node_modules

@@ -1053,6 +1053,8 @@ func TestUpdateCommittees(t *testing.T) {
 				// retrieve the old validator
 				val, err := sm.GetValidator(addr)
 				require.NoError(t, err)
+				// update the validator committeee
+				require.NoError(t, sm.SetValidator(v))
 				// run the function
 				require.NoError(t, sm.UpdateCommittees(addr, val, v.StakedAmount, v.Committees))
 			}
@@ -1121,17 +1123,16 @@ func TestDeleteCommittees(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
-			// for each test validator
-			for _, v := range test.validators {
-				// set the validator in state
-				require.NoError(t, sm.SetValidator(v))
-				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
-			}
-			// for each update
+			// create a supply tracker
+			supply := &Supply{}
+			// set the validators with proper supply tracking
+			require.NoError(t, sm.SetValidators(test.validators, supply))
+			// update the supply in state
+			require.NoError(t, sm.SetSupply(supply))
+			// for each validator to delete
 			for _, v := range test.delete {
-				// run the function
-				require.NoError(t, sm.DeleteCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+				// DeleteValidator internally calls DeleteCommittees, so we don't need to call it explicitly
+				require.NoError(t, sm.DeleteValidator(v))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
@@ -1143,10 +1144,10 @@ func TestDeleteCommittees(t *testing.T) {
 				// get the committee pool from the supply object
 				p, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
+				// compare got supply vs total tokens
+				require.Equal(t, test.expectedTotalPower[id], p.Amount)
 				// for each expected public key
 				for i, expectedPublicKey := range publicKeys {
-					// compare got supply vs total tokens
-					require.Equal(t, test.expectedTotalPower[id], p.Amount)
 					// compare got vs expected
 					require.Equal(t, expectedPublicKey, got.ValidatorSet.ValidatorSet[i].PublicKey)
 				}
@@ -1917,6 +1918,231 @@ func TestRetireCommittee(t *testing.T) {
 			gotCommittees, err := sm.GetRetiredCommittees()
 			require.NoError(t, err)
 			require.Equal(t, test.expectedRetiredCommittees, gotCommittees)
+		})
+	}
+}
+
+func TestGetTopDelegates(t *testing.T) {
+	chainId := uint64(1)
+	tests := []struct {
+		name                         string
+		detail                       string
+		maximumDelegatesPerCommittee uint64
+		validators                   []*Validator
+		expectedDelegates            int
+		expectedTotalPower           uint64
+		mustInclude                  [][]byte // public keys that must be included
+		mustExclude                  [][]byte // public keys that must be excluded
+	}{
+		{
+			name:                         "fewer delegates than maximum",
+			detail:                       "when there are fewer delegates than MaximumDelegatesPerCommittee, return all of them",
+			maximumDelegatesPerCommittee: 5,
+			validators: []*Validator{
+				{
+					Address:      newTestAddressBytes(t, 0),
+					PublicKey:    newTestPublicKeyBytes(t, 0),
+					StakedAmount: 100,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 1),
+					PublicKey:    newTestPublicKeyBytes(t, 1),
+					StakedAmount: 200,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 2),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
+					StakedAmount: 150,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+			},
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
+			mustInclude: [][]byte{
+				newTestPublicKeyBytes(t, 0),
+				newTestPublicKeyBytes(t, 1),
+				newTestPublicKeyBytes(t, 2),
+			},
+		},
+		{
+			name:                         "exact number of delegates",
+			detail:                       "when delegates equal MaximumDelegatesPerCommittee, return all of them",
+			maximumDelegatesPerCommittee: 3,
+			validators: []*Validator{
+				{
+					Address:      newTestAddressBytes(t, 0),
+					PublicKey:    newTestPublicKeyBytes(t, 0),
+					StakedAmount: 100,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 1),
+					PublicKey:    newTestPublicKeyBytes(t, 1),
+					StakedAmount: 200,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 2),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
+					StakedAmount: 150,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+			},
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
+			mustInclude: [][]byte{
+				newTestPublicKeyBytes(t, 0),
+				newTestPublicKeyBytes(t, 1),
+				newTestPublicKeyBytes(t, 2),
+			},
+		},
+		{
+			name:                         "paused and unstaking validators excluded",
+			detail:                       "paused and unstaking validators should not be included in top delegates",
+			maximumDelegatesPerCommittee: 3,
+			validators: []*Validator{
+				{
+					Address:      newTestAddressBytes(t, 0),
+					PublicKey:    newTestPublicKeyBytes(t, 0),
+					StakedAmount: 500,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:         newTestAddressBytes(t, 1),
+					PublicKey:       newTestPublicKeyBytes(t, 1),
+					StakedAmount:    400,
+					MaxPausedHeight: 1, // paused
+					Committees:      []uint64{chainId},
+					Delegate:        true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 2),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
+					StakedAmount: 300,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:         newTestAddressBytes(t, 3),
+					PublicKey:       newTestPublicKeyBytes(t, 3),
+					StakedAmount:    250,
+					UnstakingHeight: 1, // unstaking
+					Committees:      []uint64{chainId},
+					Delegate:        true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 4),
+					PublicKey:    newTestPublicKeyBytes(t, 4),
+					StakedAmount: 200,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+			},
+			expectedDelegates:  3,
+			expectedTotalPower: 1000,
+			mustInclude: [][]byte{
+				newTestPublicKeyBytes(t, 0), // 500
+				newTestPublicKeyBytes(t, 2), // 300
+				newTestPublicKeyBytes(t, 4), // 200
+			},
+			mustExclude: [][]byte{
+				newTestPublicKeyBytes(t, 1), // paused
+				newTestPublicKeyBytes(t, 3), // unstaking
+			},
+		},
+		{
+			name:                         "zero maximum returns all",
+			detail:                       "when MaximumDelegatesPerCommittee is 0, return all delegates",
+			maximumDelegatesPerCommittee: 0,
+			validators: []*Validator{
+				{
+					Address:      newTestAddressBytes(t, 0),
+					PublicKey:    newTestPublicKeyBytes(t, 0),
+					StakedAmount: 100,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 1),
+					PublicKey:    newTestPublicKeyBytes(t, 1),
+					StakedAmount: 200,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+				{
+					Address:      newTestAddressBytes(t, 2),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
+					StakedAmount: 150,
+					Committees:   []uint64{chainId},
+					Delegate:     true,
+				},
+			},
+			expectedDelegates:  3,
+			expectedTotalPower: 450,
+			mustInclude: [][]byte{
+				newTestPublicKeyBytes(t, 0),
+				newTestPublicKeyBytes(t, 1),
+				newTestPublicKeyBytes(t, 2),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// create a state machine instance with default parameters
+			sm := newTestStateMachine(t)
+			// get validator params
+			valParams, err := sm.GetParamsVal()
+			require.NoError(t, err)
+			// set the maximum delegates per committee
+			valParams.MaximumDelegatesPerCommittee = test.maximumDelegatesPerCommittee
+			// set the params back in state
+			require.NoError(t, sm.SetParamsVal(valParams))
+			// preset the validators
+			for _, v := range test.validators {
+				// set validator in the state
+				require.NoError(t, sm.SetValidator(v))
+				// set delegations
+				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
+			}
+			// execute the function call
+			got, err := sm.GetDelegates(chainId)
+			require.NoError(t, err)
+			// validate the returned validator set is not nil
+			require.NotNil(t, got.ValidatorSet)
+			// validate the number of delegates
+			require.Equal(t, len(got.ValidatorSet.ValidatorSet), test.expectedDelegates)
+			// validate total power
+			require.Equal(t, test.expectedTotalPower, got.TotalPower)
+			// validate num validators
+			require.Equal(t, uint64(len(got.ValidatorSet.ValidatorSet)), got.NumValidators)
+			// validate minimum 2/3 majority
+			require.Equal(t, (2*got.TotalPower)/3+1, got.MinimumMaj23)
+
+			// collect all returned public keys for validation
+			returnedKeys := make(map[string]bool)
+			for _, v := range got.ValidatorSet.ValidatorSet {
+				returnedKeys[string(v.PublicKey)] = true
+			}
+
+			// ensure all mustInclude keys are present
+			for _, pubKey := range test.mustInclude {
+				require.True(t, returnedKeys[string(pubKey)], "expected public key %x to be included", pubKey)
+			}
+
+			// ensure all mustExclude keys are not present
+			for _, pubKey := range test.mustExclude {
+				require.False(t, returnedKeys[string(pubKey)], "expected public key %x to be excluded", pubKey)
+			}
 		})
 	}
 }

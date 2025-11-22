@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"slices"
 
@@ -277,6 +278,35 @@ func (s *StateMachine) SetValidatorUnstaking(address crypto.AddressI, validator 
 	return s.SetValidator(validator)
 }
 
+// SetValidatorUnstakingIfBelowMinimum() updates a validator as 'unstaking' and removes it from its respective committees
+// if it is below the minimum stake according to saved params
+func (s *StateMachine) SetValidatorUnstakingIfBelowMinimum(validator *Validator, params *ValidatorParams) (bool, lib.ErrorI) {
+	var belowMinimum, unstakingBlocks = false, uint64(0)
+	// skip if already unstaking
+	if validator.UnstakingHeight != 0 {
+		return false, nil
+	}
+	// validate stake is above minimums
+	if validator.Delegate {
+		if validator.StakedAmount < params.MinimumStakeForDelegates {
+			unstakingBlocks, belowMinimum = params.DelegateUnstakingBlocks, true
+		}
+	} else {
+		if validator.StakedAmount < params.MinimumStakeForValidators {
+			unstakingBlocks, belowMinimum = params.UnstakingBlocks, true
+		}
+	}
+	// if below minimum, force unstake
+	if belowMinimum {
+		// calculate the future unstaking height
+		unstakingHeight := s.Height() + unstakingBlocks
+		// set the validator/delegate as unstaking
+		return true, s.SetValidatorUnstaking(crypto.NewAddress(validator.Address), validator, unstakingHeight)
+	}
+	// if not, nothing happen
+	return false, nil
+}
+
 // DeleteFinishedUnstaking() deletes the Validator structure and unstaking keys for those who have finished unstaking
 func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 	// create a variable to maintain a list of the unstaking keys 'to delete'
@@ -378,6 +408,80 @@ func (s *StateMachine) GetAuthorizedSignersForValidator(address []byte) (signers
 	}
 	// return the operator and output
 	return [][]byte{validator.Address, validator.Output}, nil
+}
+
+// getValidatorSet() is a helper function to get a validator set ordered by stake to the maximum parameter
+func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSet, err lib.ErrorI) {
+	// get the validator params
+	p, err := s.GetParamsVal()
+	if err != nil {
+		return
+	}
+	maxPerCommittee, delegateFilter := p.MaxCommitteeSize, lib.FilterOption_Exclude
+	if delegate {
+		maxPerCommittee, delegateFilter = p.MaximumDelegatesPerCommittee, lib.FilterOption_MustBe
+	}
+	validators := make([]*Validator, 0)
+	// reverse iterator is slightly more efficient than forward iterator for large datasets
+	it, err := s.RevIterator(ValidatorPrefix())
+	if err != nil {
+		return vs, err
+	}
+	// ensure memory cleanup
+	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		// convert the bytes into a validator object reference
+		val, e := s.unmarshalValidator(it.Value())
+		if e != nil {
+			return vs, e
+		}
+		// add it to the list
+		validators = append(validators, val)
+	}
+	// filter out validators not part of the committee
+	filtered := slices.Collect(func(yield func(*Validator) bool) {
+		for _, v := range validators {
+			// exclude validators not part of the committee
+			if !v.PassesFilter(lib.ValidatorFilters{
+				Unstaking: lib.FilterOption_Exclude,
+				Paused:    lib.FilterOption_Exclude,
+				Delegate:  lib.FilterOption(delegateFilter),
+				Committee: chainId,
+			}) {
+				continue
+			}
+			// add validator to filtered list
+			if !yield(v) {
+				return
+			}
+		}
+	})
+	// sort by highest stake then address
+	slices.SortFunc(filtered, func(a, b *Validator) int {
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
+	})
+	// create a variable to hold the committee members
+	members := make([]*lib.ConsensusValidator, 0)
+	// determine slice size — if MaxCommitteeSize == 0, use all
+	limit := uint64(len(filtered))
+	if maxPerCommittee > 0 {
+		limit = min(uint64(len(filtered)), maxPerCommittee)
+	}
+	// for each validator up to the limit
+	for _, v := range filtered[:limit] {
+		members = append(members, &lib.ConsensusValidator{
+			PublicKey:   v.PublicKey,
+			VotingPower: v.StakedAmount,
+			NetAddress:  v.NetAddress,
+		})
+	}
+	// convert list to a validator set (includes shared public key)
+	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address
