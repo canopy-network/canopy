@@ -29,9 +29,7 @@ services:
     working_dir: /anvil
   node-1:
     container_name: node-1
-    build:
-      context: ..
-      dockerfile: .docker/Dockerfile
+    image: canopy-node:latest
     ports:
       - 50000:50000 # Wallet
       - 50001:50001 # Explorer
@@ -52,9 +50,7 @@ services:
 #          cpus: "1.0"
   node-2:
     container_name: node-2
-    build:
-      context: ..
-      dockerfile: .docker/Dockerfile
+    image: canopy-node:latest
     ports:
       - 40000:40000 # Wallet
       - 40001:40001 # Explorer
