@@ -1,32 +1,4 @@
 services:
-  anvil:
-    image: ghcr.io/foundry-rs/foundry:latest
-    container_name: anvil
-    ports:
-      - 8545:8545
-    networks:
-      - canopy
-    entrypoint: ["anvil", "-vvv", "--host", "0.0.0.0", "--block-time", "2", "--port", "8545"]
-    volumes:
-      - ./anvil:/anvil
-    healthcheck:
-      test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-  anvil-init:
-    image: ghcr.io/foundry-rs/foundry:latest
-    container_name: anvil-init
-    user: "0"
-    networks:
-      - canopy
-    depends_on:
-      - anvil
-    entrypoint: ["/anvil/anvil.sh"]
-    volumes:
-      - ./anvil:/anvil
-    working_dir: /anvil
   node-1:
     container_name: node-1
     image: canopy-node:latest
