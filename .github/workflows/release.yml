@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag for the release (e.g. v1.0.0)'
+        description: "Tag for the release (e.g. v1.0.0)"
         required: true
 
 permissions:
-  contents: write  # <-- This is required for GITHUB_TOKEN to create a release
+  # required for GITHUB_TOKEN to create a release
+  contents: write
 
 jobs:
   release:
@@ -22,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22' # Change this to match your Go version
+          go-version: "1.24"
 
       - name: Build binaries
         run: |
