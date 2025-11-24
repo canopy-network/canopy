@@ -112,6 +112,7 @@ func (c *MultiConn) Start() {
 
 // Stop() sends exit signals for send and receive loops and closes the connection
 func (c *MultiConn) Stop() {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	c.close.Do(func() {
 		c.p2p.log.Debugf("Stopping peer %s", lib.BytesToString(c.Address.PublicKey))
 		c.quitReceiving <- struct{}{}
@@ -241,16 +242,12 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 	}
 	// call onError() for the peer
 	c.error.Do(func() {
-		// prevent race between adding to peer set and erroring
-		c.p2p.Lock()
-		defer c.p2p.Unlock()
-		// set the connection as failed - this marks the underlying net.Conn as invalid
-		// since it's about to be closed. There's no reliable way to check whether a connection
-		// is closed without attempting read/write operations, which can lead to race conditions,
-		// data corruption, and message loss.
+		// mark the connection as failed under lock, but avoid holding the lock during teardown
+		unlock := lockWithTrace("p2p", &c.p2p.mux, c.p2p.log)
 		c.hasError.Store(true)
-		// run the callback
+		// run the callback after releasing the lock to prevent blocking other readers
 		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
+		unlock()
 		// stop the multi-conn
 		c.Stop()
 	})
@@ -366,14 +363,14 @@ func (s *Stream) queueSend(p *Packet) bool {
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
 func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, lib.ErrorI) {
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
-	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
-	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
-	//	lib.Topic_name[int32(packet.StreamId)],
-	//	len(packet.Bytes),
-	//	packet.Eof,
-	//	crypto.ShortHashString(packet.Bytes),
-	//)
-	//defer s.logger.Debugf("Done receiving: %s", crypto.ShortHashString(packet.Bytes))
+	s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
+		lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
+		lib.Topic_name[int32(packet.StreamId)],
+		len(packet.Bytes),
+		packet.Eof,
+		crypto.ShortHashString(packet.Bytes),
+	)
+	defer s.logger.Debugf("Done receiving: %s", crypto.ShortHashString(packet.Bytes))
 	// if the addition of this new packet pushes the total message size above max
 	if int(maxMessageSize) < msgAssemblerLen+packetLen {
 		s.msgAssembler = s.msgAssembler[:0]
@@ -392,7 +389,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 			Message: msg,
 			Sender:  peerInfo,
 		}
-		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
+		s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:

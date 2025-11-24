@@ -314,9 +314,9 @@ out:
 	for {
 		select {
 		case <-time.After(500 * time.Millisecond):
-			n1.RLock()
+			unlock := rlockWithTrace("p2p", &n1.mux, n1.log)
 			numVals := len(n1.mustConnect)
-			n1.RUnlock()
+			unlock()
 			if numVals != 0 {
 				break out
 			}
