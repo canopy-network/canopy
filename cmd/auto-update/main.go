@@ -42,7 +42,13 @@ func main() {
 	configs, logger := getConfigs()
 	// check if no start was called, this means it was just called as config
 	if len(os.Args) < 2 || os.Args[1] != "start" {
-		logger.Info("Setup complete.\nKey configuration is ready.\nFrom now on, run this service using the 'start' command to launch Canopy with the auto-updater.\nThis message appears because the program was started directly instead of using 'start'.")
+		// TODO: This message is partly misleading due to the fact that the only place that it would
+		// make sense to have a setup complete message is on the context of the deployments repository.
+		// The actual behavior of this program should be to only start the CLI directly, not perform
+		// any kind of setup or initialization.
+		logger.Info("setup complete.\nKey configuration is ready.\n" +
+			"From now on, run this service using the 'start' command to launch Canopy with the auto-updater.\n" +
+			"This message appears because the program was started directly instead of using 'start'.")
 		return
 	}
 	// do not run the auto-update process if its disabled
