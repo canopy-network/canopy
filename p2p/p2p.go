@@ -303,10 +303,10 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		connection.Stop()
 		return nil
 	}
-	p.Lock()
-	defer p.Unlock()
+	unlock := lockWithTrace("p2p", &p.mux, p.log)
 	// check whether the connection has errors
 	if connection.hasError.Load() {
+		unlock()
 		return
 	}
 
@@ -325,16 +325,20 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	for _, item := range p.config.BannedPeerIDs {
 		pubKeyString := lib.BytesToString(info.Address.PublicKey)
 		if pubKeyString == item {
+			unlock()
 			return ErrBannedID(pubKeyString)
 		}
 	}
-	p.book.Add(&BookPeer{Address: info.Address})
+	bookPeer := &BookPeer{Address: info.Address}
 	if err = p.PeerSet.Add(&Peer{
 		conn:     connection,
 		PeerInfo: info,
 	}); err != nil {
+		unlock()
 		return err
 	}
+	unlock()
+	p.book.Add(bookPeer)
 	// add peer to peer set and peer book
 	p.log.Infof("Added peer: %s@%s", lib.BytesToString(info.Address.PublicKey), info.Address.NetAddress)
 	return

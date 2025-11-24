@@ -20,6 +20,8 @@
 # Go workspace file
 go.work
 
+.gocache
+
 # Jetbrains
 .idea
 

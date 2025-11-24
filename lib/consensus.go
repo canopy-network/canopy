@@ -202,6 +202,61 @@ func (x *AggregateSignature) GetNonSigners(validatorList *ConsensusValidators) (
 	return
 }
 
+func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, proposerPubKey []byte, height, chainId uint64, logger LoggerI) {
+	// convert the consensus validators list into a validator set
+	vs, err := NewValidatorSet(validatorList)
+	// if an error occurred during the conversion
+	if err != nil {
+		// exit with error
+		return
+	}
+	// create a copy of the multi-public-key from the validator set
+	key := vs.MultiKey.Copy()
+	// set the 'who signed' bitmap in a copy of the key
+	if e := key.SetBitmap(x.Bitmap); e != nil {
+		// convert the error to a lib.ErrorI
+		err = ErrInvalidSignerBitmap(e)
+		// exit with error
+		return
+	}
+	producerAddress, producerNetAddress := "", ""
+	for _, val := range vs.ValidatorSet.ValidatorSet {
+		if bytes.Equal(val.PublicKey, proposerPubKey) {
+			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
+			if err != nil {
+				logger.Errorf("Failed to create public key from valset: %s", err.Error())
+				continue
+			}
+			producerNetAddress, producerAddress = val.NetAddress, bls.Address().String()
+			break
+		}
+	}
+	// iterate through the ValSet to and see if the validator signed
+	for i, val := range vs.ValidatorSet.ValidatorSet {
+		// did they sign?
+		signed, er := key.SignerEnabledAt(i)
+		// if an error occurred during this check
+		if er != nil {
+			// convert the error to a lib.ErrorI
+			err = ErrInvalidSignerBitmap(er)
+			// exit
+			return
+		}
+		// if so, add to the pubkeys and add to the power
+		if !signed && (val.VotingPower*100 >= vs.TotalPower*5) {
+			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
+			if err != nil {
+				logger.Errorf("Failed to create public key from valset: %s", err.Error())
+				continue
+			}
+			logger.Errorf("NON-SIGNER-CRITICAL:\n%s (%s) did not sign block %d for chainID %d with producer: %s (%s)",
+				val.NetAddress, bls.Address().String(), height, chainId, producerNetAddress, producerAddress)
+		}
+	}
+	// exit
+	return
+}
+
 // getSigners() returns the public keys and corresponding combined voting power of signers or non-signers
 func (x *AggregateSignature) getSigners(vs ValidatorSet, nonSigners bool) (pubkeys [][]byte, power uint64, err ErrorI) {
 	// create a copy of the multi-public-key from the validator set
