@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -33,18 +32,25 @@ const (
 var (
 	// snapshotURLs contains the snapshot map for existing chains
 	snapshotURLs = map[uint64]string{
-		1: "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net",
-		2: "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net",
+		1: envOrDefault("SNAPSHOT_1_URL", "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net"),
+		2: envOrDefault("SNAPSHOT_2_URL", "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net"),
 	}
 )
 
 func main() {
-	// check if start was called
-	if len(os.Args) < 2 || os.Args[1] != "start" {
-		log.Fatalf("invalid input, only `start` command is allowed")
-	}
 	// get configs and logger
 	configs, logger := getConfigs()
+	// check if no start was called, this means it was just called as config
+	if len(os.Args) < 2 || os.Args[1] != "start" {
+		// TODO: This message is partly misleading due to the fact that the only place that it would
+		// make sense to have a setup complete message is on the context of the deployments repository.
+		// The actual behavior of this program should be to only start the CLI directly, not perform
+		// any kind of setup or initialization.
+		logger.Info("setup complete.\nKey configuration is ready.\n" +
+			"From now on, run this service using the 'start' command to launch Canopy with the auto-updater.\n" +
+			"This message appears because the program was started directly instead of using 'start'.")
+		return
+	}
 	// do not run the auto-update process if its disabled
 	if !configs.Coordinator.Canopy.AutoUpdate {
 		logger.Info("auto-update disabled, starting CLI directly")
