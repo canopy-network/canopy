@@ -32,8 +32,8 @@ const (
 var (
 	// snapshotURLs contains the snapshot map for existing chains
 	snapshotURLs = map[uint64]string{
-		1: "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net",
-		2: "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net",
+		1: envOrDefault("SNAPSHOT_1_URL", "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net"),
+		2: envOrDefault("SNAPSHOT_2_URL", "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net"),
 	}
 )
 
