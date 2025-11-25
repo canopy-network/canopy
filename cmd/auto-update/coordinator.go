@@ -247,7 +247,8 @@ func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
 		c.log.Debug("no update available")
 		return nil
 	}
-	c.log.Infof("new version found: %s", release.Version)
+	c.log.Infof("new version found: %s snapshot needed: %t", release.Version,
+		release.ApplySnapshot)
 	// download the new version
 	if err := c.updater.Download(ctx, release); err != nil {
 		return fmt.Errorf("failed to download release: %w", err)
