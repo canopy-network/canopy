@@ -12,6 +12,39 @@ import (
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
    not to be confused with 1 way order book swaps implemented in swap.go */
 
+// Cross-Chain DEX Pipeline (High-Level Overview)
+// ---------------------------------------------
+// Two chains (X and Y) continuously alternate between:
+//   • Collecting local DEX ops into `nextBatch`
+//   • Locking and sending that batch to the other chain
+//   • Processing the other chain’s locked batch
+//   • Applying receipts from previously locked batches
+//
+// Pipeline cycle:
+//   1) Both chains build `nextBatch` from local orders, deposits, withdrawals
+//        - Orders/Deposits: move funds to escrow and add to nextBatch
+//        - Withdrawals: add to nextBatch
+//
+//   2) ChainX locks nextBatch → sends to ChainY
+//
+//   3) ChainY receives locked batch:
+//        a) Apply receipts for prior locked batch (if any)
+//        b) Process ChainX’s locked batch:
+//             - Execute Orders: update pool, produce receipts
+//             - Execute Withdrawals: distribute tokens, burn points
+//             - Execute Deposits: create points, update pool
+//        c) Add produced receipts → Y.nextBatch, then lock + send to X
+//
+//   4) ChainX receives locked batch:
+//        a) Apply receipts from earlier X→Y batch
+//        b) Process Y’s locked batch (same rules as step 3b)
+//        c) Add receipts → X.nextBatch, then lock + send to Y
+//
+//   5) Repeat steps 3–4 indefinitely.
+//
+// Effectively: each chain is always processing the other chain’s locked batch
+// while preparing its own next locked batch, forming a continuous pipeline.
+
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
 	var localBatch *lib.DexBatch
@@ -53,68 +86,67 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 }
 
 // HandleRemoteDexBatch is the core function driving the DEX batch lifecycle.
-//
 // ─────────────────────────────────────────────────────────────────────────────
 // TERMINOLOGY
-//   • Locked Batch — A finalized (frozen) batch currently awaiting processing
-//                    by the remote chain.
-//   • Next Batch   — The batch currently collecting orders, deposits,
-//                    and withdrawals. This becomes the next Locked Batch.
+//   - Locked Batch — A finalized (frozen) batch currently awaiting processing
+//     by the remote chain.
+//   - Next Batch   — The batch currently collecting orders, deposits,
+//     and withdrawals. This becomes the next Locked Batch.
 //
 // TRIGGER POINTS
-//   • Nested Chain: Triggered on `begin_block` after handling its own
-//                   `CertificateResult`.
-//   • Root Chain:   Triggered on `deliver_tx` when receiving a
-//                   `certificateResultTx` from a Nested Chain.
+//   - Nested Chain: Triggered on `begin_block` after handling its own
+//     `CertificateResult`.
+//   - Root Chain:   Triggered on `deliver_tx` when receiving a
+//     `certificateResultTx` from a Nested Chain.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STEPS
 //
 // 0) SAFETY CHECK
-//    • Ensure our locked batch is completely satisfied
-//      abort early and retry on the next trigger.
+//   - Ensure our locked batch is completely satisfied
+//     abort early and retry on the next trigger.
 //
 // ---------------------------------------------------------------------------
 // 1) PROCESS RECEIPTS FOR *OUR* CURRENT LOCKED BATCH
 //
-//   1.a) Order Receipts
-//        • Success → Move order assets from HoldingPool → LiquidityPool.
-//        • Failure → Refund assets from HoldingPool → Seller.
-//        • Update both local and remote virtual pool ledgers.
+//	1.a) Order Receipts
+//	     • Success → Move order assets from HoldingPool → LiquidityPool.
+//	     • Failure → Refund assets from HoldingPool → Seller.
+//	     • Update both local and remote virtual pool ledgers.
 //
-//   1.b) Implied Withdrawal Receipts
-//        • Burn the proportional liquidity points.
-//        • Distribute the user’s allocated tokens for this chain.
-//        • Update all relevant pool ledgers.
+//	1.b) Implied Withdrawal Receipts
+//	     • Burn the proportional liquidity points.
+//	     • Distribute the user’s allocated tokens for this chain.
+//	     • Update all relevant pool ledgers.
 //
-//   1.c) Implied Deposit Receipts
-//        • Mint/distribute liquidity points based on local/remote pool states.
-//        • Move deposit from HoldingPool → LiquidityPool.
+//	1.c) Implied Deposit Receipts
+//	     • Mint/distribute liquidity points based on local/remote pool states.
+//	     • Move deposit from HoldingPool → LiquidityPool.
 //
 // ---------------------------------------------------------------------------
 // 2) CREATE RECEIPTS FOR THE REMOTE CHAIN'S LOCKED BATCH
 //
-//   2.a) Order Receipts (processed in pseudorandom order)
-//        • Compute how many tokens the order would receive if successful.
-//        • If within order limit (slippage) → Pay from LiquidityPool and update dX.
-//        • Else → Mark as a failed order.
-//        • Record a Receipt into NextBatch and update all pool ledgers.
+//	2.a) Order Receipts (processed in pseudorandom order)
+//	     • Compute how many tokens the order would receive if successful.
+//	     • If within order limit (slippage) → Pay from LiquidityPool and update dX.
+//	     • Else → Mark as a failed order.
+//	     • Record a Receipt into NextBatch and update all pool ledgers.
 //
-//   2.b) Withdrawal Receipts
-//        • Burn proportional liquidity points.
-//        • Distribute tokens for this chain.
-//        • Update pool ledgers.
+//	2.b) Withdrawal Receipts
+//	     • Burn proportional liquidity points.
+//	     • Distribute tokens for this chain.
+//	     • Update pool ledgers.
 //
-//   2.c) Deposit Receipts
-//        • Distribute liquidity points based on pooled liquidity states.
+//	2.c) Deposit Receipts
+//	     • Distribute liquidity points based on pooled liquidity states.
 //
 // ---------------------------------------------------------------------------
 // 3) ROTATE BATCHES
-//    • Set NextBatch.poolSize = pool.Amount.
-//    • Promote NextBatch → LockedBatch.
-//    • Reset NextBatch for the next cycle.
+//   - Set NextBatch.poolSize = pool.Amount.
+//   - Promote NextBatch → LockedBatch.
+//   - Reset NextBatch for the next cycle.
+//
 // ─────────────────────────────────────────────────────────────────────────────
-
 func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId uint64) (err lib.ErrorI) {
 	var receipts []uint64
 	// exit if dex data is empty
@@ -141,7 +173,7 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	return s.RotateDexBatches(remoteBatch.Hash(), remoteBatchCopy.PoolSize, chainId, receipts)
 }
 
-// HandleReceiptsForOurLockedBatch() processes receipts for our locked batch
+// HandleReceiptsForOurLockedBatch() 1. processes receipts for our locked batch
 func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch, chainId uint64) (locked bool, err lib.ErrorI) {
 	// get the local locked dex batch
 	localBatch, err := s.GetDexBatch(chainId, true)
@@ -172,19 +204,19 @@ func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch
 	return false, s.Delete(KeyForLockedBatch(chainId))
 }
 
-// HandleRemoteChainLockedBatch() handles the locked batch for the remote chain, producing receipts
+// HandleRemoteChainLockedBatch() 2. handles the locked batch for the remote chain, producing receipts
 func (s *StateMachine) HandleRemoteChainLockedBatch(remoteBatch *lib.DexBatch, chainId uint64) (receipts []uint64, err lib.ErrorI) {
 	// handle the orders for the remote chain's locked batch (y represents the 'distribute pool balance')
-	receipts, y, err := s.HandleDexBatchOrders(remoteBatch, chainId)
+	receipts, localPoolSize, err := s.HandleDexBatchOrders(remoteBatch, chainId)
 	if err != nil {
 		return
 	}
 	// for each liquidity withdraws, move the funds from the liquidity pool to the account
-	if err = s.HandleBatchWithdraw(remoteBatch, chainId, y, false); err != nil {
+	if err = s.HandleBatchWithdraw(remoteBatch, chainId, localPoolSize, false); err != nil {
 		return
 	}
 	// for each liquidity deposit, move the funds from the holding pool to the liquidity pool
-	if err = s.HandleBatchDeposit(remoteBatch, chainId, *y, false); err != nil {
+	if err = s.HandleBatchDeposit(remoteBatch, chainId, *localPoolSize, false); err != nil {
 		return
 	}
 	// exit
@@ -387,54 +419,55 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	if err != nil {
 		return err
 	}
-	// sum deposits
+	// define variables
 	var totalDeposit, distributed uint64
+	// x = the initial 'deposit' pool balance
+	// y = the 'counter' pool balance
+	// L = initial pool points
+	x, L := batch.PoolSize, p.TotalPoolPoints
+	// sum all deposits
 	for _, order := range batch.Deposits {
 		totalDeposit += order.Amount
 	}
-	// x = the initial 'deposit' pool balance
-	// y = the 'counter' pool balance
-	// L = initial liquidity points
-	x, L := batch.PoolSize, p.TotalPoolPoints
 	// nothing to add or failed invariant check
 	if totalDeposit == 0 || x == 0 || y == 0 {
 		return nil
 	}
 	// if no liq points yet assigned - initialize to 'dead' address
 	if L == 0 {
-		// calculate the initial liquidity points using L = √( x * y )
+		// calculate the initial pool points using L = √( x * y )
 		L = lib.SqrtProductUint64(x, y)
 		// add points to the dead address
 		p.AddPoints(deadAddr.Bytes(), L)
 	}
-	// calculate dL as if it's one big deposit
 	// using integer math and geometric mean of reserves:
-	// ΔL = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y)
+	// deltaPoolPoints = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y) or simplified as:
+	// deltaPoolPoints = L * (newK - oldK) / oldK (in a 1 sided deposit scenario dY=0 thus this formula)
 	oldK := lib.SqrtProductUint64(x, y)
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
 	newK := lib.SqrtProductUint64(x+totalDeposit, y)
-	// L * (newK - oldK) / oldK
+	// totalDL is calculated as if all deposits is just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// distribute the points
 	for _, order := range batch.Deposits {
-		// calculate pro-rate share
+		// calculate pro-rate share for this particular deposit
 		share := lib.SafeMulDiv(totalDL, order.Amount, totalDeposit)
-		// update distributed
+		// update the distributed counter
 		distributed += share
 		// add points to pool
 		p.AddPoints(order.Address, share)
-		// if 'local' request - move from holding pool to liquidity pool
+		// if 'local' request - (actually move from holding pool to liquidity pool, don't *just* update the ledger)
 		if local {
 			if err = s.PoolSub(chainId+HoldingPoolAddend, order.Amount); err != nil {
 				return err
 			}
 			p.Amount += order.Amount
 		}
-		// update the batch pool size
+		// update the local reserve
 		batch.PoolSize += order.Amount
-		// add dex deposit event
+		// emit a deposit event
 		if err = s.EventDexLiquidityDeposit(order.Address, order.OrderId, order.Amount, share, chainId, local); err != nil {
 			return err
 		}
