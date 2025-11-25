@@ -57,7 +57,7 @@ func main() {
 		cli.Start()
 		return
 	}
-	logger.Info("auto-update enabled, starting coordinator")
+	logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
