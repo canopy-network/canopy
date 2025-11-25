@@ -47,7 +47,6 @@ import (
 
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
-	var localBatch *lib.DexBatch
 	// exit without handling as the 'rootHeight' explicitly not set
 	if rootHeight == 0 {
 		return
@@ -61,7 +60,7 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 		}
 	}
 	// get the local locked dex batch for the counter chain
-	localBatch, err = s.GetDexBatch(chainId, true)
+	localBatch, err := s.GetDexBatch(chainId, true)
 	if err != nil {
 		return
 	}
@@ -231,10 +230,10 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 		if err = s.PoolSub(chainId+HoldingPoolAddend, o.AmountForSale); err != nil {
 			return
 		}
-		// convenience variable for amount purchased
-		counterAssetAmountReceived := remoteBatch.Receipts[i]
-		// if order succeeded, add order amount to the liquidity pool, else revert back to sender
-		if counterAssetAmountReceived != 0 {
+		// convenience variable for amount counter asset amount received
+		received := remoteBatch.Receipts[i]
+		success := received != 0
+		if success {
 			err = s.PoolAdd(chainId+LiquidityPoolAddend, o.AmountForSale)
 		} else {
 			err = s.AccountAdd(crypto.NewAddress(o.Address), o.AmountForSale)
@@ -243,8 +242,8 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 			return
 		}
 		// emit event
-		if err = s.EventDexSwap(o.Address, o.OrderId, o.AmountForSale, counterAssetAmountReceived,
-			localBatch.Committee, true, counterAssetAmountReceived != 0); err != nil {
+		if err = s.EventDexSwap(o.Address, o.OrderId, o.AmountForSale, received,
+			localBatch.Committee, true, success); err != nil {
 			return
 		}
 	}
@@ -375,25 +374,17 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		if err = p.RemovePoints(w.Address, points); err != nil {
 			return err
 		}
-		// credit user and update pool balance
+		payout, counter := yShare, xShare
 		if local {
-			// credit account
-			if err = s.AccountAdd(crypto.NewAddress(w.Address), xShare); err != nil {
-				return err
-			}
-			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, xShare, yShare, points, chainId); err != nil {
-				return err
-			}
-		} else {
-			// credit account
-			if err = s.AccountAdd(crypto.NewAddress(w.Address), yShare); err != nil {
-				return err
-			}
-			// add dex withdraw event
-			if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, yShare, xShare, points, chainId); err != nil {
-				return err
-			}
+			payout, counter = xShare, yShare
+		}
+		// credit user and update pool balance
+		if err = s.AccountAdd(crypto.NewAddress(w.Address), payout); err != nil {
+			return err
+		}
+		// emit withdraw event
+		if err = s.EventDexLiquidityWithdraw(w.Address, w.OrderId, payout, counter, points, chainId); err != nil {
+			return err
 		}
 	}
 	// update the remote and local pool size ledgers; burn undistributed
@@ -426,8 +417,8 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// L = initial pool points
 	x, L := batch.PoolSize, p.TotalPoolPoints
 	// sum all deposits
-	for _, order := range batch.Deposits {
-		totalDeposit += order.Amount
+	for _, deposit := range batch.Deposits {
+		totalDeposit += deposit.Amount
 	}
 	// nothing to add or failed invariant check
 	if totalDeposit == 0 || x == 0 || y == 0 {
@@ -451,24 +442,24 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// totalDL is calculated as if all deposits is just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// distribute the points
-	for _, order := range batch.Deposits {
+	for _, deposit := range batch.Deposits {
 		// calculate pro-rate share for this particular deposit
-		share := lib.SafeMulDiv(totalDL, order.Amount, totalDeposit)
+		share := lib.SafeMulDiv(totalDL, deposit.Amount, totalDeposit)
 		// update the distributed counter
 		distributed += share
 		// add points to pool
-		p.AddPoints(order.Address, share)
+		p.AddPoints(deposit.Address, share)
 		// if 'local' request - (actually move from holding pool to liquidity pool, don't *just* update the ledger)
 		if local {
-			if err = s.PoolSub(chainId+HoldingPoolAddend, order.Amount); err != nil {
+			if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
 				return err
 			}
-			p.Amount += order.Amount
+			p.Amount += deposit.Amount
 		}
 		// update the local reserve
-		batch.PoolSize += order.Amount
+		batch.PoolSize += deposit.Amount
 		// emit a deposit event
-		if err = s.EventDexLiquidityDeposit(order.Address, order.OrderId, order.Amount, share, chainId, local); err != nil {
+		if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, share, chainId, local); err != nil {
 			return err
 		}
 	}
@@ -569,11 +560,9 @@ func (s *StateMachine) SetDexBatch(key []byte, b *lib.DexBatch) (err lib.ErrorI)
 // GetDexBatch() retrieves a sell batch from the state store
 func (s *StateMachine) GetDexBatch(chainId uint64, locked bool, withPoints ...bool) (b *lib.DexBatch, err lib.ErrorI) {
 	var lPool *Pool
-	var key []byte
+	key := KeyForNextBatch(chainId)
 	if locked {
 		key = KeyForLockedBatch(chainId)
-	} else {
-		key = KeyForNextBatch(chainId)
 	}
 	// get bytes from state
 	bz, err := s.Get(key)
