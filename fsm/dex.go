@@ -154,12 +154,25 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	}
 	// a copy is required because we modify the pool size ledgers
 	remoteBatchCopy := remoteBatch.Copy()
+	// create a variable to capture the pool size at the midpoint to send to the counter batch
+	midPointPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return
+	}
 	// if the remote batch is empty, set an empty receipt hash
 	if !remoteBatch.IsEmpty() {
 		var locked bool
 		// 1) PROCESS RECEIPTS FOR OUR LOCKED BATCH
 		locked, err = s.HandleReceiptsForOurLockedBatch(remoteBatchCopy, chainId)
 		if err != nil || locked {
+			return
+		}
+		// Step 2 (HandleRemoteChainLockedBatch) may further move the pool, but that movement is intentionally not reflected
+		// in midPointPoolSize; the mid-point snapshot is what the counter chain needs to mirror our pool when it processes
+		// receipts for our batch (so withdrawals/LP math on the other side uses the same pool size we had after applying
+		// their receipts).
+		midPointPoolSize, err = s.GetPoolBalance(chainId + LiquidityPoolAddend)
+		if err != nil {
 			return
 		}
 		// 2) CREATE RECEIPTS FOR THE REMOTE CHAIN'S LOCKED BATCH
@@ -169,7 +182,7 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 		}
 	}
 	// 3) ROTATE BATCHES
-	return s.RotateDexBatches(remoteBatch.Hash(), remoteBatchCopy.PoolSize, chainId, receipts)
+	return s.RotateDexBatches(remoteBatch.Hash(), midPointPoolSize, remoteBatchCopy.PoolSize, chainId, receipts)
 }
 
 // HandleReceiptsForOurLockedBatch() 1. processes receipts for our locked batch
@@ -473,7 +486,7 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 // (1) checks if locked batch is processed yet - if not exit
 // (2) sets the upcoming 'sell' batch as 'last' sell batch
 // (3) returns the upcoming 'sell' batch to be sent to the root
-func (s *StateMachine) RotateDexBatches(receiptsHash []byte, counterPoolSize, chainId uint64, receipts []uint64) (err lib.ErrorI) {
+func (s *StateMachine) RotateDexBatches(receiptsHash []byte, lPoolSize, counterPoolSize, chainId uint64, receipts []uint64) (err lib.ErrorI) {
 	// get locked sell batch
 	lockedBatch, err := s.GetDexBatch(chainId, true)
 	// exit with error or nil if last sell batch not yet processed by root (atomic protection)
@@ -485,13 +498,8 @@ func (s *StateMachine) RotateDexBatches(receiptsHash []byte, counterPoolSize, ch
 	if err != nil {
 		return
 	}
-	// get the liquidity pool size
-	lPool, err := s.GetPool(chainId + LiquidityPoolAddend)
-	if err != nil {
-		return
-	}
 	// set the pool size
-	nextSellBatch.PoolSize = lPool.Amount
+	nextSellBatch.PoolSize = lPoolSize
 	// set the hash
 	nextSellBatch.ReceiptHash = receiptsHash
 	// set the *computed* pool amount

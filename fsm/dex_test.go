@@ -2002,7 +2002,7 @@ func TestDexWithdraw(t *testing.T) {
 	chain1LockedBatch := &lib.DexBatch{
 		Committee:       chain2Id,
 		ReceiptHash:     lockedBatch.Hash(),
-		PoolSize:        initPoolSize - expectedY,
+		PoolSize:        initPoolSize, // initial pool size due to mid point logic
 		CounterPoolSize: initPoolSize + depositAmount - expectedX,
 		LockedHeight:    2,
 	}
@@ -2129,7 +2129,7 @@ func TestDexSwap(t *testing.T) {
 		ReceiptHash:     lockedBatch.Hash(),
 		Receipts:        []uint64{expectedY},
 		CounterPoolSize: initPoolSize + expectedX,
-		PoolSize:        initPoolSize - expectedY,
+		PoolSize:        initPoolSize, // initial pool size because the `mid point logic` ensures
 		LockedHeight:    2,
 	}
 	chain1LockedBatch.EnsureNonNil()
@@ -2265,8 +2265,11 @@ func TestRotateDexSellBatch(t *testing.T) {
 			if test.setupState != nil {
 				test.setupState(&sm)
 			}
+			// get pool size
+			balance, err := sm.GetPoolBalance(test.chainId + LiquidityPoolAddend)
+			require.NoError(t, err)
 
-			err := sm.RotateDexBatches(test.buyBatch.Hash(), test.buyBatch.PoolSize, test.chainId, test.receipts)
+			err = sm.RotateDexBatches(test.buyBatch.Hash(), balance, test.buyBatch.PoolSize, test.chainId, test.receipts)
 
 			if test.expectError {
 				require.Error(t, err)
