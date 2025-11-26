@@ -247,7 +247,8 @@ func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
 		c.log.Debug("no update available")
 		return nil
 	}
-	c.log.Infof("new version found: %s", release.Version)
+	c.log.Infof("new version found: %s snapshot needed: %t", release.Version,
+		release.ApplySnapshot)
 	// download the new version
 	if err := c.updater.Download(ctx, release); err != nil {
 		return fmt.Errorf("failed to download release: %w", err)
@@ -296,7 +297,9 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release) error {
 		stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := c.supervisor.Stop(stopCtx); err != nil {
-			return fmt.Errorf("failed to stop process for update: %w", err)
+			// program may have exited with a non zero exit code due to forced close
+			// this is to be expected so the update can still proceed
+			c.log.Warnf("failed to stop process for update: %w", err)
 		}
 	}
 	// replace current db with the snapshot if needed

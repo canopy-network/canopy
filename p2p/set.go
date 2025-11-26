@@ -288,8 +288,13 @@ func (ps *PeerSet) Stop() {
 
 // send() sends a message to a specific peer object
 func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
-	//ps.logger.Debugf("Sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
-	peer.conn.Send(topic, bz)
+	// ps.logger.Debugf("sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
+	go func() {
+		ok := peer.conn.Send(topic, bz)
+		if !ok {
+			ps.logger.Errorf("sending %s message to %s failed", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
+		}
+	}()
 	return nil
 }
 
