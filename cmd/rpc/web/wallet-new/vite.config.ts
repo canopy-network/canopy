@@ -13,13 +13,16 @@ export default defineConfig(({ mode }) => {
     if (env.VITE_BASE_PATH) {
       return env.VITE_BASE_PATH;
     }
-    // In development, use ./ for local dev
+    // In development, use / for local dev
     if (mode === "development") {
-        return "./";
+      return "/";
     }
-    // In production, use ./ as Traefik will handle the /wallet prefix routing
-    // This ensures assets load correctly when served under /wallet/ path
-    return "./";
+    // In production, use /wallet/ because the app is served behind a reverse proxy
+    // at http://node1.localhost/wallet/
+    // This ensures:
+    // 1. Assets are requested as /wallet/assets/... (Traefik strips /wallet, Go server gets /assets/...)
+    // 2. React Router basename is /wallet (matches browser URL)
+    return "/wallet/";
   };
 
   return {

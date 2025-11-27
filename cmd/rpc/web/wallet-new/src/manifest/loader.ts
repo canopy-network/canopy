@@ -9,15 +9,13 @@ const RUNTIME_URL = import.meta.env.VITE_PLUGIN_URL as string | undefined
 export function getPluginBase(chain = DEFAULT_CHAIN) {
   if (MODE === 'runtime' && RUNTIME_URL) return `${RUNTIME_URL.replace(/\/$/, '')}/${chain}`
 
-  // Detect deployment base path from current URL pathname
-  // If deployed under /wallet/, this will extract that prefix
-  const deploymentBase = typeof window !== 'undefined'
-    ? window.location.pathname.match(/^(\/[^\/]+)?\//)?.[1] || ''
-    : ''
+  // Use configured base path from Vite
+  // This will be /wallet/ in production and / in development
+  const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL.slice(0, -1)
+    : import.meta.env.BASE_URL
 
-  // Use deployment base path to construct the plugin path
-  // This ensures plugin assets load correctly whether at root or under /wallet/
-  return `${deploymentBase}/plugin/${chain}`
+  return `${baseUrl}/plugin/${chain}`
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -46,7 +44,7 @@ export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
 
   // tiny bridge for places where global ctx is handy (e.g., validators)
   if (typeof window !== 'undefined') {
-    ;(window as any).__configCtx = { chain: chainQ.data, manifest: manifestQ.data }
+    ; (window as any).__configCtx = { chain: chainQ.data, manifest: manifestQ.data }
   }
 
   return {
