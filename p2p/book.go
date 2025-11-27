@@ -179,7 +179,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 			}
 			var response []*BookPeer
 			// grab up to MaxPeerExchangePerChain number of peers for that specific chain
-			for i := 0; i <= MaxPeersExchanged; i++ {
+			for i := 0; i < MaxPeersExchanged; i++ {
 				toBeAdded := p.book.GetRandom()
 				if toBeAdded == nil {
 					//p.log.Warnf("nil to be added from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))
