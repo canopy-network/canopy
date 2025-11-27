@@ -128,8 +128,7 @@ func (um *UpdateManager) GetLatestRelease() (release *Release, err error) {
 	return release, nil
 }
 
-// ShouldUpdate checks if the release should be updated, updating the release
-// object with the result
+// ShouldUpdate determines whether the given release should be applied
 func (um *UpdateManager) ShouldUpdate(release *Release) error {
 	if release == nil {
 		return fmt.Errorf("release is nil")
@@ -144,11 +143,15 @@ func (um *UpdateManager) ShouldUpdate(release *Release) error {
 	if current == "" || !semver.IsValid(current) {
 		return fmt.Errorf("invalid local version: %s", um.Version)
 	}
-	release.Version = candidate
 	// should update if the candidate version is greater than the current version
 	release.ShouldUpdate = semver.Compare(candidate, current) > 0
-	// should apply snapshot if the candidate version contains the snapshot key
-	release.ApplySnapshot = strings.Contains(candidate, um.config.SnapshotKey)
+	if !release.ShouldUpdate {
+		return nil
+	}
+	// should apply snapshot if the candidate's build metadata contains the snapshot key
+	release.ApplySnapshot = strings.Contains(semver.Build(release.Version),
+		um.config.SnapshotKey)
+	release.Version = candidate
 	return nil
 }
 
