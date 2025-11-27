@@ -2,7 +2,6 @@ package bft
 
 import (
 	"bytes"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"

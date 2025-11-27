@@ -112,10 +112,12 @@ func (b *BFT) Start() {
 		case <-b.PhaseTimer.C:
 			func() {
 				startTime := time.Now()
+				b.Controller.Lock()
+				defer b.Controller.Unlock()
 				// Update BFT metrics
 				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
-				// handle the phase (locking is done inside each phase function)
-				b.HandlePhase(startTime)
+				// handle the phase
+				b.HandlePhase()
 			}()
 
 		// RESET BFT
@@ -154,7 +156,7 @@ func (b *BFT) Start() {
 }
 
 // HandlePhase() is the main BFT Phase stepping loop
-func (b *BFT) HandlePhase(startTime time.Time) {
+func (b *BFT) HandlePhase() {
 	stopTimers := func() { b.PhaseTimer.Stop() }
 	// if currently catching up to latest height, pause the BFT loop
 	if isSyncing := b.syncing.Load(); isSyncing {
@@ -163,20 +165,14 @@ func (b *BFT) HandlePhase(startTime time.Time) {
 		return
 	}
 	// if not a validator, wait until the next block to check if became a validator
-	b.Controller.Lock()
-	isSelfValidator := b.SelfIsValidator()
-	b.Controller.Unlock()
-	if !isSelfValidator {
+	if !b.SelfIsValidator() {
 		b.log.Info("Not currently a validator, waiting for a new block")
 		stopTimers()
 		return
 	}
-	// get current phase for switching
-	b.Controller.Lock()
-	currentPhase := b.Phase
-	b.Controller.Unlock()
-	// execute the appropriate phase function (each has its own locking strategy)
-	switch currentPhase {
+	// measure process time to have the most accurate timer timeouts
+	startTime := time.Now()
+	switch b.Phase {
 	case Election:
 		b.StartElectionPhase()
 	case ElectionVote:
@@ -206,8 +202,6 @@ func (b *BFT) HandlePhase(startTime time.Time) {
 // - Replicas run the Cumulative Distribution Function and a 'practical' Verifiable Random Function
 // - If they are a candidate they send the VRF Out to the replicas
 func (b *BFT) StartElectionPhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Infof(b.View.ToString())
 	// retrieve Validator object from the ValidatorSet
 	selfValidator, err := b.ValidatorSet.GetValidator(b.PublicKey)
@@ -252,8 +246,6 @@ func (b *BFT) StartElectionPhase() {
 // - Replicas send a signed (aggregable) ELECTION vote to the Leader (Proposer)
 // - With this vote, the Replica attaches any Byzantine evidence or 'Locked' QC they have collected as well as their VDF output
 func (b *BFT) StartElectionVotePhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	// get the candidates from messages received
 	candidates := b.GetElectionCandidates()
@@ -293,8 +285,6 @@ func (b *BFT) StartElectionVotePhase() {
 // - If a HighQC exists, use that as the Proposal - if not, the Leader produces a Proposal with ByzantineEvidence using the specific plugin
 // - Leader creates a PROPOSE message from the Proposal and justifies the message with the +2/3 threshold multi-signature
 func (b *BFT) StartProposePhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	vote, as, err := b.GetMajorityVote()
 	if err != nil {
@@ -346,88 +336,59 @@ func (b *BFT) StartProposePhase() {
 // - Replica Validates the proposal using the byzantine evidence and the specific plugin
 // - Replicas send a signed (aggregable) PROPOSE vote to the Leader
 func (b *BFT) StartProposeVotePhase() {
-	// Lock to read proposal and initial state
-	b.Controller.Lock()
+	var err lib.ErrorI
 	b.log.Info(b.View.ToString())
 	msg := b.GetProposal()
 	if msg == nil {
 		b.log.Warn("no valid message received from Proposer")
 		b.RoundInterrupt()
-		b.Controller.Unlock()
 		return
 	}
-	proposerKey := msg.Signature.PublicKey
-	rcBuildHeight := msg.RcBuildHeight
-	lastRootHeightUpdated := b.CommitteeData.LastRootHeightUpdated
-	highQC := b.HighQC
-	b.Controller.Unlock()
-	
-	// Log proposer (no lock needed)
-	if bytes.Equal(proposerKey, b.PublicKey) {
+	b.ProposerKey = msg.Signature.PublicKey
+	if b.SelfIsProposer() {
 		b.log.Infof("Proposer is SELF 👑")
 	} else {
-		b.log.Infof("Proposer is %s 👑", lib.BytesToTruncatedString(proposerKey))
+		b.log.Infof("Proposer is %s 👑", lib.BytesToTruncatedString(b.ProposerKey))
 	}
-	
-	// Check safe node without lock (read-only on msg)
-	if highQC != nil {
-		b.Controller.Lock()
+	// if locked, confirm safe to unlock
+	if b.HighQC != nil {
 		if err := b.SafeNode(msg); err != nil {
 			b.log.Error(err.Error())
 			b.RoundInterrupt()
-			b.Controller.Unlock()
 			return
 		}
-		b.Controller.Unlock()
 	}
-	
-	// Validate build height (no lock needed for comparison)
-	if rcBuildHeight < lastRootHeightUpdated {
-		b.Controller.Lock()
+	// ensure the build height isn't too old
+	if msg.RcBuildHeight < b.CommitteeData.LastRootHeightUpdated {
 		b.log.Error(lib.ErrInvalidRCBuildHeight().Error())
 		b.RoundInterrupt()
-		b.Controller.Unlock()
 		return
 	}
-	
-	// Prepare byzantine evidence (no lock needed)
+	// aggregate any evidence submitted from the replicas
 	byzantineEvidence := &ByzantineEvidence{
 		DSE: NewDSE(msg.LastDoubleSignEvidence),
 	}
-	
-	// Validate proposal WITHOUT holding lock (expensive FSM operation)
-	blockResult, err := b.ValidateProposal(rcBuildHeight, msg.Qc, byzantineEvidence)
-	if err != nil {
-		b.Controller.Lock()
+	// check candidate block against FSM
+	if b.BlockResult, err = b.ValidateProposal(msg.RcBuildHeight, msg.Qc, byzantineEvidence); err != nil {
 		b.log.Error(err.Error())
 		b.RoundInterrupt()
-		b.Controller.Unlock()
 		return
 	}
-	
-	// Lock to update state
-	b.Controller.Lock()
-	b.BlockResult = blockResult
+	// Store the proposal data to enforce consistency during this voting round
+	// Note: This is not the same as a `lock`, since a `lock` would keep the data even after the round changes
 	b.Block, b.Results = msg.Qc.Block, msg.Qc.Results
-	b.ByzantineEvidence = byzantineEvidence
-	b.ProposerKey = proposerKey
-	blockHash := b.GetBlockHash()
-	resultsHash := b.Results.Hash()
-	view := b.View.Copy()
-	b.Controller.Unlock()
-	
-	// Start VDF service without lock (runs in goroutine)
-	if err := b.RunVDF(blockHash); err != nil {
+	b.ByzantineEvidence = byzantineEvidence // BE stored in case of round interrupt and replicas locked on a proposal with BE
+	// start the VDF service on this block hash
+	if err := b.RunVDF(b.GetBlockHash()); err != nil {
 		b.log.Errorf("RunVDF() failed with error, %s", err.Error())
 	}
-	
-	// Send vote to proposer without lock (network I/O)
+	// send vote to the proposer
 	b.SendToProposer(&Message{
-		Qc: &QC{
-			Header:      view,
-			BlockHash:   blockHash,
-			ResultsHash: resultsHash,
-			ProposerKey: proposerKey,
+		Qc: &QC{ // NOTE: Replicas use the QC to communicate important information so that it's aggregable by the Leader
+			Header:      b.View.Copy(),
+			BlockHash:   b.GetBlockHash(),
+			ResultsHash: b.Results.Hash(),
+			ProposerKey: b.ProposerKey,
 		},
 	})
 }
@@ -439,8 +400,6 @@ func (b *BFT) StartProposeVotePhase() {
 //
 // - Leader creates a PRECOMMIT message with the Proposal hashes and justifies the message with the +2/3 threshold multi-signature
 func (b *BFT) StartPrecommitPhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	if !b.SelfIsProposer() {
 		return
@@ -472,8 +431,6 @@ func (b *BFT) StartPrecommitPhase() {
 // - Replica `Locks` on the Proposal to protect those who may commit as a consequence of providing the aggregable signature
 // - Replicas send a signed (aggregable) PROPOSE vote to the Leader
 func (b *BFT) StartPrecommitVotePhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	msg := b.GetProposal()
 	if msg == nil {
@@ -510,8 +467,6 @@ func (b *BFT) StartPrecommitVotePhase() {
 //
 // - Leader creates a COMMIT message with the Proposal hashes and justifies the message with the +2/3 threshold multi-signature
 func (b *BFT) StartCommitPhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	if !b.SelfIsProposer() {
 		return
@@ -544,8 +499,6 @@ func (b *BFT) StartCommitPhase() {
 // - Replica gossips the Quorum Certificate message to Peers
 // - If Leader, send the Proposal (reward) Transaction
 func (b *BFT) StartCommitProcessPhase() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	msg := b.GetProposal()
 	if msg == nil {
@@ -596,8 +549,6 @@ func (b *BFT) RoundInterrupt() {
 // Pacemaker() begins the Pacemaker process after ROUND-INTERRUPT timeout occurs
 // - sets the highest round that +2/3rds majority of replicas have seen
 func (b *BFT) Pacemaker() {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	b.log.Info(b.View.ToString())
 	b.NewRound(false)
 	// sort the pacemaker votes from the highest Round to the lowest Round
@@ -759,8 +710,6 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 
 // SetTimerForNextPhase() calculates the wait time for a specific phase/Round, resets the Phase wait timer
 func (b *BFT) SetTimerForNextPhase(processTime time.Duration) {
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
 	waitTime := b.WaitTime(b.Phase, b.Round)
 	switch b.Phase {
 	default:
