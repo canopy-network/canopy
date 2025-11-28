@@ -1,0 +1,1574 @@
+{
+  "ui": {
+    "tx": {
+      "typeMap": {
+        "send": "Send",
+        "editStake": "Edit Stake",
+        "stake": "Stake",
+        "unstake": "Unstake",
+        "receive": "Receive",
+        "vote": "Vote",
+        "certificateResults": "Certificate Results",
+        "unpause": "Unpause",
+        "pause": "Pause",
+        "createProposal": "Create Proposal"
+      },
+      "typeIconMap": {
+        "editStake": "Lock",
+        "send": "Send",
+        "stake": "Lock",
+        "certificateResults": "ShieldCheck",
+        "unstake": "Unlock",
+        "unpause": "Play",
+        "pause": "Pause",
+        "receive": "Download",
+        "vote": "Vote",
+        "createProposal": "FileText"
+      },
+      "fundsWay": {
+        "editStake": "out",
+        "send": "out",
+        "stake": "out",
+        "unstake": "in",
+        "receive": "in",
+        "vote": "neutral",
+        "createProposal": "out"
+      }
+    }
+  },
+  "actions": [
+    {
+      "id": "send",
+      "title": "Send",
+      "icon": "Send",
+      "relatedActions": [
+        "receive"
+      ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": "always",
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "From Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          },
+          {
+            "id": "output",
+            "name": "output",
+            "type": "text",
+            "label": "To Address",
+            "required": true,
+            "length.min": 1,
+            "validation": {
+              "messages": {
+                "required": "Destination address is required",
+                "length.min": "Invalid destination address"
+              }
+            },
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ]
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "autoPopulate": "always",
+            "readOnly": true
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0",
+                "max": "Insufficient balance. Maximum available: {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Available balance: {{formatToCoin<{{ds.account?.amount ?? 0}}>}} {{chain.denom.symbol}}",
+            "features": [
+              {
+                "id": "maxBtn",
+                "op": "set",
+                "field": "amount",
+                "label": "Max",
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) - fees.raw.sendFee}}> }}"
+              }
+            ]
+          }
+        ],
+        "info": {
+          "items": [
+            {
+              "label": "Network Fee",
+              "value": "{{formatToCoin<{{fees.raw.sendFee}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Estimation time",
+              "value": "≈ 20",
+              "icon": "Timer"
+            }
+          ]
+        },
+        "summary": {
+          "title": "Summary",
+          "items": [
+            {
+              "label": "Receiving Address",
+              "value": "{{form.address}}"
+            },
+            {
+              "label": "Asset",
+              "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})"
+            }
+          ]
+        },
+        "confirmation": {
+          "title": "Confirmations",
+          "summary": [
+            {
+              "label": "From",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            },
+            {
+              "label": "To",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Send"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.sendFee}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-send",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "receive",
+      "title": "Receive",
+      "icon": "Scan",
+      "relatedActions": [
+        "send"
+      ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "variant": "modal",
+        "icon": "Send",
+        "hideSubmit": true,
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[20rem] md:max-w-[24rem]"
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "layout": {
+          "aside": {
+            "show": true,
+            "width": "w-[10rem]"
+          }
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Receiving Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "features": [
+              {
+                "id": "copyBtn",
+                "op": "copy",
+                "from": "{{account.address}}"
+              }
+            ]
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "autoPopulate": "always",
+            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "readOnly": true
+          }
+        ],
+        "info": {
+          "title": "Details",
+          "items": [
+            {
+              "label": "Only send {{chain.denom.symbol}} to this address.",
+              "icon": "Coins"
+            },
+            {
+              "label": "Allow 20 seconds for confirmation.",
+              "icon": "Timer"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stake",
+      "title": "Stake",
+      "icon": "Lock",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+          },
+          "__options": {
+            "enabled": "{{ (form.signerResponsible === 'operator' && form.operator) || (form.signerResponsible === 'reward' && form.output) }}"
+          }
+        },
+        "validator": {
+          "account": {
+            "address": "{{form.operator}}"
+          },
+          "__options": {
+            "enabled": "{{ form.operator }}"
+          }
+        },
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "watch": [
+            "form.operator",
+            "form.output",
+            "form.signerResponsible"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": ""
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "setup",
+              "title": "Setup"
+            },
+            {
+              "id": "committees",
+              "title": "Committees"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "operator",
+            "span": {
+              "base": 12
+            },
+            "name": "operator",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Staking (Operator) Address",
+            "placeholder": "Select Staking Address",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "step": "setup"
+          },
+          {
+            "id": "validatorInfo",
+            "name": "validatorInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Validator Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Staked Amount:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Type:</p><p class='text-canopy-50 font-semibold'>{{ ds.validator.delegate ? 'Delegation' : 'Validation' }}</p></div></div></div>",
+            "showIf": "{{ form.operator && ds.validator }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "output",
+            "span": {
+              "base": 12
+            },
+            "name": "output",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Rewards Address",
+            "placeholder": "Select Rewards Address",
+            "value": "{{ ds.validator ? ds.validator.output : '' }}",
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "step": "setup"
+          },
+          {
+            "id": "signerResponsible",
+            "name": "signerResponsible",
+            "type": "option",
+            "label": "Signer Address",
+            "required": true,
+            "value": "operator",
+            "inLine": true,
+            "borders": false,
+            "options": [
+              {
+                "label": "Operator",
+                "value": "operator",
+                "help": "Staked Address"
+              },
+              {
+                "label": "Reward",
+                "value": "reward",
+                "help": "Output Address"
+              }
+            ],
+            "step": "setup"
+          },
+          {
+            "id": "signerBalance",
+            "name": "signerBalance",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-3 bg-blue-950/30 border border-blue-800/30 rounded-lg'><div class='flex items-center gap-2 mb-1'><svg class='w-4 h-4 text-blue-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><p class='text-blue-300 text-sm font-medium'>Signer Account Balance</p></div><p class='text-canopy-50 font-semibold text-lg'>{{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}</p><p class='text-text-muted text-xs mt-1'>Available balance for transaction fees and additional stake</p></div>",
+            "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "placeholder": "0.00",
+            "label": "{{ ds.validator ? 'New Stake Amount' : 'Amount' }}",
+            "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
+            "autoPopulate": "once",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
+            "max": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}> }}",
+            "help": "{{ ds.validator ? '' : 'Minimum stake amount applies' }}",
+            "validation": {
+              "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
+              "messages": {
+                "min": "Stakes can only increase. Current stake: {{min}} {{chain.denom.symbol}}",
+                "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "features": [
+              {
+                "id": "max",
+                "op": "set",
+                "field": "amount",
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0) - fees.raw.stakeFee}}> }}"
+              }
+            ],
+            "span": {
+              "base": 12
+            },
+            "step": "setup"
+          },
+          {
+            "id": "currentStakeInfo",
+            "name": "currentStakeInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 -mt-3 mb-3 flex items-center gap-3'><div class='inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-full text-xs'><svg class='w-4 h-4 text-emerald-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><span class='text-emerald-300 font-medium'>Current:</span><span class='text-white font-semibold'>{{numberToLocaleString<{{fromMicroDenom<{{ds.validator.stakedAmount}}>}}>}} CNPY</span></div><div class='flex-1 h-px bg-gradient-to-r from-emerald-500/20 to-transparent'></div><span class='text-xs text-emerald-400/60'>↑ Increase only</span></div>",
+            "showIf": "{{ ds.validator }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "isDelegate",
+            "name": "isDelegate",
+            "type": "optionCard",
+            "label": "Stake Type",
+            "required": true,
+            "value": "{{ ds.validator ? ds.validator.delegate : false }}",
+            "autoPopulate": "once",
+            "options": [
+              {
+                "label": "Validation",
+                "value": false,
+                "help": "Run your own validator",
+                "toolTip": "This will run your own validator on the network."
+              },
+              {
+                "label": "Delegation",
+                "value": true,
+                "help": "Delegate to committee",
+                "toolTip": "This will delegate your tokens to a committee."
+              }
+            ],
+            "step": "setup"
+          },
+          {
+            "id": "isAutocompound",
+            "name": "isAutocompound",
+            "type": "switch",
+            "help": "Automatically restake rewards",
+            "label": "Autocompound",
+            "value": "{{ ds.validator ? ds.validator.compound === true : false }}",
+            "autoPopulate": "once",
+            "step": "setup"
+          },
+          {
+            "id": "selectCommittees",
+            "name": "selectCommittees",
+            "type": "tableSelect",
+            "label": "Select Committees",
+            "required": true,
+            "help": "Select committees you want to delegate to. Maximum 15 committees per validator.",
+            "validation": {
+              "max": 15,
+              "messages": {
+                "required": "Please select at least one committee",
+                "max": "Maximum 15 committees allowed per validator"
+              }
+            },
+            "multiple": true,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ ds.validator?.committees ?? [] }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Staked Amount",
+                "type": "html",
+                "html": "{{ (() => { const isStaked = ds.validator?.committees?.includes(row.id); const isSelected = Array.isArray(form.selectCommittees) && (form.selectCommittees.includes(row.id) || form.selectCommittees.includes(String(row.id))); const amt = Number(form.amount) || 0; if (isStaked) { const current = ds.validator.stakedAmount / 1000000; const diff = amt - current; return '<span class=\"text-white font-medium\">' + current.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY <span class=\"text-emerald-400 text-xs font-semibold\">+ ' + (diff > 0 ? diff : 0).toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span></span>'; } else if (isSelected) { return '<span class=\"text-emerald-400 font-medium\">' + amt.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span>'; } else { return '<span class=\"text-neutral-400\">0 CNPY</span>'; } })() }}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ ds.validator?.committees?.includes(row.id) ? 'Staked' : 'Stake' }}",
+              "disabledIf": "{{ ds.validator?.committees?.includes(row.id) }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "step": "committees"
+          },
+          {
+            "id": "manualCommittees",
+            "name": "manualCommittees",
+            "type": "text",
+            "label": "Committees Summary",
+            "placeholder": "1,2,3",
+            "help": "{{ ds.validator ? 'Current committees (from validator)' : 'Enter comma separated committee ids' }}",
+            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : (ds.validator?.committees ? (Array.isArray(ds.validator.committees) ? ds.validator.committees.join(',') : ds.validator.committees) : '') }}",
+            "readOnly": true,
+            "step": "committees"
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "showIf": "{{ form.isDelegate && form.isDelegate !== true }}",
+            "value": "{{ ds.validator?.netAddress ?? '' }}",
+            "autoPopulate": "once",
+            "placeholder": "tcp://127.0.0.1:xxxx",
+            "help": "Put the url of the validator you want to delegate to.",
+            "step": "committees"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}",
+            "step": "committees"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirmations",
+          "summary": [
+            {
+              "label": "Staking (Operator) Address",
+              "value": "{{shortAddress<{{form.operator}}>}}"
+            },
+            {
+              "label": "Rewards Address",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{form.signerResponsible == 'operator' ? 'Operator Address' : 'Rewards Address'}} | {{shortAddress<{{form.signerResponsible == 'operator' ? form.operator : form.output}}>}}"
+            },
+            {
+              "label": "{{ ds.validator ? 'Edit Stake' : 'New Stake' }}",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Transaction Type",
+              "value": "{{ds.validator ? 'Edit Stake' : 'New Stake'}}"
+            },
+            {
+              "label": "Committees IDs",
+              "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}"
+            },
+            {
+              "label": "Net Address",
+              "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btns": {
+            "submit": {
+              "icon": "Lock",
+              "label": "Stake"
+            }
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.operator}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "{{ ds.validator ? '' : account.pubKey }}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "{{ ds.validator ? false : form.isDelegate }}",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "{{!form.isAutocompound}}",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{ toMicroDenom<{{form.txFee}}> }}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "{{ ds.validator ? '/v1/admin/tx-edit-stake' : '/v1/admin/tx-stake' }}",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "vote",
+      "title": "Vote on Proposal",
+      "icon": "Vote",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "text",
+            "label": "Proposal ID",
+            "required": true,
+            "validation": {
+              "messages": {
+                "required": "Proposal ID is required"
+              }
+            }
+          },
+          {
+            "id": "vote",
+            "name": "vote",
+            "type": "option",
+            "label": "Your Vote",
+            "required": true,
+            "options": [
+              {
+                "label": "Yes",
+                "value": "yes",
+                "help": "Vote in favor of the proposal"
+              },
+              {
+                "label": "No",
+                "value": "no",
+                "help": "Vote against the proposal"
+              },
+              {
+                "label": "Abstain",
+                "value": "abstain",
+                "help": "Abstain from voting"
+              }
+            ]
+          },
+          {
+            "id": "voterAddress",
+            "name": "voterAddress",
+            "type": "text",
+            "label": "Voter Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Vote",
+          "summary": [
+            {
+              "label": "Proposal ID",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Your Vote",
+              "value": "{{form.vote}}"
+            },
+            {
+              "label": "Voter Address",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckCircle",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "proposalId": {
+          "value": "{{form.proposalId}}",
+          "coerce": "number"
+        },
+        "vote": {
+          "value": "{{form.vote}}",
+          "coerce": "string"
+        },
+        "voterAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Vote Submitted!",
+          "description": "Your vote has been recorded",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "createProposal",
+      "title": "Create Proposal",
+      "icon": "FileText",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "title",
+            "name": "title",
+            "type": "text",
+            "label": "Proposal Title",
+            "required": true,
+            "validation": {
+              "messages": {
+                "required": "Title is required"
+              }
+            }
+          },
+          {
+            "id": "description",
+            "name": "description",
+            "type": "textarea",
+            "label": "Description",
+            "required": true,
+            "rows": 5,
+            "validation": {
+              "messages": {
+                "required": "Description is required"
+              }
+            }
+          },
+          {
+            "id": "proposerAddress",
+            "name": "proposerAddress",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true
+          },
+          {
+            "id": "deposit",
+            "name": "deposit",
+            "type": "amount",
+            "label": "Deposit Amount",
+            "required": true,
+            "min": 0,
+            "validation": {
+              "messages": {
+                "required": "Deposit is required",
+                "min": "Deposit must be greater than 0"
+              }
+            },
+            "help": "Minimum deposit required to submit proposal"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Proposal",
+          "summary": [
+            {
+              "label": "Title",
+              "value": "{{form.title}}"
+            },
+            {
+              "label": "Description",
+              "value": "{{form.description}}"
+            },
+            {
+              "label": "Deposit",
+              "value": "{{numberToLocaleString<{{form.deposit}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Proposer",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Submit Proposal"
+          }
+        }
+      },
+      "payload": {
+        "title": {
+          "value": "{{form.title}}",
+          "coerce": "string"
+        },
+        "description": {
+          "value": "{{form.description}}",
+          "coerce": "string"
+        },
+        "proposerAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "deposit": {
+          "value": "{{toMicroDenom<{{form.deposit}}>}}",
+          "coerce": "number"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-create-proposal",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Created!",
+          "description": "Your proposal has been submitted",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "pauseValidator",
+      "title": "Pause Validator",
+      "icon": "Pause",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to pause"
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "pauseInfo",
+            "name": "pauseInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 p-3 bg-yellow-950/30 border border-yellow-800/30 rounded-lg'><div class='flex items-center gap-2 mb-2'><svg class='w-5 h-5 text-yellow-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg><p class='text-yellow-300 text-sm font-bold'>Pause Duration Limit</p></div><p class='text-text-muted text-xs mb-1'>Maximum pause duration: <span class='text-yellow-400 font-semibold'>4,380 blocks (~24.3 hours)</span></p><p class='text-text-muted text-xs'>If not unpaused within this period, the validator will be <span class='text-red-400 font-semibold'>automatically unstaked</span>.</p></div>",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this pause action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.pauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Pause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Pause",
+            "label": "Pause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-pause",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "unpauseValidator",
+      "title": "Unpause Validator",
+      "icon": "Play",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unpause"
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unpause action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unpauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unpause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Play",
+            "label": "Unpause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unpause",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "unstake",
+      "title": "Unstake",
+      "icon": "Unlock",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{form.validatorAddress}}"
+          },
+          "__options": {
+            "enabled": "{{ form.validatorAddress }}"
+          }
+        },
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unstake"
+          },
+          {
+            "id": "validatorInfo",
+            "name": "validatorInfo",
+            "type": "dynamicHtml",
+            "html": "<div class='flex-col col-span-12 p-4 bg-bg-primary rounded-lg'><h4 class='text-canopy-50 text-md mb-2'>Validator Information</h4><div class='flex justify-between'><div class='flex-col'><p class='text-text-muted text-sm'>Current Stake:</p><p class='text-canopy-50 font-semibold'>{{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Committees:</p><p class='text-canopy-50 font-semibold'>{{ds.validator.committees ?? 'N/A'}}</p></div><div class='flex-col'><p class='text-text-muted text-sm'>Type:</p><p class='text-canopy-50 font-semibold'>{{ ds.validator.delegate ? 'Delegation' : 'Validation' }}</p></div></div></div>",
+            "showIf": "{{ form.validatorAddress && ds.validator }}",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction"
+          },
+          {
+            "id": "earlyWithdrawal",
+            "name": "earlyWithdrawal",
+            "type": "optionCard",
+            "label": "Withdrawal Type",
+            "required": true,
+            "value": false,
+            "options": [
+              {
+                "label": "Normal Unstake",
+                "value": false,
+                "help": "Wait ~40 seconds (2 blocks)",
+                "toolTip": "Unstake following the normal unstaking period of 2 blocks (~40 seconds). No penalties applied."
+              },
+              {
+                "label": "Early Withdrawal",
+                "value": true,
+                "help": "Immediate withdrawal with penalty",
+                "toolTip": "Withdraw immediately but pay an early withdrawal penalty fee."
+              }
+            ]
+          },
+          {
+            "id": "earlyWithdrawalWarning",
+            "name": "earlyWithdrawalWarning",
+            "type": "dynamicHtml",
+            "html": "<div class='col-span-12 p-3 bg-red-950/30 border border-red-800/30 rounded-lg'><div class='flex items-center gap-2 mb-2'><svg class='w-5 h-5 text-red-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path></svg><p class='text-red-300 text-sm font-bold'>20% Early Withdrawal Penalty</p></div><p class='text-text-muted text-xs mb-2'>Early withdrawal incurs a <span class='text-red-400 font-semibold'>20% reduction</span> of your staked amount.</p><div class='flex justify-between text-xs'><span class='text-text-muted'>Current stake:</span><span class='text-white font-medium'>{{formatToCoin<{{ds.validator?.stakedAmount ?? 0}}>}} CNPY</span></div><div class='flex justify-between text-xs mt-1'><span class='text-text-muted'>You will receive:</span><span class='text-emerald-400 font-semibold'>{{formatToCoin<{{(ds.validator?.stakedAmount ?? 0) * 0.8}}>}} CNPY</span></div><p class='text-text-muted text-xs mt-2'>Funds available immediately after confirmation.</p></div>",
+            "showIf": "{{ form.earlyWithdrawal === true && ds.validator }}",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unstake action"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unstake",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Current Stake",
+              "value": "{{formatToCoin<{{ds.validator.stakedAmount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Withdrawal Type",
+              "value": "{{ form.earlyWithdrawal ? 'Early Withdrawal (with penalty)' : 'Normal Unstake' }}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Unlock",
+            "label": "Unstake Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "{{form.earlyWithdrawal}}",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unstake",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Unstake Successful!",
+          "description": "{{ form.earlyWithdrawal ? 'Your stake has been withdrawn immediately with early withdrawal penalty.' : 'Your validator has been unstaked. Funds will be available after the unstaking period.' }}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "View Transaction",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        },
+        "onError": {
+          "variant": "error",
+          "title": "Unstake Failed",
+          "description": "{{result.error || 'An error occurred while processing your unstake request.'}}",
+          "sticky": true
+        }
+      }
+    }
+  ]
+}
