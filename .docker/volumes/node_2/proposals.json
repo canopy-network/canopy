@@ -1,28 +1,5 @@
 {
-  "4a98aaf954508812e1ff607b20c4d955152e065186c92b9e6433d2f9b690ee9a": {
-    "proposal": {
-      "type": "changeParameter",
-      "msg": {
-        "parameterSpace": "cons",
-        "parameterKey": "rootChainID",
-        "parameterValue": 2,
-        "startHeight": 1,
-        "endHeight": 100,
-        "signer": "851e90eaef1fa27debaee2c2591503bdeec1d123"
-      },
-      "signature": {
-        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-        "signature": "b2b9da2b5e1d20229f8a319c1781db6d17471735ed36643c88690b2272b44813fe52346c16f6feeef516f9b1c52ca21218e29635be08ed093c0dcd652aec8333bfaa13d8c84cdfedfcfd8ca01d1f3bc41c290a6b1c837d3accb6068dcc4593b2"
-      },
-      "time": 1752067787310553,
-      "createdHeight": 14,
-      "fee": 10000,
-      "networkID": 1,
-      "chainID": 2
-    },
-    "approve": true
-  },
-  "7edaf1a0cac74c54b9ec34023af7fe8977fe36b95e40f4566db12b6f69daf75c": {
+  "ac4f9235e8b6bd7e4166fc0401435feaf6396790d54da37cc7f3a85286312148": {
     "proposal": {
       "type": "changeParameter",
       "msg": {
@@ -31,14 +8,13 @@
         "parameterValue": "example",
         "startHeight": 1,
         "endHeight": 1000,
-        "signer": "4646464646464646464646464646464646464646",
-        "proposalHash": ""
+        "signer": "4646464646464646464646464646464646464646"
       },
       "signature": {
-        "publicKey": "95ecf39914b027b32132a8e24ad0e7d7a3599dcd06757b9eacf4cab391ea1fd7e3facde205d949a6e147402c81f90b6f",
-        "signature": "923396da659a35c81b4600853d1f151126f1b322d82fe36bea50c978abbb99b7a20867ec33cc97649f46d58572e87b8a0c3a108a146265163410d4ac03555515a15096446479d9983edb492d26e6ff3f2e464657179692c12498e5cc5426b7f3"
+        "publicKey": "8b5a8ff402522f46171fb9408c32568c8e007a31e2602ea09b69b0a3522b67e9e34e10084f66f85530f49c1ba981864c",
+        "signature": "8f240289940bbb1dd0da376e64ef56d4bf5723c4180470dc69e80acbe9f29e12a7a5050d061b408475f75262e467c35f0e4ced0cd55e19b443333fcf62fcf4a0e06f172fdca6f7f708821284322165d48ef7907f265adfa5fe2cd1b5cdfd1ec3"
       },
-      "time": 1741350747491943,
+      "time": 1753234441772748,
       "createdHeight": 1,
       "fee": 10000,
       "memo": "example",

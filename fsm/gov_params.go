@@ -3,12 +3,13 @@ package fsm
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -63,7 +64,7 @@ func DefaultParams() *Params {
 			MaxCommitteeSize:                   100,
 			EarlyWithdrawalPenalty:             20,
 			DelegateUnstakingBlocks:            2,
-			MinimumOrderSize:                   1000000000,
+			MinimumOrderSize:                   10000,
 			StakePercentForSubsidizedCommittee: 33,
 			MaxSlashPerCommittee:               15,
 			DelegateRewardPercentage:           10,
