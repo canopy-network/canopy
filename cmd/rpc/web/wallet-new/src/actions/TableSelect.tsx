@@ -280,53 +280,55 @@ const TableSelect: React.FC<TableSelectProps> = ({
         <div className="col-span-12 w-full">
             {!!label && <div className="text-sm mb-3 text-neutral-300 font-medium">{label}</div>}
 
-            <div className="rounded-lg bg-[#1a1d24] overflow-hidden">
-                {/* Header */}
-                <div className="grid grid-cols-12 gap-4 px-4 py-3 text-xs text-neutral-400 font-medium">
-                    {columns.map((c, i) => (
-                        <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align), 'truncate')}>
-                            {safe(c.title)}
-                        </div>
-                    ))}
-                    {tf.rowAction?.title && (
-                        <div className={cx(colSpanCls, cellAlign('right'), 'truncate')}>
-                            {resolveTemplate(tf.rowAction.title)}
-                        </div>
-                    )}
-                </div>
+            <div className="rounded-lg bg-[#1a1d24] overflow-x-auto overflow-y-hidden">
+                <div className="min-w-full">
+                    {/* Header */}
+                    <div className="grid grid-cols-12 gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-xs text-neutral-400 font-medium">
+                        {columns.map((c, i) => (
+                            <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align), 'truncate')}>
+                                {safe(c.title)}
+                            </div>
+                        ))}
+                        {tf.rowAction?.title && (
+                            <div className={cx(colSpanCls, cellAlign('right'), 'truncate')}>
+                                {resolveTemplate(tf.rowAction.title)}
+                            </div>
+                        )}
+                    </div>
 
-                {/* Rows */}
-                <div className="space-y-0">
-                    {rows.map((row: any) => {
-                        const k = String(row[keyField] ?? row.__idx)
-                        const selected = selectedKeys.includes(k)
-                        return (
-                            <button
-                                type="button"
-                                key={k}
-                                onClick={() => toggleRow(row)}
-                                className={cx(
-                                    'w-full grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-white/5 transition-colors text-white',
-                                    selectMode !== 'row' && 'cursor-default'
-                                )}
-                                aria-pressed={selected}
-                            >
-                                {columns.map((c, i) => (
-                                    <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align))}>
-                                        {renderCell(c, row)}
-                                    </div>
-                                ))}
-                                {tf.rowAction && (
-                                    <div className={cx(colSpanCls, 'flex justify-end')}>
-                                        {renderAction(row)}
-                                    </div>
-                                )}
-                            </button>
-                        )
-                    })}
-                    {rows.length === 0 && (
-                        <div className="px-4 py-8 text-center text-sm text-neutral-500">No data</div>
-                    )}
+                    {/* Rows */}
+                    <div className="space-y-0">
+                        {rows.map((row: any) => {
+                            const k = String(row[keyField] ?? row.__idx)
+                            const selected = selectedKeys.includes(k)
+                            return (
+                                <button
+                                    type="button"
+                                    key={k}
+                                    onClick={() => toggleRow(row)}
+                                    className={cx(
+                                        'w-full grid grid-cols-12 gap-3 sm:gap-4 items-center px-3 sm:px-4 py-3 text-sm hover:bg-white/5 transition-colors text-white',
+                                        selectMode !== 'row' && 'cursor-default'
+                                    )}
+                                    aria-pressed={selected}
+                                >
+                                    {columns.map((c, i) => (
+                                        <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align))}>
+                                            {renderCell(c, row)}
+                                        </div>
+                                    ))}
+                                    {tf.rowAction && (
+                                        <div className={cx(colSpanCls, 'flex justify-end')}>
+                                            {renderAction(row)}
+                                        </div>
+                                    )}
+                                </button>
+                            )
+                        })}
+                        {rows.length === 0 && (
+                            <div className="px-3 sm:px-4 py-8 text-center text-sm text-neutral-500">No data</div>
+                        )}
+                    </div>
                 </div>
             </div>
 

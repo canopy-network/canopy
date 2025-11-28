@@ -639,9 +639,9 @@ export default function ActionRunner({
                 )}
 
                 {infoItems.length > 0 && (
-                  <div className="flex-col h-full p-4 rounded-lg bg-bg-primary">
+                  <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-bg-primary">
                     {action?.form?.info?.title && (
-                      <h4 className="text-canopy-50">
+                      <h4 className="text-canopy-50 text-base sm:text-lg mb-2">
                         {template(action?.form?.info?.title, templatingCtx)}
                       </h4>
                     )}
@@ -668,11 +668,11 @@ export default function ActionRunner({
                         ) => (
                           <div
                             key={i}
-                            className="flex items-center justify-between text-md"
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
                           >
-                            <div className="flex items-center gap-2 text-neutral-400 font-light">
+                            <div className="flex items-center gap-2 text-neutral-400 font-light text-xs sm:text-sm">
                               {d.icon ? (
-                                <LucideIcon name={d.icon} className="w-4 h-4" />
+                                <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               ) : null}
                               <span>
                                 {d.label}
@@ -680,7 +680,7 @@ export default function ActionRunner({
                               </span>
                             </div>
                             {d.value && (
-                              <span className="font-normal text-canopy-50">
+                              <span className="font-normal text-canopy-50 break-words text-sm sm:text-base">
                                 {String(d.value ?? "—")}
                               </span>
                             )}
@@ -696,7 +696,7 @@ export default function ActionRunner({
                     {wizard && stepIdx > 0 && (
                       <button
                         onClick={goPrev}
-                        className="px-3 py-2 rounded border border-muted text-canopy-50"
+                        className="px-4 py-2 sm:py-2.5 rounded border border-muted text-canopy-50 text-sm sm:text-base"
                       >
                         Back
                       </button>
@@ -705,7 +705,7 @@ export default function ActionRunner({
                       disabled={hasStepErrors}
                       onClick={goNext}
                       className={cx(
-                        "flex-1 px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded",
+                        "flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-bold rounded text-sm sm:text-base",
                         hasStepErrors && "opacity-50 cursor-not-allowed",
                       )}
                     >
@@ -718,24 +718,24 @@ export default function ActionRunner({
 
             {stage === "confirm" && (
               <motion.div className="space-y-4">
-                <div className="flex-col h-full p-4 rounded-lg bg-bg-primary">
+                <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-bg-primary">
                   {summaryTitle && (
-                    <h4 className="text-canopy-50">{summaryTitle}</h4>
+                    <h4 className="text-canopy-50 text-base sm:text-lg mb-3">{summaryTitle}</h4>
                   )}
 
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-2.5">
                     {resolvedSummary.map((d, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between text-md"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
                       >
-                        <div className="flex items-center gap-2 text-neutral-400 font-light">
+                        <div className="flex items-center gap-2 text-neutral-400 font-light text-xs sm:text-sm">
                           {d.icon ? (
-                            <LucideIcon name={d.icon} className="w-4 h-4" />
+                            <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           ) : null}
                           <span>{d.label}:</span>
                         </div>
-                        <span className="font-normal text-canopy-50">
+                        <span className="font-normal text-canopy-50 break-words text-sm sm:text-base sm:text-right">
                           {String(d.value ?? "—")}
                         </span>
                       </div>
@@ -746,10 +746,10 @@ export default function ActionRunner({
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={onConfirm}
-                    className="flex-1 px-3 py-2 bg-primary-500 text-bg-accent-foreground font-bold rounded flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-bold rounded flex items-center justify-center gap-2 text-sm sm:text-base"
                   >
                     {confirmBtn.icon ? (
-                      <LucideIcon name={confirmBtn.icon} className="w-4 h-4" />
+                      <LucideIcon name={confirmBtn.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
                     ) : null}
                     <span>{confirmBtn.label}</span>
                   </button>

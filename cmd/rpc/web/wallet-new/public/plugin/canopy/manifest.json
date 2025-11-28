@@ -41,7 +41,9 @@
       "id": "send",
       "title": "Send",
       "icon": "Send",
-      "relatedActions": ["receive"],
+      "relatedActions": [
+        "receive"
+      ],
       "ds": {
         "account": {
           "account": {
@@ -57,11 +59,13 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "w-[40rem]"
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
           }
         }
       },
-      "tags": ["quick"],
+      "tags": [
+        "quick"
+      ],
       "form": {
         "fields": [
           {
@@ -256,7 +260,9 @@
       "id": "receive",
       "title": "Receive",
       "icon": "Scan",
-      "relatedActions": ["send"],
+      "relatedActions": [
+        "send"
+      ],
       "ds": {
         "account": {
           "account": {
@@ -275,11 +281,13 @@
         "hideSubmit": true,
         "slots": {
           "modal": {
-            "className": "w-[20rem]"
+            "className": "sm:max-w-[20rem] md:max-w-[24rem]"
           }
         }
       },
-      "tags": ["quick"],
+      "tags": [
+        "quick"
+      ],
       "form": {
         "layout": {
           "aside": {
@@ -354,21 +362,23 @@
           "staleTimeMs": 30000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
-          "watch": ["form.operator", "form.output", "form.signerResponsible"]
+          "watch": [
+            "form.operator",
+            "form.output",
+            "form.signerResponsible"
+          ]
         }
       },
       "ui": {
         "slots": {
           "modal": {
-            "style": {
-              "minWidth": "34rem",
-              "maxWidth": "40rem",
-              "width": "33vw"
-            }
+            "className": ""
           }
         }
       },
-      "tags": ["quick"],
+      "tags": [
+        "quick"
+      ],
       "form": {
         "wizard": {
           "steps": [
@@ -606,7 +616,7 @@
             "type": "text",
             "label": "Validator Address",
             "required": true,
-            "showIf": "{{ form.isDelegate && form.isDelegate != 'true' }}",
+            "showIf": "{{ form.isDelegate && form.isDelegate !== true }}",
             "value": "{{ ds.validator?.netAddress ?? '' }}",
             "autoPopulate": "once",
             "placeholder": "tcp://127.0.0.1:xxxx",
@@ -770,7 +780,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "w-[40rem]"
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
           }
         }
       },
@@ -894,7 +904,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "w-[45rem]"
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
           }
         }
       },
@@ -1352,12 +1362,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "style": {
-              "minWidth": "34rem",
-              "maxWidth": "40rem",
-              "width": "33vw",
-              "minHeight": "28rem"
-            }
+            "className": "sm:max-w-[32rem] md:max-w-[40rem]"
           }
         }
       },
@@ -1419,7 +1424,7 @@
             "name": "earlyWithdrawalWarning",
             "type": "dynamicHtml",
             "html": "<div class='col-span-12 p-3 bg-red-950/30 border border-red-800/30 rounded-lg'><div class='flex items-center gap-2 mb-2'><svg class='w-5 h-5 text-red-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'></path></svg><p class='text-red-300 text-sm font-bold'>20% Early Withdrawal Penalty</p></div><p class='text-text-muted text-xs mb-2'>Early withdrawal incurs a <span class='text-red-400 font-semibold'>20% reduction</span> of your staked amount.</p><div class='flex justify-between text-xs'><span class='text-text-muted'>Current stake:</span><span class='text-white font-medium'>{{formatToCoin<{{ds.validator?.stakedAmount ?? 0}}>}} CNPY</span></div><div class='flex justify-between text-xs mt-1'><span class='text-text-muted'>You will receive:</span><span class='text-emerald-400 font-semibold'>{{formatToCoin<{{(ds.validator?.stakedAmount ?? 0) * 0.8}}>}} CNPY</span></div><p class='text-text-muted text-xs mt-2'>Funds available immediately after confirmation.</p></div>",
-            "showIf": "{{ form.earlyWithdrawal === 'true' && ds.validator }}",
+            "showIf": "{{ form.earlyWithdrawal === true && ds.validator }}",
             "span": {
               "base": 12
             }

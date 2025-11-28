@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ExternalLink } from "lucide-react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
+import { NavLink } from "react-router-dom";
 
 const getStatusColor = (s: string) =>
   s === "Confirmed"
@@ -277,12 +278,9 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = ({
 
       {/* See All */}
       <div className="text-center mt-6">
-        <a
-          href="/all-transactions"
-          className="text-primary hover:text-primary/80 text-sm font-medium transition-colors"
-        >
+        <NavLink to="/all-transactions" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">
           See All ({transactions.length})
-        </a>
+        </NavLink>
       </div>
     </motion.div>
   );

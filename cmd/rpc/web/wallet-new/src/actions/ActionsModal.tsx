@@ -58,7 +58,7 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                     initial={{opacity: 0}}
                     animate={{opacity: 1}}
                     exit={{opacity: 0}}
-                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
                     onClick={onClose}
                 >
                     <motion.div
@@ -71,7 +71,13 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                         }}
                         // 🧩 base + clases opcionales + estilos inline del manifest
                         className={cx(
-                            'relative bg-bg-secondary rounded-xl border border-bg-accent p-6 max-h-[95vh] max-w-[40vw] ',
+                            'relative bg-bg-secondary border border-bg-accent overflow-hidden flex flex-col',
+                            // Mobile: casi pantalla completa
+                            'w-full h-[96vh] max-h-[96vh] rounded-lg p-3',
+                            // Small tablets: un poco más pequeño
+                            'sm:h-auto sm:max-h-[92vh] sm:max-w-[90vw] sm:rounded-xl sm:p-5',
+                            // Desktop: tamaño controlado
+                            'md:w-auto md:max-w-[80vw] md:max-h-[90vh] md:p-6',
                             modalClassName
                         )}
                         style={modalStyle}
@@ -79,7 +85,7 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                     >
                         <XIcon
                             onClick={onClose}
-                            className="absolute top-4 right-4 text-text-muted cursor-pointer hover:text-white"
+                            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-5 h-5 sm:w-6 sm:h-6 text-text-muted cursor-pointer hover:text-white z-10"
                         />
 
                         <ModalTabs
@@ -93,12 +99,12 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                                 initial={{opacity: 0, y: 20}}
                                 animate={{opacity: 1, y: 0}}
                                 transition={{duration: 0.5, delay: 0.4}}
-                                className="max-h-[80vh] overflow-y-auto scrollbar-hide hover:scrollbar-default"
+                                className="flex-1 overflow-y-auto scrollbar-hide hover:scrollbar-default min-h-0"
                             >
                                 <ActionRunner
                                     actionId={selectedTab.value}
                                     onFinish={onClose}
-                                    className="p-4"
+                                    className="p-2 sm:p-3 md:p-4"
                                     prefilledData={actions?.find(a => a.id === selectedTab.value)?.prefilledData}
                                 />
                             </motion.div>

@@ -37,7 +37,7 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
                 {help && (
                     <div
                         className={cx(
-                            'text-xs mt-1 break-words',
+                            'text-xs mt-1.5 break-words overflow-wrap-anywhere',
                             error ? 'text-red-400' : 'text-text-muted'
                         )}
                     >

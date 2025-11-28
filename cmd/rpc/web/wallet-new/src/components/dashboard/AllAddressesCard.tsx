@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Wallet } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useAccounts } from "@/app/providers/AccountsProvider";
+import { NavLink } from "react-router-dom";
 
 export const AllAddressesCard = () => {
   const { accounts, loading: accountsLoading } = useAccounts();
@@ -93,12 +94,9 @@ export const AllAddressesCard = () => {
         <h3 className="text-text-primary text-lg font-semibold">
           All Addresses
         </h3>
-        <a
-          href="/all-addresses"
-          className="text-text-muted hover:text-primary/80 text-sm font-medium transition-colors"
-        >
+        <NavLink to="/all-addresses" className="text-text-muted hover:text-primary/80 text-sm font-medium transition-colors">
           See All ({processedAddresses.length})
-        </a>
+        </NavLink>
       </div>
 
       {/* Addresses List */}

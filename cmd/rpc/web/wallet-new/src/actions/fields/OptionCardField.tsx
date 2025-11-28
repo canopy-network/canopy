@@ -17,19 +17,29 @@ export const OptionCardField: React.FC<BaseFieldProps> = ({
 
     return (
         <FieldWrapper field={field} error={error} templateContext={templateContext} resolveTemplate={resolveTemplate}>
-            <div role="radiogroup" aria-label={String(resolveTemplate(field.label) ?? field.name)} className="grid grid-cols-12 gap-3 w-full">
+            <div role="radiogroup" aria-label={String(resolveTemplate(field.label) ?? field.name)} className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                 {opts.map((o, i) => {
                     const label = resolveTemplate(o.label)
                     const help = resolveTemplate(o.help)
-                    const val = String(resolveTemplate(o.value) ?? i)
-                    const selected = String(currentValue ?? '') === val
+                    const rawValue = resolveTemplate(o.value) ?? i
+
+                    // Normalize values for comparison (handle booleans, strings, numbers)
+                    const normalizeValue = (v: any) => {
+                        if (v === true || v === 'true') return true
+                        if (v === false || v === 'false') return false
+                        return v
+                    }
+
+                    const normalizedOptionValue = normalizeValue(rawValue)
+                    const normalizedCurrentValue = normalizeValue(currentValue)
+                    const selected = normalizedCurrentValue === normalizedOptionValue
 
                     return (
-                        <div key={val} className="col-span-12">
+                        <div key={String(rawValue)}>
                             <OptionCard
                                 selected={selected}
                                 disabled={field.readOnly}
-                                onSelect={() => onChange(val)}
+                                onSelect={() => onChange(normalizedOptionValue)}
                                 label={label}
                                 help={help}
                             />

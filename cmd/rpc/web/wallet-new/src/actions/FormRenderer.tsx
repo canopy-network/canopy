@@ -7,7 +7,7 @@ import { FieldControl } from "@/actions/FieldControl";
 import { motion } from "framer-motion";
 
 const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <motion.div className="grid grid-cols-12 gap-4">{children}</motion.div>
+  <motion.div className="grid grid-cols-12 gap-3 sm:gap-3.5 md:gap-4">{children}</motion.div>
 );
 
 type Props = {

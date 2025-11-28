@@ -79,10 +79,25 @@ const RSP = (n?: number) => {
 export const spanClasses = (f: any, layout?: any) => {
     const conf = f?.span ?? f?.ui?.grid?.colSpan ?? layout?.grid?.defaultSpan
     const base = typeof conf === 'number' ? { base: conf } : (conf || {})
-    const b = RSP(base.base ?? 12)
+
+    // Mobile-first approach: full width on small screens
+    const mobileBase = 'col-span-12'
+
+    // Desktop span: use 'base' config or default to full width
+    const baseSpan = base.base != null ? RSP(base.base) : 'col-span-12'
+
+    // Build responsive classes
+    // sm: small tablets (640px+)
     const sm = base.sm != null ? `sm:${RSP(base.sm)}` : ''
-    const md = base.md != null ? `md:${RSP(base.md)}` : ''
+
+    // md: tablets and up (768px+) - use baseSpan if not explicitly set
+    const md = base.md != null ? `md:${RSP(base.md)}` : (base.base != null ? `md:${baseSpan}` : '')
+
+    // lg: large screens (1024px+)
     const lg = base.lg != null ? `lg:${RSP(base.lg)}` : ''
+
+    // xl: extra large screens (1280px+)
     const xl = base.xl != null ? `xl:${RSP(base.xl)}` : ''
-    return [b, sm, md, lg, xl].filter(Boolean).join(' ')
+
+    return [mobileBase, sm, md, lg, xl].filter(Boolean).join(' ')
 }
