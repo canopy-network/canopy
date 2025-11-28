@@ -303,8 +303,7 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 	// load the last block from the indexer
 	prevBlk, err := s.LoadBlock(s.Height() - 1)
 	if err != nil || prevBlk == nil || prevBlk.BlockHeader == nil {
-		s.log.Error(lib.ErrNilBlock().Error())
-		return
+		return nil, nil, lib.ErrNilBlock()
 	}
 	// make 2 copies of the orders with hash keys
 	sorted, orders := remoteBatch.CopyOrders(prevBlk.BlockHeader.Hash)
