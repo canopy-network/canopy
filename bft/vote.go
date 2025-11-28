@@ -1,6 +1,8 @@
 package bft
 
 import (
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
@@ -49,8 +51,31 @@ func (b *BFT) GetLeadingVote() (m *Message, maxVotePercent uint64, maxVotes uint
 
 // AddVote() adds a Replica's vote to the VoteSet
 func (b *BFT) AddVote(vote *Message) lib.ErrorI {
+	lockAcquireStart := time.Now()
+	phase := "unknown"
+	if vote != nil && vote.Qc != nil && vote.Qc.Header != nil {
+		phase = lib.Phase_name[int32(vote.Qc.Header.Phase)]
+	}
+	sender := "unknown"
+	if vote != nil && vote.Signature != nil {
+		sender = lib.BytesToTruncatedString(vote.Signature.PublicKey)
+	}
+	b.log.Debugf("🔒 ADD VOTE LOCK ATTEMPT: phase=%s from %s", phase, sender)
 	b.Controller.Lock()
-	defer b.Controller.Unlock()
+	lockAcquireDuration := time.Since(lockAcquireStart)
+	if lockAcquireDuration > 50*time.Millisecond {
+		b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for AddVote phase=%s from %s",
+			lockAcquireDuration, phase, sender)
+	}
+	defer func() {
+		lockHeldDuration := time.Since(lockAcquireStart)
+		if lockHeldDuration > 100*time.Millisecond {
+			b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during AddVote phase=%s from %s",
+				lockHeldDuration, phase, sender)
+		}
+		b.log.Debugf("🔓 ADD VOTE LOCK RELEASED: phase=%s held for %s", phase, lockHeldDuration)
+		b.Controller.Unlock()
+	}()
 	voteSet := b.getVoteSet(vote)
 	// handle high qc and byzantine evidence (only applicable if ELECTION-VOTE)
 	if err := b.handleHighQCVDFAndEvidence(vote); err != nil {

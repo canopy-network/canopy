@@ -2,6 +2,8 @@ package bft
 
 import (
 	"bytes"
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
@@ -271,9 +273,35 @@ func (x *Message) checkBasic(view *lib.View) lib.ErrorI {
 
 // GetValidateMessageParams() executes a blocking function to collect the params needed to validate a consensus message
 func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, lib.ErrorI) {
+	msgType := "unknown"
+	if msg.IsReplicaMessage() {
+		msgType = "Replica"
+	} else if msg.IsProposerMessage() {
+		msgType = "Proposer"
+	} else if msg.IsPacemakerMessage() {
+		msgType = "Pacemaker"
+	}
 	// lock the controller for thread safety
+	lockAcquireStart := time.Now()
+	b.log.Debugf("🔒 MSG VALIDATE LOCK ATTEMPT: %s message from %s", msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
 	b.Controller.Lock()
-	defer b.Controller.Unlock()
+	lockAcquireDuration := time.Since(lockAcquireStart)
+	if lockAcquireDuration > 50*time.Millisecond {
+		b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for GetValidateMessageParams %s from %s",
+			lockAcquireDuration, msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
+	}
+	b.log.Debugf("🔒✓ MSG VALIDATE LOCK ACQUIRED: %s from %s after %s",
+		msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockAcquireDuration)
+	defer func() {
+		lockHeldDuration := time.Since(lockAcquireStart)
+		if lockHeldDuration > 100*time.Millisecond {
+			b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during GetValidateMessageParams %s from %s",
+				lockHeldDuration, msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
+		}
+		b.log.Debugf("🔓 MSG VALIDATE LOCK RELEASED: %s from %s held for %s",
+			msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockHeldDuration)
+		b.Controller.Unlock()
+	}()
 	// check if a validator
 	if _, err := b.ValidatorSet.GetValidator(msg.Signature.PublicKey); err != nil {
 		return nil, err
