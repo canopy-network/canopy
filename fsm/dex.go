@@ -44,6 +44,19 @@ import (
 //
 // Effectively: each chain is always processing the other chain’s locked batch
 // while preparing its own next locked batch, forming a continuous pipeline.
+//
+// Ledger mirroring & “shadow tracking”
+// ------------------------------------
+// - Each chain keeps a local mirror of the counter chain’s liquidity pool (`remoteBatch.PoolSize`)
+//   so that AMM math on either side uses the same reserves.
+// - When we apply receipts for *our* locked batch (Step 1), we “advance” that mirrored
+//   counter-pool snapshot by subtracting what the counter chain already paid out, so the mirror
+//   reflects their post-receipt state.
+// - We also capture a mid-point snapshot of *our* pool after receipts (`midPointPoolSize`).
+//   That snapshot is sent to the counter chain so it can mirror our pool for its next cycle.
+// - `CounterPoolSize` stored on a rotated batch is informational (RPC/event pricing) and is not
+//   used in AMM execution; the executable pool for the next batch is `nextBatch.PoolSize`, set
+//   from the mid-point snapshot.
 
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
@@ -162,7 +175,7 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	// if the remote batch is empty, set an empty receipt hash
 	if !remoteBatch.IsEmpty() {
 		var locked bool
-		// 1) PROCESS RECEIPTS FOR OUR LOCKED BATCH
+		// 1) PROCESS RECEIPTS FOR OUR LOCKED BATCH (the locked batch previously sent to the counter chain)
 		locked, err = s.HandleReceiptsForOurLockedBatch(remoteBatchCopy, chainId)
 		if err != nil || locked {
 			return
@@ -254,6 +267,14 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 		if err != nil {
 			return
 		}
+		// Mirror the remote chain's ledger:
+		// - remoteBatch.PoolSize is our local shadow of the counter chain's pool at the mid-point snapshot they sent us.
+		// - The counter chain already paid this receipt when it produced it; we subtract here to advance our shadow
+		//   forward to their post-receipt state so subsequent AMM math (for their locked batch) uses the same reserves.
+		if remoteBatch.PoolSize <= received {
+			return ErrRemotePoolSizeDebit()
+		}
+		remoteBatch.PoolSize -= received
 		// emit event
 		if err = s.EventDexSwap(o.Address, o.OrderId, o.AmountForSale, received,
 			localBatch.Committee, true, success); err != nil {
@@ -282,6 +303,7 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 	// load the last block from the indexer
 	prevBlk, err := s.LoadBlock(s.Height() - 1)
 	if err != nil || prevBlk == nil || prevBlk.BlockHeader == nil {
+		s.log.Error(lib.ErrNilBlock().Error())
 		return
 	}
 	// make 2 copies of the orders with hash keys
@@ -306,7 +328,7 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 		// capture result in map to save receipts later
 		result[order.Key] = dY
 		// emit swap event
-		if err = s.EventDexSwap(order.Address, order.OrderId, dX, dY, chainId, false, dY == 0); err != nil {
+		if err = s.EventDexSwap(order.Address, order.OrderId, dX, dY, chainId, false, dY != 0); err != nil {
 			return
 		}
 		// if succeeded: update pool ledgers like uniswap would
@@ -502,7 +524,7 @@ func (s *StateMachine) RotateDexBatches(receiptsHash []byte, lPoolSize, counterP
 	nextSellBatch.PoolSize = lPoolSize
 	// set the hash
 	nextSellBatch.ReceiptHash = receiptsHash
-	// set the *computed* pool amount
+	// set the *computed* counter pool amount (informational; used for pricing display/RPC, not execution)
 	nextSellBatch.CounterPoolSize = counterPoolSize
 	// set the locked height
 	nextSellBatch.LockedHeight = s.Height()
