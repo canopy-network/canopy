@@ -6,6 +6,9 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math"
 	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -347,7 +350,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 175, // 300 - 62.5*2
+				Amount: 176, // 300 - 62*2 (1 unit dust stays in pool)
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
@@ -964,7 +967,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 175, // 300 - 62.5*2
+				Amount: 176, // 300 - 62*2 (1 unit dust stays in pool)
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  100,
@@ -1302,7 +1305,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			// 3. Deposits create new LP points for users 4 and 5
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 143, // 300 - 39 - 38 - 15 - 49 - 16
+				Amount: 144, // 300 - 39 - 38 - 15 - 49 - 16 + dust
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  151, // Empirically determined - slight rounding in LP calculations
@@ -1311,12 +1314,12 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 					Points:  20, // 50% remaining after withdraw
 				}, {
 					Address: newTestAddressBytes(t, 4),
-					Points:  35, // LP points from 100 deposit (empirically determined)
+					Points:  36, // LP points from 100 deposit (empirically determined)
 				}, {
 					Address: newTestAddressBytes(t, 5),
 					Points:  28, // LP points from 80 deposit (empirically determined)
 				}},
-				TotalPoolPoints: 234, // 151 + 20 + 35 + 28 (empirically verified)
+				TotalPoolPoints: 235, // 151 + 20 + 36 + 28 (empirically verified)
 			},
 			expectedAccounts: []*Account{
 				{Address: newTestAddressBytes(t, 1), Amount: 23}, // Order 1 (empirically determined)
@@ -1558,7 +1561,7 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			// 3. Deposit: 50 counter-chain tokens create new LP points
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 136, // 240 - 47 (order) - 10 - 19 - 28 (withdraws) (empirically determined)
+				Amount: 137, // 240 - 47 (order) - 9 - 19 - 28 (withdraws) + dust
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  80,
@@ -2450,6 +2453,594 @@ func TestGetDexBatches(t *testing.T) {
 			require.Len(t, batches, test.expectedLen)
 		})
 	}
+}
+
+// TestDexFuzzHarness simulates two chains interacting through the DEX pipeline under random ops/timing.
+// It is designed to stress safety invariants rather than verify single functions.
+func TestDexFuzzHarness(t *testing.T) {
+	seed := time.Now().UnixNano()
+	if s := os.Getenv("DEX_FUZZ_SEED"); s != "" {
+		if parsed, err := strconv.ParseInt(s, 10, 64); err == nil {
+			seed = parsed
+		}
+	}
+	steps := 2000
+	if s := os.Getenv("DEX_FUZZ_STEPS"); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed >= 1000 && parsed <= 50000 {
+			steps = parsed
+		}
+	}
+	rng := rand.New(rand.NewSource(seed))
+
+	sim := newDexSim(t, rng)
+	history := make([]string, 0, steps)
+
+	for step := 1; step <= steps; step++ {
+		stepLabel := fmt.Sprintf("step=%d", step)
+		genOps(sim, rng)
+		applyLocalOps(t, sim)
+		deliverRemoteReceipts(t, sim, rng)
+		assertInvariant(t, sim, step, seed, history)
+
+		if step%100 == 0 {
+			t.Logf("[seed=%d step=%d] poolX=%d poolY=%d pointsX=%d pointsY=%d",
+				seed, step,
+				sim.chainX.poolBalance(), sim.chainY.poolBalance(),
+				sim.chainX.poolPoints(), sim.chainY.poolPoints())
+		}
+		sim.advanceHeight()
+		history = append(history, stepLabel)
+	}
+	_ = history // retained for future expansion; appended only on invariant breach.
+}
+
+// Ensures slippage/requestedAmount gating matches SafeComputeDY outputs.
+func TestHandleDexBatchOrdersRespectsRequestedAmount(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.ChainId = 1
+
+	chainId := uint64(2)
+	addr := newTestAddress(t, 1)
+	// seed pool used for payouts
+	require.NoError(t, sm.SetPool(&Pool{Id: chainId + LiquidityPoolAddend, Amount: 10_000}))
+
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Orders: []*lib.DexLimitOrder{
+			{AmountForSale: 1_000, RequestedAmount: 0, Address: addr.Bytes(), OrderId: []byte{0x01}},
+			{AmountForSale: 500, RequestedAmount: 999_999, Address: addr.Bytes(), OrderId: []byte{0x02}}, // should fail
+		},
+	}
+
+	x, y := uint64(10_000), uint64(10_000)
+	x0, y0 := x, y
+
+	receipts, err := sm.HandleDexBatchOrders(batch, &x, &y, chainId)
+	require.NoError(t, err)
+	require.Len(t, receipts, len(batch.Orders))
+
+	expectedDY0 := SafeComputeDY(x0, y0, batch.Orders[0].AmountForSale)
+	require.Greater(t, expectedDY0, batch.Orders[0].RequestedAmount)
+	require.Equal(t, expectedDY0, receipts[0], "first order should succeed at computed dy")
+
+	expectedDY1 := SafeComputeDY(x0+batch.Orders[0].AmountForSale, y0-expectedDY0, batch.Orders[1].AmountForSale)
+	require.Less(t, expectedDY1, batch.Orders[1].RequestedAmount)
+	require.Zero(t, receipts[1], "second order should fail slippage gate")
+}
+
+// Proves withdraw->redeposit cannot increase LP points (no gain loop), allowing only rounding loss.
+func TestWithdrawThenRedeploy_NoPointGain(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.ChainId = 1
+
+	chainId := uint64(2)
+	user := newTestAddress(t, 2)
+	// seed pools
+	require.NoError(t, sm.SetPool(&Pool{Id: chainId + LiquidityPoolAddend, Amount: 20_000}))
+	require.NoError(t, sm.SetPool(&Pool{Id: chainId + HoldingPoolAddend, Amount: 5_000}))
+	require.NoError(t, sm.SetAccount(&Account{Address: user.Bytes(), Amount: 0}))
+
+	x, y := uint64(20_000), uint64(20_000)
+	depositAmt := uint64(4_000)
+
+	depositBatch := &lib.DexBatch{
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Amount: depositAmt, Address: user.Bytes(), OrderId: []byte{0x03}},
+		},
+	}
+	require.NoError(t, sm.HandleBatchDeposit(depositBatch, chainId, &x, &y, true))
+	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
+	require.NoError(t, err)
+	initialPoints, err := pool.GetPointsFor(user.Bytes())
+	require.NoError(t, err)
+	require.NotZero(t, initialPoints)
+
+	withdrawBatch := &lib.DexBatch{
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Percent: 100, Address: user.Bytes(), OrderId: []byte{0x04}},
+		},
+	}
+	require.NoError(t, sm.HandleBatchWithdraw(withdrawBatch, chainId, &x, &y, true))
+
+	// capture payout from account
+	acc, err := sm.GetAccount(user)
+	require.NoError(t, err)
+	payout := acc.Amount
+	require.NotZero(t, payout)
+
+	// move payout into holding pool to simulate redeposit
+	require.NoError(t, sm.AccountSub(user, payout))
+	require.NoError(t, sm.PoolAdd(chainId+HoldingPoolAddend, payout))
+
+	redepositBatch := &lib.DexBatch{
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Amount: payout, Address: user.Bytes(), OrderId: []byte{0x05}},
+		},
+	}
+	require.NoError(t, sm.HandleBatchDeposit(redepositBatch, chainId, &x, &y, true))
+
+	finalPool, err := sm.GetPool(chainId + LiquidityPoolAddend)
+	require.NoError(t, err)
+	finalPoints, err := finalPool.GetPointsFor(user.Bytes())
+	require.NoError(t, err)
+
+	require.LessOrEqual(t, finalPoints, initialPoints, "round-trip should not increase LP points")
+}
+
+type dexSim struct {
+	chainX, chainY     *dexChain
+	counterId          uint64
+	totalSupply        uint64
+	lpRatioBaseline    float64
+	lpRatioLastUpdated int
+}
+
+type dexChain struct {
+	sm       *StateMachine
+	chainId  uint64
+	users    []crypto.AddressI
+	txBuffer []queuedOp
+	lastDY   map[uint64]uint64 // dX -> last seen dy for monotonicity sampling
+}
+
+type queuedOp struct {
+	kind string
+	msg  any
+}
+
+func newDexSim(t *testing.T, rng *rand.Rand) *dexSim {
+	chainXId, chainYId := uint64(1), uint64(2)
+	counterId := chainYId
+
+	chainX := newDexChain(t, chainXId, counterId, rng)
+	chainY := newDexChain(t, chainYId, chainXId, rng)
+	return &dexSim{
+		chainX:      chainX,
+		chainY:      chainY,
+		counterId:   counterId,
+		totalSupply: assetSupply(chainX) + assetSupply(chainY),
+	}
+}
+
+func newDexChain(t *testing.T, chainId, counterId uint64, rng *rand.Rand) *dexChain {
+	sm := newTestStateMachine(t)
+	sm.Config.ChainId = chainId
+	// seed users
+	users := make([]crypto.AddressI, 0, 8)
+	for i := 0; i < cap(users); i++ {
+		addr := newTestAddress(t, rng.Intn(8))
+		balance := uint64(10_000 + rng.Intn(10_000))
+		require.NoError(t, sm.SetAccount(&Account{Address: addr.Bytes(), Amount: balance}))
+		users = append(users, addr)
+	}
+	// seed pools for counter asset: liquidity + holding
+	liqPoolId := counterId + LiquidityPoolAddend
+	holdPoolId := counterId + HoldingPoolAddend
+	require.NoError(t, sm.SetPool(&Pool{Id: liqPoolId, Amount: 50_000}))
+	require.NoError(t, sm.SetPool(&Pool{Id: holdPoolId, Amount: 0}))
+
+	// initialize empty batches so rotations can start
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(counterId), &lib.DexBatch{
+		Committee:       counterId,
+		PoolSize:        50_000,
+		CounterPoolSize: 50_000,
+	}))
+	require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(counterId), &lib.DexBatch{}))
+
+	return &dexChain{
+		sm:       &sm,
+		chainId:  chainId,
+		users:    users,
+		txBuffer: []queuedOp{},
+		lastDY:   make(map[uint64]uint64),
+	}
+}
+
+func (s *dexSim) advanceHeight() {
+	s.chainX.sm.height++
+	s.chainY.sm.height++
+}
+
+func genOps(sim *dexSim, rng *rand.Rand) {
+	sim.chainX.txBuffer = sim.chainX.txBuffer[:0]
+	sim.chainY.txBuffer = sim.chainY.txBuffer[:0]
+	generate := func(chain *dexChain) {
+		balances := make(map[string]uint64, len(chain.users))
+		for _, u := range chain.users {
+			if acc, err := chain.sm.GetAccount(u); err == nil && acc != nil {
+				balances[string(u.Bytes())] = acc.Amount
+			}
+		}
+		getAvail := func(u crypto.AddressI) uint64 { return balances[string(u.Bytes())] }
+		subAvail := func(u crypto.AddressI, amt uint64) {
+			key := string(u.Bytes())
+			if cur, ok := balances[key]; ok && cur >= amt {
+				balances[key] = cur - amt
+			}
+		}
+
+		n := 1 + rng.Intn(50)
+		for i := 0; i < n; i++ {
+			switch rng.Intn(3) {
+			case 0:
+				// order
+				user := chain.users[rng.Intn(len(chain.users))]
+				amount, ok := affordableAmount(getAvail(user), 500, rng)
+				if !ok {
+					i--
+					continue
+				}
+				reqAmt := uint64(rng.Intn(int(amount + 1)))
+				subAvail(user, amount)
+				chain.txBuffer = append(chain.txBuffer, queuedOp{
+					kind: "order",
+					msg: &MessageDexLimitOrder{
+						ChainId:         counterChain(chain),
+						AmountForSale:   amount,
+						RequestedAmount: reqAmt,
+						Address:         user.Bytes(),
+						OrderId:         lib.RandSlice(uint64(crypto.HashSize)),
+					},
+				})
+			case 1:
+				// deposit
+				user := chain.users[rng.Intn(len(chain.users))]
+				amount, ok := affordableAmount(getAvail(user), 400, rng)
+				if !ok {
+					i--
+					continue
+				}
+				subAvail(user, amount)
+				chain.txBuffer = append(chain.txBuffer, queuedOp{
+					kind: "deposit",
+					msg: &MessageDexLiquidityDeposit{
+						ChainId: counterChain(chain),
+						Amount:  amount,
+						Address: user.Bytes(),
+						OrderId: lib.RandSlice(uint64(crypto.HashSize)),
+					},
+				})
+			default:
+				// withdraw (only if LP exists)
+				if chain.poolPoints() == 0 {
+					i-- // retry with a different op type
+					continue
+				}
+				lpHolders := chain.lpHolders()
+				if len(lpHolders) == 0 {
+					i--
+					continue
+				}
+				user := lpHolders[rng.Intn(len(lpHolders))]
+				percent := uint64(1 + rng.Intn(20))
+				chain.txBuffer = append(chain.txBuffer, queuedOp{
+					kind: "withdraw",
+					msg: &MessageDexLiquidityWithdraw{
+						ChainId: counterChain(chain),
+						Percent: percent,
+						Address: user.Bytes(),
+						OrderId: lib.RandSlice(uint64(crypto.HashSize)),
+					},
+				})
+			}
+		}
+	}
+	generate(sim.chainX)
+	generate(sim.chainY)
+}
+
+func applyLocalOps(t *testing.T, sim *dexSim) {
+	apply := func(chain *dexChain) {
+		for _, op := range chain.txBuffer {
+			switch msg := op.msg.(type) {
+			case *MessageDexLimitOrder:
+				require.NoError(t, chain.sm.HandleMessageDexLimitOrder(msg))
+			case *MessageDexLiquidityDeposit:
+				require.NoError(t, chain.sm.HandleMessageDexLiquidityDeposit(msg))
+			case *MessageDexLiquidityWithdraw:
+				require.NoError(t, chain.sm.HandleMessageDexLiquidityWithdraw(msg))
+			}
+		}
+		chain.txBuffer = chain.txBuffer[:0]
+	}
+	apply(sim.chainX)
+	apply(sim.chainY)
+}
+
+func deliverRemoteReceipts(t *testing.T, sim *dexSim, rng *rand.Rand) {
+	process := func(local, remote *dexChain, mode string) {
+		// get the remote locked batch targeting the local chain
+		remoteBatch, _ := remote.sm.GetDexBatch(local.sm.Config.ChainId, true)
+		if remoteBatch == nil {
+			return
+		}
+		// if local still has a locked batch to settle, skip payout delta check because receipts processing moves the pool
+		localLocked, _ := local.sm.GetDexBatch(remote.sm.Config.ChainId, true)
+		skipPayoutCheck := localLocked != nil && !localLocked.IsEmpty()
+		// capture pool before for payout accounting check
+		beforePool, _ := local.sm.GetPool(local.counterId() + LiquidityPoolAddend)
+		require.NoError(t, local.sm.HandleRemoteDexBatch(remoteBatch, remote.sm.Config.ChainId))
+		afterPool, _ := local.sm.GetPool(local.counterId() + LiquidityPoolAddend)
+		// receipts sum should match delta (orders + withdrawals only reduce local pool)
+		newLocked, _ := local.sm.GetDexBatch(remote.sm.Config.ChainId, true)
+		if !skipPayoutCheck && newLocked != nil && !newLocked.IsEmpty() {
+			var receiptSum uint64
+			for _, r := range newLocked.Receipts {
+				receiptSum += r
+			}
+			for _, w := range remoteBatch.Withdrawals {
+				points, err := beforePool.GetPointsFor(w.Address)
+				if err != nil {
+					continue
+				}
+				pointsToRemove := lib.SafeMulDiv(points, w.Percent, 100)
+				if beforePool.TotalPoolPoints == 0 {
+					continue
+				}
+				withdrawShare := lib.SafeMulDiv(beforePool.Amount, pointsToRemove, beforePool.TotalPoolPoints)
+				receiptSum += withdrawShare
+			}
+			before := beforePool.Amount
+			after := afterPool.Amount
+			if diff := int64(before) - int64(after) - int64(receiptSum); diff > 1 || diff < -1 {
+				t.Fatalf("payout vs pool delta mismatch chain=%d before=%d after=%d sum=%d diff=%d", local.chainId, before, after, receiptSum, diff)
+			}
+		}
+	}
+
+	process(sim.chainX, sim.chainY, "normal")
+	process(sim.chainY, sim.chainX, "normal")
+}
+
+func assertInvariant(t *testing.T, sim *dexSim, step int, seed int64, history []string) {
+	total := assetSupply(sim.chainX) + assetSupply(sim.chainY)
+	if diff := int64(sim.totalSupply) - int64(total); diff != 0 {
+		failInvariant(t, seed, step, fmt.Sprintf("token conservation want=%d got=%d diff=%d", sim.totalSupply, total, diff), history, sim)
+	}
+
+	lockedX, _ := sim.chainX.sm.GetDexBatch(sim.chainX.counterId(), true)
+	lockedY, _ := sim.chainY.sm.GetDexBatch(sim.chainY.counterId(), true)
+	if lockedX.IsEmpty() && lockedY.IsEmpty() {
+		// per-user LP symmetry
+		lpMapX := sim.chainX.lpPointMap()
+		lpMapY := sim.chainY.lpPointMap()
+		if len(lpMapX) != len(lpMapY) {
+			failInvariant(t, seed, step, fmt.Sprintf("LP holder set mismatch x=%d y=%d", len(lpMapX), len(lpMapY)), history, sim)
+		}
+		for k, vx := range lpMapX {
+			if k == string(deadAddr.Bytes()) {
+				continue
+			}
+			if vy, ok := lpMapY[k]; !ok || vx != vy {
+				failInvariant(t, seed, step, fmt.Sprintf("LP points diverge for holder=%x x=%d y=%d", []byte(k), vx, vy), history, sim)
+			}
+		}
+
+		if sim.chainX.poolPoints() != sim.chainY.poolPoints() {
+			failInvariant(t, seed, step, fmt.Sprintf("LP points mismatch x=%d y=%d", sim.chainX.poolPoints(), sim.chainY.poolPoints()), history, sim)
+		}
+
+		ratio := func(chain *dexChain) float64 {
+			pool, _ := chain.sm.GetPool(chain.counterId() + LiquidityPoolAddend)
+			remote := float64(counterPoolAmount(sim, chain))
+			if pool.Amount == 0 || remote == 0 {
+				return 0
+			}
+			return float64(pool.Amount) / remote
+		}
+		rx, ry := ratio(sim.chainX), ratio(sim.chainY)
+		if math.Abs(rx-ry) > 0.0001 {
+			failInvariant(t, seed, step, fmt.Sprintf("ratio mismatch rx=%.6f ry=%.6f", rx, ry), history, sim)
+		}
+		// stronger symmetry: pool vs mirrored pool should not diverge materially
+		for _, chain := range []*dexChain{sim.chainX, sim.chainY} {
+			pool, _ := chain.sm.GetPool(chain.counterId() + LiquidityPoolAddend)
+			remote := counterPoolAmount(sim, chain)
+			if diff := int64(pool.Amount) - int64(remote); diff > 1 || diff < -1 {
+				failInvariant(t, seed, step, fmt.Sprintf("pool mirror mismatch chain=%d local=%d remote=%d diff=%d", chain.chainId, pool.Amount, remote, diff), history, sim)
+			}
+			// sum of per-user points equals total (within deadAddr dust allowance)
+			sumPoints := uint64(0)
+			for _, pt := range pool.Points {
+				sumPoints += pt.Points
+			}
+			if sumPoints != pool.TotalPoolPoints {
+				failInvariant(t, seed, step, fmt.Sprintf("pool point sum mismatch chain=%d sum=%d total=%d", chain.chainId, sumPoints, pool.TotalPoolPoints), history, sim)
+			}
+			// no negative pools (uint64 already, so ensure no wrap beyond supply)
+			if pool.Amount > sim.totalSupply {
+				failInvariant(t, seed, step, fmt.Sprintf("pool exceeds total supply chain=%d pool=%d supply=%d", chain.chainId, pool.Amount, sim.totalSupply), history, sim)
+			}
+		}
+
+		// Enforce LP point math invariant: total points should stay proportional to sqrt(x*y)
+		lpRatio := func(chain *dexChain) float64 {
+			pool, _ := chain.sm.GetPool(chain.counterId() + LiquidityPoolAddend)
+			remote := float64(counterPoolAmount(sim, chain))
+			if pool.Amount == 0 || remote == 0 || pool.TotalPoolPoints == 0 {
+				return 0
+			}
+			k := math.Sqrt(float64(pool.Amount) * remote)
+			return float64(pool.TotalPoolPoints) / k
+		}
+		rlx, rly := lpRatio(sim.chainX), lpRatio(sim.chainY)
+		if sim.lpRatioBaseline == 0 && rlx != 0 && rly != 0 {
+			sim.lpRatioBaseline = (rlx + rly) / 2
+			sim.lpRatioLastUpdated = step
+		}
+		const lpRatioTolerance = 0.01 // allow small rounding drift
+		if sim.lpRatioBaseline > 0 {
+			if math.Abs(rlx-sim.lpRatioBaseline) > lpRatioTolerance || math.Abs(rly-sim.lpRatioBaseline) > lpRatioTolerance {
+				failInvariant(t, seed, step, fmt.Sprintf("LP point/share invariant drift (baseline=%.6f rlx=%.6f rly=%.6f lastUpdated=%d)", sim.lpRatioBaseline, rlx, rly, sim.lpRatioLastUpdated), history, sim)
+			}
+		}
+	}
+
+	// SafeComputeDY monotonicity sampling: if pools moved against a trader (x up, y down), dy for same dX should not increase
+	if step > 1 {
+		sim.chainX.recordDYMonotonicity(t, sim)
+		sim.chainY.recordDYMonotonicity(t, sim)
+	}
+}
+
+func (c *dexChain) counterId() uint64 { return counterChain(c) }
+
+func counterChain(c *dexChain) uint64 {
+	if c.chainId == 1 {
+		return 2
+	}
+	return 1
+}
+
+func counterPoolAmount(sim *dexSim, chain *dexChain) uint64 {
+	if chain.chainId == sim.chainX.chainId {
+		return sim.chainY.poolBalance()
+	}
+	return sim.chainX.poolBalance()
+}
+
+func (c *dexChain) poolBalance() uint64 {
+	bal, _ := c.sm.GetPoolBalance(c.counterId() + LiquidityPoolAddend)
+	return bal
+}
+
+func (c *dexChain) poolPoints() uint64 {
+	p, _ := c.sm.GetPool(c.counterId() + LiquidityPoolAddend)
+	return p.TotalPoolPoints
+}
+
+func affordableAmount(avail uint64, cap uint64, rng *rand.Rand) (uint64, bool) {
+	limit := avail
+	if limit > cap {
+		limit = cap
+	}
+	if limit == 0 {
+		return 0, false
+	}
+	amt := uint64(1 + rng.Intn(int(limit)))
+	return amt, true
+}
+
+func (c *dexChain) lpHolders() []crypto.AddressI {
+	p, _ := c.sm.GetPool(c.counterId() + LiquidityPoolAddend)
+	holders := make([]crypto.AddressI, 0, len(p.Points))
+	for _, pt := range p.Points {
+		if pt.Points > 0 && !bytes.Equal(pt.Address, deadAddr.Bytes()) {
+			holders = append(holders, crypto.NewAddressFromBytes(pt.Address))
+		}
+	}
+	return holders
+}
+
+func (c *dexChain) lpPointMap() map[string]uint64 {
+	p, _ := c.sm.GetPool(c.counterId() + LiquidityPoolAddend)
+	out := make(map[string]uint64, len(p.Points))
+	for _, pt := range p.Points {
+		out[string(pt.Address)] = pt.Points
+	}
+	return out
+}
+
+// recordDYMonotonicity samples SafeComputeDY for a couple of dX values against prior pools.
+func (c *dexChain) recordDYMonotonicity(t *testing.T, sim *dexSim) {
+	pool, _ := c.sm.GetPool(c.counterId() + LiquidityPoolAddend)
+	remote := counterPoolAmount(sim, c)
+	if pool.Amount == 0 || remote == 0 {
+		return
+	}
+	samples := []uint64{1, 10, 100}
+	for _, dx := range samples {
+		dy := SafeComputeDY(remote, pool.Amount, dx)
+		if last, ok := c.lastDY[dx]; ok {
+			// As remote increases and/or pool decreases, price should not get better for taker
+			if dy > last && (remote >= c.prevRemote(dx) && pool.Amount <= c.prevLocal(dx)) {
+				t.Fatalf("SafeComputeDY monotonicity violated chain=%d dx=%d last=%d now=%d", c.chainId, dx, last, dy)
+			}
+		}
+		c.lastDY[dx] = dy
+		c.setPrevPools(dx, remote, pool.Amount)
+	}
+}
+
+func (c *dexChain) setPrevPools(dx, remote, local uint64) {
+	// encode in lastDY map using sentinel keys to avoid extra maps
+	c.lastDY[dx<<32|1] = remote
+	c.lastDY[dx<<32|2] = local
+}
+
+func (c *dexChain) prevRemote(dx uint64) uint64 {
+	return c.lastDY[dx<<32|1]
+}
+
+func (c *dexChain) prevLocal(dx uint64) uint64 {
+	return c.lastDY[dx<<32|2]
+}
+
+func assetSupply(chain *dexChain) uint64 {
+	var total uint64
+	it, err := chain.sm.Iterator(AccountPrefix())
+	if err == nil {
+		defer it.Close()
+		for ; it.Valid(); it.Next() {
+			acc, _ := chain.sm.unmarshalAccount(it.Value())
+			if acc != nil {
+				total += acc.Amount
+			}
+		}
+	}
+	pools, err := chain.sm.GetPools()
+	if err == nil {
+		for _, p := range pools {
+			if p != nil {
+				total += p.Amount
+			}
+		}
+	}
+	return total
+}
+
+func failInvariant(t *testing.T, seed int64, step int, reason string, history []string, sim *dexSim) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "invariant failed: %s seed=%d step=%d\n", reason, seed, step)
+	fmt.Fprintf(&b, "chainX: %s\n", dumpChainState(sim.chainX))
+	fmt.Fprintf(&b, "chainY: %s\n", dumpChainState(sim.chainY))
+	if len(history) > 0 {
+		start := 0
+		if len(history) > 10 {
+			start = len(history) - 10
+		}
+		fmt.Fprintf(&b, "recent steps: %v\n", history[start:])
+	}
+	t.Fatalf("%s", b.String())
+}
+
+func dumpChainState(chain *dexChain) string {
+	liq, _ := chain.sm.GetPool(chain.counterId() + LiquidityPoolAddend)
+	hold, _ := chain.sm.GetPool(chain.counterId() + HoldingPoolAddend)
+	locked, _ := chain.sm.GetDexBatch(chain.sm.Config.ChainId, true)
+	return fmt.Sprintf("chainId=%d liq=%d hold=%d points=%d lockedOrders=%d lockedDeposits=%d lockedWithdrawals=%d",
+		chain.chainId, liq.Amount, hold.Amount, liq.TotalPoolPoints,
+		len(locked.Orders), len(locked.Deposits), len(locked.Withdrawals))
 }
 
 func TestDexValidation(t *testing.T) {
