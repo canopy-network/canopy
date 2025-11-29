@@ -46,6 +46,8 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
+	controller.FSM.RCManager = controller.RCManager
+	controller.Mempool.FSM.RCManager = controller.RCManager
 	// exit
 	return
 }
@@ -262,9 +264,20 @@ func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *
 	return sub.Transaction(tx)
 }
 
+// GetDexBatch() queries a 'dex batch on the root chain
+func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*lib.DexBatch, lib.ErrorI) {
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
+	if !found {
+		// exit with 'not subscribed' error
+		return nil, lib.ErrNotSubscribed()
+	}
+	return sub.DexBatch(height, committee, withPoints)
+}
+
 // SUBSCRIPTION CODE BELOW (OUTBOUND)
 
-// RCSubscription (Root Chain Subscription) implements an efficient subscription to root chain info
+// RCSubscription (TransactionRoot Chain Subscription) implements an efficient subscription to root chain info
 type RCSubscription struct {
 	chainId uint64             // the chain id of the subscription
 	Info    *lib.RootChainInfo // root-chain info cached from the publisher
@@ -409,7 +422,7 @@ func (r *RCSubscription) Stop(err error) {
 
 // SUBSCRIBER CODE BELOW (INBOUND)
 
-// RCSubscriber (Root Chain Subscriber) implements an efficient publishing service to nested chain subscribers
+// RCSubscriber (TransactionRoot Chain Subscriber) implements an efficient publishing service to nested chain subscribers
 type RCSubscriber struct {
 	chainId uint64          // the chain id of the publisher
 	manager *RCManager      // a reference to the manager of the ws clients

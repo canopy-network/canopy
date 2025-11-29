@@ -32,6 +32,7 @@ func (s *StateMachine) ApproveProposal(msg GovProposal) lib.ErrorI {
 		return ErrRejectProposal()
 	// if on the local approve list
 	case ProposalApproveList:
+		return nil // TODO for indexing only undo before merge
 		// read the 'approve list' from the data directory
 		proposals := make(GovProposals)
 		// get the voted from the local proposals.json file in the data directory
@@ -534,7 +535,9 @@ func (s *StateMachine) LoadRootChainId(height uint64) (uint64, lib.ErrorI) {
 		return 0, err
 	}
 	// memory cleanup
-	defer historicalFSM.Discard()
+	if height != s.Height() {
+		defer historicalFSM.Discard()
+	}
 	// return the root chain id at that height
 	return historicalFSM.GetRootChainId()
 }

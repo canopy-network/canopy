@@ -243,6 +243,10 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 	if err = s.AccountAdd(crypto.NewAddress(order.BuyerReceiveAddress), order.AmountForSale); err != nil {
 		return
 	}
+	// add swap event
+	if err = s.EventOrderBookSwap(order); err != nil {
+		return
+	}
 	// delete the order
 	return s.DeleteOrder(orderId, chainId)
 }

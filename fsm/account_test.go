@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -9,6 +10,17 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 )
+
+func TestT(t *testing.T) {
+	fmt.Println(lib.MarshalJSONIndentString(Pool{
+		Id:     1 + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+	fmt.Println(lib.MarshalJSONIndentString(Pool{
+		Id:     2 + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+}
 
 func TestSetGetAccount(t *testing.T) {
 	tests := []struct {

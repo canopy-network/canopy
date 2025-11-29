@@ -40,11 +40,27 @@ const CopyIcon = () => {
   );
 };
 
-const DeleteOrderIcon = () => {
+const DexLiquidityWithdrawIcon = () => {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" className="bi bi-dash-circle" viewBox="0 0 16 16">
       <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16" />
       <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8" />
+    </svg>
+  );
+};
+
+const DeleteOrderIcon = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="80"
+      height="80"
+      fill="currentColor"
+      className="bi bi-x-circle"
+      viewBox="0 0 16 16"
+    >
+      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16" />
+      <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708" />
     </svg>
   );
 };
@@ -85,6 +101,22 @@ const EditOrderIcon = () => {
 };
 
 const EditStakeIcon = () => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="80"
+      height="80"
+      fill="currentColor"
+      className="bi bi-record-circle"
+      viewBox="0 0 16 16"
+    >
+      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16" />
+      <path d="M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
+    </svg>
+  );
+};
+
+const DexLiquidityDepositIcon = () => {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" className="bi bi-plus-circle" viewBox="0 0 16 16">
       <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16" />
@@ -304,18 +336,17 @@ const UnstakeIcon = () => {
   );
 };
 
-const VoteIcon = () => {
+const DexLimitIcon = () => {
   return (
     <svg
-      version="1.0"
+      width="80"
+      height="80"
+      viewBox="0 0 16 16"
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 100.000000 100.000000"
-      preserveAspectRatio="xMidYMid meet"
+      fill="currentColor"
+      className="bi bi-arrow-right-circle"
     >
-      <g transform="translate(0.000000,100.000000) scale(0.100000,-0.100000)" stroke="none">
-        <path d="M152 900 c-18 -11 -41 -34 -52 -52 -19 -31 -20 -51 -20 -349 0 -449 -30 -421 432 -417 439 4 408 -27 408 418 0 341 -2 353 -69 397 -34 23 -38 23 -350 23 -298 0 -318 -1 -349 -20z m677 -34 c48 -26 51 -44 51 -366 0 -322 -3 -340 -51 -366 -37 -19 -613 -21 -654 -2 -52 24 -55 41 -55 370 1 324 3 337 51 364 36 20 619 20 658 0z" />
-        <path d="M591 525 l-132 -155 -82 74 c-66 61 -84 73 -95 63 -12 -10 1 -26 77 -99 50 -49 96 -88 101 -88 14 0 291 331 287 343 -9 28 -33 7 -156 -138z" />
-      </g>
+      <path d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M4.5 7.5a.5.5 0 0 0 0 1h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5z" />
     </svg>
   );
 };
@@ -379,6 +410,8 @@ export {
   CloseIcon,
   CopyIcon,
   DeleteOrderIcon,
+  DexLiquidityWithdrawIcon,
+  DexLiquidityDepositIcon,
   DiscordIcon,
   EditOrderIcon,
   EditStakeIcon,
@@ -395,6 +428,6 @@ export {
   TwitterIcon,
   UnpauseIcon,
   UnstakeIcon,
-  VoteIcon,
+  DexLimitIcon,
   WalletLogoIcon,
 };

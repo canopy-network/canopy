@@ -266,10 +266,10 @@ func TestApplyBlock(t *testing.T) {
 			// load the last block validator set
 			valSet, _ := sm.LoadCommittee(lib.CanopyChainId, sm.Height()-1)
 			// execute the function call
-			header, txResults, _, failed, e := sm.ApplyBlock(context.Background(), test.block, &valSet, false)
+			header, result, e := sm.ApplyBlock(context.Background(), test.block, &valSet, false)
 			// validate the expected error
-			require.Equal(t, test.error != "", e != nil || len(failed) != 0, e)
-			if len(failed) != 0 {
+			require.Equal(t, test.error != "", e != nil || len(result.Failed) != 0, e)
+			if result != nil && len(result.Failed) != 0 {
 				return
 			}
 			if e != nil {
@@ -279,7 +279,7 @@ func TestApplyBlock(t *testing.T) {
 			// validate got vs expected block header
 			require.EqualExportedValues(t, test.expectedHeader, header)
 			// validate got vs expected tx results
-			require.EqualExportedValues(t, test.expectedResults, txResults[0])
+			require.EqualExportedValues(t, test.expectedResults, result.Results[0])
 		})
 	}
 }
@@ -321,7 +321,8 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		Config: lib.Config{
 			MainConfig: lib.DefaultMainConfig(),
 		},
-		log: log,
+		events: new(lib.EventsTracker),
+		log:    log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
 		},

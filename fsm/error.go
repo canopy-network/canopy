@@ -271,6 +271,22 @@ func ErrNotEmpty() lib.ErrorI {
 	return lib.NewError(lib.CodeErrNotEmpty, lib.StateMachineModule, "a field that should be empty isn't")
 }
 
+func ErrMismatchDexBatchReceipt() lib.ErrorI {
+	return lib.NewError(lib.CodeMismatchDexBatchReceipt, lib.StateMachineModule, "the dex batch receipt doesn't correspond to the last batch")
+}
+
+func ErrInvalidLiquidityPool() lib.ErrorI {
+	return lib.NewError(lib.CodeInvalidLiquidityPool, lib.StateMachineModule, "the dex liquidity pool amount is invalid")
+}
+
+func ErrMaxDexBatchSize() lib.ErrorI {
+	return lib.NewError(lib.CodeMaxDexBatchSize, lib.StateMachineModule, "the dex batch size exceeds the global max")
+}
+
 func ErrStakeBelowMininum() lib.ErrorI {
 	return lib.NewError(lib.CodeStakeBelowMinimum, lib.StateMachineModule, "stake below minimum")
+}
+
+func ErrRemotePoolSizeDebit() lib.ErrorI {
+	return lib.NewError(lib.CodeRemotePoolSizeDebit, lib.StateMachineModule, "remote pool size debit")
 }

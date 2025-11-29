@@ -34,6 +34,9 @@ const validatorPath = "/v1/query/validator";
 const paramsPath = "/v1/query/params";
 const supplyPath = "/v1/query/supply";
 const ordersPath = "/v1/query/orders";
+const dexBatchPath = "/v1/query/dex-batch";
+const nextDexBatchPath = "/v1/query/next-dex-batch";
+const poolsPath = "/v1/query/pools";
 const configPath = "/v1/admin/config";
 
 // POST
@@ -187,6 +190,22 @@ export function Orders(chain_id) {
   return POST(rpcURL, heightAndIDRequest(0, chain_id), ordersPath);
 }
 
+export async function DexBatch(committee_id) {
+  const [currentBatch, nextBatch] = await Promise.allSettled([
+    POST(rpcURL, JSON.stringify({ height: 0, id: committee_id, points: true}), dexBatchPath),
+    POST(rpcURL, heightAndIDRequest(0, committee_id), nextDexBatchPath)
+  ]);
+  
+  const current = currentBatch.status === "fulfilled" ? currentBatch.value : null;
+  const next = nextBatch.status === "fulfilled" ? nextBatch.value : null;
+  
+  if (current) {
+    current.nextBatch = next;
+  }
+  
+  return current;
+}
+
 export function Config() {
   return GET(adminRPCURL, configPath);
 }
@@ -196,6 +215,11 @@ export function Config() {
 // getModalData() executes API call(s) and prepares data for the modal component based on the search type
 export async function getModalData(query, page) {
   const noResult = "no result found";
+
+  // Handle object queries (like DexBatch data)
+  if (typeof query === "object" && query !== null) {
+    return { dexBatch: query };
+  }
 
   // Handle string query cases
   if (typeof query === "string") {
@@ -258,5 +282,7 @@ export async function getTableData(page, category, committee) {
       return await Orders(committee);
     case 7:
       return await Supply(0);
+    case 8:
+      return await DexBatch(committee);
   }
 }

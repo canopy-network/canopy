@@ -1,6 +1,6 @@
 {
   "logLevel": "debug",
-  "chainId": 1,
+  "chainId": 2,
   "sleepUntil": 0,
   "rootChain": [
     {

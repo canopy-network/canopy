@@ -286,6 +286,42 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	})
 }
 
+// DexPrice retrieves the latest dex price for a committee
+func (s *Server) DexPrice(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexPrices()
+		}
+		// return the dex price
+		return s.GetDexPrice(id)
+	})
+}
+
+// DexBatch retrieves the 'locked' dex batch for a committee
+func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(true)
+		}
+		// return the locked batch
+		return s.GetDexBatch(id, true, points) // points augmentation used for liveness safety mirrors
+	})
+}
+
+// NextDexBatch retrieves the 'up-next' dex batch for a committee
+func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(false)
+		}
+		// return the locked batch
+		return s.GetDexBatch(id, false, points)
+	})
+}
+
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
@@ -379,6 +415,30 @@ func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ htt
 func (s *Server) TransactionsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetTxsByHeight(h, true, p) })
+}
+
+// EventsByHeight response with the events at block height h
+func (s *Server) EventsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByBlockHeight(h, true, p)
+	})
+}
+
+// EventsByAddress response with the events of address a
+func (s *Server) EventsByAddress(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.addrIndexer(w, r, func(s lib.StoreI, a crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByAddress(a, true, p)
+	})
+}
+
+// EventsByChain response with the events for a certain chain id
+func (s *Server) EventsByChain(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.idIndexer(w, r, func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByChainId(id, true, p)
+	})
 }
 
 // Pending responds with a page of unconfirmed mempool transactions
@@ -573,6 +633,20 @@ func (s *Server) heightAndIdParams(w http.ResponseWriter, r *http.Request, callb
 	})
 }
 
+// heightIdAndPointsParams is a helper function to execute a callback with a state machine, ID and points as parameters
+func (s *Server) heightIdAndPointsParams(w http.ResponseWriter, r *http.Request, callback func(*fsm.StateMachine, uint64, bool) (any, lib.ErrorI)) {
+	req := new(heightIdAndPointsRequest)
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req.ID, req.Points)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
+		return
+	})
+}
+
 // getDoubleStateMachineFromHeightParams is a helper function to get two read-only state machines at the specified heights
 func (s *Server) getDoubleStateMachineFromHeightParams(w http.ResponseWriter, r *http.Request, p httprouter.Params) (sm1, sm2 *fsm.StateMachine, o *jsondiff.Options, ok bool) {
 	request, opts := new(heightsRequest), jsondiff.Options{}
@@ -625,6 +699,31 @@ func (s *Server) heightIndexer(w http.ResponseWriter, r *http.Request, callback 
 	}
 	// Execute callback with store, height, and pagination parameters
 	p, err := callback(st, req.Height, req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	// Write the successful result to the response
+	write(w, p, http.StatusOK)
+}
+
+// idIndexer is a helper function to abstract common workflows around a callback requiring id and page params
+func (s *Server) idIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI)) {
+	// Initialize a new paginatedHeightRequest
+	req := new(paginatedIdRequest)
+	// Attempt to unmarshal the request into the req object
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// Set up the store for the request context
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	// Ensure that the store is discarded safely after processing
+	defer st.Discard()
+	// Execute callback with store, height, and pagination parameters
+	p, err := callback(st, req.ID, req.PageParams)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
