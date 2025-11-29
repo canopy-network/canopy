@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"encoding/binary"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -10,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
@@ -198,8 +199,18 @@ func (c *MultiConn) startReceiveService() {
 	for {
 		select {
 		default: // fires unless quit was signaled
+			// Track how long we wait for bytes
+			waitStart := time.Now()
+			c.log.Debugf("📥 START WAIT for bytes from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 			// waits until bytes are received from the conn
 			msg, err := c.waitForAndHandleWireBytes(m)
+			waitDuration := time.Since(waitStart)
+			c.log.Infof("📥 DONE WAIT: received from %s in %s",
+				lib.BytesToTruncatedString(c.Address.PublicKey), waitDuration)
+			if waitDuration > 5*time.Second {
+				c.log.Warnf("⚠️ SLOW RECEIVE: waitForAndHandleWireBytes took %s from %s",
+					waitDuration, lib.BytesToTruncatedString(c.Address.PublicKey))
+			}
 			if err != nil {
 				c.Error(err)
 				return
@@ -220,10 +231,20 @@ func (c *MultiConn) startReceiveService() {
 					return
 				}
 				// handle the packet within the stream
+				handleStart := time.Now()
+				c.log.Debugf("📦 START HANDLE packet topic=%s from %s",
+					lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey))
 				if slash, er := stream.handlePacket(info, x); er != nil {
 					c.log.Warnf(er.Error())
 					c.Error(er, slash)
 					return
+				}
+				handleDuration := time.Since(handleStart)
+				c.log.Infof("📦 DONE HANDLE: topic=%s from %s in %s",
+					lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey), handleDuration)
+				if handleDuration > time.Second {
+					c.log.Warnf("⚠️ SLOW PACKET HANDLE: handlePacket took %s for topic %s from %s",
+						handleDuration, lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey))
 				}
 			default: // unknown type results in slash and exiting the service
 				c.Error(ErrUnknownP2PMsg(x), UnknownMessageSlash)
@@ -278,6 +299,7 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // sends them across the wire without violating the data flow rate limits
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
+	sendStart := time.Now()
 	if packet != nil {
 		c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
 			lib.BytesToTruncatedString(c.Address.PublicKey),
@@ -286,7 +308,27 @@ func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 			packet.Eof,
 			crypto.ShortHashString(packet.Bytes),
 		)
-		defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
+		defer func() {
+			elapsed := time.Since(sendStart)
+			c.log.Infof("📤 DONE SEND: to %s (ID:%s, L:%d) in %s",
+				lib.BytesToTruncatedString(c.Address.PublicKey),
+				lib.Topic_name[int32(packet.StreamId)],
+				len(packet.Bytes),
+				elapsed)
+			if elapsed > 2*time.Second {
+				c.log.Warnf("⚠️ VERY SLOW SEND: sendPacket took %s to %s (ID:%s, L:%d)",
+					elapsed,
+					lib.BytesToTruncatedString(c.Address.PublicKey),
+					lib.Topic_name[int32(packet.StreamId)],
+					len(packet.Bytes))
+			} else if elapsed > time.Second {
+				c.log.Warnf("⚠️ SLOW SEND: sendPacket took %s to %s (ID:%s, L:%d)",
+					elapsed,
+					lib.BytesToTruncatedString(c.Address.PublicKey),
+					lib.Topic_name[int32(packet.StreamId)],
+					len(packet.Bytes))
+			}
+		}()
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -345,17 +387,30 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet) bool {
+	queueStart := time.Now()
+	defer func() {
+		elapsed := time.Since(queueStart)
+		s.logger.Infof("🎯 QUEUE SEND: topic=%s queued in %s (queue depth: %d/%d)",
+			lib.Topic_name[int32(s.topic)], elapsed, len(s.sendQueue), maxStreamSendQueueSize)
+		if elapsed > time.Second {
+			s.logger.Warnf("⚠️ SLOW QUEUE: queueSend took %s for topic=%s (may have timed out)",
+				elapsed, lib.Topic_name[int32(s.topic)])
+		}
+	}()
 	defer lib.TimeTrack(s.logger, time.Now(), time.Second)
 	if s.closed {
+		s.logger.Warnf("❌ QUEUE FAILED: stream closed for topic=%s", lib.Topic_name[int32(s.topic)])
 		return false
 	}
 	select {
 	case s.sendQueue <- p: // enqueue to the back of the line
 		if len(s.sendQueue) > 25 {
-			s.logger.Errorf("SEND QUEUE IS FILLING UP: %d", len(s.sendQueue))
+			s.logger.Errorf("SEND QUEUE IS FILLING UP: %d for topic=%s", len(s.sendQueue), lib.Topic_name[int32(s.topic)])
 		}
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
+		s.logger.Errorf("❌ QUEUE TIMEOUT: failed to queue after %s for topic=%s (queue depth: %d/%d)",
+			queueSendTimeout, lib.Topic_name[int32(s.topic)], len(s.sendQueue), maxStreamSendQueueSize)
 		return false
 	}
 }

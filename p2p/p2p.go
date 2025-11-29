@@ -404,24 +404,49 @@ func (p *P2P) IsSelf(a *lib.PeerAddress) bool {
 
 // SelfSend() executes an internal pipe send to self
 func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Message) lib.ErrorI {
-	p.log.Debugf("Self sending %s message", topic)
+	selfSendStart := time.Now()
+	p.log.Debugf("🔄 START SELF SEND: topic=%s from %s", 
+		lib.Topic_name[int32(topic)], lib.BytesToTruncatedString(fromPublicKey))
 	// non blocking
 	go func() {
+		goroutineStart := time.Now()
 		bz, _ := lib.Marshal(payload)
+		marshalDuration := time.Since(goroutineStart)
+		if marshalDuration > 100*time.Millisecond {
+			p.log.Warnf("⚠️ SLOW MARSHAL: took %s for self send topic=%s", marshalDuration, lib.Topic_name[int32(topic)])
+		}
+		
 		m := &lib.MessageAndMetadata{
 			Message: bz,
 			Sender:  &lib.PeerInfo{Address: &lib.PeerAddress{PublicKey: fromPublicKey}},
 		}
+		
+		inboxDepth := len(p.Inbox(topic))
+		p.log.Debugf("🔄 SELF SEND ENQUEUE ATTEMPT: topic=%s inbox depth=%d/%d", 
+			lib.Topic_name[int32(topic)], inboxDepth, maxInboxQueueSize)
+		
+		enqueueStart := time.Now()
 		select {
 		case p.Inbox(topic) <- m:
+			enqueueDuration := time.Since(enqueueStart)
+			totalDuration := time.Since(goroutineStart)
+			p.log.Infof("🔄 SELF SEND SUCCESS: topic=%s enqueued in %s (total: %s, inbox depth: %d/%d)", 
+				lib.Topic_name[int32(topic)], enqueueDuration, totalDuration, len(p.Inbox(topic)), maxInboxQueueSize)
+			if enqueueDuration > 100*time.Millisecond {
+				p.log.Warnf("⚠️ SLOW SELF SEND ENQUEUE: took %s for topic=%s", enqueueDuration, lib.Topic_name[int32(topic)])
+			}
 		default:
-			p.log.Errorf("CRITICAL: Inbox %s queue full in self send", lib.Topic_name[int32(topic)])
+			p.log.Errorf("❌ CRITICAL: Inbox %s queue full in self send (depth: %d/%d)", 
+				lib.Topic_name[int32(topic)], len(p.Inbox(topic)), maxInboxQueueSize)
 			p.log.Error("Dropping all messages")
 			// drain inbox
+			drainStart := time.Now()
+			drainedCount := 0
 			func() {
 				for {
 					select {
 					case <-p.Inbox(topic):
+						drainedCount++
 						// drop
 					default:
 						// channel is empty now
@@ -429,8 +454,14 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 					}
 				}
 			}()
+			drainDuration := time.Since(drainStart)
+			p.log.Errorf("❌ DRAINED INBOX: dropped %d messages from topic=%s in %s", 
+				drainedCount, lib.Topic_name[int32(topic)], drainDuration)
 		}
 	}()
+	launchDuration := time.Since(selfSendStart)
+	p.log.Debugf("🔄 SELF SEND GOROUTINE LAUNCHED: topic=%s in %s", 
+		lib.Topic_name[int32(topic)], launchDuration)
 	return nil
 }
 
