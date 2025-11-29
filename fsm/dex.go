@@ -394,14 +394,13 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		// update the total points to remove
 		totalPointsToRemove += lib.SafeMulDiv(initialPoints, w.Percent, 100)
 	}
-	// if nothing to withdraw
 	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
 		return nil
 	}
-	// total local reserve to withdraw
+	// compute totals; actual paid amounts are tracked below to avoid burning rounding dust
 	totalYWithdrawal := lib.SafeMulDiv(*y, totalPointsToRemove, p.TotalPoolPoints)
-	// total remote reserve to withdraw
 	totalXWithdraw := lib.SafeMulDiv(*x, totalPointsToRemove, p.TotalPoolPoints)
+	var paidY, paidX uint64
 	// distribute tokens
 	for _, w := range batch.Withdrawals {
 		initialPoints, e := p.GetPointsFor(w.Address)
@@ -423,6 +422,8 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 		if local {
 			payout, counter = xShare, yShare
 		}
+		paidY += yShare
+		paidX += xShare
 		// credit user and update pool balance
 		if err = s.AccountAdd(crypto.NewAddress(w.Address), payout); err != nil {
 			return err
@@ -432,9 +433,9 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 			return err
 		}
 	}
-	// update the remote and local pool size ledgers; burn undistributed
-	*y -= totalYWithdrawal
-	*x -= totalXWithdraw
+	// update the remote and local pool size ledgers using actual paid amounts (avoid burning rounding dust)
+	*y -= paidY
+	*x -= paidX
 	// update the actual pool object in state
 	if local {
 		p.Amount = *x
