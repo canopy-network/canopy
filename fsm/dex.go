@@ -167,17 +167,17 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	if remoteBatch == nil {
 		return
 	}
-	// a copy is required because we modify the pool size ledgers
+	processRemote := !remoteBatch.IsEmpty()
+	// copy because ledgers are mutated during processing
 	remoteBatchCopy := remoteBatch.Copy()
-	// create a variable to shadow mirror the pool size of the counter chain
+	// local shadow of the counter chain pool (advanced as we apply receipts)
 	counterPoolSizeMirror := remoteBatch.PoolSize
-	// create a variable to capture the pool size at the midpoint to send to the counter batch
+	// midpoint snapshot of our pool (after receipts, before counter-batch execution)
 	midPointPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
 	if err != nil {
 		return
 	}
-	// if the remote batch is empty, set an empty receipt hash
-	if !remoteBatch.IsEmpty() {
+	if processRemote {
 		var locked bool
 		// 1) PROCESS RECEIPTS FOR OUR LOCKED BATCH (the locked batch previously sent to the counter chain)
 		locked, err = s.HandleReceiptsForOurLockedBatch(remoteBatchCopy, &counterPoolSizeMirror, chainId)
@@ -209,8 +209,9 @@ func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch
 	if err != nil || localBatch.IsEmpty() {
 		return false, err
 	}
-	// ensure receipt not mismatch
-	if !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts) {
+	// ensure receipt not mismatch (expected while waiting on counter chain)
+	receiptMismatch := !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts)
+	if receiptMismatch {
 		// purposefully only log here because while the origin chain waits for the counter to process their batch
 		// this error is expected
 		s.log.Debug(ErrMismatchDexBatchReceipt().Error())
@@ -308,10 +309,10 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 // (1) sorts orders pseudorandomly by last block hash
 // (2) determines successful orders & distributes from the liquidity pool
 // (3) returns the receipts
+// x = counter chain pool shadow, y = local pool (both advanced as orders execute)
 func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uint64, chainId uint64) (receipts []uint64, err lib.ErrorI) {
 	receipts, result := make([]uint64, len(remoteBatch.Orders)), map[string]uint64{}
-	// load the last block from the indexer;
-	// NOTE: height is never <= 0
+	// load the last block from the indexer; caller triggers after genesis so height >= 1
 	prevBlk, err := s.LoadBlock(s.Height() - 1)
 	if err != nil || prevBlk == nil || prevBlk.BlockHeader == nil {
 		return nil, lib.ErrNilBlock()
@@ -370,8 +371,9 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 // - Outbound deposits/withdraws: update ledger + move tokens
 // - Inbound deposits/withdraws: update ledger but only token movement for withdraws
 
-// HandleBatchWithdraw() handles local/remote liquidity withdraw requests
-func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, x, y *uint64, receiptsPhase bool) lib.ErrorI {
+// HandleBatchWithdraw() handles local/remote liquidity withdraw requests.
+// local=true: x=local pool, y=counter mirror; local=false: x=counter mirror, y=local pool.
+func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, x, y *uint64, local bool) lib.ErrorI {
 	if len(batch.Withdrawals) == 0 {
 		return nil
 	}
@@ -418,7 +420,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 			return err
 		}
 		payout, counter := yShare, xShare
-		if receiptsPhase {
+		if local {
 			payout, counter = xShare, yShare
 		}
 		// credit user and update pool balance
@@ -434,7 +436,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	*y -= totalYWithdrawal
 	*x -= totalXWithdraw
 	// update the actual pool object in state
-	if receiptsPhase {
+	if local {
 		p.Amount = *x
 	} else {
 		p.Amount = *y
@@ -443,7 +445,8 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	return s.SetPool(p)
 }
 
-// HandleBatchDeposit() handles local/remote liquidity deposits
+// HandleBatchDeposit() handles local/remote liquidity deposits.
+// local=true: x=local pool (actual token movement), y=counter mirror. local=false: x=counter mirror, y=local pool.
 func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x, y *uint64, local bool) lib.ErrorI {
 	if len(batch.Deposits) == 0 {
 		return nil
