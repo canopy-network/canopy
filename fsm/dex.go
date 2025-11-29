@@ -78,6 +78,8 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 		return
 	}
 	// if nested, replace remoteBatch (which is a local batch) with truly a remote batch
+	// Root liveness intentionally requires manual intervention in order to ensure there's a stable
+	//   source of truth for the liquidity points ledger
 	if isNested {
 		// if should execute the liveness fallback protocol
 		livenessFallback := !localBatch.IsEmpty() && (s.Height()-localBatch.LockedHeight) >= 60
@@ -167,6 +169,8 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	}
 	// a copy is required because we modify the pool size ledgers
 	remoteBatchCopy := remoteBatch.Copy()
+	// create a variable to shadow mirror the pool size of the counter chain
+	counterPoolSizeMirror := remoteBatch.PoolSize
 	// create a variable to capture the pool size at the midpoint to send to the counter batch
 	midPointPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
 	if err != nil {
@@ -176,7 +180,7 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 	if !remoteBatch.IsEmpty() {
 		var locked bool
 		// 1) PROCESS RECEIPTS FOR OUR LOCKED BATCH (the locked batch previously sent to the counter chain)
-		locked, err = s.HandleReceiptsForOurLockedBatch(remoteBatchCopy, chainId)
+		locked, err = s.HandleReceiptsForOurLockedBatch(remoteBatchCopy, &counterPoolSizeMirror, chainId)
 		if err != nil || locked {
 			return
 		}
@@ -189,17 +193,17 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 			return
 		}
 		// 2) CREATE RECEIPTS FOR THE REMOTE CHAIN'S LOCKED BATCH
-		receipts, err = s.HandleRemoteChainLockedBatch(remoteBatchCopy, chainId)
+		receipts, err = s.HandleRemoteChainLockedBatch(remoteBatchCopy, &counterPoolSizeMirror, chainId)
 		if err != nil {
 			return
 		}
 	}
 	// 3) ROTATE BATCHES
-	return s.RotateDexBatches(remoteBatch.Hash(), midPointPoolSize, remoteBatchCopy.PoolSize, chainId, receipts)
+	return s.RotateDexBatches(remoteBatch.Hash(), midPointPoolSize, counterPoolSizeMirror, chainId, receipts)
 }
 
 // HandleReceiptsForOurLockedBatch() 1. processes receipts for our locked batch
-func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch, chainId uint64) (locked bool, err lib.ErrorI) {
+func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch, counterPoolSizeMirror *uint64, chainId uint64) (locked bool, err lib.ErrorI) {
 	// get the local locked dex batch
 	localBatch, err := s.GetDexBatch(chainId, true)
 	if err != nil || localBatch.IsEmpty() {
@@ -207,22 +211,29 @@ func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch
 	}
 	// ensure receipt not mismatch
 	if !bytes.Equal(remoteBatch.ReceiptHash, localBatch.Hash()) || len(localBatch.Orders) != len(remoteBatch.Receipts) {
+		// purposefully only log here because while the origin chain waits for the counter to process their batch
+		// this error is expected
 		s.log.Debug(ErrMismatchDexBatchReceipt().Error())
 		return true, nil
 	}
+	// get the local pool size
+	localPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return false, err
+	}
 	// handle receipts for orders within our locked batch:
 	//  moving funds from holding pool to liquidity pool on success or refunding on fail
-	if err = s.HandleOrderReceipts(localBatch, remoteBatch, chainId); err != nil {
+	if err = s.HandleOrderReceipts(localBatch, remoteBatch, chainId, &localPoolSize, counterPoolSizeMirror); err != nil {
 		return false, err
 	}
 	// handle 'implied' receipts for liquidity withdrawals within our locked batch:
 	//  burning points and distributing tokens from the liquid pool
-	if err = s.HandleBatchWithdraw(localBatch, chainId, &remoteBatch.PoolSize, true); err != nil {
+	if err = s.HandleBatchWithdraw(localBatch, chainId, &localPoolSize, counterPoolSizeMirror, true); err != nil {
 		return false, err
 	}
 	// handle 'implied' receipts for liquidity deposits within our locked batch:
 	//  issuing points and moving tokens from the hold pool to the liquid pool
-	if err = s.HandleBatchDeposit(localBatch, chainId, remoteBatch.PoolSize, true); err != nil {
+	if err = s.HandleBatchDeposit(localBatch, chainId, &localPoolSize, counterPoolSizeMirror, true); err != nil {
 		return false, err
 	}
 	// remove lockedBatch to lift the 'atomic lock' - enabling orders to be sent in the next transaction
@@ -230,18 +241,23 @@ func (s *StateMachine) HandleReceiptsForOurLockedBatch(remoteBatch *lib.DexBatch
 }
 
 // HandleRemoteChainLockedBatch() 2. handles the locked batch for the remote chain, producing receipts
-func (s *StateMachine) HandleRemoteChainLockedBatch(remoteBatch *lib.DexBatch, chainId uint64) (receipts []uint64, err lib.ErrorI) {
+func (s *StateMachine) HandleRemoteChainLockedBatch(remoteBatch *lib.DexBatch, counterPoolSizeMirror *uint64, chainId uint64) (receipts []uint64, err lib.ErrorI) {
+	// get the balance for the proper liquidity pool
+	localPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return
+	}
 	// handle the orders for the remote chain's locked batch (y represents the 'distribute pool balance')
-	receipts, localPoolSize, err := s.HandleDexBatchOrders(remoteBatch, chainId)
+	receipts, err = s.HandleDexBatchOrders(remoteBatch, counterPoolSizeMirror, &localPoolSize, chainId)
 	if err != nil {
 		return
 	}
 	// for each liquidity withdraws, move the funds from the liquidity pool to the account
-	if err = s.HandleBatchWithdraw(remoteBatch, chainId, localPoolSize, false); err != nil {
+	if err = s.HandleBatchWithdraw(remoteBatch, chainId, counterPoolSizeMirror, &localPoolSize, false); err != nil {
 		return
 	}
 	// for each liquidity deposit, move the funds from the holding pool to the liquidity pool
-	if err = s.HandleBatchDeposit(remoteBatch, chainId, *localPoolSize, false); err != nil {
+	if err = s.HandleBatchDeposit(remoteBatch, chainId, counterPoolSizeMirror, &localPoolSize, false); err != nil {
 		return
 	}
 	// exit
@@ -249,7 +265,7 @@ func (s *StateMachine) HandleRemoteChainLockedBatch(remoteBatch *lib.DexBatch, c
 }
 
 // HandleOrderReceipts() handles receipts for orders within our locked batch
-func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch, chainId uint64) (err lib.ErrorI) {
+func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch, chainId uint64, x, y *uint64) (err lib.ErrorI) {
 	// for each order, move the funds in the holding pool depending on the success or failure
 	for i, o := range localBatch.Orders {
 		// remove funds from the holding pool
@@ -260,6 +276,17 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 		received := remoteBatch.Receipts[i]
 		success := received != 0
 		if success {
+			// Mirror the remote chain's ledger:
+			// - remoteBatch.PoolSize is our local shadow of the counter chain's pool at the mid-point snapshot they sent us.
+			// - The counter chain already paid this receipt when it produced it; we subtract here to advance our shadow
+			//   forward to their post-receipt state so subsequent AMM math (for their locked batch) uses the same reserves.
+			if *y <= received {
+				return ErrRemotePoolSizeDebit()
+			}
+			// update ledgers
+			*x += o.AmountForSale
+			*y -= received
+			// add to the pool
 			err = s.PoolAdd(chainId+LiquidityPoolAddend, o.AmountForSale)
 		} else {
 			err = s.AccountAdd(crypto.NewAddress(o.Address), o.AmountForSale)
@@ -267,23 +294,11 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 		if err != nil {
 			return
 		}
-		// Mirror the remote chain's ledger:
-		// - remoteBatch.PoolSize is our local shadow of the counter chain's pool at the mid-point snapshot they sent us.
-		// - The counter chain already paid this receipt when it produced it; we subtract here to advance our shadow
-		//   forward to their post-receipt state so subsequent AMM math (for their locked batch) uses the same reserves.
-		if remoteBatch.PoolSize <= received {
-			return ErrRemotePoolSizeDebit()
-		}
-		remoteBatch.PoolSize -= received
 		// emit event
 		if err = s.EventDexSwap(o.Address, o.OrderId, o.AmountForSale, received,
 			localBatch.Committee, true, success); err != nil {
 			return
 		}
-	}
-	// update the local pool ledger
-	if localBatch.PoolSize, err = s.GetPoolBalance(chainId + LiquidityPoolAddend); err != nil {
-		return
 	}
 	// exit
 	return
@@ -293,26 +308,20 @@ func (s *StateMachine) HandleOrderReceipts(localBatch, remoteBatch *lib.DexBatch
 // (1) sorts orders pseudorandomly by last block hash
 // (2) determines successful orders & distributes from the liquidity pool
 // (3) returns the receipts
-func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId uint64) (receipts []uint64, y *uint64, err lib.ErrorI) {
+func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uint64, chainId uint64) (receipts []uint64, err lib.ErrorI) {
 	receipts, result := make([]uint64, len(remoteBatch.Orders)), map[string]uint64{}
-	// get the balance for the proper liquidity pool
-	distributePoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
-	if err != nil {
-		return
-	}
-	// load the last block from the indexer
+	// load the last block from the indexer;
+	// NOTE: height is never <= 0
 	prevBlk, err := s.LoadBlock(s.Height() - 1)
 	if err != nil || prevBlk == nil || prevBlk.BlockHeader == nil {
-		return nil, nil, lib.ErrNilBlock()
+		return nil, lib.ErrNilBlock()
 	}
 	// make 2 copies of the orders with hash keys
 	sorted, orders := remoteBatch.CopyOrders(prevBlk.BlockHeader.Hash)
 	// sort pseudorandomly by hash key
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
-	// setup working reserves, pointer auto-updates the remoteBatch pool size with each operation
-	x, y := &remoteBatch.PoolSize, &distributePoolSize
 	if *x == 0 || *y == 0 {
-		return nil, nil, ErrInvalidLiquidityPool()
+		return nil, ErrInvalidLiquidityPool()
 	}
 	// for each order
 	for _, order := range sorted {
@@ -362,7 +371,7 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, chainId u
 // - Inbound deposits/withdraws: update ledger but only token movement for withdraws
 
 // HandleBatchWithdraw() handles local/remote liquidity withdraw requests
-func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, y *uint64, local bool) lib.ErrorI {
+func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, x, y *uint64, receiptsPhase bool) lib.ErrorI {
 	if len(batch.Withdrawals) == 0 {
 		return nil
 	}
@@ -390,7 +399,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	// total local reserve to withdraw
 	totalYWithdrawal := lib.SafeMulDiv(*y, totalPointsToRemove, p.TotalPoolPoints)
 	// total remote reserve to withdraw
-	totalXWithdraw := lib.SafeMulDiv(batch.PoolSize, totalPointsToRemove, p.TotalPoolPoints)
+	totalXWithdraw := lib.SafeMulDiv(*x, totalPointsToRemove, p.TotalPoolPoints)
 	// distribute tokens
 	for _, w := range batch.Withdrawals {
 		initialPoints, e := p.GetPointsFor(w.Address)
@@ -409,7 +418,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 			return err
 		}
 		payout, counter := yShare, xShare
-		if local {
+		if receiptsPhase {
 			payout, counter = xShare, yShare
 		}
 		// credit user and update pool balance
@@ -423,10 +432,10 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 	}
 	// update the remote and local pool size ledgers; burn undistributed
 	*y -= totalYWithdrawal
-	batch.PoolSize -= totalXWithdraw
+	*x -= totalXWithdraw
 	// update the actual pool object in state
-	if local {
-		p.Amount = batch.PoolSize
+	if receiptsPhase {
+		p.Amount = *x
 	} else {
 		p.Amount = *y
 	}
@@ -435,7 +444,7 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, chainId uint64, 
 }
 
 // HandleBatchDeposit() handles local/remote liquidity deposits
-func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64, local bool) lib.ErrorI {
+func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x, y *uint64, local bool) lib.ErrorI {
 	if len(batch.Deposits) == 0 {
 		return nil
 	}
@@ -449,30 +458,30 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 	// x = the initial 'deposit' pool balance
 	// y = the 'counter' pool balance
 	// L = initial pool points
-	x, L := batch.PoolSize, p.TotalPoolPoints
+	L := p.TotalPoolPoints
 	// sum all deposits
 	for _, deposit := range batch.Deposits {
 		totalDeposit += deposit.Amount
 	}
 	// nothing to add or failed invariant check
-	if totalDeposit == 0 || x == 0 || y == 0 {
+	if totalDeposit == 0 || *x == 0 || *y == 0 {
 		return nil
 	}
 	// if no liq points yet assigned - initialize to 'dead' address
 	if L == 0 {
 		// calculate the initial pool points using L = √( x * y )
-		L = lib.SqrtProductUint64(x, y)
+		L = lib.SqrtProductUint64(*x, *y)
 		// add points to the dead address
 		p.AddPoints(deadAddr.Bytes(), L)
 	}
 	// using integer math and geometric mean of reserves:
 	// deltaPoolPoints = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y) or simplified as:
 	// deltaPoolPoints = L * (newK - oldK) / oldK (in a 1 sided deposit scenario dY=0 thus this formula)
-	oldK := lib.SqrtProductUint64(x, y)
+	oldK := lib.SqrtProductUint64(*x, *y)
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
-	newK := lib.SqrtProductUint64(x+totalDeposit, y)
+	newK := lib.SqrtProductUint64(*x+totalDeposit, *y)
 	// totalDL is calculated as if all deposits is just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// distribute the points
@@ -490,8 +499,8 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId, y uint64
 			}
 			p.Amount += deposit.Amount
 		}
-		// update the local reserve
-		batch.PoolSize += deposit.Amount
+		// update the reserve
+		*x += deposit.Amount
 		// emit a deposit event
 		if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, share, chainId, local); err != nil {
 			return err
