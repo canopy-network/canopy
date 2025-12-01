@@ -369,13 +369,13 @@ func NewLimiter(maxPerRequester, maxRequests, resetWindowS int, topic string, lo
 func (l *SimpleLimiter) NewRequest(requester string) (requesterBlock, totalBlock bool) {
 	// if the total requests exceed the max requests
 	if l.totalRequests >= l.maxRequests {
-		//l.log.Debugf("Request from %s was total blocked in topic %s", requester, l.topic)
+		l.log.Debugf("Request from %s was total blocked in topic %s", requester, l.topic)
 		// exit with 'block every requester'
 		return false, true
 	}
 	// if the count of requests for this requester is larger than the max per requester
 	if count := l.requests[requester]; count >= l.maxPerRequester {
-		//l.log.Debugf("Request from %s was blocked without total block in topic %s", requester, l.topic)
+		l.log.Debugf("Request from %s was blocked without total block in topic %s", requester, l.topic)
 		// exit with 'block this requester'
 		return true, false
 	}
@@ -383,7 +383,7 @@ func (l *SimpleLimiter) NewRequest(requester string) (requesterBlock, totalBlock
 	l.requests[requester]++
 	// add to the total requests
 	l.totalRequests++
-	//l.log.Debugf("Request from %s was not blocked in topic %s", requester, l.topic)
+	l.log.Debugf("Request from %s was not blocked in topic %s", requester, l.topic)
 	// exit
 	return
 }
