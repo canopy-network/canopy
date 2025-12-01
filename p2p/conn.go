@@ -10,8 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/canopy-network/canopy/lib/crypto"
-
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
 	limiter "github.com/mxk/go-flowrate/flowrate"
@@ -29,6 +27,12 @@ const (
 	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
 	maxInboxQueueSize      = 100                                 // maximum number of items in inbox queue before blocking
 	maxStreamSendQueueSize = 100                                 // maximum number of items in a stream send queue before blocking
+	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
+	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
+	heartbeatTimeout       = 2 * time.Second                     // how long to wait for a pong before dropping the peer
+	heartbeatTopic         = lib.Topic_HEARTBEAT                 // dedicated heartbeat stream
+	heartbeatPing          = "ping"
+	heartbeatPong          = "pong"
 
 	// "Peer Reputation Points" are actively maintained for each peer the node is connected to
 	// These points allow a node to track peer behavior over its lifetime, allowing it to disconnect from faulty peers
@@ -68,6 +72,7 @@ type MultiConn struct {
 	close         sync.Once                           // flag to identify if MultiConn is closed
 	log           lib.LoggerI                         // logging
 	hasError      atomic.Bool                         // flag to identify if MultiConn has encountered an error
+	lastPong      atomic.Int64                        // last time we saw a pong (unix nano)
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -78,6 +83,14 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		}
 		if err := tcpConn.SetReadBuffer(32 * 1024 * 1024); err != nil {
 			p.log.Warnf("Failed to set write buffer: %v", err)
+		}
+		if err := tcpConn.SetNoDelay(true); err != nil {
+			p.log.Warnf("Failed to disable Nagle: %v", err)
+		}
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			p.log.Warnf("Failed to enable TCP keepalive: %v", err)
+		} else if err := tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+			p.log.Warnf("Failed to set TCP keepalive period: %v", err)
 		}
 	}
 	// establish an encrypted connection using the handshake
@@ -98,6 +111,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		close:         sync.Once{},
 		log:           p.log,
 	}
+	c.lastPong.Store(time.Now().UnixNano())
 	_ = c.conn.SetReadDeadline(time.Time{})
 	_ = c.conn.SetWriteDeadline(time.Time{})
 	// start the connection service
@@ -109,6 +123,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 func (c *MultiConn) Start() {
 	go c.startSendService()
 	go c.startReceiveService()
+	go c.startHeartbeat()
 }
 
 // Stop() sends exit signals for send and receive loops and closes the connection
@@ -167,6 +182,8 @@ func (c *MultiConn) startSendService() {
 	for {
 		// select statement ensures the sequential coordination of the concurrent processes
 		select {
+		case packet = <-c.streams[heartbeatTopic].sendQueue:
+			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
 			c.sendPacket(packet, m)
 		case packet = <-c.streams[lib.Topic_BLOCK].sendQueue:
@@ -199,18 +216,8 @@ func (c *MultiConn) startReceiveService() {
 	for {
 		select {
 		default: // fires unless quit was signaled
-			// Track how long we wait for bytes
-			waitStart := time.Now()
-			c.log.Debugf("📥 START WAIT for bytes from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 			// waits until bytes are received from the conn
 			msg, err := c.waitForAndHandleWireBytes(m)
-			waitDuration := time.Since(waitStart)
-			c.log.Infof("📥 DONE WAIT: received from %s in %s",
-				lib.BytesToTruncatedString(c.Address.PublicKey), waitDuration)
-			if waitDuration > 5*time.Second {
-				c.log.Warnf("⚠️ SLOW RECEIVE: waitForAndHandleWireBytes took %s from %s",
-					waitDuration, lib.BytesToTruncatedString(c.Address.PublicKey))
-			}
 			if err != nil {
 				c.Error(err)
 				return
@@ -218,6 +225,10 @@ func (c *MultiConn) startReceiveService() {
 			// handle different message types
 			switch x := msg.(type) {
 			case *Packet: // receive packet is a partial or full 'Message' with a Stream Topic designation and an EOF signal
+				if x.StreamId == heartbeatTopic {
+					c.handleHeartbeatPacket(x)
+					continue
+				}
 				// load the proper stream
 				stream, found := c.streams[x.StreamId]
 				if !found {
@@ -231,20 +242,10 @@ func (c *MultiConn) startReceiveService() {
 					return
 				}
 				// handle the packet within the stream
-				handleStart := time.Now()
-				c.log.Debugf("📦 START HANDLE packet topic=%s from %s",
-					lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey))
 				if slash, er := stream.handlePacket(info, x); er != nil {
 					c.log.Warnf(er.Error())
 					c.Error(er, slash)
 					return
-				}
-				handleDuration := time.Since(handleStart)
-				c.log.Infof("📦 DONE HANDLE: topic=%s from %s in %s",
-					lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey), handleDuration)
-				if handleDuration > time.Second {
-					c.log.Warnf("⚠️ SLOW PACKET HANDLE: handlePacket took %s for topic %s from %s",
-						handleDuration, lib.Topic_name[int32(x.StreamId)], lib.BytesToTruncatedString(c.Address.PublicKey))
 				}
 			default: // unknown type results in slash and exiting the service
 				c.Error(ErrUnknownP2PMsg(x), UnknownMessageSlash)
@@ -253,6 +254,59 @@ func (c *MultiConn) startReceiveService() {
 		case <-c.quitReceiving: // fires when quit is signaled
 			return
 		}
+	}
+}
+
+// startHeartbeat periodically sends ping packets and drops the peer if no pong is seen in time.
+func (c *MultiConn) startHeartbeat() {
+	ticker := time.NewTicker(heartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if time.Since(time.Unix(0, c.lastPong.Load())) > heartbeatTimeout {
+				c.log.Warnf("Heartbeat timeout: closing peer %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+				c.Error(ErrPongTimeout())
+				return
+			}
+			c.sendHeartbeat()
+		case <-c.quitSending:
+			return
+		case <-c.quitReceiving:
+			return
+		}
+	}
+}
+
+func (c *MultiConn) sendHeartbeat() {
+	stream, ok := c.streams[heartbeatTopic]
+	if !ok {
+		return
+	}
+	_ = stream.queueSend(&Packet{
+		StreamId: heartbeatTopic,
+		Eof:      true,
+		Bytes:    []byte(heartbeatPing),
+	})
+}
+
+func (c *MultiConn) handleHeartbeatPacket(packet *Packet) {
+	switch string(packet.Bytes) {
+	case heartbeatPing:
+		// respond
+		stream, ok := c.streams[heartbeatTopic]
+		if !ok {
+			return
+		}
+		_ = stream.queueSend(&Packet{
+			StreamId: heartbeatTopic,
+			Eof:      true,
+			Bytes:    []byte(heartbeatPong),
+		})
+	case heartbeatPong:
+		c.lastPong.Store(time.Now().UnixNano())
+	default:
+		c.log.Warnf("Unknown heartbeat payload from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 	}
 }
 
@@ -299,36 +353,14 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 // sends them across the wire without violating the data flow rate limits
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
-	sendStart := time.Now()
 	if packet != nil {
-		c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-			lib.BytesToTruncatedString(c.Address.PublicKey),
-			lib.Topic_name[int32(packet.StreamId)],
-			len(packet.Bytes),
-			packet.Eof,
-			crypto.ShortHashString(packet.Bytes),
-		)
-		defer func() {
-			elapsed := time.Since(sendStart)
-			c.log.Infof("📤 DONE SEND: to %s (ID:%s, L:%d) in %s",
-				lib.BytesToTruncatedString(c.Address.PublicKey),
-				lib.Topic_name[int32(packet.StreamId)],
-				len(packet.Bytes),
-				elapsed)
-			if elapsed > 2*time.Second {
-				c.log.Warnf("⚠️ VERY SLOW SEND: sendPacket took %s to %s (ID:%s, L:%d)",
-					elapsed,
-					lib.BytesToTruncatedString(c.Address.PublicKey),
-					lib.Topic_name[int32(packet.StreamId)],
-					len(packet.Bytes))
-			} else if elapsed > time.Second {
-				c.log.Warnf("⚠️ SLOW SEND: sendPacket took %s to %s (ID:%s, L:%d)",
-					elapsed,
-					lib.BytesToTruncatedString(c.Address.PublicKey),
-					lib.Topic_name[int32(packet.StreamId)],
-					len(packet.Bytes))
-			}
-		}()
+		//c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+		//	lib.BytesToTruncatedString(c.Address.PublicKey),
+		//	lib.Topic_name[int32(packet.StreamId)],
+		//	len(packet.Bytes),
+		//	packet.Eof,
+		//	crypto.ShortHashString(packet.Bytes),
+		//)
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -387,30 +419,13 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet) bool {
-	queueStart := time.Now()
-	defer func() {
-		elapsed := time.Since(queueStart)
-		s.logger.Infof("🎯 QUEUE SEND: topic=%s queued in %s (queue depth: %d/%d)",
-			lib.Topic_name[int32(s.topic)], elapsed, len(s.sendQueue), maxStreamSendQueueSize)
-		if elapsed > time.Second {
-			s.logger.Warnf("⚠️ SLOW QUEUE: queueSend took %s for topic=%s (may have timed out)",
-				elapsed, lib.Topic_name[int32(s.topic)])
-		}
-	}()
-	defer lib.TimeTrack(s.logger, time.Now(), time.Second)
 	if s.closed {
-		s.logger.Warnf("❌ QUEUE FAILED: stream closed for topic=%s", lib.Topic_name[int32(s.topic)])
 		return false
 	}
 	select {
 	case s.sendQueue <- p: // enqueue to the back of the line
-		if len(s.sendQueue) > 25 {
-			s.logger.Errorf("SEND QUEUE IS FILLING UP: %d for topic=%s", len(s.sendQueue), lib.Topic_name[int32(s.topic)])
-		}
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
-		s.logger.Errorf("❌ QUEUE TIMEOUT: failed to queue after %s for topic=%s (queue depth: %d/%d)",
-			queueSendTimeout, lib.Topic_name[int32(s.topic)], len(s.sendQueue), maxStreamSendQueueSize)
 		return false
 	}
 }
@@ -418,14 +433,14 @@ func (s *Stream) queueSend(p *Packet) bool {
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
 func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, lib.ErrorI) {
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
-	s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
-		lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
-		lib.Topic_name[int32(packet.StreamId)],
-		len(packet.Bytes),
-		packet.Eof,
-		crypto.ShortHashString(packet.Bytes),
-	)
-	defer s.logger.Debugf("Done receiving: %s", crypto.ShortHashString(packet.Bytes))
+	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
+	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
+	//	lib.Topic_name[int32(packet.StreamId)],
+	//	len(packet.Bytes),
+	//	packet.Eof,
+	//	crypto.ShortHashString(packet.Bytes),
+	//)
+	//defer s.logger.Debugf("Done receiving: %s", crypto.ShortHashString(packet.Bytes))
 	// if the addition of this new packet pushes the total message size above max
 	if int(maxMessageSize) < msgAssemblerLen+packetLen {
 		s.msgAssembler = s.msgAssembler[:0]
@@ -444,7 +459,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 			Message: msg,
 			Sender:  peerInfo,
 		}
-		s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
+		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:
