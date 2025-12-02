@@ -111,7 +111,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		close:         sync.Once{},
 		log:           p.log,
 	}
-	c.lastPong.Store(time.Now().UnixNano())
+	c.lastPong.Store(0) // initialize to 0 to indicate no pong received yet (for backward compatibility)
 	_ = c.conn.SetReadDeadline(time.Time{})
 	_ = c.conn.SetWriteDeadline(time.Time{})
 	// start the connection service
@@ -264,7 +264,10 @@ func (c *MultiConn) startHeartbeat() {
 	for {
 		select {
 		case <-ticker.C:
-			if time.Since(time.Unix(0, c.lastPong.Load())) > heartbeatTimeout {
+			lastPongTime := c.lastPong.Load()
+			// Only enforce timeout if we've received at least one pong (backward compatibility)
+			// lastPongTime == 0 means the peer hasn't responded yet, so it might be an old node
+			if lastPongTime > 0 && time.Since(time.Unix(0, c.lastPong.Load())) > heartbeatTimeout {
 				c.log.Warnf("Heartbeat timeout: closing peer %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 				c.Error(ErrPongTimeout())
 				return
