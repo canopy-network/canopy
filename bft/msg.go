@@ -283,23 +283,23 @@ func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, li
 	}
 	// lock the controller for thread safety
 	lockAcquireStart := time.Now()
-	b.log.Debugf("🔒 MSG VALIDATE LOCK ATTEMPT: %s message from %s", msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
+	//b.log.Debugf("🔒 MSG VALIDATE LOCK ATTEMPT: %s message from %s", msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
 	b.Controller.Lock()
 	lockAcquireDuration := time.Since(lockAcquireStart)
 	if lockAcquireDuration > 50*time.Millisecond {
 		b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for GetValidateMessageParams %s from %s",
 			lockAcquireDuration, msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
 	}
-	b.log.Debugf("🔒✓ MSG VALIDATE LOCK ACQUIRED: %s from %s after %s",
-		msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockAcquireDuration)
+	//b.log.Debugf("🔒✓ MSG VALIDATE LOCK ACQUIRED: %s from %s after %s",
+	//	msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockAcquireDuration)
 	defer func() {
 		lockHeldDuration := time.Since(lockAcquireStart)
 		if lockHeldDuration > 100*time.Millisecond {
 			b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during GetValidateMessageParams %s from %s",
 				lockHeldDuration, msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey))
 		}
-		b.log.Debugf("🔓 MSG VALIDATE LOCK RELEASED: %s from %s held for %s",
-			msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockHeldDuration)
+		//b.log.Debugf("🔓 MSG VALIDATE LOCK RELEASED: %s from %s held for %s",
+		//	msgType, lib.BytesToTruncatedString(msg.Signature.PublicKey), lockHeldDuration)
 		b.Controller.Unlock()
 	}()
 	// check if a validator

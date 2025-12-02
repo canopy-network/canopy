@@ -2,11 +2,9 @@ package bft
 
 import (
 	"bytes"
-	"slices"
-	"time"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"slices"
 )
 
 // PROPOSALS RECEIVED FROM PROPOSER FOR CURRENT HEIGHT
@@ -23,25 +21,8 @@ type ProposalsForHeight map[uint64]map[string][]*Message // [ROUND][PHASE] -> PR
 
 // AddProposal() saves a validated proposal from the Leader in memory
 func (b *BFT) AddProposal(m *Message) lib.ErrorI {
-	lockAcquireStart := time.Now()
-	b.log.Debugf("🔒 ADD PROPOSAL LOCK ATTEMPT: phase=%s from %s",
-		lib.Phase_name[int32(m.Header.Phase)], lib.BytesToTruncatedString(m.Signature.PublicKey))
 	b.Controller.Lock()
-	lockAcquireDuration := time.Since(lockAcquireStart)
-	if lockAcquireDuration > 50*time.Millisecond {
-		b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for AddProposal phase=%s from %s",
-			lockAcquireDuration, lib.Phase_name[int32(m.Header.Phase)], lib.BytesToTruncatedString(m.Signature.PublicKey))
-	}
-	defer func() {
-		lockHeldDuration := time.Since(lockAcquireStart)
-		if lockHeldDuration > 100*time.Millisecond {
-			b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during AddProposal phase=%s from %s",
-				lockHeldDuration, lib.Phase_name[int32(m.Header.Phase)], lib.BytesToTruncatedString(m.Signature.PublicKey))
-		}
-		b.log.Debugf("🔓 ADD PROPOSAL LOCK RELEASED: phase=%s held for %s",
-			lib.Phase_name[int32(m.Header.Phase)], lockHeldDuration)
-		b.Controller.Unlock()
-	}()
+	defer b.Controller.Unlock()
 	// load the list of Proposals for the round
 	// initialize if not yet created
 	roundProposal, found := b.Proposals[m.Header.Round]
