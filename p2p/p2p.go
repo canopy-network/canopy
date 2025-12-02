@@ -30,15 +30,7 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const (
-	transport              = "tcp"
-	dialTimeout            = time.Second
-	minPeerTick            = 100 * time.Millisecond
-	inboxMonitorInterval   = 5 * time.Second
-	defaultMinIOTimeout    = 500 * time.Millisecond
-	defaultMaxWriteTimeout = 2 * time.Second
-	defaultMaxReadTimeout  = 4 * time.Second
-)
+const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 5 * time.Second
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
@@ -73,11 +65,10 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
-	// derive IO deadlines from config but clamp to short, predictable bounds
-	configuredWriteTimeout := time.Duration(2*c.BlockTimeMS()) * time.Millisecond
-	WriteTimeout = clampDuration(configuredWriteTimeout, defaultMinIOTimeout, defaultMaxWriteTimeout)
-	// ensure read timeout is never shorter than write timeout but still bounded
-	ReadTimeout = clampDuration(WriteTimeout*2, WriteTimeout, defaultMaxReadTimeout)
+	// set the write timeout to be 2 x the block time
+	WriteTimeout = time.Duration(2*c.BlockTimeMS()) * time.Millisecond
+	// set the read timeout to double of write
+	ReadTimeout = WriteTimeout * 2
 	// set the peer meta
 	meta := &lib.PeerMeta{NetworkId: c.NetworkID, ChainId: c.ChainId}
 	// return the p2p structure
@@ -384,11 +375,8 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 
 // NewStreams() creates map of streams for the multiplexing architecture
 func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
-	streams = make(map[lib.Topic]*Stream, lib.Topic_INVALID+1)
+	streams = make(map[lib.Topic]*Stream, lib.Topic_INVALID)
 	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
-		if i == lib.Topic_HEARTBEAT {
-			continue
-		}
 		streams[i] = &Stream{
 			topic:        i,
 			msgAssembler: make([]byte, 0),
@@ -396,14 +384,6 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}
-	}
-	// reserved stream for heartbeats (not forwarded to application inbox)
-	streams[lib.Topic_HEARTBEAT] = &Stream{
-		topic:        lib.Topic_HEARTBEAT,
-		msgAssembler: make([]byte, 0),
-		sendQueue:    make(chan *Packet, maxStreamSendQueueSize),
-		inbox:        nil,
-		logger:       p.log,
 	}
 	return
 }
@@ -424,24 +404,49 @@ func (p *P2P) IsSelf(a *lib.PeerAddress) bool {
 
 // SelfSend() executes an internal pipe send to self
 func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Message) lib.ErrorI {
-	p.log.Debugf("Self sending %s message", topic)
+	selfSendStart := time.Now()
+	p.log.Debugf("🔄 START SELF SEND: topic=%s from %s", 
+		lib.Topic_name[int32(topic)], lib.BytesToTruncatedString(fromPublicKey))
 	// non blocking
 	go func() {
+		goroutineStart := time.Now()
 		bz, _ := lib.Marshal(payload)
+		marshalDuration := time.Since(goroutineStart)
+		if marshalDuration > 100*time.Millisecond {
+			p.log.Warnf("⚠️ SLOW MARSHAL: took %s for self send topic=%s", marshalDuration, lib.Topic_name[int32(topic)])
+		}
+		
 		m := &lib.MessageAndMetadata{
 			Message: bz,
 			Sender:  &lib.PeerInfo{Address: &lib.PeerAddress{PublicKey: fromPublicKey}},
 		}
+		
+		inboxDepth := len(p.Inbox(topic))
+		p.log.Debugf("🔄 SELF SEND ENQUEUE ATTEMPT: topic=%s inbox depth=%d/%d", 
+			lib.Topic_name[int32(topic)], inboxDepth, maxInboxQueueSize)
+		
+		enqueueStart := time.Now()
 		select {
 		case p.Inbox(topic) <- m:
+			enqueueDuration := time.Since(enqueueStart)
+			totalDuration := time.Since(goroutineStart)
+			p.log.Infof("🔄 SELF SEND SUCCESS: topic=%s enqueued in %s (total: %s, inbox depth: %d/%d)", 
+				lib.Topic_name[int32(topic)], enqueueDuration, totalDuration, len(p.Inbox(topic)), maxInboxQueueSize)
+			if enqueueDuration > 100*time.Millisecond {
+				p.log.Warnf("⚠️ SLOW SELF SEND ENQUEUE: took %s for topic=%s", enqueueDuration, lib.Topic_name[int32(topic)])
+			}
 		default:
-			p.log.Errorf("CRITICAL: Inbox %s queue full in self send", lib.Topic_name[int32(topic)])
+			p.log.Errorf("❌ CRITICAL: Inbox %s queue full in self send (depth: %d/%d)", 
+				lib.Topic_name[int32(topic)], len(p.Inbox(topic)), maxInboxQueueSize)
 			p.log.Error("Dropping all messages")
 			// drain inbox
+			drainStart := time.Now()
+			drainedCount := 0
 			func() {
 				for {
 					select {
 					case <-p.Inbox(topic):
+						drainedCount++
 						// drop
 					default:
 						// channel is empty now
@@ -449,8 +454,14 @@ func (p *P2P) SelfSend(fromPublicKey []byte, topic lib.Topic, payload proto.Mess
 					}
 				}
 			}()
+			drainDuration := time.Since(drainStart)
+			p.log.Errorf("❌ DRAINED INBOX: dropped %d messages from topic=%s in %s", 
+				drainedCount, lib.Topic_name[int32(topic)], drainDuration)
 		}
 	}()
+	launchDuration := time.Since(selfSendStart)
+	p.log.Debugf("🔄 SELF SEND GOROUTINE LAUNCHED: topic=%s in %s", 
+		lib.Topic_name[int32(topic)], launchDuration)
 	return nil
 }
 
@@ -504,17 +515,6 @@ func (p *P2P) WaitForMinimumPeers() {
 			return
 		}
 	}
-}
-
-// clampDuration bounds d between min and max (inclusive).
-func clampDuration(d, min, max time.Duration) time.Duration {
-	if d < min {
-		return min
-	}
-	if d > max {
-		return max
-	}
-	return d
 }
 
 var blockedCountries = []string{
@@ -587,7 +587,7 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 		tickCount++
 		// Log heartbeat every 10 ticks to prove it's running
 		if tickCount%10 == 0 {
-			//p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
+			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
 		}
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
@@ -599,12 +599,12 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 		// Log even when idle every 60 seconds to confirm monitoring is active
 		if totalMessages == 0 {
 			if tickCount%4 == 0 { // Every 60 seconds with 15s interval
-				//p.log.Debugf("Inbox Stats: All inboxes empty (monitoring active)")
+				p.log.Debugf("Inbox Stats: All inboxes empty (monitoring active)")
 			}
 			continue
 		}
 		// Log summary
-		//p.log.Infof("Inbox Stats: Total=%d msgs across %d topics", totalMessages, len(stats))
+		p.log.Infof("Inbox Stats: Total=%d msgs across %d topics", totalMessages, len(stats))
 		// Log details for non-empty inboxes
 		for topic, count := range stats {
 			if count > 0 {
@@ -613,7 +613,7 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 				if percentage > 50 {
 					p.log.Warnf("  ⚠️  %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
 				} else {
-					//p.log.Infof("  ✓ %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
+					p.log.Infof("  ✓ %s: %d msgs (%.1f%% full)", lib.Topic_name[int32(topic)], count, percentage)
 				}
 			}
 		}

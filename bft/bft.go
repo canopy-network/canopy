@@ -112,8 +112,26 @@ func (b *BFT) Start() {
 		case <-b.PhaseTimer.C:
 			func() {
 				startTime := time.Now()
+				lockAcquireStart := time.Now()
+				b.log.Debugf("🔒 PHASE LOCK ATTEMPT: (rH:%d, H:%d, R:%d, P:%s)", b.RootHeight, b.Height, b.Round, b.Phase)
 				b.Controller.Lock()
-				defer b.Controller.Unlock()
+				lockAcquireDuration := time.Since(lockAcquireStart)
+				if lockAcquireDuration > 100*time.Millisecond {
+					b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for phase (rH:%d, H:%d, R:%d, P:%s)",
+						lockAcquireDuration, b.RootHeight, b.Height, b.Round, b.Phase)
+				}
+				b.log.Debugf("🔒✓ PHASE LOCK ACQUIRED: (rH:%d, H:%d, R:%d, P:%s) after %s",
+					b.RootHeight, b.Height, b.Round, b.Phase, lockAcquireDuration)
+				defer func() {
+					lockHeldDuration := time.Since(lockAcquireStart)
+					if lockHeldDuration > 500*time.Millisecond {
+						b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during phase (rH:%d, H:%d, R:%d, P:%s)",
+							lockHeldDuration, b.RootHeight, b.Height, b.Round, b.Phase)
+					}
+					b.log.Debugf("🔓 PHASE LOCK RELEASED: (rH:%d, H:%d, R:%d, P:%s) held for %s",
+						b.RootHeight, b.Height, b.Round, b.Phase, lockHeldDuration)
+					b.Controller.Unlock()
+				}()
 				// Update BFT metrics
 				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
 				// handle the phase
@@ -125,8 +143,26 @@ func (b *BFT) Start() {
 		case resetBFT := <-b.ResetBFT:
 			var processTime time.Duration
 			func() {
+				lockAcquireStart := time.Now()
+				b.log.Debugf("🔒 RESET LOCK ATTEMPT: (rH:%d, H:%d)", b.RootHeight, b.Height)
 				b.Controller.Lock()
-				defer b.Controller.Unlock()
+				lockAcquireDuration := time.Since(lockAcquireStart)
+				if lockAcquireDuration > 100*time.Millisecond {
+					b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for ResetBFT (rH:%d, H:%d)",
+						lockAcquireDuration, b.RootHeight, b.Height)
+				}
+				b.log.Debugf("🔒✓ RESET LOCK ACQUIRED: (rH:%d, H:%d) after %s",
+					b.RootHeight, b.Height, lockAcquireDuration)
+				defer func() {
+					lockHeldDuration := time.Since(lockAcquireStart)
+					if lockHeldDuration > 200*time.Millisecond {
+						b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during ResetBFT (rH:%d, H:%d)",
+							lockHeldDuration, b.RootHeight, b.Height)
+					}
+					b.log.Debugf("🔓 RESET LOCK RELEASED: (rH:%d, H:%d) held for %s",
+						b.RootHeight, b.Height, lockHeldDuration)
+					b.Controller.Unlock()
+				}()
 				// calculate time since
 				since := time.Since(resetBFT.StartTime)
 				// allow if 'since' is less than 1 block old
@@ -587,8 +623,27 @@ type PacemakerMessages map[string]*Message // [ public_key_string ] -> View mess
 
 // AddPacemakerMessage() adds the 'View' message to the list (keyed by public key string)
 func (b *BFT) AddPacemakerMessage(msg *Message) (err lib.ErrorI) {
+	lockAcquireStart := time.Now()
+	sender := "unknown"
+	if msg != nil && msg.Signature != nil {
+		sender = lib.BytesToTruncatedString(msg.Signature.PublicKey)
+	}
+	b.log.Debugf("🔒 ADD PACEMAKER LOCK ATTEMPT: from %s", sender)
 	b.Controller.Lock()
-	defer b.Controller.Unlock()
+	lockAcquireDuration := time.Since(lockAcquireStart)
+	if lockAcquireDuration > 50*time.Millisecond {
+		b.log.Warnf("🔒⏱️  SLOW LOCK ACQUIRE: took %s for AddPacemakerMessage from %s",
+			lockAcquireDuration, sender)
+	}
+	defer func() {
+		lockHeldDuration := time.Since(lockAcquireStart)
+		if lockHeldDuration > 100*time.Millisecond {
+			b.log.Warnf("🔓⏱️  LONG LOCK HOLD: held for %s during AddPacemakerMessage from %s",
+				lockHeldDuration, sender)
+		}
+		b.log.Debugf("🔓 ADD PACEMAKER LOCK RELEASED: held for %s", lockHeldDuration)
+		b.Controller.Unlock()
+	}()
 	b.PacemakerMessages[lib.BytesToString(msg.Signature.PublicKey)] = msg
 	return
 }
