@@ -84,14 +84,14 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		if err := tcpConn.SetReadBuffer(32 * 1024 * 1024); err != nil {
 			p.log.Warnf("Failed to set write buffer: %v", err)
 		}
-		// if err := tcpConn.SetNoDelay(true); err != nil {
-		// 	p.log.Warnf("Failed to disable Nagle: %v", err)
-		// }
-		// if err := tcpConn.SetKeepAlive(true); err != nil {
-		// 	p.log.Warnf("Failed to enable TCP keepalive: %v", err)
-		// } else if err := tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
-		// 	p.log.Warnf("Failed to set TCP keepalive period: %v", err)
-		// }
+		if err := tcpConn.SetNoDelay(true); err != nil {
+			p.log.Warnf("Failed to disable Nagle: %v", err)
+		}
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			p.log.Warnf("Failed to enable TCP keepalive: %v", err)
+		} else if err := tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+			p.log.Warnf("Failed to set TCP keepalive period: %v", err)
+		}
 	}
 	// establish an encrypted connection using the handshake
 	eConn, err := NewHandshake(conn, p.meta, p.privateKey)
