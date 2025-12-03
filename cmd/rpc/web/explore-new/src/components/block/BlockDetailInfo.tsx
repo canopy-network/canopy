@@ -90,9 +90,11 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
 
                 {/* Right Column */}
                 <div className="space-y-4">
-                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
+                    <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4 gap-2">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.builderName}</span>
-                        <span className="text-white">{block.builderName}</span>
+                        <span className="text-white break-words text-right max-w-[60%] sm:max-w-[70%]" title={block.builderName}>
+                            {block.builderName}
+                        </span>
                     </div>
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.blockReward}</span>

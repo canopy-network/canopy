@@ -111,7 +111,8 @@ export const useSearch = (searchTerm: string) => {
             if (isLikelyAddress) {
                 // If it's exactly 40 chars, try as complete address
                 if (term.length === 40) {
-                    // First check if it's a validator (validators take priority)
+                    // First check if it's a validator AND also search for account
+                    // Both can exist for the same address
                     searchPromises.push(
                         Validator(0, term)
                             .then(validator => {
@@ -128,27 +129,28 @@ export const useSearch = (searchTerm: string) => {
                                     if (!searchResults.validators.some(v => v.id === validator.address)) {
                                         searchResults.validators.push(validatorResult)
                                     }
-                                } else {
-                                    // Only search as account if it's NOT a validator
-                                    return Account(0, term)
-                                        .then(account => {
-                                            if (account && account.address) {
-                                                const accountResult = {
-                                                    type: 'address' as const,
-                                                    id: account.address,
-                                                    title: 'Account',
-                                                    subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
-                                                    data: account
-                                                }
-
-                                                // Verificar duplicados
-                                                if (!searchResults.addresses.some(a => a.id === account.address)) {
-                                                    searchResults.addresses.push(accountResult)
-                                                }
-                                            }
-                                        })
-                                        .catch(err => console.log('Account search error:', err))
                                 }
+                                
+                                // Always try to search as account too (even if it's a validator)
+                                // A validator can also have an account
+                                return Account(0, term)
+                                    .then(account => {
+                                        if (account && account.address) {
+                                            const accountResult = {
+                                                type: 'address' as const,
+                                                id: account.address,
+                                                title: 'Account',
+                                                subtitle: `Balance: ${(account.amount / 1000000).toLocaleString()} CNPY`,
+                                                data: account
+                                            }
+
+                                            // Verificar duplicados
+                                            if (!searchResults.addresses.some(a => a.id === account.address)) {
+                                                searchResults.addresses.push(accountResult)
+                                            }
+                                        }
+                                    })
+                                    .catch(err => console.log('Account search error:', err))
                             })
                             .catch(() => {
                                 // If validator search fails, try as account
@@ -178,7 +180,7 @@ export const useSearch = (searchTerm: string) => {
                         getModalData(term, 1)
                             .then(result => {
                                 if (result && result !== "no result found") {
-                                    // Si es un validador, agregarlo solo como validador
+                                    // Si es un validador, agregarlo como validador
                                     if (result.validator) {
                                         const validatorId = result.validator.address
                                         // Solo agregar si no existe ya como validador
@@ -191,11 +193,13 @@ export const useSearch = (searchTerm: string) => {
                                                 data: result.validator
                                             })
                                         }
-                                    } else if (result.account) {
-                                        // Solo agregar como address si NO es un validador
+                                    }
+                                    
+                                    // También agregar como cuenta si existe (incluso si es validador)
+                                    if (result.account) {
                                         const accountId = result.account.address
-                                        const isValidator = searchResults.validators.some(v => v.id === accountId)
-                                        if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                        // Agregar como address incluso si es validador (ambos pueden existir)
+                                        if (!searchResults.addresses.some(a => a.id === accountId)) {
                                             searchResults.addresses.push({
                                                 type: 'address' as const,
                                                 id: accountId,
@@ -247,7 +251,7 @@ export const useSearch = (searchTerm: string) => {
                         getModalData(paddedAddress, 1)
                             .then(result => {
                                 if (result && result !== "no result found") {
-                                    // Si es un validador, agregarlo solo como validador
+                                    // Si es un validador, agregarlo como validador
                                     if (result.validator && result.validator.address && result.validator.address.toLowerCase().startsWith(termLower)) {
                                         const validatorId = result.validator.address
                                         foundValidatorAddresses.add(validatorId.toLowerCase())
@@ -260,12 +264,13 @@ export const useSearch = (searchTerm: string) => {
                                                 data: result.validator
                                             })
                                         }
-                                    } else if (result.account && result.account.address && result.account.address.toLowerCase().startsWith(termLower)) {
-                                        // Solo agregar como address si NO es un validador
+                                    }
+                                    
+                                    // También agregar como cuenta si existe (incluso si es validador)
+                                    if (result.account && result.account.address && result.account.address.toLowerCase().startsWith(termLower)) {
                                         const accountId = result.account.address
-                                        const isValidator = foundValidatorAddresses.has(accountId.toLowerCase()) ||
-                                            searchResults.validators.some(v => v.id === accountId)
-                                        if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                        // Agregar como address incluso si es validador (ambos pueden existir)
+                                        if (!searchResults.addresses.some(a => a.id === accountId)) {
                                             searchResults.addresses.push({
                                                 type: 'address' as const,
                                                 id: accountId,
@@ -305,10 +310,8 @@ export const useSearch = (searchTerm: string) => {
                             .then(account => {
                                 if (account && account.address && account.address.toLowerCase().startsWith(termLower)) {
                                     const accountId = account.address
-                                    // Solo agregar como address si NO es un validador
-                                    const isValidator = foundValidatorAddresses.has(accountId.toLowerCase()) ||
-                                        searchResults.validators.some(v => v.id === accountId)
-                                    if (!isValidator && !searchResults.addresses.some(a => a.id === accountId)) {
+                                    // Agregar como address incluso si es validador (ambos pueden existir)
+                                    if (!searchResults.addresses.some(a => a.id === accountId)) {
                                         searchResults.addresses.push({
                                             type: 'address' as const,
                                             id: accountId,
@@ -371,7 +374,6 @@ export const useSearch = (searchTerm: string) => {
         }, 300) // 300ms debounce
 
         return () => clearTimeout(timeoutId)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchTerm, hashSearchData, isHashSearch, allValidatorsData])
 
     return {

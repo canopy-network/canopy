@@ -6,7 +6,7 @@ import BlockDetailHeader from './BlockDetailHeader'
 import BlockDetailInfo from './BlockDetailInfo'
 import BlockTransactions from './BlockTransactions'
 import BlockSidebar from './BlockSidebar'
-import { useBlockByHeight, useAllBlocksCache } from '../../hooks/useApi'
+import { useBlockByHeight, useAllBlocksCache, useValidator } from '../../hooks/useApi'
 
 interface Block {
     height: number
@@ -56,10 +56,31 @@ const BlockDetailPage: React.FC = () => {
     // Get latest block to check if current block is the last one
     const { data: blocksCache } = useAllBlocksCache()
     
+    // Get validator info if proposer address is available
+    const proposerAddress = blockData?.blockHeader?.proposerAddress || ''
+    const { data: validatorData } = useValidator(0, proposerAddress)
+    
     // Get latest block height from cache
     const latestBlockHeight = useMemo(() => {
         return blocksCache?.[0]?.blockHeader?.height || 0
     }, [blocksCache])
+
+    // Helper function to get builder name
+    const getBuilderName = (proposerAddr: string, validatorInfo?: any) => {
+        // Try to use validator name if available
+        if (validatorInfo?.name && validatorInfo.name !== proposerAddr) {
+            return validatorInfo.name
+        }
+        // Try netAddress as fallback
+        if (validatorInfo?.netAddress && validatorInfo.netAddress !== 'tcp://delegating' && validatorInfo.netAddress !== 'N/A') {
+            return validatorInfo.netAddress
+        }
+        // If no name available, truncate address
+        if (proposerAddr && proposerAddr.length > 16) {
+            return `Validator ${proposerAddr.slice(0, 8)}...${proposerAddr.slice(-8)}`
+        }
+        return proposerAddr ? `Validator ${proposerAddr}` : 'Unknown Validator'
+    }
 
     // Process block data when received
     useEffect(() => {
@@ -72,7 +93,7 @@ const BlockDetailPage: React.FC = () => {
                 // Create block object with real data
                 const blockInfo: Block = {
                     height: blockHeader.height,
-                    builderName: `Validator ${blockHeader.proposerAddress.slice(0, 8)}...`,
+                    builderName: getBuilderName(blockHeader.proposerAddress, validatorData),
                     status: 'confirmed',
                     blockReward: 0, // This value could come from reward results
                     timestamp: new Date(blockHeader.time / 1000).toISOString(),
@@ -154,7 +175,7 @@ const BlockDetailPage: React.FC = () => {
             // If no data and not loading, block doesn't exist
             setLoading(false)
         }
-    }, [blockData, blockHeight, isLoading])
+    }, [blockData, blockHeight, isLoading, validatorData])
 
     const handlePreviousBlock = () => {
         if (block) {
@@ -235,8 +256,13 @@ const BlockDetailPage: React.FC = () => {
         extraData: `Canopy Network ID: ${blockData?.blockHeader?.networkID || 1}`
     }
 
+    // Get validator name or use address as fallback
+    const validatorName = validatorData?.name || 
+                         validatorData?.netAddress || 
+                         (proposerAddress ? `Validator ${proposerAddress}` : 'Unknown Validator')
+    
     const validatorInfo = {
-        name: `Validator ${blockData?.blockHeader?.proposerAddress?.slice(0, 8)}...`,
+        name: validatorName,
         avatar: '',
         activeSince: '2023', // This value could come from historical validator data
     }

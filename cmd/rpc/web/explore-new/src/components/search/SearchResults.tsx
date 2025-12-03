@@ -37,22 +37,64 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         }
     }, [filters?.type])
 
-    // Calculate actual counts from filtered results
+    // Calculate actual counts from filtered results (using same logic as getFilteredResults)
     const getActualCounts = () => {
         if (!results) return { all: 0, blocks: 0, transactions: 0, addresses: 0, validators: 0 }
 
-        // Remove duplicates to get accurate counts
-        const uniqueBlocks = new Set(results.blocks?.map((b: any) => b.id || b.data?.blockHeader?.hash || b.data?.hash) || [])
-        const uniqueTx = new Set(results.transactions?.map((t: any) => t.id || t.data?.txHash || t.data?.hash) || [])
-        const uniqueAddresses = new Set(results.addresses?.map((a: any) => a.id || a.data?.address) || [])
-        const uniqueValidators = new Set(results.validators?.map((v: any) => v.id || v.data?.address) || [])
+        // Use the same filtering logic as getFilteredResults to get accurate counts
+        const uniqueBlocksMap = new Map()
+        const uniqueTxMap = new Map()
+        const uniqueAddressesMap = new Map()
+        const uniqueValidatorsMap = new Map()
+
+        // Process blocks with same validation as getFilteredResults
+        results.blocks?.forEach((block: any) => {
+            if (block && block.data) {
+                const blockId = block.id || block.data.blockHeader?.hash || block.data.hash
+                const blockHeight = block.data.blockHeader?.height ?? block.data.height
+                // Only count if it has a valid hash (not 'N/A') and valid height
+                if (blockId && blockId !== 'N/A' && blockHeight && blockHeight !== 'N/A' && !uniqueBlocksMap.has(blockId)) {
+                    uniqueBlocksMap.set(blockId, true)
+                }
+            }
+        })
+
+        // Process transactions with same validation
+        results.transactions?.forEach((tx: any) => {
+            if (tx && tx.data) {
+                const txId = tx.id || tx.data.txHash || tx.data.hash
+                if (txId && !uniqueTxMap.has(txId)) {
+                    uniqueTxMap.set(txId, true)
+                }
+            }
+        })
+
+        // Process validators
+        results.validators?.forEach((val: any) => {
+            if (val && val.data) {
+                const valId = val.id || val.data.address
+                if (valId && !uniqueValidatorsMap.has(valId)) {
+                    uniqueValidatorsMap.set(valId, true)
+                }
+            }
+        })
+
+        // Process addresses
+        results.addresses?.forEach((addr: any) => {
+            if (addr && addr.data) {
+                const addrId = addr.id || addr.data.address
+                if (addrId && !uniqueAddressesMap.has(addrId)) {
+                    uniqueAddressesMap.set(addrId, true)
+                }
+            }
+        })
 
         return {
-            all: uniqueBlocks.size + uniqueTx.size + uniqueAddresses.size + uniqueValidators.size,
-            blocks: uniqueBlocks.size,
-            transactions: uniqueTx.size,
-            addresses: uniqueAddresses.size,
-            validators: uniqueValidators.size
+            all: uniqueBlocksMap.size + uniqueTxMap.size + uniqueAddressesMap.size + uniqueValidatorsMap.size,
+            blocks: uniqueBlocksMap.size,
+            transactions: uniqueTxMap.size,
+            addresses: uniqueAddressesMap.size,
+            validators: uniqueValidatorsMap.size
         }
     }
 
@@ -330,7 +372,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             }
         })
 
-        // Process validators FIRST (they take priority over addresses)
+        // Process validators
         results.validators?.forEach((val: any) => {
             if (val && val.data) {
                 const valId = val.id || val.data.address
@@ -340,14 +382,13 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             }
         })
 
-        // Process addresses and remove duplicates - EXCLUDE addresses that are validators
-        const validatorAddresses = new Set(Array.from(uniqueValidatorsMap.values()).map((v: any) => (v.address || '').toLowerCase()))
+        // Process addresses and remove duplicates - ALLOW addresses even if they are validators
+        // A validator can also have an account, so we show both
         results.addresses?.forEach((addr: any) => {
             if (addr && addr.data) {
                 const addrId = addr.id || addr.data.address
-                const addrIdLower = (addrId || '').toLowerCase()
-                // Only add if it's NOT a validator
-                if (addrId && !validatorAddresses.has(addrIdLower) && !uniqueAddressesMap.has(addrId)) {
+                // Add address even if it's also a validator (both can exist)
+                if (addrId && !uniqueAddressesMap.has(addrId)) {
                     uniqueAddressesMap.set(addrId, { ...addr.data, resultType: 'address' })
                 }
             }
@@ -504,7 +545,11 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             className="text-center py-12"
                         >
                             <i className="fa-solid fa-search text-4xl text-gray-600 mb-4"></i>
-                            <h3 className="text-xl font-semibold text-white mb-2">No {activeTab} found</h3>
+                            <h3 className="text-xl font-semibold text-white mb-2">
+                                {activeTab === 'all' 
+                                    ? 'No results found' 
+                                    : `No ${activeTab === 'addresses' ? 'addresses' : activeTab} found`}
+                            </h3>
                             <p className="text-gray-400">Try adjusting your search or filters</p>
                         </motion.div>
                     )}
