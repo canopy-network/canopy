@@ -163,6 +163,7 @@ const (
 	CodeNewHeight                       ErrorCode = 64
 	CodeWrongViewHeight                 ErrorCode = 65
 	CodeBadPort                         ErrorCode = 66
+	CodeBadPortLowLimit                 ErrorCode = 67
 
 	// State Machine Module
 	StateMachineModule ErrorModule = "state_machine"
@@ -261,6 +262,7 @@ const (
 	CodeEmptyOrderBook           ErrorCode = 91
 	CodeNoSubsidizedCommittees   ErrorCode = 92
 	CodeEmptyLotteryWinner       ErrorCode = 93
+	CodeStakeBelowMinimum        ErrorCode = 94
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -741,6 +743,10 @@ func ErrHashSize() ErrorI {
 func ErrMaxPort() ErrorI { return NewError(CodeMaxPort, MainModule, "max port exceeded") }
 
 func ErrBadPort() ErrorI { return NewError(CodeBadPort, MainModule, "port not numerical") }
+
+func ErrBadPortLowLimit() ErrorI {
+	return NewError(CodeBadPortLowLimit, MainModule, fmt.Sprintf("port must be greater than %d", MinAllowedPort))
+}
 
 func ErrProtoParse(err error) ErrorI {
 	return NewError(CodeProtoParse, MainModule, fmt.Sprintf("proto parse failed with error: %s", err.Error()))

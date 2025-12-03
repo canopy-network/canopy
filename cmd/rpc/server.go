@@ -33,7 +33,7 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.13-beta"
+	SoftwareVersion = "v0.1.14+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
@@ -241,12 +241,10 @@ func (s *Server) getFeeFromState(ptr *txRequest, messageName string, lockorder .
 
 // readOnlyStateFromHeightParams is a helper function to safely wrap TimeMachine access
 func (s *Server) readOnlyStateFromHeightParams(w http.ResponseWriter, r *http.Request, ptr queryWithHeight, callback func(s *fsm.StateMachine) lib.ErrorI) (err lib.ErrorI) {
-
 	// Unmarshal request parameters
 	if ok := unmarshal(w, r, ptr); !ok {
 		return
 	}
-
 	return s.readOnlyState(ptr.GetHeight(), callback)
 }
 
@@ -257,10 +255,8 @@ func (s *Server) readOnlyState(height uint64, callback func(s *fsm.StateMachine)
 	if err != nil {
 		return lib.ErrTimeMachine(err)
 	}
-
 	// Discard state, ensuring proper cleanup is performed
 	defer state.Discard()
-
 	// Execute the provided callback function with the read-only state
 	err = callback(state)
 	if err != nil {
@@ -272,23 +268,18 @@ func (s *Server) readOnlyState(height uint64, callback func(s *fsm.StateMachine)
 // logsHandler writes the Canopy logfile
 func logsHandler(s *Server) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
 		// Construct the full file path to the Canopy log file
 		filePath := filepath.Join(s.config.DataDirPath, lib.LogDirectory, lib.LogFileName)
-
 		// Read the entire contents of the log file and split by newlines
 		f, _ := os.ReadFile(filePath)
 		split := bytes.Split(f, []byte("\n"))
-
 		// Prepare a slice to hold the reversed lines
 		var flipped []byte
-
 		// Iterate over the lines in reverse order
 		for i := len(split) - 1; i >= 0; i-- {
 			// Append each line to the `flipped` slice followed by a newline character
 			flipped = append(append(flipped, split[i]...), []byte("\n")...)
 		}
-
 		// Write the reversed lines to the HTTP response
 		if _, err := w.Write(flipped); err != nil {
 			s.logger.Error(err.Error())

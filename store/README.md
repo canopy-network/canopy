@@ -10,12 +10,13 @@ storage. This document provides a comprehensive overview of the package's core c
 functionalities, introducing key concepts while progressively building each component into a
 complete storage solution.
 
-## Why BadgerDB?
+~~## Why BadgerDB?~~`
 
-**[BadgerDB](https://github.com/hypermodeinc/badger)** is a fast, embeddable, persistent key-value
+~~**[BadgerDB](https://github.com/hypermodeinc/badger)** is a fast, embeddable, persistent key-value
 (KV) database written in pure Go. It's designed to be highly performant for both read and write
 operations and is the underlying databased used by the Canopy Blockchain for all of its persistence
-operations.
+operations.~~
+BadgerDB has been replaced by pebbleDB, a documentation update is required
 
 ### Key Features
 

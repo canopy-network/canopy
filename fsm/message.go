@@ -84,6 +84,21 @@ func (s *StateMachine) HandleMessageStake(msg *MessageStake) lib.ErrorI {
 	if exists {
 		return ErrValidatorExists()
 	}
+	// get val params for validation
+	params, err := s.GetParamsVal()
+	if err != nil {
+		return err
+	}
+	// validate stake is above minimums
+	if msg.Delegate {
+		if msg.Amount < params.MinimumStakeForDelegates {
+			return ErrStakeBelowMininum()
+		}
+	} else {
+		if msg.Amount < params.MinimumStakeForValidators {
+			return ErrStakeBelowMininum()
+		}
+	}
 	// subtract the tokens being locked from the signer account
 	if err = s.AccountSub(crypto.NewAddress(msg.Signer), msg.Amount); err != nil {
 		return err

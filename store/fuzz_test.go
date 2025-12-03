@@ -2,14 +2,15 @@ package store
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
-	math "math/rand"
+	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
-	"github.com/dgraph-io/badger/v4"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/vfs"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,27 +25,52 @@ const (
 	CommitTesting
 )
 
+// for local testing, change to a fixed value
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+// var rng = rand.New(rand.NewSource(10))
+
 func TestFuzz(t *testing.T) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
+	require.NoError(t, err)
+	// make a writable reader that reads from the last height
+	versionedStore := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, _, cleanup := testStore(t)
 	defer cleanup()
 	defer db.Close()
 	keys := make([]string, 0)
-	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
 }
 
 func TestFuzzTxn(t *testing.T) {
-	db, err := badger.OpenManaged(badger.DefaultOptions("").
-		WithInMemory(true).WithLoggingLevel(badger.ERROR).WithDetectConflicts(false))
+	fs := vfs.NewMem()
+	db, err := pebble.Open("", &pebble.Options{
+		DisableWAL:            false,
+		FS:                    fs,
+		L0CompactionThreshold: 4,
+		L0StopWritesThreshold: 12,
+		MaxOpenFiles:          1000,
+		FormatMajorVersion:    pebble.FormatNewest,
+	})
+	require.NoError(t, err)
+	// make a writable reader that reads from the last height
+	versionedStore := NewVersionedStore(db.NewSnapshot(), db.NewBatch(), 1)
 	require.NoError(t, err)
 	store, err := NewStoreInMemory(lib.NewDefaultLogger())
 	keys := make([]string, 0)
-	compareStore := NewBadgerTxn(db.NewTransactionAt(lssVersion, true), db.NewWriteBatchAt(1), []byte(latestStatePrefix), false, true, 1)
+	compareStore := NewTxn(versionedStore, versionedStore, []byte(latestStatePrefix), false, true, true, 1)
 	for range 1000 {
 		doRandomOperation(t, store, compareStore, &keys)
 	}
@@ -52,7 +78,7 @@ func TestFuzzTxn(t *testing.T) {
 }
 
 func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys *[]string) {
-	k, v := getRandomBytes(t, math.Intn(4)+1), getRandomBytes(t, 3)
+	k, v := getRandomBytes(t, rng.Intn(4)+1), getRandomBytes(t, 3)
 	switch getRandomOperation(t) {
 	case SetTesting:
 		testDBSet(t, db, k, v)
@@ -75,9 +101,9 @@ func doRandomOperation(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, keys
 		testCompareIterators(t, db, compare, *keys)
 	case WriteTesting:
 		if x, ok := db.(TxnWriterI); ok {
-			switch math.Intn(10) {
+			switch rng.Intn(10) {
 			case 0:
-				require.NoError(t, x.Flush())
+				require.NoError(t, x.Commit())
 			}
 		}
 	case CommitTesting:
@@ -104,35 +130,35 @@ func deDuplicate(s []string) []string {
 
 func getRandomBytes(t *testing.T, n int) []byte {
 	bz := make([]byte, n)
-	if _, err := rand.Read(bz); err != nil {
+	if _, err := rng.Read(bz); err != nil {
 		t.Fatal(err)
 	}
 	return bz
 }
 
 func getRandomOperation(_ *testing.T) TestingOp {
-	return TestingOp(math.Intn(6))
+	return TestingOp(rng.Intn(6))
 }
 
 func randomTestKey(_ *testing.T, k []byte, keys []string) []byte {
-	if len(keys) != 0 && math.Intn(100) < 85 {
+	if len(keys) != 0 && rng.Intn(100) < 85 {
 		// 85% of time use key already found
 		// else default to the random value
-		k = []byte(keys[math.Intn(len(keys))])
+		k = []byte(keys[rng.Intn(len(keys))])
 	}
 	return k
 }
 
 func testDBSet(t *testing.T, db lib.WStoreI, k, v []byte) {
-	require.NoError(t, db.Set(k, v))
+	require.NoError(t, db.Set(lib.JoinLenPrefix(k), v))
 }
 
 func testDBDelete(t *testing.T, db lib.WStoreI, k []byte) {
-	require.NoError(t, db.Delete(k))
+	require.NoError(t, db.Delete(lib.JoinLenPrefix(k)))
 }
 
 func testDBGet(t *testing.T, db lib.RWStoreI, k []byte) (value []byte) {
-	value, err := db.Get(k)
+	value, err := db.Get(lib.JoinLenPrefix(k))
 	require.NoError(t, err)
 	return
 }
@@ -142,8 +168,8 @@ func testCompareIterators(t *testing.T, db lib.RWStoreI, compare lib.RWStoreI, k
 		it1, it2 lib.IteratorI
 		err      error
 	)
-	isReverse := math.Intn(2)
-	prefix := getRandomBytes(t, math.Intn(4))
+	isReverse := rng.Intn(2)
+	prefix := lib.JoinLenPrefix(getRandomBytes(t, rng.Intn(4)))
 	require.NoError(t, err)
 	switch isReverse {
 	case 0:
