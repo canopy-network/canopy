@@ -1,75 +1,26 @@
 {
     "compilerOptions": {
-        /* Language and Environment */
         "target": "ES2022",
-        "lib": ["ES2022", "DOM"],
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "allowSyntheticDefaultImports": true,
+        "lib": ["ES2022"],
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
-
-        "allowImportingTsExtensions": true,
-        "verbatimModuleSyntax": true,
-
-        /* Type Checking */
         "strict": true,
-        "exactOptionalPropertyTypes": true,
         "noImplicitAny": true,
         "noImplicitReturns": true,
         "noImplicitThis": true,
-        "noImplicitOverride": true,
-        "noPropertyAccessFromIndexSignature": true,
-        "noUncheckedIndexedAccess": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
-        "strictBindCallApply": true,
-        "strictFunctionTypes": true,
         "strictNullChecks": true,
         "strictPropertyInitialization": true,
-        "useUnknownInCatchVariables": true,
-
-        /* Modules */
-        "baseUrl": "./",
-        "paths": {
-            "@/*": ["src/*"],
-            "@/config": ["src/config/index"],
-            "@/core": ["src/core/index"],
-            "@/network": ["src/network/index"],
-            "@/utils": ["src/utils/index"]
-        },
-        "resolveJsonModule": true,
-
-        /* Emit */
         "declaration": true,
         "declarationMap": true,
         "outDir": "./dist",
-        "removeComments": false,
+        "rootDir": "./src",
         "sourceMap": true,
-        "importHelpers": true,
-
-        /* Interop Constraints */
-        "isolatedModules": true,
-        "allowImportingTsExtensions": false,
-
-        /* Skip Lib Check */
         "skipLibCheck": true
     },
-    "include": ["src/**/*", "test/**/*"],
-    "exclude": [
-        "node_modules",
-        "dist",
-        "coverage",
-        "test-results",
-        "**/*.js",
-        "src/proto/index.js"
-    ],
-    "ts-node": {
-        "esm": true,
-        "compilerOptions": {
-            "module": "ES2022",
-            "target": "ES2022",
-            "moduleResolution": "bundler"
-        }
-    }
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "dist"]
 }

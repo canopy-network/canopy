@@ -13,7 +13,13 @@
       "Bash(rm:*)",
       "Bash(npm run dev:*)",
       "Bash(./gradlew:*)",
-      "Bash(java:*)"
+      "Bash(java:*)",
+      "WebSearch",
+      "Bash(chmod:*)",
+      "Bash(./pluginctl.sh status:*)",
+      "Bash(cat:*)",
+      "Bash(make:*)",
+      "Bash(docker run:*)"
     ],
     "deny": [],
     "ask": []

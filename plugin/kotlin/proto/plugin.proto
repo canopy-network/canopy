@@ -1,6 +1,8 @@
 syntax = "proto3";
 package types;
 option go_package = "github.com/canopy-network/go-plugin/contract";
+option java_package = "com.canopy.plugin.proto";
+option java_multiple_files = true;
 import "tx.proto";
 
 // FSMToPlugin is the outbound message to the plugin from the main FSM (fsm -> plugin)

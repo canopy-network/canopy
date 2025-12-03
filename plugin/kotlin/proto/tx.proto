@@ -1,6 +1,8 @@
 syntax = "proto3";
 package types;
 option go_package = "github.com/canopy-network/go-plugin/contract";
+option java_package = "com.canopy.plugin.proto";
+option java_multiple_files = true;
 
 import "google/protobuf/any.proto";
 // Transaction represents a request or action submitted to the network like transfer assets or perform other operations

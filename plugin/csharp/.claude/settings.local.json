@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build)"
+      "Bash(dotnet build)",
+      "Bash(chmod:*)",
+      "Bash(/home/enielson/canopy/canopy-plugins/plugin/csharp/pluginctl.sh status:*)"
     ],
     "deny": [],
     "ask": []
