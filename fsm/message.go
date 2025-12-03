@@ -481,7 +481,7 @@ func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (er
 	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.AmountForSale); err != nil {
 		return err
 	}
-	// add the batch to the order
+	// add the order to the batch
 	batch.Orders = append(batch.Orders, &lib.DexLimitOrder{
 		AmountForSale:   msg.AmountForSale,
 		RequestedAmount: msg.RequestedAmount,
@@ -515,7 +515,7 @@ func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidity
 	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.Amount); err != nil {
 		return err
 	}
-	// add the batch to the order
+	// add the deposit to the batch
 	batch.Deposits = append(batch.Deposits, &lib.DexLiquidityDeposit{
 		Address: msg.Address,
 		Amount:  msg.Amount,
@@ -549,7 +549,7 @@ func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidit
 	if _, err = p.GetPointsFor(msg.Address); err != nil {
 		return err
 	}
-	// add the batch to the order
+	// add the withdrawal to the batch
 	batch.Withdrawals = append(batch.Withdrawals, &lib.DexLiquidityWithdraw{
 		Address: msg.Address,
 		Percent: msg.Percent,
