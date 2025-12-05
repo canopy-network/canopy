@@ -49,6 +49,9 @@ func init() {
 	queryCmd.AddCommand(blkByHeightCmd)
 	queryCmd.AddCommand(blkByHashCmd)
 	queryCmd.AddCommand(blocksCmd)
+	queryCmd.AddCommand(eventsByHeight)
+	queryCmd.AddCommand(eventsByAddress)
+	queryCmd.AddCommand(eventsByChainId)
 	queryCmd.AddCommand(txsByHeightCmd)
 	queryCmd.AddCommand(txsBySenderCmd)
 	queryCmd.AddCommand(txsByRecCmd)
@@ -64,6 +67,9 @@ func init() {
 	queryCmd.AddCommand(delegateLotteryCmd)
 	queryCmd.AddCommand(rootChainInfoCmd)
 	queryCmd.AddCommand(validatorSetCmd)
+	queryCmd.AddCommand(dexPriceCmd)
+	queryCmd.AddCommand(dexBatchCmd)
+	queryCmd.AddCommand(nextDexBatchCmd)
 }
 
 var (
@@ -260,6 +266,34 @@ var (
 		},
 	}
 
+	eventsByHeight = &cobra.Command{
+		Use:   "events-by-height --height=1 --per-page=10 --page-number=1",
+		Short: "query blocks from the blockchain",
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.EventsByHeight(getPaginatedArgs()))
+		},
+	}
+
+	eventsByAddress = &cobra.Command{
+		Use:   "events-by-address <address> --per-page=10 --page-number=1",
+		Short: "query blocks from the blockchain",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			_, p := getPaginatedArgs()
+			writeToConsole(client.EventsByAddress(args[0], p))
+		},
+	}
+
+	eventsByChainId = &cobra.Command{
+		Use:   "events-by-chain <id> --per-page=10 --page-number=1",
+		Short: "query blocks from the blockchain",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			_, p := getPaginatedArgs()
+			writeToConsole(client.EventsByChainId(uint64(argToInt(args[0])), p))
+		},
+	}
+
 	txsByHeightCmd = &cobra.Command{
 		Use:   "txs --height=1 --per-page=10 --page-number=1",
 		Short: "query txs at a certain height",
@@ -392,6 +426,36 @@ var (
 			writeToConsole(client.ValidatorSet(height, uint64(argToInt(args[0]))))
 		},
 	}
+
+	dexPriceCmd = &cobra.Command{
+		Use:   "dex-price <chain-id> --height=1",
+		Short: "query the dex price at a certain height",
+		Long:  "query the dex price at a certain height",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.DexPrice(height, uint64(argToInt(args[0]))))
+		},
+	}
+
+	dexBatchCmd = &cobra.Command{
+		Use:   "dex-batch <chain-id> <with-points> --height=1",
+		Short: "query the locked dex batch at a certain height",
+		Long:  "query the locked dex batch at a certain height",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.DexBatch(height, uint64(argToInt(args[0])), argToBool(args[1])))
+		},
+	}
+
+	nextDexBatchCmd = &cobra.Command{
+		Use:   "next-dex-batch <chain-id> <with-points> --height=1",
+		Short: "query the next dex batch at a certain height",
+		Long:  "query the next dex batch at a certain height",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.NextDexBatch(height, uint64(argToInt(args[0])), argToBool(args[1])))
+		},
+	}
 )
 
 func getPoolArgs(args []string) (h uint64, id uint64) {
@@ -439,4 +503,12 @@ func argToInt(arg string) int {
 		l.Fatal(err.Error())
 	}
 	return i
+}
+
+func argToBool(arg string) bool {
+	value, err := strconv.ParseBool(arg)
+	if err != nil {
+		l.Fatal(err.Error())
+	}
+	return value
 }

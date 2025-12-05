@@ -156,6 +156,12 @@ message FeeParams {
   uint64 edit_order_fee = 12; // @gotags: json:"editOrderFee"
   // delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
   uint64 delete_order_fee = 13; // @gotags: json:"deleteOrderFee"
+  // dex_limit_order_fee: is the fee amount (in uCNPY) for Message Dex Limit Order
+  uint64 dex_limit_order_fee = 14; // @gotags: json:"dexLimitOrderFee"
+  // dex_liquidity_deposit_fee: is the fee amount (in uCNPY) for Message Dex Liquidity Deposit
+  uint64 dex_liquidity_deposit_fee = 15; // @gotags: json:"dexLiquidityDeposit"
+  // dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
+  uint64 dex_liquidity_withdraw_fee = 16; // @gotags: json:"dexLiquidityWithdraw"
 }
 
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous

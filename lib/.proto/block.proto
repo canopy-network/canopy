@@ -6,6 +6,7 @@ option go_package = "github.com/canopy-network/canopy/lib";
 import "tx.proto";
 import "certificate.proto";
 import "crypto.proto";
+import "event.proto";
 
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
@@ -86,8 +87,10 @@ message BlockResult {
   BlockHeader block_header = 1; // @gotags: json:"blockHeader"
   // transactions: is a batch of transaction results in this block
   repeated TxResult transactions = 2;
+  // events: the events associated with the block
+  repeated Event events = 3;
   // meta: is non-essential metadata about the processing of this block
-  BlockResultMeta meta = 3;
+  BlockResultMeta meta = 4;
 }
 
 // block_result_meta is non-essential information about the processing of a block

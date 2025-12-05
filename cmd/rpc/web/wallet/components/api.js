@@ -33,6 +33,9 @@ const txUnpausePath = "/v1/admin/tx-unpause";
 const txChangeParamPath = "/v1/admin/tx-change-param";
 const txDaoTransfer = "/v1/admin/tx-dao-transfer";
 const txCreateOrder = "/v1/admin/tx-create-order";
+const txDexLimitOrder = "/v1/admin/tx-dex-limit-order";
+const txDexLiquidityDeposit = "/v1/admin/tx-dex-liquidity-deposit";
+const txDexLiquidityWithdraw = "/v1/admin/tx-dex-liquidity-withdraw";
 const txLockOrder = "/v1/admin/tx-lock-order";
 const txCloseOrder = "/v1/admin/tx-close-order";
 const txEditOrder = "/v1/admin/tx-edit-order";
@@ -205,6 +208,43 @@ function newCloseOrderTxRequest(address, orderId, fee, submit, password) {
   return JSON.stringify({
     address: address,
     orderId: orderId,
+    fee: fee,
+    submit: submit,
+    password: password,
+  });
+}
+
+function newDexLimitOrderRequest(address, chainId, amount, receiveAmount, memo, fee, submit, password) {
+  return JSON.stringify({
+    address: address,
+    committees: chainId.toString(),
+    amount: amount,
+    receiveAmount: receiveAmount,
+    memo: memo,
+    fee: fee,
+    submit: submit,
+    password: password,
+  });
+}
+
+function newDexLiquidityDepositRequest(address, chainId, amount, memo, fee, submit, password) {
+  return JSON.stringify({
+    address: address,
+    committees: chainId.toString(),
+    amount: amount,
+    memo: memo,
+    fee: fee,
+    submit: submit,
+    password: password,
+  });
+}
+
+function newDexLiquidityWithdrawRequest(address, chainId, percent, memo, fee, submit, password) {
+  return JSON.stringify({
+    address: address,
+    committees: chainId.toString(),
+    percent: Number(percent),
+    memo: memo,
     fee: fee,
     submit: submit,
     password: password,
@@ -585,6 +625,80 @@ export async function TxDeleteOrder(address, chainId, orderId, memo, fee, passwo
     adminRPCURL,
     txDeleteOrder,
     newSellOrderTxRequest(address, chainId, orderId, 0, 0, "", memo, Number(fee), submit, password),
+  );
+}
+
+export async function TxDexLimitOrder(
+  address,
+  chainId,
+  amount,
+  receiveAmount,
+  memo,
+  fee,
+  password,
+  submit,
+) {
+  return POST(
+    adminRPCURL,
+    txDexLimitOrder,
+    newDexLimitOrderRequest(
+      address,
+      chainId,
+      amount,
+      receiveAmount,
+      memo,
+      fee,
+      submit,
+      password,
+    ),
+  );
+}
+
+export async function TxDexLiquidityDeposit(
+  address,
+  chainId,
+  amount,
+  memo,
+  fee,
+  password,
+  submit,
+) {
+  return POST(
+    adminRPCURL,
+    txDexLiquidityDeposit,
+    newDexLiquidityDepositRequest(
+      address,
+      chainId,
+      amount,
+      memo,
+      fee,
+      submit,
+      password,
+    ),
+  );
+}
+
+export async function TxDexLiquidityWithdrawal(
+  address,
+  chainId,
+  percent,
+  memo,
+  fee,
+  password,
+  submit,
+) {
+  return POST(
+    adminRPCURL,
+    txDexLiquidityWithdraw,
+    newDexLiquidityWithdrawRequest(
+      address,
+      chainId,
+      percent,
+      memo,
+      fee,
+      submit,
+      password,
+    ),
   );
 }
 

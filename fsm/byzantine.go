@@ -252,7 +252,11 @@ func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI
 	// calculate the future unstaking height
 	unstakingHeight := s.Height() + unstakingBlocks
 	// set the validator as unstaking
-	return s.SetValidatorUnstaking(address, validator, unstakingHeight)
+	if err = s.SetValidatorUnstaking(address, validator, unstakingHeight); err != nil {
+		return err
+	}
+	// add begin unstaking event
+	return s.EventAutoBeginUnstaking(address.Bytes())
 }
 
 // SlashValidators() burns a specified percentage of multiple validator's staked tokens
@@ -318,6 +322,10 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 	}
 	// if stake after slash is 0, remove the validator
 	if stakeAfterSlash == 0 {
+		// add slash event
+		if err = s.EventSlash(validator.Address, slashAmount); err != nil {
+			return err
+		}
 		// DeleteValidator subtracts from staked supply
 		return s.DeleteValidator(validator)
 	}
@@ -338,7 +346,11 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 		return e
 	}
 	// update the validator
-	return s.SetValidator(validator)
+	if err = s.SetValidator(validator); err != nil {
+		return err
+	}
+	// add slash event
+	return s.EventSlash(validator.Address, slashAmount)
 }
 
 // LoadMinimumEvidenceHeight() loads the minimum height the evidence must be to still be usable

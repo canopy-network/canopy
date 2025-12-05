@@ -84,7 +84,7 @@ func TestApplyTransaction(t *testing.T) {
 				},
 			}))
 			// execute the function call
-			got, err := sm.ApplyTransaction(0, tx, test.expected.TxHash, nil)
+			got, _, err := sm.ApplyTransaction(0, tx, test.expected.TxHash, nil)
 			// validate the expected error
 			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {

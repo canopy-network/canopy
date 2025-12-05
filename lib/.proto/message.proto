@@ -183,7 +183,7 @@ message MessageCreateOrder {
   // sellers_send_address: the Canopy address the seller is selling and signing from
   bytes SellersSendAddress = 6; // @gotags: json:"sellersSendAddress"
   // OrderId: auto-populated by the state machine to assign the unique bytes to the order
-  bytes OrderId = 7;
+  bytes OrderId = 7;  // @gotags: json:"orderId"
 }
 
 // MessageEditOrder modifies an un-claimed token swap 'sell order', token amount may be increased or decreased as well
@@ -214,4 +214,42 @@ message MessageDeleteOrder {
   bytes OrderId = 1; // @gotags: json:"orderID"
   // chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
   uint64 ChainId = 2; // @gotags: json:"chainID"
+}
+
+// MessageDexLimitOrder: creates a limit order for the Canopy Dex Protocol
+message MessageDexLimitOrder {
+  // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+  uint64 chain_id = 1; // @gotags: json:"chainID"
+  // amount_for_sale: the amount of asset listed for sale, transferred to escrow
+  uint64 amount_for_sale = 2; // @gotags: json:"amountForSale"
+  // requested_amount: the minimum amount of the 'counter asset' the seller is willing to receive
+  uint64 requested_amount = 3; // @gotags: json:"requestAmount"
+  // sellers_send_address: the address the seller is selling and signing from
+  bytes address = 4; // @gotags: json:"sellersSendAddress"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 5;  // @gotags: json:"orderId"
+}
+
+// MessageDexLiquidityDeposit: deposits tokens to the liquidity pool in exchange for liquidity points
+message MessageDexLiquidityDeposit {
+  // chain_id: the id of the committee that is responsible for the 'counter asset'
+  uint64 chain_id = 1; // @gotags: json:"chainID"
+  // amount: the amount tokens, transferred to escrow
+  uint64 amount = 2; // @gotags: json:"amount"
+  // sellers_send_address: the address the seller is selling and signing from
+  bytes address = 3; // @gotags: json:"sellersSendAddress"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
+}
+
+// MessageDexLiquidityWithdraw: withdraw tokens from both liquidity pools in exchange for burning liquidity points
+message MessageDexLiquidityWithdraw {
+  // chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+  uint64 chain_id = 1; // @gotags: json:"chainID"
+  // percent: the percent of tokens to withdraw
+  uint64 percent = 2; // @gotags: json:"percent"
+  // address: the address the LP is signing from
+  bytes address = 3; // @gotags: json:"address"
+  // OrderId: auto-populated by the state machine to assign the unique bytes to the order
+  bytes OrderId = 4;  // @gotags: json:"orderId"
 }

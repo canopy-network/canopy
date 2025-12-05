@@ -38,6 +38,7 @@ func init() {
 	RegisteredPageables[TxResultsPageName] = new(TxResults)      // preregister the page type for unmarshalling
 	RegisteredPageables[PendingResultsPageName] = new(TxResults) // preregister the page type for unmarshalling
 	RegisteredPageables[FailedTxsPageName] = new(FailedTxs)      // preregister the page type for unmarshalling
+	RegisteredPageables[EventsPageName] = new(Events)            // preregister the page type for unmarshalling
 }
 
 // Page is a pagination wrapper over a slice of data
@@ -813,6 +814,44 @@ func EqualByteSlices(a, b [][]byte) bool {
 		}
 	}
 	return true
+}
+
+func SqrtProductUint64(x, y uint64) uint64 {
+	// p = x * y (big.Int)
+	a := new(big.Int).SetUint64(x)
+	b := new(big.Int).SetUint64(y)
+	p := new(big.Int).Mul(a, b)
+
+	return new(big.Int).Sqrt(p).Uint64()
+}
+
+// SafeMulDiv computes (a * b) / c safely using big.Int.
+func SafeMulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	bigA := new(big.Int).SetUint64(a)
+	bigB := new(big.Int).SetUint64(b)
+	bigC := new(big.Int).SetUint64(c)
+
+	num := new(big.Int).Mul(bigA, bigB)
+	res := new(big.Int).Div(num, bigC)
+
+	return res.Uint64()
+}
+
+// IntSqrt returns the integer square root of n (truncated)
+func IntSqrt(n uint64) uint64 {
+	if n == 0 {
+		return 0
+	}
+	x := n
+	y := (x + 1) / 2
+	for y < x {
+		x = y
+		y = (x + n/x) / 2
+	}
+	return x
 }
 
 // ContainsByteSlice() checks to see if the byte slice is within the list
