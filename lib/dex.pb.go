@@ -236,9 +236,9 @@ type DexBatch struct {
 	Deposits []*DexLiquidityDeposit `protobuf:"bytes,4,rep,name=deposits,proto3" json:"deposits,omitempty"`
 	// withdrawals: the liquidity provider 'withdraw' command
 	Withdrawals []*DexLiquidityWithdraw `protobuf:"bytes,5,rep,name=withdrawals,proto3" json:"withdrawals,omitempty"`
-	// pool_size: contains the mid-point balance of the liquidity pool
+	// pool_size: contains the current balance of the liquidity pool
 	PoolSize uint64 `protobuf:"varint,6,opt,name=pool_size,json=poolSize,proto3" json:"poolSize"` // @gotags: json:"poolSize"
-	// counter_pool_size: the last final 'counter pool' size of the liquidity pool on the counter chain
+	// counter_pool_size: the last computed 'counter pool' size of the liquidity pool on the counter chain
 	CounterPoolSize uint64 `protobuf:"varint,7,opt,name=counter_pool_size,json=counterPoolSize,proto3" json:"counterPoolSize"` // @gotags: json:"counterPoolSize"
 	// pool_points: (typically omitted due to LP mirrored design) - contains the current liquidity points of the pool
 	PoolPoints []*PoolPoints `protobuf:"bytes,8,rep,name=pool_points,json=poolPoints,proto3" json:"poolPoints"` // @gotags: json:"poolPoints"

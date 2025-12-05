@@ -59,46 +59,34 @@ import (
 //   from the mid-point snapshot.
 
 // HandleDexBatch() initiates the 'dex' lifecycle
-func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *lib.DexBatch) (err lib.ErrorI) {
-	// exit without handling as the 'rootHeight' explicitly not set
-	if rootHeight == 0 {
-		return
-	}
-	isNested := chainId == s.Config.ChainId
+func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool) (err lib.ErrorI) {
+	remoteBatch := results.DexBatch
 	// if nested, replace chainId with root chainId
 	if isNested {
 		// set 'chain id' as the root chain
 		if chainId, err = s.GetRootChainId(); err != nil {
 			return
 		}
+		// use the root chainId as the remote batch
+		remoteBatch = results.RootDexBatch
+	}
+	// exit without handling as the 'rootHeight' explicitly not set
+	if remoteBatch == nil {
+		return
 	}
 	// get the local locked dex batch for the counter chain
 	localBatch, err := s.GetDexBatch(chainId, true)
 	if err != nil {
 		return
 	}
-	// if nested, replace remoteBatch (which is a local batch) with truly a remote batch
-	// Root liveness intentionally requires manual intervention in order to ensure there's a stable
-	//   source of truth for the liquidity points ledger
-	if isNested {
-		// if should execute the liveness fallback protocol
-		livenessFallback := !localBatch.IsEmpty() && (s.Height()-localBatch.LockedHeight) >= 60
-		// get root chain dex batch
-		if remoteBatch, err = s.RCManager.GetDexBatch(chainId, rootHeight, s.Config.ChainId, livenessFallback); err != nil {
+	// if executing the liveness fallback (nested chain only)
+	if len(remoteBatch.PoolPoints) != 0 {
+		// handle the liveness fallback
+		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
 			return
-		}
-		// if executing the liveness fallback
-		if livenessFallback {
-			// handle the liveness fallback
-			if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
-				return
-			}
 		}
 	}
 	// handle the remote dex batch
-	// NESTED_CHAIN = retrieves the DexBatch from the root using the root_height from the
-	//    last QC.RootHeight to keep things deterministic
-	// ROOT_CHAIN = uses the DexBatch from deliver-tx
 	return s.HandleRemoteDexBatch(remoteBatch, chainId)
 }
 
@@ -165,10 +153,6 @@ func (s *StateMachine) HandleDexBatch(rootHeight, chainId uint64, remoteBatch *l
 // ─────────────────────────────────────────────────────────────────────────────
 func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId uint64) (err lib.ErrorI) {
 	var receipts []uint64
-	// exit if dex data is empty
-	if remoteBatch == nil {
-		return
-	}
 	processRemote := !remoteBatch.IsEmpty()
 	// copy because ledgers are mutated during processing
 	remoteBatchCopy := remoteBatch.Copy()

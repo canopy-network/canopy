@@ -60,6 +60,9 @@ message CertificateResult {
   bool retired = 5; // @gotags: json:"retired"
   // dex_batch: contains information regarding the selling side 'dex' operations
   DexBatch dex_batch = 6; // @gotags: json:"dexBatch"
+  // root_dex_batch: ifNested: contains the root chain's dex batch;
+  // without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
+  DexBatch root_dex_batch = 7; // @gotags: json:"rootDexBatch"
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,

@@ -158,7 +158,10 @@ type CertificateResult struct {
 	// retired: signals if the committee wants to shut down and mark itself as 'forever unsubsidized' on the root-chain
 	Retired bool `protobuf:"varint,5,opt,name=retired,proto3" json:"retired"` // @gotags: json:"retired"
 	// dex_batch: contains information regarding the selling side 'dex' operations
-	DexBatch      *DexBatch `protobuf:"bytes,6,opt,name=dex_batch,json=dexBatch,proto3" json:"dexBatch"` // @gotags: json:"dexBatch"
+	DexBatch *DexBatch `protobuf:"bytes,6,opt,name=dex_batch,json=dexBatch,proto3" json:"dexBatch"` // @gotags: json:"dexBatch"
+	// root_dex_batch: ifNested: contains the root chain's dex batch;
+	// without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
+	RootDexBatch  *DexBatch `protobuf:"bytes,7,opt,name=root_dex_batch,json=rootDexBatch,proto3" json:"rootDexBatch"` // @gotags: json:"rootDexBatch"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -231,6 +234,13 @@ func (x *CertificateResult) GetRetired() bool {
 func (x *CertificateResult) GetDexBatch() *DexBatch {
 	if x != nil {
 		return x.DexBatch
+	}
+	return nil
+}
+
+func (x *CertificateResult) GetRootDexBatch() *DexBatch {
+	if x != nil {
+		return x.RootDexBatch
 	}
 	return nil
 }
@@ -879,7 +889,7 @@ const file_certificate_proto_rawDesc = "" +
 	"\n" +
 	"block_hash\x18\x05 \x01(\fR\tblockHash\x12!\n" +
 	"\fproposer_key\x18\x06 \x01(\fR\vproposerKey\x127\n" +
-	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\xbe\x02\n" +
+	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\xf5\x02\n" +
 	"\x11CertificateResult\x12D\n" +
 	"\x11reward_recipients\x18\x01 \x01(\v2\x17.types.RewardRecipientsR\x10rewardRecipients\x12A\n" +
 	"\x10slash_recipients\x18\x02 \x01(\v2\x16.types.SlashRecipientsR\x0fslashRecipients\x12%\n" +
@@ -888,7 +898,8 @@ const file_certificate_proto_rawDesc = "" +
 	"checkpoint\x18\x04 \x01(\v2\x11.types.CheckpointR\n" +
 	"checkpoint\x12\x18\n" +
 	"\aretired\x18\x05 \x01(\bR\aretired\x12,\n" +
-	"\tdex_batch\x18\x06 \x01(\v2\x0f.types.DexBatchR\bdexBatch\"\x81\x01\n" +
+	"\tdex_batch\x18\x06 \x01(\v2\x0f.types.DexBatchR\bdexBatch\x125\n" +
+	"\x0eroot_dex_batch\x18\a \x01(\v2\x0f.types.DexBatchR\frootDexBatch\"\x81\x01\n" +
 	"\x10RewardRecipients\x12A\n" +
 	"\x10payment_percents\x18\x01 \x03(\v2\x16.types.PaymentPercentsR\x0fpaymentPercents\x12*\n" +
 	"\x11number_of_samples\x18\x02 \x01(\x04R\x0fnumberOfSamples\"M\n" +
@@ -971,16 +982,17 @@ var file_certificate_proto_depIdxs = []int32{
 	4,  // 5: types.CertificateResult.orders:type_name -> types.Orders
 	7,  // 6: types.CertificateResult.checkpoint:type_name -> types.Checkpoint
 	14, // 7: types.CertificateResult.dex_batch:type_name -> types.DexBatch
-	8,  // 8: types.RewardRecipients.payment_percents:type_name -> types.PaymentPercents
-	9,  // 9: types.SlashRecipients.double_signers:type_name -> types.DoubleSigner
-	5,  // 10: types.Orders.lock_orders:type_name -> types.LockOrder
-	11, // 11: types.CommitteesData.list:type_name -> types.CommitteeData
-	8,  // 12: types.CommitteeData.payment_percents:type_name -> types.PaymentPercents
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	14, // 8: types.CertificateResult.root_dex_batch:type_name -> types.DexBatch
+	8,  // 9: types.RewardRecipients.payment_percents:type_name -> types.PaymentPercents
+	9,  // 10: types.SlashRecipients.double_signers:type_name -> types.DoubleSigner
+	5,  // 11: types.Orders.lock_orders:type_name -> types.LockOrder
+	11, // 12: types.CommitteesData.list:type_name -> types.CommitteeData
+	8,  // 13: types.CommitteeData.payment_percents:type_name -> types.PaymentPercents
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_certificate_proto_init() }

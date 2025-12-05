@@ -25,115 +25,6 @@ var emptyDexBatch = &lib.DexBatch{
 	Receipts:    []uint64{},
 }
 
-func TestHandleDexBatch(t *testing.T) {
-	tests := []struct {
-		name                string
-		detail              string
-		rootBuildHeight     uint64
-		chainId             uint64
-		buyBatch            *lib.DexBatch
-		setupState          func(*StateMachine)
-		errorContains       string
-		expectedLockedBatch *lib.DexBatch // Expected locked batch after processing
-	}{
-		{
-			name:                "nil batch",
-			detail:              "test handling nil dex batch",
-			chainId:             1,
-			buyBatch:            nil,
-			expectedLockedBatch: emptyDexBatch, // No batch should be locked
-		},
-		{
-			name:            "no overwrite with chainId != rootChainId",
-			detail:          "test no overwrite of buy batch for root chain",
-			rootBuildHeight: 1,
-			chainId:         2,
-			buyBatch:        nil,
-			setupState: func(sm *StateMachine) {
-				// Setup liquidity pool
-				p := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 1000,
-				}
-				require.NoError(t, sm.SetPool(p))
-				mock := &MockRCManager{}
-				mock.SetDexBatch(1, 1, 1, &lib.DexBatch{
-					Committee: 1,
-					PoolSize:  1000,
-				})
-				sm.RCManager = mock
-			},
-			expectedLockedBatch: &lib.DexBatch{
-				Committee:   2,
-				Orders:      []*lib.DexLimitOrder{},
-				Deposits:    []*lib.DexLiquidityDeposit{},
-				Withdrawals: []*lib.DexLiquidityWithdraw{},
-				PoolSize:    0,
-				Receipts:    []uint64{},
-			},
-		},
-		{
-			name:            "overwrite with chainId == rootChainId",
-			detail:          "test handling overwrite of buy batch for root chain",
-			rootBuildHeight: 1,
-			chainId:         1,
-			buyBatch:        nil,
-			setupState: func(sm *StateMachine) {
-				// Setup liquidity pool
-				p := &Pool{
-					Id:     sm.Config.ChainId + LiquidityPoolAddend,
-					Amount: 1000,
-				}
-				require.NoError(t, sm.SetPool(p))
-				mock := &MockRCManager{}
-				mock.SetDexBatch(1, 1, 1, &lib.DexBatch{
-					Committee: 1,
-					PoolSize:  1000,
-				})
-				sm.RCManager = mock
-			},
-			expectedLockedBatch: func() *lib.DexBatch {
-				remoteBatch := &lib.DexBatch{
-					Committee:    1,
-					ReceiptHash:  lib.EmptyReceiptsHash,
-					Orders:       []*lib.DexLimitOrder{},
-					Deposits:     []*lib.DexLiquidityDeposit{},
-					Withdrawals:  []*lib.DexLiquidityWithdraw{},
-					PoolSize:     1000,
-					LockedHeight: 0,
-				}
-				return &lib.DexBatch{
-					Committee:       1,
-					ReceiptHash:     remoteBatch.Hash(),
-					Orders:          []*lib.DexLimitOrder{},
-					Deposits:        []*lib.DexLiquidityDeposit{},
-					Withdrawals:     []*lib.DexLiquidityWithdraw{},
-					PoolSize:        1000,
-					CounterPoolSize: 1000,
-					Receipts:        []uint64{},
-					LockedHeight:    2,
-				}
-			}(),
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sm := newTestStateMachine(t)
-			if test.setupState != nil {
-				test.setupState(&sm)
-			}
-			err := sm.HandleDexBatch(test.rootBuildHeight, test.chainId, test.buyBatch)
-			if err != nil && test.errorContains != "" {
-				require.ErrorContains(t, err, test.errorContains)
-			}
-			// the actual locked batch
-			lockedBatch, getErr := sm.GetDexBatch(test.chainId, true)
-			require.NoError(t, getErr)
-			require.EqualExportedValues(t, test.expectedLockedBatch, lockedBatch)
-		})
-	}
-}
-
 func TestHandleRemoteDexBatch(t *testing.T) {
 	tests := []struct {
 		name                string
@@ -148,13 +39,6 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 		errorContains       string
 		expectedLockedBatch *lib.DexBatch // Expected locked batch after processing
 	}{
-		{
-			name:                "nil batch",
-			detail:              "test handling nil dex batch",
-			chainId:             1,
-			buyBatch:            nil,
-			expectedLockedBatch: emptyDexBatch, // No batch should be locked
-		},
 		{
 			name:    "no locked batch: liquidity deposit",
 			detail:  "test handling a batch with liquidity deposit from the counter chain",

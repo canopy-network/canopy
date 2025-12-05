@@ -67,27 +67,6 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
-	// if not exiting prematurely - calculate 'is own root'
-	ownRoot, err := s.LoadIsOwnRoot()
-	if err != nil {
-		return nil, err
-	}
-	// if not independent
-	if !ownRoot {
-		// handle last certificate results
-		qc, e := s.LoadCertificate(s.Height() - 1)
-		if e != nil {
-			return nil, e
-		}
-		// ensure the certificate results are not nil
-		if qc != nil && qc.Results != nil {
-			// trigger the dex batch
-			// this is only ever triggered by the NESTED_CHAIN inside of END_BLOCK
-			if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, qc.Results.DexBatch); err != nil {
-				s.log.Error(err.Error()) // log error only - allow endblock to continue
-			}
-		}
-	}
 	// return the events
 	return s.events.Reset(), nil
 }
@@ -139,11 +118,10 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Header.Height <= data.LastChainHeightUpdated {
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
-	results, chainId := qc.Results, qc.Header.ChainId
+	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
 	// handle dex action ordered by the quorum
-	if qc.Header.ChainId != s.Config.ChainId {
-		// this path is only ever called by the ROOT_CHAIN in the DELIVER_TX phase; never triggered by BEGIN_BLOCK
-		if err = s.HandleDexBatch(qc.Header.RootHeight, qc.Header.ChainId, results.DexBatch); err != nil {
+	if qc.Header.ChainId != s.Config.ChainId || isNested {
+		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
 			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
 		}
 	}

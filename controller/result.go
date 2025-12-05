@@ -285,12 +285,23 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 		c.log.Error(err.Error())
 		return
 	}
+	isTriggerBlock := false
 	// check if 'locked' dex batch is non empty
 	if !batch.IsEmpty() {
 		// calculate the 'blocks since' the lock
 		blksSince := c.FSM.Height() - batch.LockedHeight
-		if blksSince%5 == 0 {
+		if isTriggerBlock = blksSince%5 == 0; isTriggerBlock {
 			results.DexBatch = batch.Copy()
+		}
+	}
+	// if nested, populate the root dex batch structure with the
+	if rcId != c.Config.ChainId {
+		// determine if we should activate liveness fallback
+		livenessFallback := isTriggerBlock && !batch.IsEmpty() && (sm.Height()-batch.LockedHeight) >= 60
+		// set the root chain dex batch
+		if results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback); err != nil {
+			c.log.Error(err.Error())
+			return
 		}
 	}
 }

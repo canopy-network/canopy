@@ -46,7 +46,7 @@ type MessageSend struct {
 	FromAddress []byte `protobuf:"bytes,1,opt,name=from_address,json=fromAddress,proto3" json:"fromAddress"` // @gotags: json:"fromAddress"
 	// to_address: is the recipient of the funds
 	ToAddress []byte `protobuf:"bytes,2,opt,name=to_address,json=toAddress,proto3" json:"toAddress"` // @gotags: json:"toAddress"
-	// amount: is the amount of tokens in micro-denomination (uAsset)
+	// amount: is the amount of tokens in micro-denomination (uCNPY)
 	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -784,11 +784,11 @@ func (x *MessageSubsidy) GetOpcode() []byte {
 // account and transferring them to an escrow pool while awaiting a buyer
 type MessageCreateOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
 	ChainId uint64 `protobuf:"varint,1,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// data: a generic data field which can allow a committee to execute specific functionality for the swap
 	Data []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data"` // @gotags: json:"data"
-	// amount_for_sale: the amount of uAsset listed for sale, transferred to escrow
+	// amount_for_sale: the amount of uCNPY listed for sale, transferred to escrow
 	AmountForSale uint64 `protobuf:"varint,3,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the amount of the 'counter asset' the buyer must send in order to complete a swap
 	RequestedAmount uint64 `protobuf:"varint,4,opt,name=RequestedAmount,proto3" json:"requestAmount"` // @gotags: json:"requestAmount"
@@ -889,12 +889,12 @@ type MessageEditOrder struct {
 	// order_id: is the number id that is unique to this committee to identify the order
 	// not modifiable, used for order identification only
 	OrderId []byte `protobuf:"bytes,1,opt,name=OrderId,proto3" json:"orderID"` // @gotags: json:"orderID"
-	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
 	// not modifiable, used for order identification only
 	ChainId uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	// data: a generic data field which can allow a committee to execute specific functionality for the swap
 	Data []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data"` // @gotags: json:"data"
-	// amount_for_sale: the updated amount of uAsset listed for sale, a reduction will return escrowed tokens to the seller's
+	// amount_for_sale: the updated amount of uCNPY listed for sale, a reduction will return escrowed tokens to the seller's
 	// send address
 	AmountForSale uint64 `protobuf:"varint,4,opt,name=AmountForSale,proto3" json:"amountForSale"` // @gotags: json:"amountForSale"
 	// requested_amount: the updated amount of the 'counter asset' the buyer must send in order to complete a swap
@@ -983,7 +983,7 @@ type MessageDeleteOrder struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// order_id: is the number id that is unique to this committee to identify the order
 	OrderId []byte `protobuf:"bytes,1,opt,name=OrderId,proto3" json:"orderID"` // @gotags: json:"orderID"
-	// chain_id: the id of the committee that is responsible for the 'counter asset' the uAsset will swapped for
+	// chain_id: the id of the committee that is responsible for the 'counter asset' the uCNPY will swapped for
 	ChainId       uint64 `protobuf:"varint,2,opt,name=ChainId,proto3" json:"chainID"` // @gotags: json:"chainID"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

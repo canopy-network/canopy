@@ -332,6 +332,15 @@ func (x *CertificateResult) CheckBasic() (err ErrorI) {
 		// exit with error
 		return
 	}
+	// ensure dex pool points is empty
+	if x.DexBatch != nil && x.DexBatch.PoolPoints != nil {
+		return ErrNonNilPoolPoints()
+	}
+	// do basic sanity checks on the root dex batch
+	if err = x.RootDexBatch.CheckBasic(); err != nil {
+		// exit with error
+		return
+	}
 	// do basic sanity check on the 'checkpoint'
 	return x.Checkpoint.CheckBasic()
 }
@@ -365,6 +374,11 @@ func (x *CertificateResult) Equals(y *CertificateResult) bool {
 	}
 	// if dex batch aren't equal
 	if !x.DexBatch.Equals(y.DexBatch) {
+		// return unequal
+		return false
+	}
+	// if dex batch aren't equal
+	if !x.RootDexBatch.Equals(y.RootDexBatch) {
 		// return unequal
 		return false
 	}
@@ -884,10 +898,6 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 	// ensure there's not too many receipts
 	if len(x.Receipts) > MaxOrdersPerDexBatch {
 		return ErrTooManyDexReceipts()
-	}
-	// ensure pool points is empty
-	if x.PoolPoints != nil {
-		return ErrNonNilPoolPoints()
 	}
 	// if the block hash size is larger than 100
 	if len(x.ReceiptHash) > 100 {
