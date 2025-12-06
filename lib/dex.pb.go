@@ -247,9 +247,11 @@ type DexBatch struct {
 	// receipts: the amount distributed (dY) for each order <0 is fail>
 	Receipts []uint64 `protobuf:"varint,10,rep,packed,name=receipts,proto3" json:"receipts,omitempty"`
 	// locked_height: the height when the batch was locked
-	LockedHeight  uint64 `protobuf:"varint,11,opt,name=locked_height,json=lockedHeight,proto3" json:"locked_height,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LockedHeight uint64 `protobuf:"varint,11,opt,name=locked_height,json=lockedHeight,proto3" json:"locked_height,omitempty"`
+	// liveness_fallback: a boolean directing if the action is a 'liveness fallback'
+	LivenessFallback bool `protobuf:"varint,12,opt,name=liveness_fallback,json=livenessFallback,proto3" json:"livenessFallback"` // @gotags: json:"livenessFallback"
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DexBatch) Reset() {
@@ -359,6 +361,13 @@ func (x *DexBatch) GetLockedHeight() uint64 {
 	return 0
 }
 
+func (x *DexBatch) GetLivenessFallback() bool {
+	if x != nil {
+		return x.LivenessFallback
+	}
+	return false
+}
+
 // PoolPoints represents an ownership 'share' of the pool
 type PoolPoints struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -431,7 +440,7 @@ const file_dex_proto_rawDesc = "" +
 	"\x14DexLiquidityWithdraw\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
 	"\apercent\x18\x02 \x01(\x04R\apercent\x12\x18\n" +
-	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"\xda\x03\n" +
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"\x87\x04\n" +
 	"\bDexBatch\x12\x1c\n" +
 	"\tCommittee\x18\x01 \x01(\x04R\tCommittee\x12!\n" +
 	"\freceipt_hash\x18\x02 \x01(\fR\vreceiptHash\x12,\n" +
@@ -445,7 +454,8 @@ const file_dex_proto_rawDesc = "" +
 	"\x11total_pool_points\x18\t \x01(\x04R\x0ftotalPoolPoints\x12\x1a\n" +
 	"\breceipts\x18\n" +
 	" \x03(\x04R\breceipts\x12#\n" +
-	"\rlocked_height\x18\v \x01(\x04R\flockedHeight\">\n" +
+	"\rlocked_height\x18\v \x01(\x04R\flockedHeight\x12+\n" +
+	"\x11liveness_fallback\x18\f \x01(\bR\x10livenessFallback\">\n" +
 	"\n" +
 	"PoolPoints\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +

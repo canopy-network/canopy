@@ -104,6 +104,8 @@ message DexBatch {
   repeated uint64 receipts = 10;
   // locked_height: the height when the batch was locked
   uint64 locked_height = 11;
+  // liveness_fallback: a boolean directing if the action is a 'liveness fallback'
+  bool liveness_fallback = 12;  // @gotags: json:"livenessFallback"
 }
 
 // PoolPoints represents an ownership 'share' of the pool

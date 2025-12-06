@@ -18,7 +18,7 @@ const (
 	GlobalMaxBlockSize = int(256 * units.MB)
 	// ensures developers are aware of a change to the header size (which is a consensus breaking change)
 	ExpectedMaxBlockHeaderSize = 1652
-	// max number of deposits
+	// maximums
 	MaxDepositsPerDexBatch  = 5_000
 	MaxWithdrawsPerDexBatch = 5_000
 	MaxOrdersPerDexBatch    = 10_000
@@ -1009,6 +1009,10 @@ func (x *DexBatch) Equals(y *DexBatch) bool {
 		if !bytes.Equal(a.Address, b.Address) {
 			return false
 		}
+	}
+	// ensure liveness fallback is equal
+	if x.LivenessFallback != y.LivenessFallback {
+		return false
 	}
 	// exit
 	return true

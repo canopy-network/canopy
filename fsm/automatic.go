@@ -118,6 +118,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Header.Height <= data.LastChainHeightUpdated {
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
+	// setup convenience variables
 	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {

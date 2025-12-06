@@ -199,7 +199,6 @@ func (m *Mempool) HandleTransactions(tx ...[]byte) (err lib.ErrorI) {
 	// lock the mempool
 	m.L.Lock()
 	defer m.L.Unlock()
-	fmt.Println("RECEIVED A NEW TRANSACTION")
 	// signal a recheck
 	m.recheck.Store(true)
 	// add a transaction to the mempool

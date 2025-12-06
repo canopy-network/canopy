@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	EmptyReceiptsHash = []byte(strings.Repeat("F", crypto.HashSize))
+	EmptyReceiptsHash                           = []byte(strings.Repeat("F", crypto.HashSize))
+	LivenessFallbackBlocks, TriggerModuloBlocks = uint64(10), uint64(5)
 )
 
 // Hash() creates a hash representative of the dex batch
@@ -30,17 +31,21 @@ func (x *DexBatch) Copy() *DexBatch {
 		return nil
 	}
 	return &DexBatch{
-		Committee:   x.Committee,
-		ReceiptHash: x.ReceiptHash,
-		Orders:      x.Orders,
-		Deposits:    x.Deposits,
-		Withdrawals: x.Withdrawals,
-		PoolSize:    x.PoolSize,
+		Committee:       x.Committee,
+		ReceiptHash:     x.ReceiptHash,
+		Orders:          x.Orders,
+		Deposits:        x.Deposits,
+		Withdrawals:     x.Withdrawals,
+		PoolSize:        x.PoolSize,
+		CounterPoolSize: 0,
+		PoolPoints:      nil,
+		TotalPoolPoints: 0,
 		//CounterPoolSize: 0,
 		//PoolPoints:      nil,
 		//TotalPoolPoints: 0,
-		Receipts:     x.Receipts,
-		LockedHeight: x.LockedHeight,
+		Receipts:         x.Receipts,
+		LockedHeight:     x.LockedHeight,
+		LivenessFallback: x.LivenessFallback,
 	}
 }
 
@@ -215,34 +220,36 @@ func (x *DexLiquidityWithdraw) UnmarshalJSON(b []byte) (err error) {
 }
 
 type dexBatch struct {
-	Committee       uint64                  `json:"committee"`
-	ReceiptHash     HexBytes                `json:"receiptHash"`
-	Orders          []*DexLimitOrder        `json:"orders"`
-	Deposits        []*DexLiquidityDeposit  `json:"deposits,omitempty"`
-	Withdraws       []*DexLiquidityWithdraw `json:"withdraws,omitempty"`
-	CounterPoolSize uint64                  `json:"counterPoolSize"`
-	PoolSize        uint64                  `json:"poolSize"`
-	PoolPoints      []*PoolPoints           `json:"poolPoints"`
-	TotalPoolPoints uint64                  `json:"totalPoolPoints"`
-	Receipts        []uint64                `json:"receipts,omitempty"`
-	LockedHeight    uint64                  `json:"locked_height,omitempty"`
+	Committee        uint64                  `json:"committee"`
+	ReceiptHash      HexBytes                `json:"receiptHash"`
+	Orders           []*DexLimitOrder        `json:"orders"`
+	Deposits         []*DexLiquidityDeposit  `json:"deposits"`
+	Withdraws        []*DexLiquidityWithdraw `json:"withdraws"`
+	CounterPoolSize  uint64                  `json:"counterPoolSize"`
+	PoolSize         uint64                  `json:"poolSize"`
+	PoolPoints       []*PoolPoints           `json:"poolPoints"`
+	TotalPoolPoints  uint64                  `json:"totalPoolPoints"`
+	Receipts         []uint64                `json:"receipts"`
+	LockedHeight     uint64                  `json:"locked_height"`
+	LivenessFallback bool                    `json:"livenessFallback"`
 }
 
 // MarshalJSON() implements the json.Marshal interface for dex batch
 func (x DexBatch) MarshalJSON() ([]byte, error) {
 	x.EnsureNonNil()
 	return json.Marshal(dexBatch{
-		Committee:       x.Committee,
-		ReceiptHash:     x.ReceiptHash,
-		Orders:          x.Orders,
-		Deposits:        x.Deposits,
-		Withdraws:       x.Withdrawals,
-		PoolSize:        x.PoolSize,
-		CounterPoolSize: x.CounterPoolSize,
-		PoolPoints:      x.PoolPoints,
-		TotalPoolPoints: x.TotalPoolPoints,
-		Receipts:        x.Receipts,
-		LockedHeight:    x.LockedHeight,
+		Committee:        x.Committee,
+		ReceiptHash:      x.ReceiptHash,
+		Orders:           x.Orders,
+		Deposits:         x.Deposits,
+		Withdraws:        x.Withdrawals,
+		PoolSize:         x.PoolSize,
+		CounterPoolSize:  x.CounterPoolSize,
+		PoolPoints:       x.PoolPoints,
+		TotalPoolPoints:  x.TotalPoolPoints,
+		Receipts:         x.Receipts,
+		LockedHeight:     x.LockedHeight,
+		LivenessFallback: x.LivenessFallback,
 	})
 }
 
@@ -253,17 +260,18 @@ func (x *DexBatch) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 	*x = DexBatch{
-		Committee:       d.Committee,
-		ReceiptHash:     d.ReceiptHash,
-		Orders:          d.Orders,
-		Deposits:        d.Deposits,
-		Withdrawals:     d.Withdraws,
-		CounterPoolSize: d.CounterPoolSize,
-		PoolSize:        d.PoolSize,
-		PoolPoints:      d.PoolPoints,
-		TotalPoolPoints: d.TotalPoolPoints,
-		Receipts:        d.Receipts,
-		LockedHeight:    d.LockedHeight,
+		Committee:        d.Committee,
+		ReceiptHash:      d.ReceiptHash,
+		Orders:           d.Orders,
+		Deposits:         d.Deposits,
+		Withdrawals:      d.Withdraws,
+		CounterPoolSize:  d.CounterPoolSize,
+		PoolSize:         d.PoolSize,
+		PoolPoints:       d.PoolPoints,
+		TotalPoolPoints:  d.TotalPoolPoints,
+		Receipts:         d.Receipts,
+		LockedHeight:     d.LockedHeight,
+		LivenessFallback: d.LivenessFallback,
 	}
 	x.EnsureNonNil()
 	return

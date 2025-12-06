@@ -80,7 +80,7 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		return
 	}
 	// if executing the liveness fallback (nested chain only)
-	if len(remoteBatch.PoolPoints) != 0 {
+	if remoteBatch.LivenessFallback {
 		// handle the liveness fallback
 		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
 			return
