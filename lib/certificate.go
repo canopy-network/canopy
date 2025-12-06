@@ -22,6 +22,8 @@ const (
 	MaxDepositsPerDexBatch  = 5_000
 	MaxWithdrawsPerDexBatch = 5_000
 	MaxOrdersPerDexBatch    = 10_000
+	MaxReceipts             = MaxOrdersPerDexBatch
+	MaxLiquidityProviders   = 50_000
 )
 
 // MaxBlockHeaderSize is a consensus breaking change because it affects how the state machine
@@ -896,7 +898,11 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 		return ErrTooManyDexOrders()
 	}
 	// ensure there's not too many receipts
-	if len(x.Receipts) > MaxOrdersPerDexBatch {
+	if len(x.Receipts) > MaxReceipts {
+		return ErrTooManyDexReceipts()
+	}
+	// ensure there's not too many receipts
+	if len(x.PoolPoints) > MaxLiquidityProviders {
 		return ErrTooManyDexReceipts()
 	}
 	// if the block hash size is larger than 100

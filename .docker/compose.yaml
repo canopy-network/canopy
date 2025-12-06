@@ -14,7 +14,7 @@ services:
       - 9090:9090   # Metrics
     networks:
       - canopy
-    command: ["start", "--populate=true"]
+    command: ["start"]
     volumes:
       - ./volumes/node_1:/root/.canopy
 #    deploy:

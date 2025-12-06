@@ -40,8 +40,8 @@ var versionCmd = &cobra.Command{
 }
 
 var (
-	client, config, l             = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
-	Popul8, DataDir, validatorKey = false, "", crypto.PrivateKeyI(nil)
+	client, config, l     = &rpc.Client{}, lib.Config{}, lib.LoggerI(nil)
+	DataDir, validatorKey = "", crypto.PrivateKeyI(nil)
 )
 
 func init() {
@@ -54,7 +54,6 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-	startCmd.PersistentFlags().BoolVar(&Popul8, "populate", false, "populate the chain with data")
 	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
 	l = lib.NewLogger(lib.LoggerConfig{
 		Level:      config.GetLogLevel(),
@@ -95,7 +94,7 @@ func Start() {
 		l.Fatal(err.Error())
 	}
 	// initialize the state machine
-	sm, err := fsm.New(config, db, metrics, nil, l)
+	sm, err := fsm.New(config, db, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -112,10 +111,6 @@ func Start() {
 	app.Start()
 	// start the rpc server
 	rpcServer.Start()
-	// populate the chain with data
-	if Popul8 {
-		go Populate()
-	}
 	// block until a kill signal is received
 	waitForKill()
 	// gracefully stop the app

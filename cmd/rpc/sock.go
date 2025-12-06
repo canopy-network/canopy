@@ -46,8 +46,6 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
-	controller.FSM.RCManager = controller.RCManager
-	controller.Mempool.FSM.RCManager = controller.RCManager
 	// exit
 	return
 }

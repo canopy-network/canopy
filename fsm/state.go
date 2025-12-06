@@ -27,7 +27,6 @@ type StateMachine struct {
 	totalVDFIterations uint64                                  // the number of 'verifiable delay iterations' in the blockchain up to this version
 	slashTracker       *SlashTracker                           // tracks total slashes across multiple blocks
 	proposeVoteConfig  GovProposalVoteConfig                   // the configuration of how the state machine behaves with governance proposals
-	RCManager          lib.RCManagerI                          // access to the root chain info
 	Config             lib.Config                              // the main configuration as defined by the 'config.json' file
 	Metrics            *lib.Metrics                            // the telemetry module
 	events             *lib.EventsTracker                      // a simple event tracker for 'per-transaction' events
@@ -44,7 +43,7 @@ type cache struct {
 }
 
 // New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, rcManager lib.RCManagerI, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -54,7 +53,6 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, rcManager lib.RCM
 		proposeVoteConfig: AcceptAllProposals,
 		Config:            c,
 		Metrics:           metrics,
-		RCManager:         rcManager,
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
@@ -316,7 +314,7 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Metrics, s.RCManager, s.log)
+	return New(s.Config, heightStore, s.Metrics, s.log)
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
@@ -507,7 +505,6 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		totalVDFIterations: s.totalVDFIterations,
 		slashTracker:       NewSlashTracker(),
 		proposeVoteConfig:  s.proposeVoteConfig,
-		RCManager:          s.RCManager,
 		events:             new(lib.EventsTracker),
 		Config:             s.Config,
 		log:                s.log,
