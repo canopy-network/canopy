@@ -99,7 +99,7 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 //     and withdrawals. This becomes the next Locked Batch.
 //
 // TRIGGER POINTS
-//   - Nested Chain: Triggered on `end_block`.
+//   - Nested Chain: Triggered on `begin_block`.
 //   - Root Chain:   Triggered on `deliver_tx` when receiving a
 //     `certificateResultTx` from a Nested Chain.
 //

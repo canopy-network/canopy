@@ -10,7 +10,7 @@ import (
 
 var (
 	EmptyReceiptsHash                           = []byte(strings.Repeat("F", crypto.HashSize))
-	LivenessFallbackBlocks, TriggerModuloBlocks = uint64(10), uint64(5)
+	LivenessFallbackBlocks, TriggerModuloBlocks = uint64(60), uint64(5)
 )
 
 // Hash() creates a hash representative of the dex batch
@@ -31,18 +31,15 @@ func (x *DexBatch) Copy() *DexBatch {
 		return nil
 	}
 	return &DexBatch{
-		Committee:       x.Committee,
-		ReceiptHash:     x.ReceiptHash,
-		Orders:          x.Orders,
-		Deposits:        x.Deposits,
-		Withdrawals:     x.Withdrawals,
-		PoolSize:        x.PoolSize,
-		CounterPoolSize: 0,
-		PoolPoints:      nil,
-		TotalPoolPoints: 0,
-		//CounterPoolSize: 0,
-		//PoolPoints:      nil,
-		//TotalPoolPoints: 0,
+		Committee:        x.Committee,
+		ReceiptHash:      x.ReceiptHash,
+		Orders:           x.Orders,
+		Deposits:         x.Deposits,
+		Withdrawals:      x.Withdrawals,
+		PoolSize:         x.PoolSize,
+		CounterPoolSize:  0,
+		PoolPoints:       nil,
+		TotalPoolPoints:  0,
 		Receipts:         x.Receipts,
 		LockedHeight:     x.LockedHeight,
 		LivenessFallback: x.LivenessFallback,
