@@ -29,7 +29,7 @@ There are always two batches per counter chain: `nextBatch` (collecting ops) and
 
 2) **Execute the counter chain’s locked batch and produce receipts**  
    - Mirror setup: `x = counterPoolSizeMirror` (shadow of their pool), `y = local liquidity`.  
-   - Orders: pseudo‑random order using the previous block hash; AMM uses Uniswap V2 fee math (`0.3%` taker, `SafeComputeDY`). Reject if output < `RequestedAmount`. Success updates `x += dX`, `y -= dY`, pays user, records receipt.  
+   - Orders: pseudo‑random order using the previous block hash; AMM uses Uniswap V2 fee math (`1%` taker, `SafeComputeDY`). Reject if output < `RequestedAmount`. Success updates `x += dX`, `y -= dY`, pays user, records receipt.  
    - Withdrawals: burn LP points and distribute proportional shares (`y` is local, `x` is virtual mirror).  
    - Deposits: mint LP points using geometric‑mean formula; when handling the counter batch, only the ledger moves (no local token movement).  
    - Receipts are accumulated for the counter chain to apply next cycle.
@@ -47,7 +47,7 @@ There are always two batches per counter chain: `nextBatch` (collecting ops) and
 - Orders inside a batch are sorted by a hash derived from the previous block hash plus index, providing deterministic pseudo‑randomness. This requires `Height > 0`; otherwise `HandleDexBatchOrders` errors.
 
 ### Liquidity math (integer)
-- Swaps: `amountInWithFee = dX * 997; dY = (amountInWithFee * y) / (x*1000 + amountInWithFee)`.
+- Swaps: `amountInWithFee = dX * 990; dY = (amountInWithFee * y) / (x*1000 + amountInWithFee)`.
 - Deposits: LP points are minted using the geometric‑mean delta `ΔL = L * (√((x+d)*y) - √(x*y)) / √(x*y)`. If `L == 0`, initialize with `L = √(x*y)` to the dead address.
 - Withdrawals: points burned per request, payouts pro‑rata of `x` (mirror) and `y` (local).
 

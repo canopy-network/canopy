@@ -717,8 +717,8 @@ func SafeComputeDY(x, y, dX uint64) uint64 {
 	by := new(big.Int).SetUint64(y)
 	bdX := new(big.Int).SetUint64(dX)
 
-	// amountInWithFee = dX * 997
-	amountInWithFee := new(big.Int).Mul(bdX, big.NewInt(997))
+	// amountInWithFee = dX * 990 (1% fee)
+	amountInWithFee := new(big.Int).Mul(bdX, big.NewInt(990))
 
 	// numerator = amountInWithFee * y
 	numerator := new(big.Int).Mul(amountInWithFee, by)

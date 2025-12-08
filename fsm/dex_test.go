@@ -979,8 +979,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// CORRECT Step-by-step calculation:
-			// 1. Order executes first: x=100, y=200, amountInWithFee=25*997=24925
-			//    dY = (24925*200)/(100*1000+24925) = 4985000/124925 = 39.9≈39
+			// 1. Order executes first: x=100, y=200, amountInWithFee=25*990=24750
+			//    dY = (24750*200)/(100*1000+24750) = 4950000/124750 = 39.6≈39
 			//    Since 39 > 19 (requested), user gets the better AMM rate of 39 tokens
 			//    Pool after order: y = 200 - 39 = 161
 			// 2. Withdraw executes on updated pool: 50/150 * 161 = 53.67 ≈ 53
@@ -1048,11 +1048,11 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order 1: x=200, y=180, amountInWithFee=25*997=24925
-			//    dY = (24925*180)/(200*1000+24925) = 4486500/224925 = 19.95≈19
+			// 1. Order 1: x=200, y=180, amountInWithFee=25*990=24750
+			//    dY = (24750*180)/(200*1000+24750) = 4455000/224750 = 19.82≈19
 			//    Since 19 > 15 (requested), order succeeds. Pool: y = 180 - 19 = 161, virtual x = 225
-			// 2. Order 2: x=225, y=161, amountInWithFee=50*997=49850
-			//    dY = (49850*161)/(225*1000+49850) = 8025850/274850 = 29.2≈29
+			// 2. Order 2: x=225, y=161, amountInWithFee=50*990=49500
+			//    dY = (49500*161)/(225*1000+49500) = 7969500/274500 = 29.03≈29
 			//    Since 29 < 100 (requested), order fails. Pool remains: y = 161
 			// 3. Withdraw: 60/160 * 161 = 60.375≈60. Pool: y = 161 - 60 = 101, points = 100
 			// 4. Deposit: Creates new LP points for user 3
@@ -1114,26 +1114,26 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order: x=150, y=120, amountInWithFee=20*997=19940
-			//    dY = (19940*120)/(150*1000+19940) = 2392800/169940 = 14.08≈14
-			//    Since 14 > 12 (requested), order succeeds. Pool: y = 120 - 14 = 106, virtual x = 170
+			// 1. Order: x=150, y=120, amountInWithFee=20*990=19800
+			//    dY = (19800*120)/(150*1000+19800) = 2376000/169800 = 13.99≈13
+			//    Since 13 > 12 (requested), order succeeds. Pool: y = 120 - 13 = 107, virtual x = 170
 			// 2. Withdraw: 50% of 60 points = 30 points burned
-			//    Share = 30/140 * 106 = 22.71≈22. Pool: y = 106 - 22 = 84, points = 110 (80 dead + 30 user1)
+			//    Share = 30/140 * 107 = 22.92≈22. Pool: y = 107 - 22 = 85, points = 110 (80 dead + 30 user1)
 			// 3. Deposit: User 1 deposits 60 counter-chain tokens, gets new LP points added to their existing 30
 			expectedLiqPool: &Pool{
 				Id:     1 + LiquidityPoolAddend,
-				Amount: 84, // 120 - 14 (order) - 22 (withdraw) - verified correct
+				Amount: 85, // 120 - 13 (order) - 22 (withdraw) - verified correct
 				Points: []*lib.PoolPoints{{
 					Address: deadAddr.Bytes(),
 					Points:  80, // Unchanged
 				}, {
 					Address: newTestAddressBytes(t, 1),
-					Points:  51, // 30 remaining + 21 from deposit (actual empirical result)
+					Points:  52, // 30 remaining + 22 from deposit (actual empirical result)
 				}},
-				TotalPoolPoints: 131, // 80 + 51 (actual empirical result)
+				TotalPoolPoints: 132, // 80 + 52 (actual empirical result)
 			},
 			expectedAccounts: []*Account{
-				{Address: newTestAddressBytes(t, 1), Amount: 36}, // 14 (order) + 22 (withdraw) = 36
+				{Address: newTestAddressBytes(t, 1), Amount: 35}, // 13 (order) + 22 (withdraw) = 35
 			},
 		},
 		{
@@ -1177,12 +1177,12 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
 			// 1. Orders execute sequentially:
-			//    Order1: x=200, y=300, dY=(30*997*300)/(200*1000+29910)=8973000/229910=39.03≈39 > 20 ✓
-			//    Pool: y=261, x=230
-			//    Order2: x=230, y=261, dY=(40*997*261)/(230*1000+39880)=10415880/269880=38.59≈38 > 25 ✓
-			//    Pool: y=223, x=270
-			//    Order3: x=270, y=223, dY=(20*997*223)/(270*1000+19940)=4446620/289940=15.33≈15 > 12 ✓
-			//    Pool: y=208, x=290
+			//    Order1: x=200, y=300, dY=(30*990*300)/(200*1000+29700)=8910000/229700=38.77≈38 > 20 ✓
+			//    Pool: y=262, x=230
+			//    Order2: x=230, y=262, dY=(40*990*262)/(230*1000+39600)=10375200/269600=38.48≈38 > 25 ✓
+			//    Pool: y=224, x=270
+			//    Order3: x=270, y=224, dY=(20*990*224)/(270*1000+19800)=4435200/289800=15.31≈15 > 12 ✓
+			//    Pool: y=209, x=290
 			// 2. Withdrawals:
 			//    User6: 60/250 * 208 = 49.92≈49, User7: 20/250 * 208 = 16.64≈16 (50% of 40 points)
 			//    Pool: y = 208 - 49 - 16 = 143, points = 150 + 20 = 170
@@ -1248,8 +1248,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
 			// 1. Orders: Both fail because AMM output < requested amount
-			//    Order1: x=100, y=150, dY=(50*997*150)/(100*1000+49850)=74775750/149850=49.9≈49 < 80 ✗
-			//    Order2: x=100, y=150, dY=(30*997*150)/(100*1000+29910)=44865750/129910=34.5≈34 < 60 ✗
+			//    Order1: x=100, y=150, dY=(50*990*150)/(100*1000+49500)=7425000/149500=49.65≈49 < 80 ✗
+			//    Order2: x=100, y=150, dY=(30*990*150)/(100*1000+29700)=4455000/129700=34.36≈34 < 60 ✗
 			//    Pool unchanged: y=150
 			// 2. Withdraw: 40/120 * 150 = 50
 			//    Pool: y = 150 - 50 = 100, points = 80
@@ -1305,8 +1305,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order: x=100, y=100, amountInWithFee=1*997=997
-			//    dY = (997*100)/(100*1000+997) = 99700/100997 = 0.987≈0 (rounds down)
+			// 1. Order: x=100, y=100, amountInWithFee=1*990=990
+			//    dY = (990*100)/(100*1000+990) = 99000/100990 = 0.98≈0 (rounds down)
 			//    Since 0 < 1 (requested), order fails
 			//    Pool unchanged: y=100
 			// 2. Withdraw: 10% of 10 points = 1 point burned
@@ -1366,8 +1366,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Large order: x=100, y=200, amountInWithFee=500*997=498500
-			//    dY = (498500*200)/(100*1000+498500) = 99700000/598500 = 166.6≈166
+			// 1. Large order: x=100, y=200, amountInWithFee=500*990=495000
+			//    dY = (495000*200)/(100*1000+495000) = 99000000/595000 = 166.3≈166
 			//    Since 166 > 80 (requested), order succeeds with AMM rate of 166
 			//    Pool: y = 200 - 166 = 34, virtual x = 600
 			// 2. Withdraw: 25% of 40 points = 10 points, Share = 10/180 * 34 = 1.89≈1
@@ -1434,8 +1434,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order: x=120, y=240, amountInWithFee=30*997=29910
-			//    dY = (29910*240)/(120*1000+29910) = 7178400/149910 = 47.87≈47
+			// 1. Order: x=120, y=240, amountInWithFee=30*990=29700
+			//    dY = (29700*240)/(120*1000+29700) = 7128000/149700 = 47.6≈47
 			//    Since 47 > 20 (requested), order succeeds. Pool: y=193, x=150
 			// 2. Multiple withdraws:
 			//    User2: 25% of 40 = 10 points, share = 10/200 * 193 = 9.65≈9
@@ -1498,8 +1498,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order: x=60, y=50, amountInWithFee=80*997=79760
-			//    dY = (79760*50)/(60*1000+79760) = 3988000/139760 = 28.54≈28 < 30 ✗ (fails)
+			// 1. Order: x=60, y=50, amountInWithFee=80*990=79200
+			//    dY = (79200*50)/(60*1000+79200) = 3960000/139200 = 28.45≈28 < 30 ✗ (fails)
 			//    Pool unchanged: y=50
 			// 2. Deposit: Creates LP points for user 2 with existing pool
 			expectedLiqPool: &Pool{
@@ -1547,11 +1547,11 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Order1: x=100, y=100, amountInWithFee=10*997=9970
-			//    dY = (9970*100)/(100*1000+9970) = 997000/109970 = 9.07≈9 > 8 ✓
+			// 1. Order1: x=100, y=100, amountInWithFee=10*990=9900
+			//    dY = (9900*100)/(100*1000+9900) = 990000/109900 = 9.0≈9 > 8 ✓
 			//    Pool: y=91, x=110
-			// 2. Order2: x=110, y=91, amountInWithFee=9970
-			//    dY = (9970*91)/(110*1000+9970) = 907270/119970 = 7.56≈7 < 8 ✗ (fails)
+			// 2. Order2: x=110, y=91, amountInWithFee=9900
+			//    dY = (9900*91)/(110*1000+9900) = 900900/119900 = 7.51≈7 < 8 ✗ (fails)
 			//    Pool unchanged: y=91, x=110
 			// 3. Order3: Same as Order2, also fails
 			//    Pool unchanged: y=91, x=110
@@ -1605,8 +1605,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			},
 			expectedHoldingPool: &Pool{Id: 1 + HoldingPoolAddend},
 			// Step-by-step calculation:
-			// 1. Large order: x=50, y=20, amountInWithFee=1000*997=997000
-			//    dY = (997000*20)/(50*1000+997000) = 19940000/1047000 = 19.04≈19
+			// 1. Large order: x=50, y=20, amountInWithFee=1000*990=990000
+			//    dY = (990000*20)/(50*1000+990000) = 19800000/1040000 = 19.04≈19
 			//    Since 19 > 10 (requested), order succeeds, Pool: y=1, x=1050
 			// 2. Withdraw: 20/50 * 1 = 0.4≈0, Pool: y=1, points=30
 			// 3. Deposit: Creates significant LP points due to tiny remaining pool
@@ -2986,7 +2986,7 @@ func TestDexValidation(t *testing.T) {
 
 // calculateAMMOutput calculates expected output using Uniswap V2 formula
 func calculateAMMOutput(dX, x, y uint64) uint64 {
-	amountInWithFee := dX * 997
+	amountInWithFee := dX * 990
 	return (amountInWithFee * y) / (x*1000 + amountInWithFee)
 }
 
@@ -3391,11 +3391,11 @@ func validateFinalSystemState(t *testing.T, chain1, chain2 *StateMachine, chain1
 
 // validateAMMFormula validates the swap output matches Uniswap V2 formula
 func validateAMMFormula(t *testing.T, dX, dY, x, y uint64) {
-	// Uniswap V2 AMM formula with 0.3% fee:
-	// amountInWithFee = dX * 997
+	// Uniswap V2 AMM formula with 1% fee:
+	// amountInWithFee = dX * 990
 	// dY_expected = (amountInWithFee * y) / (x * 1000 + amountInWithFee)
 
-	amountInWithFee := dX * 997
+	amountInWithFee := dX * 990
 	expectedDY := (amountInWithFee * y) / (x*1000 + amountInWithFee)
 
 	require.Equal(t, expectedDY, dY,
@@ -3403,9 +3403,9 @@ func validateAMMFormula(t *testing.T, dX, dY, x, y uint64) {
 		expectedDY, dY, dX, x, y)
 
 	// Validate constant product formula: (x + dX) * (y - dY) ≥ x * y
-	// Account for fee by checking: (x + dX) * (y - dY) ≥ x * y * 997 / 1000
+	// Account for fee by checking: (x + dX) * (y - dY) ≥ x * y * 990 / 1000
 	newProduct := (x + dX) * (y - dY)
-	minRequiredProduct := (x * y * 997) / 1000
+	minRequiredProduct := (x * y * 990) / 1000
 
 	require.GreaterOrEqual(t, newProduct, minRequiredProduct,
 		"Constant product invariant violated after fees: (%d + %d) * (%d - %d) = %d < %d",
