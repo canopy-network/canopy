@@ -305,12 +305,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
 	// publish root chain information to all nested chain subscribers.
-	// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
-	// from RCManager since only these two chains exist. This will be updated to use
-	// dynamic chain discovery when additional chains are added.
-	// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
-	// for _, id := range c.RCManager.ChainIds() {
-	for _, id := range []uint64{1, 2} {
+	for _, id := range c.RCManager.ChainIds() {
 		// get the root chain info
 		info, e := c.FSM.LoadRootChainInfo(id, 0, c.LastValidatorSet[c.ChainHeight()][id])
 		if e != nil {
@@ -412,13 +407,8 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		}
 		// set the reference to lastCertificate on the new FSM
 		c.FSM.LastValidatorSet = c.LastValidatorSet
-		// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
-		// from RCManager since only these two chains exist. This will be updated to use
-		// dynamic chain discovery when additional chains are added.
-		// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
-		// publish the root chain info to the nested chain subscribers
-		// for _, id := range c.RCManager.ChainIds() {
-		for _, id := range []uint64{1, 2} {
+		// publish root chain information to all nested chain subscribers.
+		for _, id := range c.RCManager.ChainIds() {
 			// get latest validator set
 			valSet, err := c.FSM.GetCommitteeMembers(id)
 			if err != nil {
