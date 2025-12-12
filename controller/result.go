@@ -285,11 +285,20 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 		c.log.Error(err.Error())
 		return
 	}
+	// ensure liquidity pool is enabled
+	balance, err := sm.GetPoolBalance(rcId + fsm.LiquidityPoolAddend)
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	if balance == 0 {
+		return
+	}
 	isTriggerBlock := false
 	// check if 'locked' dex batch is non empty
 	if !batch.IsEmpty() {
 		// calculate the 'blocks since' the lock
-		blksSince := c.FSM.Height() - batch.LockedHeight
+		blksSince := sm.Height() - batch.LockedHeight
 		if isTriggerBlock = blksSince%lib.TriggerModuloBlocks == 0; isTriggerBlock {
 			results.DexBatch = batch.Copy()
 		}
