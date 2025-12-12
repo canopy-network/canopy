@@ -174,11 +174,27 @@ func DefaultRPCConfig() RPCConfig {
 
 // STATE MACHINE CONFIG BELOW
 
-// StateMachineConfig is an empty placeholder
-type StateMachineConfig struct{}
+// defaults for on-chain minting schedule
+const (
+	// the number of tokens in micro denomination that are initially (before halvenings) minted per block
+	DefaultInitialTokensPerBlock = uint64(80 * 1000000) // 80 CNPY
+	// the number of blocks between each halvening (block reward is cut in half) event
+	DefaultBlocksPerHalvening = uint64(3150000) // ~ 2 years - 20 second blocks
+)
 
-// DefaultStateMachineConfig returns an empty object
-func DefaultStateMachineConfig() StateMachineConfig { return StateMachineConfig{} }
+// StateMachineConfig houses FSM level options
+type StateMachineConfig struct {
+	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
+	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+}
+
+// DefaultStateMachineConfig returns FSM defaults
+func DefaultStateMachineConfig() StateMachineConfig {
+	return StateMachineConfig{
+		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
+		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+	}
+}
 
 // CONSENSUS CONFIG BELOW
 

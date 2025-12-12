@@ -114,7 +114,7 @@ func TestGetEconomicParameters(t *testing.T) {
 			// override the minimum percent for paid committee
 			params.Validator.StakePercentForSubsidizedCommittee = minPercentForPaidCommittee
 			// override the mint amount
-			sm.Config.InitialMintPerBlock = test.mintAmount
+			sm.Config.StateMachineConfig.InitialTokensPerBlock = test.mintAmount
 			// override the DAO cut percent
 			params.Governance.DaoRewardPercentage = test.daoCutPercent
 			// set the params back in state
@@ -269,7 +269,7 @@ func TestFundCommitteeRewardPools(t *testing.T) {
 			// override the minimum percent for paid committee
 			params.Validator.StakePercentForSubsidizedCommittee = minPercentForPaidCommittee
 			// override the mint amount
-			sm.Config.InitialMintPerBlock = test.mintAmount
+			sm.Config.StateMachineConfig.InitialTokensPerBlock = test.mintAmount
 			// override the DAO cut percent
 			params.Governance.DaoRewardPercentage = test.daoCutPercent
 			// set the params back in state

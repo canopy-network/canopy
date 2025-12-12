@@ -2,8 +2,6 @@ package fsm
 
 import (
 	"bytes"
-	"cmp"
-	"math/rand"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -14,12 +12,13 @@ import (
 
 // FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
-	daoCut, totalMintAmount, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
+	daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
+		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
+			return nil
+		}
 		return err
 	}
-	// log total mint
-	s.log.Infof("Total mint amount: %d | Mint per committee: %d | DAO cut: %d", totalMintAmount, mintAmountPerCommittee, daoCut)
 	// mint to the DAO account
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
@@ -56,14 +55,16 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 		subsidizedChainIds = append(subsidizedChainIds, chainId)
 	}
 	// calculate the number of halvenings
-	var halvenings uint64
-	if s.Config.BlocksPerHalvening > 0 {
-		halvenings = s.height / s.Config.BlocksPerHalvening
-	}
+	halvenings := s.height / s.Config.BlocksPerHalvening
 	// each halving, the reward is divided by 2
-	totalMintAmount := s.Config.InitialMintPerBlock >> halvenings
+	totalMintAmount := s.Config.InitialTokensPerBlock >> halvenings
 	// define a convenience variable for the number of subsidized committees
 	subsidizedCount := uint64(len(subsidizedChainIds))
+	// if there are no subsidized committees or no mint amount
+	if subsidizedCount == 0 || totalMintAmount == 0 {
+		err = lib.ErrNoSubsidizedCommittees(chainId)
+		return
+	}
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
@@ -72,9 +73,7 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 	// calculate the amount given to each qualifying committee
 	// mintAmountPerCommittee may truncate, but that's expected,
 	// less mint will be created and effectively 'burned'
-	if subsidizedCount > 0 {
-		mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
-	}
+	mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
 
 	return daoCut, totalMintAmount, mintAmountPerCommittee, nil
 }
@@ -207,7 +206,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 		p, _ = s.GetCommitteeMembers(s.Config.ChainId)
 	} else {
 		// else get the delegates
-		p, _ = s.GetTopDelegates(id)
+		p, _ = s.GetDelegates(id)
 	}
 	// get the validator params from state
 	valParams, err := s.GetParamsVal()
@@ -244,69 +243,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 
 // GetCommitteeMembers() retrieves the ValidatorSet that is responsible for the 'chainId'
 func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// get the validator params
-	p, err := s.GetParamsVal()
-	if err != nil {
-		return
-	}
-	validators := make([]*Validator, 0)
-	// reverse iterator is slightly more efficient than forward iterator for large datasets
-	it, err := s.RevIterator(ValidatorPrefix())
-	if err != nil {
-		return vs, err
-	}
-	// ensure memory cleanup
-	defer it.Close()
-	// for each item of the iterator
-	for ; it.Valid(); it.Next() {
-		// convert the bytes into a validator object reference
-		val, e := s.unmarshalValidator(it.Value())
-		if e != nil {
-			return vs, e
-		}
-		// add it to the list
-		validators = append(validators, val)
-	}
-	// filter out validators not part of the committee
-	filtered := slices.Collect(func(yield func(*Validator) bool) {
-		for _, v := range validators {
-			// exclude validators not part of the committee
-			if !v.PassesFilter(lib.ValidatorFilters{
-				Unstaking: lib.FilterOption_Exclude,
-				Paused:    lib.FilterOption_Exclude,
-				Delegate:  lib.FilterOption_Exclude,
-				Committee: chainId,
-			}) {
-				continue
-			}
-			// add validator to filtered list
-			if !yield(v) {
-				return
-			}
-		}
-	})
-	// sort by highest stake then address
-	slices.SortFunc(filtered, func(a, b *Validator) int {
-		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
-		if result == 0 {
-			return bytes.Compare(b.Address, a.Address)
-		}
-		return result
-	})
-	// create a variable to hold the committee members
-	members := make([]*lib.ConsensusValidator, 0)
-	// return only the top MaxCommitteeSize validators
-	// for each validator up to MaxCommitteeSize
-	for _, validator := range filtered[:min(uint64(len(filtered)), p.MaxCommitteeSize)] {
-		// add the member to the list
-		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   validator.PublicKey,
-			VotingPower: validator.StakedAmount,
-			NetAddress:  validator.NetAddress,
-		})
-	}
-	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	return s.getValidatorSet(chainId, false)
 }
 
 // GetCommitteePaginated() returns a 'page' of committee members ordered from the highest stake to lowest
@@ -390,174 +327,10 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 
 // DELEGATIONS BELOW
 
-// GetAllDelegates() returns all delegates for a certain chainId
-// It is heavily cached to improve performance as the delegates are used for each block commit
-func (s *StateMachine) GetAllDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// retrieve the full list of validators
-	validators, err := s.GetValidators()
-	if err != nil {
-		return
-	}
-	// filter out validators that are not delegates for the given chainId
-	delegates := slices.Collect(func(yield func(*Validator) bool) {
-		for _, v := range validators {
-			// exclude validators not part of the committee
-			if !v.PassesFilter(lib.ValidatorFilters{
-				Delegate:  lib.FilterOption_MustBe,
-				Paused:    lib.FilterOption_Exclude,
-				Unstaking: lib.FilterOption_Exclude,
-				Committee: chainId,
-			}) {
-				continue
-			}
-			// add validator to filtered list
-			if !yield(v) {
-				return
-			}
-		}
-	})
-	// sort by highest stake then address
-	slices.SortFunc(delegates, func(a, b *Validator) int {
-		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
-		if result == 0 {
-			return bytes.Compare(b.Address, a.Address)
-		}
-		return result
-	})
-	// create a variable to hold the committee members
-	members := make([]*lib.ConsensusValidator, 0)
-	var totalPower uint64
-	// loop through the delegates
-	for _, delegate := range delegates {
-		// increment the total power
-		totalPower += delegate.StakedAmount
-		// add the member to the list
-		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   delegate.PublicKey,
-			VotingPower: delegate.StakedAmount,
-			NetAddress:  delegate.NetAddress,
-		})
-	}
-	return lib.ValidatorSet{
-		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
-		TotalPower:    totalPower,
-		MinimumMaj23:  (2*totalPower)/3 + 1,
-		NumValidators: uint64(len(members)),
-	}, nil
-}
-
-// GetTopDelegates() returns top delegates according to gov params
-func (s *StateMachine) GetTopDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
-	// get val params for filtering
-	params, err := s.GetParamsVal()
-	if err != nil {
-		return vs, err
-	}
-	// if param is set to 0 all delegates should be returned
-	if params.MaximumDelegatesPerCommittee == 0 {
-		return s.GetAllDelegates(chainId)
-	}
-
-	// First pass: collect all valid delegates to check total count
-	allDelegates := make([]*Validator, 0)
-
-	// iterate through the prefix for the committee, from the highest stake amount to lowest
-	it, err := s.RevIterator(DelegatePrefix(chainId))
-	if err != nil {
-		return
-	}
-	defer it.Close()
-
-	// collect all valid delegates
-	for it.Valid() {
-		// extract the address from the iterator key
-		address, e := AddressFromKey(it.Key())
-		if e != nil {
-			return vs, e
-		}
-		// load the validator from the state using the address
-		val, e := s.GetValidator(address)
-		if e != nil {
-			return vs, e
-		}
-		// ensure the validator is not included in the committee if it's paused or unstaking
-		if val.MaxPausedHeight == 0 && val.UnstakingHeight == 0 {
-			allDelegates = append(allDelegates, val)
-		}
-		it.Next()
-	}
-
-	// if there are fewer delegates than the maximum, return all of them
-	if uint64(len(allDelegates)) <= params.MaximumDelegatesPerCommittee {
-		return buildValidatorSet(allDelegates), nil
-	}
-
-	// collect top delegates up to MaximumDelegatesPerCommittee
-	topDelegates := allDelegates[:params.MaximumDelegatesPerCommittee]
-	lastStake := topDelegates[len(topDelegates)-1].StakedAmount
-
-	// check for ties: find all delegates with the same stake as the last selected
-	tiedDelegates := make([]*Validator, 0)
-	for i := params.MaximumDelegatesPerCommittee; i < uint64(len(allDelegates)); i++ {
-		if allDelegates[i].StakedAmount == lastStake {
-			tiedDelegates = append(tiedDelegates, allDelegates[i])
-		} else {
-			break // stakes are sorted, no more ties
-		}
-	}
-
-	// if there are ties, randomly select among all candidates with that stake
-	if len(tiedDelegates) > 0 {
-		// collect all delegates with the last stake (including those already selected)
-		allWithLastStake := make([]*Validator, 0)
-		for i := uint64(0); i < params.MaximumDelegatesPerCommittee; i++ {
-			if topDelegates[i].StakedAmount == lastStake {
-				allWithLastStake = append(allWithLastStake, topDelegates[i])
-			}
-		}
-		allWithLastStake = append(allWithLastStake, tiedDelegates...)
-
-		// randomly shuffle the tied delegates
-		rand.Shuffle(len(allWithLastStake), func(i, j int) {
-			allWithLastStake[i], allWithLastStake[j] = allWithLastStake[j], allWithLastStake[i]
-		})
-
-		// rebuild topDelegates: keep non-tied delegates and add randomly selected tied ones
-		finalDelegates := make([]*Validator, 0, params.MaximumDelegatesPerCommittee)
-		for i := uint64(0); i < params.MaximumDelegatesPerCommittee; i++ {
-			if topDelegates[i].StakedAmount != lastStake {
-				finalDelegates = append(finalDelegates, topDelegates[i])
-			}
-		}
-		// add the randomly selected tied delegates to reach MaximumDelegatesPerCommittee
-		needed := int(params.MaximumDelegatesPerCommittee) - len(finalDelegates)
-		finalDelegates = append(finalDelegates, allWithLastStake[:needed]...)
-		topDelegates = finalDelegates
-	}
-
-	// build the final validator set
-	return buildValidatorSet(topDelegates), nil
-}
-
-// buildValidatorSet builds a lib.ValidatorSet from a slice of validators.
-func buildValidatorSet(delegates []*Validator) lib.ValidatorSet {
-	members := make([]*lib.ConsensusValidator, len(delegates))
-	var totalPower uint64
-	for i, d := range delegates {
-		vp := d.StakedAmount
-		members[i] = &lib.ConsensusValidator{
-			PublicKey:   d.PublicKey,
-			VotingPower: vp,
-			NetAddress:  d.NetAddress,
-		}
-		totalPower += vp
-	}
-	return lib.ValidatorSet{
-		ValidatorSet:  &lib.ConsensusValidators{ValidatorSet: members},
-		TotalPower:    totalPower,
-		MinimumMaj23:  (2*totalPower)/3 + 1,
-		NumValidators: uint64(len(members)),
-	}
+// GetDelegates returns the active delegates for a given chainId.
+// If MaximumDelegatesPerCommittee (from governance params) is 0, it will return all delegates; otherwise it returns only the top N.
+func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+	return s.getValidatorSet(chainId, true)
 }
 
 // GetDelegatesPaginated() returns a page of delegates

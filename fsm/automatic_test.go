@@ -600,10 +600,14 @@ func TestLastProposers(t *testing.T) {
 func (s *StateMachine) calculateRewardPerCommittee(t *testing.T, numberOfSubsidizedCommittees int) (mintAmountPerCommittee uint64, daoCut uint64) {
 	govParams, err := s.GetParamsGov()
 	require.NoError(t, err)
+	config := s.Config.StateMachineConfig
 	// calculate the number of halvenings
-	halvings := float64(s.height / uint64(BlocksPerHalvening))
+	var halvenings float64
+	if config.BlocksPerHalvening > 0 {
+		halvenings = float64(s.height / config.BlocksPerHalvening)
+	}
 	// each halving, the reward is divided by 2
-	totalMintAmount := uint64(float64(InitialTokensPerBlock) / (math.Pow(2, halvings)))
+	totalMintAmount := uint64(float64(config.InitialTokensPerBlock) / math.Pow(2, halvenings))
 	// calculate the amount left for the committees after the parameterized DAO cut
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
