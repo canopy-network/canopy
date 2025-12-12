@@ -70,8 +70,13 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		// use the root chainId as the remote batch
 		remoteBatch = results.RootDexBatch
 	}
+	// retrieve the pool amount for the chain id
+	liqPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
+	if err != nil {
+		return
+	}
 	// exit without handling as the 'rootHeight' explicitly not set
-	if remoteBatch == nil {
+	if remoteBatch == nil || liqPoolSize == 0 {
 		return
 	}
 	// get the local locked dex batch for the counter chain

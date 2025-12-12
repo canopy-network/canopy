@@ -100,7 +100,7 @@ func (s *StateMachine) Initialize(store lib.StoreI) (genesis bool, err lib.Error
 // NOTES:
 // - this function may be used to validate 'additional' transactions outside the normal block size as if they were to be included
 // - a list of failed transactions are returned
-func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidatorSet *lib.ValidatorSet, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
+func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, allowOversize bool) (header *lib.BlockHeader, r *lib.ApplyBlockResults, err lib.ErrorI) {
 	// catch in case there's a panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -118,7 +118,7 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidat
 		return nil, nil, ErrWrongStoreType()
 	}
 	// automated execution at the 'beginning of a block'
-	events, err := s.BeginBlock(lastValidatorSet)
+	events, err := s.BeginBlock()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -137,6 +137,8 @@ func (s *StateMachine) ApplyBlock(ctx context.Context, b *lib.Block, lastValidat
 	}
 	// add the events from end block
 	r.AddEvent(events...)
+	// load the validator set for the previous height
+	lastValidatorSet, _ := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
 	// calculate the merkle root of the last validators to maintain validator continuity between blocks (if root)
 	lastValidatorRoot, err := lastValidatorSet.ValidatorSet.Root()
 	if err != nil {
@@ -422,7 +424,7 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 }
 
 // LoadRootChainInfo() returns the 'need-to-know' information for a nested chain
-func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...*lib.ValidatorSet) (*lib.RootChainInfo, lib.ErrorI) {
+func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo, lib.ErrorI) {
 	lastHeight := uint64(1)
 	// update the metrics once complete
 	defer s.Metrics.UpdateGetRootChainInfo(time.Now())
@@ -453,14 +455,10 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 	if err != nil {
 		return nil, err
 	}
-	// get the previous committee
-	// allow an error here to have size 0 validator sets
-	if len(lastValidatorSet) == 0 || lastValidatorSet[0] == nil {
-		lvs, err := lastSM.GetCommitteeMembers(id)
-		if err != nil {
-			return nil, err
-		}
-		lastValidatorSet = []*lib.ValidatorSet{&lvs}
+	// get the n-1 committee
+	lvs, err := lastSM.GetCommitteeMembers(id)
+	if err != nil {
+		return nil, err
 	}
 	// get the delegate lottery winner
 	lotteryWinner, err := sm.LotteryWinner(id)
@@ -477,7 +475,7 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64, lastValidatorSet ...
 		RootChainId:      s.Config.ChainId,
 		Height:           sm.height,
 		ValidatorSet:     validatorSet.ValidatorSet,
-		LastValidatorSet: lastValidatorSet[0].ValidatorSet,
+		LastValidatorSet: lvs.ValidatorSet,
 		LotteryWinner:    lotteryWinner,
 		Orders:           orders,
 	}, nil

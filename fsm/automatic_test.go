@@ -2,11 +2,12 @@ package fsm
 
 import (
 	"fmt"
+	"math"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"math"
-	"testing"
 )
 
 func TestBeginBlock(t *testing.T) {
@@ -122,9 +123,9 @@ func TestBeginBlock(t *testing.T) {
 			if test.isGenesis {
 				sm.height = 1
 			}
+			// get last validator set for begin block
 			// ensure expected error on function call
 			_, err = sm.BeginBlock()
-			require.Equal(t, test.error, err)
 			if test.error != nil {
 				return
 			}

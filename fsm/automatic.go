@@ -38,13 +38,14 @@ func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 	if s.Config.ChainId != rootChainId {
 		return s.events.Reset(), s.HandleCertificateResults(lastCertificate, nil)
 	}
-	// if is root-chain: load the committee from state as the certificate result
-	// will match the evidence and there's no Transaction to HandleMessageCertificateResults
-	committee, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
+	// load the validator set for the previous height
+	lastValidatorSet, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
 	if err != nil {
 		return nil, err
 	}
-	return s.events.Reset(), s.HandleCertificateResults(lastCertificate, &committee)
+	// if is root-chain: load the committee from state as the certificate result
+	// will match the evidence and there's no Transaction to HandleMessageCertificateResults
+	return s.events.Reset(), s.HandleCertificateResults(lastCertificate, &lastValidatorSet)
 }
 
 // EndBlock() is code that is executed at the end of `applying` the block
