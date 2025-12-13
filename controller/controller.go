@@ -1,9 +1,9 @@
 package controller
 
 import (
-	"net"
+	"encoding/json"
+	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -34,11 +34,11 @@ type Controller struct {
 	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
-	RCManager   lib.RCManagerI // the data manager for the 'root chain'
-	Plugin      *lib.Plugin    // extensible plugin for FSM
-	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
-	log         lib.LoggerI    // object for logging
-	*sync.Mutex                // mutex for thread safety
+	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
+	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
+	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
+	log         lib.LoggerI                        // object for logging
+	*sync.Mutex                                    // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -73,11 +73,8 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		log:        l,
 		Mutex:      &sync.Mutex{},
 	}
-	// setup plugin if enabled
-	if c.Plugin != "" {
-		controller.PluginExecute(c.Plugin)
-		controller.PluginConnectSync()
-	}
+	// load checkpoints from file (if provided)
+	controller.loadCheckpointsFile()
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// initialize the mempool controller
@@ -229,58 +226,6 @@ func (c *Controller) IsValidDoubleSigner(rootChainId, rootHeight uint64, address
 	return *isValidDoubleSigner
 }
 
-// PLUGIN CALLS BELOW
-
-const socketDir = "/tmp/plugin"
-const socketFile = "plugin.sock"
-
-// PluginExecute() executes the plugin control script to start the plugin process
-func (c *Controller) PluginExecute(plugin string) {
-	// construct the shell command path: plugin/<plugin>/pluginctl.sh start
-	cmdPath := filepath.Join("plugin", plugin, "pluginctl.sh")
-	// create the command to execute the plugin control script with 'start' argument
-	cmd := exec.Command(cmdPath, "start")
-	// execute the command and capture output
-	output, err := cmd.CombinedOutput()
-	// if an error occurred during execution
-	if err != nil {
-		// log the error and exit
-		c.log.Errorf("Failed to execute plugin %s: %v, output: %s", plugin, err, string(output))
-	}
-	// log successful plugin execution
-	c.log.Infof("Plugin %s started: %s", plugin, string(output))
-}
-
-// PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
-func (c *Controller) PluginConnectSync() {
-	sockPath := filepath.Join(socketDir, socketFile)
-	// make the path
-	if err := os.MkdirAll(socketDir, 0777); err != nil {
-		c.log.Fatalf("Failed to make the plugin socket path %s: %v", sockPath, err)
-	}
-	// clean old socket
-	if err := os.RemoveAll(sockPath); err != nil {
-		c.log.Fatalf("Failed to remove plugin socket %s: %v", sockPath, err)
-	}
-	// create a unix listener
-	l, err := net.Listen("unix", sockPath)
-	if err != nil {
-		c.log.Fatalf("Failed to listen on socket: %v", err)
-	}
-	defer l.Close()
-	// log the listener
-	c.log.Infof("Plugin service listening on socket: %s", sockPath)
-	// wait for a connection
-	conn, e := l.Accept()
-	if e != nil {
-		c.log.Fatalf("Failed to accept plugin connection: %v", e)
-	}
-	// create plugin object
-	c.Plugin = lib.NewPlugin(conn, c.log)
-	// set plugin in FSM and mempool FSM
-	c.FSM.Plugin, c.Mempool.FSM.Plugin = c.Plugin, c.Plugin
-}
-
 // INTERNAL CALLS BELOW
 
 // LoadIsOwnRoot() returns if this chain is its own root (base)
@@ -394,6 +339,39 @@ func (c *Controller) emptyInbox(topic lib.Topic) {
 		// discard the message
 		<-c.P2P.Inbox(topic)
 	}
+}
+
+const checkpointsFileName = "checkpoints.json"
+
+// loadCheckpointsFile reads checkpoints.json (if present) into the controller cache.
+func (c *Controller) loadCheckpointsFile() {
+	path := filepath.Join(c.Config.DataDirPath, checkpointsFileName)
+	fileBytes, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			c.log.Warnf("failed to read checkpoints file: %s", err)
+		}
+		return
+	}
+	checkpoints := make(map[uint64]map[uint64]lib.HexBytes)
+	if err = json.Unmarshal(fileBytes, &checkpoints); err != nil {
+		c.log.Warnf("failed to parse checkpoints file: %s", err)
+		return
+	}
+	c.checkpoints = checkpoints
+}
+
+// checkpointFromFile returns a cached checkpoint for a given chain and height, or nil if not found.
+func (c *Controller) checkpointFromFile(height, chainId uint64) lib.HexBytes {
+	if c.checkpoints == nil {
+		return nil
+	}
+	if chainCheckpoints, ok := c.checkpoints[chainId]; ok {
+		if checkpoint, ok := chainCheckpoints[height]; ok {
+			return checkpoint
+		}
+	}
+	return nil
 }
 
 // convenience aliases that reference the library package

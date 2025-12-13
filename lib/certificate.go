@@ -1063,6 +1063,31 @@ func (x *Checkpoint) Equals(y *Checkpoint) bool {
 	return x.Height == y.Height
 }
 
+// checkpointJSON is a helper struct for JSON marshalling/unmarshalling with hex-encoded block hash
+type checkpointJSON struct {
+	Height    uint64   `json:"height,omitempty"`
+	BlockHash HexBytes `json:"blockHash,omitempty"`
+}
+
+// MarshalJSON marshals the checkpoint with a hex-encoded block hash
+func (x Checkpoint) MarshalJSON() ([]byte, error) {
+	return json.Marshal(checkpointJSON{
+		Height:    x.Height,
+		BlockHash: HexBytes(x.BlockHash),
+	})
+}
+
+// UnmarshalJSON unmarshals the checkpoint with a hex-encoded block hash
+func (x *Checkpoint) UnmarshalJSON(jsonBytes []byte) (err error) {
+	j := new(checkpointJSON)
+	if err = json.Unmarshal(jsonBytes, j); err != nil {
+		return
+	}
+	x.Height = j.Height
+	x.BlockHash = j.BlockHash
+	return
+}
+
 // Combine() merges the Reward Recipients' Payment Percents of the current Proposal with those of another Proposal
 // such that the Payment Percentages may be equally weighted when performing reward distribution calculations
 // NOTE: merging percents will exceed 100% over multiple samples, but are normalized using the NumberOfSamples field

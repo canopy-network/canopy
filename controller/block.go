@@ -515,12 +515,18 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	if syncing {
 		// use checkpoints to protect against long-range attacks
 		if qc.Header.Height%CheckpointFrequency == 0 {
-			// get the checkpoint from the base chain (or file if independent)
-			checkpoint, err := c.RCManager.GetCheckpoint(c.LoadRootChainId(qc.Header.Height), qc.Header.Height, c.Config.ChainId)
-			// if getting the checkpoint failed
-			if err != nil {
-				// warn of the inability to get the checkpoint
-				c.log.Warnf(err.Error())
+			// attempt to load the checkpoint from the file
+			checkpoint := c.checkpointFromFile(qc.Header.Height, qc.Header.ChainId)
+			// if checkpoint loading from file failed
+			if checkpoint == nil {
+				var err lib.ErrorI
+				// get the checkpoint from the base chain (or file if independent)
+				checkpoint, err = c.RCManager.GetCheckpoint(c.LoadRootChainId(qc.Header.Height), qc.Header.Height, c.Config.ChainId)
+				// if getting the checkpoint failed
+				if err != nil {
+					// warn of the inability to get the checkpoint
+					c.log.Warnf(err.Error())
+				}
 			}
 			// if checkpoint fails
 			if len(checkpoint) != 0 && !bytes.Equal(qc.BlockHash, checkpoint) {
@@ -627,7 +633,9 @@ func (c *Controller) CheckAndSetLastCertificate(candidate *lib.BlockHeader) lib.
 
 // SetFSMInConsensusModeForProposals() is how the Validator is configured for `base chain` specific parameter upgrades
 func (c *Controller) SetFSMInConsensusModeForProposals() (reset func()) {
-	if c.Consensus.GetRound() < 3 {
+	elapsed := time.Since(c.Consensus.BFTStartTime).Milliseconds()
+	// if consensus is below round 3 AND it hasn't been more than 3 minutes since the last block
+	if c.Consensus.GetRound() < 3 && elapsed < int64(c.Config.BlockTimeMS()*3) {
 		// if the node is not having 'consensus issues' refer to the approve list
 		c.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)
 		c.Mempool.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)

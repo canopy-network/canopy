@@ -42,11 +42,12 @@ type BFT struct {
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 
-	PublicKey  []byte             // self consensus public key
-	PrivateKey crypto.PrivateKeyI // self consensus private key
-	Config     lib.Config         // self configuration
-	Metrics    *lib.Metrics       // telemetry
-	log        lib.LoggerI        // logging
+	PublicKey    []byte             // self consensus public key
+	PrivateKey   crypto.PrivateKeyI // self consensus private key
+	Config       lib.Config         // self configuration
+	Metrics      *lib.Metrics       // telemetry
+	BFTStartTime time.Time          // start time of BFT for this height
+	log          lib.LoggerI        // logging
 }
 
 // New() creates a new instance of HotstuffBFT for a specific Committee
@@ -140,6 +141,7 @@ func (b *BFT) Start() {
 					b.log.Info("Reset BFT (NEW_HEIGHT)")
 					b.NewHeight(false)
 					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					b.BFTStartTime = time.Now()
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
 					//if b.LoadIsOwnRoot() {
