@@ -896,7 +896,7 @@ func checkAddress(address []byte) lib.ErrorI {
 // checkExternalAddress() validates an address from an external blockchain
 func checkExternalAddress(address []byte) lib.ErrorI {
 	addressLen := len(address)
-	if addressLen == 0 || addressLen > 100 {
+	if addressLen == 0 || addressLen > 255 {
 		return ErrAddressSize()
 	}
 	return nil
@@ -911,7 +911,7 @@ func CheckNetAddress(netAddress string, isDelegate bool) lib.ErrorI {
 		}
 		return nil
 	}
-	if netAddressLen < 1 || netAddressLen > 50 {
+	if netAddressLen < 1 || netAddressLen > 255 {
 		return ErrInvalidNetAddressLen()
 	}
 	// ensure the net address is a valid
