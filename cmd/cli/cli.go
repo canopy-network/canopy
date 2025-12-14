@@ -86,6 +86,11 @@ func Start() {
 		l.Infof("Sleeping until %s", untilTime.String())
 		time.Sleep(untilTime)
 	}
+	// start the validator TCP proxy (if configured)
+	proxy := lib.NewValidatorTCPProxy(config.ValidatorTCPProxy, l)
+	if err := proxy.Start(); err != nil {
+		l.Fatal(err.Error())
+	}
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), float64(config.ChainId), rpc.SoftwareVersion, config.MetricsConfig, l)
 	// create a new database object from the config
@@ -113,6 +118,7 @@ func Start() {
 	rpcServer.Start()
 	// block until a kill signal is received
 	waitForKill()
+	proxy.Stop()
 	// gracefully stop the app
 	app.Stop()
 	// gracefully stop the metrics server

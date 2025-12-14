@@ -15,16 +15,15 @@ import (
 
 const (
 	// GLOBAL CONSTANTS
-	UnknownChainId   = uint64(0)            // the default 'unknown' chain id
-	CanopyChainId    = uint64(1)            // NOTE: to not break nested-chain recursion, this should not be used except for 'default config/genesis' developer setups
-	DAOPoolID        = 2*math.MaxUint16 + 1 // must be above the MaxUint16 * 2 to ensure no 'overlap' with 'chainId + EscrowAddend'
-	MainnetNetworkId = 1                    // the identifier of the 'mainnet' of Canopy
+	UnknownChainId         = uint64(0)            // the default 'unknown' chain id
+	CanopyChainId          = uint64(1)            // NOTE: to not break nested-chain recursion, this should not be used except for 'default config/genesis' developer setups
+	DAOPoolID              = 2*math.MaxUint16 + 1 // must be above the MaxUint16 * 2 to ensure no 'overlap' with 'chainId + EscrowAddend'
+	CanopyMainnetNetworkId = 1                    // the identifier of the 'mainnet' of Canopy
 )
 
 const (
 	// FILE NAMES in the 'data directory'
 	ConfigFilePath    = "config.json"        // the file path for the node configuration
-	ChainsFilePath    = "chain.json"         // the file path for the node configuration
 	ValKeyPath        = "validator_key.json" // the file path for the node's private key
 	GenesisFilePath   = "genesis.json"       // the file path for the genesis (first block)
 	ProposalsFilePath = "proposals.json"     // the file path for governance proposal voting configuration
@@ -42,7 +41,6 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
-	ChainConfig        // configuration for the chain
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -59,57 +57,19 @@ func DefaultConfig() Config {
 	}
 }
 
-// CHAIN CONFIG BELOW
-type ChainConfig struct {
-	ChainId             uint64 `json:"chainId,omitempty"`             // the unique identifier of the chain (1 for CNPY)
-	ChainName           string `json:"name,omitempty"`                // the name of the chain (Canopy)
-	ChainSymbol         string `json:"symbol,omitempty"`              // the ticker of the chain (like CNPY)
-	Website             string `json:"website,omitempty"`             // the website of the chain
-	LogoURI             string `json:"logoURI,omitempty"`             // the uri where the logo is located
-	BannerURI           string `json:"bannerURI,omitempty"`           // the uri where the banner is located
-	ExplorerLogoURI     string `json:"explorerLogoURI,omitempty"`     // the banner for the explorer
-	WalletLogoURI       string `json:"walletLogoURI,omitempty"`       // the banner for the wallet
-	Color1Hex           string `json:"color1Hex,omitempty"`           // the primary color for the front end
-	Color2Hex           string `json:"color2Hex,omitempty"`           // the secondary color for the front end
-	Description         string `json:"description,omitempty"`         // description of the chain
-	ConsensusPreset     uint64 `json:"consensusPreset,omitempty"`     // the consensus preset for the chain
-	InitialMintPerBlock uint64 `json:"initialMintPerBlock,omitempty"` // the starting number of mint per block
-	BlocksPerHalvening  uint64 `json:"blocksPerHalvening,omitempty"`  // the amount of blocks per halvening (0) to disable
-}
-
-// DefaultChainConfig() returns the default 'chain configuration'
-func DefaultChainConfig() ChainConfig {
-	return ChainConfig{
-		ChainId:             1,
-		ChainName:           "canopy",
-		ChainSymbol:         "CNPY",
-		Website:             "https://canopynetwork.org",
-		LogoURI:             "https://",
-		BannerURI:           "https://",
-		ExplorerLogoURI:     "https://",
-		WalletLogoURI:       "https://",
-		Color1Hex:           "#2c9b5a",
-		Color2Hex:           "#16502e",
-		Description:         "Canopy is a recursive, progressive-sovereignty framework for blockchains",
-		ConsensusPreset:     1,
-		InitialMintPerBlock: 80 * 1000000,
-		BlocksPerHalvening:  3150000,
-	}
-}
-
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
 	LogLevel   string      `json:"logLevel"`   // any level includes the levels above it: debug < info < warning < error
+	ChainId    uint64      `json:"chainId"`    // the identifier of this particular chain within a single 'network id'
 	SleepUntil uint64      `json:"sleepUntil"` // allows coordinated 'wake-ups' for genesis or chain halt events
 	RootChain  []RootChain `json:"rootChain"`  // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
 	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
 	Headless   bool        `json:"headless"`   // turn off the web wallet and block explorer 'web' front ends
 	AutoUpdate bool        `json:"autoUpdate"` // check for new versions of software each X time
-	Plugin     string      `json:"plugin"`     // the configured plugin to use - Canopy will execute this plugin and wait for it to connect via the Unix socket
 }
 
-// DefaultMainConfig() returns the default 'main configuration'
+// DefaultMainConfig() sets log level to 'info'
 func DefaultMainConfig() MainConfig {
 	return MainConfig{
 		LogLevel: "info", // everything but debug is the default
@@ -119,9 +79,10 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:     true,  // run the VDF by default
-		Headless:   false, // serve the web wallet and block explorer by default
-		AutoUpdate: true,  // set it as default while in inmature state
+		RunVDF:     true,          // run the VDF by default
+		ChainId:    CanopyChainId, // default chain url is 1
+		Headless:   false,         // serve the web wallet and block explorer by default
+		AutoUpdate: true,          // set it as default while in inmature state
 	}
 }
 
@@ -204,15 +165,15 @@ func DefaultStateMachineConfig() StateMachineConfig {
 // - async faults may lead to extended block time
 // - social consensus dictates BlockTime for the protocol - being oo fast or too slow can lead to Non-Signing and Consensus failures
 type ConsensusConfig struct {
-	NewHeightTimeoutMs      int `json:"newHeightTimeoutMS,omitempty"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
-	ElectionTimeoutMS       int `json:"electionTimeoutMS,omitempty"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
-	ElectionVoteTimeoutMS   int `json:"electionVoteTimeoutMS,omitempty"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
-	ProposeTimeoutMS        int `json:"proposeTimeoutMS,omitempty"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
-	ProposeVoteTimeoutMS    int `json:"proposeVoteTimeoutMS,omitempty"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
-	PrecommitTimeoutMS      int `json:"precommitTimeoutMS,omitempty"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
-	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS,omitempty"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
-	CommitTimeoutMS         int `json:"commitTimeoutMS,omitempty"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
-	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS,omitempty"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
+	NewHeightTimeoutMs      int `json:"newHeightTimeoutMS"`      // how long (in milliseconds) the replica sleeps before moving to the ELECTION phase
+	ElectionTimeoutMS       int `json:"electionTimeoutMS"`       // minus VRF creation time (if Candidate), is how long (in milliseconds) the replica sleeps before moving to ELECTION-VOTE phase
+	ElectionVoteTimeoutMS   int `json:"electionVoteTimeoutMS"`   // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PROPOSE phase
+	ProposeTimeoutMS        int `json:"proposeTimeoutMS"`        // minus Proposal creation time (if Leader), is how long (in milliseconds) the replica sleeps before moving to PROPOSE-VOTE phase
+	ProposeVoteTimeoutMS    int `json:"proposeVoteTimeoutMS"`    // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to PRECOMMIT phase
+	PrecommitTimeoutMS      int `json:"precommitTimeoutMS"`      // minus Proposal-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the PRECOMMIT-VOTE phase
+	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
+	CommitTimeoutMS         int `json:"commitTimeoutMS"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
+	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
 }
 
 // DefaultConsensusConfig() configures the block time
@@ -245,26 +206,28 @@ func (c *ConsensusConfig) BlockTimeMS() int {
 
 // P2PConfig defines peering compatibility and limits as well as actions on specific peering IPs / IDs
 type P2PConfig struct {
-	NetworkID           uint64   `json:"networkID"`           // the ID for the peering network
-	ListenAddress       string   `json:"listenAddress"`       // listen for incoming connection
-	ExternalAddress     string   `json:"externalAddress"`     // advertise for external dialing
-	MaxInbound          int      `json:"maxInbound"`          // max inbound peers
-	MaxOutbound         int      `json:"maxOutbound"`         // max outbound peers
-	TrustedPeerIDs      []string `json:"trustedPeerIDs"`      // trusted public keys
-	DialPeers           []string `json:"dialPeers"`           // peers to consistently dial until expo-backoff fails (format pubkey@ip:port)
-	BannedPeerIDs       []string `json:"bannedPeersIDs"`      // banned public keys
-	BannedIPs           []string `json:"bannedIPs"`           // banned IPs
-	MinimumPeersToStart int      `json:"minimumPeersToStart"` // the minimum connections required to start consensus
+	NetworkID           uint64            `json:"networkID"`           // the ID for the peering network
+	ListenAddress       string            `json:"listenAddress"`       // listen for incoming connection
+	ExternalAddress     string            `json:"externalAddress"`     // advertise for external dialing
+	MaxInbound          int               `json:"maxInbound"`          // max inbound peers
+	MaxOutbound         int               `json:"maxOutbound"`         // max outbound peers
+	TrustedPeerIDs      []string          `json:"trustedPeerIDs"`      // trusted public keys
+	DialPeers           []string          `json:"dialPeers"`           // peers to consistently dial until expo-backoff fails (format pubkey@ip:port)
+	BannedPeerIDs       []string          `json:"bannedPeersIDs"`      // banned public keys
+	BannedIPs           []string          `json:"bannedIPs"`           // banned IPs
+	MinimumPeersToStart int               `json:"minimumPeersToStart"` // the minimum connections required to start consensus
+	ValidatorTCPProxy   map[uint64]string `json:"validator_tcp_proxy"` // tcp proxy config mapping listen port to target address
 }
 
 func DefaultP2PConfig() P2PConfig {
 	return P2PConfig{
-		NetworkID:           MainnetNetworkId,
-		ListenAddress:       "0.0.0.0:9001", // default TCP address is 9001 for chain 1 (9002 for chain 2 etc.)
-		ExternalAddress:     "",             // should be populated by the user
-		MaxInbound:          21,             // inbounds should be close to 3x greater than outbounds
-		MaxOutbound:         7,              // to ensure 'new joiners' have slots to take
-		MinimumPeersToStart: 0,              // requires no peers to start consensus by default (suitable for 1 node network)
+		NetworkID:           CanopyMainnetNetworkId,
+		ListenAddress:       "0.0.0.0:9001",      // default TCP address is 9001 for chain 1 (9002 for chain 2 etc.)
+		ExternalAddress:     "",                  // should be populated by the user
+		MaxInbound:          21,                  // inbounds should be close to 3x greater than outbounds
+		MaxOutbound:         7,                   // to ensure 'new joiners' have slots to take
+		MinimumPeersToStart: 0,                   // requires no peers to start consensus by default (suitable for 1 node network)
+		ValidatorTCPProxy:   map[uint64]string{}, // initialize the map
 	}
 }
 
@@ -373,43 +336,6 @@ func NewConfigFromFile(filepath string) (Config, error) {
 	if err = json.Unmarshal(fileBytes, &c); err != nil {
 		// exit with error
 		return Config{}, err
-	}
-	// allow environment variable override for plugin (useful for Docker containers)
-	if plugin := os.Getenv("CANOPY_PLUGIN"); plugin != "" {
-		c.Plugin = plugin
-	}
-	// exit
-	return c, nil
-}
-
-// WriteToFile() saves the chains config object to a JSON file
-func (c ChainConfig) WriteToFile(filepath string) error {
-	// convert the config to indented 'pretty' json bytes
-	jsonBytes, err := json.MarshalIndent(c, "", "  ")
-	// if an error occurred during the conversion
-	if err != nil {
-		// exit with error
-		return err
-	}
-	// write the config.json file to the data directory
-	return os.WriteFile(filepath, jsonBytes, os.ModePerm)
-}
-
-// NewChainConfigFromFile() populates a ChainConfig object from a JSON file
-func NewChainConfigFromFile(filepath string) (ChainConfig, error) {
-	// read the file into bytes using
-	fileBytes, err := os.ReadFile(filepath)
-	// if an error occurred
-	if err != nil {
-		// exit with error
-		return ChainConfig{}, err
-	}
-	// define the default config to fill in any blanks in the file
-	c := DefaultChainConfig()
-	// populate the default config with the file bytes
-	if err = json.Unmarshal(fileBytes, &c); err != nil {
-		// exit with error
-		return ChainConfig{}, err
 	}
 	// exit
 	return c, nil
