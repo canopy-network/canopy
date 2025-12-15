@@ -288,9 +288,12 @@ func (s *StateMachine) UpdateCommittees(address crypto.AddressI, oldValidator *V
 func (s *StateMachine) SetCommittees(address crypto.AddressI, totalStake uint64, committees []uint64) (err lib.ErrorI) {
 	// for each committee in the list
 	for _, committee := range committees {
-		// set the address as a member
-		if err = s.SetCommitteeMember(address, committee, totalStake); err != nil {
-			return
+		//skip if height x or config.fsmconfig.skipcommittestore === true
+		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+			// set the address as a member
+			if err = s.SetCommitteeMember(address, committee, totalStake); err != nil {
+				return
+			}
 		}
 		// add to the committee staked supply
 		if err = s.AddToCommitteeSupplyForChain(committee, totalStake); err != nil {
@@ -304,9 +307,11 @@ func (s *StateMachine) SetCommittees(address crypto.AddressI, totalStake uint64,
 func (s *StateMachine) DeleteCommittees(address crypto.AddressI, totalStake uint64, committees []uint64) (err lib.ErrorI) {
 	// for each committee in the list
 	for _, committee := range committees {
-		// remove the address from being a member
-		if err = s.DeleteCommitteeMember(address, committee, totalStake); err != nil {
-			return
+		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+			// remove the address from being a member
+			if err = s.DeleteCommitteeMember(address, committee, totalStake); err != nil {
+				return
+			}
 		}
 		// subtract from the committee staked supply
 		if err = s.SubFromCommitteeStakedSupplyForChain(committee, totalStake); err != nil {
@@ -374,9 +379,12 @@ func (s *StateMachine) UpdateDelegations(address crypto.AddressI, oldValidator *
 // SetDelegations() sets the delegate 'membership' for an address, adding to the list and updating the supply pools
 func (s *StateMachine) SetDelegations(address crypto.AddressI, totalStake uint64, committees []uint64) lib.ErrorI {
 	for _, committee := range committees {
-		// actually set the address in the delegate list
-		if err := s.SetDelegate(address, committee, totalStake); err != nil {
-			return err
+
+		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+			// actually set the address in the delegate list
+			if err := s.SetDelegate(address, committee, totalStake); err != nil {
+				return err
+			}
 		}
 		// add to the delegate supply (used for tracking amounts)
 		if err := s.AddToDelegateSupplyForChain(committee, totalStake); err != nil {
@@ -393,9 +401,12 @@ func (s *StateMachine) SetDelegations(address crypto.AddressI, totalStake uint64
 // DeleteDelegations() removes the delegate 'membership' for an address, removing from the list and updating the supply pools
 func (s *StateMachine) DeleteDelegations(address crypto.AddressI, totalStake uint64, committees []uint64) lib.ErrorI {
 	for _, committee := range committees {
-		// remove the address from the delegate list
-		if err := s.DeleteDelegate(address, committee, totalStake); err != nil {
-			return err
+
+		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+			// remove the address from the delegate list
+			if err := s.DeleteDelegate(address, committee, totalStake); err != nil {
+				return err
+			}
 		}
 		// remove from the delegate supply (used for tracking amounts)
 		if err := s.SubFromDelegateStakedSupplyForChain(committee, totalStake); err != nil {

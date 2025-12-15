@@ -147,6 +147,7 @@ const (
 type StateMachineConfig struct {
 	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
 	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	SkipCommitteeStore    bool   `json:"skipCommitteeStore"`    // if true, the committee store is not used
 }
 
 // DefaultStateMachineConfig returns FSM defaults
@@ -154,6 +155,7 @@ func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
 		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
 		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+		SkipCommitteeStore:    false,
 	}
 }
 
