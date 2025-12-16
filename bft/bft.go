@@ -116,7 +116,7 @@ func (b *BFT) Start() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
 				// Update BFT metrics
-				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
+				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.LoadRootChainId(b.Height), b.Round, b.Phase, startTime)
 				// handle the phase
 				b.HandlePhase()
 			}()

@@ -116,6 +116,7 @@ type BFTMetrics struct {
 	CommitTime        prometheus.Histogram // how long did the commit phase take?
 	CommitProcessTime prometheus.Histogram // how long did the commit process phase take?
 	RootHeight        prometheus.Gauge     // what's the height of the root-chain?
+	RootChainId       prometheus.Gauge     // what's the chain id of the root-chain?
 }
 
 // FSMMetrics represents the telemetry of the FSM module for the node's address
@@ -282,11 +283,15 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_bft_commit_process_time",
 				Help: "Execution time of the COMMIT_PROCESS bft phase",
 			}),
-			RootHeight: promauto.NewGauge(prometheus.GaugeOpts{
-				Name: "canopy_bft_root_height",
-				Help: "Current height of the `root_chain` the quorum is operating on",
-			}),
-		},
+		RootHeight: promauto.NewGauge(prometheus.GaugeOpts{
+			Name: "canopy_bft_root_height",
+			Help: "Current height of the `root_chain` the quorum is operating on",
+		}),
+		RootChainId: promauto.NewGauge(prometheus.GaugeOpts{
+			Name: "canopy_root_chain_id",
+			Help: "The chain ID of the root chain this node is operating on",
+		}),
+	},
 		// FSM
 		FSMMetrics: FSMMetrics{
 			ValidatorStatus: promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -440,7 +445,7 @@ func (m *Metrics) UpdatePeerMetrics(total, inbound, outbound int) {
 }
 
 // UpdateBFTMetrics() is a setter for the BFT metrics
-func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase, phaseStartTime time.Time) {
+func (m *Metrics) UpdateBFTMetrics(height, rootHeight, rootChainId, round uint64, phase Phase, phaseStartTime time.Time) {
 	// exit if empty
 	if m == nil {
 		return
@@ -449,6 +454,8 @@ func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase
 	m.Height.Set(float64(height))
 	// set the height of the root chain
 	m.RootHeight.Set(float64(rootHeight))
+	// set the chain id of the root chain
+	m.RootChainId.Set(float64(rootChainId))
 	// set the round
 	m.Round.Set(float64(round))
 	// set the phase
