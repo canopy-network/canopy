@@ -182,6 +182,8 @@ func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewa
 	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
 	// if not compounding, use the early withdrawal reward
 	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
+	s.log.Debugf("Distribute committee %d reward: rewardPoolAmount: %d, numberOfSample: %d, FullReward: %d, EarlyWithdrawalReward: %d",
+		stub.ChainId, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
 	validator, _ := s.GetValidator(address)
 	// if non validator, send EarlyWithdrawalReward to the address
