@@ -46,7 +46,7 @@ type OracleState struct {
 func NewOracleState(stateSaveFile string, logger lib.LoggerI) *OracleState {
 	// Ensure the state save file location exists
 	if err := os.MkdirAll(filepath.Dir(stateSaveFile), 0755); err != nil {
-		logger.Errorf("failed to create directories for %s: %w", stateSaveFile, err)
+		logger.Errorf("[ORACLE-STATE] failed to create directories for %s: %w", stateSaveFile, err)
 	}
 	return &OracleState{
 		stateSaveFile:         stateSaveFile,
@@ -67,12 +67,12 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 	orderIdStr := lib.BytesToString(order.OrderId)
 	// propose lead time validation check
 	if m.sourceChainHeight < order.WitnessedHeight+config.ProposeDelayBlocks {
-		m.log.Warnf("Propose lead time has not passed, not submitting order %s", order.OrderId)
+		m.log.Warnf("[ORACLE-STATE] Propose lead time has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
 	// resubmit delay check
 	if rootHeight <= order.LastSubmitHeight+config.OrderResubmitDelayBlocks {
-		m.log.Warnf("Block resubmit height has not passed, not submitting order %s", order.OrderId)
+		m.log.Warnf("[ORACLE-STATE] Block resubmit height has not passed, not submitting order %s", order.OrderId)
 		return false
 	}
 	// lock order specific time restrictions
@@ -81,17 +81,17 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		if height, exists := m.lockOrderSubmissions[orderIdStr]; exists {
 			// test if already submitted at this root height
 			if height == rootHeight {
-				m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
+				m.log.Debugf("[ORACLE-STATE] Order %s already submitted at root height %d", orderIdStr, rootHeight)
 				return false
 			}
 			// calculate blocks since last submission
 			blocksSinceSubmission := rootHeight - height
 			// check if enough time has passed
 			if blocksSinceSubmission < config.LockOrderCooldownBlocks {
-				m.log.Debugf("Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission", orderIdStr, height, blocksSinceSubmission, config.LockOrderCooldownBlocks)
+				m.log.Debugf("[ORACLE-STATE] Lock order %s submitted at height %d, only %d blocks ago (need %d), not allowing resubmission", orderIdStr, height, blocksSinceSubmission, config.LockOrderCooldownBlocks)
 				return false
 			}
-			m.log.Debugf("Lock order %s submitted at height %d, %d blocks ago, allowing resubmission", orderIdStr, height, blocksSinceSubmission)
+			m.log.Debugf("[ORACLE-STATE] Lock order %s submitted at height %d, %d blocks ago, allowing resubmission", orderIdStr, height, blocksSinceSubmission)
 		}
 		// record the submission height for this lock order
 		m.lockOrderSubmissions[orderIdStr] = rootHeight
@@ -99,14 +99,14 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		if height, exists := m.closeOrderSubmissions[orderIdStr]; exists {
 			// test if already submitted at this root height
 			if height == rootHeight {
-				m.log.Debugf("Order %s already submitted at root height %d", orderIdStr, rootHeight)
+				m.log.Debugf("[ORACLE-STATE] Order %s already submitted at root height %d", orderIdStr, rootHeight)
 				return false
 			}
 		}
 		// record the submission height for this close order
 		m.closeOrderSubmissions[orderIdStr] = rootHeight
 	}
-	m.log.Debugf("Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
+	m.log.Debugf("[ORACLE-STATE] Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
 	return true
 }
 
@@ -118,7 +118,7 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	// verify sequential block processing to detect gaps and chain reorganizations
 	lastState, err := m.readBlockState()
 	if err != nil {
-		m.log.Debugf("No previous state found, assuming first block")
+		m.log.Debugf("[ORACLE-STATE] No previous state found, assuming first block")
 		// first block, no validation needed
 		return nil
 	}
@@ -126,14 +126,14 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	expectedHeight := lastState.Height + 1
 	if block.Number() != expectedHeight {
 		errorMsg := fmt.Sprintf("expected height %d, got %d", expectedHeight, block.Number())
-		m.log.Errorf("Block gap detected: %s", errorMsg)
+		m.log.Errorf("[ORACLE-STATE] Block gap detected: %s", errorMsg)
 		return ErrBlockSequence(errorMsg)
 	}
 	// check for chain reorganization by comparing parent hash with last processed block
 	if block.ParentHash() != lastState.Hash {
 		errorMsg := fmt.Sprintf("parent hash mismatch at height %d: expected %s, got %s",
 			block.Number(), lastState.Hash, block.ParentHash())
-		m.log.Errorf("Chain reorganization detected: %s", errorMsg)
+		m.log.Errorf("[ORACLE-STATE] Chain reorganization detected: %s", errorMsg)
 		return ErrChainReorg(errorMsg)
 	}
 	// save last seen source chain height
@@ -153,13 +153,13 @@ func (m *OracleState) saveState(block types.BlockI) lib.ErrorI {
 	// marshal state to JSON
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
-		m.log.Errorf("Failed to marshal block state: %v", err)
+		m.log.Errorf("[ORACLE-STATE] Failed to marshal block state: %v", err)
 		return ErrWriteStateFile(err)
 	}
 	// m.log.Debugf("Saved block state for height %d", state.Height)
 	// write state to file atomically
 	if err := lib.AtomicWriteFile(m.stateSaveFile, stateBytes); err != nil {
-		m.log.Errorf("Failed to write state file: %v", err)
+		m.log.Errorf("[ORACLE-STATE] Failed to write state file: %v", err)
 		return ErrWriteStateFile(err)
 	}
 	return nil
@@ -181,11 +181,11 @@ func (m *OracleState) GetLastHeight() uint64 {
 	defer m.rwLock.RUnlock()
 	// check for previous state from last run
 	if state, err := m.readBlockState(); err == nil {
-		m.log.Infof("Found previous block state: height %d", state.Height)
+		m.log.Infof("[ORACLE-STATE] Found previous block state: height %d", state.Height)
 		// start from the next block after the last successfully processed one
 		return state.Height
 	}
-	m.log.Infof("no previous state found, returning start height 0")
+	m.log.Infof("[ORACLE-STATE] no previous state found, returning start height 0")
 	return 0
 }
 
@@ -194,14 +194,14 @@ func (m *OracleState) readBlockState() (*OracleBlockState, lib.ErrorI) {
 	// read file contents
 	data, err := os.ReadFile(m.stateSaveFile)
 	if err != nil {
-		m.log.Debugf("block state file not found: %v", err)
+		m.log.Debugf("[ORACLE-STATE] block state file not found: %v", err)
 		return nil, ErrReadStateFile(err)
 	}
 	// unmarshal JSON data
 	var state OracleBlockState
 	err = json.Unmarshal(data, &state)
 	if err != nil {
-		m.log.Errorf("failed to unmarshal block state: %v", err)
+		m.log.Errorf("[ORACLE-STATE] failed to unmarshal block state: %v", err)
 		return nil, ErrParseState(err)
 	}
 	return &state, nil
@@ -223,7 +223,7 @@ func (m *OracleState) updateSafeHeight(currentBlockHeight uint64, config lib.Ora
 	defer m.rwLock.Unlock()
 	// only update if the new safe height is higher (monotonic property)
 	if newSafeHeight > m.safeHeight {
-		m.log.Debugf("Updating safe height from %d to %d (current height %d, confirmations %d)",
+		m.log.Debugf("[ORACLE-STATE] Updating safe height from %d to %d (current height %d, confirmations %d)",
 			m.safeHeight, newSafeHeight, currentBlockHeight, config.SafeBlockConfirmations)
 		m.safeHeight = newSafeHeight
 	}
@@ -246,7 +246,7 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 	if orderBook == nil {
 		m.lockOrderSubmissions = make(map[string]uint64)
 		m.closeOrderSubmissions = make(map[string]uint64)
-		m.log.Infof("Order book is nil, cleared all submission history")
+		m.log.Infof("[ORACLE-STATE] Order book is nil, cleared all submission history")
 		return
 	}
 	// prune lock order submissions for orders not in order book
@@ -254,21 +254,21 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 		// convert string back to bytes for order book lookup
 		orderId, err := lib.StringToBytes(orderIdStr)
 		if err != nil {
-			m.log.Errorf("Failed to convert lock order ID string %s to bytes: %v", orderIdStr, err)
+			m.log.Errorf("[ORACLE-STATE] Failed to convert lock order ID string %s to bytes: %v", orderIdStr, err)
 			continue
 		}
 		// check if order exists in order book
 		order, err := orderBook.GetOrder(orderId)
 		if err != nil {
-			m.log.Errorf("Error checking lock order %s in order book: %v", orderIdStr, err)
+			m.log.Errorf("[ORACLE-STATE] Error checking lock order %s in order book: %v", orderIdStr, err)
 			continue
 		}
 		// remove lock order submission for orders not in order book
 		if order == nil {
 			delete(m.lockOrderSubmissions, orderIdStr)
-			m.log.Debugf("Pruned lock order submission for order %s (not in order book)", orderIdStr)
+			m.log.Debugf("[ORACLE-STATE] Pruned lock order submission for order %s (not in order book)", orderIdStr)
 		} else {
-			m.log.Debugf("Preserved lock order submission for order %s (still in order book)", orderIdStr)
+			m.log.Debugf("[ORACLE-STATE] Not pruning lock order submission for order %s (still in order book)", orderIdStr)
 		}
 	}
 	// prune close order submissions for orders not in order book
@@ -276,21 +276,21 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 		// convert string back to bytes for order book lookup
 		orderId, err := lib.StringToBytes(orderIdStr)
 		if err != nil {
-			m.log.Errorf("Failed to convert close order ID string %s to bytes: %v", orderIdStr, err)
+			m.log.Errorf("[ORACLE-STATE] Failed to convert close order ID string %s to bytes: %v", orderIdStr, err)
 			continue
 		}
 		// check if order exists in order book
 		order, err := orderBook.GetOrder(orderId)
 		if err != nil {
-			m.log.Errorf("Error checking close order %s in order book: %v", orderIdStr, err)
+			m.log.Errorf("[ORACLE-STATE] Error checking close order %s in order book: %v", orderIdStr, err)
 			continue
 		}
 		// remove close order submission for orders not in order book
 		if order == nil {
 			delete(m.closeOrderSubmissions, orderIdStr)
-			m.log.Debugf("Pruned close order submission for order %s (not in order book)", orderIdStr)
+			m.log.Debugf("[ORACLE-STATE] Pruned close order submission for order %s (not in order book)", orderIdStr)
 		} else {
-			m.log.Debugf("Preserved close order submission for order %s (still in order book)", orderIdStr)
+			m.log.Debugf("[ORACLE-STATE] Not pruning close order submission for order %s (still in order book)", orderIdStr)
 		}
 	}
 }

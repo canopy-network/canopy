@@ -265,7 +265,7 @@ func (e *OracleDiskStorage) GetAllOrderIds(orderType types.OrderType) ([][]byte,
 			orderId := strings.TrimSuffix(filename, orderTypeSuffix)
 			id, err := hex.DecodeString(orderId)
 			if err != nil {
-				e.logger.Errorf("Failed to decode order id in filename: %s", err.Error())
+				e.logger.Errorf("[ORACLE-STORE] Failed to decode order id in filename: %s", err.Error())
 				continue
 			}
 			orderIds = append(orderIds, id)
