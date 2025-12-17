@@ -12,7 +12,7 @@ import (
 
 // FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
-	daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
+	subsidizedChainIds, daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
 		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
 			return nil
@@ -23,11 +23,7 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
 	}
-	// get the committees that `qualify` for subsidization
-	subsidizedChainIds, err := s.GetSubsidizedCommittees()
-	if err != nil {
-		return err
-	}
+	s.log.Debugf("Subsidized committee rewards pools: %v, daoCut: %d, mintAmountPerCommittee: %d", daoCut, mintAmountPerCommittee, subsidizedChainIds)
 	// issue that amount to each subsidized committee
 	for _, chainId := range subsidizedChainIds {
 		if err = s.MintToPool(chainId, mintAmountPerCommittee); err != nil {
@@ -38,21 +34,16 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 }
 
 // GetBlockMintStats() gets the latest minting information for the blockchain
-func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
+func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []uint64, daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
 	// get governance params that are needed to complete this operation
 	govParams, err := s.GetParamsGov()
 	if err != nil {
 		return
 	}
 	// get the committees that `qualify` for subsidization
-	subsidizedChainIds, err := s.GetSubsidizedCommittees()
+	subsidizedChainIds, err = s.GetSubsidizedCommittees()
 	if err != nil {
 		return
-	}
-	// ensure self chain is always a 'paid' chain even if there are no validators
-	if !slices.Contains(subsidizedChainIds, chainId) {
-		// this ensures nested-chains always receive Native Token payment to their pool
-		subsidizedChainIds = append(subsidizedChainIds, chainId)
 	}
 	// calculate the number of halvenings
 	halvenings := s.height / s.Config.BlocksPerHalvening
@@ -69,13 +60,12 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
 	daoCut = totalMintAmount - mintAmountAfterDAOCut
-
 	// calculate the amount given to each qualifying committee
 	// mintAmountPerCommittee may truncate, but that's expected,
 	// less mint will be created and effectively 'burned'
 	mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
-
-	return daoCut, totalMintAmount, mintAmountPerCommittee, nil
+	// return the variables
+	return subsidizedChainIds, daoCut, totalMintAmount, mintAmountPerCommittee, nil
 }
 
 // GetSubsidizedCommittees() returns a list of chainIds that receive a portion of the 'block reward'
@@ -112,6 +102,11 @@ func (s *StateMachine) GetSubsidizedCommittees() (paidIDs []uint64, err lib.Erro
 			// add it to the paid list
 			paidIDs = append(paidIDs, committee.Id)
 		}
+	}
+	// ensure self chain is always a 'paid' chain
+	if !slices.Contains(paidIDs, s.Config.ChainId) {
+		// this ensures nested-chains always receive Native Token payment to their pool
+		paidIDs = append(paidIDs, s.Config.ChainId)
 	}
 	return
 }

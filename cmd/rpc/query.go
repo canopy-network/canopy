@@ -241,7 +241,7 @@ func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprou
 			proposerCut -= delegate.Cut // sub-validator
 			proposerCut -= delegate.Cut // sub-delegate
 		}
-		daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
+		_, daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
 		if err != nil {
 			write(w, err.Error(), http.StatusBadRequest)
 			return nil
