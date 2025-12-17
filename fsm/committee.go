@@ -132,6 +132,7 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 	for i, data := range committeesData.List {
 		// check to see if any payment percents were issued
 		if len(data.PaymentPercents) == 0 {
+			s.log.Debugf("Distribute committee reward for committee %d: skipped, no reward recipients", data.ChainId)
 			// if none issued, move on to the next
 			continue
 		}
@@ -144,15 +145,18 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 		var totalDistributed uint64
 		// for each payment percent issued
 		for _, stub := range data.PaymentPercents {
-			distributed, er := s.DistributeCommitteeReward(stub, rewardPool.Amount, data.NumberOfSamples, paramsVal)
+			distributed, er := s.DistributeCommitteeReward(stub, rewardPool.Amount, data.NumberOfSamples, data.ChainId, paramsVal)
 			if er != nil {
 				return er
 			}
-			// add an event for a reward amount
-			if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
-				return err
+			// no event if distributed is 0
+			if distributed > 0 {
+				// add an event for a reward amount
+				if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
+					return err
+				}
+				totalDistributed += distributed
 			}
-			totalDistributed += distributed
 		}
 		// ensure the non-distributed (burned) is removed from the 'total supply'
 		if err = s.SubFromTotalSupply(rewardPool.Amount - totalDistributed); err != nil {
@@ -176,14 +180,14 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 }
 
 // DistributeCommitteeReward() issues a single committee reward unit based on an individual 'Payment Stub'
-func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
+func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples, chainId uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
 	address := crypto.NewAddress(stub.Address)
 	// full_reward = truncate ( percentage / number_of_samples * available_reward )
 	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
 	// if not compounding, use the early withdrawal reward
 	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
 	s.log.Debugf("Distribute committee %d reward: rewardPoolAmount: %d, numberOfSample: %d, FullReward: %d, EarlyWithdrawalReward: %d",
-		stub.ChainId, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
+		chainId, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
 	validator, _ := s.GetValidator(address)
 	// if non validator, send EarlyWithdrawalReward to the address
