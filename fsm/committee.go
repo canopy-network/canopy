@@ -127,7 +127,7 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 	for i, data := range committeesData.List {
 		// check to see if any payment percents were issued
 		if len(data.PaymentPercents) == 0 {
-			s.log.Debugf("Distribute committee reward for committee %d: skipped, no reward recipients", data.ChainId)
+			//s.log.Debugf("Distribute committee reward for committee %d: skipped, no reward recipients", data.ChainId)
 			// if none issued, move on to the next
 			continue
 		}
@@ -181,8 +181,8 @@ func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewa
 	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
 	// if not compounding, use the early withdrawal reward
 	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
-	s.log.Debugf("Distributed committee %d reward: to %s percent: %d%%, rewardPoolAmount: %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
-		chainId, address.String(), stub.Percent, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
+	//s.log.Debugf("Distributed committee %d reward: to %s percent: %d%%, rewardPoolAmount: %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
+	//	chainId, address.String(), stub.Percent, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
 	validator, _ := s.GetValidator(address)
 	// if non validator, send EarlyWithdrawalReward to the address
