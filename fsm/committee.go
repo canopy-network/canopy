@@ -23,7 +23,7 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
 	}
-	s.log.Debugf("Subsidized committee rewards pools: %v, daoCut: %d, mintAmountPerCommittee: %d", daoCut, mintAmountPerCommittee, subsidizedChainIds)
+	s.log.Debugf("Subsidized committee rewards pools: %v, daoCut: %d, mintAmountPerCommittee: %d", subsidizedChainIds, daoCut, mintAmountPerCommittee)
 	// issue that amount to each subsidized committee
 	for _, chainId := range subsidizedChainIds {
 		if err = s.MintToPool(chainId, mintAmountPerCommittee); err != nil {
@@ -181,8 +181,8 @@ func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewa
 	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
 	// if not compounding, use the early withdrawal reward
 	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
-	s.log.Debugf("Distributed committee %d reward: rewardPoolAmount: %d, numberOfSample: %d, FullReward: %d, EarlyWithdrawalReward: %d",
-		chainId, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
+	s.log.Debugf("Distributed committee %d reward: to %x rewardPoolAmount: %d%% %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
+		address, stub.Percent, chainId, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
 	validator, _ := s.GetValidator(address)
 	// if non validator, send EarlyWithdrawalReward to the address
