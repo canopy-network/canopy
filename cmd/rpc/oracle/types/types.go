@@ -67,9 +67,11 @@ func (w WitnessedOrder) String() string {
 	// determine which order type is present
 	var orderDetails string
 	if w.LockOrder != nil {
-		orderDetails = fmt.Sprintf("LockOrder: %+v", w.LockOrder)
+		orderDetails = fmt.Sprintf("LockOrder{OrderId:%x ChainId:%d BuyerReceiveAddress:%x BuyerSendAddress:%x BuyerChainDeadline:%d}",
+			w.LockOrder.OrderId, w.LockOrder.ChainId, w.LockOrder.BuyerReceiveAddress, w.LockOrder.BuyerSendAddress, w.LockOrder.BuyerChainDeadline)
 	} else if w.CloseOrder != nil {
-		orderDetails = fmt.Sprintf("CloseOrder: %+v", w.CloseOrder)
+		orderDetails = fmt.Sprintf("CloseOrder{OrderId:%x ChainId:%d CloseOrder:%t}",
+			w.CloseOrder.OrderId, w.CloseOrder.ChainId, w.CloseOrder.CloseOrder)
 	} else {
 		orderDetails = "No order data"
 	}
@@ -88,10 +90,12 @@ func (w WitnessedOrder) Format(f fmt.State, verb rune) {
 			fmt.Fprintf(f, "WitnessedOrder{\n  OrderId: %x\n  WitnessedHeight: %d\n  LastSubmitHeight: %d\n",
 				w.OrderId, w.WitnessedHeight, w.LastSubmitHeight)
 			if w.LockOrder != nil {
-				fmt.Fprintf(f, "  LockOrder: %+v\n", w.LockOrder)
+				fmt.Fprintf(f, "  LockOrder{OrderId:%x ChainId:%d BuyerReceiveAddress:%x BuyerSendAddress:%x BuyerChainDeadline:%d}\n",
+					w.LockOrder.OrderId, w.LockOrder.ChainId, w.LockOrder.BuyerReceiveAddress, w.LockOrder.BuyerSendAddress, w.LockOrder.BuyerChainDeadline)
 			}
 			if w.CloseOrder != nil {
-				fmt.Fprintf(f, "  CloseOrder: %+v\n", w.CloseOrder)
+				fmt.Fprintf(f, "  CloseOrder{OrderId:%x ChainId:%d CloseOrder:%t}\n",
+					w.CloseOrder.OrderId, w.CloseOrder.ChainId, w.CloseOrder.CloseOrder)
 			}
 			fmt.Fprint(f, "}")
 		} else {
@@ -103,7 +107,7 @@ func (w WitnessedOrder) Format(f fmt.State, verb rune) {
 		fmt.Fprint(f, w.String())
 	default:
 		// handle unsupported format verbs
-		fmt.Fprintf(f, "%%!%c(WitnessedOrder=%+v)", verb, w)
+		fmt.Fprintf(f, "%%!%c(WitnessedOrder=%s)", verb, w.String())
 	}
 }
 

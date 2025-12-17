@@ -573,7 +573,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// copy and save order book
 	o.orderBook = info.Orders.Copy()
 	for _, order := range o.orderBook.Orders {
-		o.log.Warnf("ORDER %s\n", order)
+		o.log.Warnf("ORDER %s", formatSellOrder(order))
 	}
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
@@ -738,4 +738,13 @@ func (o *Oracle) updateMetrics() {
 	o.metrics.UpdateOracleStateMetrics(safeHeight, o.state.sourceChainHeight, lockOrderSubmissionsSize, closeOrderSubmissionsSize)
 	// update store metrics
 	o.metrics.UpdateOracleStoreMetrics(lockOrders, closeOrders)
+}
+
+// formatSellOrder formats a SellOrder with hex-encoded byte fields for logging
+func formatSellOrder(o *lib.SellOrder) string {
+	return fmt.Sprintf(
+		"Id:%x Committee:%d Data:%x AmountForSale:%d RequestedAmount:%d SellerReceive:%x SellerSend:%x",
+		o.Id, o.Committee, o.Data, o.AmountForSale, o.RequestedAmount,
+		o.SellerReceiveAddress, o.SellersSendAddress,
+	)
 }
