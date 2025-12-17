@@ -72,7 +72,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 	// create an ethereum client for the token cache
 	ethClient, ethErr := ethclient.Dial(config.NodeUrl)
 	if ethErr != nil {
-		logger.Fatal(ethErr.Error())
+		logger.Fatal("[ETH-CONN] " + ethErr.Error())
 	}
 	// create a new erc20 token cache
 	tokenCache := NewERC20TokenCache(ethClient, metrics)
@@ -93,7 +93,7 @@ func NewEthBlockProvider(config lib.EthBlockProviderConfig, orderValidator Order
 		metrics:         metrics,
 	}
 	// log provider creation
-	p.logger.Infof("created ethereum block provider with rpc: %s, ws: %s, eth chain id: %d", p.config.NodeUrl, p.config.NodeWSUrl, p.chainId)
+	p.logger.Infof("[ETH-CONN] created block provider with rpc: %s, ws: %s, chain id: %d", p.config.NodeUrl, p.config.NodeWSUrl, p.chainId)
 	return p
 }
 
@@ -103,14 +103,14 @@ func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Bl
 	ethBlock, err := p.rpcClient.BlockByNumber(ctx, height)
 	if err != nil {
 		// log error and return
-		p.logger.Errorf("BlockByNumber rpc called failed for height %d: %v", height, err)
+		p.logger.Errorf("[ETH-RPC] BlockByNumber failed for height %d: %v", height, err)
 		return nil, err
 	}
 	// create new block from ethereum block
 	block, err := NewBlock(ethBlock)
 	if err != nil {
 		// log error and return
-		p.logger.Errorf("failed to wrap block at height %d: %v", height, err)
+		p.logger.Errorf("[ETH-BLOCK] failed to wrap block at height %d: %v", height, err)
 		return nil, err
 	}
 	// iterate through ethereum transactions, creating a transaction wrappers
@@ -118,7 +118,7 @@ func (p *EthBlockProvider) fetchBlock(ctx context.Context, height *big.Int) (*Bl
 		// create new Transaction from ethereum transaction
 		tx, err := NewTransaction(ethTx, p.chainId)
 		if err != nil {
-			p.logger.Errorf("failed to create transaction: %s", err)
+			p.logger.Errorf("[ETH-TX] failed to create transaction: %s", err)
 			continue
 			// return nil, err // return error if transaction creation fails
 		}
@@ -157,7 +157,7 @@ func (p *EthBlockProvider) closeConnections() {
 // Start begins the block provider operation
 func (p *EthBlockProvider) Start(ctx context.Context, height uint64) {
 	p.nextHeight = new(big.Int).SetUint64(height)
-	p.logger.Info("starting ethereum block provider")
+	p.logger.Info("[ETH-CONN] starting block provider")
 	go p.run(ctx)
 }
 
@@ -166,7 +166,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			p.logger.Info("shutting down ethereum block provider")
+			p.logger.Info("[ETH-CONN] shutting down block provider")
 			p.closeConnections()
 			return
 		default:
@@ -174,7 +174,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		// try to connect to ethereum node
 		err := p.connect(ctx)
 		if err != nil {
-			p.logger.Errorf("error connecting to ethereum node: %s", err.Error())
+			p.logger.Errorf("[ETH-CONN] error connecting to node: %s", err.Error())
 			select {
 			case <-ctx.Done():
 				return
@@ -185,7 +185,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		// fetch latest block
 		block, err := p.rpcClient.BlockByNumber(ctx, nil)
 		if err != nil {
-			p.logger.Errorf("error fetching latest block from ethereum node: %s", err.Error())
+			p.logger.Errorf("[ETH-RPC] error fetching latest block: %s", err.Error())
 			continue
 		}
 		// a next height of zero indicates no height was specified by the consumer
@@ -196,12 +196,12 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 			if p.nextHeight.Sign() < 0 {
 				p.nextHeight.SetInt64(0)
 			}
-			p.logger.Warnf("eth block provider: next height was 0 - initialized next height to %s", p.nextHeight.String())
+			p.logger.Warnf("[ETH-SYNC] next height was 0 - initialized to %s", p.nextHeight.String())
 		}
 		// begin monitoring new block headers
 		err = p.monitorHeaders(ctx)
 		if err != nil {
-			p.logger.Errorf("subscription error: %v", err)
+			p.logger.Errorf("[ETH-WS] subscription error: %v", err)
 		}
 		// close any remaining connections
 		p.closeConnections()
@@ -216,25 +216,25 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 	rpcClient, err := ethclient.DialContext(ctx, p.config.NodeUrl)
 	if err != nil {
 		// log error and retry
-		p.logger.Errorf("failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
+		p.logger.Errorf("[ETH-CONN] failed to connect to rpc client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
 		return err
 	}
 	// set rpc client
 	p.rpcClient = rpcClient
 	// log successful rpc connection
-	p.logger.Infof("Successfully connected to ethereum RPC at %s", p.config.NodeUrl)
+	p.logger.Infof("[ETH-CONN] connected to RPC at %s", p.config.NodeUrl)
 	// attempt to connect to websocket client
 	wsClient, err := ethclient.DialContext(ctx, p.config.NodeWSUrl)
 	if err != nil {
 		p.rpcClient.Close()
 		// log error and retry
-		p.logger.Errorf("Failed to connect to websocket client: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
+		p.logger.Errorf("[ETH-WS] failed to connect: %v, retrying in %v", err, time.Duration(p.config.RetryDelay)*time.Second)
 		return err
 	}
 	// set websocket client
 	p.wsClient = wsClient
 	// log successful websocket connection
-	p.logger.Infof("Websockets successfully connected to ethereum node at %s", p.config.NodeWSUrl)
+	p.logger.Infof("[ETH-WS] connected at %s", p.config.NodeWSUrl)
 	return nil
 }
 
@@ -252,11 +252,11 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	sub, err := p.wsClient.SubscribeNewHead(ctx, headerCh)
 	if err != nil {
 		// log error and return
-		p.logger.Errorf("failed to subscribe to new headers: %v", err)
+		p.logger.Errorf("[ETH-WS] failed to subscribe to headers: %v", err)
 		return err
 	}
 	// log successful subscription
-	p.logger.Info("successfully subscribed to new block headers")
+	p.logger.Info("[ETH-WS] subscribed to new headers")
 	// create status ticker for periodic updates
 	statusTicker := time.NewTicker(30 * time.Second)
 	defer statusTicker.Stop()
@@ -265,20 +265,20 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 		select {
 		case <-statusTicker.C:
 			// periodic status update
-			p.logger.Infof("ETH block provider status: nextHeight=%s, synced=%v", p.nextHeight.String(), p.synced)
+			p.logger.Infof("[ETH-SYNC] status: nextHeight=%s, synced=%v", p.nextHeight.String(), p.synced)
 		case <-ctx.Done():
-			p.logger.Info("block provider context cancelled")
+			p.logger.Info("[ETH-SYNC] context cancelled")
 			sub.Unsubscribe()
 			return ctx.Err()
 		case header := <-headerCh:
 			if header == nil || header.Number == nil {
-				p.logger.Warn("received nil header or header number, skipping")
+				p.logger.Warn("[ETH-BLOCK] received nil header, skipping")
 				continue
 			}
 			// ensure we haven't gotten ahead of the current chain height
 			if p.nextHeight.Cmp(header.Number) > 0 {
-				p.logger.Errorf("eth block provider: next expected source chain height was %d, higher than current source chain height %d", p.nextHeight, header.Number)
-				p.logger.Error("If this is expected, remove state file and restart node. Exiting.")
+				p.logger.Errorf("[ETH-SYNC] next height %d higher than current chain height %d", p.nextHeight, header.Number)
+				p.logger.Error("[ETH-SYNC] remove state file and restart node if expected")
 				// unsubscribe from new headers
 				sub.Unsubscribe()
 				// stop listening to new headers and return an error
@@ -290,7 +290,7 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				if p.nextHeight.Cmp(header.Number) == 0 {
 					// we've caught up to the latest block, mark as synced
 					p.synced = true
-					p.logger.Infof("ethereum block provider synced at height %s", p.nextHeight.String())
+					p.logger.Infof("[ETH-SYNC] synced at height %s", p.nextHeight.String())
 				}
 			}
 			// process all blocks up to current height
@@ -312,7 +312,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 	defer cancel()
 	// track next height to be processed
 	next := new(big.Int).Set(start)
-	p.logger.Debugf("block provider processing blocks from %d to %d", start, end)
+	p.logger.Debugf("[ETH-BLOCK] processing blocks from %d to %d", start, end)
 	// initialize metrics counters
 	var blocksProcessed, transactionsProcessed, retries int
 	// process blocks from next height to current height
@@ -320,7 +320,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		// Check if context has been cancelled or timed out
 		select {
 		case <-timeoutCtx.Done():
-			p.logger.Errorf("processBlocks maximum run time hit, returning.")
+			p.logger.Errorf("[ETH-BLOCK] max run time hit, returning")
 			return next
 		default:
 		}
@@ -329,7 +329,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		block, err := p.fetchBlock(timeoutCtx, next)
 		if err != nil {
 			// log error and return without continuing
-			p.logger.Errorf("failed to get block at height %d: %v", next, err)
+			p.logger.Errorf("[ETH-BLOCK] failed to get block at height %d: %v", next, err)
 			// update metrics before returning
 			p.metrics.UpdateEthBlockProviderMetrics(0, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
 			// return same height so the provider tries this block again
@@ -339,7 +339,7 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		// process each transaction, populating orders and transfer data
 		txProcessStart := time.Now()
 		if err := p.processBlockTransactions(timeoutCtx, block); err != nil {
-			p.logger.Errorf("failed to process block transactions: %v", err)
+			p.logger.Errorf("[ETH-TX] failed to process block transactions: %v", err)
 			// update metrics before returning
 			p.metrics.UpdateEthBlockProviderMetrics(fetchTime, 0, 0, 0, 0, 1, blocksProcessed, transactionsProcessed, retries)
 			return next
@@ -379,11 +379,11 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 			tx.clearOrder()
 			// these errors can be temporary network errors, all others should not be retried
 			if !errors.Is(err, ErrTransactionReceipt) && !errors.Is(err, ErrTokenInfo) {
-				p.logger.Errorf("Error processing transaction %s with Canopy order in block %s: %v", tx.Hash(), block.Hash(), err)
+				p.logger.Errorf("[ETH-TX] error processing tx %s with order in block %s: %v", tx.Hash(), block.Hash(), err)
 				// non-retryable error, break immediately
 				break
 			}
-			p.logger.Errorf("Error processing transaction %s in block %s: %v - attempt %d", tx.Hash(), block.Hash(), attempt+1)
+			p.logger.Errorf("[ETH-TX] error processing tx %s in block %s: %v - attempt %d", tx.Hash(), block.Hash(), err, attempt+1)
 			// count retry for metrics
 			if attempt > 0 {
 				retryCount++
@@ -400,7 +400,7 @@ func (p *EthBlockProvider) processBlockTransactions(ctx context.Context, block *
 			}
 		}
 		if err != nil {
-			p.logger.Errorf("Error processing transaction %s in block %s: %v - all attempts failed", tx.Hash(), block.Hash())
+			p.logger.Errorf("[ETH-TX] tx %s in block %s failed after all attempts: %v", tx.Hash(), block.Hash(), err)
 		}
 	}
 	// update retry metrics if there were retries
@@ -435,7 +435,7 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	success, err := p.transactionSuccess(ctx, tx)
 	// check for error
 	if err != nil {
-		p.logger.Errorf("Error fetching transaction receipt: %s", err.Error())
+		p.logger.Errorf("[ETH-RPC] error fetching transaction receipt: %s", err.Error())
 		// there was an error fetching the transaction receipt
 		return err
 	}
@@ -451,10 +451,10 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 	// fetch erc20 token info (name, symbol, decimals)
 	tokenInfo, err := p.erc20TokenCache.TokenInfo(ctx, tx.To())
 	if err != nil {
-		p.logger.Errorf("failed to get token info for contract %s: %v", tx.To(), err)
+		p.logger.Errorf("[ETH-ERC20] failed to get token info for %s: %v", tx.To(), err)
 		return err
 	}
-	p.logger.Infof("Obtained token info for contract %s: %s", tx.To(), tokenInfo)
+	p.logger.Infof("[ETH-ERC20] obtained token info for %s: %s", tx.To(), tokenInfo)
 	// store the erc20 token info
 	tx.tokenInfo = tokenInfo
 	return nil
@@ -475,7 +475,7 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 	receiptTime := time.Since(receiptStart)
 	// check for error
 	if err != nil {
-		p.logger.Warnf("failed to get transaction receipt for tx %s: %v", txHashStr, err)
+		p.logger.Warnf("[ETH-RPC] failed to get receipt for tx %s: %v", txHashStr, err)
 		// update receipt fetch metrics on error
 		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 1, 0, 0, 0)
 		return false, ErrTransactionReceipt
@@ -492,7 +492,7 @@ func (p *EthBlockProvider) transactionSuccess(ctx context.Context, tx *Transacti
 		p.metrics.UpdateEthBlockProviderMetrics(0, 0, receiptTime, 0, 0, 0, 0, 0, 0)
 		return true, nil
 	}
-	p.logger.Errorf("transaction %s with ERC20 transfer was a failed on-chain transaction, ignoring", txHashStr)
+	p.logger.Errorf("[ETH-TX] tx %s ERC20 transfer failed on-chain, ignoring", txHashStr)
 	// return unsuccessful transaction
 	return false, nil
 }
@@ -515,5 +515,5 @@ func (p *EthBlockProvider) logAsciiBytes(data []byte) {
 		}
 	}
 	// all bytes are printable ASCII, log them
-	p.logger.Debugf("First 100 bytes ASCII data: %s", string(data[:limit]))
+	p.logger.Debugf("[ETH-TX] first 100 bytes ASCII: %s", string(data[:limit]))
 }
