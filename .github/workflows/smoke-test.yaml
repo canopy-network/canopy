@@ -1,0 +1,100 @@
+name: Nested Chain Validation
+
+# This workflow validates that forks of this repository (nested blockchains)
+# can successfully build and run the canopy binary. This is required before
+# a nested chain can graduate and be added to the Canopy ecosystem.
+#
+# When you fork this repository to create a nested blockchain:
+# 1. This workflow will run automatically on pushes to your fork
+# 2. It validates your fork can build the canopy binary
+# 3. It validates your binary executes and produces consensus logs
+# 4. A passing workflow serves as proof of a legitimate, functional fork
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - staging
+
+jobs:
+  validate-nested-chain:
+    name: Validate Nested Chain Binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build canopy binary with all services
+        run: make build/canopy-full
+
+      - name: Verify binary version
+        run: |
+          ~/go/bin/canopy version
+
+      - name: Validate binary execution and consensus logs
+        run: |
+          echo "=========================================="
+          echo "Nested Chain Validation"
+          echo "=========================================="
+          echo "Validating that this fork can build and run the canopy binary."
+          echo "This is required before nested chain graduation."
+          echo ""
+          echo "Running canopy binary for 30 seconds to capture consensus logs..."
+          echo "---"
+
+          # Run canopy and capture output
+          # Timeout is expected and normal after 30 seconds
+          set +e  # Don't exit on error
+          timeout 30s ~/go/bin/canopy start \
+            --data-dir=/tmp/canopy-test \
+            --password=test-password \
+            --nickname=nested-chain-validator > /tmp/canopy-output.log 2>&1
+          EXIT_CODE=$?
+          set -e  # Re-enable exit on error
+
+          # Show the captured logs
+          cat /tmp/canopy-output.log
+
+          echo "---"
+          echo ""
+          echo "Validating consensus logs..."
+
+          # Check that timeout caused the exit (code 124), not a crash
+          if [ $EXIT_CODE -ne 124 ] && [ $EXIT_CODE -ne 0 ]; then
+            echo "✗ Binary crashed with exit code $EXIT_CODE"
+            exit 1
+          fi
+
+          # Validate log contains expected success indicators
+          if ! grep -q "Proposer is SELF" /tmp/canopy-output.log && \
+             ! grep -q "Producing proposal" /tmp/canopy-output.log && \
+             ! grep -q "Self sending CONSENSUS message" /tmp/canopy-output.log; then
+            echo "✗ Logs do not contain expected consensus messages"
+            echo "Expected to find: 'Proposer is SELF', 'Producing proposal', or 'Self sending CONSENSUS message'"
+            exit 1
+          fi
+
+          # Check for critical errors that should fail validation
+          if grep -qi "FATAL\|panic\|fatal error" /tmp/canopy-output.log; then
+            echo "✗ Critical errors found in logs"
+            exit 1
+          fi
+
+          echo "✓ Validation successful!"
+          echo "  - Binary builds correctly"
+          echo "  - Binary executes without errors"
+          echo "  - Consensus engine produces expected logs"
+          echo ""
+          echo "This fork is ready for nested chain deployment."
+          echo "=========================================="
