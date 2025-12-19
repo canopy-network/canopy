@@ -293,9 +293,11 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 				p.logger.Warn("[ETH-BLOCK] received nil header, skipping")
 				continue
 			}
-			// update block height lag metric
-			if header.Number.Uint64() >= p.nextHeight.Uint64() {
-				p.metrics.SetEthBlockHeightLag(header.Number.Uint64() - p.nextHeight.Uint64())
+			// update block height metrics
+			chainHead := header.Number.Uint64()
+			p.metrics.SetEthChainHeadHeight(chainHead)
+			if chainHead >= p.nextHeight.Uint64() {
+				p.metrics.SetEthBlockHeightLag(chainHead - p.nextHeight.Uint64())
 			}
 			// ensure we haven't gotten ahead of the current chain height
 			if p.nextHeight.Cmp(header.Number) > 0 {
@@ -320,6 +322,12 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			}
 			// process all blocks up to current height
 			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
+			// update last processed height (nextHeight - 1 is the last block we sent)
+			if p.nextHeight.Uint64() > 0 {
+				lastProcessed := p.nextHeight.Uint64() - 1
+				p.metrics.SetEthLastProcessedHeight(lastProcessed)
+				p.metrics.SetEthSafeHeight(lastProcessed)
+			}
 		case err := <-sub.Err():
 			// log subscription error
 			p.logger.Errorf("[ETH-WS] subscription error received: %v", err)
