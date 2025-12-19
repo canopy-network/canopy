@@ -108,7 +108,7 @@ type P2PMetrics struct {
 	SendQueueTime       prometheus.Histogram   // time a packet spends waiting in the send queue
 	SendWireTime        prometheus.Histogram   // time to write a packet to the wire
 	SendTotalTime       prometheus.Histogram   // total time from Send() call to wire write completion
-	ReceiveWireTime     prometheus.Histogram   // time to read a packet from the wire
+	ReceiveWireTime     prometheus.Histogram   // time to read a packet from the wire TODO Review as this one is not reliable in all scenarios
 	ReceiveAssemblyTime prometheus.Histogram   // time to assemble packets into a complete message
 	SendQueueDepth      *prometheus.GaugeVec   // current depth of send queue by topic
 	InboxQueueDepth     *prometheus.GaugeVec   // current depth of inbox queue by topic
