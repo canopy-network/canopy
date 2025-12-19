@@ -264,7 +264,6 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 // Blocks until bytes are received converts bytes into a proto.Message using an Envelope
 func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message, lib.ErrorI) {
 	receiveStart := time.Now()
-
 	// initialize the wrapper object
 	msg := new(Envelope)
 	// restrict the instantaneous data flow to rate bytes per second
@@ -276,13 +275,11 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	if err != nil {
 		return nil, err
 	}
-
 	// Record wire read time
 	if c.p2p.metrics != nil {
 		receiveDuration := time.Since(receiveStart).Seconds()
 		c.p2p.metrics.ReceiveWireTime.Observe(receiveDuration)
 	}
-
 	// update the limiter
 	m.Update(lenM)
 	// unmarshal the payload from proto.any
@@ -416,7 +413,6 @@ func (s *Stream) queueSend(p *Packet, sendStart time.Time, metrics *lib.Metrics)
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
 func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *lib.Metrics) (int32, lib.ErrorI) {
 	assemblyStart := time.Now()
-
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
 	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
 	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
@@ -444,13 +440,11 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *l
 			Message: msg,
 			Sender:  peerInfo,
 		}
-
 		// Record assembly time
 		if metrics != nil {
 			assemblyDuration := time.Since(assemblyStart).Seconds()
 			metrics.ReceiveAssemblyTime.Observe(assemblyDuration)
 		}
-
 		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
 		select {

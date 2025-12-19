@@ -554,10 +554,8 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 		if tickCount%10 == 0 {
 			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
 		}
-
 		// Update queue depth metrics for prometheus
 		p.UpdateQueueDepthMetrics()
-
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
 		// Calculate total messages across all inboxes
@@ -607,10 +605,8 @@ func (p *P2P) UpdateQueueDepthMetrics() {
 	if p.metrics == nil {
 		return
 	}
-
 	// Track send queue depths by aggregating across all peers
 	sendQueueDepths := make(map[lib.Topic]int)
-
 	// Get all peers and check their stream send queues
 	p.PeerSet.RLock()
 	for _, peer := range p.PeerSet.m {
@@ -623,12 +619,10 @@ func (p *P2P) UpdateQueueDepthMetrics() {
 		}
 	}
 	p.PeerSet.RUnlock()
-
 	// Update send queue depth metrics
 	for topic, depth := range sendQueueDepths {
 		p.metrics.SendQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(depth))
 	}
-
 	// Update inbox queue depth metrics
 	for topic, ch := range p.channels {
 		p.metrics.InboxQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(len(ch)))
