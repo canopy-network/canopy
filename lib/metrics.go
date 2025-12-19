@@ -248,7 +248,10 @@ type EthBlockProviderMetrics struct {
 	WSSubscriptionErrors  prometheus.Counter     // WebSocket subscription failures
 	ConnectionState       prometheus.Gauge       // current connection state (0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected)
 	SyncStatus            prometheus.Gauge       // sync status (0=unsynced, 1=syncing, 2=synced)
-	BlockHeightLag        prometheus.Gauge       // blocks behind chain head
+	BlockHeightLag          prometheus.Gauge       // blocks behind chain head
+	ChainHeadHeight         prometheus.Gauge       // latest block height from chain head
+	EthLastProcessedHeight  prometheus.Gauge       // last block height successfully processed
+	EthSafeHeight           prometheus.Gauge       // current safe (confirmed) block height
 
 	// Block Processing Metrics (High Priority)
 	BlockFetchErrors        *prometheus.CounterVec // block fetch errors by error type
@@ -776,6 +779,18 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			BlockHeightLag: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_eth_block_height_lag",
 				Help: "Number of blocks behind chain head",
+			}),
+			ChainHeadHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_chain_head_height",
+				Help: "Latest block height from chain head",
+			}),
+			EthLastProcessedHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_last_processed_height",
+				Help: "Last block height successfully processed",
+			}),
+			EthSafeHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_safe_height",
+				Help: "Current safe (confirmed) block height",
 			}),
 			// Block Processing Metrics
 			BlockFetchErrors: promauto.NewCounterVec(prometheus.CounterOpts{
@@ -1327,6 +1342,30 @@ func (m *Metrics) SetEthBlockHeightLag(lag uint64) {
 		return
 	}
 	m.BlockHeightLag.Set(float64(lag))
+}
+
+// SetEthChainHeadHeight sets the latest block height from chain head
+func (m *Metrics) SetEthChainHeadHeight(height uint64) {
+	if m == nil {
+		return
+	}
+	m.ChainHeadHeight.Set(float64(height))
+}
+
+// SetEthLastProcessedHeight sets the last block height successfully processed
+func (m *Metrics) SetEthLastProcessedHeight(height uint64) {
+	if m == nil {
+		return
+	}
+	m.EthLastProcessedHeight.Set(float64(height))
+}
+
+// SetEthSafeHeight sets the current safe (confirmed) block height
+func (m *Metrics) SetEthSafeHeight(height uint64) {
+	if m == nil {
+		return
+	}
+	m.EthSafeHeight.Set(float64(height))
 }
 
 // IncrementEthRPCConnectionAttempt increments the RPC connection attempt counter
