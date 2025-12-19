@@ -310,6 +310,9 @@ func newTestStateMachine(t *testing.T) StateMachine {
 	log := lib.NewDefaultLogger()
 	db, err := store.NewStoreInMemory(log)
 	require.NoError(t, err)
+	// Create state machine config with committee store skip disabled for tests
+	smConfig := lib.DefaultStateMachineConfig()
+	smConfig.Upgrades.SkipCommitteeStore.Enabled = false
 	sm := StateMachine{
 		store:              db,
 		ProtocolVersion:    0,
@@ -320,7 +323,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		proposeVoteConfig:  AcceptAllProposals,
 		Config: lib.Config{
 			MainConfig:         lib.DefaultMainConfig(),
-			StateMachineConfig: lib.DefaultStateMachineConfig(),
+			StateMachineConfig: smConfig,
 		},
 		events: new(lib.EventsTracker),
 		log:    log,

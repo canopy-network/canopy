@@ -1067,6 +1067,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			detail: "the validator is updated but the balance and delegations remains the same",
 			presetValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				Committees:   []uint64{0, 1},
 				Output:       newTestAddressBytes(t),
@@ -1080,6 +1081,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			},
 			expectedValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				Committees:   []uint64{0, 1},
 				Output:       newTestAddressBytes(t),
@@ -1164,6 +1166,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			detail: "the validator is updated with different delegations but the balance remains the same",
 			presetValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				Committees:   []uint64{0, 1},
 				Delegate:     true,
@@ -1175,6 +1178,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			},
 			expectedValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				Committees:   []uint64{1, 2, 3},
 				Delegate:     true,
@@ -1219,6 +1223,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			presetSender: 2,
 			presetValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				NetAddress:   "tcp://example.com",
 				Committees:   []uint64{0, 1},
@@ -1232,6 +1237,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			},
 			expectedValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 2,
 				NetAddress:   "tcp://example.com",
 				Committees:   []uint64{1, 2, 3},
@@ -1261,6 +1267,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			presetSender: 2,
 			presetValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 1,
 				Committees:   []uint64{0, 1},
 				Delegate:     true,
@@ -1273,6 +1280,7 @@ func TestHandleMessageEditStake(t *testing.T) {
 			},
 			expectedValidator: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: 2,
 				Committees:   []uint64{1, 2, 3},
 				Delegate:     true,

@@ -376,10 +376,11 @@ func (x *ConsensusValidator) UnmarshalJSON(jsonBytes []byte) (err error) {
 
 // ValidatorFilters are used to filter types of validators from a ValidatorPage
 type ValidatorFilters struct {
-	Unstaking FilterOption `json:"unstaking"` // validators are currently unstaking
-	Paused    FilterOption `json:"paused"`    // validators are currently paused
-	Delegate  FilterOption `json:"delegate"`  // validators are set as delegates
-	Committee uint64       `json:"committee"` // validators are staked for this chain id (committee id)
+	Unstaking         FilterOption `json:"unstaking"`
+	Paused            FilterOption `json:"paused"`
+	Delegate          FilterOption `json:"delegate"`
+	Committee         uint64       `json:"committee"`
+	FilterByCommittee bool         `json:"filter_by_committee"` // Add this flag
 }
 
 // On() returns whether there exists any filters

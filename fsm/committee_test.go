@@ -1175,12 +1175,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1198,12 +1200,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1221,12 +1225,14 @@ func TestGetDelegatesPaginated(t *testing.T) {
 					PublicKey:    newTestPublicKeyBytes(t),
 					StakedAmount: 1,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
 					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: 2,
 					Committees:   []uint64{lib.CanopyChainId},
+					Delegate:     true,
 				},
 			},
 			pageParams: lib.PageParams{
@@ -1383,6 +1389,10 @@ func TestUpdateDelegates(t *testing.T) {
 				require.NoError(t, err)
 				// run the function
 				require.NoError(t, sm.UpdateDelegations(addr, val, v.StakedAmount, v.Committees))
+				// update validator object with new committees and stake
+				val.StakedAmount = v.StakedAmount
+				val.Committees = v.Committees
+				require.NoError(t, sm.SetValidator(val))
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {

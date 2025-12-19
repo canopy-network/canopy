@@ -251,23 +251,34 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 func (s *StateMachine) GetCommitteePaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
 	// define a page and result variables
 	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using an iterator over the 'committee prefix' ordered by stake (high to low)
-	err = page.Load(CommitteePrefix(chainId), true, &res, s.store, func(key, value []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
+	// retrieve the full committee member set
+	vs, err := s.GetCommitteeMembers(chainId)
+	if err != nil {
+		// if there are no validators, return empty page instead of error
+		if err.Error() == lib.ErrNoValidators().Error() {
+			page.Results = &res
+			return page, nil
 		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
+		return nil, err
+	}
+	// populate the page using the consensus validator list
+	err = page.LoadArray(vs.ValidatorSet.ValidatorSet, &res, func(i any) (e lib.ErrorI) {
+		// cast to consensus validator
+		v, ok := i.(*lib.ConsensusValidator)
+		if !ok {
+			return lib.ErrInvalidArgument()
 		}
-		// skip if validator is not paused and not unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
+		// calculate the address from the public key
+		address, e := s.pubKeyBytesToAddress(v.PublicKey)
+		if e != nil {
+			return e
 		}
-		// append the validator to the page
+		// get the full validator from the address
+		validator, e := s.GetValidator(crypto.NewAddress(address))
+		if e != nil {
+			return e
+		}
+		// append the validator to the result
 		res = append(res, validator)
 		return
 	})
@@ -286,14 +297,17 @@ func (s *StateMachine) UpdateCommittees(address crypto.AddressI, oldValidator *V
 
 // SetCommittees() sets the membership and staked supply for all an addresses' committees
 func (s *StateMachine) SetCommittees(address crypto.AddressI, totalStake uint64, committees []uint64) (err lib.ErrorI) {
+	// check if committee store operations should be skipped
+	skipStore := s.ShouldSkipCommitteeStore()
 	// for each committee in the list
 	for _, committee := range committees {
-		//skip if height x or config.fsmconfig.skipcommittestore === true
-		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+		if !skipStore {
 			// set the address as a member
 			if err = s.SetCommitteeMember(address, committee, totalStake); err != nil {
 				return
 			}
+		} else {
+			s.log.Debugf("Skipping committee store write at height %d (activationHeight: %d)", s.height, s.Config.Upgrades.SkipCommitteeStore.ActivationHeight)
 		}
 		// add to the committee staked supply
 		if err = s.AddToCommitteeSupplyForChain(committee, totalStake); err != nil {
@@ -305,9 +319,11 @@ func (s *StateMachine) SetCommittees(address crypto.AddressI, totalStake uint64,
 
 // DeleteCommittees() deletes the membership and staked supply for each of an address' committees
 func (s *StateMachine) DeleteCommittees(address crypto.AddressI, totalStake uint64, committees []uint64) (err lib.ErrorI) {
+	// check if committee store operations should be skipped
+	skipStore := s.ShouldSkipCommitteeStore()
 	// for each committee in the list
 	for _, committee := range committees {
-		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+		if !skipStore {
 			// remove the address from being a member
 			if err = s.DeleteCommitteeMember(address, committee, totalStake); err != nil {
 				return
@@ -331,6 +347,12 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 	return s.Delete(KeyForCommittee(chainId, address, stakeForCommittee))
 }
 
+// ShouldSkipCommitteeStore returns true if the committee store operations should be skipped
+func (s *StateMachine) ShouldSkipCommitteeStore() bool {
+	return s.Config.Upgrades.SkipCommitteeStore.Enabled &&
+		s.height >= s.Config.Upgrades.SkipCommitteeStore.ActivationHeight
+}
+
 // DELEGATIONS BELOW
 
 // GetDelegates returns the active delegates for a given chainId.
@@ -343,23 +365,34 @@ func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSet, err li
 func (s *StateMachine) GetDelegatesPaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
 	// create a page of validator objects
 	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using the 'delegates' prefix sorted by stake (high to low)
-	err = page.Load(DelegatePrefix(chainId), true, &res, s.store, func(key, _ []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
+	// retrieve the full delegate set
+	vs, err := s.GetDelegates(chainId)
+	if err != nil {
+		// if there are no validators, return empty page instead of error
+		if err.Error() == lib.ErrNoValidators().Error() {
+			page.Results = &res
+			return page, nil
 		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
+		return nil, err
+	}
+	// populate the page using the consensus validator list
+	err = page.LoadArray(vs.ValidatorSet.ValidatorSet, &res, func(i any) (e lib.ErrorI) {
+		// cast to consensus validator
+		v, ok := i.(*lib.ConsensusValidator)
+		if !ok {
+			return lib.ErrInvalidArgument()
 		}
-		// skip if validator is paused or unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
+		// calculate the address from the public key
+		address, e := s.pubKeyBytesToAddress(v.PublicKey)
+		if e != nil {
+			return e
 		}
-		// append the validator to the page
+		// get the full validator from the address
+		validator, e := s.GetValidator(crypto.NewAddress(address))
+		if e != nil {
+			return e
+		}
+		// append the validator to the result
 		res = append(res, validator)
 		return
 	})
@@ -378,9 +411,11 @@ func (s *StateMachine) UpdateDelegations(address crypto.AddressI, oldValidator *
 
 // SetDelegations() sets the delegate 'membership' for an address, adding to the list and updating the supply pools
 func (s *StateMachine) SetDelegations(address crypto.AddressI, totalStake uint64, committees []uint64) lib.ErrorI {
+	// check if committee store operations should be skipped
+	skipStore := s.ShouldSkipCommitteeStore()
+	// for each committee in the list
 	for _, committee := range committees {
-
-		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+		if !skipStore {
 			// actually set the address in the delegate list
 			if err := s.SetDelegate(address, committee, totalStake); err != nil {
 				return err
@@ -400,9 +435,11 @@ func (s *StateMachine) SetDelegations(address crypto.AddressI, totalStake uint64
 
 // DeleteDelegations() removes the delegate 'membership' for an address, removing from the list and updating the supply pools
 func (s *StateMachine) DeleteDelegations(address crypto.AddressI, totalStake uint64, committees []uint64) lib.ErrorI {
+	// check if committee store operations should be skipped
+	skipStore := s.ShouldSkipCommitteeStore()
+	// for each committee in the list
 	for _, committee := range committees {
-
-		if s.height <= 1020000 || !s.Config.SkipCommitteeStore {
+		if !skipStore {
 			// remove the address from the delegate list
 			if err := s.DeleteDelegate(address, committee, totalStake); err != nil {
 				return err

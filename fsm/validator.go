@@ -454,10 +454,11 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		for _, v := range validators {
 			// exclude validators not part of the committee
 			if !v.PassesFilter(lib.ValidatorFilters{
-				Unstaking: lib.FilterOption_Exclude,
-				Paused:    lib.FilterOption_Exclude,
-				Delegate:  lib.FilterOption(delegateFilter),
-				Committee: chainId,
+				Unstaking:         lib.FilterOption_Exclude,
+				Paused:            lib.FilterOption_Exclude,
+				Delegate:          lib.FilterOption(delegateFilter),
+				Committee:         chainId,
+				FilterByCommittee: true,
 			}) {
 				continue
 			}
@@ -467,6 +468,34 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			}
 		}
 	})
+	//// filter out validators not part of the committee
+	//filtered := slices.Collect(func(yield func(*Validator) bool) {
+	//	for _, v := range validators {
+	//		// exclude unstaking validators
+	//		if v.UnstakingHeight != 0 {
+	//			continue
+	//		}
+	//		// exclude paused validators
+	//		if v.MaxPausedHeight != 0 {
+	//			continue
+	//		}
+	//		// filter by delegate status
+	//		if delegateFilter == lib.FilterOption_MustBe && !v.Delegate {
+	//			continue
+	//		}
+	//		if delegateFilter == lib.FilterOption_Exclude && v.Delegate {
+	//			continue
+	//		}
+	//		// filter by committee membership (always filter, including chainId 0)
+	//		if !slices.Contains(v.Committees, chainId) {
+	//			continue
+	//		}
+	//		// add validator to filtered list
+	//		if !yield(v) {
+	//			return
+	//		}
+	//	}
+	//})
 	// sort by highest stake then address
 	slices.SortFunc(filtered, func(a, b *Validator) int {
 		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
@@ -612,7 +641,8 @@ func (x *Validator) PassesFilter(f lib.ValidatorFilters) (ok bool) {
 			return
 		}
 	}
-	if f.Committee != 0 {
+	// filter by committee if the ID is non-zero OR if explicitly requested (to handle chain 0)
+	if f.Committee != 0 || f.FilterByCommittee {
 		if !slices.Contains(x.Committees, f.Committee) {
 			return
 		}
