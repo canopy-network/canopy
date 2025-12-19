@@ -1,6 +1,6 @@
 name: Nested Chain Validation
 
-# This workflow validates that forks of this repository (nested blockchains)
+# This workflow validates that this repository
 # can successfully build and run the canopy binary. This is required before
 # a nested chain can graduate and be added to the Canopy ecosystem.
 #
@@ -27,16 +27,11 @@ jobs:
         with:
           go-version: 1.21
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build canopy binary with all services
-        run: make build/canopy-full
+      - name: Build canopy binary
+        run: make build/canopy
 
       - name: Verify binary version
         run: |
