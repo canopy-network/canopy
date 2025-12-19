@@ -1424,7 +1424,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
 				committee:  1, // Single committee handling both USDC and USDT
 				log:        lib.NewDefaultLogger(),
-				metrics:    lib.NewMetrics(),
+				metrics:    nil, // Metrics methods are nil-safe
 			}
 
 			// Process block with transactions

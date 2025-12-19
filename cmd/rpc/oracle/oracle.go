@@ -94,6 +94,7 @@ func (o *Oracle) reorgRollback() {
 	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
 	// update reorg metrics
 	o.metrics.UpdateOracleErrorMetrics(1, 0, 0)
+	o.metrics.RecordOracleReorgDepth(o.config.ReorgRollbackBlocks)
 	o.log.Infof("[ORACLE-REORG] Reorg rollback completed")
 }
 
@@ -109,11 +110,13 @@ func (o *Oracle) rollbackOrderType(orderType types.OrderType, rollbackHeight uin
 	totalOrders := len(orderIds)
 	removedCount := 0
 	// examine each stored order and remove if witnessed above rollback height
+	var storeReadErrors, storeRemoveErrors int
 	for _, orderId := range orderIds {
 		// read the witnessed order to check its witnessed height
 		witnessedOrder, err := o.orderStore.ReadOrder(orderId, orderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-REORG] Error reading %s order %x during rollback: %s", orderType, orderId, err.Error())
+			storeReadErrors++
 			continue
 		}
 		// check if this order was witnessed above the rollback height
@@ -122,6 +125,7 @@ func (o *Oracle) rollbackOrderType(orderType types.OrderType, rollbackHeight uin
 			err = o.orderStore.RemoveOrder(orderId, orderType)
 			if err != nil {
 				o.log.Errorf("[ORACLE-REORG] Error removing %s order %x during rollback: %s", orderType, orderId, err.Error())
+				storeRemoveErrors++
 				continue
 			}
 			removedCount++
@@ -129,6 +133,14 @@ func (o *Oracle) rollbackOrderType(orderType types.OrderType, rollbackHeight uin
 		}
 	}
 	o.log.Infof("[ORACLE-REORG] Rollback processed %d %s orders, removed %d orders witnessed above height %d", totalOrders, orderType, removedCount, rollbackHeight)
+	// update pruned orders metric
+	if removedCount > 0 {
+		o.metrics.UpdateOracleErrorMetrics(0, removedCount, 0)
+	}
+	// update store error metrics
+	if storeReadErrors > 0 || storeRemoveErrors > 0 {
+		o.metrics.UpdateOracleStoreErrorMetrics(0, storeReadErrors, storeRemoveErrors)
+	}
 }
 
 // Start begins listening for blocks from the configured block provider
@@ -219,6 +231,7 @@ func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 			// check for processing error
 			if err != nil {
 				o.log.Errorf("[ORACLE-BLOCK] Failed to process block at height %d: %v", block.Number(), err)
+				o.metrics.UpdateOracleErrorMetrics(0, 0, 1)
 				continue
 			}
 			// update safe height after successful block processing
@@ -226,6 +239,7 @@ func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 			// save state after successful block processing
 			if err := o.state.saveState(block); err != nil {
 				o.log.Errorf("[ORACLE-BLOCK] Failed to save block state for height %d: %v", block.Number(), err)
+				o.metrics.UpdateOracleErrorMetrics(0, 0, 1)
 				return err
 			}
 			// close syncCh when provider is synced to top
@@ -267,6 +281,7 @@ func (o *Oracle) validateOrder(tx types.TransactionI, sellOrder *lib.SellOrder) 
 	// get witnessed order from transaction
 	order := tx.Order()
 	if order == nil {
+		o.metrics.IncrementValidationFailure("order_nil")
 		return ErrOrderValidation("witnessed order cannot be nil")
 	}
 	// convenience variables
@@ -274,10 +289,12 @@ func (o *Oracle) validateOrder(tx types.TransactionI, sellOrder *lib.SellOrder) 
 	hasClose := order.CloseOrder != nil
 	// witnessed order must contain either a lock or close order
 	if !hasLock && !hasClose {
+		o.metrics.IncrementValidationFailure("missing_order_type")
 		return ErrOrderValidation("witnessed order must contain either lock or close order")
 	}
 	// witnessed order cannot contain both a lock or close order
 	if hasLock && hasClose {
+		o.metrics.IncrementValidationFailure("both_order_types")
 		return ErrOrderValidation("witnessed order cannot contain both lock and close orders")
 	}
 	// validate the lock order
@@ -291,9 +308,11 @@ func (o *Oracle) validateOrder(tx types.TransactionI, sellOrder *lib.SellOrder) 
 // validateLockOrder ensures a lock order matches a sell order
 func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.SellOrder) lib.ErrorI {
 	if !bytes.Equal(lockOrder.OrderId, sellOrder.Id) {
+		o.metrics.IncrementValidationFailure("lock_id_mismatch")
 		return ErrOrderValidation("lock order ID does not match sell order ID")
 	}
 	if lockOrder.ChainId != sellOrder.Committee {
+		o.metrics.IncrementValidationFailure("lock_chain_mismatch")
 		return ErrOrderValidation("lock order chain ID does not match sell order committee")
 	}
 	return nil
@@ -309,33 +328,40 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	sellOrderDataHex := common.BytesToAddress(sellOrder.Data).String()
 	if sellOrderDataHex != tx.To() {
 		fmt.Println(sellOrderDataHex, tx.To())
+		o.metrics.IncrementValidationFailure("close_data_mismatch")
 		return ErrOrderValidation("sell order data field does not match transaction recipient")
 	}
 	// ensure the order ids are a match
 	if !bytes.Equal(closeOrder.OrderId, sellOrder.Id) {
+		o.metrics.IncrementValidationFailure("close_id_mismatch")
 		return ErrOrderValidation("close order ID does not match sell order ID")
 	}
 	// ensure the chain and committee are a match
 	if closeOrder.ChainId != sellOrder.Committee {
+		o.metrics.IncrementValidationFailure("close_chain_mismatch")
 		return ErrOrderValidation("close order chain ID does not match sell order committee")
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
 	recipient, err := lib.StringToBytes(strings.TrimPrefix(tokenTransfer.RecipientAddress, "0x"))
 	if err != nil {
+		o.metrics.IncrementValidationFailure("recipient_conversion_error")
 		return ErrOrderValidation("error converting recipient address to bytes")
 	}
 	// verify the recipient of the transfer was the seller receive address
 	if !bytes.Equal(sellOrder.SellerReceiveAddress, recipient) {
+		o.metrics.IncrementValidationFailure("recipient_mismatch")
 		return ErrOrderValidation("tokens not transferred to sell receive address")
 	}
 	// ensure transfer amount is not nil
 	// TODO validate further fields here?
 	if tokenTransfer.TokenBaseAmount == nil {
+		o.metrics.IncrementValidationFailure("amount_nil")
 		return ErrOrderValidation("token transfer amount cannot be nil")
 	}
 	// ensure the correct amount was transferred
 	if tokenTransfer.TokenBaseAmount.Uint64() != sellOrder.RequestedAmount {
+		o.metrics.IncrementValidationFailure("amount_mismatch")
 		return ErrOrderValidation(fmt.Sprintf("transfer amount %d does not match requested amount %d",
 			tokenTransfer.TokenBaseAmount.Uint64(), sellOrder.RequestedAmount))
 	}
@@ -361,6 +387,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 	}
 	// initialize metrics counters for this block
 	var witnessed, validated, rejected int
+	var notInOrderbook, duplicate, archived int
 	// iterate through each transaction
 	for _, tx := range block.Transactions() {
 		// get order in this transaction
@@ -382,6 +409,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 			// log a warning and continue processing transactions
 			o.log.Warnf("[ORACLE-ORDER] Order %s not found in order book", lib.BytesToString(order.OrderId))
 			rejected++
+			notInOrderbook++
 			continue
 		}
 		// increment witnessed orders counter
@@ -408,26 +436,31 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 			o.log.Warnf("[ORACLE-ORDER] Order %s already exists in store, skipping new order", lib.BytesToString(order.OrderId))
 			// order exists, skip writing
 			// this prevents newer orders from overwriting older orders
-			// TODO should there be any more logic here?
+			duplicate++
 			continue
 		}
 		err = o.orderStore.WriteOrder(order, orderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-ORDER] Failed to write order %s: %v", lib.BytesToString(order.OrderId), err)
+			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			return err
 		}
 		// write order to archive
 		err = o.orderStore.ArchiveOrder(order, orderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-ORDER] Failed to archive order %s: %v", lib.BytesToString(order.OrderId), err)
+			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			return err
 		}
+		archived++
 		// update order metrics for this successful write
 		o.metrics.UpdateOracleOrderMetrics(0, 0, 0, 0, validationTime)
 		o.log.Debugf("[ORACLE-ORDER] Wrote order %s %s to store", order, orderType)
 	}
 	// update order metrics for this block with counters
 	o.metrics.UpdateOracleOrderMetrics(witnessed, validated, 0, rejected, 0)
+	// update lifecycle metrics
+	o.metrics.UpdateOracleLifecycleMetrics(notInOrderbook, duplicate, archived, 0, 0)
 	// update state and store metrics
 	o.updateMetrics()
 	return nil
@@ -525,6 +558,7 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 		err = o.orderStore.WriteOrder(wOrder, types.LockOrderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-COMMIT] Failed to write order %s: %v", lib.BytesToString(order.OrderId), err)
+			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			continue
 		}
 		o.log.Infof("[ORACLE-COMMIT] Updated last submit height for lock order %s: %d", lib.BytesToString(order.OrderId), qc.Header.RootHeight)
@@ -544,11 +578,14 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 		err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-COMMIT] Failed to write close order %s: %v", lib.BytesToString(orderId), err)
+			o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 			continue
 		}
 		o.log.Infof("[ORACLE-COMMIT] Updated last submit height for close order %s: %d", lib.BytesToString(orderId), qc.Header.RootHeight)
 	}
 
+	// update lifecycle metrics for committed orders
+	o.metrics.UpdateOracleLifecycleMetrics(0, 0, 0, len(qc.Results.Orders.LockOrders), len(qc.Results.Orders.CloseOrders))
 	return
 }
 
@@ -562,6 +599,24 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if o == nil {
 		return
 	}
+	// track timing for metrics
+	startTime := time.Now()
+	// track pruned orders and store errors for metrics
+	var ordersPruned, storeRemoveErrors int
+	defer func() {
+		if o.metrics == nil {
+			return
+		}
+		elapsed := time.Since(startTime)
+		o.metrics.OrderBookUpdateTime.Observe(elapsed.Seconds())
+		o.metrics.RootChainSyncTime.Observe(elapsed.Seconds())
+		if ordersPruned > 0 {
+			o.metrics.UpdateOracleErrorMetrics(0, ordersPruned, 0)
+		}
+		if storeRemoveErrors > 0 {
+			o.metrics.UpdateOracleStoreErrorMetrics(0, 0, storeRemoveErrors)
+		}
+	}()
 	// lock order book while updating it and updating order store
 	o.orderBookMu.Lock()
 	defer o.orderBookMu.Unlock()
@@ -575,7 +630,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// copy and save order book
 	o.orderBook = info.Orders.Copy()
 	for _, order := range o.orderBook.Orders {
-		o.log.Warnf("[ORACLE-ORDERBOOK] ORDER %s", formatSellOrder(order))
+		o.log.Infof("[ORACLE-ORDERBOOK] ORDER %s", formatSellOrder(order))
 	}
 	// get all lock orders from the order store
 	storedOrders, err := o.orderStore.GetAllOrderIds(types.LockOrderType)
@@ -609,6 +664,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		err = o.orderStore.RemoveOrder(id, types.LockOrderType)
 		if err != nil {
 			o.log.Errorf("[ORACLE-ORDERBOOK] Error removing order from order store: %s", err.Error())
+			storeRemoveErrors++
+		} else {
+			ordersPruned++
 		}
 	}
 	// get all close orders from the order store
@@ -632,6 +690,9 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 			err := o.orderStore.RemoveOrder(id, types.CloseOrderType)
 			if err != nil {
 				o.log.Errorf("[ORACLE-ORDERBOOK] Error removing order from order store: %s", err.Error())
+				storeRemoveErrors++
+			} else {
+				ordersPruned++
 			}
 		}
 	}
@@ -649,6 +710,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	}
 	// current safe height
 	safeHeight := o.state.GetSafeHeight()
+	// track submission metrics
+	var heldAwaitingSafe, ordersAwaitingConfirmation int
 	// loop through the order book searching the order store for lock/close orders witnessed by this node
 	for _, order := range orderBook.Orders {
 		// process unlocked sell order
@@ -664,6 +727,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
 				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
+				heldAwaitingSafe++
+				ordersAwaitingConfirmation++
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
@@ -687,6 +752,8 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
 				o.log.Debugf("[ORACLE-SUBMIT] Not submitting close order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
+				heldAwaitingSafe++
+				ordersAwaitingConfirmation++
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
@@ -700,6 +767,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
 			if err != nil {
 				o.log.Errorf("[ORACLE-SUBMIT] Failed to write order %s: %v", lib.BytesToString(order.Id), err)
+				o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 				continue
 			}
 			o.log.Debugf("[ORACLE-SUBMIT] Informing controller of witnessed close order %s", wOrder)
@@ -711,6 +779,12 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	// update submitted orders metrics
 	totalSubmitted := len(lockOrders) + len(closeOrders)
 	o.metrics.UpdateOracleOrderMetrics(0, 0, totalSubmitted, 0, 0)
+	// update submission tracking metrics
+	o.metrics.UpdateOracleSubmissionMetrics(heldAwaitingSafe, 0, 0, 0, 0)
+	// update orders awaiting confirmation gauge
+	if o.metrics != nil && o.metrics.OrdersAwaitingConfirmation != nil {
+		o.metrics.OrdersAwaitingConfirmation.Set(float64(ordersAwaitingConfirmation))
+	}
 	return lockOrders, closeOrders
 }
 
@@ -722,6 +796,8 @@ func (o *Oracle) updateMetrics() {
 	}
 	// get current state metrics
 	safeHeight := o.state.GetSafeHeight()
+	lastHeight := o.state.GetLastHeight()
+	sourceHeight := o.state.sourceChainHeight
 	// get submission history sizes
 	lockOrderSubmissionsSize := len(o.state.lockOrderSubmissions)
 	closeOrderSubmissionsSize := len(o.state.closeOrderSubmissions)
@@ -736,8 +812,10 @@ func (o *Oracle) updateMetrics() {
 	if err == nil {
 		closeOrders = len(closeOrderIds)
 	}
+	// update height metrics
+	o.metrics.UpdateOracleHeightMetrics(lastHeight, safeHeight, sourceHeight, 0)
 	// update state metrics
-	o.metrics.UpdateOracleStateMetrics(safeHeight, o.state.sourceChainHeight, lockOrderSubmissionsSize, closeOrderSubmissionsSize)
+	o.metrics.UpdateOracleStateMetrics(safeHeight, sourceHeight, lockOrderSubmissionsSize, closeOrderSubmissionsSize)
 	// update store metrics
 	o.metrics.UpdateOracleStoreMetrics(lockOrders, closeOrders)
 }
