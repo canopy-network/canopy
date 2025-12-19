@@ -233,9 +233,9 @@ func (t *Transaction) TokenTransfer() types.TokenTransfer {
 //   - USDT: transfer() returns void (no return value)
 //
 // This difference does NOT affect the oracle because:
-//   1. The oracle observes transactions passively - it doesn't call transfer()
-//   2. We parse the transaction INPUT data (the function call parameters), not return values
-//   3. Transfer success is validated via transaction receipt status (see block_provider.go)
+//  1. The oracle observes transactions passively - it doesn't call transfer()
+//  2. We parse the transaction INPUT data (the function call parameters), not return values
+//  3. Transfer success is validated via transaction receipt status (see block_provider.go)
 //
 // This approach works identically for USDC, USDT, and all ERC20 variants.
 func parseERC20Transfer(data []byte) (recipientAddress string, amount *big.Int, auxData []byte, err error) {

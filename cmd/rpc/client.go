@@ -9,11 +9,11 @@ import (
 
 	"github.com/canopy-network/canopy/fsm"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
-	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"google.golang.org/protobuf/proto"
 )
 

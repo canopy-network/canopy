@@ -334,6 +334,7 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 		return s.GetDexBatch(id, false, points)
 	})
 }
+
 // CanopyOrdersResponse holds categorized witnessed orders
 type CanopyOrdersResponse struct {
 	LockOrders  []*types.WitnessedOrder `json:"lock_orders"`

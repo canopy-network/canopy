@@ -166,8 +166,8 @@ func TestEthBlockProvider_fetchBlock(t *testing.T) {
 				rpcClient: mockClient,
 				logger:    logger,
 				chainId:   1,
-				config: lib.EthBlockProviderConfig{},
-				heightMu: &sync.Mutex{},
+				config:    lib.EthBlockProviderConfig{},
+				heightMu:  &sync.Mutex{},
 			}
 
 			block, err := provider.fetchBlock(context.Background(), new(big.Int).SetUint64(tt.height))
@@ -308,8 +308,8 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 				logger:          logger,
 				blockChan:       blockChan,
 				chainId:         1,
-				config: lib.EthBlockProviderConfig{},
-				heightMu: &sync.Mutex{},
+				config:          lib.EthBlockProviderConfig{},
+				heightMu:        &sync.Mutex{},
 			}
 			// Call processBlocks with start and end parameters
 			resultNext := provider.processBlocks(context.Background(), tt.startHeight, tt.endHeight)
@@ -535,4 +535,3 @@ func createTestTransaction(config transactionConfig) *Transaction {
 func uint64Ptr(v uint64) *uint64 {
 	return &v
 }
-
