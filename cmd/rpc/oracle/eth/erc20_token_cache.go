@@ -61,22 +61,25 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 		return info, nil
 	}
 	// fetch name from contract
-	nameBytes, err := callContract(ctx, m.client, contractAddress, erc20NameFunction)
+	nameBytes, err := m.callContract(ctx, contractAddress, erc20NameFunction)
 	if err != nil {
+		m.metrics.IncrementEthTokenInfoFetchError("name")
 		return types.TokenInfo{}, ErrTokenInfo
 	}
 	// decode name from bytes
 	name := decodeString(nameBytes)
 	// fetch symbol from contract
-	symbolBytes, err := callContract(ctx, m.client, contractAddress, erc20SymbolFunction)
+	symbolBytes, err := m.callContract(ctx, contractAddress, erc20SymbolFunction)
 	if err != nil {
+		m.metrics.IncrementEthTokenInfoFetchError("symbol")
 		return types.TokenInfo{}, ErrTokenInfo
 	}
 	// decode symbol from bytes
 	symbol := decodeString(symbolBytes)
 	// fetch decimals from contract
-	decimalsBytes, err := callContract(ctx, m.client, contractAddress, erc20DecimalsFunction)
+	decimalsBytes, err := m.callContract(ctx, contractAddress, erc20DecimalsFunction)
 	if err != nil {
+		m.metrics.IncrementEthTokenInfoFetchError("decimals")
 		return types.TokenInfo{}, ErrTokenInfo
 	}
 	// decode decimals from bytes
@@ -97,7 +100,7 @@ func (m *ERC20TokenCache) TokenInfo(ctx context.Context, contractAddress string)
 }
 
 // callContract uses client to call the specified function at address
-func callContract(ctx context.Context, client ContractCaller, address, function string) ([]byte, error) {
+func (m *ERC20TokenCache) callContract(ctx context.Context, address, function string) ([]byte, error) {
 	// convert address string to common.Address
 	contractAddr := common.HexToAddress(address)
 	// decode function signature from hex
@@ -114,8 +117,12 @@ func callContract(ctx context.Context, client ContractCaller, address, function 
 	callCtx, cancel := context.WithTimeout(ctx, callContractTimeoutS*time.Second)
 	defer cancel()
 	// make the contract call
-	result, err := client.CallContract(callCtx, msg, nil)
+	result, err := m.client.CallContract(callCtx, msg, nil)
 	if err != nil {
+		// check if this was a timeout
+		if ctx.Err() != nil || callCtx.Err() != nil {
+			m.metrics.IncrementEthTokenContractCallTimeout()
+		}
 		return nil, ErrContractNotFound
 	}
 	return result, nil

@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -239,6 +240,39 @@ type EthBlockProviderMetrics struct {
 	BlocksProcessed       prometheus.Counter // total Ethereum blocks processed
 	TransactionsProcessed prometheus.Counter // total Ethereum transactions processed
 	TransactionRetries    prometheus.Counter // total Ethereum transaction processing retries
+
+	// Connection & Sync Status Metrics (High Priority)
+	RPCConnectionAttempts prometheus.Counter     // total RPC connection attempts
+	RPCConnectionErrors   *prometheus.CounterVec // RPC connection errors by error type
+	WSConnectionAttempts  prometheus.Counter     // total WebSocket connection attempts
+	WSSubscriptionErrors  prometheus.Counter     // WebSocket subscription failures
+	ConnectionState       prometheus.Gauge       // current connection state (0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected)
+	SyncStatus            prometheus.Gauge       // sync status (0=unsynced, 1=syncing, 2=synced)
+	BlockHeightLag        prometheus.Gauge       // blocks behind chain head
+
+	// Block Processing Metrics (High Priority)
+	BlockFetchErrors        *prometheus.CounterVec // block fetch errors by error type
+	BlockProcessingTimeouts prometheus.Counter     // blocks that timed out during processing
+	ProcessBlocksBatchSize  prometheus.Histogram   // blocks processed per batch
+	ReorgDetected           prometheus.Counter     // chain reorganizations detected
+
+	// Transaction Processing Metrics (Medium Priority)
+	TransactionsTotal           prometheus.Counter     // total transactions encountered
+	TransactionParseErrors      *prometheus.CounterVec // TX parsing errors by error type
+	TransactionRetryByAttempt   *prometheus.CounterVec // retry attempts by attempt number
+	TransactionExhaustedRetries prometheus.Counter     // transactions that exhausted all retries
+	TransactionSuccessStatus    *prometheus.CounterVec // TX success/failed/unknown breakdown
+	ReceiptFetchErrors          prometheus.Counter     // receipt fetch failures
+
+	// Order Detection Metrics (Medium Priority)
+	ERC20TransferDetected prometheus.Counter     // ERC20 transfers detected
+	LockOrderDetected     prometheus.Counter     // lock orders successfully parsed
+	CloseOrderDetected    prometheus.Counter     // close orders successfully parsed
+	OrderValidationErrors *prometheus.CounterVec // order validation errors by order_type and error_type
+
+	// Token Cache Error Metrics (Medium Priority)
+	TokenInfoFetchErrors      *prometheus.CounterVec // token info fetch errors by field
+	TokenContractCallTimeouts prometheus.Counter     // token contract call timeouts
 }
 
 // NewMetricsServer() creates a new telemetry server
@@ -714,6 +748,104 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Name: "canopy_eth_transaction_retries_total",
 				Help: "Total number of Ethereum transaction processing retries",
 			}),
+			// Connection & Sync Status Metrics
+			RPCConnectionAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_rpc_connection_attempts_total",
+				Help: "Total RPC connection attempts",
+			}),
+			RPCConnectionErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_rpc_connection_errors_total",
+				Help: "RPC connection errors by error type",
+			}, []string{"error_type"}),
+			WSConnectionAttempts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_ws_connection_attempts_total",
+				Help: "Total WebSocket connection attempts",
+			}),
+			WSSubscriptionErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_ws_subscription_errors_total",
+				Help: "WebSocket subscription failures",
+			}),
+			ConnectionState: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_connection_state",
+				Help: "Current connection state (0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected)",
+			}),
+			SyncStatus: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_sync_status",
+				Help: "Sync status (0=unsynced, 1=syncing, 2=synced)",
+			}),
+			BlockHeightLag: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_eth_block_height_lag",
+				Help: "Number of blocks behind chain head",
+			}),
+			// Block Processing Metrics
+			BlockFetchErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_block_fetch_errors_total",
+				Help: "Block fetch errors by error type",
+			}, []string{"error_type"}),
+			BlockProcessingTimeouts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_block_processing_timeouts_total",
+				Help: "Blocks that timed out during processing",
+			}),
+			ProcessBlocksBatchSize: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_eth_process_blocks_batch_size",
+				Help:    "Number of blocks processed per batch",
+				Buckets: []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000},
+			}),
+			ReorgDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_reorg_detected_total",
+				Help: "Chain reorganizations detected",
+			}),
+			// Transaction Processing Metrics
+			TransactionsTotal: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transactions_total",
+				Help: "Total transactions encountered in blocks",
+			}),
+			TransactionParseErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_parse_errors_total",
+				Help: "Transaction parsing errors by error type",
+			}, []string{"error_type"}),
+			TransactionRetryByAttempt: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_retry_by_attempt_total",
+				Help: "Transaction retry attempts by attempt number",
+			}, []string{"attempt"}),
+			TransactionExhaustedRetries: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_exhausted_retries_total",
+				Help: "Transactions that exhausted all retry attempts",
+			}),
+			TransactionSuccessStatus: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_transaction_success_status_total",
+				Help: "Transaction success/failed/unknown breakdown",
+			}, []string{"status"}),
+			ReceiptFetchErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_receipt_fetch_errors_total",
+				Help: "Receipt fetch failures",
+			}),
+			// Order Detection Metrics
+			ERC20TransferDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_erc20_transfer_detected_total",
+				Help: "ERC20 transfers detected",
+			}),
+			LockOrderDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_lock_order_detected_total",
+				Help: "Lock orders successfully parsed",
+			}),
+			CloseOrderDetected: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_close_order_detected_total",
+				Help: "Close orders successfully parsed",
+			}),
+			OrderValidationErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_order_validation_errors_total",
+				Help: "Order validation errors by order type and error type",
+			}, []string{"order_type", "error_type"}),
+			// Token Cache Error Metrics
+			TokenInfoFetchErrors: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_eth_token_info_fetch_errors_total",
+				Help: "Token info fetch errors by field",
+			}, []string{"field"}),
+			TokenContractCallTimeouts: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_eth_token_contract_call_timeouts_total",
+				Help: "Token contract call timeouts",
+			}),
 		},
 	}
 }
@@ -1167,4 +1299,193 @@ func (m *Metrics) UpdateOracleStoreErrorMetrics(writeErrors, readErrors, removeE
 	m.StoreWriteErrors.Add(float64(writeErrors))
 	m.StoreReadErrors.Add(float64(readErrors))
 	m.StoreRemoveErrors.Add(float64(removeErrors))
+}
+
+// ========== Eth Block Provider Metrics Helper Functions ==========
+
+// SetEthConnectionState sets the current connection state
+// States: 0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected
+func (m *Metrics) SetEthConnectionState(state int) {
+	if m == nil {
+		return
+	}
+	m.ConnectionState.Set(float64(state))
+}
+
+// SetEthSyncStatus sets the current sync status
+// States: 0=unsynced, 1=syncing, 2=synced
+func (m *Metrics) SetEthSyncStatus(status int) {
+	if m == nil {
+		return
+	}
+	m.SyncStatus.Set(float64(status))
+}
+
+// SetEthBlockHeightLag sets the number of blocks behind chain head
+func (m *Metrics) SetEthBlockHeightLag(lag uint64) {
+	if m == nil {
+		return
+	}
+	m.BlockHeightLag.Set(float64(lag))
+}
+
+// IncrementEthRPCConnectionAttempt increments the RPC connection attempt counter
+func (m *Metrics) IncrementEthRPCConnectionAttempt() {
+	if m == nil {
+		return
+	}
+	m.RPCConnectionAttempts.Inc()
+}
+
+// IncrementEthRPCConnectionError increments the RPC connection error counter for a specific error type
+func (m *Metrics) IncrementEthRPCConnectionError(errorType string) {
+	if m == nil {
+		return
+	}
+	m.RPCConnectionErrors.WithLabelValues(errorType).Inc()
+}
+
+// IncrementEthWSConnectionAttempt increments the WebSocket connection attempt counter
+func (m *Metrics) IncrementEthWSConnectionAttempt() {
+	if m == nil {
+		return
+	}
+	m.WSConnectionAttempts.Inc()
+}
+
+// IncrementEthWSSubscriptionError increments the WebSocket subscription error counter
+func (m *Metrics) IncrementEthWSSubscriptionError() {
+	if m == nil {
+		return
+	}
+	m.WSSubscriptionErrors.Inc()
+}
+
+// IncrementEthBlockFetchError increments the block fetch error counter for a specific error type
+func (m *Metrics) IncrementEthBlockFetchError(errorType string) {
+	if m == nil {
+		return
+	}
+	m.BlockFetchErrors.WithLabelValues(errorType).Inc()
+}
+
+// IncrementEthBlockProcessingTimeout increments the block processing timeout counter
+func (m *Metrics) IncrementEthBlockProcessingTimeout() {
+	if m == nil {
+		return
+	}
+	m.BlockProcessingTimeouts.Inc()
+}
+
+// RecordEthProcessBlocksBatchSize records the number of blocks processed in a batch
+func (m *Metrics) RecordEthProcessBlocksBatchSize(batchSize int) {
+	if m == nil {
+		return
+	}
+	m.ProcessBlocksBatchSize.Observe(float64(batchSize))
+}
+
+// IncrementEthReorgDetected increments the chain reorganization detected counter
+func (m *Metrics) IncrementEthReorgDetected() {
+	if m == nil {
+		return
+	}
+	m.ReorgDetected.Inc()
+}
+
+// IncrementEthTransactionsTotal increments the total transactions counter
+func (m *Metrics) IncrementEthTransactionsTotal(count int) {
+	if m == nil {
+		return
+	}
+	m.TransactionsTotal.Add(float64(count))
+}
+
+// IncrementEthTransactionParseError increments the transaction parse error counter for a specific error type
+func (m *Metrics) IncrementEthTransactionParseError(errorType string) {
+	if m == nil {
+		return
+	}
+	m.TransactionParseErrors.WithLabelValues(errorType).Inc()
+}
+
+// IncrementEthTransactionRetryByAttempt increments the transaction retry counter for a specific attempt number
+func (m *Metrics) IncrementEthTransactionRetryByAttempt(attempt int) {
+	if m == nil {
+		return
+	}
+	m.TransactionRetryByAttempt.WithLabelValues(fmt.Sprintf("%d", attempt)).Inc()
+}
+
+// IncrementEthTransactionExhaustedRetries increments the exhausted retries counter
+func (m *Metrics) IncrementEthTransactionExhaustedRetries() {
+	if m == nil {
+		return
+	}
+	m.TransactionExhaustedRetries.Inc()
+}
+
+// IncrementEthTransactionSuccessStatus increments the transaction success status counter
+// Status values: "success", "failed", "unknown"
+func (m *Metrics) IncrementEthTransactionSuccessStatus(status string) {
+	if m == nil {
+		return
+	}
+	m.TransactionSuccessStatus.WithLabelValues(status).Inc()
+}
+
+// IncrementEthReceiptFetchError increments the receipt fetch error counter
+func (m *Metrics) IncrementEthReceiptFetchError() {
+	if m == nil {
+		return
+	}
+	m.ReceiptFetchErrors.Inc()
+}
+
+// IncrementEthERC20TransferDetected increments the ERC20 transfer detected counter
+func (m *Metrics) IncrementEthERC20TransferDetected() {
+	if m == nil {
+		return
+	}
+	m.ERC20TransferDetected.Inc()
+}
+
+// IncrementEthLockOrderDetected increments the lock order detected counter
+func (m *Metrics) IncrementEthLockOrderDetected() {
+	if m == nil {
+		return
+	}
+	m.LockOrderDetected.Inc()
+}
+
+// IncrementEthCloseOrderDetected increments the close order detected counter
+func (m *Metrics) IncrementEthCloseOrderDetected() {
+	if m == nil {
+		return
+	}
+	m.CloseOrderDetected.Inc()
+}
+
+// IncrementEthOrderValidationError increments the order validation error counter
+func (m *Metrics) IncrementEthOrderValidationError(orderType, errorType string) {
+	if m == nil {
+		return
+	}
+	m.OrderValidationErrors.WithLabelValues(orderType, errorType).Inc()
+}
+
+// IncrementEthTokenInfoFetchError increments the token info fetch error counter for a specific field
+func (m *Metrics) IncrementEthTokenInfoFetchError(field string) {
+	if m == nil {
+		return
+	}
+	m.TokenInfoFetchErrors.WithLabelValues(field).Inc()
+}
+
+// IncrementEthTokenContractCallTimeout increments the token contract call timeout counter
+func (m *Metrics) IncrementEthTokenContractCallTimeout() {
+	if m == nil {
+		return
+	}
+	m.TokenContractCallTimeouts.Inc()
 }
