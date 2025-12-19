@@ -380,7 +380,7 @@ type ValidatorFilters struct {
 	Paused            FilterOption `json:"paused"`
 	Delegate          FilterOption `json:"delegate"`
 	Committee         uint64       `json:"committee"`
-	FilterByCommittee bool         `json:"filter_by_committee"` // Add this flag
+	FilterByCommittee bool         `json:"filterByCommittee"` // Add this flag
 }
 
 // On() returns whether there exists any filters
