@@ -147,9 +147,11 @@ func (p *EthBlockProvider) IsSynced() bool {
 
 func (p *EthBlockProvider) closeConnections() {
 	if p.rpcClient != nil {
+		p.logger.Debug("[ETH-CONN] closing RPC connection")
 		p.rpcClient.Close()
 	}
 	if p.wsClient != nil {
+		p.logger.Debug("[ETH-WS] closing WebSocket connection")
 		p.wsClient.Close()
 	}
 }
@@ -175,6 +177,7 @@ func (p *EthBlockProvider) run(ctx context.Context) {
 		err := p.connect(ctx)
 		if err != nil {
 			p.logger.Errorf("[ETH-CONN] error connecting to node: %s", err.Error())
+			p.logger.Infof("[ETH-CONN] retrying connection in %d seconds", p.config.RetryDelay)
 			select {
 			case <-ctx.Done():
 				return
@@ -244,6 +247,7 @@ func (p *EthBlockProvider) connect(ctx context.Context) error {
 // and our ethereum block provider should execute a process loop
 func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 	if p.wsClient == nil {
+		p.logger.Error("[ETH-WS] websocket client not initialized")
 		return fmt.Errorf("websocket client not initialized")
 	}
 	// create header channel
@@ -296,6 +300,8 @@ func (p *EthBlockProvider) monitorHeaders(ctx context.Context) error {
 			// process all blocks up to current height
 			p.nextHeight = p.processBlocks(ctx, p.nextHeight, header.Number)
 		case err := <-sub.Err():
+			// log subscription error
+			p.logger.Errorf("[ETH-WS] subscription error received: %v", err)
 			// unsubscribe from new headers
 			sub.Unsubscribe()
 			// return the error
