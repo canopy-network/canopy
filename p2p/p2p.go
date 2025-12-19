@@ -376,7 +376,7 @@ func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 		streams[i] = &Stream{
 			topic:        i,
 			msgAssembler: make([]byte, 0),
-			sendQueue:    make(chan *Packet, maxStreamSendQueueSize),
+			sendQueue:    make(chan *PacketWithTiming, maxStreamSendQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}
@@ -554,6 +554,10 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 		if tickCount%10 == 0 {
 			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
 		}
+
+		// Update queue depth metrics for prometheus
+		p.UpdateQueueDepthMetrics()
+
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
 		// Calculate total messages across all inboxes
@@ -595,4 +599,38 @@ func (p *P2P) GetInboxStats() map[lib.Topic]int {
 		stats[topic] = len(ch)
 	}
 	return stats
+}
+
+// UpdateQueueDepthMetrics updates prometheus metrics for send and inbox queue depths
+// by iterating through all peer connections and aggregating queue sizes
+func (p *P2P) UpdateQueueDepthMetrics() {
+	if p.metrics == nil {
+		return
+	}
+
+	// Track send queue depths by aggregating across all peers
+	sendQueueDepths := make(map[lib.Topic]int)
+
+	// Get all peers and check their stream send queues
+	p.PeerSet.RLock()
+	for _, peer := range p.PeerSet.m {
+		if peer.conn != nil && peer.conn.streams != nil {
+			for topic, stream := range peer.conn.streams {
+				if stream != nil && stream.sendQueue != nil {
+					sendQueueDepths[topic] += len(stream.sendQueue)
+				}
+			}
+		}
+	}
+	p.PeerSet.RUnlock()
+
+	// Update send queue depth metrics
+	for topic, depth := range sendQueueDepths {
+		p.metrics.SendQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(depth))
+	}
+
+	// Update inbox queue depth metrics
+	for topic, ch := range p.channels {
+		p.metrics.InboxQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(len(ch)))
+	}
 }

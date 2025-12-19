@@ -127,6 +127,7 @@ func (c *MultiConn) Stop() {
 
 // Send() queues the sending of a message to a specific Stream
 func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
+	startTime := time.Now()
 	stream, ok := c.streams[topic]
 	if !ok {
 		c.log.Errorf("Stream %s does not exist", topic)
@@ -141,7 +142,12 @@ func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
 			Bytes:    chunk,
 		})
 	}
-	ok = stream.queueSends(packets)
+	// Record message metrics
+	if c.p2p.metrics != nil {
+		c.p2p.metrics.MessageSize.Observe(float64(len(bz)))
+		c.p2p.metrics.PacketsPerMessage.Observe(float64(len(packets)))
+	}
+	ok = stream.queueSends(packets, startTime, c.p2p.metrics)
 	if !ok {
 		c.log.Errorf("Packet(ID:%s) packet failed in queue for: %s", lib.Topic_name[int32(topic)], lib.BytesToTruncatedString(c.Address.PublicKey))
 	}
@@ -158,23 +164,23 @@ func (c *MultiConn) startSendService() {
 		}
 	}()
 	m := limiter.New(0, 0)
-	var packet *Packet
+	var pwt *PacketWithTiming
 	defer func() { m.Done() }()
 	for {
 		// select statement ensures the sequential coordination of the concurrent processes
 		select {
-		case packet = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_BLOCK].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_BLOCK_REQUEST].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_TX].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_PEERS_RESPONSE].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_PEERS_REQUEST].sendQueue:
-			c.sendPacket(packet, m)
+		case pwt = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_BLOCK].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_BLOCK_REQUEST].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_TX].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_PEERS_RESPONSE].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_PEERS_REQUEST].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
 		case <-c.quitSending: // fires when Stop() is called
 			return
 		}
@@ -217,7 +223,7 @@ func (c *MultiConn) startReceiveService() {
 					return
 				}
 				// handle the packet within the stream
-				if slash, er := stream.handlePacket(info, x); er != nil {
+				if slash, er := stream.handlePacket(info, x, c.p2p.metrics); er != nil {
 					c.log.Warnf(er.Error())
 					c.Error(er, slash)
 					return
@@ -257,6 +263,8 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 // waitForAndHandleWireBytes() a rate limited handler of inbound bytes from the wire.
 // Blocks until bytes are received converts bytes into a proto.Message using an Envelope
 func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message, lib.ErrorI) {
+	receiveStart := time.Now()
+
 	// initialize the wrapper object
 	msg := new(Envelope)
 	// restrict the instantaneous data flow to rate bytes per second
@@ -268,10 +276,43 @@ func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message
 	if err != nil {
 		return nil, err
 	}
+
+	// Record wire read time
+	if c.p2p.metrics != nil {
+		receiveDuration := time.Since(receiveStart).Seconds()
+		c.p2p.metrics.ReceiveWireTime.Observe(receiveDuration)
+	}
+
 	// update the limiter
 	m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
+}
+
+// sendPacketWithTiming() a rate limited writer with metrics tracking
+func (c *MultiConn) sendPacketWithTiming(pwt *PacketWithTiming, m *limiter.Monitor) {
+	if pwt == nil || pwt.packet == nil {
+		return
+	}
+	dequeueTime := time.Now()
+
+	// Record queue wait time
+	if c.p2p.metrics != nil {
+		queueDuration := dequeueTime.Sub(pwt.queueStart).Seconds()
+		c.p2p.metrics.SendQueueTime.Observe(queueDuration)
+	}
+
+	// Send packet and measure wire time
+	wireStart := time.Now()
+	c.sendWireBytes(pwt.packet, m)
+
+	// Record wire write time and total send time
+	if c.p2p.metrics != nil {
+		wireDuration := time.Since(wireStart).Seconds()
+		totalDuration := time.Since(pwt.sendStart).Seconds()
+		c.p2p.metrics.SendWireTime.Observe(wireDuration)
+		c.p2p.metrics.SendTotalTime.Observe(totalDuration)
+	}
 }
 
 // sendPacket() a rate limited writer of outbound bytes to the wire
@@ -317,11 +358,18 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	m.Update(lenM)
 }
 
+// PacketWithTiming wraps a Packet with timing information for metrics
+type PacketWithTiming struct {
+	packet     *Packet
+	sendStart  time.Time // when Send() was called
+	queueStart time.Time // when packet was queued
+}
+
 // Stream: an independent, bidirectional communication channel that is scoped to a single topic.
 // In a multiplexed connection there is typically more than one stream per connection
 type Stream struct {
 	topic        lib.Topic                    // the subject and priority of the stream
-	sendQueue    chan *Packet                 // a queue of unsent messages
+	sendQueue    chan *PacketWithTiming       // a queue of unsent messages with timing
 	msgAssembler []byte                       // collects and adds incoming packets until the entire message is received (EOF signal)
 	inbox        chan *lib.MessageAndMetadata // the channel where fully received messages are held for other parts of the app to read
 	mu           sync.Mutex                   // mutex to prevent race conditions when sending packets (all packets of the same message should be one right after the other)
@@ -330,11 +378,11 @@ type Stream struct {
 }
 
 // queueSends() schedules the packets to be sent ensuring coordination with the mutex
-func (s *Stream) queueSends(packets []*Packet) bool {
+func (s *Stream) queueSends(packets []*Packet, sendStart time.Time, metrics *lib.Metrics) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, packet := range packets {
-		ok := s.queueSend(packet)
+		ok := s.queueSend(packet, sendStart, metrics)
 		if !ok {
 			return false
 		}
@@ -343,20 +391,32 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 }
 
 // queueSend() schedules the packet to be sent
-func (s *Stream) queueSend(p *Packet) bool {
+func (s *Stream) queueSend(p *Packet, sendStart time.Time, metrics *lib.Metrics) bool {
 	if s.closed {
 		return false
 	}
+	queueStart := time.Now()
+	pwt := &PacketWithTiming{
+		packet:     p,
+		sendStart:  sendStart,
+		queueStart: queueStart,
+	}
 	select {
-	case s.sendQueue <- p: // enqueue to the back of the line
+	case s.sendQueue <- pwt: // enqueue to the back of the line
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
+		if metrics != nil {
+			metrics.SendQueueTimeout.Inc()
+			metrics.SendQueueFull.WithLabelValues(lib.Topic_name[int32(p.StreamId)]).Inc()
+		}
 		return false
 	}
 }
 
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
-func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, lib.ErrorI) {
+func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *lib.Metrics) (int32, lib.ErrorI) {
+	assemblyStart := time.Now()
+
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
 	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
 	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
@@ -384,6 +444,13 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 			Message: msg,
 			Sender:  peerInfo,
 		}
+
+		// Record assembly time
+		if metrics != nil {
+			assemblyDuration := time.Since(assemblyStart).Seconds()
+			metrics.ReceiveAssemblyTime.Observe(assemblyDuration)
+		}
+
 		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
 		select {
