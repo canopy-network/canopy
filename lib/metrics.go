@@ -193,6 +193,34 @@ type OracleMetrics struct {
 	// Performance metrics
 	OrderBookUpdateTime prometheus.Histogram // how long does it take to update order book?
 	RootChainSyncTime   prometheus.Histogram // how long does it take to sync with root chain?
+
+	// Block height metrics
+	LastProcessedHeight        prometheus.Gauge     // last source chain block height processed
+	ConfirmationLag            prometheus.Gauge     // gap between source chain height and safe height
+	OrdersAwaitingConfirmation prometheus.Gauge     // orders witnessed but not yet at safe height
+	ReorgRollbackDepth         prometheus.Histogram // how many blocks reorgs roll back
+
+	// Order lifecycle metrics
+	OrdersNotInOrderbook prometheus.Counter // orders witnessed but not found in order book
+	OrdersDuplicate      prometheus.Counter // duplicate orders (already in store)
+	OrdersArchived       prometheus.Counter // orders successfully archived
+	LockOrdersCommitted  prometheus.Counter // lock orders committed via certificate
+	CloseOrdersCommitted prometheus.Counter // close orders committed via certificate
+
+	// Validation failure metrics
+	ValidationFailures *prometheus.CounterVec // validation failures by reason
+
+	// Submission tracking metrics
+	OrdersHeldAwaitingSafe  prometheus.Counter // orders not submitted due to safe height
+	OrdersHeldProposeDelay  prometheus.Counter // orders held by ProposeDelayBlocks
+	OrdersHeldResubmitDelay prometheus.Counter // orders held by resubmit cooldown
+	LockOrderResubmissions  prometheus.Counter // lock orders resubmitted
+	CloseOrderResubmissions prometheus.Counter // close orders resubmitted
+
+	// Store operation metrics
+	StoreWriteErrors  prometheus.Counter // order store write failures
+	StoreReadErrors   prometheus.Counter // order store read failures
+	StoreRemoveErrors prometheus.Counter // order store remove failures
 }
 
 // EthBlockProviderMetrics represents the telemetry for the Ethereum block provider
@@ -563,6 +591,84 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			RootChainSyncTime: promauto.NewHistogram(prometheus.HistogramOpts{
 				Name: "canopy_oracle_root_chain_sync_time",
 				Help: "Time to sync with root chain in the oracle in seconds",
+			}),
+			// Block height metrics
+			LastProcessedHeight: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_last_processed_height",
+				Help: "Last source chain block height processed by the oracle",
+			}),
+			ConfirmationLag: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_confirmation_lag",
+				Help: "Gap between source chain height and safe height (blocks awaiting confirmation)",
+			}),
+			OrdersAwaitingConfirmation: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_oracle_orders_awaiting_confirmation",
+				Help: "Number of orders witnessed but not yet at safe height",
+			}),
+			ReorgRollbackDepth: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_oracle_reorg_rollback_depth",
+				Help:    "Number of blocks rolled back during chain reorganizations",
+				Buckets: []float64{1, 2, 5, 10, 20, 50, 100},
+			}),
+			// Order lifecycle metrics
+			OrdersNotInOrderbook: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_not_in_orderbook_total",
+				Help: "Total orders witnessed but not found in order book",
+			}),
+			OrdersDuplicate: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_duplicate_total",
+				Help: "Total duplicate orders encountered (already in store)",
+			}),
+			OrdersArchived: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_archived_total",
+				Help: "Total orders successfully archived",
+			}),
+			LockOrdersCommitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_lock_orders_committed_total",
+				Help: "Total lock orders committed via certificate",
+			}),
+			CloseOrdersCommitted: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_close_orders_committed_total",
+				Help: "Total close orders committed via certificate",
+			}),
+			// Validation failure metrics
+			ValidationFailures: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_oracle_validation_failures_total",
+				Help: "Total validation failures by reason",
+			}, []string{"reason"}),
+			// Submission tracking metrics
+			OrdersHeldAwaitingSafe: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_awaiting_safe_total",
+				Help: "Total orders not submitted due to safe height requirement",
+			}),
+			OrdersHeldProposeDelay: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_propose_delay_total",
+				Help: "Total orders held by ProposeDelayBlocks configuration",
+			}),
+			OrdersHeldResubmitDelay: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_orders_held_resubmit_delay_total",
+				Help: "Total orders held by resubmit cooldown",
+			}),
+			LockOrderResubmissions: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_lock_order_resubmissions_total",
+				Help: "Total lock orders resubmitted",
+			}),
+			CloseOrderResubmissions: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_close_order_resubmissions_total",
+				Help: "Total close orders resubmitted",
+			}),
+			// Store operation metrics
+			StoreWriteErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_write_errors_total",
+				Help: "Total order store write failures",
+			}),
+			StoreReadErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_read_errors_total",
+				Help: "Total order store read failures",
+			}),
+			StoreRemoveErrors: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_oracle_store_remove_errors_total",
+				Help: "Total order store remove failures",
 			}),
 		},
 		// ETH
@@ -987,4 +1093,64 @@ func (m *Metrics) UpdateEthBlockProviderMetrics(blockFetchTime, transactionProce
 	m.BlocksProcessed.Add(float64(blocksProcessed))
 	m.TransactionsProcessed.Add(float64(transactionsProcessed))
 	m.TransactionRetries.Add(float64(retries))
+}
+
+// UpdateOracleHeightMetrics() updates oracle block height tracking metrics
+func (m *Metrics) UpdateOracleHeightMetrics(lastHeight, safeHeight, sourceHeight uint64, awaitingConfirmation int) {
+	if m == nil {
+		return
+	}
+	m.LastProcessedHeight.Set(float64(lastHeight))
+	m.ConfirmationLag.Set(float64(sourceHeight - safeHeight))
+	m.OrdersAwaitingConfirmation.Set(float64(awaitingConfirmation))
+}
+
+// RecordOracleReorgDepth() records the depth of a chain reorganization rollback
+func (m *Metrics) RecordOracleReorgDepth(depth uint64) {
+	if m == nil {
+		return
+	}
+	m.ReorgRollbackDepth.Observe(float64(depth))
+}
+
+// IncrementValidationFailure() increments the validation failure counter for a specific reason
+func (m *Metrics) IncrementValidationFailure(reason string) {
+	if m == nil {
+		return
+	}
+	m.ValidationFailures.WithLabelValues(reason).Inc()
+}
+
+// UpdateOracleLifecycleMetrics() updates order lifecycle metrics
+func (m *Metrics) UpdateOracleLifecycleMetrics(notInOrderbook, duplicate, archived, lockCommitted, closeCommitted int) {
+	if m == nil {
+		return
+	}
+	m.OrdersNotInOrderbook.Add(float64(notInOrderbook))
+	m.OrdersDuplicate.Add(float64(duplicate))
+	m.OrdersArchived.Add(float64(archived))
+	m.LockOrdersCommitted.Add(float64(lockCommitted))
+	m.CloseOrdersCommitted.Add(float64(closeCommitted))
+}
+
+// UpdateOracleSubmissionMetrics() updates submission tracking metrics
+func (m *Metrics) UpdateOracleSubmissionMetrics(heldSafe, heldPropose, heldResubmit, lockResub, closeResub int) {
+	if m == nil {
+		return
+	}
+	m.OrdersHeldAwaitingSafe.Add(float64(heldSafe))
+	m.OrdersHeldProposeDelay.Add(float64(heldPropose))
+	m.OrdersHeldResubmitDelay.Add(float64(heldResubmit))
+	m.LockOrderResubmissions.Add(float64(lockResub))
+	m.CloseOrderResubmissions.Add(float64(closeResub))
+}
+
+// UpdateOracleStoreErrorMetrics() updates store operation error metrics
+func (m *Metrics) UpdateOracleStoreErrorMetrics(writeErrors, readErrors, removeErrors int) {
+	if m == nil {
+		return
+	}
+	m.StoreWriteErrors.Add(float64(writeErrors))
+	m.StoreReadErrors.Add(float64(readErrors))
+	m.StoreRemoveErrors.Add(float64(removeErrors))
 }
