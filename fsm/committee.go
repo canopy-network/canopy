@@ -306,8 +306,6 @@ func (s *StateMachine) SetCommittees(address crypto.AddressI, totalStake uint64,
 			if err = s.SetCommitteeMember(address, committee, totalStake); err != nil {
 				return
 			}
-		} else {
-			s.log.Debugf("Skipping committee store write at height %d (activationHeight: %d)", s.height, s.Config.Upgrades.SkipCommitteeStore.ActivationHeight)
 		}
 		// add to the committee staked supply
 		if err = s.AddToCommitteeSupplyForChain(committee, totalStake); err != nil {
