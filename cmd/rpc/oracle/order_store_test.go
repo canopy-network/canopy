@@ -793,7 +793,7 @@ func TestOracleDiskStorage_ArchiveOrder(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 			} else {
 				require.NoError(t, err)
-				
+
 				// Verify archive file exists in correct location
 				var expectedDir string
 				switch tt.orderType {
@@ -802,22 +802,22 @@ func TestOracleDiskStorage_ArchiveOrder(t *testing.T) {
 				case types.CloseOrderType:
 					expectedDir = "archive/close"
 				}
-				
+
 				filename := fmt.Sprintf("%s.%s.json", hex.EncodeToString(tt.order.OrderId), string(tt.orderType))
 				archivePath := filepath.Join(tempDir, expectedDir, filename)
-				
+
 				// Check that archive file exists
 				_, err := os.Stat(archivePath)
 				assert.NoError(t, err, "archive file should exist")
-				
+
 				// Verify archive file contents
 				data, err := os.ReadFile(archivePath)
 				require.NoError(t, err)
-				
+
 				var archivedOrder types.WitnessedOrder
 				err = json.Unmarshal(data, &archivedOrder)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, tt.order.OrderId, archivedOrder.OrderId)
 				assert.Equal(t, tt.order.WitnessedHeight, archivedOrder.WitnessedHeight)
 			}
