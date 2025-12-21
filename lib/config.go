@@ -105,13 +105,19 @@ func (m *MainConfig) GetLogLevel() int32 {
 // RPC CONFIG BELOW
 
 type RPCConfig struct {
-	WalletPort   string `json:"walletPort"`   // the port where the web wallet is hosted
-	ExplorerPort string `json:"explorerPort"` // the port where the block explorer is hosted
-	RPCPort      string `json:"rpcPort"`      // the port where the rpc server is hosted
-	AdminPort    string `json:"adminPort"`    // the port where the admin rpc server is hosted
-	RPCUrl       string `json:"rpcURL"`       // the url where the rpc server is hosted
-	AdminRPCUrl  string `json:"adminRPCUrl"`  // the url where the admin rpc server is hosted
-	TimeoutS     int    `json:"timeoutS"`     // the rpc request timeout in seconds
+	WalletPort                 string `json:"walletPort"`                 // the port where the web wallet is hosted
+	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
+	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
+	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
+	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
+	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
+	MaxRCSubscribers           int    `json:"maxRCSubscribers"`           // max total root-chain subscribers
+	MaxRCSubscribersPerChain   int    `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
+	RCSubscriberReadLimitBytes int64  `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
+	RCSubscriberWriteTimeoutMS int    `json:"rcSubscriberWriteTimeoutMS"` // ws write timeout for publishing root-chain info
+	RCSubscriberPongWaitS      int    `json:"rcSubscriberPongWaitS"`      // time to wait for pong responses
+	RCSubscriberPingPeriodS    int    `json:"rcSubscriberPingPeriodS"`    // how often to ping subscribers
 }
 
 // RootChain defines a rpc url to a possible 'root chain' which is used if the governance parameter RootChainId == ChainId
@@ -123,13 +129,19 @@ type RootChain struct {
 // DefaultRPCConfig() sets rpc url to localhost and sets wallet, explorer, rpc, and admin ports from [50000-50003]
 func DefaultRPCConfig() RPCConfig {
 	return RPCConfig{
-		WalletPort:   "50000",                  // find the wallet on localhost:50000
-		ExplorerPort: "50001",                  // find the explorer on localhost:50001
-		RPCPort:      "50002",                  // the rpc is served on localhost:50002
-		AdminPort:    "50003",                  // the admin rpc is served on localhost:50003
-		RPCUrl:       "http://localhost:50002", // use a local rpc by default
-		AdminRPCUrl:  "http://localhost:50003", // use a local admin rpc by default
-		TimeoutS:     3,                        // the rpc timeout is 3 seconds
+		WalletPort:                 "50000",                    // find the wallet on localhost:50000
+		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
+		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
+		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
+		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
+		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
+		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
+		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id
+		RCSubscriberReadLimitBytes: int64(64 * units.Kilobyte), // cap inbound ws message sizes
+		RCSubscriberWriteTimeoutMS: 10000,                      // 10s write deadline for publishes
+		RCSubscriberPongWaitS:      60,                         // 60s pong wait
+		RCSubscriberPingPeriodS:    50,                         // 50s ping interval
 	}
 }
 

@@ -21,6 +21,15 @@ var _ lib.RCManagerI = new(RCManager)
 
 const chainIdParamName = "chainId"
 
+const (
+	defaultRCSubscriberReadLimitBytes = int64(64 * 1024)
+	defaultRCSubscriberWriteTimeout   = 10 * time.Second
+	defaultRCSubscriberPongWait       = 60 * time.Second
+	defaultRCSubscriberPingPeriod     = 50 * time.Second
+	defaultMaxRCSubscribers           = 512
+	defaultMaxRCSubscribersPerChain   = 128
+)
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -30,19 +39,57 @@ type RCManager struct {
 	afterRCUpdate func(info *lib.RootChainInfo) // callback after the root chain info update
 	upgrader      websocket.Upgrader            // upgrade http connection to ws
 	log           lib.LoggerI                   // stdout log
+	// rc subscriber limits
+	rcSubscriberReadLimitBytes int64
+	rcSubscriberWriteTimeout   time.Duration
+	rcSubscriberPongWait       time.Duration
+	rcSubscriberPingPeriod     time.Duration
+	maxRCSubscribers           int
+	maxRCSubscribersPerChain   int
+	subscriberCount            int
 }
 
 // NewRCManager() constructs a new instance of a RCManager
 func NewRCManager(controller *controller.Controller, config lib.Config, logger lib.LoggerI) (manager *RCManager) {
+	readLimit := config.RCSubscriberReadLimitBytes
+	if readLimit <= 0 {
+		readLimit = defaultRCSubscriberReadLimitBytes
+	}
+	writeTimeout := time.Duration(config.RCSubscriberWriteTimeoutMS) * time.Millisecond
+	if writeTimeout <= 0 {
+		writeTimeout = defaultRCSubscriberWriteTimeout
+	}
+	pongWait := time.Duration(config.RCSubscriberPongWaitS) * time.Second
+	if pongWait <= 0 {
+		pongWait = defaultRCSubscriberPongWait
+	}
+	pingPeriod := time.Duration(config.RCSubscriberPingPeriodS) * time.Second
+	if pingPeriod <= 0 || pingPeriod >= pongWait {
+		pingPeriod = pongWait * 9 / 10
+	}
+	maxSubscribers := config.MaxRCSubscribers
+	if maxSubscribers <= 0 {
+		maxSubscribers = defaultMaxRCSubscribers
+	}
+	maxSubscribersPerChain := config.MaxRCSubscribersPerChain
+	if maxSubscribersPerChain <= 0 {
+		maxSubscribersPerChain = defaultMaxRCSubscribersPerChain
+	}
 	// create the manager
 	manager = &RCManager{
-		c:             config,
-		subscriptions: make(map[uint64]*RCSubscription),
-		subscribers:   make(map[uint64][]*RCSubscriber),
-		l:             controller.Mutex,
-		afterRCUpdate: controller.UpdateRootChainInfo,
-		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
-		log:           logger,
+		c:                          config,
+		subscriptions:              make(map[uint64]*RCSubscription),
+		subscribers:                make(map[uint64][]*RCSubscriber),
+		l:                          controller.Mutex,
+		afterRCUpdate:              controller.UpdateRootChainInfo,
+		upgrader:                   websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
+		log:                        logger,
+		rcSubscriberReadLimitBytes: readLimit,
+		rcSubscriberWriteTimeout:   writeTimeout,
+		rcSubscriberPongWait:       pongWait,
+		rcSubscriberPingPeriod:     pingPeriod,
+		maxRCSubscribers:           maxSubscribers,
+		maxRCSubscribersPerChain:   maxSubscribersPerChain,
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
@@ -66,15 +113,21 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 	if err != nil {
 		return
 	}
+	// copy subscribers under lock to avoid map iteration races
+	r.l.Lock()
+	subscribers := append([]*RCSubscriber(nil), r.subscribers[chainId]...)
+	r.l.Unlock()
 	// for each ws client
-	for _, subscriber := range r.subscribers[chainId] {
+	for _, subscriber := range subscribers {
+		subscriber.writeMu.Lock()
+		_ = subscriber.conn.SetWriteDeadline(time.Now().Add(r.rcSubscriberWriteTimeout))
 		// publish to each client
 		if e := subscriber.conn.WriteMessage(websocket.BinaryMessage, protoBytes); e != nil {
-			// defer the Stop() call to prevent the slice modification during iteration.
-			// since Stop() removes the subscriber from r.subscribers, immediate execution
-			// would affect the slice that is currently being iterated.
-			defer subscriber.Stop(e)
+			subscriber.writeMu.Unlock()
+			subscriber.Stop(e)
+			continue
 		}
+		subscriber.writeMu.Unlock()
 	}
 }
 
@@ -426,6 +479,7 @@ type RCSubscriber struct {
 	manager *RCManager      // a reference to the manager of the ws clients
 	conn    *websocket.Conn // the underlying ws connection
 	log     lib.LoggerI     // stdout log
+	writeMu sync.Mutex      // protects concurrent writes
 }
 
 // WebSocket() upgrades a http request to a websockets connection
@@ -450,6 +504,10 @@ func (s *Server) WebSocket(w http.ResponseWriter, r *http.Request, _ httprouter.
 		http.Error(w, "invalid chain id", http.StatusBadRequest)
 		return
 	}
+	if chainId == 0 {
+		http.Error(w, "invalid chain id", http.StatusBadRequest)
+		return
+	}
 	// create a new web sockets client
 	client := &RCSubscriber{
 		chainId: chainId,
@@ -458,16 +516,31 @@ func (s *Server) WebSocket(w http.ResponseWriter, r *http.Request, _ httprouter.
 		log:     s.logger,
 	}
 	// add the connection to the manager
-	s.rcManager.AddSubscriber(client)
+	if err := s.rcManager.AddSubscriber(client); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		if closeErr := conn.Close(); closeErr != nil {
+			s.logger.Error(closeErr.Error())
+		}
+		return
+	}
+	client.Start()
 }
 
 // Add() adds the client to the manager
-func (r *RCManager) AddSubscriber(subscriber *RCSubscriber) {
+func (r *RCManager) AddSubscriber(subscriber *RCSubscriber) error {
 	// lock for thread safety
 	r.l.Lock()
 	defer r.l.Unlock()
+	if r.maxRCSubscribers > 0 && r.subscriberCount >= r.maxRCSubscribers {
+		return fmt.Errorf("subscriber limit reached")
+	}
+	if r.maxRCSubscribersPerChain > 0 && len(r.subscribers[subscriber.chainId]) >= r.maxRCSubscribersPerChain {
+		return fmt.Errorf("subscriber limit reached for chainId=%d", subscriber.chainId)
+	}
 	// add to the map
 	r.subscribers[subscriber.chainId] = append(r.subscribers[subscriber.chainId], subscriber)
+	r.subscriberCount++
+	return nil
 }
 
 // RemoveSubscriber() gracefully deletes a RC subscriber
@@ -476,9 +549,52 @@ func (r *RCManager) RemoveSubscriber(chainId uint64, subscriber *RCSubscriber) {
 	r.l.Lock()
 	defer r.l.Unlock()
 	// remove from the slice
+	before := len(r.subscribers[chainId])
 	r.subscribers[chainId] = slices.DeleteFunc(r.subscribers[chainId], func(sub *RCSubscriber) bool {
 		return sub == subscriber
 	})
+	if len(r.subscribers[chainId]) == 0 {
+		delete(r.subscribers, chainId)
+	}
+	if len(r.subscribers[chainId]) < before {
+		r.subscriberCount--
+	}
+}
+
+// Start() configures and starts subscriber lifecycle goroutines
+func (r *RCSubscriber) Start() {
+	r.conn.SetReadLimit(r.manager.rcSubscriberReadLimitBytes)
+	_ = r.conn.SetReadDeadline(time.Now().Add(r.manager.rcSubscriberPongWait))
+	r.conn.SetPongHandler(func(string) error {
+		_ = r.conn.SetReadDeadline(time.Now().Add(r.manager.rcSubscriberPongWait))
+		return nil
+	})
+	go r.readLoop()
+	go r.pingLoop()
+}
+
+func (r *RCSubscriber) readLoop() {
+	for {
+		if _, _, err := r.conn.ReadMessage(); err != nil {
+			r.Stop(err)
+			return
+		}
+	}
+}
+
+func (r *RCSubscriber) pingLoop() {
+	ticker := time.NewTicker(r.manager.rcSubscriberPingPeriod)
+	defer ticker.Stop()
+	for range ticker.C {
+		r.writeMu.Lock()
+		_ = r.conn.SetWriteDeadline(time.Now().Add(r.manager.rcSubscriberWriteTimeout))
+		if err := r.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			r.writeMu.Unlock()
+			r.Stop(err)
+			return
+		}
+		r.writeMu.Unlock()
+	}
 }
 
 // Stop() stops the client
