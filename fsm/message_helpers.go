@@ -953,7 +953,12 @@ func checkCommittees(committees []uint64) lib.ErrorI {
 	if numCommittees > 1000 || numCommittees == 0 {
 		return ErrInvalidNumCommittees()
 	}
+	seen := make(map[uint64]struct{}, numCommittees)
 	for _, committee := range committees {
+		if _, dup := seen[committee]; dup {
+			return ErrInvalidNumCommittees()
+		}
+		seen[committee] = struct{}{}
 		if err := checkChainId(committee); err != nil {
 			return err
 		}
