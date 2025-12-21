@@ -36,7 +36,8 @@ func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 	// the byzantine evidence is handled at `Transaction Level` on the root
 	// chain with a HandleMessageCertificateResults
 	if s.Config.ChainId != rootChainId {
-		return s.events.Reset(), s.HandleCertificateResults(lastCertificate, nil)
+		err = s.HandleCertificateResults(lastCertificate, nil)
+		return s.events.Reset(), err
 	}
 	// load the validator set for the previous height
 	lastValidatorSet, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
@@ -45,7 +46,8 @@ func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 	}
 	// if is root-chain: load the committee from state as the certificate result
 	// will match the evidence and there's no Transaction to HandleMessageCertificateResults
-	return s.events.Reset(), s.HandleCertificateResults(lastCertificate, &lastValidatorSet)
+	err = s.HandleCertificateResults(lastCertificate, &lastValidatorSet)
+	return s.events.Reset(), err
 }
 
 // EndBlock() is code that is executed at the end of `applying` the block
