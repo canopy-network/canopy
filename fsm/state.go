@@ -259,6 +259,8 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 		}
 		// get the store from the state machine, it may be the original or a wrapped 'txn' if processing oversize transactions
 		currentStore := s.Store().(lib.StoreI)
+		// snapshot trackers that must not persist across failed transactions
+		preTxSlashTracker := s.slashTracker.Clone()
 		// wrap the store in a 'database transaction' in case a rollback to the previous valid transaction is needed
 		txn, e := s.TxnWrap()
 		if e != nil {
@@ -271,6 +273,10 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			r.AddFailed(lib.NewFailedTx(tx, e))
 			// discard the FSM cache
 			s.ResetCaches()
+			// clear any events accumulated for the failed transaction to avoid leaking them to subsequent txs
+			s.events.Reset()
+			// restore slash tracker to its pre-transaction state
+			s.slashTracker = preTxSlashTracker
 			//txn.Discard()
 			s.SetStore(currentStore)
 			continue

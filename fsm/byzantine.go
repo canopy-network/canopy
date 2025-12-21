@@ -402,6 +402,22 @@ func NewSlashTracker() *SlashTracker {
 	return &slashTracker
 }
 
+// Clone() returns a deep copy of the slash tracker to allow safe rollback on failed operations
+func (s *SlashTracker) Clone() *SlashTracker {
+	if s == nil {
+		return nil
+	}
+	clone := make(SlashTracker, len(*s))
+	for addr, m := range *s {
+		cp := make(map[uint64]uint64, len(m))
+		for chainId, percent := range m {
+			cp[chainId] = percent
+		}
+		clone[addr] = cp
+	}
+	return &clone
+}
+
 // AddSlash() adds a slash for an address at by a committee for a certain percent
 func (s *SlashTracker) AddSlash(address []byte, chainId, percent uint64) {
 	// add the percent to the total
