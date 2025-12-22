@@ -481,7 +481,7 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 	}
 	// skip validation when no orders are present
 	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
-		o.log.Debug("[ORACLE-VALIDATE] No orders to validate in proposal")
+		o.log.Info("[ORACLE-VALIDATE] No orders to validate in proposal")
 		return nil
 	}
 	// current safe height
@@ -534,15 +534,16 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		}
 		o.log.Infof("[ORACLE-VALIDATE] Validated proposed close order %s successfully", lib.BytesToString(order.OrderId))
 	}
-	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
-		o.log.Debug("[ORACLE-VALIDATE] Validated off chain orders successfully")
-	}
+	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders and %d close orders successfully", len(orders.LockOrders), len(orders.CloseOrders))
 	return nil
 }
 
 // CommitCertificate is executed after the quorum agrees on a block
 func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
-
+	// oracle is disabled
+	if o == nil {
+		return nil
+	}
 	// Update the last submit height for all lock orders in this certificate
 	for _, order := range qc.Results.Orders.LockOrders {
 		// get order from order store
