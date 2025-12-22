@@ -727,7 +727,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
-				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
+				o.log.Infof("[ORACLE-SUBMIT] Not submitting lock order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
 				heldAwaitingSafe++
 				ordersAwaitingConfirmation++
 				continue
