@@ -727,7 +727,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
-				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
+				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
 				heldAwaitingSafe++
 				ordersAwaitingConfirmation++
 				continue
@@ -737,7 +737,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
 				continue
 			}
-			o.log.Debugf("[ORACLE-SUBMIT] Informing controller of witnessed lock order %s", wOrder)
+			o.log.Infof("[ORACLE-SUBMIT] Reporting witnessed lock order %s", wOrder)
 			// submit this witnessed lock order by returning it in the lockOrders slice
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
@@ -752,7 +752,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
-				o.log.Debugf("[ORACLE-SUBMIT] Not submitting close order %s: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
+				o.log.Debugf("[ORACLE-SUBMIT] Not submitting close order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
 				heldAwaitingSafe++
 				ordersAwaitingConfirmation++
 				continue
@@ -771,7 +771,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 				continue
 			}
-			o.log.Debugf("[ORACLE-SUBMIT] Informing controller of witnessed close order %s", wOrder)
+			o.log.Infof("[ORACLE-SUBMIT] Reporting witnessed close order %s", wOrder)
 			// submit this witnessed close order by returning it in the closeOrders slice
 			closeOrders = append(closeOrders, wOrder.OrderId)
 		}

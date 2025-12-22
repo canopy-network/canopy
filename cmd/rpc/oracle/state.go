@@ -106,7 +106,6 @@ func (m *OracleState) shouldSubmit(order *types.WitnessedOrder, rootHeight uint6
 		// record the submission height for this close order
 		m.closeOrderSubmissions[orderIdStr] = rootHeight
 	}
-	m.log.Debugf("[ORACLE-STATE] Allowing submission of order %s at root height %d", orderIdStr, rootHeight)
 	return true
 }
 
