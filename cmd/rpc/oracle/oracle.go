@@ -479,45 +479,51 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		o.log.Error("[ORACLE-VALIDATE] Proposal orders == nil, unable to validate orders")
 		return nil
 	}
-	// skip validation when no orders are present
+	// skip validation and logging when no orders are present
 	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
-		// o.log.Info("[ORACLE-VALIDATE] No orders to validate in proposal")
 		return nil
 	}
-	// current safe height
+	// get current safe height for validation
 	safeHeight := o.state.GetSafeHeight()
+	// entry log with context
+	o.log.Debugf("[ORACLE-VALIDATE] Validating proposal: %d lock orders, %d close orders, safeHeight=%d",
+		len(orders.LockOrders), len(orders.CloseOrders), safeHeight)
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
+		orderId := lib.BytesToString(lock.OrderId)
 		// get order from order store
 		witnessedOrder, err := o.orderStore.ReadOrder(lock.OrderId, types.LockOrderType)
 		if err != nil {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed lock order %s not validated", lib.BytesToString(lock.OrderId))
-			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), err)
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: not found in store", orderId)
+			return ErrOrderNotVerified(orderId, err)
 		}
 		// check if the witnessed order is from a safe block (has sufficient confirmations)
 		if witnessedOrder.WitnessedHeight > safeHeight {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed lock order %s not validated: witnessed at height %d, safe height is %d", lib.BytesToString(lock.OrderId), witnessedOrder.WitnessedHeight, safeHeight)
-			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), errors.New("order witnessed above safe height"))
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: not safe (witnessed=%d, safe=%d, need %d more blocks)",
+				orderId, witnessedOrder.WitnessedHeight, safeHeight, witnessedOrder.WitnessedHeight-safeHeight)
+			return ErrOrderNotVerified(orderId, errors.New("order witnessed above safe height"))
 		}
 		// compare orderbook order and witnessed order
 		if !lock.Equals(witnessedOrder.LockOrder) {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed lock order %s not validated", lib.BytesToString(lock.OrderId))
-			return ErrOrderNotVerified(lib.BytesToString(lock.OrderId), errors.New("lock order unequal"))
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: order data mismatch", orderId)
+			return ErrOrderNotVerified(orderId, errors.New("lock order unequal"))
 		}
-		o.log.Infof("[ORACLE-VALIDATE] Validated proposed lock order %s successfully", lib.BytesToString(lock.OrderId))
+		o.log.Infof("[ORACLE-VALIDATE] Lock order %s valid (witnessed=%d)", orderId, witnessedOrder.WitnessedHeight)
 	}
 	// validate each close order against the witnessed order store
 	for _, orderId := range orders.CloseOrders {
-		// get the witnessd order
+		orderIdStr := lib.BytesToString(orderId)
+		// get the witnessed order
 		witnessedOrder, err := o.orderStore.ReadOrder(orderId, types.CloseOrderType)
 		if err != nil {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed close order %s not validated", lib.BytesToString(orderId))
-			return ErrOrderNotVerified(lib.BytesToString(orderId), err)
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: not found in store", orderIdStr)
+			return ErrOrderNotVerified(orderIdStr, err)
 		}
 		// check if the witnessed order is from a safe block (has sufficient confirmations)
 		if witnessedOrder.WitnessedHeight > safeHeight {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed close order %s not validated: witnessed at height %d, safe height is %d", lib.BytesToString(orderId), witnessedOrder.WitnessedHeight, safeHeight)
-			return ErrOrderNotVerified(lib.BytesToString(orderId), errors.New("order witnessed above safe height"))
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: not safe (witnessed=%d, safe=%d, need %d more blocks)",
+				orderIdStr, witnessedOrder.WitnessedHeight, safeHeight, witnessedOrder.WitnessedHeight-safeHeight)
+			return ErrOrderNotVerified(orderIdStr, errors.New("order witnessed above safe height"))
 		}
 		// construct close order for comparison
 		order := lib.CloseOrder{
@@ -527,12 +533,13 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		}
 		// compare orderbook order and witnessed order
 		if !order.Equals(witnessedOrder.CloseOrder) {
-			o.log.Warnf("[ORACLE-VALIDATE] Proposed close order %s not validated", lib.BytesToString(orderId))
-			return ErrOrderNotVerified(lib.BytesToString(orderId), errors.New("close order unequal"))
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: order data mismatch", orderIdStr)
+			return ErrOrderNotVerified(orderIdStr, errors.New("close order unequal"))
 		}
-		o.log.Infof("[ORACLE-VALIDATE] Validated proposed close order %s successfully", lib.BytesToString(order.OrderId))
+		o.log.Infof("[ORACLE-VALIDATE] Close order %s valid (witnessed=%d)", orderIdStr, witnessedOrder.WitnessedHeight)
 	}
-	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders and %d close orders successfully", len(orders.LockOrders), len(orders.CloseOrders))
+	// summary log
+	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders and %d close orders", len(orders.LockOrders), len(orders.CloseOrders))
 	return nil
 }
 
@@ -707,57 +714,75 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	if o == nil {
 		return lockOrders, closeOrders
 	}
-	// current safe height
+	// get current heights for context
 	safeHeight := o.state.GetSafeHeight()
-	// track submission metrics
-	var heldAwaitingSafe, ordersAwaitingConfirmation int
+	// track statistics for summary log
+	var stats struct {
+		lockChecked, lockSubmitting, lockHeldSafe, lockHeldDelay     int
+		closeChecked, closeSubmitting, closeHeldSafe, closeHeldDelay int
+	}
+	// entry log with key context
+	// o.log.Debugf("[ORACLE-SUBMIT] Checking orders: orderBook=%d orders, rootHeight=%d, safeHeight=%d",
+	// 	len(orderBook.Orders), rootHeight, safeHeight)
 	// loop through the order book searching the order store for lock/close orders witnessed by this node
 	for _, order := range orderBook.Orders {
+		orderId := lib.BytesToString(order.Id)
 		// process unlocked sell order
 		if !order.IsLocked() {
-			// try to find a lock oorder
+			stats.lockChecked++
+			// try to find a lock order
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.LockOrderType)
 			if err != nil {
 				if err.Code() != CodeReadOrder {
-					o.log.Errorf("[ORACLE-SUBMIT] Failed to read order %s: %v", order, err)
+					o.log.Errorf("[ORACLE-SUBMIT] Failed to read lock order %s: %v", orderId, err)
 				}
 				continue
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
-				o.log.Infof("[ORACLE-SUBMIT] Not submitting lock order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
-				heldAwaitingSafe++
-				ordersAwaitingConfirmation++
+				blocksUntilSafe := wOrder.WitnessedHeight - safeHeight
+				o.log.Debugf("[ORACLE-SUBMIT] Lock order %s held: awaiting safe height (witnessed=%d, safe=%d, need %d more blocks)",
+					orderId, wOrder.WitnessedHeight, safeHeight, blocksUntilSafe)
+				stats.lockHeldSafe++
 				continue
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
 			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
-				o.log.Debugf("[ORACLE-SUBMIT] Not submitting lock order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
+				nextEligible := wOrder.LastSubmitHeight + o.config.OrderResubmitDelayBlocks
+				o.log.Debugf("[ORACLE-SUBMIT] Lock order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
+					orderId, wOrder.LastSubmitHeight, nextEligible, rootHeight)
+				stats.lockHeldDelay++
 				continue
 			}
-			o.log.Infof("[ORACLE-SUBMIT] Reporting witnessed lock order %s", wOrder)
+			o.log.Infof("[ORACLE-SUBMIT] Submitting lock order %s (witnessed=%d)", orderId, wOrder.WitnessedHeight)
+			stats.lockSubmitting++
 			// submit this witnessed lock order by returning it in the lockOrders slice
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
+			stats.closeChecked++
 			// process locked orders - look for witnessed close orders
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
 			if err != nil {
 				if err.Code() != CodeReadOrder {
-					o.log.Errorf("[ORACLE-SUBMIT] Failed to read order %s: %v", lib.BytesToString(order.Id), err)
+					o.log.Errorf("[ORACLE-SUBMIT] Failed to read close order %s: %v", orderId, err)
 				}
 				// No witnessed order is a normal condition, do not log
 				continue
 			}
 			// check if the witnessed order is from a safe block (has sufficient confirmations)
 			if wOrder.WitnessedHeight > safeHeight {
-				o.log.Infof("[ORACLE-SUBMIT] Not submitting close order %s, safe height not passed: witnessed at height %d, safe height is %d", lib.BytesToString(order.Id), wOrder.WitnessedHeight, safeHeight)
-				heldAwaitingSafe++
-				ordersAwaitingConfirmation++
+				blocksUntilSafe := wOrder.WitnessedHeight - safeHeight
+				o.log.Debugf("[ORACLE-SUBMIT] Close order %s held: awaiting safe height (witnessed=%d, safe=%d, need %d more blocks)",
+					orderId, wOrder.WitnessedHeight, safeHeight, blocksUntilSafe)
+				stats.closeHeldSafe++
 				continue
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
 			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
-				o.log.Debugf("[ORACLE-SUBMIT] Not submitting close order %s: LastSubmightHeight %d rootHeight %d", lib.BytesToString(order.Id), wOrder.LastSubmitHeight, rootHeight)
+				nextEligible := wOrder.LastSubmitHeight + o.config.OrderResubmitDelayBlocks
+				o.log.Debugf("[ORACLE-SUBMIT] Close order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
+					orderId, wOrder.LastSubmitHeight, nextEligible, rootHeight)
+				stats.closeHeldDelay++
 				continue
 			}
 			// update the last height this order was submitted
@@ -765,26 +790,30 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// update the witnessed order in the store
 			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
 			if err != nil {
-				o.log.Errorf("[ORACLE-SUBMIT] Failed to write order %s: %v", lib.BytesToString(order.Id), err)
+				o.log.Errorf("[ORACLE-SUBMIT] Failed to write close order %s: %v", orderId, err)
 				o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 				continue
 			}
-			o.log.Infof("[ORACLE-SUBMIT] Reporting witnessed close order %s", wOrder)
+			o.log.Infof("[ORACLE-SUBMIT] Submitting close order %s (witnessed=%d)", orderId, wOrder.WitnessedHeight)
+			stats.closeSubmitting++
 			// submit this witnessed close order by returning it in the closeOrders slice
 			closeOrders = append(closeOrders, wOrder.OrderId)
 		}
 	}
+	// summary log with full picture
+	o.log.Infof("[ORACLE-SUBMIT] rootHeight=%d: lock[checked=%d submitting=%d heldSafe=%d heldDelay=%d] close[checked=%d submitting=%d heldSafe=%d heldDelay=%d]",
+		rootHeight,
+		stats.lockChecked, stats.lockSubmitting, stats.lockHeldSafe, stats.lockHeldDelay,
+		stats.closeChecked, stats.closeSubmitting, stats.closeHeldSafe, stats.closeHeldDelay)
 	// update submitted orders metrics
-	totalSubmitted := len(lockOrders) + len(closeOrders)
-	if totalSubmitted > 0 {
-		o.log.Infof("[ORACLE-SUBMIT] rh: %d Witnessed %d lock orders and %d close orders, root height %d", rootHeight, len(lockOrders), len(closeOrders))
-	}
+	totalSubmitted := stats.lockSubmitting + stats.closeSubmitting
 	o.metrics.UpdateOracleOrderMetrics(0, 0, totalSubmitted, 0, 0)
 	// update submission tracking metrics
-	o.metrics.UpdateOracleSubmissionMetrics(heldAwaitingSafe, 0, 0, 0, 0)
+	totalHeldSafe := stats.lockHeldSafe + stats.closeHeldSafe
+	o.metrics.UpdateOracleSubmissionMetrics(totalHeldSafe, 0, 0, 0, 0)
 	// update orders awaiting confirmation gauge
 	if o.metrics != nil && o.metrics.OrdersAwaitingConfirmation != nil {
-		o.metrics.OrdersAwaitingConfirmation.Set(float64(ordersAwaitingConfirmation))
+		o.metrics.OrdersAwaitingConfirmation.Set(float64(totalHeldSafe))
 	}
 	return lockOrders, closeOrders
 }
