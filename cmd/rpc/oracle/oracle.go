@@ -748,9 +748,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			// check whether this witnessed lock order should be submitted in the next proposed block
 			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
-				nextEligible := wOrder.LastSubmitHeight + o.config.OrderResubmitDelayBlocks
-				o.log.Debugf("[ORACLE-SUBMIT] Lock order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
-					orderId, wOrder.LastSubmitHeight, nextEligible, rootHeight)
+				// shouldSubmit logs the specific reason internally
 				stats.lockHeldDelay++
 				continue
 			}
@@ -779,9 +777,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			}
 			// check whether this witnessed close order should be submitted in the next proposed block
 			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
-				nextEligible := wOrder.LastSubmitHeight + o.config.OrderResubmitDelayBlocks
-				o.log.Debugf("[ORACLE-SUBMIT] Close order %s held: resubmit delay (lastSubmit=%d, eligible at rootHeight=%d, current=%d)",
-					orderId, wOrder.LastSubmitHeight, nextEligible, rootHeight)
+				// shouldSubmit logs the specific reason internally
 				stats.closeHeldDelay++
 				continue
 			}

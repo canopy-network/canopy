@@ -241,16 +241,16 @@ type EthBlockProviderMetrics struct {
 	TransactionRetries    prometheus.Counter // total Ethereum transaction processing retries
 
 	// Connection & Sync Status Metrics (High Priority)
-	RPCConnectionAttempts prometheus.Counter     // total RPC connection attempts
-	RPCConnectionErrors   *prometheus.CounterVec // RPC connection errors by error type
-	WSConnectionAttempts  prometheus.Counter     // total WebSocket connection attempts
-	WSSubscriptionErrors  prometheus.Counter     // WebSocket subscription failures
-	ConnectionState       prometheus.Gauge       // current connection state (0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected)
-	SyncStatus            prometheus.Gauge       // sync status (0=unsynced, 1=syncing, 2=synced)
-	BlockHeightLag          prometheus.Gauge       // blocks behind chain head
-	ChainHeadHeight         prometheus.Gauge       // latest block height from chain head
-	EthLastProcessedHeight  prometheus.Gauge       // last block height successfully processed
-	EthSafeHeight           prometheus.Gauge       // current safe (confirmed) block height
+	RPCConnectionAttempts  prometheus.Counter     // total RPC connection attempts
+	RPCConnectionErrors    *prometheus.CounterVec // RPC connection errors by error type
+	WSConnectionAttempts   prometheus.Counter     // total WebSocket connection attempts
+	WSSubscriptionErrors   prometheus.Counter     // WebSocket subscription failures
+	ConnectionState        prometheus.Gauge       // current connection state (0=disconnected, 1=connecting, 2=rpc_connected, 3=fully_connected)
+	SyncStatus             prometheus.Gauge       // sync status (0=unsynced, 1=syncing, 2=synced)
+	BlockHeightLag         prometheus.Gauge       // blocks behind chain head
+	ChainHeadHeight        prometheus.Gauge       // latest block height from chain head
+	EthLastProcessedHeight prometheus.Gauge       // last block height successfully processed
+	EthSafeHeight          prometheus.Gauge       // current safe (confirmed) block height
 
 	// Block Processing Metrics (High Priority)
 	BlockFetchErrors        *prometheus.CounterVec // block fetch errors by error type
