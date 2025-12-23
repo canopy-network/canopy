@@ -92,6 +92,9 @@ func DefaultParams() *Params {
 
 // Check() validates the Params object
 func (x *Params) Check() lib.ErrorI {
+	if x == nil {
+		return ErrEmptyConsParams()
+	}
 	if err := x.Consensus.Check(); err != nil {
 		return err
 	}

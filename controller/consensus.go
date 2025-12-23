@@ -541,9 +541,12 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 	// if this node 'is validator'
 	if selfIsValidator {
 		// log the must connect update
+		c.log.Info("Self IS a validator 👍")
 		c.log.Infof("Updating must connects with %d validators", len(mustConnects))
 		// send the list to the p2p module
 		c.P2P.MustConnectsReceiver <- mustConnects
+	} else {
+		c.log.Info("Self IS NOT a validator 👎")
 	}
 }
 

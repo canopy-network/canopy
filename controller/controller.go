@@ -99,7 +99,7 @@ func (c *Controller) Start() {
 		// start the P2P module
 		c.P2P.Start()
 		// log the beginning of the root-chain API connection
-		c.log.Warnf("Attempting to connect to the root-chain")
+		c.log.Warnf("Attempting to connect to the root-chain: %d", rootChainId)
 		// set a timer to go off once per second
 		t := time.NewTicker(time.Second)
 		// once function completes, stop the timer
@@ -111,6 +111,7 @@ func (c *Controller) Start() {
 			if e != nil {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
+				c.log.Infof("Received root chain info with %d validators", len(rootChainInfo.ValidatorSet.GetValidatorSet()))
 				// call mempool check
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
@@ -118,6 +119,7 @@ func (c *Controller) Start() {
 				// exit the loop
 				break
 			}
+			c.log.Warnf("Empty root chain info")
 		}
 		// start mempool service
 		go c.CheckMempool()

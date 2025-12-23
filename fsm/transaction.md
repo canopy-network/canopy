@@ -58,7 +58,7 @@ Canopy uses a unique approach to prevent replay attacks and hash collisions:
 
 - Instead of using a traditional sequence number, Canopy uses a combination of timestamp and created block height.
 - The timestamp adds microsecond-level entropy to the transaction hash, making hash collisions extremely unlikely.
-- The created block height must be within an acceptable range of the current height (±120 blocks), allowing for safe pruning of old transaction data.
+- The created block height must be within an acceptable range of the current height (±4320 blocks). Assuming 20s block times, this is roughly 24 hours and allows safe pruning of old transaction data.
 
 This approach is "prune-friendly," meaning that nodes don't need to store the entire transaction history to prevent replay attacks, which helps keep the blockchain more efficient.
 
