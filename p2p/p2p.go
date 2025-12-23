@@ -100,8 +100,6 @@ func (p *P2P) Start() {
 	go p.DialForOutboundPeers()
 	// Start inbox monitoring
 	go p.MonitorInboxStats(inboxMonitorInterval)
-	// Wait until peers reaches minimum count
-	p.WaitForMinimumPeers()
 }
 
 // Stop() stops the P2P service
