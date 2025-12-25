@@ -119,15 +119,11 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 	r.l.Unlock()
 	// for each ws client
 	for _, subscriber := range subscribers {
-		subscriber.writeMu.Lock()
-		_ = subscriber.conn.SetWriteDeadline(time.Now().Add(r.rcSubscriberWriteTimeout))
 		// publish to each client
-		if e := subscriber.conn.WriteMessage(websocket.BinaryMessage, protoBytes); e != nil {
-			subscriber.writeMu.Unlock()
+		if e := subscriber.writeMessage(websocket.BinaryMessage, protoBytes); e != nil {
 			subscriber.Stop(e)
 			continue
 		}
-		subscriber.writeMu.Unlock()
 	}
 }
 
@@ -586,15 +582,18 @@ func (r *RCSubscriber) pingLoop() {
 	ticker := time.NewTicker(r.manager.rcSubscriberPingPeriod)
 	defer ticker.Stop()
 	for range ticker.C {
-		r.writeMu.Lock()
-		_ = r.conn.SetWriteDeadline(time.Now().Add(r.manager.rcSubscriberWriteTimeout))
-		if err := r.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-			r.writeMu.Unlock()
+		if err := r.writeMessage(websocket.PingMessage, nil); err != nil {
 			r.Stop(err)
 			return
 		}
-		r.writeMu.Unlock()
 	}
+}
+
+func (r *RCSubscriber) writeMessage(messageType int, data []byte) error {
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	_ = r.conn.SetWriteDeadline(time.Now().Add(r.manager.rcSubscriberWriteTimeout))
+	return r.conn.WriteMessage(messageType, data)
 }
 
 // Stop() stops the client
