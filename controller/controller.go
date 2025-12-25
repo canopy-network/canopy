@@ -65,23 +65,22 @@ func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey cryp
 		// exit with error
 		return
 	}
-
 	// create the controller
 	controller = &Controller{
-		Address:          address.Bytes(),
-		PublicKey:        valKey.PublicKey().Bytes(),
-		PrivateKey:       valKey,
-		Config:           c,
-		Metrics:          metrics,
-		FSM:              fsm,
-		oracle:           oracle,
-		Mempool:          mempool,
-		Consensus:        nil,
-		P2P:              p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:        &atomic.Bool{},
-		LastValidatorSet: make(map[uint64]map[uint64]*lib.ValidatorSet),
-		log:              l,
-		Mutex:            &sync.Mutex{},
+		Address:    address.Bytes(),
+		PublicKey:  valKey.PublicKey().Bytes(),
+		PrivateKey: valKey,
+		Config:     c,
+		Metrics:    metrics,
+		FSM:        fsm,
+		Mempool:    mempool,
+		Consensus:  nil,
+		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:  &atomic.Bool{},
+		log:        l,
+		Mutex:      &sync.Mutex{},
+
+		oracle: oracle,
 	}
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
@@ -143,10 +142,6 @@ func (c *Controller) Start() {
 					<-syncCh // wait for syncCh to be closed
 					c.log.Info("Oracle is synced to top, starting Canopy")
 				}
-				// // start the syncing process (if not synced to top)
-				// go c.Sync()
-				// // start the bft consensus (if synced to top)
-				// go c.Consensus.Start()
 				// exit the loop
 				break
 			}
