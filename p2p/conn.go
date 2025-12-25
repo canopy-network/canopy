@@ -12,7 +12,6 @@ import (
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 	limiter "github.com/mxk/go-flowrate/flowrate"
 	"google.golang.org/protobuf/proto"
 )
@@ -319,14 +318,14 @@ func (c *MultiConn) sendPacketWithTiming(pwt *PacketWithTiming, m *limiter.Monit
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 	if packet != nil {
-		c.log.Warnf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
-			lib.BytesToTruncatedString(c.Address.PublicKey),
-			lib.Topic_name[int32(packet.StreamId)],
-			len(packet.Bytes),
-			packet.Eof,
-			crypto.ShortHashString(packet.Bytes),
-		)
-		defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
+		//c.log.Debugf("Send Packet to %s (ID:%s, L:%d, E:%t), hash: %s",
+		//	lib.BytesToTruncatedString(c.Address.PublicKey),
+		//	lib.Topic_name[int32(packet.StreamId)],
+		//	len(packet.Bytes),
+		//	packet.Eof,
+		//	crypto.ShortHashString(packet.Bytes),
+		//)
+		//defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)

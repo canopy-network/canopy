@@ -3,10 +3,9 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -254,7 +253,6 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
-	// Print full stack trace
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
 	if err != nil {

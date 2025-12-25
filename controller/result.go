@@ -2,9 +2,8 @@ package controller
 
 import (
 	"bytes"
-	"slices"
-
 	"github.com/canopy-network/canopy/fsm"
+	"slices"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"

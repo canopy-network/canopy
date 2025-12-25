@@ -65,14 +65,15 @@ type Metrics struct {
 	log             LoggerI       // the logger
 	startupBlockSet bool          // flag to ensure startup block is only set once
 
-	NodeMetrics             // general telemetry about the node
-	BlockMetrics            // block telemetry
-	PeerMetrics             // peer telemetry
-	P2PMetrics              // p2p performance telemetry
-	BFTMetrics              // bft telemetry
-	FSMMetrics              // fsm telemetry
-	StoreMetrics            // persistence telemetry
-	MempoolMetrics          // tx memory pool telemetry
+	NodeMetrics    // general telemetry about the node
+	BlockMetrics   // block telemetry
+	PeerMetrics    // peer telemetry
+	P2PMetrics     // p2p performance telemetry
+	BFTMetrics     // bft telemetry
+	FSMMetrics     // fsm telemetry
+	StoreMetrics   // persistence telemetry
+	MempoolMetrics // tx memory pool telemetry
+
 	OracleMetrics           // oracle telemetry
 	EthBlockProviderMetrics // ethereum block provider telemetry
 }

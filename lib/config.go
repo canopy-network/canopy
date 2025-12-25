@@ -32,15 +32,16 @@ const (
 
 // Config is the structure of the user configuration options for a Canopy node
 type Config struct {
-	MainConfig                                             // main options spanning over all modules
-	LoggerConfig                                           // logger options
-	RPCConfig                                              // rpc API options
-	StateMachineConfig                                     // FSM options
-	StoreConfig                                            // persistence options
-	P2PConfig                                              // peer-to-peer options
-	ConsensusConfig                                        // bft options
-	MempoolConfig                                          // mempool options
-	MetricsConfig                                          // telemetry options
+	MainConfig         // main options spanning over all modules
+	LoggerConfig       // logger options
+	RPCConfig          // rpc API options
+	StateMachineConfig // FSM options
+	StoreConfig        // persistence options
+	P2PConfig          // peer-to-peer options
+	ConsensusConfig    // bft options
+	MempoolConfig      // mempool options
+	MetricsConfig      // telemetry options
+
 	EthBlockProviderConfig `json:"ethBlockProviderConfig"` // ethereum block provider configuration
 	OracleConfig           `json:"oracleConfig"`           // oracle configuration
 }
@@ -48,14 +49,15 @@ type Config struct {
 // DefaultConfig() returns a Config with developer set options
 func DefaultConfig() Config {
 	return Config{
-		MainConfig:             DefaultMainConfig(),
-		RPCConfig:              DefaultRPCConfig(),
-		StateMachineConfig:     DefaultStateMachineConfig(),
-		StoreConfig:            DefaultStoreConfig(),
-		P2PConfig:              DefaultP2PConfig(),
-		ConsensusConfig:        DefaultConsensusConfig(),
-		MempoolConfig:          DefaultMempoolConfig(),
-		MetricsConfig:          DefaultMetricsConfig(),
+		MainConfig:         DefaultMainConfig(),
+		RPCConfig:          DefaultRPCConfig(),
+		StateMachineConfig: DefaultStateMachineConfig(),
+		StoreConfig:        DefaultStoreConfig(),
+		P2PConfig:          DefaultP2PConfig(),
+		ConsensusConfig:    DefaultConsensusConfig(),
+		MempoolConfig:      DefaultMempoolConfig(),
+		MetricsConfig:      DefaultMetricsConfig(),
+
 		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
 		OracleConfig:           DefaultOracleConfig(),
 	}
