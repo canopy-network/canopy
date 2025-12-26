@@ -114,6 +114,7 @@ const (
 	ParamProtocolVersion = "protocolVersion" // current protocol version (upgrade enforcement)
 	ParamRetired         = "retired"         // if the chain is marking itself as 'retired' to the root-chain making it forever un-subsidized
 	ParamRootChainId     = "rootChainID"     // the chain id of the root chain (source of the validator set)
+	ParamResetCommittee  = "resetCommittee"  // committee id to reset its committee data
 )
 
 var _ ParamSpace = &ConsensusParams{}
@@ -135,6 +136,8 @@ func (x *ConsensusParams) SetUint64(paramName string, value uint64) lib.ErrorI {
 		x.Retired = value
 	case ParamRootChainId:
 		x.RootChainId = value
+	case ParamResetCommittee:
+		x.ResetCommittee = value
 	default:
 		return ErrUnknownParam()
 	}

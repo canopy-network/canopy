@@ -112,6 +112,27 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 	if err != nil {
 		return err
 	}
+	// reset committee data if requested by consensus param update
+	if params.Consensus.ResetCommittee != 0 {
+		// reset committee data
+		if err = s.OverwriteCommitteeData(&lib.CommitteeData{ChainId: params.Consensus.ResetCommittee}); err != nil {
+			return err
+		}
+		// prune checkpoints
+		storeI, ok := s.store.(lib.StoreI)
+		if !ok {
+			s.log.Errorf(ErrWrongStoreType().Error())
+		} else {
+			if err = storeI.DeleteCheckpointsForChain(params.Consensus.ResetCommittee); err != nil {
+				return err
+			}
+		}
+		// reset the param back to 0
+		params.Consensus.ResetCommittee = 0
+		if err = s.SetParamsCons(params.Consensus); err != nil {
+			return err
+		}
+	}
 	// if root chain id was updated
 	if previousParams.Consensus.RootChainId != params.Consensus.RootChainId {
 		// get the committee for self chain
