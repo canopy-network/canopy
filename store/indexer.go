@@ -524,6 +524,27 @@ func (t *Indexer) GetAllCheckpoints(chainId uint64) (checkpoints []*lib.Checkpoi
 	return
 }
 
+// DeleteCheckpointsForChain() removes all checkpoint records for a committee chain
+func (t *Indexer) DeleteCheckpointsForChain(chainId uint64) (err lib.ErrorI) {
+	it, err := t.db.Iterator(t.checkpointsCommitteeKey(chainId))
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	var keys [][]byte
+	for ; it.Valid(); it.Next() {
+		key := make([]byte, len(it.Key()))
+		copy(key, it.Key())
+		keys = append(keys, key)
+	}
+	for _, key := range keys {
+		if err = t.db.Delete(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (t *Indexer) checkpointFromKeyValue(key, value []byte) (*lib.Checkpoint, lib.ErrorI) {
 	segments := lib.DecodeLengthPrefixed(key)
 	if len(segments) != 3 {

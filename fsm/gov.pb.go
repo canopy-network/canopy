@@ -238,9 +238,11 @@ type ConsensusParams struct {
 	// root_chain_id: the identifier of the root chain (source of the validator set)
 	RootChainId uint64 `protobuf:"varint,3,opt,name=root_chain_id,json=rootChainId,proto3" json:"rootChainID"` // @gotags: json:"rootChainID"
 	// retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
-	Retired       uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Retired uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
+	// reset_committee: clears committee data for the provided committee id
+	ResetCommittee uint64 `protobuf:"varint,5,opt,name=reset_committee,json=resetCommittee,proto3" json:"resetCommittee"` // @gotags: json:"resetCommittee"
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ConsensusParams) Reset() {
@@ -301,6 +303,13 @@ func (x *ConsensusParams) GetRetired() uint64 {
 	return 0
 }
 
+func (x *ConsensusParams) GetResetCommittee() uint64 {
+	if x != nil {
+		return x.ResetCommittee
+	}
+	return 0
+}
+
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain
 type ValidatorParams struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -351,8 +360,14 @@ type ValidatorParams struct {
 	BuyDeadlineBlocks uint64 `protobuf:"varint,15,opt,name=buy_deadline_blocks,json=buyDeadlineBlocks,proto3" json:"buyDeadlineBlocks"` // @gotags: json:"buyDeadlineBlocks"
 	// lock_order_fee_multiplier: the fee multiplier of the 'send' fee that is required to execute a lock order
 	LockOrderFeeMultiplier uint64 `protobuf:"varint,16,opt,name=lock_order_fee_multiplier,json=lockOrderFeeMultiplier,proto3" json:"lockOrderFeeMultiplier"` // @gotags: json:"lockOrderFeeMultiplier"
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// minimum_stake_for_validators: is the least amount a validator must stake to qualify as staked
+	MinimumStakeForValidators uint64 `protobuf:"varint,17,opt,name=minimum_stake_for_validators,json=minimumStakeForValidators,proto3" json:"minimumStakeForValidators"` // @gotags: json:"minimumStakeForValidators"
+	// minimum_stake_for_delegates: is the least amount a delegator must stake to qualify as staked
+	MinimumStakeForDelegates uint64 `protobuf:"varint,18,opt,name=minimum_stake_for_delegates,json=minimumStakeForDelegates,proto3" json:"minimumStakeForDelegates"` // @gotags: json:"minimumStakeForDelegates"
+	// maximum_delegates_per_committee: is the maximum number of delegates that can be chose as lottery winners
+	MaximumDelegatesPerCommittee uint64 `protobuf:"varint,19,opt,name=maximum_delegates_per_committee,json=maximumDelegatesPerCommittee,proto3" json:"maximumDelegatesPerCommittee"` // @gotags: json:"maximumDelegatesPerCommittee"
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *ValidatorParams) Reset() {
@@ -493,6 +508,27 @@ func (x *ValidatorParams) GetBuyDeadlineBlocks() uint64 {
 func (x *ValidatorParams) GetLockOrderFeeMultiplier() uint64 {
 	if x != nil {
 		return x.LockOrderFeeMultiplier
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMinimumStakeForValidators() uint64 {
+	if x != nil {
+		return x.MinimumStakeForValidators
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMinimumStakeForDelegates() uint64 {
+	if x != nil {
+		return x.MinimumStakeForDelegates
+	}
+	return 0
+}
+
+func (x *ValidatorParams) GetMaximumDelegatesPerCommittee() uint64 {
+	if x != nil {
+		return x.MaximumDelegatesPerCommittee
 	}
 	return 0
 }
@@ -739,13 +775,14 @@ const file_gov_proto_rawDesc = "" +
 	"Governance\"C\n" +
 	"\x0fProtocolVersion\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x04R\aversion\"\x99\x01\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\"\xc2\x01\n" +
 	"\x0fConsensusParams\x12\x1d\n" +
 	"\n" +
 	"block_size\x18\x01 \x01(\x04R\tblockSize\x12)\n" +
 	"\x10protocol_version\x18\x02 \x01(\tR\x0fprotocolVersion\x12\"\n" +
 	"\rroot_chain_id\x18\x03 \x01(\x04R\vrootChainId\x12\x18\n" +
-	"\aretired\x18\x04 \x01(\x04R\aretired\"\xd9\x06\n" +
+	"\aretired\x18\x04 \x01(\x04R\aretired\x12'\n" +
+	"\x0freset_committee\x18\x05 \x01(\x04R\x0eresetCommittee\"\xa0\b\n" +
 	"\x0fValidatorParams\x12)\n" +
 	"\x10unstaking_blocks\x18\x01 \x01(\x04R\x0funstakingBlocks\x12(\n" +
 	"\x10max_pause_blocks\x18\x02 \x01(\x04R\x0emaxPauseBlocks\x12?\n" +
@@ -764,7 +801,10 @@ const file_gov_proto_rawDesc = "" +
 	"\x17max_slash_per_committee\x18\r \x01(\x04R\x14maxSlashPerCommittee\x12<\n" +
 	"\x1adelegate_reward_percentage\x18\x0e \x01(\x04R\x18delegateRewardPercentage\x12.\n" +
 	"\x13buy_deadline_blocks\x18\x0f \x01(\x04R\x11buyDeadlineBlocks\x129\n" +
-	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\"\x9e\x05\n" +
+	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\x12?\n" +
+	"\x1cminimum_stake_for_validators\x18\x11 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
+	"\x1bminimum_stake_for_delegates\x18\x12 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
+	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\x9e\x05\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12\x1b\n" +
 	"\tstake_fee\x18\x02 \x01(\x04R\bstakeFee\x12$\n" +

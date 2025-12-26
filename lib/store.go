@@ -55,6 +55,7 @@ type WIndexerI interface {
 	DeleteTxsForHeight(height uint64) ErrorI                       // deletes all transactions for a height
 	DeleteBlockForHeight(height uint64) ErrorI                     // deletes a block and transaction data for a height
 	DeleteQCForHeight(height uint64) ErrorI                        // deletes a certificate for a height
+	DeleteCheckpointsForChain(uint64) ErrorI                       // deletes all checkpoints for a chain
 }
 
 // RIndexerI defines the read interface for the indexing operations

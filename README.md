@@ -106,5 +106,3 @@ make test
 
 [![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://x.com/CNPYNetwork)
 [![Discord](https://img.shields.io/badge/discord-online-blue.svg)](https://discord.gg/pNcSJj7Wdh)
-
-> Code written by hand with ❤️ by the team, documentation with the help of AI for some of the ESL team

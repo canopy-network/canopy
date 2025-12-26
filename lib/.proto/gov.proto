@@ -69,6 +69,8 @@ message ConsensusParams {
   uint64 root_chain_id = 3; // @gotags: json:"rootChainID"
   // retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
   uint64 retired = 4;
+  // reset_committee: clears committee data for the provided committee id
+  uint64 reset_committee = 5; // @gotags: json:"resetCommittee"
 }
 
 // ValidatorParams is the parameter space that defines the rules and criteria for validators in the blockchain
