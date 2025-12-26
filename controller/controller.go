@@ -129,6 +129,13 @@ func (c *Controller) Start() {
 		c.P2P.WaitForMinimumPeers()
 		// start the syncing process (if not synced to top)
 		go c.Sync()
+		// allow sleep and wake up using config
+		wakeDate := time.Unix(int64(c.Config.SleepUntil), 0)
+		if time.Now().Before(wakeDate) {
+			untilTime := time.Until(wakeDate)
+			c.log.Infof("Sleeping until %s", untilTime.String())
+			time.Sleep(untilTime)
+		}
 		// start the bft consensus (if synced to top)
 		go c.Consensus.Start()
 	}()

@@ -79,13 +79,6 @@ var startCmd = &cobra.Command{
 
 // Start() is the entrypoint of the application
 func Start() {
-	// allow sleep and wake up using config
-	wakeDate := time.Unix(int64(config.SleepUntil), 0)
-	if time.Now().Before(wakeDate) {
-		untilTime := time.Until(wakeDate)
-		l.Infof("Sleeping until %s", untilTime.String())
-		time.Sleep(untilTime)
-	}
 	// start the validator TCP proxy (if configured)
 	proxy := lib.NewValidatorTCPProxy(config.ValidatorTCPProxy, l)
 	if err := proxy.Start(); err != nil {
