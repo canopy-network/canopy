@@ -44,3 +44,6 @@ vendor
 cmd/web/explorer/.idea
 **/.DS_Store
 /cmd/tps/data
+
+rag
+node_modules
