@@ -84,6 +84,8 @@ func (vs *ValidatorSet) GetValidatorAndIdx(targetPublicKey []byte) (val *Consens
 	// if the validator set is empty
 	if vs == nil || vs.ValidatorSet == nil {
 		// exit with error
+		PrintStackTrace(true)
+		fmt.Println("GetValidatorAndIdx err: ValidatorSet is nil")
 		return nil, 0, ErrInvalidValidatorIndex()
 	}
 	// for each validator in the set
