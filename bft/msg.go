@@ -9,6 +9,7 @@ import (
 
 // HandleMessage handles and routes incoming consensus message from a Validator peer
 func (b *BFT) HandleMessage(message proto.Message) lib.ErrorI {
+	b.Preflight()
 	// ensure is a valid `Consensus Message` type
 	switch msg := message.(type) {
 	case *Message:

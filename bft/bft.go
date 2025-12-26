@@ -39,6 +39,7 @@ type BFT struct {
 	Controller               // reference to the Controller for callbacks like producing and validating the proposal via the plugin or gossiping commit message
 	ResetBFT   chan ResetBFT // trigger that resets the BFT due to a new Target block or a new Canopy block
 	syncing    *atomic.Bool  // if chain for this committee is currently catching up to latest height
+	init       *atomic.Bool  // check if bft is initialized
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 
@@ -85,6 +86,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 		Metrics:           m,
 		HighVDF:           new(crypto.VDF),
 		VDFCache:          []*Message{},
+		init:              new(atomic.Bool),
 	}, nil
 }
 
@@ -95,17 +97,7 @@ func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con
 //   - (a) Canopy chainId <committeeSet changed, reset but keep locks to prevent conflicting validator sets between peers during a view change>
 //   - (b) Target chainId <mission accomplished, move to next height>
 func (b *BFT) Start() {
-	var err lib.ErrorI
-	// load the committee from the base chain
-	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
-	if err != nil {
-		b.log.Warn(err.Error())
-	}
-	// load the committee data
-	b.CommitteeData, err = b.Controller.LoadCommitteeData()
-	if err != nil {
-		b.log.Warn(err.Error())
-	}
+	b.Preflight()
 	for {
 		select {
 		// EXECUTE PHASE
@@ -153,6 +145,24 @@ func (b *BFT) Start() {
 					//}
 				}
 			}()
+		}
+	}
+}
+
+// Preflight() initializes the variables needed to listen to consensus
+func (b *BFT) Preflight() {
+	// check if already initialized
+	if !b.init.Swap(true) {
+		var err lib.ErrorI
+		// load the committee from the base chain
+		b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
+		if err != nil {
+			b.log.Warn(err.Error())
+		}
+		// load the committee data
+		b.CommitteeData, err = b.Controller.LoadCommitteeData()
+		if err != nil {
+			b.log.Warn(err.Error())
 		}
 	}
 }
