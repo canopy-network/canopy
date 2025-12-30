@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"slices"
 
@@ -565,3 +566,77 @@ type ConsValidatorPage []*lib.ConsensusValidator
 
 // ConsValidatorPage satisfies the Page interface
 func (p *ConsValidatorPage) New() lib.Pageable { return &ConsValidatorPage{{}} }
+
+// getValidatorSet() is a helper function to get a validator set ordered by stake to the maximum parameter
+func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSet, err lib.ErrorI) {
+	// get the validator params
+	p, err := s.GetParamsVal()
+	if err != nil {
+		return
+	}
+	maxPerCommittee, delegateFilter := p.MaxCommitteeSize, lib.FilterOption_Exclude
+	if delegate {
+		maxPerCommittee, delegateFilter = p.MaximumDelegatesPerCommittee, lib.FilterOption_MustBe
+	}
+	validators := make([]*Validator, 0)
+	// reverse iterator is slightly more efficient than forward iterator for large datasets
+	it, err := s.RevIterator(ValidatorPrefix())
+	if err != nil {
+		return vs, err
+	}
+	// ensure memory cleanup
+	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		// convert the bytes into a validator object reference
+		val, e := s.unmarshalValidator(it.Value())
+		if e != nil {
+			return vs, e
+		}
+		// add it to the list
+		validators = append(validators, val)
+	}
+	// filter out validators not part of the committee
+	filtered := slices.Collect(func(yield func(*Validator) bool) {
+		for _, v := range validators {
+			// exclude validators not part of the committee
+			if !v.PassesFilter(lib.ValidatorFilters{
+				Unstaking: lib.FilterOption_Exclude,
+				Paused:    lib.FilterOption_Exclude,
+				Delegate:  lib.FilterOption(delegateFilter),
+				Committee: chainId,
+			}) {
+				continue
+			}
+			// add validator to filtered list
+			if !yield(v) {
+				return
+			}
+		}
+	})
+	// sort by highest stake then address
+	slices.SortFunc(filtered, func(a, b *Validator) int {
+		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
+		if result == 0 {
+			return bytes.Compare(b.Address, a.Address)
+		}
+		return result
+	})
+	// create a variable to hold the committee members
+	members := make([]*lib.ConsensusValidator, 0)
+	// determine slice size — if MaxCommitteeSize == 0, use all
+	limit := uint64(len(filtered))
+	if maxPerCommittee > 0 {
+		limit = min(uint64(len(filtered)), maxPerCommittee)
+	}
+	// for each validator up to the limit
+	for _, v := range filtered[:limit] {
+		members = append(members, &lib.ConsensusValidator{
+			PublicKey:   v.PublicKey,
+			VotingPower: v.StakedAmount,
+			NetAddress:  v.NetAddress,
+		})
+	}
+	// convert list to a validator set (includes shared public key)
+	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+}

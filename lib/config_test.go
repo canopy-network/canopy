@@ -20,6 +20,7 @@ func TestDefaultConfig(t *testing.T) {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
+		ChainConfig:        DefaultChainConfig(),
 	}
 	// execute the function call
 	got := DefaultConfig()

@@ -286,3 +286,7 @@ func ErrInvalidLiquidityPool() lib.ErrorI {
 func ErrMaxDexBatchSize() lib.ErrorI {
 	return lib.NewError(lib.CodeMaxDexBatchSize, lib.StateMachineModule, "the dex batch size exceeds the global max")
 }
+
+func ErrRemotePoolSizeDebit() lib.ErrorI {
+	return lib.NewError(lib.CodeRemotePoolSizeDebit, lib.StateMachineModule, "remote pool size debit")
+}
