@@ -44,6 +44,10 @@
       "source": { "base": "admin", "path": "/v1/admin/keystore-new-key", "method": "POST" },
       "body": { "nickname": "{{nickname}}", "password": "{{password}}" }
     },
+    "keystoreGet": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-get", "method": "POST" },
+      "body": { "address": "{{address}}", "password": "{{password}}", "nickname": "{{nickname}}", "submit": true }
+    },
     "keystoreDelete": {
       "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
       "body": { "nickname": "{{nickname}}" }

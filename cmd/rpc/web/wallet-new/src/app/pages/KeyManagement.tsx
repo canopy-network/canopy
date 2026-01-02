@@ -5,10 +5,16 @@ import { Button } from '@/components/ui/Button';
 import { CurrentWallet } from '@/components/key-management/CurrentWallet';
 import { ImportWallet } from '@/components/key-management/ImportWallet';
 import { NewKey } from '@/components/key-management/NewKey';
+import { useDS } from '@/core/useDs';
+import { downloadJson } from '@/helpers/download';
+import { useToast } from '@/toast/ToastContext';
 
 
 
 export const KeyManagement = (): JSX.Element => {
+    const toast = useToast();
+    const { data: keystore } = useDS('keystore', {});
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -18,6 +24,22 @@ export const KeyManagement = (): JSX.Element => {
                 staggerChildren: 0.1
             }
         }
+    };
+
+    const handleDownloadKeys = () => {
+        if (!keystore) {
+            toast.error({
+                title: 'No keys available',
+                description: 'Keystore data has not loaded yet.',
+            });
+            return;
+        }
+
+        downloadJson(keystore, 'keystore');
+        toast.success({
+            title: 'Download started',
+            description: 'Your keystore JSON is on its way.',
+        });
     };
 
     return (
@@ -34,7 +56,10 @@ export const KeyManagement = (): JSX.Element => {
                         <h1 className="text-3xl font-bold text-white mb-2">Key Management</h1>
                         <p className="text-gray-400">Manage your wallet keys and security settings</p>
                     </motion.div>
-                    <Button className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
+                    <Button
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                        onClick={handleDownloadKeys}
+                    >
                         <Download className="w-4 h-4 mr-2" />
                         Download Keys
                     </Button>

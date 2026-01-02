@@ -1404,6 +1404,7 @@
             "label": "Withdrawal Type",
             "required": true,
             "value": false,
+            "autoPopulate": "once",
             "options": [
               {
                 "label": "Normal Unstake",

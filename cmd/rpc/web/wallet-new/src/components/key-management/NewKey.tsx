@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
-import {useAccounts} from "@/app/providers/AccountsProvider";
+import { useAccounts } from "@/app/providers/AccountsProvider";
+import { useToast } from '@/toast/ToastContext';
 
 export const NewKey = (): JSX.Element => {
     const { createNewAccount } = useAccounts();
+    const toast = useToast();
 
     const [newKeyForm, setNewKeyForm] = useState({
         password: '',
@@ -23,25 +24,35 @@ export const NewKey = (): JSX.Element => {
 
     const handleCreateWallet = async () => {
         if (!newKeyForm.password) {
-            toast.error('Please enter a password');
+            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
         }
 
         if (!newKeyForm.walletName) {
-            toast.error('Please enter a wallet name');
+            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
             return;
         }
 
-
-
-        const loadingToast = toast.loading('Creating wallet...');
+        const loadingToast = toast.info({
+            title: 'Creating wallet...',
+            description: 'Please wait while your wallet is created.',
+            sticky: true,
+        });
 
         try {
             await createNewAccount(newKeyForm.walletName, newKeyForm.password);
-            toast.success('Wallet created successfully', { id: loadingToast });
+            toast.dismiss(loadingToast);
+            toast.success({
+                title: 'Wallet created',
+                description: `Wallet "${newKeyForm.walletName}" is ready.`,
+            });
             setNewKeyForm({ password: '', walletName: '' });
         } catch (error) {
-            toast.error(`Error creating wallet: ${error}`, { id: loadingToast });
+            toast.dismiss(loadingToast);
+            toast.error({
+                title: 'Error creating wallet',
+                description: String(error),
+            });
         }
     };
 

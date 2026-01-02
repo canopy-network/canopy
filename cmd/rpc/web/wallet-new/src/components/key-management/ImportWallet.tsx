@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import {useAccounts} from "@/app/providers/AccountsProvider";
+import { useAccounts } from "@/app/providers/AccountsProvider";
+import { useToast } from '@/toast/ToastContext';
 
 export const ImportWallet = (): JSX.Element => {
     const { createNewAccount } = useAccounts();
+    const toast = useToast();
 
     const [showPrivateKey, setShowPrivateKey] = useState(false);
     const [activeTab, setActiveTab] = useState<'key' | 'keystore'>('key');
@@ -27,30 +28,39 @@ export const ImportWallet = (): JSX.Element => {
 
     const handleImportWallet = async () => {
         if (!importForm.privateKey) {
-            toast.error('Please enter a private key');
+            toast.error({ title: 'Missing private key', description: 'Please enter a private key.' });
             return;
         }
 
         if (!importForm.password) {
-            toast.error('Please enter a password');
+            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
         }
 
         if (importForm.password !== importForm.confirmPassword) {
-            toast.error('Passwords do not match');
+            toast.error({ title: 'Password mismatch', description: 'Passwords do not match.' });
             return;
         }
 
-        const loadingToast = toast.loading('Importing wallet...');
+        const loadingToast = toast.info({
+            title: 'Importing wallet...',
+            description: 'Please wait while your wallet is imported.',
+            sticky: true,
+        });
 
         try {
             // Here you would implement the import functionality
             // For now, we'll create a new account with the provided name
             await createNewAccount(importForm.password, 'Imported Wallet');
-            toast.success('Wallet imported successfully', { id: loadingToast });
+            toast.dismiss(loadingToast);
+            toast.success({
+                title: 'Wallet imported',
+                description: 'Your wallet has been imported successfully.',
+            });
             setImportForm({ privateKey: '', password: '', confirmPassword: '' });
         } catch (error) {
-            toast.error(`Error importing wallet: ${error}`, { id: loadingToast });
+            toast.dismiss(loadingToast);
+            toast.error({ title: 'Error importing wallet', description: String(error) });
         }
     };
 
@@ -92,7 +102,7 @@ export const ImportWallet = (): JSX.Element => {
                         </label>
                         <div className="relative">
                             <input
-                                type="password"
+                                type={showPrivateKey ? "text" : "password"}
                                 placeholder="Enter your private key..."
                                 value={importForm.privateKey}
                                 onChange={(e) => setImportForm({ ...importForm, privateKey: e.target.value })}

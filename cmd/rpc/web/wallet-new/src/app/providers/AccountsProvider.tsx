@@ -57,7 +57,7 @@ export function AccountsProvider({ children }: { children: React.ReactNode }) {
             id: address,
             address,
             nickname: (entry as any).keyNickname || `Account ${address.slice(0, 8)}...`,
-            publicKey: (entry as any).publicKey,
+            publicKey: (entry as any).publicKey ?? (entry as any).public_key ?? '',
         }))
     }, [ks])
 
