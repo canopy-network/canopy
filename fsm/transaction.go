@@ -13,19 +13,20 @@ import (
 const BlockAcceptanceRange = 4320
 
 // ApplyTransaction() processes the transaction within the state machine, returning the corresponding TxResult.
-func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, lib.ErrorI) {
+func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash string, batchVerifier *crypto.BatchVerifier) (*lib.TxResult, []*lib.Event, lib.ErrorI) {
+	s.events.Refer(txHash)
 	// validate the transaction and get the check result
 	result, err := s.CheckTx(transaction, txHash, batchVerifier)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// deduct fees for the transaction
 	if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// handle the message (payload)
 	if err = s.HandleMessage(result.msg); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// return the tx result
 	return &lib.TxResult{
@@ -36,7 +37,7 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 		Index:       index,
 		Transaction: result.tx,
 		TxHash:      txHash,
-	}, nil
+	}, s.events.Reset(), nil
 }
 
 // CheckTx() validates the transaction object
@@ -146,7 +147,19 @@ func (s *StateMachine) CheckSignature(msg lib.MessageI, tx *lib.Transaction, bat
 				hash, _ := tx.GetHash()
 				x.ProposalHash = lib.BytesToString(hash)
 			case *MessageCreateOrder:
-				// populate the order id for the create order
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLimitOrder:
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLiquidityDeposit:
+				// populate the order id
+				hash, _ := tx.GetHash()
+				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
+			case *MessageDexLiquidityWithdraw:
+				// populate the order id
 				hash, _ := tx.GetHash()
 				x.OrderId = hash[:20] // first 20 bytes of the transaction hash
 			}
@@ -399,6 +412,34 @@ func NewDeleteOrderTx(from crypto.PrivateKeyI, orderId string, committeeId uint6
 	return NewTransaction(from, &MessageDeleteOrder{
 		OrderId: oId,
 		ChainId: committeeId,
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLimitOrder() creates a DexLimitOrder object in the interface form of TransactionI
+func NewDexLimitOrder(from crypto.PrivateKeyI, amountForSale, requestedAmount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLimitOrder{
+		ChainId:         committeeId,
+		AmountForSale:   amountForSale,
+		RequestedAmount: requestedAmount,
+		Address:         from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityDeposit() creates a DexLiquidityDeposit object in the interface form of TransactionI
+func NewDexLiquidityDeposit(from crypto.PrivateKeyI, amount, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityDeposit{
+		ChainId: committeeId,
+		Amount:  amount,
+		Address: from.PublicKey().Address().Bytes(),
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewDexLiquidityWithdraw() creates a DexLiquidityWithdrawal object in the interface form of TransactionI
+func NewDexLiquidityWithdraw(from crypto.PrivateKeyI, percent uint64, committeeId, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageDexLiquidityWithdraw{
+		ChainId: committeeId,
+		Percent: percent,
+		Address: from.PublicKey().Address().Bytes(),
 	}, networkId, chainId, fee, height, memo)
 }
 

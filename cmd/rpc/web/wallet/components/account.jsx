@@ -5,6 +5,9 @@ import {
   TxCloseOrder,
   TxCreateOrder,
   TxDeleteOrder,
+  TxDexLimitOrder,
+  TxDexLiquidityDeposit,
+  TxDexLiquidityWithdrawal,
   TxEditOrder,
   TxEditStake,
   TxLockOrder,
@@ -42,7 +45,7 @@ import {
   StakeIcon,
   SwapIcon,
   UnpauseIcon,
-  UnstakeIcon
+  UnstakeIcon, DexLimitIcon, TransactionIcon, DexLiquidityWithdrawIcon, DexLiquidityDepositIcon
 } from "@/components/svg_icons";
 import { useContext, useEffect, useRef, useState } from "react";
 import { Button, Card, Col, Form, Modal, Row, Spinner, Table } from "react-bootstrap";
@@ -67,7 +70,10 @@ const transactionButtons = [
   { title: "LOCK", name: "lock_order", src: LockIcon },
   { title: "CLOSE", name: "close_order", src: CloseIcon },
   { title: "REPRICE", name: "edit_order", src: EditOrderIcon },
-  { title: "VOID", name: "delete_order", src: DeleteOrderIcon }
+  { title: "VOID", name: "delete_order", src: DeleteOrderIcon },
+  { title: "ORDER", name: "dex_limit_order", src: DexLimitIcon },
+  { title: "DEPOSIT", name: "dex_liquidity_deposit", src: DexLiquidityDepositIcon },
+  { title: "WITHDRAW", name: "dex_liquidity_withdrawal", src: DexLiquidityWithdrawIcon },
 ];
 
 // Accounts() returns the main component of this file
@@ -303,7 +309,10 @@ export default function Accounts({ keygroup, account, validator, setActiveKey, p
             r.password,
             submit
           ),
-        delete_order: () => TxDeleteOrder(r.sender, r.chainId, r.orderId, r.memo, fee, r.password, submit)
+        delete_order: () => TxDeleteOrder(r.sender, r.chainId, r.orderId, r.memo, fee, r.password, submit),
+        dex_limit_order: () => TxDexLimitOrder(r.sender, r.chainId, amount, receiveAmount, r.memo, fee, r.password, submit),
+        dex_liquidity_deposit: () => TxDexLiquidityDeposit(r.sender, r.chainId, amount, r.memo, fee, r.password, submit),
+        dex_liquidity_withdrawal: () => TxDexLiquidityWithdrawal(r.sender, r.chainId, r.percent, r.memo, fee, r.password, submit)
       };
 
       const txFunction = txMap[state.txType];

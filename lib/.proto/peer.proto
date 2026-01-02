@@ -37,8 +37,10 @@ enum Topic {
   PEERS_RESPONSE = 4;
   // PEERS_REQUEST: topic a peer requesting an exchange of book peers
   PEERS_REQUEST = 5;
+  // HEARTBEAT: reserved for transport heartbeat
+  HEARTBEAT = 6;
   // INVALID: topic to mark the exclusive end of valid topics
-  INVALID = 6;
+  INVALID = 99;
 }
 
 // PeerInfo contains peering information about a peer node, like its address, connection type, trust level,

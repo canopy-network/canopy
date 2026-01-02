@@ -79,12 +79,10 @@ var startCmd = &cobra.Command{
 
 // Start() is the entrypoint of the application
 func Start() {
-	// allow sleep and wake up using config
-	wakeDate := time.Unix(int64(config.SleepUntil), 0)
-	if time.Now().Before(wakeDate) {
-		untilTime := time.Until(wakeDate)
-		l.Infof("Sleeping until %s", untilTime.String())
-		time.Sleep(untilTime)
+	// start the validator TCP proxy (if configured)
+	proxy := lib.NewValidatorTCPProxy(config.ValidatorTCPProxy, l)
+	if err := proxy.Start(); err != nil {
+		l.Fatal(err.Error())
 	}
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), float64(config.ChainId), rpc.SoftwareVersion, config.MetricsConfig, l)
@@ -93,6 +91,9 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
+	// log the validator identity
+	l.Infof("Using identity: Address: %s | PublicKey: %s",
+		validatorKey.PublicKey().Address().String(), validatorKey.PublicKey().String())
 	// initialize the state machine
 	sm, err := fsm.New(config, db, metrics, l)
 	if err != nil {
@@ -113,6 +114,7 @@ func Start() {
 	rpcServer.Start()
 	// block until a kill signal is received
 	waitForKill()
+	proxy.Stop()
 	// gracefully stop the app
 	app.Stop()
 	// gracefully stop the metrics server

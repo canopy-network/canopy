@@ -1,6 +1,10 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,10 +34,11 @@ type Controller struct {
 	Consensus *bft.BFT          // the async consensus process between the committee members for the chain
 	P2P       *p2p.P2P          // the P2P module the node uses to connect to the network
 
-	RCManager   lib.RCManagerI // the data manager for the 'root chain'
-	isSyncing   *atomic.Bool   // is the chain currently being downloaded from peers
-	log         lib.LoggerI    // object for logging
-	*sync.Mutex                // mutex for thread safety
+	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
+	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
+	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
+	log         lib.LoggerI                        // object for logging
+	*sync.Mutex                                    // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
@@ -55,26 +60,25 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	}
 	// create the controller
 	controller = &Controller{
-		Address:          address.Bytes(),
-		PublicKey:        valKey.PublicKey().Bytes(),
-		PrivateKey:       valKey,
-		Config:           c,
-		Metrics:          metrics,
-		FSM:              fsm,
-		Mempool:          mempool,
-		Consensus:        nil,
-		P2P:              p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
-		isSyncing:        &atomic.Bool{},
-		LastValidatorSet: make(map[uint64]map[uint64]*lib.ValidatorSet),
-		log:              l,
-		Mutex:            &sync.Mutex{},
+		Address:    address.Bytes(),
+		PublicKey:  valKey.PublicKey().Bytes(),
+		PrivateKey: valKey,
+		Config:     c,
+		Metrics:    metrics,
+		FSM:        fsm,
+		Mempool:    mempool,
+		Consensus:  nil,
+		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
+		isSyncing:  &atomic.Bool{},
+		log:        l,
+		Mutex:      &sync.Mutex{},
 	}
+	// load checkpoints from file (if provided)
+	controller.loadCheckpointsFile()
 	// initialize the consensus in the controller, passing a reference to itself
 	controller.Consensus, err = bft.New(c, valKey, fsm.Height(), fsm.Height()-1, controller, c.RunVDF, metrics, l)
 	// initialize the mempool controller
 	mempool.controller = controller
-	// add the last validator set reference to the FSM
-	fsm.LastValidatorSet = controller.LastValidatorSet
 	// if an error occurred initializing the bft module
 	if err != nil {
 		// exit with error
@@ -95,24 +99,9 @@ func (c *Controller) Start() {
 		// start the P2P module
 		c.P2P.Start()
 		// log the beginning of the root-chain API connection
-		c.log.Warnf("Attempting to connect to the root-chain")
+		c.log.Warnf("Attempting to connect to the root-chain: %d", rootChainId)
 		// set a timer to go off once per second
 		t := time.NewTicker(time.Second)
-		// pre save the validator sets from previous and current heights
-		lastValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight()-1)
-		if err != nil {
-			c.log.Fatal(err.Error())
-		}
-		currValSet, err := c.FSM.LoadCommittee(c.Config.ChainId, c.ChainHeight())
-		if err != nil {
-			c.log.Fatal(err.Error())
-		}
-		c.LastValidatorSet[c.ChainHeight()] = map[uint64]*lib.ValidatorSet{
-			c.Config.ChainId: &lastValSet,
-		}
-		c.LastValidatorSet[c.ChainHeight()+1] = map[uint64]*lib.ValidatorSet{
-			c.Config.ChainId: &currValSet,
-		}
 		// once function completes, stop the timer
 		defer t.Stop()
 		// each time the timer fires
@@ -122,6 +111,7 @@ func (c *Controller) Start() {
 			if e != nil {
 				c.log.Error(e.Error()) // log error but continue
 			} else if rootChainInfo != nil && rootChainInfo.Height != 0 {
+				c.log.Infof("Received root chain info with %d validators", len(rootChainInfo.ValidatorSet.GetValidatorSet()))
 				// call mempool check
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
@@ -129,13 +119,23 @@ func (c *Controller) Start() {
 				// exit the loop
 				break
 			}
+			c.log.Warnf("Empty root chain info")
 		}
 		// start mempool service
 		go c.CheckMempool()
 		// start internal Controller listeners for P2P
 		c.StartListeners()
+		// Wait until peers reaches minimum count
+		c.P2P.WaitForMinimumPeers()
 		// start the syncing process (if not synced to top)
 		go c.Sync()
+		// allow sleep and wake up using config
+		wakeDate := time.Unix(int64(c.Config.SleepUntil), 0)
+		if time.Now().Before(wakeDate) {
+			untilTime := time.Until(wakeDate)
+			c.log.Infof("Sleeping until %s", untilTime.String())
+			time.Sleep(untilTime)
+		}
 		// start the bft consensus (if synced to top)
 		go c.Consensus.Start()
 	}()
@@ -350,6 +350,39 @@ func (c *Controller) emptyInbox(topic lib.Topic) {
 		// discard the message
 		<-c.P2P.Inbox(topic)
 	}
+}
+
+const checkpointsFileName = "checkpoints.json"
+
+// loadCheckpointsFile reads checkpoints.json (if present) into the controller cache.
+func (c *Controller) loadCheckpointsFile() {
+	path := filepath.Join(c.Config.DataDirPath, checkpointsFileName)
+	fileBytes, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			c.log.Warnf("failed to read checkpoints file: %s", err)
+		}
+		return
+	}
+	checkpoints := make(map[uint64]map[uint64]lib.HexBytes)
+	if err = json.Unmarshal(fileBytes, &checkpoints); err != nil {
+		c.log.Warnf("failed to parse checkpoints file: %s", err)
+		return
+	}
+	c.checkpoints = checkpoints
+}
+
+// checkpointFromFile returns a cached checkpoint for a given chain and height, or nil if not found.
+func (c *Controller) checkpointFromFile(height, chainId uint64) lib.HexBytes {
+	if c.checkpoints == nil {
+		return nil
+	}
+	if chainCheckpoints, ok := c.checkpoints[chainId]; ok {
+		if checkpoint, ok := chainCheckpoints[height]; ok {
+			return checkpoint
+		}
+	}
+	return nil
 }
 
 // convenience aliases that reference the library package

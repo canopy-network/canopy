@@ -12,7 +12,7 @@ import (
 
 // FundCommitteeRewardPools() mints newly created tokens to protocol subsidized committees
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
-	daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
+	subsidizedChainIds, daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
 		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
 			return nil
@@ -23,11 +23,7 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	if err = s.MintToPool(lib.DAOPoolID, daoCut); err != nil {
 		return err
 	}
-	// get the committees that `qualify` for subsidization
-	subsidizedChainIds, err := s.GetSubsidizedCommittees()
-	if err != nil {
-		return err
-	}
+	s.log.Debugf("Subsidized committee rewards pools: %v, daoCut: %d, mintAmountPerCommittee: %d", subsidizedChainIds, daoCut, mintAmountPerCommittee)
 	// issue that amount to each subsidized committee
 	for _, chainId := range subsidizedChainIds {
 		if err = s.MintToPool(chainId, mintAmountPerCommittee); err != nil {
@@ -38,26 +34,21 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 }
 
 // GetBlockMintStats() gets the latest minting information for the blockchain
-func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
+func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []uint64, daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
 	// get governance params that are needed to complete this operation
 	govParams, err := s.GetParamsGov()
 	if err != nil {
 		return
 	}
 	// get the committees that `qualify` for subsidization
-	subsidizedChainIds, err := s.GetSubsidizedCommittees()
+	subsidizedChainIds, err = s.GetSubsidizedCommittees()
 	if err != nil {
 		return
 	}
-	// ensure self chain is always a 'paid' chain even if there are no validators
-	if !slices.Contains(subsidizedChainIds, chainId) {
-		// this ensures nested-chains always receive Native Token payment to their pool
-		subsidizedChainIds = append(subsidizedChainIds, chainId)
-	}
 	// calculate the number of halvenings
-	halvenings := s.height / uint64(BlocksPerHalvening)
+	halvenings := s.height / s.Config.BlocksPerHalvening
 	// each halving, the reward is divided by 2
-	totalMintAmount := uint64(InitialTokensPerBlock >> halvenings)
+	totalMintAmount := s.Config.InitialTokensPerBlock >> halvenings
 	// define a convenience variable for the number of subsidized committees
 	subsidizedCount := uint64(len(subsidizedChainIds))
 	// if there are no subsidized committees or no mint amount
@@ -69,13 +60,12 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (daoCut uint64, totalMi
 	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
 	// calculate the DAO cut
 	daoCut = totalMintAmount - mintAmountAfterDAOCut
-
 	// calculate the amount given to each qualifying committee
 	// mintAmountPerCommittee may truncate, but that's expected,
 	// less mint will be created and effectively 'burned'
 	mintAmountPerCommittee = mintAmountAfterDAOCut / subsidizedCount
-
-	return daoCut, totalMintAmount, mintAmountPerCommittee, nil
+	// return the variables
+	return subsidizedChainIds, daoCut, totalMintAmount, mintAmountPerCommittee, nil
 }
 
 // GetSubsidizedCommittees() returns a list of chainIds that receive a portion of the 'block reward'
@@ -113,6 +103,11 @@ func (s *StateMachine) GetSubsidizedCommittees() (paidIDs []uint64, err lib.Erro
 			paidIDs = append(paidIDs, committee.Id)
 		}
 	}
+	// ensure self chain is always a 'paid' chain
+	if !slices.Contains(paidIDs, s.Config.ChainId) {
+		// this ensures nested-chains always receive Native Token payment to their pool
+		paidIDs = append(paidIDs, s.Config.ChainId)
+	}
 	return
 }
 
@@ -132,6 +127,7 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 	for i, data := range committeesData.List {
 		// check to see if any payment percents were issued
 		if len(data.PaymentPercents) == 0 {
+			//s.log.Debugf("Distribute committee reward for committee %d: skipped, no reward recipients", data.ChainId)
 			// if none issued, move on to the next
 			continue
 		}
@@ -144,11 +140,18 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 		var totalDistributed uint64
 		// for each payment percent issued
 		for _, stub := range data.PaymentPercents {
-			distributed, er := s.DistributeCommitteeReward(stub, rewardPool.Amount, data.NumberOfSamples, paramsVal)
+			distributed, er := s.DistributeCommitteeReward(stub, rewardPool.Amount, data.NumberOfSamples, data.ChainId, paramsVal)
 			if er != nil {
 				return er
 			}
-			totalDistributed += distributed
+			// no event if distributed is 0
+			if distributed > 0 {
+				// add an event for a reward amount
+				if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
+					return err
+				}
+				totalDistributed += distributed
+			}
 		}
 		// ensure the non-distributed (burned) is removed from the 'total supply'
 		if err = s.SubFromTotalSupply(rewardPool.Amount - totalDistributed); err != nil {
@@ -172,12 +175,14 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 }
 
 // DistributeCommitteeReward() issues a single committee reward unit based on an individual 'Payment Stub'
-func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
+func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples, chainId uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
 	address := crypto.NewAddress(stub.Address)
 	// full_reward = truncate ( percentage / number_of_samples * available_reward )
 	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
 	// if not compounding, use the early withdrawal reward
 	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
+	//s.log.Debugf("Distributed committee %d reward: to %s percent: %d%%, rewardPoolAmount: %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
+	//	chainId, address.String(), stub.Percent, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
 	validator, _ := s.GetValidator(address)
 	// if non validator, send EarlyWithdrawalReward to the address

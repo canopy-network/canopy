@@ -3,11 +3,15 @@ package lib
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -431,4 +435,260 @@ func (x *PeerMeta) Equals(y *PeerMeta) bool {
 		return false
 	}
 	return true
+}
+
+// VALIDATOR TCP PROXY: enables a validator to forward p2p traffic for other *chain_ids* based on the staked net_address
+
+const (
+	validatorProxyDialTimeout = 5 * time.Second
+	validatorProxyIdleTimeout = 2 * time.Minute
+	validatorProxyBufferSize  = 32 * 1024
+	validatorProxyDefaultMax  = 1024
+)
+
+// ValidatorTCPProxy forwards TCP connections from configured local ports to target addresses.
+type ValidatorTCPProxy struct {
+	routes       map[uint64]string
+	listeners    []net.Listener
+	log          LoggerI
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	maxConns     int
+	activeConns  int64
+	activeConnsM sync.Mutex
+}
+
+// NewValidatorTCPProxy builds a new proxy instance using the provided routes, max connections, and logger.
+func NewValidatorTCPProxy(routes map[uint64]string, log LoggerI) *ValidatorTCPProxy {
+	if log == nil {
+		log = NewDefaultLogger()
+	}
+	copiedRoutes := make(map[uint64]string, len(routes))
+	for port, target := range routes {
+		copiedRoutes[port] = target
+	}
+	return &ValidatorTCPProxy{
+		routes:   copiedRoutes,
+		log:      log,
+		maxConns: validatorProxyDefaultMax,
+	}
+}
+
+// Start initializes listeners for each configured port.
+func (p *ValidatorTCPProxy) Start() error {
+	if len(p.routes) == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	// for each configured 'route'
+	for port, target := range p.routes {
+		if port == 0 || port > MaxAllowedPort {
+			cancel()
+			p.Stop()
+			return fmt.Errorf("validator tcp proxy port %d out of range", port)
+		}
+		// standardize the configured target
+		normalizedTarget := normalizeTCPProxyTarget(target)
+		if normalizedTarget == "" {
+			cancel()
+			p.Stop()
+			return fmt.Errorf("validator tcp proxy target missing for port %d", port)
+		}
+		// setup the listen address
+		listenAddr := fmt.Sprintf(":%d", port)
+		ln, err := net.Listen("tcp", listenAddr)
+		if err != nil {
+			cancel()
+			p.Stop()
+			return fmt.Errorf("validator tcp proxy failed to listen on %s: %w", listenAddr, err)
+		}
+		// update the listeners
+		p.listeners = append(p.listeners, ln)
+		// update accept loops for graceful stop)(
+		p.wg.Add(1)
+		// accept() for this target
+		go p.acceptLoop(ctx, ln, normalizedTarget, port)
+		p.log.Infof("Starting validator tcp proxy on :%d -> %s", port, normalizedTarget)
+	}
+	return nil
+}
+
+// Stop shuts down listeners and active proxy connections.
+func (p *ValidatorTCPProxy) Stop() {
+	if p == nil {
+		return
+	}
+	if p.cancel != nil {
+		p.cancel()
+	}
+	for _, ln := range p.listeners {
+		_ = ln.Close()
+	}
+	p.wg.Wait()
+}
+
+// acceptLoop() accepts inbound peers in a loop for a certain 'target' - creating new connections in separate threads
+func (p *ValidatorTCPProxy) acceptLoop(ctx context.Context, ln net.Listener, target string, port uint64) {
+	defer p.wg.Done()
+
+	for {
+		// accept the inbound connection
+		conn, err := ln.Accept()
+		if err != nil {
+			// check the context
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			// if there's a temporary error (DEPRECATED)
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				p.log.Warnf("validator tcp proxy temporary accept error on port %d: %v", port, err)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			// check the accept error
+			p.log.Warnf("validator tcp proxy accept error on port %d: %v", port, err)
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		// check connection limit
+		if !p.incConnCount() {
+			p.log.Warnf("validator tcp proxy rejected connection on port %d: too many active connections", port)
+			_ = conn.Close()
+			continue
+		}
+		p.wg.Add(1)
+		go p.handleConnection(ctx, conn, target, port)
+	}
+}
+
+// handleConnect9) establishes a new inbound tcp connection and forwards it to the proper destination
+func (p *ValidatorTCPProxy) handleConnection(ctx context.Context, inbound net.Conn, target string, port uint64) {
+	defer p.wg.Done()
+	defer p.decConnCount()
+
+	// attempt to dial the destination
+	outbound, err := net.DialTimeout("tcp", target, validatorProxyDialTimeout)
+	if err != nil {
+		p.log.Warnf("validator tcp proxy dial to %s from port %d failed: %v", target, port, err)
+		_ = inbound.Close()
+		return
+	}
+
+	// set up 'cancel' in the context
+	connCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// close 'inbound' and 'outbound' once complete
+	var closeOnce sync.Once
+	closeBoth := func() {
+		_ = inbound.Close()
+		_ = outbound.Close()
+	}
+
+	go func() {
+		<-connCtx.Done()
+		_ = inbound.SetDeadline(time.Now())
+		_ = outbound.SetDeadline(time.Now())
+		closeOnce.Do(closeBoth)
+	}()
+
+	// setup a 'wait group' that lives for the entirety of the connection life
+	var copyWG sync.WaitGroup
+	copyWG.Add(2)
+	// forward inbound to configured
+	go p.copyStream(connCtx, &copyWG, outbound, inbound)
+	// forward configured to inbound
+	go p.copyStream(connCtx, &copyWG, inbound, outbound)
+	copyWG.Wait()
+
+	closeOnce.Do(closeBoth)
+}
+
+// copyStream() forwards inbound packets to the destination
+func (p *ValidatorTCPProxy) copyStream(ctx context.Context, wg *sync.WaitGroup, dst net.Conn, src net.Conn) {
+	defer wg.Done()
+	buf := make([]byte, validatorProxyBufferSize)
+
+	for {
+		// set deadline for inbound 'source' connection
+		if err := setProxyDeadline(p.log, src, validatorProxyIdleTimeout); err != nil {
+			return
+		}
+		// set deadline for the outbound 'destination'
+		if err := setProxyDeadline(p.log, dst, validatorProxyIdleTimeout); err != nil {
+			return
+		}
+
+		// check context (non-blocking)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// read the buf (blocking)
+		n, err := src.Read(buf)
+		if n > 0 {
+			if _, werr := dst.Write(buf[:n]); werr != nil {
+				p.log.Debugf("validator tcp proxy write error: %v", werr)
+				return
+			}
+		}
+		// handle error
+		if err != nil {
+			// log error
+			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+				p.log.Debugf("validator tcp proxy copy error: %v", err)
+			}
+			// close the connection
+			if errors.Is(err, io.EOF) {
+				if cw, ok := dst.(interface{ CloseWrite() error }); ok {
+					_ = cw.CloseWrite()
+				}
+			}
+			return
+		}
+	}
+}
+
+// incConnCount() increment number of active connections
+func (p *ValidatorTCPProxy) incConnCount() bool {
+	p.activeConnsM.Lock()
+	defer p.activeConnsM.Unlock()
+	if p.activeConns >= int64(p.maxConns) {
+		return false
+	}
+	p.activeConns++
+	return true
+}
+
+// decConnCount() remove an 'active' connection
+func (p *ValidatorTCPProxy) decConnCount() {
+	p.activeConnsM.Lock()
+	defer p.activeConnsM.Unlock()
+	if p.activeConns > 0 {
+		p.activeConns--
+	}
+}
+
+// setProxyDeadline() sets the
+func setProxyDeadline(log LoggerI, conn net.Conn, timeout time.Duration) error {
+	if timeout <= 0 {
+		return nil
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		log.Debugf("validator tcp proxy deadline error: %v", err)
+		return err
+	}
+	return nil
+}
+
+// normalizeTCPProxyTarget() removes space and "tcp://" from the target
+func normalizeTCPProxyTarget(target string) string {
+	trimmed := strings.TrimSpace(target)
+	return strings.TrimPrefix(trimmed, "tcp://")
 }

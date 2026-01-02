@@ -227,30 +227,30 @@ const (
 	CodeInsufficientSupply        ErrorCode = 56
 	CodeUnknownMsgName            ErrorCode = 57
 	CodeUnknownPageable           ErrorCode = 58
+	CodeMismatchDexBatchReceipt   ErrorCode = 59
+	CodeInvalidBlockRange         ErrorCode = 60
+	CodeInvalidPublicKey          ErrorCode = 61
+	CodeInvalidDoubleSignHeights  ErrorCode = 62
+	CodeInvalidDoubleSigner       ErrorCode = 63
+	CodeInvalidNumCommittees      ErrorCode = 64
+	CodeInvalidLiquidityPool      ErrorCode = 65
+	CodeValidatorIsADelegate      ErrorCode = 66
+	CodeMaxDexBatchSize           ErrorCode = 67
+	CodeInvalidChainId            ErrorCode = 68
+	CodeWrongNetworkID            ErrorCode = 69
+	CodePointHolderNotFound       ErrorCode = 70
+	CodeRootHeight                ErrorCode = 71
+	CodeInvalidQCCommitteeHeight  ErrorCode = 72
+	CodeZeroPointHolder           ErrorCode = 73
+	CodeOrderNotFound             ErrorCode = 74
 
-	CodeInvalidBlockRange        ErrorCode = 60
-	CodeInvalidPublicKey         ErrorCode = 61
-	CodeInvalidDoubleSignHeights ErrorCode = 62
-	CodeInvalidDoubleSigner      ErrorCode = 63
-	CodeInvalidNumCommittees     ErrorCode = 64
-
-	CodeValidatorIsADelegate ErrorCode = 66
-
-	CodeInvalidChainId ErrorCode = 68
-	CodeWrongNetworkID ErrorCode = 69
-
-	CodeRootHeight               ErrorCode = 71
-	CodeInvalidQCCommitteeHeight ErrorCode = 72
-
-	CodeOrderNotFound ErrorCode = 74
-
-	CodeMinimumOrderSize     ErrorCode = 76
-	CodeOrderLocked          ErrorCode = 77
-	CodeInvalidLockOrder     ErrorCode = 78
-	CodeDuplicateLockOrder   ErrorCode = 79
-	CodeInvalidBuyerDeadline ErrorCode = 80
-	CodeInvalidCloseOrder    ErrorCode = 81
-
+	CodeMinimumOrderSize         ErrorCode = 76
+	CodeOrderLocked              ErrorCode = 77
+	CodeInvalidLockOrder         ErrorCode = 78
+	CodeDuplicateLockOrder       ErrorCode = 79
+	CodeInvalidBuyerDeadline     ErrorCode = 80
+	CodeInvalidCloseOrder        ErrorCode = 81
+	CodeEmptyEventsTracker       ErrorCode = 82
 	CodeInvalidCheckpoint        ErrorCode = 83
 	CodeInvalidSellOrder         ErrorCode = 84
 	CodeStartPollHeight          ErrorCode = 85
@@ -263,6 +263,12 @@ const (
 	CodeNoSubsidizedCommittees   ErrorCode = 92
 	CodeEmptyLotteryWinner       ErrorCode = 93
 	CodeStakeBelowMinimum        ErrorCode = 94
+	CodeTooManyDexWithdrawsError ErrorCode = 95
+	CodeTooManyDexDepositsError  ErrorCode = 96
+	CodeTooManyDexOrdersError    ErrorCode = 97
+	CodeTooManyDexReceiptsError  ErrorCode = 98
+	CodeNonNilPoolPointsError    ErrorCode = 99
+	CodeRemotePoolSizeDebit      ErrorCode = 100
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -815,4 +821,36 @@ func ErrEmptyLotteryWinner() ErrorI {
 
 func ErrFailedTransactions() ErrorI {
 	return NewError(CodeErrFailedTransactions, StateMachineModule, "a block contained failed transactions")
+}
+
+func ErrPointHolderNotFound() ErrorI {
+	return NewError(CodePointHolderNotFound, StateMachineModule, "point holder not found")
+}
+
+func ErrZeroLiquidityPool() ErrorI {
+	return NewError(CodeZeroPointHolder, StateMachineModule, "pool cannot have zero points after allocated")
+}
+
+func ErrEmptyEventsTracker() ErrorI {
+	return NewError(CodeEmptyEventsTracker, StateMachineModule, "events tracker nil")
+}
+
+func ErrTooManyDexDeposits() ErrorI {
+	return NewError(CodeTooManyDexDepositsError, StateMachineModule, "too many dex deposits")
+}
+
+func ErrTooManyDexWithdraws() ErrorI {
+	return NewError(CodeTooManyDexWithdrawsError, StateMachineModule, "too many dex withdrawals")
+}
+
+func ErrTooManyDexOrders() ErrorI {
+	return NewError(CodeTooManyDexOrdersError, StateMachineModule, "too many dex orders")
+}
+
+func ErrTooManyDexReceipts() ErrorI {
+	return NewError(CodeTooManyDexReceiptsError, StateMachineModule, "too many dex receipts")
+}
+
+func ErrNonNilPoolPoints() ErrorI {
+	return NewError(CodeNonNilPoolPointsError, StateMachineModule, "non nil pool points")
 }

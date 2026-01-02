@@ -67,6 +67,7 @@ type Metrics struct {
 	NodeMetrics    // general telemetry about the node
 	BlockMetrics   // block telemetry
 	PeerMetrics    // peer telemetry
+	P2PMetrics     // p2p performance telemetry
 	BFTMetrics     // bft telemetry
 	FSMMetrics     // fsm telemetry
 	StoreMetrics   // persistence telemetry
@@ -102,6 +103,21 @@ type PeerMetrics struct {
 	OutboundPeers prometheus.Gauge // number of peers that this node dialed
 }
 
+// P2PMetrics represents detailed performance telemetry for P2P message sending and receiving
+type P2PMetrics struct {
+	SendQueueTime       prometheus.Histogram   // time a packet spends waiting in the send queue
+	SendWireTime        prometheus.Histogram   // time to write a packet to the wire
+	SendTotalTime       prometheus.Histogram   // total time from Send() call to wire write completion
+	ReceiveWireTime     prometheus.Histogram   // time to read a packet from the wire TODO Review as this one is not reliable in all scenarios
+	ReceiveAssemblyTime prometheus.Histogram   // time to assemble packets into a complete message
+	SendQueueDepth      *prometheus.GaugeVec   // current depth of send queue by topic
+	InboxQueueDepth     *prometheus.GaugeVec   // current depth of inbox queue by topic
+	MessageSize         prometheus.Histogram   // size of messages in bytes
+	PacketsPerMessage   prometheus.Histogram   // number of packets per message
+	SendQueueTimeout    prometheus.Counter     // count of send queue timeout errors
+	SendQueueFull       *prometheus.CounterVec // count of send queue full events by topic
+}
+
 // BFTMetrics represents the telemetry for the BFT module
 type BFTMetrics struct {
 	Height            prometheus.Gauge     // what's the height of this chain?
@@ -116,6 +132,7 @@ type BFTMetrics struct {
 	CommitTime        prometheus.Histogram // how long did the commit phase take?
 	CommitProcessTime prometheus.Histogram // how long did the commit process phase take?
 	RootHeight        prometheus.Gauge     // what's the height of the root-chain?
+	RootChainId       prometheus.Gauge     // what's the chain id of the root-chain?
 }
 
 // FSMMetrics represents the telemetry of the FSM module for the node's address
@@ -236,6 +253,60 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Help: "Number of outbound peers",
 			}),
 		},
+		// P2P Performance
+		P2PMetrics: P2PMetrics{
+			SendQueueTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_queue_time_seconds",
+				Help:    "Time a packet spends waiting in the send queue before being sent",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendWireTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_wire_time_seconds",
+				Help:    "Time to write a packet to the wire (network)",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendTotalTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_send_total_time_seconds",
+				Help:    "Total time from Send() call to wire write completion",
+				Buckets: prometheus.DefBuckets,
+			}),
+			ReceiveWireTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_receive_wire_time_seconds",
+				Help:    "Time to read a packet from the wire (network)",
+				Buckets: prometheus.DefBuckets,
+			}),
+			ReceiveAssemblyTime: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_receive_assembly_time_seconds",
+				Help:    "Time to assemble packets into a complete message",
+				Buckets: prometheus.DefBuckets,
+			}),
+			SendQueueDepth: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_p2p_send_queue_depth",
+				Help: "Current depth of send queue by topic",
+			}, []string{"topic"}),
+			InboxQueueDepth: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_p2p_inbox_queue_depth",
+				Help: "Current depth of inbox queue by topic",
+			}, []string{"topic"}),
+			MessageSize: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_message_size_bytes",
+				Help:    "Size of messages in bytes",
+				Buckets: prometheus.ExponentialBuckets(100, 10, 8), // 100B to ~100MB
+			}),
+			PacketsPerMessage: promauto.NewHistogram(prometheus.HistogramOpts{
+				Name:    "canopy_p2p_packets_per_message",
+				Help:    "Number of packets per message",
+				Buckets: prometheus.LinearBuckets(1, 1, 20), // 1 to 20 packets
+			}),
+			SendQueueTimeout: promauto.NewCounter(prometheus.CounterOpts{
+				Name: "canopy_p2p_send_queue_timeout_total",
+				Help: "Total count of send queue timeout errors",
+			}),
+			SendQueueFull: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_p2p_send_queue_full_total",
+				Help: "Total count of send queue full events by topic",
+			}, []string{"topic"}),
+		},
 		// BFT
 		BFTMetrics: BFTMetrics{
 			Height: promauto.NewGauge(prometheus.GaugeOpts{
@@ -285,6 +356,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			RootHeight: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_bft_root_height",
 				Help: "Current height of the `root_chain` the quorum is operating on",
+			}),
+			RootChainId: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_root_chain_id",
+				Help: "The chain ID of the root chain this node is operating on",
 			}),
 		},
 		// FSM
@@ -440,7 +515,7 @@ func (m *Metrics) UpdatePeerMetrics(total, inbound, outbound int) {
 }
 
 // UpdateBFTMetrics() is a setter for the BFT metrics
-func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase, phaseStartTime time.Time) {
+func (m *Metrics) UpdateBFTMetrics(height, rootHeight, rootChainId, round uint64, phase Phase, phaseStartTime time.Time) {
 	// exit if empty
 	if m == nil {
 		return
@@ -449,6 +524,8 @@ func (m *Metrics) UpdateBFTMetrics(height, rootHeight, round uint64, phase Phase
 	m.Height.Set(float64(height))
 	// set the height of the root chain
 	m.RootHeight.Set(float64(rootHeight))
+	// set the chain id of the root chain
+	m.RootChainId.Set(float64(rootChainId))
 	// set the round
 	m.Round.Set(float64(round))
 	// set the phase

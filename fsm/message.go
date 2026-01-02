@@ -41,6 +41,12 @@ func (s *StateMachine) HandleMessage(msg lib.MessageI) lib.ErrorI {
 		return s.HandleMessageEditOrder(x)
 	case *MessageDeleteOrder:
 		return s.HandleMessageDeleteOrder(x)
+	case *MessageDexLimitOrder:
+		return s.HandleMessageDexLimitOrder(x)
+	case *MessageDexLiquidityDeposit:
+		return s.HandleMessageDexLiquidityDeposit(x)
+	case *MessageDexLiquidityWithdraw:
+		return s.HandleMessageDexLiquidityWithdraw(x)
 	default:
 		return ErrUnknownMessage(x)
 	}
@@ -318,22 +324,13 @@ func (s *StateMachine) HandleMessageCertificateResults(msg *MessageCertificateRe
 	if err != nil {
 		return err
 	}
-	// block any tx message certificate result for self chain id, as it is stored in the qc
-	if msg.Qc.Header.ChainId == rootChainId {
+	// block any tx message certificate result for root or self chain id, as it is stored in the qc
+	if msg.Qc.Header.ChainId == rootChainId || msg.Qc.Header.ChainId == s.Config.ChainId {
 		return ErrInvalidCertificateResults()
 	}
 	s.log.Debugf("Handling certificate results msg with height %d:%d", msg.Qc.Header.Height, msg.Qc.Header.RootHeight)
 	// define convenience variables
 	chainId := msg.Qc.Header.ChainId
-	// get the proper reward Pool
-	poolBalance, err := s.GetPoolBalance(chainId)
-	if err != nil {
-		return err
-	}
-	// ensure subsidized
-	if poolBalance == 0 {
-		return ErrNonSubsidizedCommittee()
-	}
 	// get committee for the QC from the cache
 	var committee *lib.ValidatorSet
 	if s.LastValidatorSet != nil {
@@ -485,6 +482,112 @@ func (s *StateMachine) HandleMessageDeleteOrder(msg *MessageDeleteOrder) (err li
 	return
 }
 
+// HandleMessageDexLimitOrder() is the proper handler for a `DexLimitOrder` message
+func (s *StateMachine) HandleMessageDexLimitOrder(msg *MessageDexLimitOrder) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(msg.ChainId, false)
+	if err != nil {
+		return err
+	}
+	// ensure there's some liquidity in the pool
+	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
+		return ErrInvalidLiquidityPool()
+	}
+	// hard limit orders to 10K per batch to prevent unchecked state growth
+	if len(batch.Orders) >= lib.MaxOrdersPerDexBatch {
+		return ErrMaxDexBatchSize()
+	}
+	// move funds from user
+	if err = s.AccountSub(crypto.NewAddress(msg.Address), msg.AmountForSale); err != nil {
+		return err
+	}
+	// add funds to holding pool
+	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.AmountForSale); err != nil {
+		return err
+	}
+	// add the order to the batch
+	batch.Orders = append(batch.Orders, &lib.DexLimitOrder{
+		AmountForSale:   msg.AmountForSale,
+		RequestedAmount: msg.RequestedAmount,
+		Address:         msg.Address,
+		OrderId:         msg.OrderId,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
+}
+
+// HandleMessageDexLiquidityDeposit() is the proper handler for a `DexLiquidityDeposit` message
+func (s *StateMachine) HandleMessageDexLiquidityDeposit(msg *MessageDexLiquidityDeposit) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(msg.ChainId, false)
+	if err != nil {
+		return err
+	}
+	// retrieve the pool from state
+	lPool, err := s.GetPool(msg.ChainId + LiquidityPoolAddend)
+	if err != nil {
+		return err
+	}
+	// ensure there's some liquidity in the pool
+	if lPool.Amount == 0 || s.Config.ChainId == msg.ChainId || len(lPool.Points) >= lib.MaxLiquidityProviders {
+		return ErrInvalidLiquidityPool()
+	}
+	// hard limit ops to 5K per batch to prevent unchecked state growth
+	if len(batch.Deposits) >= lib.MaxDepositsPerDexBatch {
+		return ErrMaxDexBatchSize()
+	}
+	// move funds from user
+	if err = s.AccountSub(crypto.NewAddress(msg.Address), msg.Amount); err != nil {
+		return err
+	}
+	// add funds to holding pool
+	if err = s.PoolAdd(msg.ChainId+HoldingPoolAddend, msg.Amount); err != nil {
+		return err
+	}
+	// add the deposit to the batch
+	batch.Deposits = append(batch.Deposits, &lib.DexLiquidityDeposit{
+		Address: msg.Address,
+		Amount:  msg.Amount,
+		OrderId: msg.OrderId,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
+}
+
+// HandleMessageDexLiquidityWithdraw() is the proper handler for a `DexLiquidityWithdrawal` message
+func (s *StateMachine) HandleMessageDexLiquidityWithdraw(msg *MessageDexLiquidityWithdraw) (err lib.ErrorI) {
+	// get the next sell batch
+	batch, err := s.GetDexBatch(msg.ChainId, false)
+	if err != nil {
+		return err
+	}
+	// ensure there's some liquidity in the pool
+	if batch.PoolSize == 0 || s.Config.ChainId == msg.ChainId {
+		return ErrInvalidLiquidityPool()
+	}
+	// hard limit ops to 5K per batch to prevent unchecked state growth
+	if len(batch.Withdrawals) >= lib.MaxWithdrawsPerDexBatch {
+		return ErrMaxDexBatchSize()
+	}
+	// get the liquidity pool
+	p, err := s.GetPool(msg.ChainId + LiquidityPoolAddend)
+	if err != nil {
+		return err
+	}
+	// sanity check has liquidity points
+	if _, err = p.GetPointsFor(msg.Address); err != nil {
+		return err
+	}
+	// add the withdrawal to the batch
+	batch.Withdrawals = append(batch.Withdrawals, &lib.DexLiquidityWithdraw{
+		Address: msg.Address,
+		Percent: msg.Percent,
+		OrderId: msg.OrderId,
+	})
+	// update next sell batch
+	return s.SetDexBatch(KeyForNextBatch(msg.ChainId), batch)
+}
+
 // GetFeeForMessageName() returns the associated cost for processing a specific type of message based on the name
 func (s *StateMachine) GetFeeForMessageName(name string) (fee uint64, err lib.ErrorI) {
 	// retrieve the fee parameters from the state
@@ -520,6 +623,12 @@ func (s *StateMachine) GetFeeForMessageName(name string) (fee uint64, err lib.Er
 		return feeParams.EditOrderFee, nil
 	case MessageDeleteOrderName:
 		return feeParams.DeleteOrderFee, nil
+	case MessageDexLimitOrderName:
+		return feeParams.DexLimitOrderFee, nil
+	case MessageDexLiquidityDepositName:
+		return feeParams.DexLiquidityDepositFee, nil
+	case MessageDexLiquidityWithdrawName:
+		return feeParams.DexLiquidityWithdrawFee, nil
 	default:
 		return 0, lib.ErrUnknownMessageName(name)
 	}
@@ -571,6 +680,12 @@ func (s *StateMachine) GetAuthorizedSignersFor(msg lib.MessageI) (signers [][]by
 			return nil, e
 		}
 		return [][]byte{order.SellersSendAddress}, nil
+	case *MessageDexLimitOrder:
+		return [][]byte{x.Address}, nil
+	case *MessageDexLiquidityDeposit:
+		return [][]byte{x.Address}, nil
+	case *MessageDexLiquidityWithdraw:
+		return [][]byte{x.Address}, nil
 	default:
 		return nil, ErrUnknownMessage(x)
 	}

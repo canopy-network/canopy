@@ -34,6 +34,10 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 	if err != nil {
 		return 0, err
 	}
+	// ensure both the certificate and the signature are non-nil
+	if qc != nil && qc.Signature != nil && qc.Header != nil {
+		qc.Signature.LogNonSigners(vs.ValidatorSet, qc.ProposerKey, qc.Header.Height, qc.Header.ChainId, s.log)
+	}
 	// increment the non-signing count for the non-signers
 	if err = s.IncrementNonSigners(nonSignerPubKeys); err != nil {
 		return 0, err
@@ -252,7 +256,11 @@ func (s *StateMachine) ForceUnstakeValidator(address crypto.AddressI) lib.ErrorI
 	// calculate the future unstaking height
 	unstakingHeight := s.Height() + unstakingBlocks
 	// set the validator as unstaking
-	return s.SetValidatorUnstaking(address, validator, unstakingHeight)
+	if err = s.SetValidatorUnstaking(address, validator, unstakingHeight); err != nil {
+		return err
+	}
+	// add begin unstaking event
+	return s.EventAutoBeginUnstaking(address.Bytes())
 }
 
 // SlashValidators() burns a specified percentage of multiple validator's staked tokens
@@ -318,6 +326,10 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 	}
 	// if stake after slash is 0, remove the validator
 	if stakeAfterSlash == 0 {
+		// add slash event
+		if err = s.EventSlash(validator.Address, slashAmount); err != nil {
+			return err
+		}
 		// DeleteValidator subtracts from staked supply
 		return s.DeleteValidator(validator)
 	}
@@ -338,7 +350,11 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 		return e
 	}
 	// update the validator
-	return s.SetValidator(validator)
+	if err = s.SetValidator(validator); err != nil {
+		return err
+	}
+	// add slash event
+	return s.EventSlash(validator.Address, slashAmount)
 }
 
 // LoadMinimumEvidenceHeight() loads the minimum height the evidence must be to still be usable
@@ -380,6 +396,22 @@ type SlashTracker map[string]map[uint64]uint64
 func NewSlashTracker() *SlashTracker {
 	slashTracker := make(SlashTracker)
 	return &slashTracker
+}
+
+// Clone() returns a deep copy of the slash tracker to allow safe rollback on failed operations
+func (s *SlashTracker) Clone() *SlashTracker {
+	if s == nil {
+		return nil
+	}
+	clone := make(SlashTracker, len(*s))
+	for addr, m := range *s {
+		cp := make(map[uint64]uint64, len(m))
+		for chainId, percent := range m {
+			cp[chainId] = percent
+		}
+		clone[addr] = cp
+	}
+	return &clone
 }
 
 // AddSlash() adds a slash for an address at by a committee for a certain percent

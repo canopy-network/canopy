@@ -4,6 +4,8 @@ import (
 	"container/list"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -593,4 +595,55 @@ func TestPeerInfoCopy(t *testing.T) {
 	got := expected.Copy()
 	// compare got vs expected
 	require.EqualExportedValues(t, expected, got)
+}
+
+func TestValidatorTCPProxy_ForwardsTraffic(t *testing.T) {
+	logger := NewDefaultLogger()
+
+	backendLn, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	backendAddr := backendLn.Addr().String()
+	backendDone := make(chan struct{})
+
+	go func() {
+		defer close(backendDone)
+		conn, acceptErr := backendLn.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+
+		buf := make([]byte, 4)
+		if _, readErr := io.ReadFull(conn, buf); readErr != nil {
+			return
+		}
+		_, _ = conn.Write(buf)
+	}()
+
+	frontendLn, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	frontendPort := frontendLn.Addr().(*net.TCPAddr).Port
+	require.NoError(t, frontendLn.Close())
+
+	proxy := NewValidatorTCPProxy(map[uint64]string{uint64(frontendPort): backendAddr}, logger)
+	require.NoError(t, proxy.Start())
+	t.Cleanup(proxy.Stop)
+
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", frontendPort), time.Second)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	require.NoError(t, conn.SetDeadline(time.Now().Add(2*time.Second)))
+
+	msg := []byte("ping")
+	_, err = conn.Write(msg)
+	require.NoError(t, err)
+
+	resp := make([]byte, len(msg))
+	_, err = io.ReadFull(conn, resp)
+	require.NoError(t, err)
+	require.Equal(t, msg, resp)
+
+	require.NoError(t, backendLn.Close())
+	<-backendDone
 }

@@ -26,6 +26,8 @@ func (s *StateMachine) NewFromGenesisFile() (err lib.ErrorI) {
 	if _, err = s.store.(lib.StoreI).Commit(); err != nil {
 		return
 	}
+	// log the application
+	s.log.Infof("Applied the genesis file with %d validators", len(genesis.Validators))
 	// update the height from 0 to 1
 	s.height += 1
 	// exit

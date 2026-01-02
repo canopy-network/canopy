@@ -330,7 +330,11 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 			return err
 		}
 		// delete the validator structure
-		return s.DeleteValidator(validator)
+		if err = s.DeleteValidator(validator); err != nil {
+			return err
+		}
+		// add finish unstake event
+		return s.EventFinishUnstaking(addr.Bytes())
 	}
 	// for each unstaking key at this height
 	if err := s.IterateAndExecute(UnstakingPrefix(s.Height()), callback); err != nil {
@@ -365,6 +369,12 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 		if err = s.HandleMessagePause(&MessagePause{Address: addr}); err != nil {
 			// log error
 			s.log.Debugf("can't pause validator %s with err %s", lib.BytesToString(addr), err.Error())
+			// move on to the next iteration
+			continue
+		}
+		// index pause event
+		if err = s.EventAutoPause(addr); err != nil {
+			s.log.Debugf("can't index pause validator %s with err %s", lib.BytesToString(addr), err.Error())
 			// move on to the next iteration
 			continue
 		}
@@ -630,3 +640,33 @@ type ConsValidatorPage []*lib.ConsensusValidator
 
 // ConsValidatorPage satisfies the Page interface
 func (p *ConsValidatorPage) New() lib.Pageable { return &ConsValidatorPage{{}} }
+
+// nonSignerJSON implements the json interface for non-signers
+type nonSignerJSON struct {
+	Address lib.HexBytes `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Counter uint64       `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+func (x *NonSigner) MarshalJSON() (bz []byte, err error) {
+	if x == nil {
+		return nil, nil
+	}
+	return json.Marshal(&nonSignerJSON{
+		Address: x.Address,
+		Counter: x.Counter,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+func (x *NonSigner) UnmarshalJSON(bz []byte) (err error) {
+	j := &nonSignerJSON{}
+	if err = json.Unmarshal(bz, j); err != nil {
+		return err
+	}
+	*x = NonSigner{
+		Address: j.Address,
+		Counter: j.Counter,
+	}
+	return nil
+}

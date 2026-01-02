@@ -55,6 +55,24 @@ func (c *Client) Blocks(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	return
 }
 
+func (c *Client) EventsByHeight(height uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedHeightRequest(EventsByHeightRouteName, height, params, p)
+	return
+}
+
+func (c *Client) EventsByAddress(address string, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedAddrRequest(EventsByAddressRouteName, address, params, p)
+	return
+}
+
+func (c *Client) EventsByChainId(id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
+	p = new(lib.Page)
+	err = c.paginatedIdRequest(EventsByChainRouteName, id, params, p)
+	return
+}
+
 func (c *Client) Pending(params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
 	p = new(lib.Page)
 	err = c.paginatedAddrRequest(PendingRouteName, "", params, p)
@@ -203,6 +221,24 @@ func (c *Client) Order(height uint64, orderId string, chainId uint64) (p *lib.Se
 func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.ErrorI) {
 	p = new(lib.OrderBooks)
 	err = c.heightAndIdRequest(OrdersRouteName, height, chainId, p)
+	return
+}
+
+func (c *Client) DexPrice(height, chainId uint64) (p *lib.DexPrice, err lib.ErrorI) {
+	p = new(lib.DexPrice)
+	err = c.heightAndIdRequest(DexPriceRouteName, height, chainId, p)
+	return
+}
+
+func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	p = new(lib.DexBatch)
+	err = c.heightIdAndPointsRequest(DexBatchRouteName, height, chainId, withPoints, p)
+	return
+}
+
+func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
+	p = new(lib.DexBatch)
+	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
 	return
 }
 
@@ -627,6 +663,61 @@ func (c *Client) TxDeleteOrder(from AddrOrNickname, orderId string, chainId uint
 	return c.transactionRequest(TxDeleteOrderRouteName, txReq, submit)
 }
 
+func (c *Client) TxDexLimitOrder(from AddrOrNickname, amount, receiveAmount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLimitOrder{
+		Fee:               optFee,
+		Amount:            amount,
+		ReceiveAmount:     receiveAmount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLimitOrderRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityDeposit(from AddrOrNickname, amount, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityDeposit{
+		Fee:               optFee,
+		Amount:            amount,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityDepositRouteName, txReq, submit)
+}
+
+func (c *Client) TxDexLiquidityWithdraw(from AddrOrNickname, percent int, chainId uint64,
+	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
+	txReq := txDexLiquidityWithdraw{
+		Fee:               optFee,
+		Percent:           percent,
+		Submit:            submit,
+		Password:          pwd,
+		committeesRequest: committeesRequest{fmt.Sprintf("%d", chainId)},
+	}
+	var err lib.ErrorI
+	txReq.fromFields, err = getFrom(from.Address, from.Nickname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.transactionRequest(TxDexLiquidityWithdrawRouteName, txReq, submit)
+}
+
 func (c *Client) TxLockOrder(from AddrOrNickname, receiveAddress string, orderId string,
 	pwd string, submit bool, optFee uint64) (hash *string, tx json.RawMessage, e lib.ErrorI) {
 	receiveHex, err := lib.NewHexBytesFromString(receiveAddress)
@@ -838,6 +929,20 @@ func (c *Client) paginatedHeightRequest(routeName string, height uint64, p lib.P
 	return
 }
 
+func (c *Client) paginatedIdRequest(routeName string, id uint64, p lib.PageParams, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(paginatedIdRequest{
+		idRequest: idRequest{
+			ID: id,
+		},
+		PageParams: p,
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
 func (c *Client) paginatedAddrRequest(routeName string, address string, p lib.PageParams, ptr any) (err lib.ErrorI) {
 	addr, err := lib.StringToBytes(address)
 	if err != nil {
@@ -907,6 +1012,21 @@ func (c *Client) heightAndIdRequest(routeName string, height, id uint64, ptr any
 	bz, err := lib.MarshalJSON(heightAndIdRequest{
 		heightRequest: heightRequest{height},
 		idRequest:     idRequest{id},
+	})
+	if err != nil {
+		return
+	}
+	err = c.post(routeName, bz, ptr)
+	return
+}
+
+func (c *Client) heightIdAndPointsRequest(routeName string, height, id uint64, points bool, ptr any) (err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(heightIdAndPointsRequest{
+		heightAndIdRequest: heightAndIdRequest{
+			heightRequest: heightRequest{height},
+			idRequest:     idRequest{id},
+		},
+		Points: points,
 	})
 	if err != nil {
 		return

@@ -108,6 +108,7 @@ type RCManagerI interface {
 	GetLotteryWinner(rootChainId, height, id uint64) (p *LotteryWinner, err ErrorI)           // get the delegate 'lottery winner' for a chain id
 	GetOrders(rootChainId, rootHeight, id uint64) (*OrderBook, ErrorI)                        // get the order book for a specific 'chain id'
 	GetOrder(rootChainId, height uint64, orderId string, chainId uint64) (*SellOrder, ErrorI) // get a specific order from the order book
+	GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*DexBatch, ErrorI)   // get the dex information from the root chain
 	IsValidDoubleSigner(rootChainId, height uint64, address string) (p *bool, err ErrorI)     // check if a double signer is valid for an address for a specific 'double sign height'
 	GetMinimumEvidenceHeight(rootChainId, rootHeight uint64) (*uint64, ErrorI)                // load the minimum height that evidence is valid
 	GetCheckpoint(rootChainId, height, id uint64) (blockHash HexBytes, i ErrorI)              // get a checkpoint at a height and chain id combination
@@ -198,6 +199,61 @@ func (x *AggregateSignature) GetNonSigners(validatorList *ConsensusValidators) (
 	}
 	// set the non signer percent (Non Signer Power / Total Power)
 	nonSignerPercent = int(Uint64PercentageDiv(nonSignerPower, vs.TotalPower))
+	// exit
+	return
+}
+
+func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, proposerPubKey []byte, height, chainId uint64, logger LoggerI) {
+	// convert the consensus validators list into a validator set
+	vs, err := NewValidatorSet(validatorList)
+	// if an error occurred during the conversion
+	if err != nil {
+		// exit with error
+		return
+	}
+	// create a copy of the multi-public-key from the validator set
+	key := vs.MultiKey.Copy()
+	// set the 'who signed' bitmap in a copy of the key
+	if e := key.SetBitmap(x.Bitmap); e != nil {
+		// convert the error to a lib.ErrorI
+		err = ErrInvalidSignerBitmap(e)
+		// exit with error
+		return
+	}
+	producerAddress, producerNetAddress := "", ""
+	for _, val := range vs.ValidatorSet.ValidatorSet {
+		if bytes.Equal(val.PublicKey, proposerPubKey) {
+			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
+			if err != nil {
+				logger.Errorf("Failed to create public key from valset: %s", err.Error())
+				continue
+			}
+			producerNetAddress, producerAddress = val.NetAddress, bls.Address().String()
+			break
+		}
+	}
+	// iterate through the ValSet to and see if the validator signed
+	for i, val := range vs.ValidatorSet.ValidatorSet {
+		// did they sign?
+		signed, er := key.SignerEnabledAt(i)
+		// if an error occurred during this check
+		if er != nil {
+			// convert the error to a lib.ErrorI
+			err = ErrInvalidSignerBitmap(er)
+			// exit
+			return
+		}
+		// if so, add to the pubkeys and add to the power
+		if !signed && (val.VotingPower*100 >= vs.TotalPower*5) {
+			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
+			if err != nil {
+				logger.Errorf("Failed to create public key from valset: %s", err.Error())
+				continue
+			}
+			logger.Errorf("NON-SIGNER-CRITICAL:\n%s (%s) did not sign block %d for chainID %d with producer: %s (%s)",
+				val.NetAddress, bls.Address().String(), height, chainId, producerNetAddress, producerAddress)
+		}
+	}
 	// exit
 	return
 }

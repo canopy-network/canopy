@@ -55,20 +55,23 @@ const (
 	Topic_PEERS_RESPONSE Topic = 4
 	// PEERS_REQUEST: topic a peer requesting an exchange of book peers
 	Topic_PEERS_REQUEST Topic = 5
+	// HEARTBEAT: reserved for transport heartbeat
+	Topic_HEARTBEAT Topic = 6
 	// INVALID: topic to mark the exclusive end of valid topics
-	Topic_INVALID Topic = 6
+	Topic_INVALID Topic = 99
 )
 
 // Enum value maps for Topic.
 var (
 	Topic_name = map[int32]string{
-		0: "CONSENSUS",
-		1: "BLOCK",
-		2: "BLOCK_REQUEST",
-		3: "TX",
-		4: "PEERS_RESPONSE",
-		5: "PEERS_REQUEST",
-		6: "INVALID",
+		0:  "CONSENSUS",
+		1:  "BLOCK",
+		2:  "BLOCK_REQUEST",
+		3:  "TX",
+		4:  "PEERS_RESPONSE",
+		5:  "PEERS_REQUEST",
+		6:  "HEARTBEAT",
+		99: "INVALID",
 	}
 	Topic_value = map[string]int32{
 		"CONSENSUS":      0,
@@ -77,7 +80,8 @@ var (
 		"TX":             3,
 		"PEERS_RESPONSE": 4,
 		"PEERS_REQUEST":  5,
-		"INVALID":        6,
+		"HEARTBEAT":      6,
+		"INVALID":        99,
 	}
 )
 
@@ -565,15 +569,16 @@ const file_peer_proto_rawDesc = "" +
 	"\x04time\x18\x05 \x01(\x04R\x04time\"8\n" +
 	"\tTxMessage\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x10\n" +
-	"\x03txs\x18\x02 \x03(\fR\x03txs*p\n" +
+	"\x03txs\x18\x02 \x03(\fR\x03txs*\x7f\n" +
 	"\x05Topic\x12\r\n" +
 	"\tCONSENSUS\x10\x00\x12\t\n" +
 	"\x05BLOCK\x10\x01\x12\x11\n" +
 	"\rBLOCK_REQUEST\x10\x02\x12\x06\n" +
 	"\x02TX\x10\x03\x12\x12\n" +
 	"\x0ePEERS_RESPONSE\x10\x04\x12\x11\n" +
-	"\rPEERS_REQUEST\x10\x05\x12\v\n" +
-	"\aINVALID\x10\x06B&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\rPEERS_REQUEST\x10\x05\x12\r\n" +
+	"\tHEARTBEAT\x10\x06\x12\v\n" +
+	"\aINVALID\x10cB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_peer_proto_rawDescOnce sync.Once

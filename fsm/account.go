@@ -1,6 +1,7 @@
 package fsm
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -319,6 +320,19 @@ func (s *StateMachine) PoolSub(id uint64, amountToSub uint64) lib.ErrorI {
 	pool.Amount -= amountToSub
 	// update the pool in state
 	return s.SetPool(pool)
+}
+
+// SetPoolPoints() updates the pool points with correct values
+func (s *StateMachine) SetPoolPoints(chainId uint64, points []*lib.PoolPoints, totalPoolPoints uint64) lib.ErrorI {
+	lPool, err := s.GetPool(chainId)
+	if err != nil {
+		return err
+	}
+	// update points
+	lPool.Points = points
+	lPool.TotalPoolPoints = totalPoolPoints
+	// set pool back
+	return s.SetPool(lPool)
 }
 
 // unmarshalPool() coverts bytes into a Pool structure
@@ -686,15 +700,91 @@ func (x *Account) UnmarshalJSON(bz []byte) (err error) {
 	return
 }
 
+// GetPointsFor() returns the amount of points an address has
+func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// exit
+			return lp.Points, nil
+		}
+	}
+	// exit
+	return 0, lib.ErrPointHolderNotFound()
+}
+
+// AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
+// Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
+func (x *Pool) AddPoints(address []byte, points uint64) {
+	// add to total points
+	x.TotalPoolPoints += points
+	// add to existing if found
+	for _, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// add points
+			lp.Points += points
+			// exit
+			return
+		}
+	}
+	// add to the points
+	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
+	// exit
+	return
+}
+
+// RemovePoints() removes liquidity points for a certain provider in the pool
+func (x *Pool) RemovePoints(address []byte, points uint64) (err lib.ErrorI) {
+	// add to existing if found
+	for i, lp := range x.Points {
+		// if the address is found
+		if bytes.Equal(lp.Address, address) {
+			// update total points
+			x.TotalPoolPoints -= points
+			// calculate the remaining lp points
+			x.Points[i].Points -= points
+			// check if should evict from slice
+			if x.Points[i].Points == 0 {
+				// remove from the slice
+				x.Points = append(x.Points[:i], x.Points[i+1:]...)
+			}
+			// check for zero pool
+			if x.TotalPoolPoints == 0 {
+				return lib.ErrZeroLiquidityPool()
+			}
+			// exit
+			return
+		}
+	}
+	// exit
+	return lib.ErrPointHolderNotFound()
+}
+
 // pool is the json.Marshaller and json.Unmarshaler implementation for the Pool object
 type pool struct {
-	ID     uint64 `json:"id"`
-	Amount uint64 `json:"amount"`
+	ID          uint64       `json:"id"`
+	Amount      uint64       `json:"amount"`
+	Points      []poolPoints `json:"points"`
+	TotalPoints uint64       `json:"totalPoints"`
+}
+
+type poolPoints struct {
+	Address lib.HexBytes
+	Points  uint64
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Pool object
 func (x *Pool) MarshalJSON() ([]byte, error) {
-	return json.Marshal(pool{x.Id, x.Amount})
+	var points []poolPoints
+	for _, p := range x.Points {
+		points = append(points, poolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	return json.Marshal(pool{x.Id, x.Amount, points, x.TotalPoolPoints})
 }
 
 // UnmarshalJSON() is the json.Unmarshaler implementation for the Pool object
@@ -703,6 +793,13 @@ func (x *Pool) UnmarshalJSON(bz []byte) (err error) {
 	if err = json.Unmarshal(bz, a); err != nil {
 		return err
 	}
-	x.Id, x.Amount = a.ID, a.Amount
+	var points []*lib.PoolPoints
+	for _, p := range a.Points {
+		points = append(points, &lib.PoolPoints{
+			Address: p.Address,
+			Points:  p.Points,
+		})
+	}
+	x.Id, x.Amount, x.Points, x.TotalPoolPoints = a.ID, a.Amount, points, a.TotalPoints
 	return
 }

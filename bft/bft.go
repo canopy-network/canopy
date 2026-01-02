@@ -42,11 +42,12 @@ type BFT struct {
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 
-	PublicKey  []byte             // self consensus public key
-	PrivateKey crypto.PrivateKeyI // self consensus private key
-	Config     lib.Config         // self configuration
-	Metrics    *lib.Metrics       // telemetry
-	log        lib.LoggerI        // logging
+	PublicKey    []byte             // self consensus public key
+	PrivateKey   crypto.PrivateKeyI // self consensus private key
+	Config       lib.Config         // self configuration
+	Metrics      *lib.Metrics       // telemetry
+	BFTStartTime time.Time          // start time of BFT for this height
+	log          lib.LoggerI        // logging
 }
 
 // New() creates a new instance of HotstuffBFT for a specific Committee
@@ -115,7 +116,7 @@ func (b *BFT) Start() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
 				// Update BFT metrics
-				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
+				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.LoadRootChainId(b.Height), b.Round, b.Phase, startTime)
 				// handle the phase
 				b.HandlePhase()
 			}()
@@ -140,6 +141,7 @@ func (b *BFT) Start() {
 					b.log.Info("Reset BFT (NEW_HEIGHT)")
 					b.NewHeight(false)
 					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					b.BFTStartTime = time.Now()
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
 					//if b.LoadIsOwnRoot() {
@@ -288,16 +290,12 @@ func (b *BFT) StartProposePhase() {
 	b.log.Info(b.View.ToString())
 	vote, as, err := b.GetMajorityVote()
 	if err != nil {
-		// this errors can be ignored bc it's expected in the consensus process
-		// b.log.Debugf("get majority vote in propose phase failed with %s", err.Error())
 		return
 	}
 	b.log.Info("Self is the proposer")
 	// select the highest VDF from the cache
 	highVDF, err := b.selectHighestVDF()
 	if err != nil {
-		// this errors can be ignored bc it's expected in the consensus process
-		// b.log.Debugf("select highest VDF in propose phase failed with %s", err.Error())
 		return
 	}
 	b.HighVDF = highVDF

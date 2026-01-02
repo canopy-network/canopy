@@ -1,11 +1,11 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -248,9 +248,14 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	if err = s.setCommitID(s.version, root); err != nil {
 		return nil, err
 	}
+	// collect LSS tombstones before Flush() clears the txn operations
+	lssDeleteKeys := s.collectLssDeleteKeys()
 	// commit the in-memory txn to the pebbleDB batch
 	if e := s.Flush(); e != nil {
 		return nil, e
+	}
+	if err = s.purgeLssTombstones(lssDeleteKeys); err != nil {
+		return nil, err
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
@@ -480,8 +485,7 @@ func (s *Store) MaybeCompact() {
 	}
 }
 
-// Compact deletes all entries marked for compaction on the given prefix range.
-// it iterates over the prefix, deletes tombstone entries, and performs DB compaction
+// Compact runs Pebble range compaction over the latest and optional historic state prefixes.
 func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// first compaction: latest state  keys
 	startPrefix, endPrefix := latestStatePrefix, prefixEnd(latestStatePrefix)
@@ -492,64 +496,12 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	// TODO: timeout was chosen arbitrarily, should update the number once multiple tests are run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	// create a batch to set the keys to be removed by the compaction
-	batch := s.db.NewBatch()
-	defer batch.Close()
-	// set metrics to log
-	total, toDelete := 0, 0
-	// collect and delete tombstone entries
-	err := s.withIterator(startPrefix, endPrefix, func(it *pebble.Iterator) {
-		tombstone, _ := parseValueWithTombstone(it.Value())
-		if tombstone == DeadTombstone {
-			batch.Delete(it.Key(), pebble.NoSync)
-			toDelete++
-		} else {
-			total++
-		}
-	})
-	if err != nil {
-		return ErrCommitDB(err)
-	}
-	// if nothing to delete, skip compaction
-	if batch.Empty() {
-		s.log.Debugf("key compaction finished [%d], no values to delete", version)
-		return nil
-	}
-	// commit the batch
-	s.mu.Lock() // lock commit op
-	// check if batch's db closed field is not nil using reflection, this is due to a possible issue
-	// on pebbleDB where the batch may come as nil due to their internal sync.Pool implementation.
-	// The issue is currently being investigated and this may be removed in the future.
-	// Issue: https://github.com/cockroachdb/pebble/issues/5563
-	batchValue := reflect.ValueOf(batch).Elem()
-	batchDBField := batchValue.FieldByName("db")
-	if !batchDBField.IsValid() || batchDBField.IsNil() {
-		s.mu.Unlock() // unlock commit op
-		return ErrCommitDB(fmt.Errorf("db field is nil"))
-	}
-	dbValue := batchDBField.Elem()
-	closedField := dbValue.FieldByName("closed")
-	if !closedField.IsValid() || closedField.IsNil() {
-		s.mu.Unlock() // unlock commit op
-		return ErrCommitDB(fmt.Errorf("closed field is nil"))
-	}
-	if err := batch.Commit(pebble.Sync); err != nil {
-		s.mu.Unlock() // unlock commit op
-		return ErrCommitDB(err)
-	}
-	s.mu.Unlock() // unlock commit op
-	batchTime := time.Since(now)
-	// perform a flush to ensure memtables are flushed to disk
-	if err := s.db.Flush(); err != nil {
-		return ErrCommitDB(fmt.Errorf("failed to flush memtables: %v", err))
-	}
 	// flush and compact the range
 	if err := s.db.Compact(ctx, startPrefix, endPrefix, true); err != nil {
 		return ErrCommitDB(err)
 	}
 	lssTime := time.Since(now)
-	s.log.Debugf("key compaction finished [LSS] [%d], total keys: %d, deleted: %d batch: %s elapsed: %s",
-		version, total, toDelete, batchTime, lssTime)
+	s.log.Debugf("key compaction finished [LSS] [%d] time: %s", version, lssTime)
 	// second compaction: historic state keys
 	if compactHSS {
 		startPrefix, endPrefix = historicStatePrefix, prefixEnd(historicStatePrefix)
@@ -564,17 +516,38 @@ func (s *Store) Compact(version uint64, compactHSS bool) lib.ErrorI {
 	return nil
 }
 
-// withIterator iterates over the keys in the given range with the provided callback function.
-func (s *Store) withIterator(startPrefix, endPrefix []byte, cb func(it *pebble.Iterator)) lib.ErrorI {
-	db := s.db.NewSnapshot()
-	defer db.Close()
-	it, err := db.NewIter(&pebble.IterOptions{LowerBound: startPrefix, UpperBound: endPrefix})
-	if err != nil {
-		return ErrOpenDB(err)
+// collectLssDeleteKeys collects state deletes from the current txn before Flush() clears them.
+func (s *Store) collectLssDeleteKeys() [][]byte {
+	s.ss.txn.l.Lock()
+	defer s.ss.txn.l.Unlock()
+	if len(s.ss.txn.ops) == 0 {
+		return nil
 	}
-	defer it.Close()
-	for it.First(); it.Valid(); it.Next() {
-		cb(it)
+	keys := make([][]byte, 0)
+	for _, op := range s.ss.txn.ops {
+		if op.op != opDelete {
+			continue
+		}
+		keys = append(keys, bytes.Clone(op.key))
+	}
+	return keys
+}
+
+// purgeLssTombstones removes LSS tombstone entries using the current commit batch.
+func (s *Store) purgeLssTombstones(keys [][]byte) lib.ErrorI {
+	if len(keys) == 0 {
+		return nil
+	}
+	reader, ok := s.ss.reader.(*VersionedStore)
+	if !ok {
+		return nil
+	}
+	for _, key := range keys {
+		userKey := lib.Append(latestStatePrefix, key)
+		versionedKey := reader.makeVersionedKey(userKey, lssVersion)
+		if err := s.writer.Delete(versionedKey, nil); err != nil {
+			return ErrCommitDB(err)
+		}
 	}
 	return nil
 }

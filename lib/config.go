@@ -105,13 +105,19 @@ func (m *MainConfig) GetLogLevel() int32 {
 // RPC CONFIG BELOW
 
 type RPCConfig struct {
-	WalletPort   string `json:"walletPort"`   // the port where the web wallet is hosted
-	ExplorerPort string `json:"explorerPort"` // the port where the block explorer is hosted
-	RPCPort      string `json:"rpcPort"`      // the port where the rpc server is hosted
-	AdminPort    string `json:"adminPort"`    // the port where the admin rpc server is hosted
-	RPCUrl       string `json:"rpcURL"`       // the url where the rpc server is hosted
-	AdminRPCUrl  string `json:"adminRPCUrl"`  // the url where the admin rpc server is hosted
-	TimeoutS     int    `json:"timeoutS"`     // the rpc request timeout in seconds
+	WalletPort                 string `json:"walletPort"`                 // the port where the web wallet is hosted
+	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
+	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
+	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
+	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
+	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
+	MaxRCSubscribers           int    `json:"maxRCSubscribers"`           // max total root-chain subscribers
+	MaxRCSubscribersPerChain   int    `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
+	RCSubscriberReadLimitBytes int64  `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
+	RCSubscriberWriteTimeoutMS int    `json:"rcSubscriberWriteTimeoutMS"` // ws write timeout for publishing root-chain info
+	RCSubscriberPongWaitS      int    `json:"rcSubscriberPongWaitS"`      // time to wait for pong responses
+	RCSubscriberPingPeriodS    int    `json:"rcSubscriberPingPeriodS"`    // how often to ping subscribers
 }
 
 // RootChain defines a rpc url to a possible 'root chain' which is used if the governance parameter RootChainId == ChainId
@@ -123,23 +129,45 @@ type RootChain struct {
 // DefaultRPCConfig() sets rpc url to localhost and sets wallet, explorer, rpc, and admin ports from [50000-50003]
 func DefaultRPCConfig() RPCConfig {
 	return RPCConfig{
-		WalletPort:   "50000",                  // find the wallet on localhost:50000
-		ExplorerPort: "50001",                  // find the explorer on localhost:50001
-		RPCPort:      "50002",                  // the rpc is served on localhost:50002
-		AdminPort:    "50003",                  // the admin rpc is served on localhost:50003
-		RPCUrl:       "http://localhost:50002", // use a local rpc by default
-		AdminRPCUrl:  "http://localhost:50003", // use a local admin rpc by default
-		TimeoutS:     3,                        // the rpc timeout is 3 seconds
+		WalletPort:                 "50000",                    // find the wallet on localhost:50000
+		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
+		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
+		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
+		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
+		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
+		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
+		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id
+		RCSubscriberReadLimitBytes: int64(64 * units.Kilobyte), // cap inbound ws message sizes
+		RCSubscriberWriteTimeoutMS: 10000,                      // 10s write deadline for publishes
+		RCSubscriberPongWaitS:      60,                         // 60s pong wait
+		RCSubscriberPingPeriodS:    50,                         // 50s ping interval
 	}
 }
 
 // STATE MACHINE CONFIG BELOW
 
-// StateMachineConfig is an empty placeholder
-type StateMachineConfig struct{}
+// defaults for on-chain minting schedule
+const (
+	// the number of tokens in micro denomination that are initially (before halvenings) minted per block
+	DefaultInitialTokensPerBlock = uint64(80 * 1000000) // 80 CNPY
+	// the number of blocks between each halvening (block reward is cut in half) event
+	DefaultBlocksPerHalvening = uint64(3150000) // ~ 2 years - 20 second blocks
+)
 
-// DefaultStateMachineConfig returns an empty object
-func DefaultStateMachineConfig() StateMachineConfig { return StateMachineConfig{} }
+// StateMachineConfig houses FSM level options
+type StateMachineConfig struct {
+	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
+	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+}
+
+// DefaultStateMachineConfig returns FSM defaults
+func DefaultStateMachineConfig() StateMachineConfig {
+	return StateMachineConfig{
+		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
+		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+	}
+}
 
 // CONSENSUS CONFIG BELOW
 
@@ -190,26 +218,28 @@ func (c *ConsensusConfig) BlockTimeMS() int {
 
 // P2PConfig defines peering compatibility and limits as well as actions on specific peering IPs / IDs
 type P2PConfig struct {
-	NetworkID           uint64   `json:"networkID"`           // the ID for the peering network
-	ListenAddress       string   `json:"listenAddress"`       // listen for incoming connection
-	ExternalAddress     string   `json:"externalAddress"`     // advertise for external dialing
-	MaxInbound          int      `json:"maxInbound"`          // max inbound peers
-	MaxOutbound         int      `json:"maxOutbound"`         // max outbound peers
-	TrustedPeerIDs      []string `json:"trustedPeerIDs"`      // trusted public keys
-	DialPeers           []string `json:"dialPeers"`           // peers to consistently dial until expo-backoff fails (format pubkey@ip:port)
-	BannedPeerIDs       []string `json:"bannedPeersIDs"`      // banned public keys
-	BannedIPs           []string `json:"bannedIPs"`           // banned IPs
-	MinimumPeersToStart int      `json:"minimumPeersToStart"` // the minimum connections required to start consensus
+	NetworkID           uint64            `json:"networkID"`           // the ID for the peering network
+	ListenAddress       string            `json:"listenAddress"`       // listen for incoming connection
+	ExternalAddress     string            `json:"externalAddress"`     // advertise for external dialing
+	MaxInbound          int               `json:"maxInbound"`          // max inbound peers
+	MaxOutbound         int               `json:"maxOutbound"`         // max outbound peers
+	TrustedPeerIDs      []string          `json:"trustedPeerIDs"`      // trusted public keys
+	DialPeers           []string          `json:"dialPeers"`           // peers to consistently dial until expo-backoff fails (format pubkey@ip:port)
+	BannedPeerIDs       []string          `json:"bannedPeersIDs"`      // banned public keys
+	BannedIPs           []string          `json:"bannedIPs"`           // banned IPs
+	MinimumPeersToStart int               `json:"minimumPeersToStart"` // the minimum connections required to start consensus
+	ValidatorTCPProxy   map[uint64]string `json:"validator_tcp_proxy"` // tcp proxy config mapping listen port to target address
 }
 
 func DefaultP2PConfig() P2PConfig {
 	return P2PConfig{
 		NetworkID:           CanopyMainnetNetworkId,
-		ListenAddress:       "0.0.0.0:9001", // default TCP address is 9001 for chain 1 (9002 for chain 2 etc.)
-		ExternalAddress:     "",             // should be populated by the user
-		MaxInbound:          21,             // inbounds should be close to 3x greater than outbounds
-		MaxOutbound:         7,              // to ensure 'new joiners' have slots to take
-		MinimumPeersToStart: 0,              // requires no peers to start consensus by default (suitable for 1 node network)
+		ListenAddress:       "0.0.0.0:9001",      // default TCP address is 9001 for chain 1 (9002 for chain 2 etc.)
+		ExternalAddress:     "",                  // should be populated by the user
+		MaxInbound:          21,                  // inbounds should be close to 3x greater than outbounds
+		MaxOutbound:         7,                   // to ensure 'new joiners' have slots to take
+		MinimumPeersToStart: 0,                   // requires no peers to start consensus by default (suitable for 1 node network)
+		ValidatorTCPProxy:   map[uint64]string{}, // initialize the map
 	}
 }
 

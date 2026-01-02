@@ -7,12 +7,11 @@
 package fsm
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -239,9 +238,11 @@ type ConsensusParams struct {
 	// root_chain_id: the identifier of the root chain (source of the validator set)
 	RootChainId uint64 `protobuf:"varint,3,opt,name=root_chain_id,json=rootChainId,proto3" json:"rootChainID"` // @gotags: json:"rootChainID"
 	// retired: have the validators agreed to stop this chain and mark it as 'forever un-subsidized' in the base chain
-	Retired       uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Retired uint64 `protobuf:"varint,4,opt,name=retired,proto3" json:"retired,omitempty"`
+	// reset_committee: clears committee data for the provided committee id
+	ResetCommittee uint64 `protobuf:"varint,5,opt,name=reset_committee,json=resetCommittee,proto3" json:"resetCommittee"` // @gotags: json:"resetCommittee"
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ConsensusParams) Reset() {
@@ -298,6 +299,13 @@ func (x *ConsensusParams) GetRootChainId() uint64 {
 func (x *ConsensusParams) GetRetired() uint64 {
 	if x != nil {
 		return x.Retired
+	}
+	return 0
+}
+
+func (x *ConsensusParams) GetResetCommittee() uint64 {
+	if x != nil {
+		return x.ResetCommittee
 	}
 	return 0
 }
@@ -554,8 +562,14 @@ type FeeParams struct {
 	EditOrderFee uint64 `protobuf:"varint,12,opt,name=edit_order_fee,json=editOrderFee,proto3" json:"editOrderFee"` // @gotags: json:"editOrderFee"
 	// delete_order_fee: is the fee amount (in uCNPY) for Message Delete Order
 	DeleteOrderFee uint64 `protobuf:"varint,13,opt,name=delete_order_fee,json=deleteOrderFee,proto3" json:"deleteOrderFee"` // @gotags: json:"deleteOrderFee"
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// dex_limit_order_fee: is the fee amount (in uCNPY) for Message Dex Limit Order
+	DexLimitOrderFee uint64 `protobuf:"varint,14,opt,name=dex_limit_order_fee,json=dexLimitOrderFee,proto3" json:"dexLimitOrderFee"` // @gotags: json:"dexLimitOrderFee"
+	// dex_liquidity_deposit_fee: is the fee amount (in uCNPY) for Message Dex Liquidity Deposit
+	DexLiquidityDepositFee uint64 `protobuf:"varint,15,opt,name=dex_liquidity_deposit_fee,json=dexLiquidityDepositFee,proto3" json:"dexLiquidityDeposit"` // @gotags: json:"dexLiquidityDeposit"
+	// dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
+	DexLiquidityWithdrawFee uint64 `protobuf:"varint,16,opt,name=dex_liquidity_withdraw_fee,json=dexLiquidityWithdrawFee,proto3" json:"dexLiquidityWithdraw"` // @gotags: json:"dexLiquidityWithdraw"
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *FeeParams) Reset() {
@@ -679,6 +693,27 @@ func (x *FeeParams) GetDeleteOrderFee() uint64 {
 	return 0
 }
 
+func (x *FeeParams) GetDexLimitOrderFee() uint64 {
+	if x != nil {
+		return x.DexLimitOrderFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetDexLiquidityDepositFee() uint64 {
+	if x != nil {
+		return x.DexLiquidityDepositFee
+	}
+	return 0
+}
+
+func (x *FeeParams) GetDexLiquidityWithdrawFee() uint64 {
+	if x != nil {
+		return x.DexLiquidityWithdrawFee
+	}
+	return 0
+}
+
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous
 // governing of the network
 type GovernanceParams struct {
@@ -740,13 +775,14 @@ const file_gov_proto_rawDesc = "" +
 	"Governance\"C\n" +
 	"\x0fProtocolVersion\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x04R\aversion\"\x99\x01\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\"\xc2\x01\n" +
 	"\x0fConsensusParams\x12\x1d\n" +
 	"\n" +
 	"block_size\x18\x01 \x01(\x04R\tblockSize\x12)\n" +
 	"\x10protocol_version\x18\x02 \x01(\tR\x0fprotocolVersion\x12\"\n" +
 	"\rroot_chain_id\x18\x03 \x01(\x04R\vrootChainId\x12\x18\n" +
-	"\aretired\x18\x04 \x01(\x04R\aretired\"\xa0\b\n" +
+	"\aretired\x18\x04 \x01(\x04R\aretired\x12'\n" +
+	"\x0freset_committee\x18\x05 \x01(\x04R\x0eresetCommittee\"\xa0\b\n" +
 	"\x0fValidatorParams\x12)\n" +
 	"\x10unstaking_blocks\x18\x01 \x01(\x04R\x0funstakingBlocks\x12(\n" +
 	"\x10max_pause_blocks\x18\x02 \x01(\x04R\x0emaxPauseBlocks\x12?\n" +
@@ -768,7 +804,7 @@ const file_gov_proto_rawDesc = "" +
 	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\x12?\n" +
 	"\x1cminimum_stake_for_validators\x18\x11 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
 	"\x1bminimum_stake_for_delegates\x18\x12 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
-	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\xf7\x03\n" +
+	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\x9e\x05\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12\x1b\n" +
 	"\tstake_fee\x18\x02 \x01(\x04R\bstakeFee\x12$\n" +
@@ -786,7 +822,10 @@ const file_gov_proto_rawDesc = "" +
 	"subsidyFee\x12(\n" +
 	"\x10create_order_fee\x18\v \x01(\x04R\x0ecreateOrderFee\x12$\n" +
 	"\x0eedit_order_fee\x18\f \x01(\x04R\feditOrderFee\x12(\n" +
-	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\"F\n" +
+	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\x12-\n" +
+	"\x13dex_limit_order_fee\x18\x0e \x01(\x04R\x10dexLimitOrderFee\x129\n" +
+	"\x19dex_liquidity_deposit_fee\x18\x0f \x01(\x04R\x16dexLiquidityDepositFee\x12;\n" +
+	"\x1adex_liquidity_withdraw_fee\x18\x10 \x01(\x04R\x17dexLiquidityWithdrawFee\"F\n" +
 	"\x10GovernanceParams\x122\n" +
 	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage*I\n" +
 	"\x15GovProposalVoteConfig\x12\x0e\n" +
