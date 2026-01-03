@@ -51,7 +51,7 @@ const (
 	DexPriceRoutePath              = "/v1/query/dex-price"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
 	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
-	CanopyOrdersRoutePath          = "/v1/query/canopy-orders"
+	OracleOrdersRoutePath          = "/v1/query/oracle-orders"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -157,7 +157,7 @@ const (
 	DexPriceRouteName              = "dex-price"
 	DexBatchRouteName              = "dex-batch"
 	NextDexBatchRouteName          = "next-dex-batch"
-	CanopyOrdersRouteName          = "canopy-orders"
+	OracleOrdersRouteName          = "oracle-orders"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -260,7 +260,7 @@ var routePaths = routes{
 	DexPriceRouteName:              {Method: http.MethodPost, Path: DexPriceRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
 	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
-	CanopyOrdersRouteName:          {Method: http.MethodPost, Path: CanopyOrdersRoutePath},
+	OracleOrdersRouteName:          {Method: http.MethodPost, Path: OracleOrdersRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -367,7 +367,7 @@ func createRouter(s *Server) *httprouter.Router {
 		DexPriceRouteName:              s.DexPrice,
 		DexBatchRouteName:              s.DexBatch,
 		NextDexBatchRouteName:          s.NextDexBatch,
-		CanopyOrdersRouteName:          s.CanopyOrders,
+		OracleOrdersRouteName:          s.OracleOrders,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,
