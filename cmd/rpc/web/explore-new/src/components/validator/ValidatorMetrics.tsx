@@ -61,27 +61,27 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
     ]
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {metricsData.map((metric, index) => (
                 <motion.div
                     key={index}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="bg-card rounded-lg p-4"
+                    className="bg-card rounded-lg p-3 sm:p-4"
                 >
                     <div className="flex justify-between items-center gap-3 mb-2">
-                        <div className="text-sm text-gray-400">
+                        <div className="text-xs sm:text-sm text-gray-400 break-words">
                             {metric.title}
                         </div>
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                            <i className={`${metric.icon} text-primary text-sm`}></i>
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i className={`${metric.icon} text-primary text-xs sm:text-sm`}></i>
                         </div>
                     </div>
-                    <div className="text-xl font-bold text-white">
+                    <div className="text-lg sm:text-xl font-bold text-white break-words">
                         {(metric.title === 'Max Paused Height' || metric.title === 'Unstaking Height') ? (
                             metric.value === 0 ? (
-                                <span className="text-gray-400 text-lg">-</span>
+                                <span className="text-gray-400 text-base sm:text-lg">-</span>
                             ) : (
                                 <AnimatedNumber
                                     value={metric.value}
@@ -99,7 +99,7 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
                         {metric.suffix}
                     </div>
                     {metric.subtitle && (
-                        <div className="text-xs mt-1 text-gray-400">
+                        <div className="text-xs mt-1 text-gray-400 break-words">
                             {metric.subtitle}
                         </div>
                     )}

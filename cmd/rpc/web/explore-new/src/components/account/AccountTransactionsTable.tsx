@@ -183,10 +183,10 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             // Hash
             <span
                 key="hash"
-                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
+                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline break-all"
                 onClick={() => navigate(`/transaction/${transaction.txHash}`)}
             >
-                {truncate(transaction.txHash, 12)}
+                {truncate(transaction.txHash, 10)}
             </span>,
 
             // Type
@@ -202,21 +202,21 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             <Link
                 key="from"
                 to={`/account/${fromAddress}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline break-all"
             >
-                {truncate(fromAddress, 12)}
+                {truncate(fromAddress, 10)}
             </Link>,
 
             // To
             <Link
                 key="to"
                 to={`/account/${toAddress}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline break-all"
             >
                 {toAddress === 'N/A' ? (
-                    <span className="text-gray-500">{truncate('0x00000000000000000000000000000000000', 12)}</span>
+                    <span className="text-gray-500">{truncate('0x00000000000000000000000000000000000', 10)}</span>
                 ) : (
-                    truncate(toAddress, 12)
+                    truncate(toAddress, 10)
                 )}
             </Link>,
 
@@ -263,14 +263,14 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     })
 
     const columns = [
-        { label: transactionsTexts.table.headers.hash, width: 'w-[15%]' },
-        { label: transactionsTexts.table.headers.type, width: 'w-[12%]' },
-        { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.amount, width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.fee, width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
-        { label: transactionsTexts.table.headers.age, width: 'w-[10%]' }
+        { label: transactionsTexts.table.headers.hash, width: 'min-w-[120px]' },
+        { label: transactionsTexts.table.headers.type, width: 'min-w-[100px]' },
+        { label: transactionsTexts.table.headers.from, width: 'min-w-[110px]' },
+        { label: transactionsTexts.table.headers.to, width: 'min-w-[110px]' },
+        { label: transactionsTexts.table.headers.amount, width: 'min-w-[90px]' },
+        { label: transactionsTexts.table.headers.fee, width: 'min-w-[80px]' },
+        { label: transactionsTexts.table.headers.status, width: 'min-w-[90px]' },
+        { label: transactionsTexts.table.headers.age, width: 'min-w-[100px]' }
     ]
 
     // Show message when no data
@@ -302,17 +302,181 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         )
     }
 
+    // Mobile card view for transactions
+    const renderMobileCards = () => {
+        const pageSize = 10
+        const startIdx = (currentPage - 1) * pageSize
+        const endIdx = startIdx + pageSize
+        const pageTransactions = Array.isArray(transactions) ? transactions.slice(startIdx, endIdx) : []
+
+        return (
+            <div className="space-y-3">
+                {pageTransactions.map((transaction, idx) => {
+                    const rawTxType = transaction.messageType || transaction.transaction?.type || 'send'
+                    const txType = normalizeType(rawTxType)
+                    const fromAddress = transaction.sender || transaction.transaction?.msg?.fromAddress || 'N/A'
+                    const toAddress = transaction.recipient || transaction.transaction?.msg?.toAddress || 'N/A'
+                    const amountMicro = transaction.transaction?.msg?.amount || 0
+                    const amountCNPY = amountMicro > 0 ? amountMicro / 1000000 : 0
+                    const feeMicro = transaction.transaction?.fee || 0
+
+                    return (
+                        <motion.div
+                            key={transaction.txHash || idx}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-card rounded-lg p-4 border border-gray-800/50"
+                        >
+                            <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getTypeColor(txType)}`}>
+                                        <i className={`${getTypeIcon(txType)} text-xs`}></i>
+                                        <span className="hidden sm:inline">{txType}</span>
+                                    </div>
+                                    <span
+                                        className="font-mono text-white text-xs cursor-pointer hover:text-green-400 hover:underline truncate flex-1"
+                                        onClick={() => navigate(`/transaction/${transaction.txHash}`)}
+                                    >
+                                        {truncate(transaction.txHash, 8)}
+                                    </span>
+                                </div>
+                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor('success')}`}>
+                                    <i className="fa-solid fa-check text-xs mr-1"></i>
+                                    <span>Success</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">From:</span>
+                                    <Link
+                                        to={`/account/${fromAddress}`}
+                                        className="text-gray-300 font-mono hover:text-green-400 hover:underline truncate ml-2 max-w-[60%]"
+                                    >
+                                        {truncate(fromAddress, 8)}
+                                    </Link>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">To:</span>
+                                    <Link
+                                        to={`/account/${toAddress}`}
+                                        className="text-gray-300 font-mono hover:text-green-400 hover:underline truncate ml-2 max-w-[60%]"
+                                    >
+                                        {toAddress === 'N/A' ? truncate('0x00000000000000000000000000000000000', 8) : truncate(toAddress, 8)}
+                                    </Link>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Amount:</span>
+                                    <span className="text-white font-medium">
+                                        {typeof amountCNPY === 'number' && amountCNPY > 0 ? (
+                                            <>
+                                                <AnimatedNumber
+                                                    value={amountCNPY}
+                                                    format={{ maximumFractionDigits: 4 }}
+                                                    className="text-white"
+                                                /> CNPY
+                                            </>
+                                        ) : (
+                                            '0 CNPY'
+                                        )}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Fee:</span>
+                                    <span className="text-gray-300">{formatFee(feeMicro)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Age:</span>
+                                    <span className="text-gray-400">{formatTime(transaction.transaction.time)}</span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )
+                })}
+            </div>
+        )
+    }
+
     return (
-        <TableCard
-            title={type === 'sent' ? accountDetailTexts.table.sentTitle : accountDetailTexts.table.receivedTitle}
-            columns={columns}
-            rows={rows}
-            totalCount={Array.isArray(transactions) ? transactions.length : 0}
-            currentPage={currentPage}
-            onPageChange={onPageChange}
-            loading={loading}
-            spacing={4}
-        />
+        <div>
+            {/* Mobile Card View */}
+            <div className="md:hidden">
+                <div className="bg-card rounded-lg p-4 border border-gray-800/60">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base text-white/90 inline-flex items-center gap-2">
+                            {type === 'sent' ? accountDetailTexts.table.sentTitle : accountDetailTexts.table.receivedTitle}
+                            {loading && <i className="fa-solid fa-circle-notch fa-spin text-gray-400 text-sm"></i>}
+                        </h3>
+                    </div>
+                    {loading ? (
+                        <div className="space-y-3">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                                <div key={i} className="bg-gray-800/30 rounded-lg p-4 animate-pulse">
+                                    <div className="h-4 bg-gray-700/60 rounded w-3/4 mb-3"></div>
+                                    <div className="space-y-2">
+                                        <div className="h-3 bg-gray-700/60 rounded w-1/2"></div>
+                                        <div className="h-3 bg-gray-700/60 rounded w-2/3"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (!Array.isArray(transactions) || transactions.length === 0) ? (
+                        <div className="text-center py-8">
+                            <i className="fa-solid fa-receipt text-4xl text-gray-600 mb-4"></i>
+                            <h3 className="text-white text-lg font-semibold mb-2">
+                                {type === 'sent' ? 'No sent transactions' : 'No received transactions'}
+                            </h3>
+                            <p className="text-gray-400 text-sm">
+                                {type === 'sent'
+                                    ? 'This account has not sent any transactions yet.'
+                                    : 'This account has not received any transactions yet.'
+                                }
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            {renderMobileCards()}
+                            {/* Mobile Pagination */}
+                            {Array.isArray(transactions) && transactions.length > 10 && (
+                                <div className="mt-4 flex items-center justify-between">
+                                    <button
+                                        onClick={() => onPageChange && onPageChange(Math.max(1, currentPage - 1))}
+                                        disabled={currentPage === 1}
+                                        className={`px-3 py-2 rounded text-xs ${currentPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                    >
+                                        <i className="fa-solid fa-angle-left mr-1"></i>Previous
+                                    </button>
+                                    <span className="text-xs text-gray-400">
+                                        Page {currentPage} of {Math.ceil(transactions.length / 10)}
+                                    </span>
+                                    <button
+                                        onClick={() => onPageChange && onPageChange(Math.min(Math.ceil(transactions.length / 10), currentPage + 1))}
+                                        disabled={currentPage >= Math.ceil(transactions.length / 10)}
+                                        className={`px-3 py-2 rounded text-xs ${currentPage >= Math.ceil(transactions.length / 10) ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                    >
+                                        Next<i className="fa-solid fa-angle-right ml-1"></i>
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+                <TableCard
+                    title={type === 'sent' ? accountDetailTexts.table.sentTitle : accountDetailTexts.table.receivedTitle}
+                    columns={columns}
+                    rows={rows}
+                    totalCount={Array.isArray(transactions) ? transactions.length : 0}
+                    currentPage={currentPage}
+                    onPageChange={onPageChange}
+                    loading={loading}
+                    spacing={4}
+                />
+            </div>
+        </div>
     )
 }
 

@@ -89,21 +89,21 @@ const AccountDetailPage: React.FC = () => {
             transition={{ duration: 0.3 }}
             className="min-h-screen bg-background"
         >
-            <div className="container mx-auto px-4 py-8">
+            <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
                 {/* Header */}
                 <AccountDetailHeader account={account} />
 
                 {/* Navigation Tabs */}
                 <motion.div
-                    className="mb-6"
+                    className="mb-4 sm:mb-6"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                    <div className="flex gap-1 border-b border-gray-700">
+                    <div className="flex gap-1 border-b border-gray-700 overflow-x-auto">
                         <motion.button
                             onClick={() => handleTabChange('sent')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${activeTab === 'sent'
+                            className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${activeTab === 'sent'
                                     ? 'bg-primary text-black'
                                     : 'text-gray-400 hover:text-white'
                                 }`}
@@ -118,7 +118,7 @@ const AccountDetailPage: React.FC = () => {
                         </motion.button>
                         <motion.button
                             onClick={() => handleTabChange('received')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${activeTab === 'received'
+                            className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${activeTab === 'received'
                                     ? 'bg-primary text-black'
                                     : 'text-gray-400 hover:text-white'
                                 }`}

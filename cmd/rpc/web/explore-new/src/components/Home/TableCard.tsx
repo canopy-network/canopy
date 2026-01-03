@@ -176,7 +176,7 @@ const TableCard: React.FC<TableCardProps> = ({
                     <thead className={theadClassName}>
                         <tr>
                             {columns.map((c) => (
-                                <th key={c.label} className={`px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider ${c.width || ''}`}>
+                                <th key={c.label} className={`px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider ${c.width || ''}`}>
                                     {c.label}
                                 </th>
                             ))}
@@ -226,7 +226,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                         className="hover:bg-gray-800/30"
                                     >
                                         {cells.map((node, j) => (
-                                            <motion.td key={j} layout className={`px-4 text-sm text-gray-200 whitespace-nowrap overflow-hidden text-ellipsis ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'} ${columns[j]?.width || ''}`}>{node}</motion.td>
+                                            <motion.td key={j} layout className={`px-2 sm:px-4 text-xs sm:text-sm text-gray-200 overflow-hidden ${spacingClasses[spacing as keyof typeof spacingClasses] || 'py-2'} ${columns[j]?.width || ''}`}>{node}</motion.td>
                                         ))}
                                     </motion.tr>
                                 ))}

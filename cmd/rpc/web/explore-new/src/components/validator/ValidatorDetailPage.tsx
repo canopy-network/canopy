@@ -205,8 +205,8 @@ const ValidatorDetailPage: React.FC = () => {
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
             {/* Breadcrumb */}
-            <div className="mb-8">
-                <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400 mb-4">
+            <div className="mb-6 sm:mb-8">
+                <nav className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-gray-400 mb-4">
                     <button onClick={() => navigate('/')} className="hover:text-primary transition-colors">
                         Home
                     </button>
@@ -215,8 +215,10 @@ const ValidatorDetailPage: React.FC = () => {
                         {validator.delegate ? 'Delegators' : 'Validators'}
                     </button>
                     <i className="fa-solid fa-chevron-right text-xs"></i>
-                    <span className="text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] sm:max-w-full">
-                        {truncate(validator.address || '', window.innerWidth < 640 ? 6 : 8)}
+                    <span className="text-white break-all sm:break-normal font-mono text-xs sm:text-sm">
+                        {typeof window !== 'undefined' && window.innerWidth < 640
+                            ? truncate(validator.address || '', 6)
+                            : validator.address || ''}
                     </span>
                 </nav>
             </div>

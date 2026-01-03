@@ -49,67 +49,74 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
     }
 
     return (
-        <div className="bg-card rounded-lg p-6 mb-6">
-            <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-2">
+        <div className="bg-card rounded-lg p-4 sm:p-6 mb-6">
+            <div className="mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-white mb-2">
                     {validatorDetailTexts.stakeByChains.title}
                 </h2>
-                <div className="text-sm text-gray-400">
+                <div className="text-xs sm:text-sm text-gray-400 break-words">
                     {validatorDetailTexts.stakeByChains.totalDelegated}: {formatNumber(toCNPY(validator.stakedAmount))} {validatorDetailTexts.metrics.units.cnpy}
                 </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
                 {validator.nestedChains.map((chain, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gray-800/30 rounded-lg">
-                        <div className="flex items-start gap-4 flex-col w-full">
-                            <div className="flex items-center gap-4">
-                                {/* Icono de la cadena */}
-                                <div className={`w-10 h-10 ${chain.color} rounded-md flex items-center justify-center`}>
-                                    <i className={`${chain.icon} text-sm`}></i>
-                                </div>
-
-                                {/* Información de la cadena */}
-                                <div>
-                                    <div className="text-white font-medium">
-                                        {chain.name}
-                                    </div>
-                                    <div className="text-sm text-gray-400">
-                                        Committee ID: {chain.committeeId}
-                                    </div>
-                                </div>
+                    <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-800/30 rounded-lg">
+                        <div className="flex items-start gap-3 sm:gap-4 w-full sm:w-auto">
+                            {/* Icono de la cadena */}
+                            <div className={`w-8 h-8 sm:w-10 sm:h-10 ${chain.color} rounded-md flex items-center justify-center flex-shrink-0`}>
+                                <i className={`${chain.icon} text-xs sm:text-sm`}></i>
                             </div>
-                            {/* Barra de progreso */}
-                            <div className="w-full">
-                                <div className="w-full bg-gray-700 rounded-full h-2">
-                                    <div
-                                        className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
-                                        style={{ width: `${chain.percentage}%` }}
-                                    ></div>
+
+                            {/* Información de la cadena */}
+                            <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium text-sm sm:text-base">
+                                    {chain.name}
+                                </div>
+                                <div className="text-xs sm:text-sm text-gray-400">
+                                    Committee ID: {chain.committeeId}
+                                </div>
+                                {/* Barra de progreso */}
+                                <div className="w-full mt-2 sm:hidden">
+                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                        <div
+                                            className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
+                                            style={{ width: `${chain.percentage}%` }}
+                                        ></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
+                        {/* Barra de progreso - Desktop */}
+                        <div className="hidden sm:block w-full sm:w-auto sm:flex-1 max-w-xs">
+                            <div className="w-full bg-gray-700 rounded-full h-2">
+                                <div
+                                    className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
+                                    style={{ width: `${chain.percentage}%` }}
+                                ></div>
+                            </div>
+                        </div>
+
                         {/* Información del stake */}
-                        <div className="flex items-center gap-6">
-                            <div className="text-right">
-                                <div className="text-white font-medium">
+                        <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="text-left sm:text-right">
+                                <div className="text-white font-medium text-sm sm:text-base">
                                     {formatNumber(toCNPY(chain.stakedAmount))} {validatorDetailTexts.metrics.units.cnpy}
                                 </div>
-                                <div className="text-sm text-gray-400">
+                                <div className="text-xs sm:text-sm text-gray-400">
                                     {formatPercentage(chain.percentage)}
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 ))}
             </div>
 
             {/* Total Network Control */}
-            <div className="mt-6 pt-4 border-t border-gray-700">
-                <div className="text-sm text-gray-400 text-center flex  items-center gap-2 w-full">
-                    <p>{validatorDetailTexts.stakeByChains.totalNetworkControl}: </p>
+            <div className="mt-4 sm:mt-6 pt-4 border-t border-gray-700">
+                <div className="text-xs sm:text-sm text-gray-400 text-center flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+                    <p>{validatorDetailTexts.stakeByChains.totalNetworkControl}:</p>
                     <p className="text-primary">
                         {validator.nestedChains.length > 0 ? formatPercentage(validator.nestedChains[0].percentage) : '0.00%'} of total network stake
                     </p>

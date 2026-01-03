@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import toast from 'react-hot-toast'
+import { Account, TransactionsBySender, TransactionsByRec } from '../../lib/api'
 
 interface SearchResultsProps {
     results: any
@@ -166,8 +167,130 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
         setCurrentPage(1)
     }, [activeTab])
 
+    // Component to render address with balance and transactions
+    const AddressResult: React.FC<{ address: string; initialData?: any }> = ({ address, initialData }) => {
+        const [accountData, setAccountData] = useState<any>(null)
+        const [transactions, setTransactions] = useState<{ sent: any[]; received: any[] }>({ sent: [], received: [] })
+        const [loading, setLoading] = useState(true)
+
+        useEffect(() => {
+            const fetchAddressData = async () => {
+                if (!address) return
+
+                setLoading(true)
+                try {
+                    // Get account balance
+                    const account = await Account(0, address)
+                    setAccountData(account)
+
+                    // Get transactions (sent and received)
+                    const [sentTxs, recTxs] = await Promise.all([
+                        TransactionsBySender(1, address).catch(() => ({ results: [] })),
+                        TransactionsByRec(1, address).catch(() => ({ results: [] }))
+                    ])
+
+                    setTransactions({
+                        sent: sentTxs?.results || sentTxs || [],
+                        received: recTxs?.results || recTxs || []
+                    })
+                } catch (error) {
+                    console.error('Error fetching address data:', error)
+                } finally {
+                    setLoading(false)
+                }
+            }
+
+            fetchAddressData()
+        }, [address])
+
+        const balance = accountData?.amount ? (accountData.amount / 1000000).toFixed(2) : (initialData?.amount ? (initialData.amount / 1000000).toFixed(2) : '0.00')
+
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-gray-600/10 rounded-xl p-4 md:p-6 hover:border-gray-600/20 transition-colors"
+            >
+                <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                        <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0 mb-3'>
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-green-700/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <i className="fa-solid fa-wallet text-primary text-lg"></i>
+                                </div>
+                                <span className="text-white text-lg">Address</span>
+                            </div>
+                            <div className="bg-green-700/30 text-primary text-sm rounded-full px-2 py-0.5 w-fit">
+                                Address
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 mb-4">
+                            <div className="flex items-start flex-col">
+                                <span className="text-gray-400 text-sm mb-1">Address:</span>
+                                <Link
+                                    to={`/account/${address}`}
+                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-green-400 hover:underline transition-colors w-full"
+                                >
+                                    {address || 'N/A'}
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-2 mt-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                <span className="text-gray-400 text-sm">Balance:</span>
+                                {loading ? (
+                                    <span className="text-white text-sm">Loading...</span>
+                                ) : (
+                                    <span className="text-white text-sm">{balance} CNPY</span>
+                                )}
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                <span className="text-gray-400 text-sm">Sent Transactions:</span>
+                                {loading ? (
+                                    <span className="text-white text-sm">Loading...</span>
+                                ) : (
+                                    <span className="text-white text-sm">{transactions.sent?.length || 0}</span>
+                                )}
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 sm:col-span-2 lg:col-span-1">
+                                <span className="text-gray-400 text-sm">Received Transactions:</span>
+                                {loading ? (
+                                    <span className="text-white text-sm">Loading...</span>
+                                ) : (
+                                    <span className="text-white text-sm">{transactions.received?.length || 0}</span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                            <Link
+                                to={`/account/${address}`}
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium transition-colors text-center sm:text-left"
+                            >
+                                <i className="fa-solid fa-eye text-white mr-2"></i> View Details
+                            </Link>
+                            <button
+                                onClick={() => copyToClipboard(address)}
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                            >
+                                <i className="fa-solid fa-copy text-white mr-2"></i> Copy Address
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
+        )
+    }
+
     const renderResult = (item: any, type: string) => {
         if (!item) return null
+
+        // If it's an address, use the AddressResult component
+        if (type === 'address' && item.address) {
+            return <AddressResult key={item.address} address={item.address} initialData={item} />
+        }
 
         // settings for each type
         const configs = {
@@ -213,31 +336,13 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                     { label: 'To:', value: truncateHash(item.recipient || item.to || '', 6) }
                 ] as FieldConfig[]
             },
-            address: {
-                icon: 'fa-wallet',
-                iconColor: 'text-primary',
-                bgColor: 'bg-green-700/30',
-                badgeColor: 'bg-green-700/30',
-                badgeText: 'Address',
-                title: 'Address',
-                borderColor: 'border-gray-600/10',
-                hoverColor: 'hover:border-gray-600/20',
-                linkTo: `/account/${item.address}`,
-                copyValue: item.address || 'N/A',
-                copyLabel: 'Copy Address',
-                fields: [
-                    { label: 'Address:', value: item.address || 'N/A', fullWidth: true },
-                    { label: 'Balance:', value: `${(item.balance ?? 0).toFixed(2)} CNPY` },
-                    { label: 'Transactions:', value: `${item.transactionCount ?? 0} transactions` }
-                ] as FieldConfig[]
-            },
             validator: {
                 icon: 'fa-shield-halved',
-                iconColor: 'text-primary',
+                iconColor: (item.delegate === true) ? 'text-blue-500' : 'text-primary',
                 bgColor: 'bg-green-700/30',
-                badgeColor: 'bg-green-700/30',
-                badgeText: 'Validator',
-                title: item.name || 'Validator',
+                badgeColor: (item.delegate === true) ? 'bg-blue-700/20' : 'bg-green-700/30',
+                badgeText: (item.delegate === true) ? 'Delegator' : 'Validator',
+                title: item.name || item.delegate ? 'Delegator' : 'Validator',
                 borderColor: 'border-gray-400/10',
                 hoverColor: 'hover:border-gray-400/20',
                 linkTo: `/validator/${item.address}`,
@@ -248,7 +353,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                     { label: 'Status:', value: item.status || 'Active' },
                     { label: 'Stake:', value: `${(item.stakedAmount / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CNPY` },
                     { label: 'Auto-Compound:', value: `${(item.compound ?? false) ? 'Yes' : 'No'}` },
-                    { label: 'Net Address:', value: `${item.netAddress ?? 'tcp://delegation'}` }
+                    { label: 'Net Address:', value: `${item.netAddress ? item.netAddress : 'tcp://delegation'}` }
                 ] as FieldConfig[]
             }
         }
@@ -261,23 +366,23 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                 key={config.copyValue}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`bg-card border ${config.borderColor} rounded-xl p-6 ${config.hoverColor} transition-colors`}
+                className={`bg-card border ${config.borderColor} rounded-xl p-4 md:p-6 ${config.hoverColor} transition-colors`}
             >
                 <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                        <div className='flex items-start justify-between'>
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className={`w-9 h-9 ${config.bgColor} rounded-full flex items-center justify-center`}>
+                    <div className="flex-1 min-w-0">
+                        <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-0 mb-3'>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 ${config.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
                                     <i className={`fa-solid ${config.icon} ${config.iconColor} text-lg`}></i>
                                 </div>
-                                <span className="text-white text-lg">{config.title}</span>
+                                <span className="text-white text-base sm:text-lg break-words">{config.title}</span>
                             </div>
-                            <div className={`${config.badgeColor} ${config.iconColor} text-sm rounded-full p-2 py-0.5`}>
+                            <div className={`${config.badgeColor} ${config.iconColor} text-sm rounded-full px-2 py-0.5 w-fit`}>
                                 {config.badgeText}
                             </div>
                         </div>
 
-                        <div className={`space-y-2 ${type === 'address' ? 'flex justify-between' : 'grid grid-cols-1 lg:grid-cols-3 gap-2'}`}>
+                        <div className={`space-y-2 ${type === 'address' ? 'flex justify-between' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-2'}`}>
                             {config.fields.map((field, index) => {
                                 // Determine if this field should be a link
                                 let linkTo: string | null = null
@@ -302,17 +407,17 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 }
 
                                 return (
-                                    <div key={index} className={field.fullWidth ? 'flex items-start flex-col' : ''}>
-                                        <span className="text-gray-400 text-sm">{field.label}</span>
+                                    <div key={index} className={field.fullWidth ? 'flex items-start flex-col w-full' : 'flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2'}>
+                                        <span className="text-gray-400 text-sm whitespace-nowrap">{field.label}</span>
                                         {linkTo ? (
                                             <Link
                                                 to={linkTo}
-                                                className={`${field.fullWidth ? 'text-white font-mono text-lg' : 'text-white text-sm ml-2'} ${field.truncate ? 'truncate' : ''} hover:text-green-400 hover:underline transition-colors`}
+                                                className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-all'} hover:text-green-400 hover:underline transition-colors`}
                                             >
                                                 {linkValue}
                                             </Link>
                                         ) : (
-                                            <span className={`${field.fullWidth ? 'text-white font-mono text-lg' : 'text-white text-sm ml-2'} ${field.truncate ? 'truncate' : ''}`}>
+                                            <span className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-words'}`}>
                                                 {field.value}
                                             </span>
                                         )}
@@ -321,16 +426,16 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             })}
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
                             <Link
                                 to={config.linkTo}
-                                className="px-3 py-1 bg-input text-white rounded-md text-sm font-medium transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium transition-colors text-center sm:text-left"
                             >
                                 <i className="fa-solid fa-eye text-white mr-2"></i> View Details
                             </Link>
                             <button
                                 onClick={() => copyToClipboard(config.copyValue)}
-                                className="px-3 py-1 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
                             >
                                 <i className="fa-solid fa-copy text-white mr-2"></i> {config.copyLabel}
                             </button>
@@ -507,12 +612,12 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
     return (
         <div>
             {/* Tabs */}
-            <div className="flex gap-1 flex-wrap mb-6 border-b border-gray-400/10">
+            <div className="flex gap-1 flex-wrap mb-6 border-b border-gray-400/10 overflow-x-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
                             ? 'border-primary text-primary'
                             : 'border-transparent text-gray-400 hover:text-white'
                             }`}
@@ -546,8 +651,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                         >
                             <i className="fa-solid fa-search text-4xl text-gray-600 mb-4"></i>
                             <h3 className="text-xl font-semibold text-white mb-2">
-                                {activeTab === 'all' 
-                                    ? 'No results found' 
+                                {activeTab === 'all'
+                                    ? 'No results found'
                                     : `No ${activeTab === 'addresses' ? 'addresses' : activeTab} found`}
                             </h3>
                             <p className="text-gray-400">Try adjusting your search or filters</p>
@@ -558,15 +663,15 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
 
             {/* Pagination */}
             {allFilteredResults.length > 0 && (
-                <div className="mt-8 flex items-center justify-between flex-wrap lg:flex-row-reverse">
-                    <div className="text-sm text-gray-400">
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 lg:flex-row-reverse">
+                    <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-left">
                         Showing {startIndex + 1} to {Math.min(endIndex, allFilteredResults.length)} of <AnimatedNumber value={allFilteredResults.length} /> results
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap justify-center">
                         <button
                             onClick={handlePrevious}
                             disabled={currentPage === 1}
-                            className={`px-3 py-1 rounded-md text-sm transition-colors ${currentPage === 1
+                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === 1
                                 ? 'bg-input text-gray-500 cursor-not-allowed'
                                 : 'bg-input text-white hover:bg-gray-600'
                                 }`}
@@ -580,7 +685,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 <button
                                     key={pageNum}
                                     onClick={() => handlePageChange(pageNum)}
-                                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === pageNum
+                                    className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${currentPage === pageNum
                                         ? 'bg-primary text-black'
                                         : 'bg-input text-white hover:bg-gray-600'
                                         }`}
@@ -593,7 +698,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                         <button
                             onClick={handleNext}
                             disabled={currentPage === totalPages}
-                            className={`px-3 py-1 rounded-md text-sm transition-colors ${currentPage === totalPages
+                            className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === totalPages
                                 ? 'bg-input text-gray-500 cursor-not-allowed'
                                 : 'bg-input text-white hover:bg-gray-600'
                                 }`}

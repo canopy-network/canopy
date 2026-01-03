@@ -142,74 +142,73 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
     const typeInfo = getValidatorTypeInfo()
 
     return (
-        <div className="bg-card rounded-lg p-6 mb-6">
-            <div className="flex items-start justify-between">
+        <div className="bg-card rounded-lg p-4 sm:p-6 mb-6">
+            <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
                 {/* Información del Validador */}
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3 sm:gap-4 w-full lg:w-auto">
                     {/* Icono determinístico del Validador */}
-                    <div className="w-16 h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i className={`${getValidatorIcon(validator.address)} text-primary text-2xl`}></i>
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i className={`${getValidatorIcon(validator.address)} text-primary text-lg sm:text-2xl`}></i>
                     </div>
 
                     {/* Detalles del Validador */}
-                    <div className="flex items-center gap-4 flex-col">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <h1 className="text-2xl font-bold text-white">
+                    <div className="flex-1 min-w-0">
+                        <div className="mb-3">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white break-all font-mono">
                                     {validator.address}
                                 </h1>
-                                <i className="fa-solid fa-copy cursor-pointer hover:text-green-600 transition-colors text-primary"
+                                <i className="fa-solid fa-copy cursor-pointer hover:text-green-600 transition-colors text-primary flex-shrink-0"
                                     onClick={() => copyToClipboard(validator.address)}
                                     title="Copy address"></i>
                             </div>
                             {validator.netAddress && (
-                                <div className="text-sm text-gray-400">
+                                <div className="text-xs sm:text-sm text-gray-400 break-all">
                                     {validator.netAddress}
                                 </div>
                             )}
                         </div>
-                        <div className="flex items-start justify-start gap-4 w-full">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                             {/* Estado */}
-                            <div className="flex items-center justify-start gap-2 w-full">
-                                <div className={`w-3 h-3 rounded-full ${getStatusColor(validator.status)}`}></div>
-                                <span className="text-sm font-medium text-primary">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full flex-shrink-0 ${getStatusColor(validator.status)}`}></div>
+                                <span className="text-xs sm:text-sm font-medium text-primary">
                                     {getStatusText(validator.status)}
                                 </span>
                             </div>
 
                             {/* Committees */}
-                            <div className="text-start flex items-center justify-start gap-2 w-full">
-                                <div className="text-sm text-gray-400 text-nowrap">Committees:</div>
-                                <div className="text-sm font-normal text-white">
+                            <div className="text-start flex items-center gap-2">
+                                <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Committees:</div>
+                                <div className="text-xs sm:text-sm font-normal text-white break-words">
                                     {validator.committees.length > 0 ? validator.committees.join(', ') : 'None'}
                                 </div>
                             </div>
 
                             {/* Rank */}
                             {validator.rank > 0 && (
-                                <div className="text-start flex items-center justify-start gap-2 w-full">
-                                    <div className="text-sm text-gray-400">Rank:</div>
-                                    <div className="text-sm font-normal text-white">
+                                <div className="text-start flex items-center gap-2">
+                                    <div className="text-xs sm:text-sm text-gray-400">Rank:</div>
+                                    <div className="text-xs sm:text-sm font-normal text-white">
                                         #{validator.rank}
                                     </div>
                                 </div>
                             )}
 
                             {/* Auto-Compound */}
-                            <div className="text-start flex items-center justify-start gap-2 w-full">
-                                <div className="text-sm text-gray-400 text-nowrap">Auto-Compound:</div>
-                                <div className={`text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-green-400' : 'text-gray-500'}`}>
+                            <div className="text-start flex items-center gap-2">
+                                <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Auto-Compound:</div>
+                                <div className={`text-xs sm:text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-green-400' : 'text-gray-500'}`}>
                                     <i className={`fa-solid ${validator.compound ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
                                     <span>{validator.compound ? 'Enabled' : 'Disabled'}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-
                 </div>
 
                 {/* Estado y Acciones */}
-                <div className="flex items-start justify-start gap-4 h-full">
+                <div className="flex items-start justify-start gap-4 h-full w-full lg:w-auto">
 
                     {/* Botones de Acción */}
                     {/* <div className="flex items-start gap-3">
