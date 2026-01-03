@@ -243,8 +243,8 @@ func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.D
 	return
 }
 
-func (c *Client) CanopyOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
-	err = c.paginatedHeightRequest(CanopyOrdersRouteName, height, params, &orders)
+func (c *Client) OracleOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
+	err = c.paginatedHeightRequest(OracleOrdersRouteName, height, params, &orders)
 	return
 }
 

@@ -323,14 +323,14 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 	})
 }
 
-// CanopyOrdersResponse holds categorized witnessed orders
-type CanopyOrdersResponse struct {
+// OracleOrdersResponse holds categorized witnessed orders
+type OracleOrdersResponse struct {
 	LockOrders  []*types.WitnessedOrder `json:"lock_orders"`
 	CloseOrders []*types.WitnessedOrder `json:"close_orders"`
 }
 
-// CanopyOrders returns canopy orders stored in the order store
-func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// OracleOrders returns oracle orders stored in the order store
+func (s *Server) OracleOrders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// use the standard heightPaginated helper for paginated height requests
 	s.heightPaginated(w, r, func(state *fsm.StateMachine, p *paginatedHeightRequest) (any, lib.ErrorI) {
 		// create order store instance using config data dir path
@@ -350,9 +350,9 @@ func (s *Server) CanopyOrders(w http.ResponseWriter, r *http.Request, _ httprout
 		if libErr != nil {
 			return nil, libErr
 		}
-		fmt.Println("CanopyOrders()", lockOrderIds, closeOrderIds)
+		fmt.Println("OracleOrders()", lockOrderIds, closeOrderIds)
 		// create response structure to hold categorized orders
-		response := &CanopyOrdersResponse{
+		response := &OracleOrdersResponse{
 			LockOrders:  make([]*types.WitnessedOrder, 0, len(lockOrderIds)),
 			CloseOrders: make([]*types.WitnessedOrder, 0, len(closeOrderIds)),
 		}
