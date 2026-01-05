@@ -3,6 +3,8 @@ package types;
 
 option go_package = "github.com/canopy-network/canopy/lib";
 
+import "google/protobuf/any.proto";
+
 message Event {
   // event_type: The type of the transaction like 'slash' or 'unstake'
   string event_type = 1; // @gotags: json:"eventType"
@@ -17,6 +19,7 @@ message Event {
     EventAutoPause auto_pause = 8;
     EventAutoBeginUnstaking auto_begin_unstaking = 9;
     EventFinishUnstaking finish_unstaking = 10;
+    EventCustom custom = 11;
   }
   // height: the block height of the event
   uint64 height = 91;
@@ -101,3 +104,9 @@ message EventAutoPause {}
 message EventAutoBeginUnstaking {}
 
 message EventFinishUnstaking {}
+
+// EventCustom carries a plugin-defined event payload.
+message EventCustom {
+  // msg: custom payload.
+  google.protobuf.Any msg = 1;
+}

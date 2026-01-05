@@ -104,26 +104,34 @@ func TestCheckTx(t *testing.T) {
 	// predefine a send-transaction to insert into the block
 	sendTx, e := NewSendTransaction(kg.PrivateKey, newTestAddress(t), amount-1, 1, 1, 1, 1, "")
 	require.NoError(t, e)
+	cloneTx := func(t *testing.T, tx lib.TransactionI) *lib.Transaction {
+		t.Helper()
+		txBytes, err := lib.Marshal(tx)
+		require.NoError(t, err)
+		out := new(lib.Transaction)
+		require.NoError(t, lib.Unmarshal(txBytes, out))
+		return out
+	}
 	// convert the object to bytes
 	tx, e := lib.Marshal(sendTx)
 	require.NoError(t, e)
 	// define a version with a bad height
-	sendTxBadHeight := sendTx.(*lib.Transaction)
+	sendTxBadHeight := cloneTx(t, sendTx)
 	sendTxBadHeight.CreatedHeight = 4320 + 3
 	require.NoError(t, sendTxBadHeight.Sign(kg.PrivateKey))
 	// convert the object to bytes
 	txBadHeight, e := lib.Marshal(sendTxBadHeight)
 	require.NoError(t, e)
 	// define a version with a bad fee (below state limit)
-	sendTxBadFee := sendTx.(*lib.Transaction)
-	sendTxBadHeight.CreatedHeight = 4320
+	sendTxBadFee := cloneTx(t, sendTx)
+	sendTxBadFee.CreatedHeight = 4320
 	sendTxBadFee.Fee = 0
 	require.NoError(t, sendTxBadFee.Sign(kg.PrivateKey))
 	// convert the object to bytes
 	txBadFee, e := lib.Marshal(sendTxBadFee)
 	require.NoError(t, e)
 	// define a version without a bad signature
-	sendTxBadSig := sendTx.(*lib.Transaction)
+	sendTxBadSig := cloneTx(t, sendTx)
 	sendTxBadSig.Signature.Signature = []byte("bad sig")
 	// convert the object to bytes
 	txBadSig, e := lib.Marshal(sendTxBadSig)
@@ -312,13 +320,15 @@ func TestCheckSignature(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// create a state machine instance with default parameters
-			sm := newTestStateMachine(t)
-			// execute the function call
-			signer, err := sm.CheckSignature(test.msg, test.transaction, nil)
-			// validate the expected error
-			require.Equal(t, test.error != "", err != nil, err)
+			t.Run(test.name, func(t *testing.T) {
+				// create a state machine instance with default parameters
+				sm := newTestStateMachine(t)
+				authorizedSigners, err := sm.GetAuthorizedSignersFor(test.msg)
+				require.NoError(t, err)
+				// execute the function call
+				signer, err := sm.CheckSignature(test.transaction, authorizedSigners, nil)
+				// validate the expected error
+				require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
 				require.ErrorContains(t, err, test.error)
 				return

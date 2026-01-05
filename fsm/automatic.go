@@ -4,11 +4,26 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-/* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
+/* This file handles 'automatic' (non-transaction-induced) state changes that occur at the beginning and ending of a block */
 
 // BeginBlock() is code that is executed at the start of `applying` the block
 func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
 	s.events.Refer(lib.EventStageBeginBlock)
+	// execute plugin begin block if enabled
+	if s.Plugin != nil {
+		resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{Height: s.height})
+		if err != nil {
+			return nil, err
+		}
+		if resp != nil {
+			if err = resp.Error.E(); err != nil {
+				return nil, err
+			}
+			if err = s.addPluginEvents(resp.Events); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// prevent attempting to load the certificate for height 0
 	if s.Height() <= 1 {
 		return nil, nil
@@ -69,6 +84,24 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	// delete validators who are finishing unstaking
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
+	}
+	// execute plugin end block if enabled
+	if s.Plugin != nil {
+		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{
+			Height:          s.height,
+			ProposerAddress: proposerAddress,
+		})
+		if e != nil {
+			return nil, e
+		}
+		if resp != nil {
+			if err = resp.Error.E(); err != nil {
+				return nil, err
+			}
+			if err = s.addPluginEvents(resp.Events); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// return the events
 	return s.events.Reset(), nil
