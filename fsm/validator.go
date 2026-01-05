@@ -640,3 +640,33 @@ type ConsValidatorPage []*lib.ConsensusValidator
 
 // ConsValidatorPage satisfies the Page interface
 func (p *ConsValidatorPage) New() lib.Pageable { return &ConsValidatorPage{{}} }
+
+// nonSignerJSON implements the json interface for non-signers
+type nonSignerJSON struct {
+	Address lib.HexBytes `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Counter uint64       `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+func (x *NonSigner) MarshalJSON() (bz []byte, err error) {
+	if x == nil {
+		return nil, nil
+	}
+	return json.Marshal(&nonSignerJSON{
+		Address: x.Address,
+		Counter: x.Counter,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for the non signers object
+func (x *NonSigner) UnmarshalJSON(bz []byte) (err error) {
+	j := &nonSignerJSON{}
+	if err = json.Unmarshal(bz, j); err != nil {
+		return err
+	}
+	*x = NonSigner{
+		Address: j.Address,
+		Counter: j.Counter,
+	}
+	return nil
+}

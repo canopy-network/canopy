@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/canopy-network/canopy/fsm"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -15,6 +16,7 @@ import (
 func (c *Controller) NewCertificateResults(
 	fsm *fsm.StateMachine, block *lib.Block, blockResult *lib.BlockResult,
 	evidence *bft.ByzantineEvidence, rcBuildHeight uint64) (results *lib.CertificateResult) {
+	defer lib.TimeTrack(c.log, time.Now(), 500*time.Millisecond)
 	// calculate reward recipients, creating a 'certificate results' object reference in the process
 	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
 	// handle swaps

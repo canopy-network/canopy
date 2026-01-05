@@ -893,8 +893,11 @@ func (d *DeDuplicator[T]) Delete(k T) { delete(d.m, k) }
 func (d *DeDuplicator[T]) Map() map[T]struct{} { return d.m }
 
 // TimeTrack() a utility function to benchmark the time of caller function
-func TimeTrack(l LoggerI, start time.Time) {
+func TimeTrack(l LoggerI, start time.Time, logOnMax time.Duration) {
 	elapsed, functionName := time.Since(start), "unknown"
+	if elapsed < logOnMax {
+		return
+	}
 	pcs := make([]uintptr, 10)
 	n := runtime.Callers(2, pcs)
 	for _, pc := range pcs[:n] {
@@ -907,7 +910,7 @@ func TimeTrack(l LoggerI, start time.Time) {
 			break
 		}
 	}
-	l.Warnf("%s took %s", functionName, elapsed)
+	l.Errorf("*** %s took %s", functionName, elapsed)
 }
 
 func PrintStackTrace(print bool) (fns []string) {

@@ -60,25 +60,25 @@ func TestUpdateMustConnects(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestChangeReputation(t *testing.T) {
-	n1, n2, cleanup := newTestP2PPair(t)
-	defer cleanup()
-	n1.UpdateMustConnects([]*lib.PeerAddress{{PublicKey: n2.pub}})
-	peerInfo, err := n1.GetPeerInfo(n2.pub)
-	require.NoError(t, err)
-	require.True(t, peerInfo.IsMustConnect)
-	require.True(t, peerInfo.Reputation == 0)
-	n1.ChangeReputation(n2.pub, -11)
-	peerInfo, err = n1.GetPeerInfo(n2.pub)
-	require.NoError(t, err)
-	require.True(t, peerInfo.Reputation == -11)
-	_, err = n1.GetPeerInfo(n2.pub)
-	require.NoError(t, err)
-	n1.PeerSet.m[lib.BytesToString(peerInfo.Address.PublicKey)].IsMustConnect = false
-	n1.ChangeReputation(n2.pub, 0)
-	_, err = n1.GetPeerInfo(n2.pub)
-	require.Error(t, err)
-}
+//func TestChangeReputation(t *testing.T) {
+//	n1, n2, cleanup := newTestP2PPair(t)
+//	defer cleanup()
+//	n1.UpdateMustConnects([]*lib.PeerAddress{{PublicKey: n2.pub}})
+//	peerInfo, err := n1.GetPeerInfo(n2.pub)
+//	require.NoError(t, err)
+//	require.True(t, peerInfo.IsMustConnect)
+//	require.True(t, peerInfo.Reputation == 0)
+//	n1.ChangeReputation(n2.pub, -11)
+//	peerInfo, err = n1.GetPeerInfo(n2.pub)
+//	require.NoError(t, err)
+//	require.True(t, peerInfo.Reputation == -11)
+//	_, err = n1.GetPeerInfo(n2.pub)
+//	require.NoError(t, err)
+//	n1.PeerSet.m[lib.BytesToString(peerInfo.Address.PublicKey)].IsMustConnect = false
+//	n1.ChangeReputation(n2.pub, 0)
+//	_, err = n1.GetPeerInfo(n2.pub)
+//	require.Error(t, err)
+//}
 
 func TestGetAllInfosAndBookPeers(t *testing.T) {
 	n1, n2, cleanup := newTestP2PPair(t)

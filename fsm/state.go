@@ -431,6 +431,7 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 
 // LoadRootChainInfo() returns the 'need-to-know' information for a nested chain
 func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo, lib.ErrorI) {
+	defer lib.TimeTrack(s.log, time.Now(), 750*time.Millisecond)
 	lastHeight := uint64(1)
 	// update the metrics once complete
 	defer s.Metrics.UpdateGetRootChainInfo(time.Now())

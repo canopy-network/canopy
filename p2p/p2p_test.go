@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,32 @@ import (
 const (
 	testTimeout = 10 * time.Second
 )
+
+func receiveInbox(t *testing.T, ch <-chan *lib.MessageAndMetadata) *lib.MessageAndMetadata {
+	t.Helper()
+	select {
+	case msg := <-ch:
+		return msg
+	case <-time.After(testTimeout):
+		t.Fatal("timeout waiting for inbox message")
+		return nil
+	}
+}
+
+func waitGroupTimeout(t *testing.T, wg *sync.WaitGroup) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return
+	case <-time.After(testTimeout):
+		t.Fatal("timeout waiting for goroutines")
+	}
+}
 
 func TestConnection(t *testing.T) {
 	_, _, cleanup := newTestP2PPair(t)
@@ -41,10 +68,9 @@ func TestMultiSendRec(t *testing.T) {
 	go func() {
 		require.NoError(t, n1.SendTo(n2.pub, lib.Topic_TX, &PeerBookRequestMessage{}))
 		require.NoError(t, n1.SendTo(n2.pub, lib.Topic_CONSENSUS, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}}))
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
-	<-n2.Inbox(lib.Topic_TX)
-	msg := <-n2.Inbox(lib.Topic_CONSENSUS)
+	receiveInbox(t, n2.Inbox(lib.Topic_TX))
+	msg := receiveInbox(t, n2.Inbox(lib.Topic_CONSENSUS))
 	gotMsg := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg.Message, gotMsg))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -68,9 +94,8 @@ func TestSendToRand(t *testing.T) {
 		peerInfo, err := n1.SendToRandPeer(lib.Topic_CONSENSUS, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}})
 		require.NoError(t, err)
 		require.Equal(t, peerInfo.Address.PublicKey, n2.pub)
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
-	msg := <-n2.Inbox(lib.Topic_CONSENSUS)
+	msg := receiveInbox(t, n2.Inbox(lib.Topic_CONSENSUS))
 	gotMsg := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg.Message, gotMsg))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -105,9 +130,8 @@ func TestSendToPeers(t *testing.T) {
 	}
 	go func() {
 		require.NoError(t, n1.SendToPeers(lib.Topic_CONSENSUS, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}}))
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
-	msg := <-n2.Inbox(lib.Topic_CONSENSUS)
+	msg := receiveInbox(t, n2.Inbox(lib.Topic_CONSENSUS))
 	gotMsg := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg.Message, gotMsg))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -144,9 +168,8 @@ func TestSendToPeersChunkedPacket(t *testing.T) {
 	}
 	go func() {
 		require.NoError(t, n1.SendToPeers(lib.Topic_PEERS_RESPONSE, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}}))
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
-	msg := <-n2.Inbox(lib.Topic_PEERS_RESPONSE)
+	msg := receiveInbox(t, n2.Inbox(lib.Topic_PEERS_RESPONSE))
 	gotMsg := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg.Message, gotMsg))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -183,16 +206,14 @@ func TestSendToPeersMultipleMessages(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		require.NoError(t, n1.SendToPeers(lib.Topic_CONSENSUS, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}}))
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
 	go func() {
 		defer wg.Done()
 		require.NoError(t, n1.SendToPeers(lib.Topic_CONSENSUS, &PeerBookResponseMessage{Book: []*BookPeer{expectedMsg}}))
-		time.AfterFunc(testTimeout, func() { panic("timeout") })
 	}()
-	wg.Wait()
+	waitGroupTimeout(t, &wg)
 
-	msg := <-n2.Inbox(lib.Topic_CONSENSUS)
+	msg := receiveInbox(t, n2.Inbox(lib.Topic_CONSENSUS))
 	gotMsg := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg.Message, gotMsg))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -200,7 +221,7 @@ func TestSendToPeersMultipleMessages(t *testing.T) {
 	require.Equal(t, expectedMsg.Address.PublicKey, gotMsg.Book[0].Address.PublicKey)
 	require.Equal(t, expectedMsg.ConsecutiveFailedDial, gotMsg.Book[0].ConsecutiveFailedDial)
 
-	msg2 := <-n2.Inbox(lib.Topic_CONSENSUS)
+	msg2 := receiveInbox(t, n2.Inbox(lib.Topic_CONSENSUS))
 	gotMsg2 := new(PeerBookResponseMessage)
 	require.NoError(t, lib.Unmarshal(msg2.Message, gotMsg2))
 	require.True(t, len(gotMsg.Book) == 1)
@@ -270,18 +291,26 @@ func TestStart(t *testing.T) {
 	startTestP2PNode(t, n1)
 	defer func() { n1.Stop(); n2.Stop(); n3.Stop() }()
 	// test listener
-	require.NoError(t, n3.Dial(&lib.PeerAddress{
+	time.Sleep(1 * time.Second)
+	<-time.After(200 * time.Millisecond)
+	err := n3.Dial(&lib.PeerAddress{
 		PublicKey:  n1.pub,
 		NetAddress: n1.listener.Addr().String(),
 		PeerMeta:   pm,
-	}, false, true))
+	}, false, true)
+	if err != nil {
+		t.Error(err)
+	}
+	deadline := time.After(testTimeout)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		select {
-		default:
+		case <-ticker.C:
 			if ok, _ := test(); ok {
 				return
 			}
-		case <-time.After(testTimeout):
+		case <-deadline:
 			_, reason := test()
 			t.Fatal(reason)
 		}
@@ -314,9 +343,9 @@ out:
 	for {
 		select {
 		case <-time.After(500 * time.Millisecond):
-			n1.RLock()
+			n1.mux.RLock()
 			numVals := len(n1.mustConnect)
-			n1.RUnlock()
+			n1.mux.RUnlock()
 			if numVals != 0 {
 				break out
 			}
@@ -526,11 +555,14 @@ func newTestP2PNodeWithConfig(t *testing.T, c lib.Config, noLog ...bool) (n test
 	return
 }
 
-func newTestP2PConfig(_ *testing.T) lib.Config {
+func newTestP2PConfig(t *testing.T) lib.Config {
 	config := lib.DefaultConfig()
 	config.ChainId = lib.CanopyChainId
 	config.ListenAddress = ":0"
-	config.DataDirPath = os.TempDir()
+	temp := os.TempDir()
+	tempFP := filepath.Join(temp, time.Now().String())
+	require.NoError(t, os.MkdirAll(tempFP, 0700))
+	config.DataDirPath = tempFP
 	return config
 }
 
@@ -552,6 +584,7 @@ func TestGetInboxStats(t *testing.T) {
 				lib.Topic_TX:             0,
 				lib.Topic_PEERS_RESPONSE: 0,
 				lib.Topic_PEERS_REQUEST:  0,
+				lib.Topic_HEARTBEAT:      0,
 			},
 		},
 		{
@@ -581,6 +614,7 @@ func TestGetInboxStats(t *testing.T) {
 				lib.Topic_TX:             1,
 				lib.Topic_PEERS_RESPONSE: 0,
 				lib.Topic_PEERS_REQUEST:  0,
+				lib.Topic_HEARTBEAT:      0,
 			},
 		},
 		{
@@ -630,6 +664,7 @@ func TestGetInboxStats(t *testing.T) {
 				lib.Topic_TX:             3,
 				lib.Topic_PEERS_RESPONSE: 1,
 				lib.Topic_PEERS_REQUEST:  0,
+				lib.Topic_HEARTBEAT:      0,
 			},
 		},
 	}
@@ -673,10 +708,16 @@ func TestGetInboxStatsThreadSafety(t *testing.T) {
 	errs := make(chan error, 100)
 
 	// Writer goroutines - send messages
-	for i := 0; i < 10; i++ {
+	writerCount := 10
+	readerCount := 10
+	messagesPerWriter := maxInboxQueueSize / writerCount
+	if messagesPerWriter < 1 {
+		messagesPerWriter = 1
+	}
+	for i := 0; i < writerCount; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			for j := 0; j < 50; j++ {
+			for j := 0; j < messagesPerWriter; j++ {
 				txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte(fmt.Sprintf("tx-%d-%d", id, j))}}
 				msgBytes, err := lib.Marshal(txMsg)
 				if err != nil {
@@ -693,21 +734,21 @@ func TestGetInboxStatsThreadSafety(t *testing.T) {
 	}
 
 	// Reader goroutines - read stats
-	for i := 0; i < 10; i++ {
+	for i := 0; i < readerCount; i++ {
 		go func() {
 			defer func() { done <- true }()
 			for j := 0; j < 50; j++ {
 				stats := p2pNode.GetInboxStats()
 				// Just verify it doesn't panic and returns a valid map
 				require.NotNil(t, stats)
-				require.GreaterOrEqual(t, len(stats), 6)
+				require.GreaterOrEqual(t, len(stats), 7)
 				time.Sleep(time.Millisecond)
 			}
 		}()
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	for i := 0; i < writerCount+readerCount; i++ {
 		select {
 		case <-done:
 		case err := <-errs:
@@ -781,9 +822,10 @@ func TestGetInboxStatsPerformance(t *testing.T) {
 		},
 	}
 
-	// Add 1000 messages to each channel
-	for topic := lib.Topic_CONSENSUS; topic < lib.Topic_INVALID; topic++ {
-		for i := 0; i < 1000; i++ {
+	// Add messages to each channel without blocking
+	fillAmount := maxInboxQueueSize
+	for topic := lib.Topic_CONSENSUS; topic <= lib.Topic_HEARTBEAT; topic++ {
+		for i := 0; i < fillAmount; i++ {
 			txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte("test")}}
 			msgBytes, _ := lib.Marshal(txMsg)
 			p2pNode.channels[topic] <- &lib.MessageAndMetadata{
@@ -825,9 +867,8 @@ func TestInboxStatsWithFullChannel(t *testing.T) {
 		},
 	}
 
-	// Fill TX channel to capacity (500,000)
-	// For testing, use a smaller number to avoid timeout
-	fillAmount := 1000
+	// Fill TX channel to capacity
+	fillAmount := maxInboxQueueSize
 
 	for i := 0; i < fillAmount; i++ {
 		txMsg := &lib.TxMessage{ChainId: 1, Txs: [][]byte{[]byte(fmt.Sprintf("tx-%d", i))}}

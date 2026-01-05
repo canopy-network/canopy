@@ -543,7 +543,7 @@ func (x *MessageSubsidy) UnmarshalJSON(b []byte) (err error) {
 		return
 	}
 	*x = MessageSubsidy{
-		Address: x.Address,
+		Address: j.Address,
 		ChainId: j.ChainId,
 		Amount:  j.Amount,
 		Opcode:  j.Opcode,

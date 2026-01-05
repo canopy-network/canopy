@@ -34,6 +34,10 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 	if err != nil {
 		return 0, err
 	}
+	// ensure both the certificate and the signature are non-nil
+	if qc != nil && qc.Signature != nil && qc.Header != nil {
+		qc.Signature.LogNonSigners(vs.ValidatorSet, qc.ProposerKey, qc.Header.Height, qc.Header.ChainId, s.log)
+	}
 	// increment the non-signing count for the non-signers
 	if err = s.IncrementNonSigners(nonSignerPubKeys); err != nil {
 		return 0, err

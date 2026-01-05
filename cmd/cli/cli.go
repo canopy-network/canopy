@@ -93,7 +93,7 @@ func Start() {
 	}
 	// log the validator identity
 	l.Infof("Using identity: Address: %s | PublicKey: %s",
-		validatorKey.PublicKey().Address().String(), validatorKey.PublicKey().Address().String())
+		validatorKey.PublicKey().Address().String(), validatorKey.PublicKey().String())
 	// initialize the state machine
 	sm, err := fsm.New(config, db, metrics, l)
 	if err != nil {

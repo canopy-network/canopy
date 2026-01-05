@@ -1,7 +1,6 @@
 package bft
 
 import (
-	"fmt"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 )
@@ -99,9 +98,6 @@ func (b *BFT) addSigToVoteSet(vote *Message, voteSet *VoteSet) (err lib.ErrorI) 
 	}
 	enabled, er := voteSet.multiKey.SignerEnabledAt(idx)
 	if er != nil {
-		fmt.Printf("%d validators\n", len(b.ValidatorSet.ValidatorSet.GetValidatorSet()))
-		fmt.Println("addSigToVoteSet err:", er.Error())
-		fmt.Println(len(voteSet.multiKey.Bitmap()))
 		return lib.ErrInvalidValidatorIndex()
 	}
 	if enabled {
