@@ -40,6 +40,7 @@ func init() {
 	queryCmd.AddCommand(retiredCommitteeCmd)
 	queryCmd.AddCommand(orderCmd)
 	queryCmd.AddCommand(ordersCmd)
+	queryCmd.AddCommand(indexerSnapshotCmd)
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
@@ -189,6 +190,14 @@ var (
 		Short: "query all sell orders for a committee",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Orders(height, committee))
+		},
+	}
+
+	indexerSnapshotCmd = &cobra.Command{
+		Use:   "indexer-snapshot --height=1",
+		Short: "query comprehensive indexer snapshot data for a block height",
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.IndexerSnapshot(height))
 		},
 	}
 
