@@ -41,6 +41,7 @@ func init() {
 	queryCmd.AddCommand(orderCmd)
 	queryCmd.AddCommand(ordersCmd)
 	queryCmd.AddCommand(oracleOrdersCmd)
+	queryCmd.AddCommand(indexerSnapshotCmd)
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
@@ -199,6 +200,14 @@ var (
 		Run: func(cmd *cobra.Command, args []string) {
 			h, p := getPaginatedArgs()
 			writeToConsole(client.OracleOrders(h, p))
+		},
+	}
+
+	indexerSnapshotCmd = &cobra.Command{
+		Use:   "indexer-snapshot --height=1",
+		Short: "query comprehensive indexer snapshot data for a block height",
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.IndexerSnapshot(height))
 		},
 	}
 

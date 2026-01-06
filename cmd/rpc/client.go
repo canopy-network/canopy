@@ -248,6 +248,12 @@ func (c *Client) OracleOrders(height uint64, params lib.PageParams) (orders []*t
 	return
 }
 
+func (c *Client) IndexerSnapshot(height uint64) (p *IndexerSnapshotResponse, err lib.ErrorI) {
+	p = new(IndexerSnapshotResponse)
+	err = c.heightRequest(IndexerSnapshotRouteName, height, p)
+	return
+}
+
 func (c *Client) LastProposers(height uint64) (p *lib.Proposers, err lib.ErrorI) {
 	p = new(lib.Proposers)
 	err = c.heightRequest(LastProposersRouteName, height, p)
