@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/controller"
+	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/store"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
@@ -33,6 +35,7 @@ const (
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
+	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
 	l             *sync.Mutex                   // thread safety
@@ -78,6 +81,7 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	// create the manager
 	manager = &RCManager{
 		c:                          config,
+		controller:                 controller,
 		subscriptions:              make(map[uint64]*RCSubscription),
 		subscribers:                make(map[uint64][]*RCSubscriber),
 		l:                          controller.Mutex,
@@ -126,6 +130,129 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 			continue
 		}
 	}
+}
+
+// buildIndexerSnapshot creates a lib.IndexerSnapshot protobuf for the given height
+// This is used to send state snapshots over WebSocket alongside root chain info
+func (r *RCManager) buildIndexerSnapshot(height uint64) (*lib.IndexerSnapshot, error) {
+	// Setup store for indexed data (blocks, txs, events)
+	db := r.controller.FSM.Store().(lib.StoreI).DB()
+	st, err := store.NewStoreWithDB(r.c, db, nil, r.log)
+	if err != nil {
+		return nil, err
+	}
+	defer st.Discard()
+
+	if height == 0 {
+		height = st.Version() - 1
+	}
+	prevHeight := height - 1
+
+	// Get state machines for current and previous height
+	smCurrent, err := r.controller.FSM.TimeMachine(height)
+	if err != nil {
+		return nil, err
+	}
+	defer smCurrent.Discard()
+
+	smPrevious, err := r.controller.FSM.TimeMachine(prevHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer smPrevious.Discard()
+
+	snapshot := &lib.IndexerSnapshot{Height: height}
+
+	// Fetch block data from indexer (errors result in nil, not failure)
+	snapshot.Block, _ = st.GetBlockByHeight(height)
+	if txPage, _ := st.GetTxsByHeight(height, true, lib.PageParams{}); txPage != nil {
+		if txs, ok := txPage.Results.(*lib.TxResults); ok {
+			snapshot.Transactions = []*lib.TxResult(*txs)
+		}
+	}
+	if evtPage, _ := st.GetEventsByBlockHeight(height, true, lib.PageParams{}); evtPage != nil {
+		if evts, ok := evtPage.Results.(*lib.Events); ok {
+			snapshot.Events = []*lib.Event(*evts)
+		}
+	}
+
+	// Fetch state data (current height) - serialize to bytes for proto
+	if accPage, _ := smCurrent.GetAccountsPaginated(lib.PageParams{}); accPage != nil {
+		if accs, ok := accPage.Results.(*fsm.AccountPage); ok {
+			snapshot.Accounts = make([][]byte, len(*accs))
+			for i, acc := range *accs {
+				snapshot.Accounts[i], _ = lib.Marshal(acc)
+			}
+		}
+	}
+	snapshot.Orders, _ = smCurrent.GetOrderBooks()
+	if prices, _ := smCurrent.GetDexPrices(); prices != nil {
+		snapshot.DexPrices = make([][]byte, len(prices))
+		for i, p := range prices {
+			snapshot.DexPrices[i], _ = lib.Marshal(p)
+		}
+	}
+	if params, _ := smCurrent.GetParams(); params != nil {
+		snapshot.Params, _ = lib.Marshal(params)
+	}
+	if supply, _ := smCurrent.GetSupply(); supply != nil {
+		snapshot.Supply, _ = lib.Marshal(supply)
+	}
+	snapshot.CommitteesData, _ = smCurrent.GetCommitteesData()
+	snapshot.SubsidizedCommittees, _ = smCurrent.GetSubsidizedCommittees()
+	snapshot.RetiredCommittees, _ = smCurrent.GetRetiredCommittees()
+
+	// Change detection pairs (current + H-1) - serialize validators/pools to bytes
+	if valPage, _ := smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valPage != nil {
+		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
+			snapshot.ValidatorsCurrent = make([][]byte, len(*vals))
+			for i, v := range *vals {
+				snapshot.ValidatorsCurrent[i], _ = lib.Marshal(v)
+			}
+		}
+	}
+	if valPage, _ := smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valPage != nil {
+		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
+			snapshot.ValidatorsPrevious = make([][]byte, len(*vals))
+			for i, v := range *vals {
+				snapshot.ValidatorsPrevious[i], _ = lib.Marshal(v)
+			}
+		}
+	}
+
+	if poolPage, _ := smCurrent.GetPoolsPaginated(lib.PageParams{}); poolPage != nil {
+		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
+			snapshot.PoolsCurrent = make([][]byte, len(*pools))
+			for i, p := range *pools {
+				snapshot.PoolsCurrent[i], _ = lib.Marshal(p)
+			}
+		}
+	}
+	if poolPage, _ := smPrevious.GetPoolsPaginated(lib.PageParams{}); poolPage != nil {
+		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
+			snapshot.PoolsPrevious = make([][]byte, len(*pools))
+			for i, p := range *pools {
+				snapshot.PoolsPrevious[i], _ = lib.Marshal(p)
+			}
+		}
+	}
+
+	if ns, _ := smCurrent.GetNonSigners(); ns != nil {
+		snapshot.NonSignersCurrent, _ = lib.Marshal(ns)
+	}
+	if ns, _ := smPrevious.GetNonSigners(); ns != nil {
+		snapshot.NonSignersPrevious, _ = lib.Marshal(ns)
+	}
+
+	snapshot.DoubleSignersCurrent, _ = st.GetDoubleSigners()
+
+	snapshot.DexBatchesCurrent, _ = smCurrent.GetDexBatches(true)
+	snapshot.DexBatchesPrevious, _ = smPrevious.GetDexBatches(true)
+
+	snapshot.NextDexBatchesCurrent, _ = smCurrent.GetDexBatches(false)
+	snapshot.NextDexBatchesPrevious, _ = smPrevious.GetDexBatches(false)
+
+	return snapshot, nil
 }
 
 // ChainIds() returns a list of chainIds for subscribers
