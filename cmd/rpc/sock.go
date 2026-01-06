@@ -11,6 +11,7 @@ import (
 
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/store"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
@@ -33,6 +34,7 @@ const (
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
+	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
 	l             *sync.Mutex                   // thread safety
@@ -78,6 +80,7 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	// create the manager
 	manager = &RCManager{
 		c:                          config,
+		controller:                 controller,
 		subscriptions:              make(map[uint64]*RCSubscription),
 		subscribers:                make(map[uint64][]*RCSubscriber),
 		l:                          controller.Mutex,
@@ -129,6 +132,74 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 		}
 		subscriber.writeMu.Unlock()
 	}
+}
+
+// buildIndexerSnapshot creates an IndexerSnapshotResponse for the given height
+// This is used to send state snapshots over WebSocket alongside root chain info
+func (r *RCManager) buildIndexerSnapshot(height uint64) (*IndexerSnapshotResponse, error) {
+	// Setup store for indexed data (blocks, txs, events)
+	db := r.controller.FSM.Store().(lib.StoreI).DB()
+	st, err := store.NewStoreWithDB(r.c, db, nil, r.log)
+	if err != nil {
+		return nil, err
+	}
+	defer st.Discard()
+
+	if height == 0 {
+		height = st.Version() - 1
+	}
+	prevHeight := height - 1
+
+	// Get state machines for current and previous height
+	smCurrent, err := r.controller.FSM.TimeMachine(height)
+	if err != nil {
+		return nil, err
+	}
+	defer smCurrent.Discard()
+
+	smPrevious, err := r.controller.FSM.TimeMachine(prevHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer smPrevious.Discard()
+
+	response := &IndexerSnapshotResponse{Height: height}
+
+	// Fetch block data from indexer (errors result in nil, not failure)
+	response.Block, _ = st.GetBlockByHeight(height)
+	response.Transactions, _ = st.GetTxsByHeight(height, true, lib.PageParams{})
+	response.Events, _ = st.GetEventsByBlockHeight(height, true, lib.PageParams{})
+
+	// Fetch state data (current height)
+	response.Accounts, _ = smCurrent.GetAccountsPaginated(lib.PageParams{})
+	response.Orders, _ = smCurrent.GetOrderBooks()
+	response.DexPrices, _ = smCurrent.GetDexPrices()
+	response.Params, _ = smCurrent.GetParams()
+	response.Supply, _ = smCurrent.GetSupply()
+	response.CommitteesData, _ = smCurrent.GetCommitteesData()
+	response.SubsidizedCommittees, _ = smCurrent.GetSubsidizedCommittees()
+	response.RetiredCommittees, _ = smCurrent.GetRetiredCommittees()
+
+	// Change detection pairs (current + H-1)
+	response.Validators.Current, _ = smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{})
+	response.Validators.Previous, _ = smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{})
+
+	response.Pools.Current, _ = smCurrent.GetPoolsPaginated(lib.PageParams{})
+	response.Pools.Previous, _ = smPrevious.GetPoolsPaginated(lib.PageParams{})
+
+	response.NonSigners.Current, _ = smCurrent.GetNonSigners()
+	response.NonSigners.Previous, _ = smPrevious.GetNonSigners()
+
+	response.DoubleSigners.Current, _ = st.GetDoubleSigners()
+	// Note: DoubleSigners doesn't have historical lookup - only current snapshot
+
+	response.DexBatches.Current, _ = smCurrent.GetDexBatches(true)
+	response.DexBatches.Previous, _ = smPrevious.GetDexBatches(true)
+
+	response.NextDexBatches.Current, _ = smCurrent.GetDexBatches(false)
+	response.NextDexBatches.Previous, _ = smPrevious.GetDexBatches(false)
+
+	return response, nil
 }
 
 // ChainIds() returns a list of chainIds for subscribers
