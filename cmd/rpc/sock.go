@@ -164,93 +164,197 @@ func (r *RCManager) buildIndexerSnapshot(height uint64) (*lib.IndexerSnapshot, e
 	snapshot := &lib.IndexerSnapshot{Height: height}
 
 	// Fetch block data from indexer (errors result in nil, not failure)
-	snapshot.Block, _ = st.GetBlockByHeight(height)
-	if txPage, _ := st.GetTxsByHeight(height, true, lib.PageParams{}); txPage != nil {
+	var blockErr error
+	snapshot.Block, blockErr = st.GetBlockByHeight(height)
+	if blockErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetBlockByHeight failed for height %d: %s", height, blockErr.Error())
+	}
+	if txPage, txErr := st.GetTxsByHeight(height, true, lib.PageParams{}); txErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetTxsByHeight failed for height %d: %s", height, txErr.Error())
+	} else if txPage != nil {
 		if txs, ok := txPage.Results.(*lib.TxResults); ok {
 			snapshot.Transactions = []*lib.TxResult(*txs)
 		}
 	}
-	if evtPage, _ := st.GetEventsByBlockHeight(height, true, lib.PageParams{}); evtPage != nil {
+	if evtPage, evtErr := st.GetEventsByBlockHeight(height, true, lib.PageParams{}); evtErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetEventsByBlockHeight failed for height %d: %s", height, evtErr.Error())
+	} else if evtPage != nil {
 		if evts, ok := evtPage.Results.(*lib.Events); ok {
 			snapshot.Events = []*lib.Event(*evts)
 		}
 	}
 
 	// Fetch state data (current height) - serialize to bytes for proto
-	if accPage, _ := smCurrent.GetAccountsPaginated(lib.PageParams{}); accPage != nil {
+	if accPage, accErr := smCurrent.GetAccountsPaginated(lib.PageParams{}); accErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetAccountsPaginated failed for height %d: %s", height, accErr.Error())
+	} else if accPage != nil {
 		if accs, ok := accPage.Results.(*fsm.AccountPage); ok {
 			snapshot.Accounts = make([][]byte, len(*accs))
 			for i, acc := range *accs {
-				snapshot.Accounts[i], _ = lib.Marshal(acc)
+				if data, marshalErr := lib.Marshal(acc); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal account[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.Accounts[i] = data
+				}
 			}
 		}
 	}
-	snapshot.Orders, _ = smCurrent.GetOrderBooks()
-	if prices, _ := smCurrent.GetDexPrices(); prices != nil {
+	if orders, ordersErr := smCurrent.GetOrderBooks(); ordersErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetOrderBooks failed for height %d: %s", height, ordersErr.Error())
+	} else {
+		snapshot.Orders = orders
+	}
+	if prices, pricesErr := smCurrent.GetDexPrices(); pricesErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexPrices failed for height %d: %s", height, pricesErr.Error())
+	} else if prices != nil {
 		snapshot.DexPrices = make([][]byte, len(prices))
 		for i, p := range prices {
-			snapshot.DexPrices[i], _ = lib.Marshal(p)
+			if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+				r.log.Warnf("buildIndexerSnapshot: Marshal dex price[%d] failed for height %d: %s", i, height, marshalErr.Error())
+			} else {
+				snapshot.DexPrices[i] = data
+			}
 		}
 	}
-	if params, _ := smCurrent.GetParams(); params != nil {
-		snapshot.Params, _ = lib.Marshal(params)
+	if params, paramsErr := smCurrent.GetParams(); paramsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetParams failed for height %d: %s", height, paramsErr.Error())
+	} else if params != nil {
+		if data, marshalErr := lib.Marshal(params); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal params failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.Params = data
+		}
 	}
-	if supply, _ := smCurrent.GetSupply(); supply != nil {
-		snapshot.Supply, _ = lib.Marshal(supply)
+	if supply, supplyErr := smCurrent.GetSupply(); supplyErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetSupply failed for height %d: %s", height, supplyErr.Error())
+	} else if supply != nil {
+		if data, marshalErr := lib.Marshal(supply); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal supply failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.Supply = data
+		}
 	}
-	snapshot.CommitteesData, _ = smCurrent.GetCommitteesData()
-	snapshot.SubsidizedCommittees, _ = smCurrent.GetSubsidizedCommittees()
-	snapshot.RetiredCommittees, _ = smCurrent.GetRetiredCommittees()
+	if committeesData, cdErr := smCurrent.GetCommitteesData(); cdErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetCommitteesData failed for height %d: %s", height, cdErr.Error())
+	} else {
+		snapshot.CommitteesData = committeesData
+	}
+	if subsidized, subErr := smCurrent.GetSubsidizedCommittees(); subErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetSubsidizedCommittees failed for height %d: %s", height, subErr.Error())
+	} else {
+		snapshot.SubsidizedCommittees = subsidized
+	}
+	if retired, retErr := smCurrent.GetRetiredCommittees(); retErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetRetiredCommittees failed for height %d: %s", height, retErr.Error())
+	} else {
+		snapshot.RetiredCommittees = retired
+	}
 
 	// Change detection pairs (current + H-1) - serialize validators/pools to bytes
-	if valPage, _ := smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valPage != nil {
+	if valPage, valErr := smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetValidatorsPaginated (current) failed for height %d: %s", height, valErr.Error())
+	} else if valPage != nil {
 		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
 			snapshot.ValidatorsCurrent = make([][]byte, len(*vals))
 			for i, v := range *vals {
-				snapshot.ValidatorsCurrent[i], _ = lib.Marshal(v)
+				if data, marshalErr := lib.Marshal(v); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal validator current[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.ValidatorsCurrent[i] = data
+				}
 			}
 		}
 	}
-	if valPage, _ := smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valPage != nil {
+	if valPage, valErr := smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetValidatorsPaginated (previous) failed for height %d: %s", prevHeight, valErr.Error())
+	} else if valPage != nil {
 		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
 			snapshot.ValidatorsPrevious = make([][]byte, len(*vals))
 			for i, v := range *vals {
-				snapshot.ValidatorsPrevious[i], _ = lib.Marshal(v)
+				if data, marshalErr := lib.Marshal(v); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal validator previous[%d] failed for height %d: %s", i, prevHeight, marshalErr.Error())
+				} else {
+					snapshot.ValidatorsPrevious[i] = data
+				}
 			}
 		}
 	}
 
-	if poolPage, _ := smCurrent.GetPoolsPaginated(lib.PageParams{}); poolPage != nil {
+	if poolPage, poolErr := smCurrent.GetPoolsPaginated(lib.PageParams{}); poolErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetPoolsPaginated (current) failed for height %d: %s", height, poolErr.Error())
+	} else if poolPage != nil {
 		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
 			snapshot.PoolsCurrent = make([][]byte, len(*pools))
 			for i, p := range *pools {
-				snapshot.PoolsCurrent[i], _ = lib.Marshal(p)
+				if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal pool current[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.PoolsCurrent[i] = data
+				}
 			}
 		}
 	}
-	if poolPage, _ := smPrevious.GetPoolsPaginated(lib.PageParams{}); poolPage != nil {
+	if poolPage, poolErr := smPrevious.GetPoolsPaginated(lib.PageParams{}); poolErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetPoolsPaginated (previous) failed for height %d: %s", prevHeight, poolErr.Error())
+	} else if poolPage != nil {
 		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
 			snapshot.PoolsPrevious = make([][]byte, len(*pools))
 			for i, p := range *pools {
-				snapshot.PoolsPrevious[i], _ = lib.Marshal(p)
+				if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal pool previous[%d] failed for height %d: %s", i, prevHeight, marshalErr.Error())
+				} else {
+					snapshot.PoolsPrevious[i] = data
+				}
 			}
 		}
 	}
 
-	if ns, _ := smCurrent.GetNonSigners(); ns != nil {
-		snapshot.NonSignersCurrent, _ = lib.Marshal(ns)
+	if ns, nsErr := smCurrent.GetNonSigners(); nsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetNonSigners (current) failed for height %d: %s", height, nsErr.Error())
+	} else if ns != nil {
+		if data, marshalErr := lib.Marshal(ns); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal non-signers current failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.NonSignersCurrent = data
+		}
 	}
-	if ns, _ := smPrevious.GetNonSigners(); ns != nil {
-		snapshot.NonSignersPrevious, _ = lib.Marshal(ns)
+	if ns, nsErr := smPrevious.GetNonSigners(); nsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetNonSigners (previous) failed for height %d: %s", prevHeight, nsErr.Error())
+	} else if ns != nil {
+		if data, marshalErr := lib.Marshal(ns); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal non-signers previous failed for height %d: %s", prevHeight, marshalErr.Error())
+		} else {
+			snapshot.NonSignersPrevious = data
+		}
 	}
 
-	snapshot.DoubleSignersCurrent, _ = st.GetDoubleSigners()
+	if doubleSigners, dsErr := st.GetDoubleSigners(); dsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDoubleSigners failed for height %d: %s", height, dsErr.Error())
+	} else {
+		snapshot.DoubleSignersCurrent = doubleSigners
+	}
 
-	snapshot.DexBatchesCurrent, _ = smCurrent.GetDexBatches(true)
-	snapshot.DexBatchesPrevious, _ = smPrevious.GetDexBatches(true)
+	if dexBatches, dbErr := smCurrent.GetDexBatches(true); dbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (current, confirmed) failed for height %d: %s", height, dbErr.Error())
+	} else {
+		snapshot.DexBatchesCurrent = dexBatches
+	}
+	if dexBatches, dbErr := smPrevious.GetDexBatches(true); dbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (previous, confirmed) failed for height %d: %s", prevHeight, dbErr.Error())
+	} else {
+		snapshot.DexBatchesPrevious = dexBatches
+	}
 
-	snapshot.NextDexBatchesCurrent, _ = smCurrent.GetDexBatches(false)
-	snapshot.NextDexBatchesPrevious, _ = smPrevious.GetDexBatches(false)
+	if nextDexBatches, ndbErr := smCurrent.GetDexBatches(false); ndbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (current, next) failed for height %d: %s", height, ndbErr.Error())
+	} else {
+		snapshot.NextDexBatchesCurrent = nextDexBatches
+	}
+	if nextDexBatches, ndbErr := smPrevious.GetDexBatches(false); ndbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (previous, next) failed for height %d: %s", prevHeight, ndbErr.Error())
+	} else {
+		snapshot.NextDexBatchesPrevious = nextDexBatches
+	}
 
 	return snapshot, nil
 }
