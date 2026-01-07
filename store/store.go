@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -259,8 +260,11 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	}
 	// extract the internal metrics from the pebble batch
 	size, count := len(s.writer.Repr()), s.writer.Count()
+	// Add random delay to commit for testing in order to avoid a disk write stampede on machines with
+	// a large number of nodes
+	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	// finally commit the entire Transaction to the actual DB under the proper version (height) number
-	if err := s.db.Apply(s.writer, pebble.NoSync); err != nil {
+	if err := s.db.Apply(s.writer, pebble.Sync); err != nil {
 		return nil, ErrCommitDB(err)
 	}
 	// update the metrics once complete
