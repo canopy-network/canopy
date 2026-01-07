@@ -318,6 +318,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// publish root chain information
 		go c.RCManager.Publish(id, info)
 	}
+	// publish block data to all block data subscribers
+	go c.RCManager.PublishBlockData(block.BlockHeader.Height)
 	// exit
 	return
 }
@@ -411,6 +413,8 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 			info.Timestamp = ts
 			go c.RCManager.Publish(id, info)
 		}
+		// publish block data to all block data subscribers
+		go c.RCManager.PublishBlockData(block.BlockHeader.Height)
 		// exit
 		return nil
 	})

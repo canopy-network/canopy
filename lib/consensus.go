@@ -101,6 +101,7 @@ func (vs *ValidatorSet) GetValidatorAndIdx(targetPublicKey []byte) (val *Consens
 // RootChainClient executes 'on-demand' calls to the root-chain
 type RCManagerI interface {
 	Publish(chainId uint64, info *RootChainInfo)                                              // publish the root chain info to nested chain listeners
+	PublishBlockData(height uint64)                                                           // publish block data to all block data subscribers
 	ChainIds() []uint64                                                                       // get the list of chain ids of the nested chain subscribers
 	GetHeight(rootChainId uint64) uint64                                                      // get the height of the root chain
 	GetRootChainInfo(rootChainId, chainId uint64) (rootChainInfo *RootChainInfo, err ErrorI)  // get root-chain info 'on-demand'

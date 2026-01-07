@@ -62,6 +62,7 @@ const (
 	ValidatorSetRoutePath          = "/v1/query/validator-set"
 	CheckpointRoutePath            = "/v1/query/checkpoint"
 	SubscribeRCInfoPath            = "/v1/subscribe-rc-info"
+	SubscribeBlockDataPath         = "/v1/subscribe-block-data"
 	// debug
 	DebugBlockedRoutePath   = "/debug/blocked"
 	DebugHeapRoutePath      = "/debug/heap"
@@ -201,6 +202,7 @@ const (
 	AddVoteRouteName                = "add-vote"
 	DelVoteRouteName                = "del-vote"
 	SubscribeRCInfoName             = "subscribe-rc-info"
+	SubscribeBlockDataName          = "subscribe-block-data"
 )
 
 // routes contains the method and path for a canopy command
@@ -306,6 +308,7 @@ var routePaths = routes{
 	AddVoteRouteName:                {Method: http.MethodPost, Path: AddVoteRoutePath},
 	DelVoteRouteName:                {Method: http.MethodPost, Path: DelVoteRoutePath},
 	SubscribeRCInfoName:             {Method: http.MethodGet, Path: SubscribeRCInfoPath},
+	SubscribeBlockDataName:          {Method: http.MethodGet, Path: SubscribeBlockDataPath},
 }
 
 // httpRouteHandlers is a custom type that maps strings to httprouter handle functions
@@ -369,6 +372,7 @@ func createRouter(s *Server) *httprouter.Router {
 		CheckpointRouteName:            s.Checkpoint,
 		EthereumRouteName:              s.EthereumHandler,
 		SubscribeRCInfoName:            s.WebSocket,
+		SubscribeBlockDataName:         s.BlockDataWebSocket,
 	}
 
 	// Initialize a new router using the httprouter package.

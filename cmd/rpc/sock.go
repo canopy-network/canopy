@@ -50,6 +50,10 @@ type RCManager struct {
 	maxRCSubscribers           int
 	maxRCSubscribersPerChain   int
 	subscriberCount            int
+	// block data subscribers
+	blockDataSubscribers      []*BlockDataSubscriber
+	blockDataSubscriberCount  int
+	maxBlockDataSubscribers   int
 }
 
 // NewRCManager() constructs a new instance of a RCManager
@@ -94,6 +98,8 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 		rcSubscriberPingPeriod:     pingPeriod,
 		maxRCSubscribers:           maxSubscribers,
 		maxRCSubscribersPerChain:   maxSubscribersPerChain,
+		blockDataSubscribers:       make([]*BlockDataSubscriber, 0),
+		maxBlockDataSubscribers:    maxSubscribers, // reuse same limit
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
@@ -848,4 +854,158 @@ func (r *RCSubscriber) Stop(err error) {
 	}
 	// remove from the manager
 	r.manager.RemoveSubscriber(r.chainId, r)
+}
+
+// BlockDataSubscriber represents a WebSocket client subscribed to block data updates
+type BlockDataSubscriber struct {
+	conn    *websocket.Conn // the underlying ws connection
+	manager *RCManager      // reference to manager
+	log     lib.LoggerI     // stdout log
+	writeMu sync.Mutex      // protects concurrent writes
+}
+
+// BlockDataWebSocket() upgrades a http request to a websockets connection for block data
+func (s *Server) BlockDataWebSocket(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	_ = w.(http.Hijacker)
+	// upgrade the connection to websockets
+	conn, err := s.rcManager.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		s.logger.Error(err.Error())
+		return
+	}
+	// create a new block data subscriber
+	subscriber := &BlockDataSubscriber{
+		conn:    conn,
+		manager: s.rcManager,
+		log:     s.logger,
+	}
+	// add the subscriber to the manager
+	if err := s.rcManager.AddBlockDataSubscriber(subscriber); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		if closeErr := conn.Close(); closeErr != nil {
+			s.logger.Error(closeErr.Error())
+		}
+		return
+	}
+	// send initial snapshot at current height
+	go subscriber.sendInitialSnapshot()
+	// start the subscriber lifecycle
+	subscriber.Start()
+}
+
+// sendInitialSnapshot sends the current block data snapshot when a client first connects
+func (b *BlockDataSubscriber) sendInitialSnapshot() {
+	snapshot, err := b.manager.buildIndexerSnapshot(0) // 0 means latest height
+	if err != nil {
+		b.log.Warnf("BlockDataSubscriber: failed to build initial snapshot: %s", err.Error())
+		return
+	}
+	protoBytes, err := lib.Marshal(snapshot)
+	if err != nil {
+		b.log.Warnf("BlockDataSubscriber: failed to marshal initial snapshot: %s", err.Error())
+		return
+	}
+	if err := b.writeMessage(websocket.BinaryMessage, protoBytes); err != nil {
+		b.Stop(err)
+	}
+}
+
+// AddBlockDataSubscriber adds a block data subscriber to the manager
+func (r *RCManager) AddBlockDataSubscriber(subscriber *BlockDataSubscriber) error {
+	r.l.Lock()
+	defer r.l.Unlock()
+	if r.maxBlockDataSubscribers > 0 && r.blockDataSubscriberCount >= r.maxBlockDataSubscribers {
+		return fmt.Errorf("block data subscriber limit reached")
+	}
+	r.blockDataSubscribers = append(r.blockDataSubscribers, subscriber)
+	r.blockDataSubscriberCount++
+	return nil
+}
+
+// RemoveBlockDataSubscriber removes a block data subscriber from the manager
+func (r *RCManager) RemoveBlockDataSubscriber(subscriber *BlockDataSubscriber) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	before := len(r.blockDataSubscribers)
+	r.blockDataSubscribers = slices.DeleteFunc(r.blockDataSubscribers, func(sub *BlockDataSubscriber) bool {
+		return sub == subscriber
+	})
+	if len(r.blockDataSubscribers) < before {
+		r.blockDataSubscriberCount--
+	}
+}
+
+// PublishBlockData sends the IndexerSnapshot to all block data subscribers
+func (r *RCManager) PublishBlockData(height uint64) {
+	// build the snapshot
+	snapshot, err := r.buildIndexerSnapshot(height)
+	if err != nil {
+		r.log.Warnf("PublishBlockData: failed to build snapshot for height %d: %s", height, err.Error())
+		return
+	}
+	// marshal to proto bytes
+	protoBytes, err := lib.Marshal(snapshot)
+	if err != nil {
+		r.log.Warnf("PublishBlockData: failed to marshal snapshot for height %d: %s", height, err.Error())
+		return
+	}
+	// copy subscribers under lock to avoid map iteration races
+	r.l.Lock()
+	subscribers := append([]*BlockDataSubscriber(nil), r.blockDataSubscribers...)
+	r.l.Unlock()
+	// publish to each subscriber
+	for _, subscriber := range subscribers {
+		if e := subscriber.writeMessage(websocket.BinaryMessage, protoBytes); e != nil {
+			subscriber.Stop(e)
+		}
+	}
+}
+
+// Start configures and starts block data subscriber lifecycle goroutines
+func (b *BlockDataSubscriber) Start() {
+	b.conn.SetReadLimit(b.manager.rcSubscriberReadLimitBytes)
+	_ = b.conn.SetReadDeadline(time.Now().Add(b.manager.rcSubscriberPongWait))
+	b.conn.SetPongHandler(func(string) error {
+		_ = b.conn.SetReadDeadline(time.Now().Add(b.manager.rcSubscriberPongWait))
+		return nil
+	})
+	go b.readLoop()
+	go b.pingLoop()
+}
+
+func (b *BlockDataSubscriber) readLoop() {
+	for {
+		if _, _, err := b.conn.ReadMessage(); err != nil {
+			b.Stop(err)
+			return
+		}
+	}
+}
+
+func (b *BlockDataSubscriber) pingLoop() {
+	ticker := time.NewTicker(b.manager.rcSubscriberPingPeriod)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := b.writeMessage(websocket.PingMessage, nil); err != nil {
+			b.Stop(err)
+			return
+		}
+	}
+}
+
+func (b *BlockDataSubscriber) writeMessage(messageType int, data []byte) error {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
+	_ = b.conn.SetWriteDeadline(time.Now().Add(b.manager.rcSubscriberWriteTimeout))
+	return b.conn.WriteMessage(messageType, data)
+}
+
+// Stop stops the block data subscriber
+func (b *BlockDataSubscriber) Stop(err error) {
+	b.log.Errorf("BlockData WS Failed with err: %s", err.Error())
+	if err = b.conn.Close(); err != nil {
+		b.log.Error(err.Error())
+	}
+	b.manager.RemoveBlockDataSubscriber(b)
 }
