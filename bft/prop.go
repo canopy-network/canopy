@@ -5,6 +5,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"slices"
+	"time"
 )
 
 // PROPOSALS RECEIVED FROM PROPOSER FOR CURRENT HEIGHT
@@ -82,6 +83,7 @@ func (b *BFT) getProposal(round uint64, phase Phase) *Message {
 
 // GetElectionCandidates() retrieves ELECTION messages, verifies, and returns the candidate(s)
 func (b *BFT) GetElectionCandidates() (candidates []VRFCandidate) {
+	lib.TimeTrack(b.log, time.Now(), time.Millisecond*500)
 	roundProposal := b.Proposals[b.Round]
 	// for each Election proposal message
 	// validate the VRF and verify is a candidate

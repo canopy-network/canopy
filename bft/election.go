@@ -4,6 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
+	"time"
 )
 
 /*
@@ -62,8 +63,11 @@ func Sortition(p *SortitionParams) (out []byte, vrf *lib.Signature, isCandidate 
 	return
 }
 
+var log = lib.NewDefaultLogger()
+
 // VerifyCandidate verifies that a remote peer is in fact a Leader Candidate by running the IsCandidate function using the provided VRF out
 func VerifyCandidate(p *SortitionVerifyParams) (out []byte, isCandidate bool) {
+	lib.TimeTrack(log, time.Now(), time.Millisecond*100)
 	if p == nil {
 		return nil, false
 	}
@@ -79,6 +83,7 @@ func VerifyCandidate(p *SortitionVerifyParams) (out []byte, isCandidate bool) {
 
 // sortition() determines if IsCandidate using the hash of the VRF and calculates the expected candidates
 func sortition(votingPower, totalPower, totalValidators uint64, signature []byte) (out []byte, isCandidate bool) {
+	lib.TimeTrack(log, time.Now(), time.Millisecond*100)
 	out = crypto.Hash(signature)
 	isCandidate = IsCandidate(votingPower, totalPower, expectedCandidates(totalValidators), out)
 	return
@@ -92,6 +97,7 @@ type VRFCandidate struct {
 
 // SelectProposerFromCandidates() chooses the `Leader` by comparing the pre-validated VRF Candidates, no candidates falls back to StakeWeightedRandom selection
 func SelectProposerFromCandidates(candidates []VRFCandidate, data *lib.SortitionData, v *lib.ConsensusValidators) (proposerPubKey []byte) {
+	lib.TimeTrack(log, time.Now(), time.Millisecond*500)
 	// if there are no candidates, fallback to StakeWeightedRandom
 	if len(candidates) == 0 {
 		return lib.WeightedPseudorandom(&lib.PseudorandomParams{

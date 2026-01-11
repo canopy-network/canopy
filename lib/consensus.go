@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/drand/kyber"
@@ -81,6 +82,7 @@ func (vs *ValidatorSet) GetValidator(publicKey []byte) (val *ConsensusValidator,
 
 // GetValidatorAndIdx() retrieves a validator and its index in the ValidatorSet using the public key
 func (vs *ValidatorSet) GetValidatorAndIdx(targetPublicKey []byte) (val *ConsensusValidator, idx int, err ErrorI) {
+	TimeTrack(log, time.Now(), time.Millisecond*100)
 	// if the validator set is empty
 	if vs == nil || vs.ValidatorSet == nil {
 		// exit with error
@@ -788,8 +790,11 @@ type PseudorandomParams struct {
 	ValidatorSet   *ConsensusValidators // the set of validators
 }
 
+var log = NewDefaultLogger()
+
 // WeightedPseudorandom() generates an index for the 'token' that the winner has in their stake
 func WeightedPseudorandom(p *PseudorandomParams) (publicKey crypto.PublicKeyI) {
+	TimeTrack(log, time.Now(), time.Millisecond*500)
 	// convert the seed data to a 16 byte hash, so it may fit in a uint64 type
 	seed := FormatInputIntoSeed(p.LastProposerAddresses, p.RootHeight, p.Height, p.Round)[:16]
 	// convert the seedBytes into a uint64 number
