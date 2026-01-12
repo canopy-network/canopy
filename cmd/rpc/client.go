@@ -242,6 +242,12 @@ func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.D
 	return
 }
 
+func (c *Client) IndexerSnapshot(height uint64) (p *IndexerSnapshotResponse, err lib.ErrorI) {
+	p = new(IndexerSnapshotResponse)
+	err = c.heightRequest(IndexerSnapshotRouteName, height, p)
+	return
+}
+
 func (c *Client) LastProposers(height uint64) (p *lib.Proposers, err lib.ErrorI) {
 	p = new(lib.Proposers)
 	err = c.heightRequest(LastProposersRouteName, height, p)

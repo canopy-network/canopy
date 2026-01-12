@@ -320,6 +320,112 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 	})
 }
 
+// IndexerSnapshotResponse holds aggregated data for indexers
+type IndexerSnapshotResponse struct {
+	Height uint64 `json:"height"`
+
+	// Block data
+	Block        *lib.BlockResult `json:"block"`
+	Transactions *lib.Page        `json:"transactions"`
+	Events       *lib.Page        `json:"events"`
+
+	// Simple fetches (current height)
+	Accounts             *lib.Page           `json:"accounts"`
+	Orders               *lib.OrderBooks     `json:"orders"`
+	DexPrices            []*lib.DexPrice     `json:"dex_prices"`
+	Params               *fsm.Params         `json:"params"`
+	Supply               *fsm.Supply         `json:"supply"`
+	CommitteesData       *lib.CommitteesData `json:"committees_data"`
+	SubsidizedCommittees []uint64            `json:"subsidized_committees"`
+	RetiredCommittees    []uint64            `json:"retired_committees"`
+
+	// Change detection (current + previous height for diff)
+	Validators     IndexerSnapshotPair[*lib.Page]           `json:"validators"`
+	Pools          IndexerSnapshotPair[*lib.Page]           `json:"pools"`
+	NonSigners     IndexerSnapshotPair[fsm.NonSigners]      `json:"non_signers"`
+	DoubleSigners  IndexerSnapshotPair[[]*lib.DoubleSigner] `json:"double_signers"`
+	DexBatches     IndexerSnapshotPair[[]*lib.DexBatch]     `json:"dex_batches"`
+	NextDexBatches IndexerSnapshotPair[[]*lib.DexBatch]     `json:"next_dex_batches"`
+}
+
+// IndexerSnapshotPair holds current and previous values for change detection
+type IndexerSnapshotPair[T any] struct {
+	Current  T `json:"current"`
+	Previous T `json:"previous"`
+}
+
+// IndexerSnapshot returns comprehensive block data for indexers
+func (s *Server) IndexerSnapshot(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	req := new(heightRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+
+	// Setup store for indexed data (blocks, txs, events)
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	defer st.Discard()
+
+	height := req.Height
+	if height == 0 {
+		height = st.Version() - 1
+	}
+	prevHeight := height - 1
+
+	// Get state machines for current and previous height
+	smCurrent, ok := s.getStateMachineWithHeight(height, w)
+	if !ok {
+		return
+	}
+	defer smCurrent.Discard()
+
+	smPrevious, ok := s.getStateMachineWithHeight(prevHeight, w)
+	if !ok {
+		return
+	}
+	defer smPrevious.Discard()
+
+	response := &IndexerSnapshotResponse{Height: height}
+
+	// Fetch block data from indexer (errors result in nil, not failure)
+	response.Block, _ = st.GetBlockByHeight(height)
+	response.Transactions, _ = st.GetTxsByHeight(height, true, lib.PageParams{})
+	response.Events, _ = st.GetEventsByBlockHeight(height, true, lib.PageParams{})
+
+	// Fetch state data (current height)
+	response.Accounts, _ = smCurrent.GetAccountsPaginated(lib.PageParams{})
+	response.Orders, _ = smCurrent.GetOrderBooks()
+	response.DexPrices, _ = smCurrent.GetDexPrices()
+	response.Params, _ = smCurrent.GetParams()
+	response.Supply, _ = smCurrent.GetSupply()
+	response.CommitteesData, _ = smCurrent.GetCommitteesData()
+	response.SubsidizedCommittees, _ = smCurrent.GetSubsidizedCommittees()
+	response.RetiredCommittees, _ = smCurrent.GetRetiredCommittees()
+
+	// Change detection pairs (current + H-1)
+	response.Validators.Current, _ = smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{})
+	response.Validators.Previous, _ = smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{})
+
+	response.Pools.Current, _ = smCurrent.GetPoolsPaginated(lib.PageParams{})
+	response.Pools.Previous, _ = smPrevious.GetPoolsPaginated(lib.PageParams{})
+
+	response.NonSigners.Current, _ = smCurrent.GetNonSigners()
+	response.NonSigners.Previous, _ = smPrevious.GetNonSigners()
+
+	response.DoubleSigners.Current, _ = st.GetDoubleSigners()
+	// Note: DoubleSigners doesn't have historical lookup - only current snapshot
+
+	response.DexBatches.Current, _ = smCurrent.GetDexBatches(true)
+	response.DexBatches.Previous, _ = smPrevious.GetDexBatches(true)
+
+	response.NextDexBatches.Current, _ = smCurrent.GetDexBatches(false)
+	response.NextDexBatches.Previous, _ = smPrevious.GetDexBatches(false)
+
+	write(w, response, http.StatusOK)
+}
+
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
