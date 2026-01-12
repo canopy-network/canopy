@@ -7,6 +7,8 @@ import "tx.proto";
 import "certificate.proto";
 import "crypto.proto";
 import "event.proto";
+import "swap.proto";
+import "dex.proto";
 
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
@@ -99,4 +101,38 @@ message BlockResultMeta {
   uint64 size = 1;
   // took: duration string of the block in milliseconds
   uint64 took = 2;
+}
+
+// IndexerSnapshot is a comprehensive state snapshot for indexers sent over WebSocket
+// Uses raw slices instead of Page wrappers for proto compatibility
+message IndexerSnapshot {
+  uint64 height = 1;
+
+  // Block data
+  BlockResult block = 2;
+  repeated TxResult transactions = 3;
+  repeated Event events = 4;
+
+  // State data (current height)
+  repeated bytes accounts = 5;           // serialized Account messages
+  OrderBooks orders = 6;
+  repeated bytes dex_prices = 7;         // serialized DexPrice structs @gotags: json:"dexPrices"
+  bytes params = 8;                      // serialized Params message
+  bytes supply = 9;                      // serialized Supply message
+  CommitteesData committees_data = 10;   // @gotags: json:"committeesData"
+  repeated uint64 subsidized_committees = 11; // @gotags: json:"subsidizedCommittees"
+  repeated uint64 retired_committees = 12;    // @gotags: json:"retiredCommittees"
+
+  // Change detection pairs (current + previous)
+  repeated bytes validators_current = 13;    // @gotags: json:"validatorsCurrent"
+  repeated bytes validators_previous = 14;   // @gotags: json:"validatorsPrevious"
+  repeated bytes pools_current = 15;         // @gotags: json:"poolsCurrent"
+  repeated bytes pools_previous = 16;        // @gotags: json:"poolsPrevious"
+  bytes non_signers_current = 17;            // @gotags: json:"nonSignersCurrent"
+  bytes non_signers_previous = 18;           // @gotags: json:"nonSignersPrevious"
+  repeated DoubleSigner double_signers_current = 19;  // @gotags: json:"doubleSignersCurrent"
+  repeated DexBatch dex_batches_current = 20;         // @gotags: json:"dexBatchesCurrent"
+  repeated DexBatch dex_batches_previous = 21;        // @gotags: json:"dexBatchesPrevious"
+  repeated DexBatch next_dex_batches_current = 22;    // @gotags: json:"nextDexBatchesCurrent"
+  repeated DexBatch next_dex_batches_previous = 23;   // @gotags: json:"nextDexBatchesPrevious"
 }

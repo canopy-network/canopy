@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/controller"
+	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/store"
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
@@ -33,6 +35,7 @@ const (
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
+	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
 	l             *sync.Mutex                   // thread safety
@@ -47,6 +50,10 @@ type RCManager struct {
 	maxRCSubscribers           int
 	maxRCSubscribersPerChain   int
 	subscriberCount            int
+	// block data subscribers
+	blockDataSubscribers      []*BlockDataSubscriber
+	blockDataSubscriberCount  int
+	maxBlockDataSubscribers   int
 }
 
 // NewRCManager() constructs a new instance of a RCManager
@@ -78,6 +85,7 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	// create the manager
 	manager = &RCManager{
 		c:                          config,
+		controller:                 controller,
 		subscriptions:              make(map[uint64]*RCSubscription),
 		subscribers:                make(map[uint64][]*RCSubscriber),
 		l:                          controller.Mutex,
@@ -90,6 +98,8 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 		rcSubscriberPingPeriod:     pingPeriod,
 		maxRCSubscribers:           maxSubscribers,
 		maxRCSubscribersPerChain:   maxSubscribersPerChain,
+		blockDataSubscribers:       make([]*BlockDataSubscriber, 0),
+		maxBlockDataSubscribers:    maxSubscribers, // reuse same limit
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
@@ -126,6 +136,233 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 			continue
 		}
 	}
+}
+
+// buildIndexerSnapshot creates a lib.IndexerSnapshot protobuf for the given height
+// This is used to send state snapshots over WebSocket alongside root chain info
+func (r *RCManager) buildIndexerSnapshot(height uint64) (*lib.IndexerSnapshot, error) {
+	// Setup store for indexed data (blocks, txs, events)
+	db := r.controller.FSM.Store().(lib.StoreI).DB()
+	st, err := store.NewStoreWithDB(r.c, db, nil, r.log)
+	if err != nil {
+		return nil, err
+	}
+	defer st.Discard()
+
+	if height == 0 {
+		height = st.Version() - 1
+	}
+	prevHeight := height - 1
+
+	// Get state machines for current and previous height
+	smCurrent, err := r.controller.FSM.TimeMachine(height)
+	if err != nil {
+		return nil, err
+	}
+	defer smCurrent.Discard()
+
+	smPrevious, err := r.controller.FSM.TimeMachine(prevHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer smPrevious.Discard()
+
+	snapshot := &lib.IndexerSnapshot{Height: height}
+
+	// Fetch block data from indexer (errors result in nil, not failure)
+	var blockErr error
+	snapshot.Block, blockErr = st.GetBlockByHeight(height)
+	if blockErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetBlockByHeight failed for height %d: %s", height, blockErr.Error())
+	}
+	if txPage, txErr := st.GetTxsByHeight(height, true, lib.PageParams{}); txErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetTxsByHeight failed for height %d: %s", height, txErr.Error())
+	} else if txPage != nil {
+		if txs, ok := txPage.Results.(*lib.TxResults); ok {
+			snapshot.Transactions = []*lib.TxResult(*txs)
+		}
+	}
+	if evtPage, evtErr := st.GetEventsByBlockHeight(height, true, lib.PageParams{}); evtErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetEventsByBlockHeight failed for height %d: %s", height, evtErr.Error())
+	} else if evtPage != nil {
+		if evts, ok := evtPage.Results.(*lib.Events); ok {
+			snapshot.Events = []*lib.Event(*evts)
+		}
+	}
+
+	// Fetch state data (current height) - serialize to bytes for proto
+	if accPage, accErr := smCurrent.GetAccountsPaginated(lib.PageParams{}); accErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetAccountsPaginated failed for height %d: %s", height, accErr.Error())
+	} else if accPage != nil {
+		if accs, ok := accPage.Results.(*fsm.AccountPage); ok {
+			snapshot.Accounts = make([][]byte, len(*accs))
+			for i, acc := range *accs {
+				if data, marshalErr := lib.Marshal(acc); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal account[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.Accounts[i] = data
+				}
+			}
+		}
+	}
+	if orders, ordersErr := smCurrent.GetOrderBooks(); ordersErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetOrderBooks failed for height %d: %s", height, ordersErr.Error())
+	} else {
+		snapshot.Orders = orders
+	}
+	if prices, pricesErr := smCurrent.GetDexPrices(); pricesErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexPrices failed for height %d: %s", height, pricesErr.Error())
+	} else if prices != nil {
+		snapshot.DexPrices = make([][]byte, len(prices))
+		for i, p := range prices {
+			if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+				r.log.Warnf("buildIndexerSnapshot: Marshal dex price[%d] failed for height %d: %s", i, height, marshalErr.Error())
+			} else {
+				snapshot.DexPrices[i] = data
+			}
+		}
+	}
+	if params, paramsErr := smCurrent.GetParams(); paramsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetParams failed for height %d: %s", height, paramsErr.Error())
+	} else if params != nil {
+		if data, marshalErr := lib.Marshal(params); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal params failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.Params = data
+		}
+	}
+	if supply, supplyErr := smCurrent.GetSupply(); supplyErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetSupply failed for height %d: %s", height, supplyErr.Error())
+	} else if supply != nil {
+		if data, marshalErr := lib.Marshal(supply); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal supply failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.Supply = data
+		}
+	}
+	if committeesData, cdErr := smCurrent.GetCommitteesData(); cdErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetCommitteesData failed for height %d: %s", height, cdErr.Error())
+	} else {
+		snapshot.CommitteesData = committeesData
+	}
+	if subsidized, subErr := smCurrent.GetSubsidizedCommittees(); subErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetSubsidizedCommittees failed for height %d: %s", height, subErr.Error())
+	} else {
+		snapshot.SubsidizedCommittees = subsidized
+	}
+	if retired, retErr := smCurrent.GetRetiredCommittees(); retErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetRetiredCommittees failed for height %d: %s", height, retErr.Error())
+	} else {
+		snapshot.RetiredCommittees = retired
+	}
+
+	// Change detection pairs (current + H-1) - serialize validators/pools to bytes
+	if valPage, valErr := smCurrent.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetValidatorsPaginated (current) failed for height %d: %s", height, valErr.Error())
+	} else if valPage != nil {
+		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
+			snapshot.ValidatorsCurrent = make([][]byte, len(*vals))
+			for i, v := range *vals {
+				if data, marshalErr := lib.Marshal(v); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal validator current[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.ValidatorsCurrent[i] = data
+				}
+			}
+		}
+	}
+	if valPage, valErr := smPrevious.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{}); valErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetValidatorsPaginated (previous) failed for height %d: %s", prevHeight, valErr.Error())
+	} else if valPage != nil {
+		if vals, ok := valPage.Results.(*fsm.ValidatorPage); ok {
+			snapshot.ValidatorsPrevious = make([][]byte, len(*vals))
+			for i, v := range *vals {
+				if data, marshalErr := lib.Marshal(v); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal validator previous[%d] failed for height %d: %s", i, prevHeight, marshalErr.Error())
+				} else {
+					snapshot.ValidatorsPrevious[i] = data
+				}
+			}
+		}
+	}
+
+	if poolPage, poolErr := smCurrent.GetPoolsPaginated(lib.PageParams{}); poolErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetPoolsPaginated (current) failed for height %d: %s", height, poolErr.Error())
+	} else if poolPage != nil {
+		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
+			snapshot.PoolsCurrent = make([][]byte, len(*pools))
+			for i, p := range *pools {
+				if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal pool current[%d] failed for height %d: %s", i, height, marshalErr.Error())
+				} else {
+					snapshot.PoolsCurrent[i] = data
+				}
+			}
+		}
+	}
+	if poolPage, poolErr := smPrevious.GetPoolsPaginated(lib.PageParams{}); poolErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetPoolsPaginated (previous) failed for height %d: %s", prevHeight, poolErr.Error())
+	} else if poolPage != nil {
+		if pools, ok := poolPage.Results.(*fsm.PoolPage); ok {
+			snapshot.PoolsPrevious = make([][]byte, len(*pools))
+			for i, p := range *pools {
+				if data, marshalErr := lib.Marshal(p); marshalErr != nil {
+					r.log.Warnf("buildIndexerSnapshot: Marshal pool previous[%d] failed for height %d: %s", i, prevHeight, marshalErr.Error())
+				} else {
+					snapshot.PoolsPrevious[i] = data
+				}
+			}
+		}
+	}
+
+	if ns, nsErr := smCurrent.GetNonSigners(); nsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetNonSigners (current) failed for height %d: %s", height, nsErr.Error())
+	} else if ns != nil {
+		if data, marshalErr := lib.Marshal(ns); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal non-signers current failed for height %d: %s", height, marshalErr.Error())
+		} else {
+			snapshot.NonSignersCurrent = data
+		}
+	}
+	if ns, nsErr := smPrevious.GetNonSigners(); nsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetNonSigners (previous) failed for height %d: %s", prevHeight, nsErr.Error())
+	} else if ns != nil {
+		if data, marshalErr := lib.Marshal(ns); marshalErr != nil {
+			r.log.Warnf("buildIndexerSnapshot: Marshal non-signers previous failed for height %d: %s", prevHeight, marshalErr.Error())
+		} else {
+			snapshot.NonSignersPrevious = data
+		}
+	}
+
+	if doubleSigners, dsErr := st.GetDoubleSigners(); dsErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDoubleSigners failed for height %d: %s", height, dsErr.Error())
+	} else {
+		snapshot.DoubleSignersCurrent = doubleSigners
+	}
+
+	if dexBatches, dbErr := smCurrent.GetDexBatches(true); dbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (current, confirmed) failed for height %d: %s", height, dbErr.Error())
+	} else {
+		snapshot.DexBatchesCurrent = dexBatches
+	}
+	if dexBatches, dbErr := smPrevious.GetDexBatches(true); dbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (previous, confirmed) failed for height %d: %s", prevHeight, dbErr.Error())
+	} else {
+		snapshot.DexBatchesPrevious = dexBatches
+	}
+
+	if nextDexBatches, ndbErr := smCurrent.GetDexBatches(false); ndbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (current, next) failed for height %d: %s", height, ndbErr.Error())
+	} else {
+		snapshot.NextDexBatchesCurrent = nextDexBatches
+	}
+	if nextDexBatches, ndbErr := smPrevious.GetDexBatches(false); ndbErr != nil {
+		r.log.Warnf("buildIndexerSnapshot: GetDexBatches (previous, next) failed for height %d: %s", prevHeight, ndbErr.Error())
+	} else {
+		snapshot.NextDexBatchesPrevious = nextDexBatches
+	}
+
+	return snapshot, nil
 }
 
 // ChainIds() returns a list of chainIds for subscribers
@@ -617,4 +854,158 @@ func (r *RCSubscriber) Stop(err error) {
 	}
 	// remove from the manager
 	r.manager.RemoveSubscriber(r.chainId, r)
+}
+
+// BlockDataSubscriber represents a WebSocket client subscribed to block data updates
+type BlockDataSubscriber struct {
+	conn    *websocket.Conn // the underlying ws connection
+	manager *RCManager      // reference to manager
+	log     lib.LoggerI     // stdout log
+	writeMu sync.Mutex      // protects concurrent writes
+}
+
+// BlockDataWebSocket() upgrades a http request to a websockets connection for block data
+func (s *Server) BlockDataWebSocket(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	_ = w.(http.Hijacker)
+	// upgrade the connection to websockets
+	conn, err := s.rcManager.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		write(w, err, http.StatusInternalServerError)
+		s.logger.Error(err.Error())
+		return
+	}
+	// create a new block data subscriber
+	subscriber := &BlockDataSubscriber{
+		conn:    conn,
+		manager: s.rcManager,
+		log:     s.logger,
+	}
+	// add the subscriber to the manager
+	if err := s.rcManager.AddBlockDataSubscriber(subscriber); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		if closeErr := conn.Close(); closeErr != nil {
+			s.logger.Error(closeErr.Error())
+		}
+		return
+	}
+	// send initial snapshot at current height
+	go subscriber.sendInitialSnapshot()
+	// start the subscriber lifecycle
+	subscriber.Start()
+}
+
+// sendInitialSnapshot sends the current block data snapshot when a client first connects
+func (b *BlockDataSubscriber) sendInitialSnapshot() {
+	snapshot, err := b.manager.buildIndexerSnapshot(0) // 0 means latest height
+	if err != nil {
+		b.log.Warnf("BlockDataSubscriber: failed to build initial snapshot: %s", err.Error())
+		return
+	}
+	protoBytes, err := lib.Marshal(snapshot)
+	if err != nil {
+		b.log.Warnf("BlockDataSubscriber: failed to marshal initial snapshot: %s", err.Error())
+		return
+	}
+	if err := b.writeMessage(websocket.BinaryMessage, protoBytes); err != nil {
+		b.Stop(err)
+	}
+}
+
+// AddBlockDataSubscriber adds a block data subscriber to the manager
+func (r *RCManager) AddBlockDataSubscriber(subscriber *BlockDataSubscriber) error {
+	r.l.Lock()
+	defer r.l.Unlock()
+	if r.maxBlockDataSubscribers > 0 && r.blockDataSubscriberCount >= r.maxBlockDataSubscribers {
+		return fmt.Errorf("block data subscriber limit reached")
+	}
+	r.blockDataSubscribers = append(r.blockDataSubscribers, subscriber)
+	r.blockDataSubscriberCount++
+	return nil
+}
+
+// RemoveBlockDataSubscriber removes a block data subscriber from the manager
+func (r *RCManager) RemoveBlockDataSubscriber(subscriber *BlockDataSubscriber) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	before := len(r.blockDataSubscribers)
+	r.blockDataSubscribers = slices.DeleteFunc(r.blockDataSubscribers, func(sub *BlockDataSubscriber) bool {
+		return sub == subscriber
+	})
+	if len(r.blockDataSubscribers) < before {
+		r.blockDataSubscriberCount--
+	}
+}
+
+// PublishBlockData sends the IndexerSnapshot to all block data subscribers
+func (r *RCManager) PublishBlockData(height uint64) {
+	// build the snapshot
+	snapshot, err := r.buildIndexerSnapshot(height)
+	if err != nil {
+		r.log.Warnf("PublishBlockData: failed to build snapshot for height %d: %s", height, err.Error())
+		return
+	}
+	// marshal to proto bytes
+	protoBytes, err := lib.Marshal(snapshot)
+	if err != nil {
+		r.log.Warnf("PublishBlockData: failed to marshal snapshot for height %d: %s", height, err.Error())
+		return
+	}
+	// copy subscribers under lock to avoid map iteration races
+	r.l.Lock()
+	subscribers := append([]*BlockDataSubscriber(nil), r.blockDataSubscribers...)
+	r.l.Unlock()
+	// publish to each subscriber
+	for _, subscriber := range subscribers {
+		if e := subscriber.writeMessage(websocket.BinaryMessage, protoBytes); e != nil {
+			subscriber.Stop(e)
+		}
+	}
+}
+
+// Start configures and starts block data subscriber lifecycle goroutines
+func (b *BlockDataSubscriber) Start() {
+	b.conn.SetReadLimit(b.manager.rcSubscriberReadLimitBytes)
+	_ = b.conn.SetReadDeadline(time.Now().Add(b.manager.rcSubscriberPongWait))
+	b.conn.SetPongHandler(func(string) error {
+		_ = b.conn.SetReadDeadline(time.Now().Add(b.manager.rcSubscriberPongWait))
+		return nil
+	})
+	go b.readLoop()
+	go b.pingLoop()
+}
+
+func (b *BlockDataSubscriber) readLoop() {
+	for {
+		if _, _, err := b.conn.ReadMessage(); err != nil {
+			b.Stop(err)
+			return
+		}
+	}
+}
+
+func (b *BlockDataSubscriber) pingLoop() {
+	ticker := time.NewTicker(b.manager.rcSubscriberPingPeriod)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := b.writeMessage(websocket.PingMessage, nil); err != nil {
+			b.Stop(err)
+			return
+		}
+	}
+}
+
+func (b *BlockDataSubscriber) writeMessage(messageType int, data []byte) error {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
+	_ = b.conn.SetWriteDeadline(time.Now().Add(b.manager.rcSubscriberWriteTimeout))
+	return b.conn.WriteMessage(messageType, data)
+}
+
+// Stop stops the block data subscriber
+func (b *BlockDataSubscriber) Stop(err error) {
+	b.log.Errorf("BlockData WS Failed with err: %s", err.Error())
+	if err = b.conn.Close(); err != nil {
+		b.log.Error(err.Error())
+	}
+	b.manager.RemoveBlockDataSubscriber(b)
 }
