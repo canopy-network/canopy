@@ -94,7 +94,7 @@ func (c *Controller) ListenForBlock() {
 
 // PUBLISHERS BELOW
 
-// GossipBlockMsg() gossips a certificate (with block) through the P2P network for a specific chainId
+// GossipBlock() gossips a certificate (with block) through the P2P network for a specific chainId
 func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubToExclude []byte, timestamp uint64) {
 	// log the start of the gossip block function
 	c.log.Debugf("Gossiping certificate: %s", lib.BytesToString(certificate.ResultsHash))

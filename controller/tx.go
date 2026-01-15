@@ -58,7 +58,7 @@ func (c *Controller) ListenForTx() {
 				return
 			}
 			// if the message is empty
-			if txMsg == nil {
+			if txMsg.String() == "" {
 				// log the unexpected behavior
 				c.log.Warnf("Empty tx message from %s", lib.BytesToTruncatedString(senderID))
 				// slash the peers reputation score

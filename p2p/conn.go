@@ -25,8 +25,8 @@ const (
 	maxMessageSize         = uint32(256 * units.MB)              // the maximum total size of a message once all the packets are added up
 	dataFlowRatePerS       = maxMessageSize                      // the maximum number of bytes that may be sent or received per second per MultiConn
 	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
-	maxInboxQueueSize      = 100                                 // maximum number of items in inbox queue before blocking
-	maxStreamSendQueueSize = 100                                 // maximum number of items in a stream send queue before blocking
+	maxInboxQueueSize      = 1000                                // maximum number of items in inbox queue before blocking
+	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
 	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
 	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
 	heartbeatTimeout       = 2 * time.Second                     // how long to wait for a pong before dropping the peer
@@ -515,7 +515,7 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *l
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:
-			if len(s.inbox) > 25 {
+			if len(s.inbox) > maxInboxQueueSize/4 {
 				s.logger.Errorf("OVERSIZE INBOX: %d", len(s.inbox))
 			}
 		default:
