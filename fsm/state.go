@@ -435,13 +435,9 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 	lastHeight := uint64(1)
 	// update the metrics once complete
 	defer s.Metrics.UpdateGetRootChainInfo(time.Now())
-	// if height is 0; use the latest committed height
+	// if height is 0; use the latest height
 	if height == 0 {
-		if s.height > 1 {
-			height = s.height - 1
-		} else {
-			height = 1
-		}
+		height = s.height
 	}
 	// ensure lastHeight is not < 0
 	if height != 1 {
