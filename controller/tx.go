@@ -19,10 +19,10 @@ import (
 
 /* This file implements logic for transaction sending and handling as well as memory pooling */
 
-// SendTxMsg() routes a locally generated transaction message to the listener for processing + gossiping
-func (c *Controller) SendTxMsg(tx []byte) lib.ErrorI {
+// SendTxMsgs() routes generated transaction messages to the listener for processing + gossiping
+func (c *Controller) SendTxMsgs(txs [][]byte) lib.ErrorI {
 	// create a transaction message object using the tx bytes and the chain id
-	msg := &lib.TxMessage{ChainId: c.Config.ChainId, Txs: [][]byte{tx}}
+	msg := &lib.TxMessage{ChainId: c.Config.ChainId, Txs: txs}
 	// send the transaction message to the listener using internal routing
 	return c.P2P.SelfSend(c.PublicKey, Tx, msg)
 }

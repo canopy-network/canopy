@@ -32,7 +32,24 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 		return
 	}
 	// Submit transaction to RPC server
-	s.submitTx(w, tx)
+	s.submitTxs(w, []lib.TransactionI{tx})
+}
+
+// Transactions handles multiple transactions in a single request
+func (s *Server) Transactions(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// create a slice to hold the incoming transactions
+	var txs []lib.Transaction
+	// unmarshal the HTTP request body into the transactions slice
+	if ok := unmarshal(w, r, &txs); !ok {
+		return
+	}
+	// cast txs to lib.TransactionI
+	txsI := make([]lib.TransactionI, len(txs))
+	for i := range txs {
+		txsI[i] = &txs[i]
+	}
+	// submit transactions to RPC server
+	s.submitTxs(w, txsI)
 }
 
 // Height responds with the next block version

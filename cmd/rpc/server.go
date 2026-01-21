@@ -179,24 +179,36 @@ func (s *Server) startStaticFileServers() {
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
-// submitTx submits a transaction to the controller and writes http response
-func (s *Server) submitTx(w http.ResponseWriter, tx any) (ok bool) {
-
-	// Marshal the transaction
-	bz, err := lib.Marshal(tx)
-	if err != nil {
+// submitTx submits transactions to the controller and writes http response
+func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bool) {
+	// marshal each transaction to bytes
+	var txBytes [][]byte
+	for _, tx := range txs {
+		bz, err := lib.Marshal(tx)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		txBytes = append(txBytes, bz)
+	}
+	// send transactions to controller
+	if err := s.controller.SendTxMsgs(txBytes); err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
 	}
-
-	// Send transaction to controller
-	if err = s.controller.SendTxMsg(bz); err != nil {
-		write(w, err, http.StatusBadRequest)
+	// return hashes of all submitted transactions
+	var hashes []*string
+	for _, bz := range txBytes {
+		hash := crypto.HashString(bz)
+		hashes = append(hashes, &hash)
+	}
+	// if only one transaction was submitted, return the hash as a string
+	if len(hashes) == 1 {
+		write(w, hashes[0], http.StatusOK)
 		return
 	}
-
-	// Write transaction to http response
-	write(w, crypto.HashString(bz), http.StatusOK)
+	// if multiple transactions were submitted, return the hashes as an array
+	write(w, hashes, http.StatusOK)
 	return true
 }
 
