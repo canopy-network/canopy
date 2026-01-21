@@ -38,13 +38,13 @@ func (c *Controller) ListenForTx() {
 			// exit
 			continue
 		}
-		func() {
-			// check and add the message to the cache to prevent duplicates
-			if ok := cache.Add(msg); !ok {
-				// if duplicate, exit
-				return
-			}
-			c.log.Debug("Handling transaction")
+		// check and add the message to the cache to prevent duplicates
+		if ok := cache.Add(msg); !ok {
+			// if duplicate, exit
+			continue
+		}
+		go func() {
+			// c.log.Debug("Handling transaction async")
 			// create a convenience variable for the identity of the sender
 			senderID := msg.Sender.Address.PublicKey
 			// try to unmarshal the p2p message as a tx message
@@ -244,6 +244,7 @@ func (m *Mempool) CheckMempool() {
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	}
+	fmt.Printf("finished checking mempool, txs: %d\n", len(result.Results))
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,
