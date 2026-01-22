@@ -311,15 +311,19 @@ func DefaultMempoolConfig() MempoolConfig {
 
 // MetricsConfig represents the configuration for the metrics server
 type MetricsConfig struct {
-	MetricsEnabled    bool   `json:"metricsEnabled"`    // if the metrics are enabled
-	PrometheusAddress string `json:"prometheusAddress"` // the address of the server
+	MetricsEnabled         bool   `json:"metricsEnabled"`         // if the metrics are enabled
+	PrometheusAddress      string `json:"prometheusAddress"`      // the address of the server
+	HeapProfilingEnabled   bool   `json:"heapProfilingEnabled"`   // enable periodic heap profiling (warning: causes GC pauses)
+	HeapProfilingIntervalS int    `json:"heapProfilingIntervalS"` // interval in seconds between heap profile snapshots
 }
 
 // DefaultMetricsConfig() returns the default metrics configuration
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		MetricsEnabled:    true,           // enabled by default
-		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
+		MetricsEnabled:         true,           // enabled by default
+		PrometheusAddress:      "0.0.0.0:9090", // the default prometheus address
+		HeapProfilingEnabled:   false,          // disabled by default (causes GC pauses)
+		HeapProfilingIntervalS: 10,             // 10 second interval when enabled
 	}
 }
 

@@ -12,12 +12,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	pprof2 "runtime/pprof"
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/controller"
@@ -33,7 +32,7 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.14+beta"
+	SoftwareVersion = "v0.1.15+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
@@ -87,21 +86,11 @@ func (s *Server) Start() {
 	go s.updatePollResults()
 	go s.rcManager.Start()
 	go s.startEthRPCService()
-	go func() { // TODO remove DEBUG ONLY
-		fileName := "heap1.out"
-		for range time.Tick(time.Second * 10) {
-			f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
-			if err != nil {
-				s.logger.Fatalf("could not create memory profile: ", err)
-			}
-			runtime.GC() // get up-to-date statistics
-			if err = pprof2.WriteHeapProfile(f); err != nil {
-				s.logger.Fatalf("could not write memory profile: ", err)
-			}
-			f.Close()
-			fileName = "heap2.out"
-		}
-	}()
+
+	// Start heap profiler if enabled (warning: causes GC pauses which may affect RPC latency)
+	if s.config.HeapProfilingEnabled {
+		go s.startHeapProfiler()
+	}
 
 	if s.config.Headless {
 		return
@@ -177,6 +166,35 @@ func (s *Server) startStaticFileServers() {
 	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
 	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
+}
+
+// startHeapProfiler writes periodic heap profiles to the data directory
+// Warning: This calls runtime.GC() which causes pauses and may affect RPC latency
+func (s *Server) startHeapProfiler() {
+	interval := time.Duration(s.config.HeapProfilingIntervalS) * time.Second
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	s.logger.Infof("Starting heap profiler with %s interval", interval)
+	fileName := "heap1.out"
+	for range time.Tick(interval) {
+		f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
+		if err != nil {
+			s.logger.Errorf("could not create memory profile: %v", err)
+			continue
+		}
+		runtime.GC() // get up-to-date statistics
+		if err = pprof.WriteHeapProfile(f); err != nil {
+			s.logger.Errorf("could not write memory profile: %v", err)
+		}
+		f.Close()
+		// Alternate between two files
+		if fileName == "heap1.out" {
+			fileName = "heap2.out"
+		} else {
+			fileName = "heap1.out"
+		}
+	}
 }
 
 // submitTx submits transactions to the controller and writes http response
