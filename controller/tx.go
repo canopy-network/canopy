@@ -244,7 +244,6 @@ func (m *Mempool) CheckMempool() {
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	}
-	fmt.Printf("finished checking mempool, txs: %d\n", len(result.Results))
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,
