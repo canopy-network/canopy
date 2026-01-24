@@ -71,7 +71,7 @@ c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: [...], Deletes: [...]})
 
 ```bash
 cd plugin/go
-make build          # Builds to ~/go/bin/go-plugin
+make build          # Builds to plugin/go/go-plugin
 ```
 
 ## Running with Canopy

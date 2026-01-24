@@ -4,7 +4,8 @@
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_SCRIPT="$SCRIPT_DIR/main.py"
-PYTHON_CMD="python"
+VENV_DIR="$SCRIPT_DIR/.venv"
+PYTHON_CMD="$VENV_DIR/bin/python3"
 PID_FILE="/tmp/plugin/python-plugin.pid"
 LOG_FILE="/tmp/plugin/python-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
@@ -48,6 +49,12 @@ start() {
     fi
     # Clean up any stale PID file
     cleanup_pid
+    # Check if virtual environment exists
+    if [ ! -d "$VENV_DIR" ]; then
+        echo "Error: Virtual environment not found at $VENV_DIR"
+        echo "Please run 'make dev' in the plugin/python directory first"
+        return 1
+    fi
     # Check if Python script exists
     if [ ! -f "$PYTHON_SCRIPT" ]; then
         echo "Error: Python script not found at $PYTHON_SCRIPT"

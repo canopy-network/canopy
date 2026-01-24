@@ -105,11 +105,11 @@ build/plugin:
 ifeq ($(PLUGIN),kotlin)
 	cd plugin/kotlin && ./gradlew fatJar --no-daemon
 else ifeq ($(PLUGIN),go)
-	$(MAKE) -C plugin/go build
+	cd plugin/go && go build -o go-plugin .
 else ifeq ($(PLUGIN),typescript)
-	cd plugin/typescript && npm ci && npm run build
+	cd plugin/typescript && npm ci && npm run build:all
 else ifeq ($(PLUGIN),python)
-	cd plugin/python && pip install -e ".[dev]" 2>/dev/null || true
+	cd plugin/python && make dev
 else ifeq ($(PLUGIN),csharp)
 	cd plugin/csharp && dotnet publish -c Release -o out
 else ifeq ($(PLUGIN),all)

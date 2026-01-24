@@ -3,7 +3,7 @@
 # Usage: ./pluginctl.sh {start|stop|status|restart|build}
 # Configuration variables for paths and files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BINARY_PATH="$SCRIPT_DIR/bin/Debug/net9.0/CanopyPlugin"
+BINARY_PATH="$SCRIPT_DIR/bin/Debug/net8.0/CanopyPlugin.dll"
 PID_FILE="/tmp/plugin/csharp-plugin.pid"
 LOG_FILE="/tmp/plugin/csharp-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
@@ -23,8 +23,8 @@ is_running() {
     fi
     # Check if process exists and is the CanopyPlugin binary
     if ps -p "$pid" > /dev/null 2>&1; then
-        # Verify it's actually our binary
-        if ps -p "$pid" -o cmd= | grep -q "CanopyPlugin"; then
+        # Verify it's actually our binary (running via dotnet)
+        if ps -p "$pid" -o cmd= | grep -q "CanopyPlugin.dll"; then
             return 0
         fi
     fi
@@ -66,9 +66,9 @@ start() {
     fi
     # Ensure plugin directory exists
     mkdir -p "$PLUGIN_DIR"
-    # Start the binary in background with nohup
+    # Start the binary in background with nohup (use dotnet to run the DLL)
     echo "Starting csharp-plugin..."
-    nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    nohup dotnet "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
     local pid=$!
     # Save PID to file
     echo "$pid" > "$PID_FILE"
