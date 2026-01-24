@@ -387,9 +387,11 @@ make build
 
 ## Step 7: Running Canopy with the Plugin
 
-To run Canopy with the C# plugin enabled, you need to configure the `plugin` field in your Canopy configuration file.
+There are two ways to run Canopy with the C# plugin: locally or with Docker.
 
-### 1. Locate your config.json
+### Option A: Running Locally
+
+#### 1. Locate your config.json
 
 The configuration file is typically located at `~/.canopy/config.json`. If it doesn't exist, start Canopy once to generate the default configuration:
 
@@ -398,7 +400,7 @@ The configuration file is typically located at `~/.canopy/config.json`. If it do
 # Stop it after it generates the config (Ctrl+C)
 ```
 
-### 2. Enable the C# plugin
+#### 2. Enable the C# plugin
 
 Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`:
 
@@ -411,7 +413,7 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`:
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration.
 
-### 3. Start Canopy
+#### 3. Start Canopy
 
 ```bash
 ~/go/bin/canopy start
@@ -419,7 +421,7 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`:
 
 Canopy will automatically start the C# plugin and connect to it via Unix socket.
 
-### 4. Verify the plugin is running
+#### 4. Verify the plugin is running
 
 Check the plugin logs:
 
@@ -428,6 +430,68 @@ tail -f /tmp/plugin/csharp-plugin.log
 ```
 
 You should see messages indicating the plugin has connected and performed the handshake with Canopy.
+
+### Step 7b: Running with Docker (Alternative)
+
+Instead of running Canopy and the plugin locally, you can use Docker to run everything in a container.
+
+#### 1. Build the Docker image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=csharp
+```
+
+This creates a `canopy-csharp` image containing both Canopy and the C# plugin pre-configured.
+
+#### 2. Run the container
+
+```bash
+make docker/run-csharp
+```
+
+Or with a custom volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-csharp
+```
+
+#### 3. Expose RPC ports (for running tests)
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-csharp
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002` and `localhost:50003`.
+
+#### 4. View logs inside the container
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/csharp-plugin.log
+```
+
+#### 5. Interactive shell (for debugging)
+
+To inspect the container or debug issues:
+
+```bash
+docker run -it --entrypoint /bin/sh canopy-csharp
+```
 
 ## Step 8: Testing
 
