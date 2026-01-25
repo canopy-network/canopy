@@ -1,0 +1,69 @@
+name: Release C# Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-csharp-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release C# Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        working-directory: plugin/csharp
+        run: dotnet restore
+
+      - name: Build and publish
+        working-directory: plugin/csharp
+        run: |
+          mkdir -p release
+          # Linux x64
+          dotnet publish -c Release -r linux-x64 --self-contained false -o release/linux-x64
+          # Linux ARM64
+          dotnet publish -c Release -r linux-arm64 --self-contained false -o release/linux-arm64
+
+      - name: Create tarballs
+        working-directory: plugin/csharp
+        run: |
+          cd release
+          tar -czf csharp-plugin-linux-x64.tar.gz -C linux-x64 .
+          tar -czf csharp-plugin-linux-arm64.tar.gz -C linux-arm64 .
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "C# Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            C# Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Requirements
+            - .NET Runtime 8.0 or later
+            
+            ## Installation
+            1. Extract the appropriate tarball to `plugin/csharp/bin/`
+            2. Run with `dotnet CanopyPlugin.dll`
+            
+            ## Assets
+            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64
+            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64
+          files: |
+            plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

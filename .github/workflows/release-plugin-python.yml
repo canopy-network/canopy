@@ -1,0 +1,64 @@
+name: Release Python Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-python-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release Python Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create distribution tarball
+        working-directory: plugin/python
+        run: |
+          mkdir -p release
+          # Create tarball with source code and dependencies
+          tar -czf release/python-plugin.tar.gz \
+            main.py \
+            contract/ \
+            pyproject.toml \
+            pluginctl.sh \
+            Makefile \
+            --exclude='*.pyc' \
+            --exclude='__pycache__' \
+            --exclude='.venv'
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "Python Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            Python Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Requirements
+            - Python 3.9 or later
+            
+            ## Installation
+            1. Extract `python-plugin.tar.gz` to `plugin/python/`
+            2. Create virtual environment: `python3 -m venv .venv`
+            3. Install dependencies: `.venv/bin/pip install -e .`
+            4. The plugin is ready to run
+            
+            ## Assets
+            - `python-plugin.tar.gz` - Source code with pyproject.toml
+          files: |
+            plugin/python/release/python-plugin.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -183,6 +183,174 @@ func (um *UpdateManager) Download(ctx context.Context, release *Release) error {
 	return bin.Close()
 }
 
+// PluginUpdateManager code below
+
+// PluginRelease represents a plugin release with metadata
+type PluginRelease struct {
+	Version      string // version of the release (tag name)
+	DownloadURL  string // url to download the release asset
+	ShouldUpdate bool   // whether the release should be updated
+}
+
+// PluginUpdaterConfig contains configuration for the plugin updater
+type PluginUpdaterConfig struct {
+	RepoName       string // name of the repository
+	RepoOwner      string // owner of the repository
+	PluginType     string // type of plugin (go, typescript, kotlin, csharp, python)
+	PluginDir      string // path to the plugin directory
+	GithubApiToken string // github api token for authenticated requests
+}
+
+// PluginUpdateManager manages the update process for plugins
+type PluginUpdateManager struct {
+	config     *PluginUpdaterConfig
+	httpClient *http.Client
+	Version    string // current plugin version
+}
+
+// NewPluginUpdateManager creates a new PluginUpdateManager instance
+func NewPluginUpdateManager(config *PluginUpdaterConfig) *PluginUpdateManager {
+	return &PluginUpdateManager{
+		config:     config,
+		httpClient: &http.Client{Timeout: httpReleaseClientTimeout},
+		Version:    "v0.0.0", // start with no version, will update on first check
+	}
+}
+
+// Check checks for updates of the plugin
+func (pm *PluginUpdateManager) Check() (*PluginRelease, error) {
+	release, err := pm.GetLatestRelease()
+	if err != nil {
+		return nil, err
+	}
+	if err := pm.ShouldUpdate(release); err != nil {
+		return nil, err
+	}
+	return release, nil
+}
+
+// GetLatestRelease returns the latest plugin release from the GitHub API
+func (pm *PluginUpdateManager) GetLatestRelease() (*PluginRelease, error) {
+	// build the URL: https://api.github.com/repos/<owner>/<repo>/releases/latest
+	apiURL, err := url.JoinPath("https://api.github.com", "repos",
+		pm.config.RepoOwner, pm.config.RepoName, "releases", "latest")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "canopy-updater/1.0")
+	if token := pm.config.GithubApiToken; token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := pm.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	var rel GithubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return nil, err
+	}
+	// find asset matching plugin type and architecture
+	targetName := pm.getAssetName()
+	for _, asset := range rel.Assets {
+		if asset.Name == targetName {
+			return &PluginRelease{
+				Version:     rel.TagName,
+				DownloadURL: asset.BrowserDownloadURL,
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("no matching asset found for plugin %s (looking for %s)", pm.config.PluginType, targetName)
+}
+
+// getAssetName returns the expected asset name based on plugin type and architecture
+func (pm *PluginUpdateManager) getAssetName() string {
+	switch pm.config.PluginType {
+	case "go":
+		return fmt.Sprintf("go-plugin-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	case "typescript":
+		return "typescript-plugin.tar.gz"
+	case "kotlin":
+		return "kotlin-plugin.tar.gz"
+	case "csharp":
+		arch := runtime.GOARCH
+		if arch == "amd64" {
+			arch = "x64"
+		}
+		return fmt.Sprintf("csharp-plugin-%s-%s.tar.gz", runtime.GOOS, arch)
+	case "python":
+		return "python-plugin.tar.gz"
+	default:
+		panic(fmt.Sprintf("unknown plugin type: %s", pm.config.PluginType))
+	}
+}
+
+// ShouldUpdate determines whether the given release should be applied
+func (pm *PluginUpdateManager) ShouldUpdate(release *PluginRelease) error {
+	if release == nil {
+		return fmt.Errorf("release is nil")
+	}
+	// extract version from tag (handles both "v1.0.0" and "plugin-go-v1.0.0" formats)
+	candidateTag := release.Version
+	// try to extract version if it's a plugin-prefixed tag
+	if strings.Contains(candidateTag, "-v") {
+		parts := strings.Split(candidateTag, "-v")
+		if len(parts) >= 2 {
+			candidateTag = "v" + parts[len(parts)-1]
+		}
+	}
+	candidate := semver.Canonical(candidateTag)
+	current := semver.Canonical(pm.Version)
+	// if current version is invalid (first run), always update
+	if current == "" || !semver.IsValid(current) {
+		release.ShouldUpdate = true
+		release.Version = candidate
+		return nil
+	}
+	if candidate == "" || !semver.IsValid(candidate) {
+		return fmt.Errorf("invalid release version: %s", release.Version)
+	}
+	release.ShouldUpdate = semver.Compare(candidate, current) > 0
+	if release.ShouldUpdate {
+		release.Version = candidate
+	}
+	return nil
+}
+
+// Download downloads the plugin release tarball to the plugin directory
+func (pm *PluginUpdateManager) Download(ctx context.Context, release *PluginRelease) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, release.DownloadURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "canopy-updater/1.0")
+	if token := pm.config.GithubApiToken; token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := pm.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	// save the tarball to the plugin directory
+	tarballPath := filepath.Join(pm.config.PluginDir, pm.getAssetName())
+	file, err := SaveToFile(tarballPath, resp.Body, 0644)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
 // SnapshotManager code below
 
 // SnapshotConfig is the config for the snapshot manager

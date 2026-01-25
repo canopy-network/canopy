@@ -9,8 +9,33 @@ PYTHON_CMD="$VENV_DIR/bin/python3"
 PID_FILE="/tmp/plugin/python-plugin.pid"
 LOG_FILE="/tmp/plugin/python-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
+TARBALL="$SCRIPT_DIR/python-plugin.tar.gz"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
+
+# Extract tarball if main.py doesn't exist
+extract_if_needed() {
+    # If main.py already exists, nothing to do
+    if [ -f "$PYTHON_SCRIPT" ]; then
+        return 0
+    fi
+    
+    # Check for tarball
+    if [ -f "$TARBALL" ]; then
+        echo "Extracting $TARBALL..."
+        tar -xzf "$TARBALL" -C "$SCRIPT_DIR"
+        if [ $? -eq 0 ] && [ -f "$PYTHON_SCRIPT" ]; then
+            echo "Extraction complete"
+            return 0
+        else
+            echo "Error: Failed to extract from $TARBALL"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -49,15 +74,18 @@ start() {
     fi
     # Clean up any stale PID file
     cleanup_pid
+    # Try to extract from tarball if source doesn't exist
+    extract_if_needed
+    # Check if Python script exists
+    if [ ! -f "$PYTHON_SCRIPT" ]; then
+        echo "Error: Python script not found at $PYTHON_SCRIPT"
+        echo "Download python-plugin.tar.gz or clone the source"
+        return 1
+    fi
     # Check if virtual environment exists
     if [ ! -d "$VENV_DIR" ]; then
         echo "Error: Virtual environment not found at $VENV_DIR"
         echo "Please run 'make dev' in the plugin/python directory first"
-        return 1
-    fi
-    # Check if Python script exists
-    if [ ! -f "$PYTHON_SCRIPT" ]; then
-        echo "Error: Python script not found at $PYTHON_SCRIPT"
         return 1
     fi
     # Ensure plugin directory exists

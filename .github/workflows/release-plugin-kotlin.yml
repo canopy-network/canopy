@@ -1,0 +1,62 @@
+name: Release Kotlin Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-kotlin-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release Kotlin Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build fat JAR
+        working-directory: plugin/kotlin
+        run: ./gradlew shadowJar
+
+      - name: Prepare release artifacts
+        working-directory: plugin/kotlin
+        run: |
+          mkdir -p release
+          cp build/libs/canopy-plugin-kotlin-*-all.jar release/kotlin-plugin.jar
+          cd release && tar -czf kotlin-plugin.tar.gz kotlin-plugin.jar
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "Kotlin Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            Kotlin Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Requirements
+            - Java Runtime Environment (JRE) 21 or later
+            
+            ## Installation
+            1. Download `kotlin-plugin.tar.gz` to `plugin/kotlin/`
+            2. The plugin will auto-extract on first start
+            
+            ## Assets
+            - `kotlin-plugin.tar.gz` - Fat JAR with all dependencies included
+          files: |
+            plugin/kotlin/release/kotlin-plugin.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -65,7 +65,18 @@ func main() {
 	updater := NewUpdateManager(configs.Updater, rpc.SoftwareVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	supervisor := NewSupervisor(logger)
-	coordinator := NewCoordinator(configs.Coordinator, updater, supervisor, snapshot, logger)
+	
+	// setup plugin updater if configured
+	var pluginUpdater *PluginUpdateManager
+	if configs.PluginUpdater != nil {
+		pluginUpdater = NewPluginUpdateManager(configs.PluginUpdater)
+		logger.Infof("plugin auto-update enabled for %s from %s/%s",
+			configs.PluginUpdater.PluginType,
+			configs.PluginUpdater.RepoOwner,
+			configs.PluginUpdater.RepoName)
+	}
+	
+	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
 	err := coordinator.UpdateLoop(sigChan)
 	if err != nil {
@@ -84,10 +95,11 @@ func main() {
 
 // Configs holds the configuration for the updater, snapshotter, and process supervisor.
 type Configs struct {
-	Updater     *UpdaterConfig
-	Snapshot    *SnapshotConfig
-	Coordinator *CoordinatorConfig
-	LoggerI     lib.LoggerI
+	Updater       *UpdaterConfig
+	PluginUpdater *PluginUpdaterConfig
+	Snapshot      *SnapshotConfig
+	Coordinator   *CoordinatorConfig
+	LoggerI       lib.LoggerI
 }
 
 // getConfigs returns the configuration for the updater, snapshotter, and process supervisor.
@@ -120,11 +132,34 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		GracePeriod:  defaultGracePeriod,
 	}
 
+	// setup plugin updater config if plugin auto-update is enabled
+	var pluginUpdater *PluginUpdaterConfig
+	pluginConfig := canopyConfig.PluginAutoUpdate
+	if pluginConfig.Enabled && canopyConfig.Plugin != "" {
+		// use configured repo or default to canopy-network/canopy
+		repoOwner := pluginConfig.RepoOwner
+		if repoOwner == "" {
+			repoOwner = defaultRepoOwner
+		}
+		repoName := pluginConfig.RepoName
+		if repoName == "" {
+			repoName = defaultRepoName
+		}
+		pluginUpdater = &PluginUpdaterConfig{
+			RepoOwner:      repoOwner,
+			RepoName:       repoName,
+			PluginType:     canopyConfig.Plugin,
+			PluginDir:      fmt.Sprintf("plugin/%s", canopyConfig.Plugin),
+			GithubApiToken: envOrDefault("CANOPY_GITHUB_API_TOKEN", ""),
+		}
+	}
+
 	return &Configs{
-		Updater:     updater,
-		Snapshot:    snapshot,
-		Coordinator: coordinator,
-		LoggerI:     l,
+		Updater:       updater,
+		PluginUpdater: pluginUpdater,
+		Snapshot:      snapshot,
+		Coordinator:   coordinator,
+		LoggerI:       l,
 	}, l
 }
 

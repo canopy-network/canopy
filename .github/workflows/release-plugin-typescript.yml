@@ -1,0 +1,60 @@
+name: Release TypeScript Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-typescript-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release TypeScript Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: plugin/typescript
+        run: npm ci
+
+      - name: Build plugin
+        working-directory: plugin/typescript
+        run: npm run build:all
+
+      - name: Create distribution tarball
+        working-directory: plugin/typescript
+        run: |
+          mkdir -p release
+          # Create tarball with dist/, package.json, and pluginctl.sh
+          tar -czf release/typescript-plugin.tar.gz dist/ package.json package-lock.json pluginctl.sh
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "TypeScript Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            TypeScript Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Installation
+            1. Extract `typescript-plugin.tar.gz` to `plugin/typescript/`
+            2. Run `npm ci --production` to install runtime dependencies
+            3. The plugin is ready to run
+            
+            ## Assets
+            - `typescript-plugin.tar.gz` - Compiled plugin with dependencies
+          files: |
+            plugin/typescript/release/typescript-plugin.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

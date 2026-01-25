@@ -9,6 +9,50 @@ LOG_FILE="/tmp/plugin/go-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
+
+# Detect system architecture
+get_arch() {
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "amd64"  # Default to amd64
+            ;;
+    esac
+}
+
+# Extract tarball if binary doesn't exist
+extract_if_needed() {
+    # If binary already exists, nothing to do
+    if [ -f "$BINARY_PATH" ]; then
+        return 0
+    fi
+    
+    # Check for architecture-specific tarball
+    local arch=$(get_arch)
+    local tarball="$SCRIPT_DIR/go-plugin-linux-${arch}.tar.gz"
+    
+    if [ -f "$tarball" ]; then
+        echo "Extracting $tarball..."
+        tar -xzf "$tarball" -C "$SCRIPT_DIR"
+        if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then
+            chmod +x "$BINARY_PATH"
+            echo "Extraction complete"
+            return 0
+        else
+            echo "Error: Failed to extract binary from $tarball"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -47,9 +91,12 @@ start() {
     fi
     # Clean up any stale PID file
     cleanup_pid
+    # Try to extract from tarball if binary doesn't exist
+    extract_if_needed
     # Check if binary exists and is executable
     if [ ! -x "$BINARY_PATH" ]; then
         echo "Error: Binary not found or not executable at $BINARY_PATH"
+        echo "Run 'make build' to build the plugin or download go-plugin-linux-$(get_arch).tar.gz"
         return 1
     fi
     # Ensure plugin directory exists
