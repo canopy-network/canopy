@@ -632,7 +632,11 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 		// send the list to the p2p module
 		c.P2P.MustConnectsReceiver <- mustConnects
 	} else {
-		c.log.Info("Self IS NOT a validator 👎")
+		c.log.Warnf("Self IS NOT a validator 👎 - selfPubKey=%s, chainId=%d, validatorCount=%d",
+			lib.BytesToTruncatedString(c.PublicKey), c.Config.ChainId, len(v.ValidatorSet))
+		for i, member := range v.ValidatorSet {
+			c.log.Debugf("  validator[%d]: pubKey=%s", i, lib.BytesToTruncatedString(member.PublicKey))
+		}
 	}
 }
 

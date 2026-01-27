@@ -164,6 +164,8 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	// ensure the chain height isn't too old
 	if qc.Header.Height <= data.LastChainHeightUpdated {
+		s.log.Errorf("DEBUG HandleCertificateResults FAILED: qc.Height=%d <= data.LastChainHeightUpdated=%d, chainId=%d, fsmHeight=%d",
+			qc.Header.Height, data.LastChainHeightUpdated, qc.Header.ChainId, s.Height())
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
 	// setup convenience variables
