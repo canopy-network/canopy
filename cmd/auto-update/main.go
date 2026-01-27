@@ -125,11 +125,12 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Name: snapshotFileName,
 	}
 	coordinator := &CoordinatorConfig{
-		Canopy:       canopyConfig,
-		BinPath:      binPath,
-		MaxDelayTime: defaultMaxDelayTime,
-		CheckPeriod:  defaultCheckPeriod,
-		GracePeriod:  defaultGracePeriod,
+		Canopy:             canopyConfig,
+		BinPath:            binPath,
+		MaxDelayTime:       defaultMaxDelayTime,
+		CheckPeriod:        defaultCheckPeriod,
+		GracePeriod:        defaultGracePeriod,
+		TestRestartOnStart: envOrDefault("TEST_RESTART_ON_START", "") != "",
 	}
 
 	// setup plugin updater config if plugin auto-update is enabled

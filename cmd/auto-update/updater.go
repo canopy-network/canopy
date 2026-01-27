@@ -348,7 +348,37 @@ func (pm *PluginUpdateManager) Download(ctx context.Context, release *PluginRele
 	if err != nil {
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	
+	// remove old binary so pluginctl.sh will extract the new tarball on next start
+	oldBinaryPath := pm.getOldBinaryPath()
+	if oldBinaryPath != "" {
+		_ = os.Remove(oldBinaryPath) // ignore error if file doesn't exist
+	}
+	
+	return nil
+}
+
+// getOldBinaryPath returns the path to the old plugin binary that should be removed
+// This triggers pluginctl.sh to extract the new tarball on next start
+func (pm *PluginUpdateManager) getOldBinaryPath() string {
+	switch pm.config.PluginType {
+	case "go":
+		return filepath.Join(pm.config.PluginDir, "go-plugin")
+	case "kotlin":
+		return filepath.Join(pm.config.PluginDir, "build", "libs", "canopy-plugin-kotlin-1.0.0-all.jar")
+	case "typescript":
+		return filepath.Join(pm.config.PluginDir, "dist", "main.js")
+	case "python":
+		// pluginctl.sh checks for main.py to decide if extraction is needed
+		return filepath.Join(pm.config.PluginDir, "main.py")
+	case "csharp":
+		return filepath.Join(pm.config.PluginDir, "bin", "CanopyPlugin.dll")
+	default:
+		return ""
+	}
 }
 
 // SnapshotManager code below
