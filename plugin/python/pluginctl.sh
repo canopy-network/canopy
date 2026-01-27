@@ -58,11 +58,22 @@ setup_venv_if_needed() {
     
     # Upgrade pip and install dependencies
     echo "Installing dependencies..."
-    "$VENV_DIR/bin/pip" install --upgrade pip > /dev/null 2>&1
-    "$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR" > /dev/null 2>&1
+    "$VENV_DIR/bin/pip" install --upgrade pip
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to install dependencies"
+        echo "Error: Failed to upgrade pip"
         return 1
+    fi
+    
+    # Install the package in editable mode
+    "$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR"
+    if [ $? -ne 0 ]; then
+        echo "Warning: Editable install failed, trying direct dependency install..."
+        # Fallback: install dependencies directly from pyproject.toml
+        "$VENV_DIR/bin/pip" install protobuf fastapi uvicorn pydantic structlog
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to install dependencies"
+            return 1
+        fi
     fi
     
     echo "Virtual environment setup complete"
