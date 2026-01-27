@@ -36,6 +36,39 @@ extract_if_needed() {
     return 1
 }
 
+# Create virtual environment if it doesn't exist or Python binary is missing/broken
+setup_venv_if_needed() {
+    # Check if venv exists and Python binary works
+    if [ -d "$VENV_DIR" ] && [ -x "$PYTHON_CMD" ]; then
+        # Test if the Python binary actually works
+        if "$PYTHON_CMD" --version > /dev/null 2>&1; then
+            return 0
+        fi
+        echo "Existing venv is broken, recreating..."
+        rm -rf "$VENV_DIR"
+    fi
+    
+    # Create virtual environment
+    echo "Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to create virtual environment"
+        return 1
+    fi
+    
+    # Upgrade pip and install dependencies
+    echo "Installing dependencies..."
+    "$VENV_DIR/bin/pip" install --upgrade pip > /dev/null 2>&1
+    "$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR" > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install dependencies"
+        return 1
+    fi
+    
+    echo "Virtual environment setup complete"
+    return 0
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -82,10 +115,9 @@ start() {
         echo "Download python-plugin.tar.gz or clone the source"
         return 1
     fi
-    # Check if virtual environment exists
-    if [ ! -d "$VENV_DIR" ]; then
-        echo "Error: Virtual environment not found at $VENV_DIR"
-        echo "Please run 'make dev' in the plugin/python directory first"
+    # Setup virtual environment if needed
+    setup_venv_if_needed
+    if [ $? -ne 0 ]; then
         return 1
     fi
     # Ensure plugin directory exists
