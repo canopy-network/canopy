@@ -79,6 +79,9 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		log:        l,
 		Mutex:      &sync.Mutex{},
 	}
+	// log validator identity for debugging
+	l.Infof("Controller initialized with validator pubKey=%s address=%s chainId=%d",
+		lib.BytesToTruncatedString(valKey.PublicKey().Bytes()), address.String(), c.ChainId)
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
 	// setup plugin if enabled
