@@ -195,7 +195,12 @@ func (c *Controller) Stop() {
 
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
-	c.log.Debugf("Updating root chain info")
+	validatorCount := 0
+	if info.ValidatorSet != nil {
+		validatorCount = len(info.ValidatorSet.ValidatorSet)
+	}
+	c.log.Infof("UpdateRootChainInfo: rootChainId=%d height=%d validatorCount=%d",
+		info.RootChainId, info.Height, validatorCount)
 	// ensure this root chain is active
 	activeRootChainId, _ := c.FSM.GetRootChainId()
 	// if inactive
