@@ -573,7 +573,7 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 		result = nil
 	}
 	// attempts to commit the QC to persistence of chain by playing it against the state machine
-	if err = c.CommitCertificate(qc, block, result, msg.Time); err != nil {
+	if err = c.CommitCertificateParallel(qc, block, result, msg.Time); err != nil {
 		// exit with error
 		return nil, err
 	}

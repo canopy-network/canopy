@@ -1,10 +1,11 @@
 package fsm
 
 import (
+	"time"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"time"
 )
 
 /* This file contains transaction handling logic - for the payload handling check message.go */
@@ -151,10 +152,17 @@ func (s *StateMachine) CheckSignature(tx *lib.Transaction, authorizedSigners [][
 	if err != nil {
 		return nil, ErrTxSignBytes(err)
 	}
-	// convert signature bytes to public key object
-	publicKey, e := crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
-	if e != nil {
-		return nil, ErrInvalidPublicKey(e)
+	// try to obtain the public key from the cache
+	var e error
+	publicKey, ok := s.cache.publicKey.Get(string(tx.Signature.PublicKey))
+	if !ok {
+		// convert signature bytes to public key object
+		publicKey, e = crypto.NewPublicKeyFromBytes(tx.Signature.PublicKey)
+		if e != nil {
+			return nil, ErrInvalidPublicKey(e)
+		}
+		// add the public key to the cache
+		s.cache.publicKey.Add(string(tx.Signature.PublicKey), publicKey)
 	}
 	// special case: check for a special RLP transaction
 	if _, hasEthPubKey := publicKey.(*crypto.ETHSECP256K1PublicKey); hasEthPubKey && tx.Memo == RLPIndicator {

@@ -353,7 +353,7 @@ func (s *Store) Root() (root []byte, err lib.ErrorI) {
 		// set up the state commit store
 		s.sc = NewDefaultSMT(NewTxn(s.ss.reader, s.ss.writer, stateCommitIDPrefix, false, false, true, nextVersion))
 		// commit the SMT directly using the txn ops
-		if err = s.sc.Commit(s.ss.txn.ops); err != nil {
+		if err = s.sc.CommitParallel(s.ss.txn.ops); err != nil {
 			return nil, err
 		}
 	}

@@ -3,9 +3,10 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -77,7 +78,7 @@ func (s *StateMachine) ParseCloseOrder(tx *lib.Transaction) (co *lib.CloseOrder,
 // ProcessRootChainOrderBook() processes the order book from the root-chain and cross-references blocks on this chain to determine
 // actions that warrant committee level changes to the root-chain order book like: LockOrder, ResetOrder and CloseOrder
 func (s *StateMachine) ProcessRootChainOrderBook(book *lib.OrderBook, proposalBlock *lib.BlockResult) (lockOrders []*lib.LockOrder, closedOrders, resetOrders [][]byte) {
-	if book == nil {
+	if book == nil || len(book.Orders) == 0 {
 		return
 	}
 	blocks := []*lib.BlockResult{proposalBlock}
