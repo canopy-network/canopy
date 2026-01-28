@@ -1,9 +1,10 @@
 package fsm
 
 import (
+	"slices"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"slices"
 )
 
 /* This file contains logic regarding byzantine actor handling and bond slashes */

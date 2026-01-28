@@ -233,7 +233,7 @@ func TestApplyBlock(t *testing.T) {
 				committee, er := sm.GetCommitteeMembers(lib.CanopyChainId)
 				require.NoError(t, er)
 				// create a copy of the multikey
-				mk := committee.MultiKey.Copy()
+				mk := committee.MultiPubKey.Copy()
 				// only sign with 3/4 to test the non-signer reduction
 				for i := 0; i < 3; i++ {
 					privateKey := newTestKeyGroup(t, i).PrivateKey
@@ -428,7 +428,7 @@ func newTestQC(t *testing.T, params testQCParams) (qc *lib.QuorumCertificate) {
 	validatorSet, err := lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: vals})
 	require.NoError(t, err)
 	// create the 'justification' object
-	justification := validatorSet.MultiKey.Copy()
+	justification := validatorSet.MultiPubKey.Copy()
 	// create the certificate results object to put in the QC
 	// create the QC object
 	qc = &lib.QuorumCertificate{

@@ -927,13 +927,13 @@ func TestSetGetCommittees(t *testing.T) {
 				p, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
 				// compare got total power vs expected total power
-				require.Equal(t, test.expectedTotalPower[id], got.TotalPower)
+				require.Equal(t, test.expectedTotalPower[id], got.ValTotalPower)
 				// compare got supply vs total tokens
 				require.Equal(t, test.expectedTotalPower[id], p.Amount)
 				// compare got min 2/3 maj vs expected min 2/3 maj
-				require.Equal(t, test.expectedMin23MajPower[id], got.MinimumMaj23)
+				require.Equal(t, test.expectedMin23MajPower[id], got.ValMinimumMaj23)
 				// compare got num validators vs num validators
-				require.EqualValues(t, len(test.expected[id]), got.NumValidators)
+				require.EqualValues(t, len(test.expected[id]), got.ValNumValidators)
 				// for each expected public key
 				for i, expectedPublicKey := range publicKeys {
 					// compare got vs expected
@@ -1066,7 +1066,7 @@ func TestUpdateCommittees(t *testing.T) {
 				got, err := sm.GetCommitteeMembers(id)
 				require.NoError(t, err)
 				// compare got num validators vs num validators
-				require.EqualValues(t, len(test.expected[id]), got.NumValidators)
+				require.EqualValues(t, len(test.expected[id]), got.ValNumValidators)
 				// get the committee pool from the supply object
 				p, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
@@ -1142,7 +1142,7 @@ func TestDeleteCommittees(t *testing.T) {
 				got, err := sm.GetCommitteeMembers(id)
 				require.NoError(t, err)
 				// compare got num validators vs num validators
-				require.EqualValues(t, len(test.expected[id]), got.NumValidators)
+				require.EqualValues(t, len(test.expected[id]), got.ValNumValidators)
 				// get the committee pool from the supply object
 				p, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
@@ -2124,11 +2124,11 @@ func TestGetTopDelegates(t *testing.T) {
 			// validate the number of delegates
 			require.Equal(t, len(got.ValidatorSet.ValidatorSet), test.expectedDelegates)
 			// validate total power
-			require.Equal(t, test.expectedTotalPower, got.TotalPower)
+			require.Equal(t, test.expectedTotalPower, got.ValTotalPower)
 			// validate num validators
-			require.Equal(t, uint64(len(got.ValidatorSet.ValidatorSet)), got.NumValidators)
+			require.Equal(t, uint64(len(got.ValidatorSet.ValidatorSet)), got.ValNumValidators)
 			// validate minimum 2/3 majority
-			require.Equal(t, (2*got.TotalPower)/3+1, got.MinimumMaj23)
+			require.Equal(t, (2*got.ValTotalPower)/3+1, got.ValMinimumMaj23)
 
 			// collect all returned public keys for validation
 			returnedKeys := make(map[string]bool)

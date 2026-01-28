@@ -217,9 +217,9 @@ func (tc *testConsensus) setSortitionData(t *testing.T) {
 		LastProposerAddresses: tc.cont.proposers.Addresses,
 		Height:                1,
 		Round:                 0,
-		TotalValidators:       tc.valSet.NumValidators,
+		TotalValidators:       tc.valSet.ValNumValidators,
 		VotingPower:           selfVal.VotingPower,
-		TotalPower:            tc.valSet.TotalPower,
+		TotalPower:            tc.valSet.ValTotalPower,
 	}
 }
 
@@ -263,7 +263,7 @@ func (tc *testConsensus) simLead(t *testing.T, mk crypto.MultiPublicKeyI, round 
 func (tc *testConsensus) simVote(t *testing.T, round uint64, phase Phase, callback func(idx int, m *Message) bool) (mk crypto.MultiPublicKeyI, blkHash []byte, resHash []byte) {
 	// generate the proposal
 	tc.bft.Block, blkHash, tc.bft.Results, resHash = tc.proposal(t)
-	mk = tc.valSet.MultiKey.Copy()
+	mk = tc.valSet.MultiPubKey.Copy()
 	for idx, privateKey := range tc.valKeys {
 		// the last signer is skipped to make it just barely +2/3rds majority
 		// this is purely to stress test under the 'harshest' majority conditions
@@ -358,7 +358,7 @@ func (tc *testConsensus) newPartialQCDoubleSign(t *testing.T, phase Phase) {
 	// create the bytes to be signed by the 'double signers'
 	sb := qc.SignBytes()
 	// create a multikey to hold the partial justification
-	partialJustify := tc.valSet.MultiKey.Copy()
+	partialJustify := tc.valSet.MultiPubKey.Copy()
 	// 2/3 sign the proposal, just missing the +2/3 majority that is needed
 	for i, pk := range tc.valKeys {
 		if i == 0 {
@@ -424,7 +424,7 @@ func (tc *testConsensus) newTestDoubleSignEvidence(t *testing.T) []*DoubleSignEv
 	// generate the sign bytes of both
 	sbA, sbB := qcA.SignBytes(), qcB.SignBytes()
 	// generate the justifications for both
-	fullJustify, partialJustify := tc.valSet.MultiKey.Copy(), tc.valSet.MultiKey.Copy()
+	fullJustify, partialJustify := tc.valSet.MultiPubKey.Copy(), tc.valSet.MultiPubKey.Copy()
 	// full justify has all signers
 	for _, pk := range tc.valKeys {
 		_, idx, e := tc.valSet.GetValidatorAndIdx(pk.PublicKey().Bytes())

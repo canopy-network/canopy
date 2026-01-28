@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"fmt"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -201,14 +202,17 @@ func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewa
 // LotteryWinner() selects a validator/delegate randomly weighted based on their stake within a committee
 func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *lib.LotteryWinner, err lib.ErrorI) {
 	// create a variable to hold the 'members' of the committee
-	var p lib.ValidatorSet
+	var p lib.ValidatorSetI
 	// if validators
+	fmt.Printf("len validators: %d validators: %v\n", len(validators), validators)
 	if len(validators) == 1 && validators[0] == true {
 		p, _ = s.GetCommitteeMembers(s.Config.ChainId)
 	} else {
 		// else get the delegates
-		p, _ = s.GetDelegates(id)
+		p, err = s.GetDelegates(id)
+		fmt.Printf("I got delegates: result: %+v\n err: %v\n", p, err)
 	}
+	fmt.Printf("validator set: %+v\n", p)
 	// get the validator params from state
 	valParams, err := s.GetParamsVal()
 	if err != nil {
@@ -217,7 +221,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 	// define a convenience variable for the 'cut' of the lottery winner
 	winnerCut := valParams.DelegateRewardPercentage
 	// if there are no validators in the set - return
-	if p.NumValidators == 0 || p.TotalPower == 0 {
+	if p.ValNumValidators == 0 || p.ValTotalPower == 0 {
 		return &lib.LotteryWinner{Winner: nil, Cut: winnerCut}, nil
 	}
 	// get the last proposers
@@ -231,8 +235,8 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 			LastProposerAddresses: lastProposers.Addresses,
 			RootHeight:            0, // deterministic
 			Height:                s.Height(),
-			TotalValidators:       p.NumValidators,
-			TotalPower:            p.TotalPower,
+			TotalValidators:       p.ValNumValidators,
+			TotalPower:            p.ValTotalPower,
 		}, ValidatorSet: p.ValidatorSet,
 	})
 	// return the lottery winner and cut
@@ -243,7 +247,7 @@ func (s *StateMachine) LotteryWinner(id uint64, validators ...bool) (lottery *li
 }
 
 // GetCommitteeMembers() retrieves the ValidatorSet that is responsible for the 'chainId'
-func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSetI, err lib.ErrorI) {
 	return s.getValidatorSet(chainId, false)
 }
 
@@ -330,7 +334,7 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 
 // GetDelegates returns the active delegates for a given chainId.
 // If MaximumDelegatesPerCommittee (from governance params) is 0, it will return all delegates; otherwise it returns only the top N.
-func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
+func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSetI, err lib.ErrorI) {
 	return s.getValidatorSet(chainId, true)
 }
 

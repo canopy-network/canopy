@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"fmt"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -421,7 +422,7 @@ func (s *StateMachine) GetAuthorizedSignersForValidator(address []byte) (signers
 }
 
 // getValidatorSet() is a helper function to get a validator set ordered by stake to the maximum parameter
-func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSet, err lib.ErrorI) {
+func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.ValidatorSetI, err lib.ErrorI) {
 	// get the validator params
 	p, err := s.GetParamsVal()
 	if err != nil {
@@ -449,6 +450,9 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		// add it to the list
 		validators = append(validators, val)
 	}
+	if delegate {
+		fmt.Printf("getValidatorSet: %+v\n", validators)
+	}
 	// filter out validators not part of the committee
 	filtered := slices.Collect(func(yield func(*Validator) bool) {
 		for _, v := range validators {
@@ -467,6 +471,9 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			}
 		}
 	})
+	if delegate {
+		fmt.Printf("getValidatorSet [%d] filtered: %+v\n", delegateFilter, filtered)
+	}
 	// sort by highest stake then address
 	slices.SortFunc(filtered, func(a, b *Validator) int {
 		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
@@ -482,6 +489,9 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	if maxPerCommittee > 0 {
 		limit = min(uint64(len(filtered)), maxPerCommittee)
 	}
+	if delegate {
+		fmt.Printf("getValidatorSet after commitee limit filter  [%d] filtered: %+v\n", delegateFilter, filtered)
+	}
 	// for each validator up to the limit
 	for _, v := range filtered[:limit] {
 		members = append(members, &lib.ConsensusValidator{
@@ -490,8 +500,19 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			NetAddress:  v.NetAddress,
 		})
 	}
+	if delegate {
+		fmt.Printf("last result %+v\n", members)
+		if len(members) > 0 {
+			fmt.Printf("public key [%d]: %x\n", len(members[0].PublicKey), members[0].PublicKey)
+		}
+	}
 	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	if delegate {
+		ds, err := lib.NewDelegatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+		return &ds, err
+	}
+	set, err := lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	return &set, err
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address

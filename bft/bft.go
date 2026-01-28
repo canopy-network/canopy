@@ -217,13 +217,13 @@ func (b *BFT) StartElectionPhase() {
 	}
 	// initialize the sortition parameters
 	b.SortitionData = &lib.SortitionData{
-		LastProposerAddresses: lastProposers.Addresses,      // LastProposers ensures defense against Grinding Attacks
-		RootHeight:            b.RootHeight,                 // the height of the root ensures a unique sortition for each root height
-		Height:                b.Height,                     // height ensures a unique sortition seed for each height
-		Round:                 b.Round,                      // round ensures a unique sortition seed for each round
-		TotalValidators:       b.ValidatorSet.NumValidators, // validator count is required for CDF
-		TotalPower:            b.ValidatorSet.TotalPower,    // total power between all validators is required for CDF
-		VotingPower:           selfValidator.VotingPower,    // self voting power is required for CDF
+		LastProposerAddresses: lastProposers.Addresses,         // LastProposers ensures defense against Grinding Attacks
+		RootHeight:            b.RootHeight,                    // the height of the root ensures a unique sortition for each root height
+		Height:                b.Height,                        // height ensures a unique sortition seed for each height
+		Round:                 b.Round,                         // round ensures a unique sortition seed for each round
+		TotalValidators:       b.ValidatorSet.ValNumValidators, // validator count is required for CDF
+		TotalPower:            b.ValidatorSet.ValTotalPower,    // total power between all validators is required for CDF
+		VotingPower:           selfValidator.VotingPower,       // self voting power is required for CDF
 	}
 	// SORTITION (CDF + VRF)
 	_, vrf, isCandidate := Sortition(&SortitionParams{
@@ -566,7 +566,7 @@ func (b *BFT) Pacemaker() {
 		}
 		totalVotedPower += validator.VotingPower
 		// if totalVotePower >= +33%, it's safe to advance to that round
-		if totalVotedPower >= lib.Uint64ReducePercentage(b.ValidatorSet.MinimumMaj23, 50) {
+		if totalVotedPower >= lib.Uint64ReducePercentage(b.ValidatorSet.ValMinimumMaj23, 50) {
 			pacemakerRound = vote.Qc.Header.Round // set the highest round where +1/3rds have been
 			break
 		}

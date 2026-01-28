@@ -11,14 +11,54 @@ import (
 	"github.com/drand/kyber"
 )
 
+// enforce interface implementation
+var _ ValidatorSetI = &ValidatorSet{}
+var _ ValidatorSetI = &DelegatorSet{}
+
+// ValidatorSetI is an interface for a collection of validators staked for consensus
+type ValidatorSetI interface {
+	// GetValidator retrieves a validator from the set by their public key
+	GetValidator(publicKey []byte) (*ConsensusValidator, ErrorI)
+	// GetValidatorAndIdx returns a validator by their public key and their index in the set
+	GetValidatorAndIdx(targetPublicKey []byte) (val *ConsensusValidator, idx int, err ErrorI)
+	// MultiKey is the composite public key derived from the individual public keys of all validators
+	MultiKey() crypto.MultiPublicKeyI
+	// ValTotalPower returns the aggregate voting power of all validators in the set
+	TotalPower() uint64
+	// ValMinimumMaj23 returns the minimum voting power threshold required to achieve a two-thirds majority (2f+1), essential for consensus decisions
+	MinimumMaj23() uint64
+	// Actual list of validators participating in the consensus process
+	Validators() *ConsensusValidators
+}
+
 // ValidatorSet represents a collection of validators responsible for consensus
 // It facilitates the creation and validation of +2/3 Majority agreements using multi-signatures
 type ValidatorSet struct {
-	ValidatorSet  *ConsensusValidators   // a list of validators participating in the consensus process
-	MultiKey      crypto.MultiPublicKeyI // a composite public key derived from the individual public keys of all validators, used for verifying multi-signatures
-	TotalPower    uint64                 // the aggregate voting power of all validators in the set, reflecting their influence on the consensus
-	MinimumMaj23  uint64                 // the minimum voting power threshold required to achieve a two-thirds majority (2f+1), essential for consensus decisions
-	NumValidators uint64                 // the total number of validators in the set, indicating the size of the validator pool
+	ValidatorSet     *ConsensusValidators   // a list of validators participating in the consensus process
+	MultiPubKey      crypto.MultiPublicKeyI // a composite public key derived from the individual public keys of all validators, used for verifying multi-signatures
+	ValTotalPower    uint64                 // the aggregate voting power of all validators in the set, reflecting their influence on the consensus
+	ValMinimumMaj23  uint64                 // the minimum voting power threshold required to achieve a two-thirds majority (2f+1), essential for consensus decisions
+	ValNumValidators uint64                 // the total number of validators in the set, indicating the size of the validator pool
+}
+
+// Validators returns the list of validators participating in the consensus process
+func (vs *ValidatorSet) Validators() *ConsensusValidators {
+	return vs.ValidatorSet
+}
+
+// MinimumMaj23 returns the minimum voting power threshold required to achieve a two-thirds majority (2f+1)
+func (vs *ValidatorSet) MinimumMaj23() uint64 {
+	return vs.ValMinimumMaj23
+}
+
+// TotalPower returns the aggregate voting power of all validators in the set
+func (vs *ValidatorSet) TotalPower() uint64 {
+	return vs.ValTotalPower
+}
+
+// MultiKey returns the composite public key of the validator set
+func (vs *ValidatorSet) MultiKey() crypto.MultiPublicKeyI {
+	return vs.MultiPubKey
 }
 
 // NewValidatorSet() initializes a ValidatorSet from a given set of consensus validators
@@ -63,11 +103,11 @@ func NewValidatorSet(validators *ConsensusValidators) (ValidatorSet, ErrorI) {
 	}
 	// return the validator set
 	return ValidatorSet{
-		ValidatorSet:  validators,
-		MultiKey:      multiPublicKey,
-		TotalPower:    totalPower,
-		MinimumMaj23:  minPowerFor23Maj,
-		NumValidators: count,
+		ValidatorSet:     validators,
+		MultiPubKey:      multiPublicKey,
+		ValTotalPower:    totalPower,
+		ValMinimumMaj23:  minPowerFor23Maj,
+		ValNumValidators: count,
 	}, nil
 }
 
@@ -96,6 +136,91 @@ func (vs *ValidatorSet) GetValidatorAndIdx(targetPublicKey []byte) (val *Consens
 	}
 	// exit with 'not found' error
 	return nil, 0, ErrValidatorNotInSet(targetPublicKey)
+}
+
+// DelegatorSet is a collection of delegators who have staked their tokens in order to provide security
+// in committees. It intentionally embeds the ValidatorSet to inherit its methods and fields while
+// providing a more 'relaxed' implementation by allowing any type of public key
+type DelegatorSet struct {
+	vs ValidatorSet
+}
+
+// Validators returns the list of delegators
+func (ds *DelegatorSet) Validators() *ConsensusValidators {
+	return ds.vs.ValidatorSet
+}
+
+// MinimumMaj23 returns the minimum voting power threshold required to achieve a two-thirds majority (2f+1)
+func (ds *DelegatorSet) MinimumMaj23() uint64 {
+	return ds.vs.ValMinimumMaj23
+}
+
+// TotalPower returns the aggregate voting power of all validators in the set
+func (ds *DelegatorSet) TotalPower() uint64 {
+	return ds.vs.ValTotalPower
+}
+
+// MultiKey panics as delegators do not have a composite public key
+func (ds *DelegatorSet) MultiKey() crypto.MultiPublicKeyI {
+	panic("delegators do not have a composite public key")
+}
+
+// GetValidator() retrieves a delegator from the ValidatorSet using the public key
+func (ds *DelegatorSet) GetValidator(publicKey []byte) (val *ConsensusValidator, err ErrorI) {
+	// retrieve the validator using a public key
+	val, _, err = ds.vs.GetValidatorAndIdx(publicKey)
+	// exit
+	return
+}
+
+// GetValidatorAndIdx() retrieves a delegator and its index in the ValidatorSet using the public key
+// Note: This implementation does not provide a MultiKey signature scheme as not all supported types
+// of keys implement the MultiKey interface
+func (ds *DelegatorSet) GetValidatorAndIdx(targetPublicKey []byte) (*ConsensusValidator, int, ErrorI) {
+	// retrieve the delegator using a public key
+	return ds.vs.GetValidatorAndIdx(targetPublicKey)
+}
+
+// NewDelegatorSet() initializes a ValidatorSet from a given set of consensus delegators
+func NewDelegatorSet(delegators *ConsensusValidators) (DelegatorSet, ErrorI) {
+	// handle empty set
+	if delegators == nil {
+		// exit with error
+		return DelegatorSet{}, ErrNoValidators()
+	}
+	// define tracking variables
+	totalPower, count := uint64(0), uint64(0)
+	// iterate through the ValidatorSet to get the count, total power
+	for _, v := range delegators.ValidatorSet {
+		// convert the bytes into a public key
+		_, err := crypto.NewPublicKeyFromBytes(v.PublicKey)
+		// check for an error during the conversion
+		if err != nil {
+			// exit with error
+			return DelegatorSet{}, ErrPubKeyFromBytes(err)
+		}
+		// update total voting power
+		totalPower += v.VotingPower
+		// increment the count
+		count++
+	}
+	// if the total voting power is 0
+	if totalPower == 0 {
+		// exit with error
+		return DelegatorSet{}, ErrNoValidators()
+	}
+	// calculate the minimum power for a two-thirds majority (2f+1)
+	minPowerFor23Maj := (2*totalPower)/3 + 1
+	// return the validator set
+	return DelegatorSet{
+		vs: ValidatorSet{
+			ValidatorSet:     delegators,
+			ValTotalPower:    totalPower,
+			ValMinimumMaj23:  minPowerFor23Maj,
+			ValNumValidators: count,
+			MultiPubKey:      nil,
+		},
+	}, nil
 }
 
 // RootChainClient executes 'on-demand' calls to the root-chain
@@ -145,7 +270,7 @@ func (x *AggregateSignature) Check(sb SignByte, vs ValidatorSet) (isPartialQC bo
 		return false, err
 	}
 	// create a copy of the mutli-public-key of the validator set
-	key := vs.MultiKey.Copy()
+	key := vs.MultiPubKey.Copy()
 	// indicate which validator indexes have purportedly signed the payload
 	// and are included in the aggregated signature
 	if er := key.SetBitmap(x.Bitmap); er != nil {
@@ -165,7 +290,7 @@ func (x *AggregateSignature) Check(sb SignByte, vs ValidatorSet) (isPartialQC bo
 		return false, err
 	}
 	// ensure the signers reach a +2/3 majority
-	if totalSignedPower < vs.MinimumMaj23 {
+	if totalSignedPower < vs.ValMinimumMaj23 {
 		// exit with isPartialQC
 		return true, nil
 	}
@@ -198,7 +323,7 @@ func (x *AggregateSignature) GetNonSigners(validatorList *ConsensusValidators) (
 		return
 	}
 	// set the non signer percent (Non Signer Power / Total Power)
-	nonSignerPercent = int(Uint64PercentageDiv(nonSignerPower, vs.TotalPower))
+	nonSignerPercent = int(Uint64PercentageDiv(nonSignerPower, vs.ValTotalPower))
 	// exit
 	return
 }
@@ -212,7 +337,7 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 		return
 	}
 	// create a copy of the multi-public-key from the validator set
-	key := vs.MultiKey.Copy()
+	key := vs.MultiPubKey.Copy()
 	// set the 'who signed' bitmap in a copy of the key
 	if e := key.SetBitmap(x.Bitmap); e != nil {
 		// convert the error to a lib.ErrorI
@@ -244,7 +369,7 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 			return
 		}
 		// if so, add to the pubkeys and add to the power
-		if !signed && (val.VotingPower*100 >= vs.TotalPower*5) {
+		if !signed && (val.VotingPower*100 >= vs.ValTotalPower*5) {
 			bls, err := crypto.NewPublicKeyFromBytes(val.PublicKey)
 			if err != nil {
 				logger.Errorf("Failed to create public key from valset: %s", err.Error())
@@ -261,7 +386,7 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 // getSigners() returns the public keys and corresponding combined voting power of signers or non-signers
 func (x *AggregateSignature) getSigners(vs ValidatorSet, nonSigners bool) (pubkeys [][]byte, power uint64, err ErrorI) {
 	// create a copy of the multi-public-key from the validator set
-	key := vs.MultiKey.Copy()
+	key := vs.MultiPubKey.Copy()
 	// set the 'who signed' bitmap in a copy of the key
 	if e := key.SetBitmap(x.Bitmap); e != nil {
 		// convert the error to a lib.ErrorI
@@ -295,7 +420,7 @@ func (x *AggregateSignature) getSigners(vs ValidatorSet, nonSigners bool) (pubke
 // GetDoubleSigners() compares the signers of two signatures and return who signed both
 func (x *AggregateSignature) GetDoubleSigners(y *AggregateSignature, vs ValidatorSet) (doubleSigners [][]byte, err ErrorI) {
 	// create 2 copies of the multi public key for the validator set
-	key, key2 := vs.MultiKey.Copy(), vs.MultiKey.Copy()
+	key, key2 := vs.MultiPubKey.Copy(), vs.MultiPubKey.Copy()
 	// set the 'who signed' bitmap in key 1
 	if er := key.SetBitmap(x.Bitmap); er != nil {
 		// exit with error

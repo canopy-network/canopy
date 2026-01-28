@@ -1,10 +1,11 @@
 package fsm
 
 import (
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestHandleMessage(t *testing.T) {
@@ -2024,7 +2025,7 @@ func TestHandleMessageCertificateResults(t *testing.T) {
 				committee, err := sm.GetCommitteeMembers(lib.CanopyChainId + 1)
 				require.NoError(t, err)
 				// create a copy of the multikey
-				mk := committee.MultiKey.Copy()
+				mk := committee.MultiPubKey.Copy()
 				// only sign with 3/4 to test the non-signer reduction
 				for i := 0; i < 3; i++ {
 					privateKey := newTestKeyGroup(t, i).PrivateKey

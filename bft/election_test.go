@@ -4,13 +4,14 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/stretchr/testify/require"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsCandidateDistribution(t *testing.T) {
@@ -193,7 +194,7 @@ func newTestSortitionData(t *testing.T, c *testConsensus) *lib.SortitionData {
 		Round:                 0,
 		TotalValidators:       uint64(len(c.valKeys)),
 		VotingPower:           val.VotingPower,
-		TotalPower:            c.valSet.TotalPower,
+		TotalPower:            c.valSet.ValTotalPower,
 	}
 	return sortitionData
 }

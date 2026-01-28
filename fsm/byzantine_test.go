@@ -3,11 +3,12 @@ package fsm
 import (
 	"bytes"
 	"fmt"
+	"slices"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
-	"slices"
-	"testing"
 )
 
 func Test(t *testing.T) {
@@ -115,10 +116,10 @@ func TestHandleByzantine(t *testing.T) {
 			require.NoError(t, err)
 			// generate non-signer history for the first validator for 'reset and slash' testing
 			for j := uint64(0); j <= valParams.MaxNonSign; j++ {
-				require.NoError(t, sm.IncrementNonSigners([][]byte{committee.ValidatorSet.ValidatorSet[0].PublicKey}))
+				require.NoError(t, sm.IncrementNonSigners([][]byte{committee.Validators().ValidatorSet[0].PublicKey}))
 			}
 			// get the non-signers of the QC from the committee
-			expectedNonSigners, expectedPercent, err := test.qc.GetNonSigners(committee.ValidatorSet)
+			expectedNonSigners, expectedPercent, err := test.qc.GetNonSigners(committee.Validators())
 			require.NoError(t, err)
 
 			// STEP 1) execute function call

@@ -3,11 +3,12 @@ package lib
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
+	"testing"
+
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
-	"sort"
-	"testing"
 )
 
 func TestNewValidatorSet(t *testing.T) {
@@ -64,10 +65,10 @@ func TestNewValidatorSet(t *testing.T) {
 						},
 					},
 				},
-				MultiKey:      multi,
-				TotalPower:    1,
-				MinimumMaj23:  1,
-				NumValidators: 1,
+				MultiPubKey:      multi,
+				ValTotalPower:    1,
+				ValMinimumMaj23:  1,
+				ValNumValidators: 1,
 			},
 		},
 	}

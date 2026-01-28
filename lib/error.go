@@ -449,6 +449,7 @@ func ErrUnequalBlockHash() ErrorI {
 }
 
 func ErrPubKeyFromBytes(err error) ErrorI {
+	PrintStackTrace(true)
 	return NewError(CodeNewPubKeyFromBytes, MainModule, fmt.Sprintf("publicKeyFromBytes() failed with err: %s", err.Error()))
 }
 

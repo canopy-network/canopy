@@ -439,7 +439,7 @@ func (s *StateMachine) PollsToResults(polls *ActivePolls) (result Poll, err lib.
 			ProposalHash: proposalHash,
 			ProposalURL:  polls.PollMeta[proposalHash].Url,
 			Accounts:     VoteStats{TotalTokens: supply.Total - supply.Staked - dao.Amount},
-			Validators:   VoteStats{TotalTokens: members.TotalPower},
+			Validators:   VoteStats{TotalTokens: members.ValTotalPower},
 		}
 		// for each vote in the active poll
 		for address, approve := range addresses {

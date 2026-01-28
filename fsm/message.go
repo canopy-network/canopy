@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -71,6 +72,7 @@ func (s *StateMachine) HandleMessageStake(msg *MessageStake) lib.ErrorI {
 	}
 	// the public key must be a BLS public key to be a validator in order to participate in consensus for efficient signature aggregation
 	if !msg.Delegate {
+		fmt.Println("important")
 		if _, ok := publicKey.(*crypto.BLS12381PublicKey); !ok {
 			return ErrInvalidPublicKey(e)
 		}

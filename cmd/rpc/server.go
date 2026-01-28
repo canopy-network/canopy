@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"bytes"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -162,10 +161,6 @@ func (s *Server) updatePollResults() {
 
 // startStaticFileServers starts a file server for the wallet and explorer
 func (s *Server) startStaticFileServers() {
-	s.logger.Infof("Starting Web Wallet 🔑 http://localhost:%s ⬅️", s.config.WalletPort)
-	s.runStaticFileServer(walletFS, walletStaticDir, s.config.WalletPort, s.config)
-	s.logger.Infof("Starting Block Explorer 🔍️ http://localhost:%s ⬅️", s.config.ExplorerPort)
-	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
 // startHeapProfiler writes periodic heap profiles to the data directory
@@ -334,12 +329,6 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 	// Call the actual handler function with the response, request, and parameters.
 	h.h(resp, req, p)
 }
-
-//go:embed all:web/explorer/out
-var explorerFS embed.FS
-
-//go:embed all:web/wallet/out
-var walletFS embed.FS
 
 // runStaticFileServer creates a web server serving static files
 func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.Config) {

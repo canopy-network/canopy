@@ -26,7 +26,7 @@ type (
 // NOTE: Votes for a specific Height-Round-Phase are organized by `Payload Hash` to ensure that all Replicas are voting on the same proposal
 func (b *BFT) GetMajorityVote() (m *Message, sig *lib.AggregateSignature, err lib.ErrorI) {
 	for _, voteSet := range b.Votes[b.View.Round][phaseToString(b.View.Phase-1)] {
-		if has23maj := voteSet.TotalVotedPower >= b.ValidatorSet.MinimumMaj23; has23maj {
+		if has23maj := voteSet.TotalVotedPower >= b.ValidatorSet.ValMinimumMaj23; has23maj {
 			signature, e := voteSet.multiKey.AggregateSignatures()
 			if e != nil {
 				return nil, nil, ErrAggregateSignature(e)
@@ -41,7 +41,7 @@ func (b *BFT) GetMajorityVote() (m *Message, sig *lib.AggregateSignature, err li
 func (b *BFT) GetLeadingVote() (m *Message, maxVotePercent uint64, maxVotes uint64) {
 	for _, voteSet := range b.Votes[b.View.Round][phaseToString(b.View.Phase-1)] {
 		if voteSet.TotalVotedPower >= maxVotes {
-			m, maxVotes, maxVotePercent = voteSet.Vote, voteSet.TotalVotedPower, lib.Uint64PercentageDiv(voteSet.TotalVotedPower, b.ValidatorSet.TotalPower)
+			m, maxVotes, maxVotePercent = voteSet.Vote, voteSet.TotalVotedPower, lib.Uint64PercentageDiv(voteSet.TotalVotedPower, b.ValidatorSet.ValTotalPower)
 		}
 	}
 	return
@@ -82,7 +82,7 @@ func (b *BFT) getVoteSet(vote *Message) (voteSet *VoteSet) {
 	if voteSet, ok = b.Votes[round][phase][payload]; !ok {
 		voteSet = &VoteSet{
 			Vote:     vote,
-			multiKey: b.ValidatorSet.MultiKey.Copy(),
+			multiKey: b.ValidatorSet.MultiPubKey.Copy(),
 		}
 		b.Votes[round][phase][payload] = voteSet
 	}

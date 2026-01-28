@@ -90,7 +90,7 @@ func TestBeginBlock(t *testing.T) {
 				committee, err := sm.GetCommitteeMembers(lib.CanopyChainId)
 				require.NoError(t, err)
 				// create a copy of the multikey
-				mk := committee.MultiKey.Copy()
+				mk := committee.MultiKey().Copy()
 				// only sign with 3/4 to test the non-signer reduction
 				for i := 0; i < 3; i++ {
 					privateKey := newTestKeyGroup(t, i).PrivateKey

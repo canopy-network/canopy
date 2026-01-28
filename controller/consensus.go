@@ -458,7 +458,7 @@ func (c *Controller) ListenForBlockRequests() {
 // SendToReplicas() directly send a bft message to each validator in a set (committee)
 func (c *Controller) SendToReplicas(replicas lib.ValidatorSet, msg lib.Signable) {
 	// log the initialization of the send process
-	c.log.Debugf("Sending to %d replicas", replicas.NumValidators)
+	c.log.Debugf("Sending to %d replicas", replicas.ValNumValidators)
 	// sign the consensus message
 	if err := msg.Sign(c.PrivateKey); err != nil {
 		// log the error
@@ -702,7 +702,7 @@ func (c *Controller) singleNodeNetwork() bool {
 		c.log.Fatalf(err.Error())
 	}
 	// if self is the only validator, return true
-	return v.NumValidators == 0 || (v.NumValidators == 1 && bytes.Equal(v.ValidatorSet.ValidatorSet[0].PublicKey, c.PublicKey))
+	return v.ValNumValidators == 0 || (v.ValNumValidators == 1 && bytes.Equal(v.ValidatorSet.ValidatorSet[0].PublicKey, c.PublicKey))
 }
 
 // syncingDone() checks if the syncing loop may complete for a specific chainId
@@ -757,7 +757,7 @@ func (c *Controller) ConsensusSummary() ([]byte, lib.ErrorI) {
 		Proposals:            c.Consensus.Proposals,
 		PartialQCs:           c.Consensus.PartialQCs,
 		PacemakerVotes:       c.Consensus.PacemakerMessages,
-		MinimumPowerFor23Maj: c.Consensus.ValidatorSet.MinimumMaj23,
+		MinimumPowerFor23Maj: c.Consensus.ValidatorSet.ValMinimumMaj23,
 		Votes:                c.Consensus.Votes,
 		Status:               "",
 	}
