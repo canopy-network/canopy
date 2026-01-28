@@ -86,6 +86,64 @@ make format
 make lint
 ```
 
+## Running with Docker
+
+The C# plugin can be run in a Docker container that includes both Canopy and the plugin.
+
+### Build the Docker Image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=csharp
+```
+
+This builds a Docker image named `canopy-csharp` that contains:
+- The Canopy binary
+- The C# plugin DLL
+- .NET 8 runtime
+- Pre-configured `config.json` with `"plugin": "csharp"`
+
+### Run the Container
+
+```bash
+make docker/run-csharp
+```
+
+Or manually with volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-csharp
+```
+
+### Expose Ports for Testing
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-csharp
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002`.
+
+### View Logs
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/csharp-plugin.log
+```
+
 ## Development Guidelines
 
 ### Adding New Transaction Types

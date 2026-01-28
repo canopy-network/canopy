@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,6 +126,39 @@ func (s *Supervisor) UnexpectedExit() <-chan error {
 	return s.unexpectedExit
 }
 
+// KillPluginProcesses kills any remaining plugin processes and cleans up PID files
+func (s *Supervisor) KillPluginProcesses() {
+	// plugin patterns to match in process command line
+	pluginPatterns := []string{
+		"canopy-plugin-kotlin", // Kotlin plugin JAR
+		"go-plugin",            // Go plugin binary
+		"typescript-plugin",    // TypeScript plugin
+		"python-plugin",        // Python plugin
+		"csharp-plugin",        // C# plugin
+	}
+	for _, pattern := range pluginPatterns {
+		// use pkill to kill processes matching the pattern, ignore errors
+		cmd := exec.Command("pkill", "-9", "-f", pattern)
+		if err := cmd.Run(); err == nil {
+			s.log.Infof("killed remaining process matching: %s", pattern)
+		}
+	}
+
+	// clean up PID files
+	pidFiles := []string{
+		"/tmp/plugin/kotlin-plugin.pid",
+		"/tmp/plugin/go-plugin.pid",
+		"/tmp/plugin/typescript-plugin.pid",
+		"/tmp/plugin/python-plugin.pid",
+		"/tmp/plugin/csharp-plugin.pid",
+	}
+	for _, pidFile := range pidFiles {
+		if err := os.Remove(pidFile); err == nil {
+			s.log.Infof("removed PID file: %s", pidFile)
+		}
+	}
+}
+
 // Coordinator code below
 
 // CoordinatorConfig holds the configuration for the Coordinator
@@ -142,7 +174,8 @@ type CoordinatorConfig struct {
 // handles the coordination between checking updates, stopping processes, and
 // restarting
 type Coordinator struct {
-	updater          *UpdateManager     // updater instance reference
+	updater          *ReleaseManager    // CLI updater instance reference
+	pluginUpdater    *ReleaseManager    // plugin updater instance reference
 	supervisor       *Supervisor        // supervisor instance reference
 	snapshot         *SnapshotManager   // snapshot instance reference
 	config           *CoordinatorConfig // coordinator configuration
@@ -151,10 +184,11 @@ type Coordinator struct {
 }
 
 // NewCoordinator creates a new Coordinator instance
-func NewCoordinator(config *CoordinatorConfig, updater *UpdateManager,
+func NewCoordinator(config *CoordinatorConfig, updater, pluginUpdater *ReleaseManager,
 	supervisor *Supervisor, snapshot *SnapshotManager, logger lib.LoggerI) *Coordinator {
 	return &Coordinator{
 		updater:          updater,
+		pluginUpdater:    pluginUpdater,
 		supervisor:       supervisor,
 		snapshot:         snapshot,
 		config:           config,
@@ -174,6 +208,7 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	// create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	// kick off an immediate check
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -237,29 +272,58 @@ func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
 		c.log.Debug("update already in progress, skipping check")
 		return nil
 	}
-	// check for new version
-	release, err := c.updater.Check()
+
+	var canopyUpdate, pluginUpdate bool
+	var release, pluginRelease *Release
+
+	// check for new Canopy version
+	var err error
+	release, err = c.updater.Check()
 	if err != nil {
-		return fmt.Errorf("failed to check for update: %w", err)
+		c.log.Warnf("failed to check for Canopy update: %v", err)
+	} else if release.ShouldUpdate {
+		canopyUpdate = true
+		c.log.Infof("new Canopy version found: %s snapshot needed: %t", release.Version, release.ApplySnapshot)
 	}
-	// check if an update is required
-	if !release.ShouldUpdate {
-		c.log.Debug("no update available")
+
+	// check for new plugin version if plugin updater is configured
+	if c.pluginUpdater != nil {
+		pluginRelease, err = c.pluginUpdater.Check()
+		if err != nil {
+			c.log.Warnf("failed to check for plugin update: %v", err)
+		} else if pluginRelease.ShouldUpdate {
+			pluginUpdate = true
+			c.log.Infof("new plugin version found: %s", pluginRelease.Version)
+		}
+	}
+
+	// if no updates needed, return early
+	if !canopyUpdate && !pluginUpdate {
+		c.log.Debug("no updates available")
 		return nil
 	}
-	c.log.Infof("new version found: %s snapshot needed: %t", release.Version,
-		release.ApplySnapshot)
-	// download the new version
-	if err := c.updater.Download(ctx, release); err != nil {
-		return fmt.Errorf("failed to download release: %w", err)
+
+	// download Canopy update if needed
+	if canopyUpdate {
+		if err := c.updater.Download(ctx, release); err != nil {
+			return fmt.Errorf("failed to download Canopy release: %w", err)
+		}
 	}
-	// apply the update
-	return c.ApplyUpdate(ctx, release)
+
+	// download plugin update if needed
+	if pluginUpdate {
+		if err := c.pluginUpdater.Download(ctx, pluginRelease); err != nil {
+			return fmt.Errorf("failed to download plugin release: %w", err)
+		}
+	}
+
+	// apply the updates (this will restart the process)
+	return c.ApplyUpdate(ctx, release, pluginRelease, canopyUpdate, pluginUpdate)
 }
 
 // ApplyUpdate coordinates the update process, stopping the old process and starting the new one
 // while applying a snapshot if required
-func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release) error {
+func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *Release, canopyUpdate, pluginUpdate bool) error {
 	canopy := c.config.Canopy
 	// check if an update is already in progress
 	if !c.updateInProgress.CompareAndSwap(false, true) {
@@ -267,9 +331,10 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release) error {
 	}
 	defer c.updateInProgress.Store(false)
 	c.log.Info("starting update process")
-	// download snapshot if required
+
+	// download snapshot if required (only for Canopy updates)
 	var snapshotPath string
-	if release.ApplySnapshot {
+	if canopyUpdate && release != nil && release.ApplySnapshot {
 		snapshotPath = filepath.Join(canopy.DataDirPath, "snapshot")
 		c.log.Info("downloading and extracting required snapshot")
 		err := c.snapshot.DownloadAndExtract(ctx, snapshotPath, c.config.Canopy.ChainId)
@@ -278,30 +343,25 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release) error {
 		}
 		c.log.Info("snapshot downloaded and extracted")
 	}
-	// add random delay for staggered updates
-	if c.supervisor.IsRunning() {
-		delay := time.Duration(rand.IntN(c.config.MaxDelayTime)+1) * time.Minute
-		c.log.Infof("waiting %v before applying update", delay)
-		timer := time.NewTimer(delay)
-		// allow cancellation of timer if context is done
-		defer timer.Stop()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
+
 	// stop current process if running
 	if c.supervisor.IsRunning() {
 		c.log.Info("stopping current CLI process for update")
-		stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		if err := c.supervisor.Stop(stopCtx); err != nil {
 			// program may have exited with a non zero exit code due to forced close
 			// this is to be expected so the update can still proceed
 			c.log.Warnf("failed to stop process for update: %w", err)
 		}
+		// kill any remaining plugin processes
+		c.log.Info("cleaning up plugin processes")
+		c.supervisor.KillPluginProcesses()
+		// wait for processes to fully terminate
+		c.log.Info("waiting for processes to terminate")
+		time.Sleep(2 * time.Second)
 	}
+
 	// replace current db with the snapshot if needed
 	if snapshotPath != "" {
 		c.log.Info("replacing current db with snapshot")
@@ -311,13 +371,30 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release) error {
 			// continue with update even if snapshot fails
 		}
 	}
-	// restart with new version
-	c.log.Infof("starting updated CLI process with version %s", release.Version)
+
+	// log what was updated
+	if canopyUpdate && pluginUpdate {
+		c.log.Infof("starting updated CLI process with Canopy %s and plugin %s", release.Version, pluginRelease.Version)
+	} else if canopyUpdate {
+		c.log.Infof("starting updated CLI process with Canopy %s", release.Version)
+	} else if pluginUpdate {
+		c.log.Infof("starting CLI process with updated plugin %s", pluginRelease.Version)
+	}
+
+	// restart the process (pluginctl.sh will extract the new tarball on start)
 	if err := c.supervisor.Start(c.config.BinPath); err != nil {
 		return fmt.Errorf("failed to start updated process: %w", err)
 	}
-	c.log.Infof("update to version %s completed successfully", release.Version)
-	// update UpdateManager to have the new version
-	c.updater.Version = release.Version
+
+	// update version trackers
+	if canopyUpdate && release != nil {
+		c.updater.Version = release.Version
+		c.log.Infof("Canopy update to version %s completed successfully", release.Version)
+	}
+	if pluginUpdate && pluginRelease != nil && c.pluginUpdater != nil {
+		c.pluginUpdater.Version = pluginRelease.Version
+		c.log.Infof("Plugin update to version %s completed successfully", pluginRelease.Version)
+	}
+
 	return nil
 }

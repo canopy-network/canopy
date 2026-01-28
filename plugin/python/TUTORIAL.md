@@ -393,6 +393,68 @@ Check the plugin logs:
 tail -f /tmp/plugin/python-plugin.log
 ```
 
+### Step 7b: Running with Docker (Alternative)
+
+Instead of running Canopy and the plugin locally, you can use Docker to run everything in a container.
+
+#### 1. Build the Docker image
+
+From the repository root:
+
+```bash
+make docker/plugin PLUGIN=python
+```
+
+This creates a `canopy-python` image containing both Canopy and the Python plugin pre-configured.
+
+#### 2. Run the container
+
+```bash
+make docker/run-python
+```
+
+Or with a custom volume mount for persistent data:
+
+```bash
+docker run -v ~/.canopy:/root/.canopy canopy-python
+```
+
+#### 3. Expose RPC ports (for running tests)
+
+To run tests against the containerized Canopy, expose the RPC ports:
+
+```bash
+docker run -p 50002:50002 -p 50003:50003 -v ~/.canopy:/root/.canopy canopy-python
+```
+
+| Port | Service |
+|------|---------|
+| 50002 | RPC API (transactions, queries) |
+| 50003 | Admin RPC (keystore operations) |
+
+Now you can run tests from your host machine that connect to `localhost:50002` and `localhost:50003`.
+
+#### 4. View logs inside the container
+
+```bash
+# Get the container ID
+docker ps
+
+# View Canopy logs
+docker exec -it <container_id> tail -f /root/.canopy/logs/log
+
+# View plugin logs
+docker exec -it <container_id> tail -f /tmp/plugin/python-plugin.log
+```
+
+#### 5. Interactive shell (for debugging)
+
+To inspect the container or debug issues:
+
+```bash
+docker run -it --entrypoint /bin/sh canopy-python
+```
+
 ## Step 8: Testing
 
 Run the RPC tests from the `tutorial` directory:
