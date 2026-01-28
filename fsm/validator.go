@@ -454,10 +454,11 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		for _, v := range validators {
 			// exclude validators not part of the committee
 			if !v.PassesFilter(lib.ValidatorFilters{
-				Unstaking: lib.FilterOption_Exclude,
-				Paused:    lib.FilterOption_Exclude,
-				Delegate:  lib.FilterOption(delegateFilter),
-				Committee: chainId,
+				Unstaking:         lib.FilterOption_Exclude,
+				Paused:            lib.FilterOption_Exclude,
+				Delegate:          lib.FilterOption(delegateFilter),
+				Committee:         chainId,
+				FilterByCommittee: true,
 			}) {
 				continue
 			}
@@ -467,6 +468,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 			}
 		}
 	})
+
 	// sort by highest stake then address
 	slices.SortFunc(filtered, func(a, b *Validator) int {
 		result := cmp.Compare(b.StakedAmount, a.StakedAmount)
@@ -612,7 +614,8 @@ func (x *Validator) PassesFilter(f lib.ValidatorFilters) (ok bool) {
 			return
 		}
 	}
-	if f.Committee != 0 {
+	// filter by committee if the ID is non-zero OR if explicitly requested (to handle chain 0)
+	if f.Committee != 0 || f.FilterByCommittee {
 		if !slices.Contains(x.Committees, f.Committee) {
 			return
 		}
