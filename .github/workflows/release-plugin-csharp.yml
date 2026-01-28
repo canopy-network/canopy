@@ -32,10 +32,10 @@ jobs:
         working-directory: plugin/csharp
         run: |
           mkdir -p release
-          # Linux x64
-          dotnet publish -c Release -r linux-x64 --self-contained false -o release/linux-x64
-          # Linux ARM64
-          dotnet publish -c Release -r linux-arm64 --self-contained false -o release/linux-arm64
+          # Linux musl x64 (Alpine) - publish main project only with all dependencies
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o release/linux-x64
+          # Linux musl ARM64 (Alpine) - publish main project only with all dependencies
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-arm64 --self-contained true -o release/linux-arm64
 
       - name: Create tarballs
         working-directory: plugin/csharp
@@ -52,16 +52,13 @@ jobs:
           body: |
             C# Plugin Release ${{ github.event.inputs.tag }}
             
-            ## Requirements
-            - .NET Runtime 8.0 or later
-            
             ## Installation
             1. Extract the appropriate tarball to `plugin/csharp/bin/`
-            2. Run with `dotnet CanopyPlugin.dll`
+            2. The plugin is self-contained (no .NET runtime required)
             
             ## Assets
-            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64
-            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64
+            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64 (self-contained)
+            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64 (self-contained)
           files: |
             plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
             plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz
