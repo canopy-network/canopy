@@ -24,9 +24,9 @@ const (
 	defaultRepoName     = "canopy"
 	defaultRepoOwner    = "canopy-network"
 	defaultBinPath      = "./cli"
-	defaultCheckPeriod  = time.Minute * 30 // default check period for updates
-	defaultGracePeriod  = time.Second * 2  // default grace period for graceful shutdown
-	defaultMaxDelayTime = 30               // default max delay time for staggered updates
+	defaultCheckPeriod  = time.Minute * 1 // default check period for updates
+	defaultGracePeriod  = time.Second * 2 // default grace period for graceful shutdown
+	defaultMaxDelayTime = 30              // default max delay time for staggered updates
 )
 
 var (
@@ -65,7 +65,7 @@ func main() {
 	updater := NewUpdateManager(configs.Updater, rpc.SoftwareVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	supervisor := NewSupervisor(logger)
-	
+
 	// setup plugin updater if configured
 	var pluginUpdater *PluginUpdateManager
 	if configs.PluginUpdater != nil {
@@ -75,7 +75,7 @@ func main() {
 			configs.PluginUpdater.RepoOwner,
 			configs.PluginUpdater.RepoName)
 	}
-	
+
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
 	err := coordinator.UpdateLoop(sigChan)
