@@ -126,6 +126,39 @@ func (s *Supervisor) UnexpectedExit() <-chan error {
 	return s.unexpectedExit
 }
 
+// KillPluginProcesses kills any remaining plugin processes and cleans up PID files
+func (s *Supervisor) KillPluginProcesses() {
+	// plugin patterns to match in process command line
+	pluginPatterns := []string{
+		"canopy-plugin-kotlin", // Kotlin plugin JAR
+		"go-plugin",            // Go plugin binary
+		"typescript-plugin",    // TypeScript plugin
+		"python-plugin",        // Python plugin
+		"csharp-plugin",        // C# plugin
+	}
+	for _, pattern := range pluginPatterns {
+		// use pkill to kill processes matching the pattern, ignore errors
+		cmd := exec.Command("pkill", "-9", "-f", pattern)
+		if err := cmd.Run(); err == nil {
+			s.log.Infof("killed remaining process matching: %s", pattern)
+		}
+	}
+
+	// clean up PID files
+	pidFiles := []string{
+		"/tmp/plugin/kotlin-plugin.pid",
+		"/tmp/plugin/go-plugin.pid",
+		"/tmp/plugin/typescript-plugin.pid",
+		"/tmp/plugin/python-plugin.pid",
+		"/tmp/plugin/csharp-plugin.pid",
+	}
+	for _, pidFile := range pidFiles {
+		if err := os.Remove(pidFile); err == nil {
+			s.log.Infof("removed PID file: %s", pidFile)
+		}
+	}
+}
+
 // Coordinator code below
 
 // CoordinatorConfig holds the configuration for the Coordinator
@@ -141,18 +174,18 @@ type CoordinatorConfig struct {
 // handles the coordination between checking updates, stopping processes, and
 // restarting
 type Coordinator struct {
-	updater          *UpdateManager       // updater instance reference
-	pluginUpdater    *PluginUpdateManager // plugin updater instance reference
-	supervisor       *Supervisor          // supervisor instance reference
-	snapshot         *SnapshotManager     // snapshot instance reference
-	config           *CoordinatorConfig   // coordinator configuration
-	updateInProgress atomic.Bool          // flag indicating if an update is in progress
-	log              lib.LoggerI          // logger instance
+	updater          *ReleaseManager    // CLI updater instance reference
+	pluginUpdater    *ReleaseManager    // plugin updater instance reference
+	supervisor       *Supervisor        // supervisor instance reference
+	snapshot         *SnapshotManager   // snapshot instance reference
+	config           *CoordinatorConfig // coordinator configuration
+	updateInProgress atomic.Bool        // flag indicating if an update is in progress
+	log              lib.LoggerI        // logger instance
 }
 
 // NewCoordinator creates a new Coordinator instance
-func NewCoordinator(config *CoordinatorConfig, updater *UpdateManager,
-	pluginUpdater *PluginUpdateManager, supervisor *Supervisor, snapshot *SnapshotManager, logger lib.LoggerI) *Coordinator {
+func NewCoordinator(config *CoordinatorConfig, updater, pluginUpdater *ReleaseManager,
+	supervisor *Supervisor, snapshot *SnapshotManager, logger lib.LoggerI) *Coordinator {
 	return &Coordinator{
 		updater:          updater,
 		pluginUpdater:    pluginUpdater,
@@ -217,39 +250,6 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	}
 }
 
-// killPluginProcesses kills any remaining plugin processes and cleans up PID files
-func (c *Coordinator) killPluginProcesses() {
-	// plugin patterns to match in process command line
-	pluginPatterns := []string{
-		"canopy-plugin-kotlin", // Kotlin plugin JAR
-		"go-plugin",            // Go plugin binary
-		"typescript-plugin",    // TypeScript plugin
-		"python-plugin",        // Python plugin
-		"csharp-plugin",        // C# plugin
-	}
-	for _, pattern := range pluginPatterns {
-		// use pkill to kill processes matching the pattern, ignore errors
-		cmd := exec.Command("pkill", "-9", "-f", pattern)
-		if err := cmd.Run(); err == nil {
-			c.log.Infof("killed remaining process matching: %s", pattern)
-		}
-	}
-
-	// clean up PID files
-	pidFiles := []string{
-		"/tmp/plugin/kotlin-plugin.pid",
-		"/tmp/plugin/go-plugin.pid",
-		"/tmp/plugin/typescript-plugin.pid",
-		"/tmp/plugin/python-plugin.pid",
-		"/tmp/plugin/csharp-plugin.pid",
-	}
-	for _, pidFile := range pidFiles {
-		if err := os.Remove(pidFile); err == nil {
-			c.log.Infof("removed PID file: %s", pidFile)
-		}
-	}
-}
-
 // GracefulShutdown stops the coordinator while giving a grace period to the
 // canopy process to stop
 func (c *Coordinator) GracefulShutdown() error {
@@ -274,8 +274,7 @@ func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
 	}
 
 	var canopyUpdate, pluginUpdate bool
-	var release *Release
-	var pluginRelease *PluginRelease
+	var release, pluginRelease *Release
 
 	// check for new Canopy version
 	var err error
@@ -324,7 +323,7 @@ func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
 
 // ApplyUpdate coordinates the update process, stopping the old process and starting the new one
 // while applying a snapshot if required
-func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release, pluginRelease *PluginRelease, canopyUpdate, pluginUpdate bool) error {
+func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *Release, canopyUpdate, pluginUpdate bool) error {
 	canopy := c.config.Canopy
 	// check if an update is already in progress
 	if !c.updateInProgress.CompareAndSwap(false, true) {
@@ -357,7 +356,7 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release *Release, pluginR
 		}
 		// kill any remaining plugin processes
 		c.log.Info("cleaning up plugin processes")
-		c.killPluginProcesses()
+		c.supervisor.KillPluginProcesses()
 		// wait for processes to fully terminate
 		c.log.Info("waiting for processes to terminate")
 		time.Sleep(2 * time.Second)

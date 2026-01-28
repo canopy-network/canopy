@@ -25,8 +25,8 @@ const (
 	defaultRepoOwner    = "canopy-network"
 	defaultBinPath      = "./cli"
 	defaultCheckPeriod  = time.Minute * 30 // default check period for updates
-	defaultGracePeriod  = time.Second * 2 // default grace period for graceful shutdown
-	defaultMaxDelayTime = 30              // default max delay time for staggered updates
+	defaultGracePeriod  = time.Second * 2  // default grace period for graceful shutdown
+	defaultMaxDelayTime = 30               // default max delay time for staggered updates (minutes)
 )
 
 var (
@@ -62,14 +62,14 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	// setup the dependencies
-	updater := NewUpdateManager(configs.Updater, rpc.SoftwareVersion)
+	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	supervisor := NewSupervisor(logger)
 
 	// setup plugin updater if configured
-	var pluginUpdater *PluginUpdateManager
+	var pluginUpdater *ReleaseManager
 	if configs.PluginUpdater != nil {
-		pluginUpdater = NewPluginUpdateManager(configs.PluginUpdater)
+		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
 		logger.Infof("plugin auto-update enabled for %s from %s/%s",
 			configs.PluginUpdater.PluginType,
 			configs.PluginUpdater.RepoOwner,
@@ -95,8 +95,8 @@ func main() {
 
 // Configs holds the configuration for the updater, snapshotter, and process supervisor.
 type Configs struct {
-	Updater       *UpdaterConfig
-	PluginUpdater *PluginUpdaterConfig
+	Updater       *ReleaseManagerConfig
+	PluginUpdater *ReleaseManagerConfig
 	Snapshot      *SnapshotConfig
 	Coordinator   *CoordinatorConfig
 	LoggerI       lib.LoggerI
@@ -112,11 +112,13 @@ func getConfigs() (*Configs, lib.LoggerI) {
 	})
 
 	binPath := envOrDefault("BIN_PATH", defaultBinPath)
+	githubToken := envOrDefault("CANOPY_GITHUB_API_TOKEN", "")
 
-	updater := &UpdaterConfig{
+	updater := &ReleaseManagerConfig{
+		Type:           ReleaseTypeCLI,
 		RepoName:       envOrDefault("REPO_NAME", defaultRepoName),
 		RepoOwner:      envOrDefault("REPO_OWNER", defaultRepoOwner),
-		GithubApiToken: envOrDefault("CANOPY_GITHUB_API_TOKEN", ""),
+		GithubApiToken: githubToken,
 		BinPath:        binPath,
 		SnapshotKey:    snapshotMetadataKey,
 	}
@@ -127,13 +129,13 @@ func getConfigs() (*Configs, lib.LoggerI) {
 	coordinator := &CoordinatorConfig{
 		Canopy:       canopyConfig,
 		BinPath:      binPath,
-		MaxDelayTime: defaultMaxDelayTime,
-		CheckPeriod:  defaultCheckPeriod,
+		MaxDelayTime: envOrDefaultInt("AUTO_UPDATE_MAX_DELAY_MINUTES", defaultMaxDelayTime),
+		CheckPeriod:  envOrDefaultDuration("AUTO_UPDATE_CHECK_PERIOD", defaultCheckPeriod),
 		GracePeriod:  defaultGracePeriod,
 	}
 
 	// setup plugin updater config if plugin auto-update is enabled
-	var pluginUpdater *PluginUpdaterConfig
+	var pluginUpdater *ReleaseManagerConfig
 	pluginConfig := canopyConfig.PluginAutoUpdate
 	if pluginConfig.Enabled && canopyConfig.Plugin != "" {
 		// use configured repo or default to canopy-network/canopy
@@ -145,12 +147,13 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		if repoName == "" {
 			repoName = defaultRepoName
 		}
-		pluginUpdater = &PluginUpdaterConfig{
+		pluginUpdater = &ReleaseManagerConfig{
+			Type:           ReleaseTypePlugin,
 			RepoOwner:      repoOwner,
 			RepoName:       repoName,
 			PluginType:     canopyConfig.Plugin,
 			PluginDir:      fmt.Sprintf("plugin/%s", canopyConfig.Plugin),
-			GithubApiToken: envOrDefault("CANOPY_GITHUB_API_TOKEN", ""),
+			GithubApiToken: githubToken,
 		}
 	}
 
@@ -171,4 +174,33 @@ func envOrDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// envOrDefaultInt returns the value of the environment variable as an int,
+// or the default value if the variable is not set or invalid.
+func envOrDefaultInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	var result int
+	if _, err := fmt.Sscanf(value, "%d", &result); err != nil {
+		return defaultValue
+	}
+	return result
+}
+
+// envOrDefaultDuration returns the value of the environment variable as a duration,
+// or the default value if the variable is not set or invalid.
+// Accepts formats like "30m", "1h", "30s", etc.
+func envOrDefaultDuration(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	result, err := time.ParseDuration(value)
+	if err != nil {
+		return defaultValue
+	}
+	return result
 }
