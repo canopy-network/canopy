@@ -130,12 +130,11 @@ func (s *Supervisor) UnexpectedExit() <-chan error {
 
 // CoordinatorConfig holds the configuration for the Coordinator
 type CoordinatorConfig struct {
-	Canopy             lib.Config    // Configuration for the canopy service
-	BinPath            string        // Path to the binary file
-	MaxDelayTime       int           // Max time for delaying the update process (minutes)
-	CheckPeriod        time.Duration // Period for checking updates
-	GracePeriod        time.Duration // Grace period for tasks completion during shutdown
-	TestRestartOnStart bool          // For testing: restart using local binary on first check
+	Canopy       lib.Config    // Configuration for the canopy service
+	BinPath      string        // Path to the binary file
+	MaxDelayTime int           // Max time for delaying the update process (minutes)
+	CheckPeriod  time.Duration // Period for checking updates
+	GracePeriod  time.Duration // Grace period for tasks completion during shutdown
 }
 
 // Coordinator orchestrates the process of updating while managing CLI lifecycle
@@ -148,7 +147,6 @@ type Coordinator struct {
 	snapshot         *SnapshotManager     // snapshot instance reference
 	config           *CoordinatorConfig   // coordinator configuration
 	updateInProgress atomic.Bool          // flag indicating if an update is in progress
-	testRestartDone  atomic.Bool          // flag indicating if test restart has been done
 	log              lib.LoggerI          // logger instance
 }
 
@@ -177,18 +175,6 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	// create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// if test restart mode is enabled, trigger a restart using local binary
-	if true {
-		c.log.Info("test restart mode: will restart using local binary in 10 seconds")
-		go func() {
-			// wait 10 seconds before restarting (for testing)
-			time.Sleep(10 * time.Second)
-			if err := c.TestRestart(ctx); err != nil {
-				c.log.Errorf("test restart failed: %v", err)
-			}
-		}()
-	}
 
 	// kick off an immediate check
 	timer := time.NewTimer(0)
@@ -229,52 +215,6 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 			}()
 		}
 	}
-}
-
-// TestRestart performs a restart using the local binary for testing the update flow
-func (c *Coordinator) TestRestart(ctx context.Context) error {
-	// check if already done
-	if c.testRestartDone.Load() {
-		return nil
-	}
-
-	// check if an update is already in progress
-	if !c.updateInProgress.CompareAndSwap(false, true) {
-		return fmt.Errorf("update already in progress")
-	}
-	defer c.updateInProgress.Store(false)
-
-	c.log.Info("test restart: simulating update by restarting with local binary")
-
-	// mark as done
-	c.testRestartDone.Store(true)
-
-	// stop the current process
-	if c.supervisor.IsRunning() {
-		c.log.Info("test restart: stopping current CLI process")
-		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		if err := c.supervisor.Stop(stopCtx); err != nil {
-			c.log.Warnf("failed to stop process: %v", err)
-		}
-	}
-
-	// kill any remaining plugin processes
-	c.log.Info("test restart: cleaning up plugin processes")
-	c.killPluginProcesses()
-
-	// wait for child processes to fully terminate
-	c.log.Info("test restart: waiting for processes to terminate")
-	time.Sleep(2 * time.Second)
-
-	// restart with the same binary
-	c.log.Info("test restart: restarting CLI with local binary")
-	if err := c.supervisor.Start(c.config.BinPath); err != nil {
-		return fmt.Errorf("failed to restart process: %w", err)
-	}
-
-	c.log.Info("test restart: completed successfully")
-	return nil
 }
 
 // killPluginProcesses kills any remaining plugin processes and cleans up PID files

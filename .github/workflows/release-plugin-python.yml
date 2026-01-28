@@ -28,16 +28,16 @@ jobs:
         working-directory: plugin/python
         run: |
           mkdir -p release
-          # Create tarball with source code and dependencies
-          tar -czf release/python-plugin.tar.gz \
+          # Create tarball with source code (venv is created on first run by pluginctl.sh)
+          # Note: pluginctl.sh is NOT included - it's copied separately by Dockerfile
+          # and we don't want old releases to overwrite newer pluginctl.sh versions
+          tar --exclude='*.pyc' \
+            --exclude='__pycache__' \
+            -czf release/python-plugin.tar.gz \
             main.py \
             contract/ \
             pyproject.toml \
-            pluginctl.sh \
-            Makefile \
-            --exclude='*.pyc' \
-            --exclude='__pycache__' \
-            --exclude='.venv'
+            Makefile
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -52,9 +52,7 @@ jobs:
             
             ## Installation
             1. Extract `python-plugin.tar.gz` to `plugin/python/`
-            2. Create virtual environment: `python3 -m venv .venv`
-            3. Install dependencies: `.venv/bin/pip install -e .`
-            4. The plugin is ready to run
+            2. The plugin will create a virtual environment on first run
             
             ## Assets
             - `python-plugin.tar.gz` - Source code with pyproject.toml

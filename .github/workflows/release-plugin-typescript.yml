@@ -32,12 +32,20 @@ jobs:
         working-directory: plugin/typescript
         run: npm run build:all
 
+      - name: Install production dependencies only
+        working-directory: plugin/typescript
+        run: |
+          rm -rf node_modules
+          npm ci --production
+
       - name: Create distribution tarball
         working-directory: plugin/typescript
         run: |
           mkdir -p release
-          # Create tarball with dist/, package.json, and pluginctl.sh
-          tar -czf release/typescript-plugin.tar.gz dist/ package.json package-lock.json pluginctl.sh
+          # Create tarball with dist/, node_modules, package.json (for "type": "module")
+          # Note: pluginctl.sh is NOT included - it's copied separately by Dockerfile
+          # and we don't want old releases to overwrite newer pluginctl.sh versions
+          tar -czf release/typescript-plugin.tar.gz dist/ node_modules/ package.json
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -49,8 +57,7 @@ jobs:
             
             ## Installation
             1. Extract `typescript-plugin.tar.gz` to `plugin/typescript/`
-            2. Run `npm ci --production` to install runtime dependencies
-            3. The plugin is ready to run
+            2. The plugin is ready to run (node_modules included)
             
             ## Assets
             - `typescript-plugin.tar.gz` - Compiled plugin with dependencies

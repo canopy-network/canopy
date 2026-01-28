@@ -24,7 +24,7 @@ const (
 	defaultRepoName     = "canopy"
 	defaultRepoOwner    = "canopy-network"
 	defaultBinPath      = "./cli"
-	defaultCheckPeriod  = time.Minute * 1 // default check period for updates
+	defaultCheckPeriod  = time.Minute * 30 // default check period for updates
 	defaultGracePeriod  = time.Second * 2 // default grace period for graceful shutdown
 	defaultMaxDelayTime = 30              // default max delay time for staggered updates
 )
@@ -125,12 +125,11 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Name: snapshotFileName,
 	}
 	coordinator := &CoordinatorConfig{
-		Canopy:             canopyConfig,
-		BinPath:            binPath,
-		MaxDelayTime:       defaultMaxDelayTime,
-		CheckPeriod:        defaultCheckPeriod,
-		GracePeriod:        defaultGracePeriod,
-		TestRestartOnStart: envOrDefault("TEST_RESTART_ON_START", "") != "",
+		Canopy:       canopyConfig,
+		BinPath:      binPath,
+		MaxDelayTime: defaultMaxDelayTime,
+		CheckPeriod:  defaultCheckPeriod,
+		GracePeriod:  defaultGracePeriod,
 	}
 
 	// setup plugin updater config if plugin auto-update is enabled

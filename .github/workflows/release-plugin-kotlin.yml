@@ -30,7 +30,7 @@ jobs:
 
       - name: Build fat JAR
         working-directory: plugin/kotlin
-        run: ./gradlew shadowJar
+        run: ./gradlew fatJar --no-daemon
 
       - name: Prepare release artifacts
         working-directory: plugin/kotlin
