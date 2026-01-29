@@ -15,24 +15,32 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
+// PluginConfig holds the configuration for killing a specific plugin process
+type PluginConfig struct {
+	Pattern string // process pattern to match (e.g., "canopy-plugin-kotlin")
+	PID     string // path to PID file (e.g., "/tmp/plugin/kotlin-plugin.pid")
+}
+
 // Supervisor manages the CLI process lifecycle, from start to stop,
 // and notifies listeners when the process exits
 type Supervisor struct {
-	cmd            *exec.Cmd    // canopy sub-process
-	mu             sync.RWMutex // mutex for concurrent access
-	running        atomic.Bool  // flag indicating if process is running
-	stopping       atomic.Bool  // flag indicating if process is stopping
-	exit           chan error   // channel to notify listeners when process exits
-	unexpectedExit chan error   // channel to notify listeners when process exits unexpectedly
-	log            lib.LoggerI  // logger instance
+	cmd            *exec.Cmd     // canopy sub-process
+	mu             sync.RWMutex  // mutex for concurrent access
+	running        atomic.Bool   // flag indicating if process is running
+	stopping       atomic.Bool   // flag indicating if process is stopping
+	exit           chan error    // channel to notify listeners when process exits
+	unexpectedExit chan error    // channel to notify listeners when process exits unexpectedly
+	pluginConfig   *PluginConfig // optional plugin configuration
+	log            lib.LoggerI   // logger instance
 }
 
 // NewSupervisor creates a new ProcessSupervisor instance
-func NewSupervisor(logger lib.LoggerI) *Supervisor {
+func NewSupervisor(logger lib.LoggerI, pluginConfig *PluginConfig) *Supervisor {
 	return &Supervisor{
 		log:            logger,
 		exit:           make(chan error, 1),
 		unexpectedExit: make(chan error, 1),
+		pluginConfig:   pluginConfig,
 	}
 }
 
@@ -126,36 +134,19 @@ func (s *Supervisor) UnexpectedExit() <-chan error {
 	return s.unexpectedExit
 }
 
-// KillPluginProcesses kills any remaining plugin processes and cleans up PID files
-func (s *Supervisor) KillPluginProcesses() {
-	// plugin patterns to match in process command line
-	pluginPatterns := []string{
-		"canopy-plugin-kotlin", // Kotlin plugin JAR
-		"go-plugin",            // Go plugin binary
-		"typescript-plugin",    // TypeScript plugin
-		"python-plugin",        // Python plugin
-		"csharp-plugin",        // C# plugin
+// KillPlugin kills the configured plugin process and cleans up its PID file
+func (s *Supervisor) KillPlugin() {
+	if s.pluginConfig == nil {
+		return
 	}
-	for _, pattern := range pluginPatterns {
-		// use pkill to kill processes matching the pattern, ignore errors
-		cmd := exec.Command("pkill", "-9", "-f", pattern)
-		if err := cmd.Run(); err == nil {
-			s.log.Infof("killed remaining process matching: %s", pattern)
-		}
+	// kill process matching the pattern
+	cmd := exec.Command("pkill", "-9", "-f", s.pluginConfig.Pattern)
+	if err := cmd.Run(); err == nil {
+		s.log.Infof("killed process matching: %s", s.pluginConfig.Pattern)
 	}
-
-	// clean up PID files
-	pidFiles := []string{
-		"/tmp/plugin/kotlin-plugin.pid",
-		"/tmp/plugin/go-plugin.pid",
-		"/tmp/plugin/typescript-plugin.pid",
-		"/tmp/plugin/python-plugin.pid",
-		"/tmp/plugin/csharp-plugin.pid",
-	}
-	for _, pidFile := range pidFiles {
-		if err := os.Remove(pidFile); err == nil {
-			s.log.Infof("removed PID file: %s", pidFile)
-		}
+	// clean up PID file
+	if err := os.Remove(s.pluginConfig.PID); err == nil {
+		s.log.Infof("removed PID file: %s", s.pluginConfig.PID)
 	}
 }
 
@@ -356,7 +347,7 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *R
 		}
 		// kill any remaining plugin processes
 		c.log.Info("cleaning up plugin processes")
-		c.supervisor.KillPluginProcesses()
+		c.supervisor.KillPlugin()
 		// wait for processes to fully terminate
 		c.log.Info("waiting for processes to terminate")
 		time.Sleep(2 * time.Second)

@@ -35,6 +35,14 @@ var (
 		1: envOrDefault("SNAPSHOT_1_URL", "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net"),
 		2: envOrDefault("SNAPSHOT_2_URL", "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net"),
 	}
+	// pluginConfigs maps plugin type to its process kill configuration
+	pluginConfigs = map[string]*PluginConfig{
+		"go":         {Pattern: "go-plugin", PID: "/tmp/plugin/go-plugin.pid"},
+		"kotlin":     {Pattern: "canopy-plugin-kotlin", PID: "/tmp/plugin/kotlin-plugin.pid"},
+		"typescript": {Pattern: "typescript-plugin", PID: "/tmp/plugin/typescript-plugin.pid"},
+		"python":     {Pattern: "python-plugin", PID: "/tmp/plugin/python-plugin.pid"},
+		"csharp":     {Pattern: "csharp-plugin", PID: "/tmp/plugin/csharp-plugin.pid"},
+	}
 )
 
 func main() {
@@ -64,17 +72,19 @@ func main() {
 	// setup the dependencies
 	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion)
 	snapshot := NewSnapshotManager(configs.Snapshot)
-	supervisor := NewSupervisor(logger)
 
-	// setup plugin updater if configured
+	// setup plugin updater and config if configured
 	var pluginUpdater *ReleaseManager
+	var pluginConfig *PluginConfig
 	if configs.PluginUpdater != nil {
 		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
+		pluginConfig = pluginConfigs[configs.PluginUpdater.PluginType]
 		logger.Infof("plugin auto-update enabled for %s from %s/%s",
 			configs.PluginUpdater.PluginType,
 			configs.PluginUpdater.RepoOwner,
 			configs.PluginUpdater.RepoName)
 	}
+	supervisor := NewSupervisor(logger, pluginConfig)
 
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
