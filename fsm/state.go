@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -39,14 +40,16 @@ type StateMachine struct {
 
 // cache is the set of items to be cached used by the state machine
 type cache struct {
-	accounts  map[uint64]*Account // cache of accounts accessed
-	feeParams *FeeParams          // fee params for the current block
-	valParams *ValidatorParams    // validator params for the current block
+	accounts  map[uint64]*Account                   // cache of accounts accessed
+	feeParams *FeeParams                            // fee params for the current block
+	valParams *ValidatorParams                      // validator params for the current block
+	publicKey *lru.Cache[string, crypto.PublicKeyI] // public keys for block processing
 }
 
 // New() creates a new instance of a StateMachine
 func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
+	publicKeyCache, _ := lru.New[string, crypto.PublicKeyI](10_000)
 	sm := &StateMachine{
 		store:             nil,
 		ProtocolVersion:   CurrentProtocolVersion,
@@ -59,7 +62,8 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
+			accounts:  make(map[uint64]*Account),
+			publicKey: publicKeyCache,
 		},
 	}
 	// initialize the state machine
@@ -520,7 +524,8 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		Plugin:             s.Plugin,
 		log:                s.log,
 		cache: &cache{
-			accounts: make(map[uint64]*Account),
+			accounts:  make(map[uint64]*Account),
+			publicKey: s.cache.publicKey,
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
