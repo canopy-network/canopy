@@ -158,12 +158,29 @@ const (
 	DefaultInitialTokensPerBlock = uint64(80 * 1000000) // 80 CNPY
 	// the number of blocks between each halvening (block reward is cut in half) event
 	DefaultBlocksPerHalvening = uint64(3150000) // ~ 2 years - 20 second blocks
+	// default setting for skipping committee store operations (true = skip, recommended for new chains)
+	DefaultSkipCommitteeStoreEnabled = true
+	// default activation height for skip committee store upgrade (0 = from genesis)
+	DefaultSkipCommitteeStoreActivationHeight = uint64(0)
 )
 
 // StateMachineConfig houses FSM level options
 type StateMachineConfig struct {
-	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
-	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	InitialTokensPerBlock uint64   `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
+	BlocksPerHalvening    uint64   `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	Upgrades              Upgrades `json:"upgrades"`              // configuration for protocol upgrades and optimizations
+}
+
+// Upgrades houses configuration for protocol upgrades and optimizations
+// These are non-consensus breaking changes (for now) that allow nodes to optimize performance
+type Upgrades struct {
+	SkipCommitteeStore UpgradeConfig `json:"skipCommitteeStore"` // skip committee store set/delete operations
+}
+
+// UpgradeConfig defines when an upgrade activates
+type UpgradeConfig struct {
+	Enabled          bool   `json:"enabled"`          // if true, the upgrade is active
+	ActivationHeight uint64 `json:"activationHeight"` // block height when upgrade activates (0 = from genesis)
 }
 
 // DefaultStateMachineConfig returns FSM defaults
@@ -171,6 +188,12 @@ func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
 		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
 		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+		Upgrades: Upgrades{
+			SkipCommitteeStore: UpgradeConfig{
+				Enabled:          DefaultSkipCommitteeStoreEnabled,
+				ActivationHeight: DefaultSkipCommitteeStoreActivationHeight,
+			},
+		},
 	}
 }
 
