@@ -41,6 +41,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/cli-linux-amd64
             dist/cli-linux-arm64
