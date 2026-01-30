@@ -653,9 +653,10 @@ func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult,
 		return nil, err
 	}
 	return &lib.BlockResult{
-		BlockHeader: ptr,
-		Meta:        &lib.BlockResultMeta{Size: uint64(len(bz))},
-		Events:      events,
+		BlockHeader:  ptr,
+		Meta:         &lib.BlockResultMeta{Size: uint64(len(bz))},
+		Events:       events,
+		Transactions: txs,
 	}, nil
 }
 
