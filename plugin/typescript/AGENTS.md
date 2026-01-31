@@ -111,6 +111,15 @@ See `TUTORIAL.md` for the complete guide. Summary:
 
 ### Building the Plugin
 
+Using Makefile (recommended):
+```bash
+make build-all       # Full rebuild (install + proto + descriptors + TypeScript)
+make build           # TypeScript compilation only
+make build-proto     # Regenerate protobuf code only
+make build-descriptors  # Regenerate descriptor file only
+```
+
+Using npm directly:
 ```bash
 npm run build:all    # Full rebuild (proto + descriptors + TypeScript)
 npm run build:proto  # Regenerate protobuf code only
@@ -124,6 +133,9 @@ The plugin is started by Canopy when configured with `"plugin": "typescript"` in
 
 For development:
 ```bash
+make dev             # Run with nodemon for hot reload
+make run             # Run compiled output
+# or
 npm run dev          # Run with nodemon for hot reload
 npm start            # Run compiled output
 ```

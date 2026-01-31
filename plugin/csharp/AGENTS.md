@@ -67,8 +67,12 @@ Defines transaction message types:
 # Restore dependencies
 make restore
 
-# Build the plugin
+# Build the plugin (framework-dependent, requires .NET runtime)
 make build
+
+# Build self-contained executable for local Linux development
+# This produces a native executable that doesn't require .NET runtime installed
+make build-local
 
 # Run the plugin (starts socket server)
 make run
@@ -86,6 +90,14 @@ make format
 make lint
 ```
 
+### Build Variants
+
+| Target | Output | Use Case |
+|--------|--------|----------|
+| `make build` | Framework-dependent DLL | Development with .NET SDK |
+| `make build-local` | Self-contained executable (`bin/CanopyPlugin`) | Local Linux testing without .NET runtime |
+| Release workflow | Self-contained for glibc + musl | Docker/production (handled by CI) |
+
 ## Running with Docker
 
 The C# plugin can be run in a Docker container that includes both Canopy and the plugin.
@@ -100,9 +112,10 @@ make docker/plugin PLUGIN=csharp
 
 This builds a Docker image named `canopy-csharp` that contains:
 - The Canopy binary
-- The C# plugin DLL
-- .NET 8 runtime
+- The C# plugin as a self-contained executable (no .NET runtime required)
 - Pre-configured `config.json` with `"plugin": "csharp"`
+
+Note: The release workflow builds both glibc (standard Linux) and musl (Alpine) variants. The auto-update system automatically downloads the correct variant based on the runtime environment.
 
 ### Run the Container
 

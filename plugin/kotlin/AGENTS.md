@@ -193,6 +193,15 @@ make build
 ./gradlew build -x test
 ```
 
+### Build Fat JAR (for deployment/Docker)
+```bash
+make fatjar
+# or
+./gradlew fatJar --no-daemon
+```
+
+This creates a single JAR with all dependencies bundled, used by Docker and the auto-update system.
+
 ### Run Plugin
 ```bash
 make run
