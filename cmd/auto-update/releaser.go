@@ -45,10 +45,10 @@ const (
 // PluginReleaseConfig contains all plugin-specific configuration for releases
 type PluginReleaseConfig struct {
 	// Asset configuration
-	AssetName      string // asset filename (e.g., "go-plugin-%s-%s.tar.gz" or "typescript-plugin.tar.gz")
-	ArchSpecific   bool   // whether to format AssetName with OS/arch (uses fmt.Sprintf with GOOS, GOARCH)
-	UseX64Arch     bool   // use "x64" instead of "amd64" for architecture (e.g., C#)
-	MuslAssetName  string // alternative asset name for musl/Alpine systems (optional)
+	AssetName     string // asset filename (e.g., "go-plugin-%s-%s.tar.gz" or "typescript-plugin.tar.gz")
+	ArchSpecific  bool   // whether to format AssetName with OS/arch (uses fmt.Sprintf with GOOS, GOARCH)
+	UseX64Arch    bool   // use "x64" instead of "amd64" for architecture (e.g., C#)
+	MuslAssetName string // alternative asset name for musl/Alpine systems (optional)
 	// Extraction trigger
 	OldBinaryPath string // relative path to binary to remove to trigger extraction (e.g., "go-plugin")
 	// Process management
