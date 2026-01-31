@@ -186,10 +186,59 @@ func NewCoordinator(config *CoordinatorConfig, updater, pluginUpdater *ReleaseMa
 	}
 }
 
+// EnsurePluginReady checks if the plugin binary or tarball exists, and downloads if needed.
+// This ensures the plugin is available before starting the CLI for the first time.
+func (c *Coordinator) EnsurePluginReady() error {
+	// skip if no plugin updater configured
+	if c.pluginUpdater == nil {
+		return nil
+	}
+	cfg := c.pluginUpdater.config
+	if cfg == nil || cfg.PluginConfig == nil {
+		return nil
+	}
+	// check if binary already exists
+	binaryPath := filepath.Join(cfg.PluginDir, cfg.PluginConfig.OldBinaryPath)
+	if _, err := os.Stat(binaryPath); err == nil {
+		c.log.Debug("plugin binary exists, skipping initial download")
+		return nil
+	}
+	// check if tarball already exists
+	tarballPath := filepath.Join(cfg.PluginDir, c.pluginUpdater.getAssetName())
+	if _, err := os.Stat(tarballPath); err == nil {
+		c.log.Debug("plugin tarball exists, skipping initial download")
+		return nil
+	}
+	// neither exists, download the plugin
+	c.log.Info("plugin not found, downloading from release...")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	// check for latest release
+	release, err := c.pluginUpdater.Check()
+	if err != nil {
+		return fmt.Errorf("failed to check for plugin release: %w", err)
+	}
+	if release == nil {
+		return fmt.Errorf("no plugin release found")
+	}
+	// download the plugin
+	if err := c.pluginUpdater.Download(ctx, release); err != nil {
+		return fmt.Errorf("failed to download plugin: %w", err)
+	}
+	c.pluginUpdater.Version = release.Version
+	c.log.Infof("plugin %s downloaded successfully", release.Version)
+	return nil
+}
+
 // UpdateLoop starts the update loop for the coordinator. This loop continuously checks
 // for updates and applies them if necessary while also providing graceful shutdown for any
 // termination signal received.
 func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
+	// ensure plugin is ready before starting CLI (downloads if needed)
+	if err := c.EnsurePluginReady(); err != nil {
+		c.log.Warnf("failed to ensure plugin ready: %v", err)
+		// continue anyway - CLI might work without plugin or plugin might exist
+	}
 	// start the process
 	if err := c.supervisor.Start(c.config.BinPath); err != nil {
 		return err
