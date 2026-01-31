@@ -27,16 +27,32 @@ get_arch() {
     esac
 }
 
+# Detect if running on musl libc (Alpine)
+is_musl() {
+    [ -f /lib/ld-musl-*.so.1 ] 2>/dev/null && return 0
+    return 1
+}
+
 # Extract tarball if binary doesn't exist
 extract_if_needed() {
-    # If DLL already exists, nothing to do
+    # If binary already exists, nothing to do
     if [ -f "$BINARY_PATH" ]; then
         return 0
     fi
     
     # Check for architecture-specific tarball
     local arch=$(get_arch)
-    local tarball="$SCRIPT_DIR/csharp-plugin-linux-${arch}.tar.gz"
+    local tarball=""
+    
+    # Try musl tarball first on Alpine, then glibc
+    if is_musl; then
+        tarball="$SCRIPT_DIR/csharp-plugin-linux-musl-${arch}.tar.gz"
+    fi
+    
+    # Fall back to glibc tarball if musl not found or not on Alpine
+    if [ -z "$tarball" ] || [ ! -f "$tarball" ]; then
+        tarball="$SCRIPT_DIR/csharp-plugin-linux-${arch}.tar.gz"
+    fi
     
     if [ -f "$tarball" ]; then
         echo "Extracting $tarball..."
