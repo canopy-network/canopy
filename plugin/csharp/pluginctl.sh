@@ -40,6 +40,8 @@ extract_if_needed() {
     
     if [ -f "$tarball" ]; then
         echo "Extracting $tarball..."
+        # Clear old bin directory to avoid leftover files from previous builds
+        rm -rf "$SCRIPT_DIR/bin"
         mkdir -p "$SCRIPT_DIR/bin"
         tar -xzf "$tarball" -C "$SCRIPT_DIR/bin"
         if [ $? -eq 0 ] && [ -f "$BINARY_PATH" ]; then

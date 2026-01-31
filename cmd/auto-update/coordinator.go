@@ -15,27 +15,21 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-// PluginConfig holds the configuration for killing a specific plugin process
-type PluginConfig struct {
-	Pattern string // process pattern to match (e.g., "canopy-plugin-kotlin")
-	PID     string // path to PID file (e.g., "/tmp/plugin/kotlin-plugin.pid")
-}
-
 // Supervisor manages the CLI process lifecycle, from start to stop,
 // and notifies listeners when the process exits
 type Supervisor struct {
-	cmd            *exec.Cmd     // canopy sub-process
-	mu             sync.RWMutex  // mutex for concurrent access
-	running        atomic.Bool   // flag indicating if process is running
-	stopping       atomic.Bool   // flag indicating if process is stopping
-	exit           chan error    // channel to notify listeners when process exits
-	unexpectedExit chan error    // channel to notify listeners when process exits unexpectedly
-	pluginConfig   *PluginConfig // optional plugin configuration
-	log            lib.LoggerI   // logger instance
+	cmd            *exec.Cmd            // canopy sub-process
+	mu             sync.RWMutex         // mutex for concurrent access
+	running        atomic.Bool          // flag indicating if process is running
+	stopping       atomic.Bool          // flag indicating if process is stopping
+	exit           chan error           // channel to notify listeners when process exits
+	unexpectedExit chan error           // channel to notify listeners when process exits unexpectedly
+	pluginConfig   *PluginReleaseConfig // optional plugin configuration
+	log            lib.LoggerI          // logger instance
 }
 
 // NewSupervisor creates a new ProcessSupervisor instance
-func NewSupervisor(logger lib.LoggerI, pluginConfig *PluginConfig) *Supervisor {
+func NewSupervisor(logger lib.LoggerI, pluginConfig *PluginReleaseConfig) *Supervisor {
 	return &Supervisor{
 		log:            logger,
 		exit:           make(chan error, 1),
@@ -140,13 +134,17 @@ func (s *Supervisor) KillPlugin() {
 		return
 	}
 	// kill process matching the pattern
-	cmd := exec.Command("pkill", "-9", "-f", s.pluginConfig.Pattern)
-	if err := cmd.Run(); err == nil {
-		s.log.Infof("killed process matching: %s", s.pluginConfig.Pattern)
+	if s.pluginConfig.ProcessPattern != "" {
+		cmd := exec.Command("pkill", "-9", "-f", s.pluginConfig.ProcessPattern)
+		if err := cmd.Run(); err == nil {
+			s.log.Infof("killed process matching: %s", s.pluginConfig.ProcessPattern)
+		}
 	}
 	// clean up PID file
-	if err := os.Remove(s.pluginConfig.PID); err == nil {
-		s.log.Infof("removed PID file: %s", s.pluginConfig.PID)
+	if s.pluginConfig.PIDFile != "" {
+		if err := os.Remove(s.pluginConfig.PIDFile); err == nil {
+			s.log.Infof("removed PID file: %s", s.pluginConfig.PIDFile)
+		}
 	}
 }
 
@@ -200,6 +198,16 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// TODO: TESTING ONLY - remove before merging
+	// test restart after 10 seconds
+	go func() {
+		time.Sleep(10 * time.Second)
+		c.log.Info("TEST: triggering test restart after 10 seconds")
+		if err := c.TestRestart(ctx); err != nil {
+			c.log.Errorf("TEST: restart failed: %v", err)
+		}
+	}()
+
 	// kick off an immediate check
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -211,6 +219,8 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 			c.log.Warn("unexpected process exit, stopping program")
 			// cancel the context to clean up resources
 			cancel()
+			// kill any lingering plugin processes
+			c.supervisor.KillPlugin()
 			// wait for context to clean up
 			gracePeriodTimer := time.NewTimer(c.config.GracePeriod)
 			defer gracePeriodTimer.Stop()
@@ -241,6 +251,29 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	}
 }
 
+// TestRestart restarts the CLI process for testing purposes
+// TODO: TESTING ONLY - remove before merging
+func (c *Coordinator) TestRestart(ctx context.Context) error {
+	if !c.updateInProgress.CompareAndSwap(false, true) {
+		return fmt.Errorf("update already in progress")
+	}
+	defer c.updateInProgress.Store(false)
+
+	c.log.Info("TEST: stopping CLI process for test restart")
+	if c.supervisor.IsRunning() {
+		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := c.supervisor.Stop(stopCtx); err != nil {
+			c.log.Warnf("TEST: failed to stop process: %v", err)
+		}
+		c.supervisor.KillPlugin()
+		time.Sleep(2 * time.Second)
+	}
+
+	c.log.Info("TEST: restarting CLI process")
+	return c.supervisor.Start(c.config.BinPath)
+}
+
 // GracefulShutdown stops the coordinator while giving a grace period to the
 // canopy process to stop
 func (c *Coordinator) GracefulShutdown() error {
@@ -248,12 +281,17 @@ func (c *Coordinator) GracefulShutdown() error {
 	c.updateInProgress.Store(false)
 	// check if the supervisor process is running
 	if !c.supervisor.IsRunning() {
+		// still kill any lingering plugin processes
+		c.supervisor.KillPlugin()
 		return nil
 	}
 	// stop the supervised process
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), c.config.GracePeriod)
 	defer cancel()
-	return c.supervisor.Stop(shutdownCtx)
+	err := c.supervisor.Stop(shutdownCtx)
+	// kill plugin process after stopping CLI
+	c.supervisor.KillPlugin()
+	return err
 }
 
 // CheckAndApplyUpdate performs a single update check and applies if needed

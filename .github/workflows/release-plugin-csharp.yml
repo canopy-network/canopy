@@ -32,17 +32,25 @@ jobs:
         working-directory: plugin/csharp
         run: |
           mkdir -p release
-          # Linux musl x64 (Alpine) - publish main project only with all dependencies
-          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o release/linux-x64
-          # Linux musl ARM64 (Alpine) - publish main project only with all dependencies
-          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-arm64 --self-contained true -o release/linux-arm64
+          # Linux glibc x64 (Ubuntu, Debian, etc.)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-x64 --self-contained true -o release/linux-glibc-x64
+          # Linux glibc ARM64
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-arm64 --self-contained true -o release/linux-glibc-arm64
+          # Linux musl x64 (Alpine Docker)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o release/linux-musl-x64
+          # Linux musl ARM64 (Alpine Docker)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-arm64 --self-contained true -o release/linux-musl-arm64
 
       - name: Create tarballs
         working-directory: plugin/csharp
         run: |
           cd release
-          tar -czf csharp-plugin-linux-x64.tar.gz -C linux-x64 .
-          tar -czf csharp-plugin-linux-arm64.tar.gz -C linux-arm64 .
+          # glibc versions (standard Linux)
+          tar -czf csharp-plugin-linux-x64.tar.gz -C linux-glibc-x64 .
+          tar -czf csharp-plugin-linux-arm64.tar.gz -C linux-glibc-arm64 .
+          # musl versions (Alpine Docker)
+          tar -czf csharp-plugin-linux-musl-x64.tar.gz -C linux-musl-x64 .
+          tar -czf csharp-plugin-linux-musl-arm64.tar.gz -C linux-musl-arm64 .
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -57,10 +65,17 @@ jobs:
             2. The plugin is self-contained (no .NET runtime required)
             
             ## Assets
-            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64 (self-contained)
-            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64 (self-contained)
+            ### Standard Linux (glibc) - Ubuntu, Debian, RHEL, etc.
+            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64
+            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64
+            
+            ### Alpine Linux (musl) - Docker containers
+            - `csharp-plugin-linux-musl-x64.tar.gz` - Alpine x86_64
+            - `csharp-plugin-linux-musl-arm64.tar.gz` - Alpine ARM64
           files: |
             plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
             plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-arm64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

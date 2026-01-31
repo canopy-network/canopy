@@ -42,6 +42,20 @@ const (
 	ReleaseTypePlugin
 )
 
+// PluginReleaseConfig contains all plugin-specific configuration for releases
+type PluginReleaseConfig struct {
+	// Asset configuration
+	AssetName      string // asset filename (e.g., "go-plugin-%s-%s.tar.gz" or "typescript-plugin.tar.gz")
+	ArchSpecific   bool   // whether to format AssetName with OS/arch (uses fmt.Sprintf with GOOS, GOARCH)
+	UseX64Arch     bool   // use "x64" instead of "amd64" for architecture (e.g., C#)
+	MuslAssetName  string // alternative asset name for musl/Alpine systems (optional)
+	// Extraction trigger
+	OldBinaryPath string // relative path to binary to remove to trigger extraction (e.g., "go-plugin")
+	// Process management
+	ProcessPattern string // process pattern for pkill (e.g., "go-plugin")
+	PIDFile        string // path to PID file (e.g., "/tmp/plugin/go-plugin.pid")
+}
+
 // ReleaseManagerConfig contains configuration for the release manager
 type ReleaseManagerConfig struct {
 	Type           ReleaseType // type of release (CLI or plugin)
@@ -52,8 +66,8 @@ type ReleaseManagerConfig struct {
 	BinPath     string // path to the binary to be updated (CLI only)
 	SnapshotKey string // version metadata key for snapshot (CLI only)
 	// Plugin-specific fields
-	PluginType string // type of plugin: go, typescript, kotlin, csharp, python
-	PluginDir  string // path to the plugin directory
+	PluginDir    string               // path to the plugin directory
+	PluginConfig *PluginReleaseConfig // plugin-specific release configuration
 }
 
 // ReleaseManager manages the update process for CLI or plugins
@@ -124,7 +138,14 @@ func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 	if rm.config.Type == ReleaseTypeCLI {
 		return nil, fmt.Errorf("unsupported architecture: %s-%s", runtime.GOOS, runtime.GOARCH)
 	}
-	return nil, fmt.Errorf("no matching asset found for plugin %s (looking for %s)", rm.config.PluginType, targetName)
+	return nil, fmt.Errorf("no matching asset found for plugin (looking for %s)", targetName)
+}
+
+// isMuslLibc detects if the system uses musl libc (Alpine Linux)
+func isMuslLibc() bool {
+	// Check for musl dynamic linker
+	matches, _ := filepath.Glob("/lib/ld-musl-*.so.1")
+	return len(matches) > 0
 }
 
 // getAssetName returns the expected asset name based on release type
@@ -132,25 +153,25 @@ func (rm *ReleaseManager) getAssetName() string {
 	if rm.config.Type == ReleaseTypeCLI {
 		return fmt.Sprintf("cli-%s-%s", runtime.GOOS, runtime.GOARCH)
 	}
-	// Plugin asset names
-	switch rm.config.PluginType {
-	case "go":
-		return fmt.Sprintf("go-plugin-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
-	case "typescript":
-		return "typescript-plugin.tar.gz"
-	case "kotlin":
-		return "kotlin-plugin.tar.gz"
-	case "csharp":
-		arch := runtime.GOARCH
-		if arch == "amd64" {
-			arch = "x64"
-		}
-		return fmt.Sprintf("csharp-plugin-%s-%s.tar.gz", runtime.GOOS, arch)
-	case "python":
-		return "python-plugin.tar.gz"
-	default:
-		return fmt.Sprintf("%s-plugin.tar.gz", rm.config.PluginType)
+	// Plugin asset name from config
+	cfg := rm.config.PluginConfig
+	if cfg == nil {
+		return ""
 	}
+	// Use musl-specific asset name if available and running on musl
+	assetName := cfg.AssetName
+	if cfg.MuslAssetName != "" && isMuslLibc() {
+		assetName = cfg.MuslAssetName
+	}
+	if !cfg.ArchSpecific {
+		return assetName
+	}
+	// Format with OS and arch
+	arch := runtime.GOARCH
+	if cfg.UseX64Arch && arch == "amd64" {
+		arch = "x64"
+	}
+	return fmt.Sprintf(assetName, runtime.GOOS, arch)
 }
 
 // ShouldUpdate determines whether the given release should be applied
@@ -246,25 +267,14 @@ func (rm *ReleaseManager) downloadPlugin(body io.Reader) error {
 
 // getOldBinaryPath returns the path to the old plugin binary to trigger extraction
 func (rm *ReleaseManager) getOldBinaryPath() string {
-	if rm.config.Type == ReleaseTypeCLI {
+	if rm.config.Type == ReleaseTypeCLI || rm.config.PluginConfig == nil {
 		return ""
 	}
-	switch rm.config.PluginType {
-	case "go":
-		return filepath.Join(rm.config.PluginDir, "go-plugin")
-	case "kotlin":
-		return filepath.Join(rm.config.PluginDir, "build", "libs", "canopy-plugin-kotlin-1.0.0-all.jar")
-	case "typescript":
-		return filepath.Join(rm.config.PluginDir, "dist", "main.js")
-	case "python":
-		return filepath.Join(rm.config.PluginDir, "main.py")
-	case "csharp":
-		return filepath.Join(rm.config.PluginDir, "bin", "CanopyPlugin.dll")
-	default:
+	if rm.config.PluginConfig.OldBinaryPath == "" {
 		return ""
 	}
+	return filepath.Join(rm.config.PluginDir, rm.config.PluginConfig.OldBinaryPath)
 }
-
 
 // SnapshotManager code below
 

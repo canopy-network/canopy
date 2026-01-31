@@ -35,13 +35,45 @@ var (
 		1: envOrDefault("SNAPSHOT_1_URL", "http://canopy-mainnet-latest-chain-id1.us.nodefleet.net"),
 		2: envOrDefault("SNAPSHOT_2_URL", "http://canopy-mainnet-latest-chain-id2.us.nodefleet.net"),
 	}
-	// pluginConfigs maps plugin type to its process kill configuration
-	pluginConfigs = map[string]*PluginConfig{
-		"go":         {Pattern: "go-plugin", PID: "/tmp/plugin/go-plugin.pid"},
-		"kotlin":     {Pattern: "canopy-plugin-kotlin", PID: "/tmp/plugin/kotlin-plugin.pid"},
-		"typescript": {Pattern: "typescript-plugin", PID: "/tmp/plugin/typescript-plugin.pid"},
-		"python":     {Pattern: "python-plugin", PID: "/tmp/plugin/python-plugin.pid"},
-		"csharp":     {Pattern: "csharp-plugin", PID: "/tmp/plugin/csharp-plugin.pid"},
+	// pluginReleaseConfigs maps plugin type to its full release configuration
+	pluginReleaseConfigs = map[string]*PluginReleaseConfig{
+		"go": {
+			AssetName:      "go-plugin-%s-%s.tar.gz",
+			ArchSpecific:   true,
+			OldBinaryPath:  "go-plugin",
+			ProcessPattern: "go-plugin",
+			PIDFile:        "/tmp/plugin/go-plugin.pid",
+		},
+		"kotlin": {
+			AssetName:      "kotlin-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "build/libs/canopy-plugin-kotlin-1.0.0-all.jar",
+			ProcessPattern: "canopy-plugin-kotlin",
+			PIDFile:        "/tmp/plugin/kotlin-plugin.pid",
+		},
+		"typescript": {
+			AssetName:      "typescript-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "dist/main.js",
+			ProcessPattern: "plugin/typescript/dist/main.js",
+			PIDFile:        "/tmp/plugin/typescript-plugin.pid",
+		},
+		"python": {
+			AssetName:      "python-plugin.tar.gz",
+			ArchSpecific:   false,
+			OldBinaryPath:  "main.py",
+			ProcessPattern: "plugin/python/main.py",
+			PIDFile:        "/tmp/plugin/python-plugin.pid",
+		},
+		"csharp": {
+			AssetName:      "csharp-plugin-%s-%s.tar.gz",
+			MuslAssetName:  "csharp-plugin-%s-musl-%s.tar.gz",
+			ArchSpecific:   true,
+			UseX64Arch:     true,
+			OldBinaryPath:  "bin/CanopyPlugin",
+			ProcessPattern: "plugin/csharp/bin/CanopyPlugin",
+			PIDFile:        "/tmp/plugin/csharp-plugin.pid",
+		},
 	}
 )
 
@@ -75,12 +107,11 @@ func main() {
 
 	// setup plugin updater and config if configured
 	var pluginUpdater *ReleaseManager
-	var pluginConfig *PluginConfig
+	var pluginConfig *PluginReleaseConfig
 	if configs.PluginUpdater != nil {
 		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
-		pluginConfig = pluginConfigs[configs.PluginUpdater.PluginType]
-		logger.Infof("plugin auto-update enabled for %s from %s/%s",
-			configs.PluginUpdater.PluginType,
+		pluginConfig = configs.PluginUpdater.PluginConfig
+		logger.Infof("plugin auto-update enabled from %s/%s",
 			configs.PluginUpdater.RepoOwner,
 			configs.PluginUpdater.RepoName)
 	}
@@ -146,24 +177,30 @@ func getConfigs() (*Configs, lib.LoggerI) {
 
 	// setup plugin updater config if plugin auto-update is enabled
 	var pluginUpdater *ReleaseManagerConfig
-	pluginConfig := canopyConfig.PluginAutoUpdate
-	if pluginConfig.Enabled && canopyConfig.Plugin != "" {
-		// use configured repo or default to canopy-network/canopy
-		repoOwner := pluginConfig.RepoOwner
-		if repoOwner == "" {
-			repoOwner = defaultRepoOwner
-		}
-		repoName := pluginConfig.RepoName
-		if repoName == "" {
-			repoName = defaultRepoName
-		}
-		pluginUpdater = &ReleaseManagerConfig{
-			Type:           ReleaseTypePlugin,
-			RepoOwner:      repoOwner,
-			RepoName:       repoName,
-			PluginType:     canopyConfig.Plugin,
-			PluginDir:      fmt.Sprintf("plugin/%s", canopyConfig.Plugin),
-			GithubApiToken: githubToken,
+	pluginAutoUpdate := canopyConfig.PluginAutoUpdate
+	if pluginAutoUpdate.Enabled && canopyConfig.Plugin != "" {
+		// lookup plugin release config from map
+		pluginReleaseCfg, ok := pluginReleaseConfigs[canopyConfig.Plugin]
+		if !ok {
+			l.Warnf("unknown plugin type %q, plugin auto-update disabled", canopyConfig.Plugin)
+		} else {
+			// use configured repo or default to canopy-network/canopy
+			repoOwner := pluginAutoUpdate.RepoOwner
+			if repoOwner == "" {
+				repoOwner = defaultRepoOwner
+			}
+			repoName := pluginAutoUpdate.RepoName
+			if repoName == "" {
+				repoName = defaultRepoName
+			}
+			pluginUpdater = &ReleaseManagerConfig{
+				Type:           ReleaseTypePlugin,
+				RepoOwner:      repoOwner,
+				RepoName:       repoName,
+				PluginDir:      fmt.Sprintf("plugin/%s", canopyConfig.Plugin),
+				PluginConfig:   pluginReleaseCfg,
+				GithubApiToken: githubToken,
+			}
 		}
 	}
 

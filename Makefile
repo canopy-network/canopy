@@ -58,10 +58,6 @@ run/auto-update:
 run/auto-update-build: build/auto-update-local
 	BIN_PATH=./cli go run $(AUTO_UPDATE_DIR) start
 
-## run/auto-update-test: run auto-update with test restart (restarts using local binary for testing)
-run/auto-update-test:
-	BIN_PATH=./cli TEST_RESTART_ON_START=1 go run $(AUTO_UPDATE_DIR) start
-
 # ==================================================================================== #
 # TESTING
 # ==================================================================================== #
@@ -133,7 +129,7 @@ else ifeq ($(PLUGIN),typescript)
 else ifeq ($(PLUGIN),python)
 	cd plugin/python && make dev
 else ifeq ($(PLUGIN),csharp)
-	cd plugin/csharp && dotnet publish -c Release -o bin
+	cd plugin/csharp && rm -rf bin && dotnet publish -c Release -r linux-x64 --self-contained true -o bin
 else ifeq ($(PLUGIN),all)
 	$(MAKE) build/plugin PLUGIN=go
 	$(MAKE) build/plugin PLUGIN=kotlin
