@@ -12,13 +12,23 @@ RUN go build -trimpath -ldflags="-s -w" -o /canopy ./cmd/main/...
 # Stage 2: Runtime with Python
 FROM python:3.12-alpine
 WORKDIR /app
+
+# Install bash (required for pluginctl.sh)
+RUN apk add --no-cache bash
+
 RUN mkdir -p /tmp/plugin /root/.canopy
 
+# Copy Canopy binary
 COPY --from=canopy-builder /canopy .
-COPY plugin/python/ ./plugin/
 
-# Install dependencies if requirements.txt exists
-RUN if [ -f plugin/requirements.txt ]; then pip install --no-cache-dir -r plugin/requirements.txt; fi
+# Copy Python plugin to correct path (Canopy expects plugin/python/pluginctl.sh)
+COPY plugin/python/ ./plugin/python/
+
+# Remove any existing venv from copy, create fresh venv, and install dependencies
+RUN rm -rf /app/plugin/python/.venv && \
+    python3 -m venv /app/plugin/python/.venv && \
+    /app/plugin/python/.venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /app/plugin/python/.venv/bin/pip install --no-cache-dir -e /app/plugin/python/
 
 # Set plugin type for Canopy to start
 RUN printf '{"plugin":"python"}\n' > /root/.canopy/config.json
