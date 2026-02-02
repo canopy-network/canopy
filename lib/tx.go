@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/canopy-network/canopy/lib/crypto"
 
+	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -184,6 +184,8 @@ func (x *Transaction) Sign(pk crypto.PrivateKeyI) (err ErrorI) {
 type jsonTx struct {
 	Type          string          `json:"type,omitempty"`
 	Msg           json.RawMessage `json:"msg,omitempty"`
+	MsgTypeURL    string          `json:"msgTypeUrl,omitempty"`
+	MsgBytes      string          `json:"msgBytes,omitempty"`
 	Signature     *Signature      `json:"signature,omitempty"`
 	Time          uint64          `json:"time,omitempty"`
 	CreatedHeight uint64          `json:"createdHeight,omitempty"`
@@ -195,31 +197,26 @@ type jsonTx struct {
 
 // MarshalJSON() implements the json.Marshaller interface for the Transaction type
 func (x Transaction) MarshalJSON() (jsonBytes []byte, err error) {
-	// convert the payload from a proto.Any to a proto.Message
-	payload, err := FromAny(x.Msg)
-	// if an error occurred during the conversion
-	if err != nil {
-		// exit with error
-		return
+	if x.Msg == nil {
+		return nil, fmt.Errorf("transaction message is nil")
 	}
-	// cast the payload to a Message interface type
-	msg, castSucceeded := payload.(MessageI)
-	// if the cast failed
-	if !castSucceeded {
-		// exit with conversion error
-		return nil, fmt.Errorf("couldn't convert %T to type MessageI", payload)
-	}
-	// convert the message to json bytes
-	messageRawJSON, err := MarshalJSON(msg)
-	// if an error occurred during the conversion
+	var (
+		messageRawJSON json.RawMessage
+		msgTypeURL     string
+		msgBytes       string
+	)
+	// convert the payload from a proto.Any to a JSON object when possible
+	messageRawJSON, err = MarshalAnypbJSON(x.Msg)
 	if err != nil {
-		// exit with error
-		return
+		msgTypeURL = x.Msg.TypeUrl
+		msgBytes = BytesToString(x.Msg.Value)
 	}
 	// exit by converting a new json object into json bytes
 	return json.Marshal(jsonTx{
 		Type:          x.MessageType,
 		Msg:           messageRawJSON,
+		MsgTypeURL:    msgTypeURL,
+		MsgBytes:      msgBytes,
 		Signature:     x.Signature,
 		Time:          x.Time,
 		CreatedHeight: x.CreatedHeight,
@@ -238,12 +235,54 @@ func (x *Transaction) UnmarshalJSON(jsonBytes []byte) (err error) {
 	if err = json.Unmarshal(jsonBytes, j); err != nil {
 		return err
 	}
+	// first try unmarshalling using the global plugin registration
+	if len(j.Msg) > 0 {
+		anyMsg, e := AnyFromJSONForMessageType(j.Type, j.Msg)
+		if e == nil {
+			*x = Transaction{
+				MessageType:   j.Type,
+				Msg:           anyMsg,
+				Signature:     j.Signature,
+				CreatedHeight: j.CreatedHeight,
+				Time:          j.Time,
+				Fee:           j.Fee,
+				Memo:          j.Memo,
+				NetworkId:     j.NetworkId,
+				ChainId:       j.ChainId,
+			}
+			return nil
+		} else if e.Code() != CodeUnknownMsgName {
+			return e
+		}
+	}
 	// get the type of the message payload based on the 'message types' that were globally registered upon app start
 	m, found := RegisteredMessages[j.Type]
 	// if the message type is not found among the registered messages
 	if !found {
-		// exit with error
-		return ErrUnknownMessageName(j.Type)
+		if j.MsgTypeURL == "" && j.MsgBytes == "" {
+			// exit with error
+			return ErrUnknownMessageName(j.Type)
+		}
+		var msgValue []byte
+		if j.MsgBytes != "" {
+			msgValue, err = StringToBytes(j.MsgBytes)
+			if err != nil {
+				return err
+			}
+		}
+		// populate the underlying transaction object using raw any bytes
+		*x = Transaction{
+			MessageType:   j.Type,
+			Msg:           &anypb.Any{TypeUrl: j.MsgTypeURL, Value: msgValue},
+			Signature:     j.Signature,
+			CreatedHeight: j.CreatedHeight,
+			Time:          j.Time,
+			Fee:           j.Fee,
+			Memo:          j.Memo,
+			NetworkId:     j.NetworkId,
+			ChainId:       j.ChainId,
+		}
+		return nil
 	}
 	// create a new instance of the message
 	msg := m.New()

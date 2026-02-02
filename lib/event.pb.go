@@ -9,6 +9,7 @@ package lib
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -40,6 +41,7 @@ type Event struct {
 	//	*Event_FinishUnstaking
 	//	*Event_OrderBookLock
 	//	*Event_OrderBookReset
+	//	*Event_Custom
 	Msg isEvent_Msg `protobuf_oneof:"msg"`
 	// height: the block height of the event
 	Height uint64 `protobuf:"varint,91,opt,name=height,proto3" json:"height,omitempty"`
@@ -202,6 +204,15 @@ func (x *Event) GetOrderBookReset() *EventOrderBookReset {
 	return nil
 }
 
+func (x *Event) GetCustom() *EventCustom {
+	if x != nil {
+		if x, ok := x.Msg.(*Event_Custom); ok {
+			return x.Custom
+		}
+	}
+	return nil
+}
+
 func (x *Event) GetHeight() uint64 {
 	if x != nil {
 		return x.Height
@@ -292,6 +303,10 @@ type Event_OrderBookReset struct {
 	OrderBookReset *EventOrderBookReset `protobuf:"bytes,12,opt,name=order_book_reset,json=orderBookReset,proto3,oneof"`
 }
 
+type Event_Custom struct {
+	Custom *EventCustom `protobuf:"bytes,13,opt,name=custom,proto3,oneof"`
+}
+
 func (*Event_Reward) isEvent_Msg() {}
 
 func (*Event_Slash) isEvent_Msg() {}
@@ -313,6 +328,8 @@ func (*Event_FinishUnstaking) isEvent_Msg() {}
 func (*Event_OrderBookLock) isEvent_Msg() {}
 
 func (*Event_OrderBookReset) isEvent_Msg() {}
+
+func (*Event_Custom) isEvent_Msg() {}
 
 type EventReward struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -953,11 +970,57 @@ func (x *EventOrderBookReset) GetOrderId() []byte {
 	return nil
 }
 
+// EventCustom carries a plugin-defined event payload.
+type EventCustom struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// msg: custom payload.
+	Msg           *anypb.Any `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventCustom) Reset() {
+	*x = EventCustom{}
+	mi := &file_event_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventCustom) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventCustom) ProtoMessage() {}
+
+func (x *EventCustom) ProtoReflect() protoreflect.Message {
+	mi := &file_event_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventCustom.ProtoReflect.Descriptor instead.
+func (*EventCustom) Descriptor() ([]byte, []int) {
+	return file_event_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *EventCustom) GetMsg() *anypb.Any {
+	if x != nil {
+		return x.Msg
+	}
+	return nil
+}
+
 var File_event_proto protoreflect.FileDescriptor
 
 const file_event_proto_rawDesc = "" +
 	"\n" +
-	"\vevent.proto\x12\x05types\"\xc3\a\n" +
+	"\vevent.proto\x12\x05types\x1a\x19google/protobuf/any.proto\"\xf1\a\n" +
 	"\x05Event\x12\x1d\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\tR\teventType\x12,\n" +
@@ -973,7 +1036,8 @@ const file_event_proto_rawDesc = "" +
 	"\x10finish_unstaking\x18\n" +
 	" \x01(\v2\x1b.types.EventFinishUnstakingH\x00R\x0ffinishUnstaking\x12C\n" +
 	"\x0forder_book_lock\x18\v \x01(\v2\x19.types.EventOrderBookLockH\x00R\rorderBookLock\x12F\n" +
-	"\x10order_book_reset\x18\f \x01(\v2\x1a.types.EventOrderBookResetH\x00R\x0eorderBookReset\x12\x16\n" +
+	"\x10order_book_reset\x18\f \x01(\v2\x1a.types.EventOrderBookResetH\x00R\x0eorderBookReset\x12,\n" +
+	"\x06custom\x18\r \x01(\v2\x12.types.EventCustomH\x00R\x06custom\x12\x16\n" +
 	"\x06height\x18[ \x01(\x04R\x06height\x12\x1c\n" +
 	"\treference\x18\\ \x01(\tR\treference\x12\x18\n" +
 	"\achainId\x18] \x01(\x04R\achainId\x12!\n" +
@@ -1022,7 +1086,9 @@ const file_event_proto_rawDesc = "" +
 	"\x12buyer_send_address\x18\x03 \x01(\fR\x10buyerSendAddress\x120\n" +
 	"\x14buyer_chain_deadline\x18\x04 \x01(\x04R\x12buyerChainDeadline\"0\n" +
 	"\x13EventOrderBookReset\x12\x19\n" +
-	"\border_id\x18\x01 \x01(\fR\aorderIdB&Z$github.com/canopy-network/canopy/libb\x06proto3"
+	"\border_id\x18\x01 \x01(\fR\aorderId\"5\n" +
+	"\vEventCustom\x12&\n" +
+	"\x03msg\x18\x01 \x01(\v2\x14.google.protobuf.AnyR\x03msgB&Z$github.com/canopy-network/canopy/libb\x06proto3"
 
 var (
 	file_event_proto_rawDescOnce sync.Once
@@ -1036,7 +1102,7 @@ func file_event_proto_rawDescGZIP() []byte {
 	return file_event_proto_rawDescData
 }
 
-var file_event_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_event_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_event_proto_goTypes = []any{
 	(*Event)(nil),                       // 0: types.Event
 	(*EventReward)(nil),                 // 1: types.EventReward
@@ -1050,6 +1116,8 @@ var file_event_proto_goTypes = []any{
 	(*EventFinishUnstaking)(nil),        // 9: types.EventFinishUnstaking
 	(*EventOrderBookLock)(nil),          // 10: types.EventOrderBookLock
 	(*EventOrderBookReset)(nil),         // 11: types.EventOrderBookReset
+	(*EventCustom)(nil),                 // 12: types.EventCustom
+	(*anypb.Any)(nil),                   // 13: google.protobuf.Any
 }
 var file_event_proto_depIdxs = []int32{
 	1,  // 0: types.Event.reward:type_name -> types.EventReward
@@ -1063,11 +1131,13 @@ var file_event_proto_depIdxs = []int32{
 	9,  // 8: types.Event.finish_unstaking:type_name -> types.EventFinishUnstaking
 	10, // 9: types.Event.order_book_lock:type_name -> types.EventOrderBookLock
 	11, // 10: types.Event.order_book_reset:type_name -> types.EventOrderBookReset
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	12, // 11: types.Event.custom:type_name -> types.EventCustom
+	13, // 12: types.EventCustom.msg:type_name -> google.protobuf.Any
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_event_proto_init() }
@@ -1087,6 +1157,7 @@ func file_event_proto_init() {
 		(*Event_FinishUnstaking)(nil),
 		(*Event_OrderBookLock)(nil),
 		(*Event_OrderBookReset)(nil),
+		(*Event_Custom)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1094,7 +1165,7 @@ func file_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_event_proto_rawDesc), len(file_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

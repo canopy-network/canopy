@@ -2,6 +2,8 @@ package lib
 
 import (
 	"encoding/json"
+
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type EventType string
@@ -75,6 +77,8 @@ func (e *Events) New() Pageable { return &Events{} }
 type eventJSON struct {
 	EventType   string          `json:"eventType"`
 	Msg         json.RawMessage `json:"msg,omitempty"`
+	MsgTypeURL  string          `json:"msgTypeUrl,omitempty"`
+	MsgBytes    HexBytes        `json:"msgBytes,omitempty"`
 	Height      uint64          `json:"height"`
 	Reference   string          `json:"reference"`
 	ChainId     uint64          `json:"chainId"`
@@ -91,6 +95,8 @@ func (e *Event) MarshalJSON() ([]byte, error) {
 
 	// Marshal the Msg field separately
 	var msgBytes []byte
+	var msgTypeURL string
+	var msgHex HexBytes
 	var err error
 	if e.Msg != nil {
 		switch msg := e.Msg.(type) {
@@ -116,6 +122,16 @@ func (e *Event) MarshalJSON() ([]byte, error) {
 			msgBytes, err = json.Marshal(msg.AutoBeginUnstaking)
 		case *Event_FinishUnstaking:
 			msgBytes, err = json.Marshal(msg.FinishUnstaking)
+		case *Event_Custom:
+			if msg.Custom != nil && msg.Custom.Msg != nil {
+				msgBytes, err = MarshalAnypbJSON(msg.Custom.Msg)
+				if err != nil {
+					msgTypeURL = msg.Custom.Msg.TypeUrl
+					msgHex = HexBytes(msg.Custom.Msg.Value)
+					msgBytes = nil
+					err = nil
+				}
+			}
 		}
 		if err != nil {
 			return nil, err
@@ -125,6 +141,8 @@ func (e *Event) MarshalJSON() ([]byte, error) {
 	temp := eventJSON{
 		EventType:   e.EventType,
 		Msg:         msgBytes,
+		MsgTypeURL:  msgTypeURL,
+		MsgBytes:    msgHex,
 		Height:      e.Height,
 		Reference:   e.Reference,
 		ChainId:     e.ChainId,
@@ -154,6 +172,12 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 	e.Address = temp.Address
 
 	// Handle the Msg field based on EventType
+	if temp.MsgTypeURL != "" || len(temp.MsgBytes) > 0 {
+		e.Msg = &Event_Custom{Custom: &EventCustom{
+			Msg: &anypb.Any{TypeUrl: temp.MsgTypeURL, Value: []byte(temp.MsgBytes)},
+		}}
+		return nil
+	}
 	if len(temp.Msg) > 0 {
 		switch temp.EventType {
 		case string(EventTypeReward):
@@ -223,6 +247,13 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 			}
 			e.Msg = &Event_OrderBookReset{OrderBookReset: &orderBookReset}
 		}
+	}
+	if e.Msg == nil && len(temp.Msg) > 0 {
+		anyMsg, err := AnyFromProtoJSON(temp.Msg)
+		if err != nil {
+			return err
+		}
+		e.Msg = &Event_Custom{Custom: &EventCustom{Msg: anyMsg}}
 	}
 
 	return nil

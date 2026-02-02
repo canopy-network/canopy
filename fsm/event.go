@@ -133,3 +133,28 @@ func (s *StateMachine) addEvent(eventType lib.EventType, msg interface{}, addres
 	// add the event to the tracker
 	return s.events.Add(e)
 }
+
+// addPluginEvents applies plugin events with default metadata.
+func (s *StateMachine) addPluginEvents(events []*lib.Event) lib.ErrorI {
+	if len(events) == 0 {
+		return nil
+	}
+	for _, e := range events {
+		if e == nil {
+			continue
+		}
+		if e.Height == 0 {
+			e.Height = s.Height()
+		}
+		if e.Reference == "" {
+			e.Reference = s.events.GetReference()
+		}
+		if e.ChainId == 0 {
+			e.ChainId = s.Config.ChainId
+		}
+		if err := s.events.Add(e); err != nil {
+			return err
+		}
+	}
+	return nil
+}

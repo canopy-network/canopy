@@ -1,0 +1,3 @@
+# Dependencies for the Python plugin tutorial
+protobuf>=4.21.0,<5.0.0
+blspy>=2.0.0,<3.0.0
