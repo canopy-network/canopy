@@ -141,13 +141,13 @@ func TestSetGetValidators(t *testing.T) {
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t),
+					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: amount + 1,
 					Committees:   []uint64{lib.CanopyChainId, 2},
 				},
 				{
 					Address:      newTestAddressBytes(t, 2),
-					PublicKey:    newTestPublicKeyBytes(t),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
 					StakedAmount: amount,
 					Committees:   []uint64{lib.CanopyChainId, 2},
 				},
@@ -180,14 +180,14 @@ func TestSetGetValidators(t *testing.T) {
 				},
 				{
 					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t),
+					PublicKey:    newTestPublicKeyBytes(t, 1),
 					StakedAmount: amount + 1,
 					Delegate:     true,
 					Committees:   []uint64{lib.CanopyChainId, 2},
 				},
 				{
 					Address:      newTestAddressBytes(t, 2),
-					PublicKey:    newTestPublicKeyBytes(t),
+					PublicKey:    newTestPublicKeyBytes(t, 2),
 					StakedAmount: amount,
 					Delegate:     true,
 					Committees:   []uint64{lib.CanopyChainId, 2},
@@ -250,19 +250,23 @@ func TestSetGetValidators(t *testing.T) {
 			for i, v := range got {
 				require.EqualExportedValues(t, test.preset[i], v)
 			}
-			// get the committees from state
-			set, err := sm.GetCommitteePaginated(lib.PageParams{}, lib.CanopyChainId)
-			require.NoError(t, err)
-			// check committees got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
-			}
-			// get delegates from state
-			set, err = sm.GetDelegatesPaginated(lib.PageParams{}, lib.CanopyChainId)
-			require.NoError(t, err)
-			// check delegates got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
+			// get the committees or delegates from state based on validator type
+			if len(test.preset) > 0 && test.preset[0].Delegate {
+				// get delegates from state
+				set, err := sm.GetDelegatesPaginated(lib.PageParams{}, lib.CanopyChainId)
+				require.NoError(t, err)
+				// check delegates got vs expected
+				for i, member := range *set.Results.(*ValidatorPage) {
+					require.EqualExportedValues(t, test.preset[i], member)
+				}
+			} else {
+				// get the committees from state
+				set, err := sm.GetCommitteePaginated(lib.PageParams{}, lib.CanopyChainId)
+				require.NoError(t, err)
+				// check committees got vs expected
+				for i, member := range *set.Results.(*ValidatorPage) {
+					require.EqualExportedValues(t, test.preset[i], member)
+				}
 			}
 			gotSupply, err := sm.GetSupply()
 			require.NoError(t, err)
@@ -388,11 +392,13 @@ func TestUpdateValidatorStake(t *testing.T) {
 			detail: "no updates to the validator",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 			},
 			update: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 			},
@@ -416,11 +422,13 @@ func TestUpdateValidatorStake(t *testing.T) {
 			detail: "update validator stake",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 			},
 			update: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount + 1,
 				Committees:   []uint64{0, 1},
 			},
@@ -444,12 +452,14 @@ func TestUpdateValidatorStake(t *testing.T) {
 			detail: "update delegate stake",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 				Delegate:     true,
 			},
 			update: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount + 1,
 				Committees:   []uint64{0, 1},
 				Delegate:     true,
@@ -485,11 +495,13 @@ func TestUpdateValidatorStake(t *testing.T) {
 			detail: "update validator committees",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 			},
 			update: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount + 1,
 				Committees:   []uint64{0, 2},
 			},
@@ -513,12 +525,14 @@ func TestUpdateValidatorStake(t *testing.T) {
 			detail: "update delegate committees",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1},
 				Delegate:     true,
 			},
 			update: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount + 1,
 				Committees:   []uint64{0, 2},
 				Delegate:     true,
@@ -612,6 +626,7 @@ func TestDeleteValidator(t *testing.T) {
 			detail: "delete validator with 1 committee",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0},
 			},
@@ -623,6 +638,7 @@ func TestDeleteValidator(t *testing.T) {
 			detail: "delete validator with multiple committees",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1, 2},
 			},
@@ -635,6 +651,7 @@ func TestDeleteValidator(t *testing.T) {
 			detail: "delete delegate with 1 committee",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1, 2},
 				Delegate:     true,
@@ -648,6 +665,7 @@ func TestDeleteValidator(t *testing.T) {
 			detail: "delete delegate with multiple committees",
 			preset: &Validator{
 				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
 				StakedAmount: amount,
 				Committees:   []uint64{0, 1, 2},
 				Delegate:     true,
@@ -684,8 +702,13 @@ func TestDeleteValidator(t *testing.T) {
 					// get the committee
 					page, err = sm.GetCommitteePaginated(lib.PageParams{}, cId)
 				}
-				require.NoError(t, err)
-				// ensure the slice contains the expected
+				// After deleting the only validator, the set may be empty which returns an error
+				// If there's an error, it should be "no validators in the set"
+				if err != nil {
+					require.ErrorContains(t, err, "there are no validators in the set")
+					continue
+				}
+				// ensure the slice doesn't contain the deleted validator
 				var contains bool
 				for _, member := range *page.Results.(*ValidatorPage) {
 					if bytes.Equal(member.PublicKey, test.preset.PublicKey) {
