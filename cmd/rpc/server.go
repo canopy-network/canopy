@@ -197,7 +197,7 @@ func (s *Server) startHeapProfiler() {
 	}
 }
 
-// submitTxs submits transactions to the controller and writes http response
+// submitTx submits transactions to the controller and writes http response
 func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bool) {
 	// marshal each transaction to bytes
 	var txBytes [][]byte
@@ -215,9 +215,10 @@ func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bo
 		return
 	}
 	// return hashes of all submitted transactions
-	var hashes []string
+	var hashes []*string
 	for _, bz := range txBytes {
-		hashes = append(hashes, crypto.HashString(bz))
+		hash := crypto.HashString(bz)
+		hashes = append(hashes, &hash)
 	}
 	// if only one transaction was submitted, return the hash as a string
 	if len(hashes) == 1 {

@@ -399,14 +399,18 @@ func (c *Client) Transaction(tx lib.TransactionI) (hash *string, err lib.ErrorI)
 	return
 }
 
-func (c *Client) Transactions(txs []lib.TransactionI) (hash *string, err lib.ErrorI) {
+func (c *Client) Transactions(txs []lib.TransactionI) (hashes []*string, err lib.ErrorI) {
 	bz, err := lib.MarshalJSON(txs)
 	if err != nil {
 		return nil, err
 	}
-	hash = new(string)
-	err = c.post(TxsRouteName, bz, hash)
-	return
+	// a single transaction returns a single string hash
+	if len(txs) == 1 {
+		hash := new(string)
+		err = c.post(TxsRouteName, bz, hash)
+		return []*string{hash}, err
+	}
+	return hashes, c.post(TxsRouteName, bz, &hashes)
 }
 
 func (c *Client) Keystore() (keystore *crypto.Keystore, err lib.ErrorI) {
