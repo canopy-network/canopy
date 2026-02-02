@@ -32,7 +32,7 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.17+beta"
+	SoftwareVersion = "v0.1.15+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 

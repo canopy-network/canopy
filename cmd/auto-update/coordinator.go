@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -247,16 +248,6 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// TODO: TESTING ONLY - remove before merging
-	// test restart after 10 seconds
-	go func() {
-		time.Sleep(10 * time.Second)
-		c.log.Info("TEST: triggering test restart after 10 seconds")
-		if err := c.TestRestart(ctx); err != nil {
-			c.log.Errorf("TEST: restart failed: %v", err)
-		}
-	}()
-
 	// kick off an immediate check
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -298,29 +289,6 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 			}()
 		}
 	}
-}
-
-// TestRestart restarts the CLI process for testing purposes
-// TODO: TESTING ONLY - remove before merging
-func (c *Coordinator) TestRestart(ctx context.Context) error {
-	if !c.updateInProgress.CompareAndSwap(false, true) {
-		return fmt.Errorf("update already in progress")
-	}
-	defer c.updateInProgress.Store(false)
-
-	c.log.Info("TEST: stopping CLI process for test restart")
-	if c.supervisor.IsRunning() {
-		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		if err := c.supervisor.Stop(stopCtx); err != nil {
-			c.log.Warnf("TEST: failed to stop process: %v", err)
-		}
-		c.supervisor.KillPlugin()
-		time.Sleep(2 * time.Second)
-	}
-
-	c.log.Info("TEST: restarting CLI process")
-	return c.supervisor.Start(c.config.BinPath)
 }
 
 // GracefulShutdown stops the coordinator while giving a grace period to the
@@ -422,22 +390,38 @@ func (c *Coordinator) ApplyUpdate(ctx context.Context, release, pluginRelease *R
 		c.log.Info("snapshot downloaded and extracted")
 	}
 
+	// add random delay for staggered updates
+	if c.supervisor.IsRunning() {
+		delay := time.Duration(rand.IntN(c.config.MaxDelayTime)+1) * time.Minute
+		c.log.Infof("waiting %v before applying update", delay)
+		timer := time.NewTimer(delay)
+		// allow cancellation of timer if context is done
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+
 	// stop current process if running
 	if c.supervisor.IsRunning() {
 		c.log.Info("stopping current CLI process for update")
-		stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		stopCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
 		if err := c.supervisor.Stop(stopCtx); err != nil {
 			// program may have exited with a non zero exit code due to forced close
 			// this is to be expected so the update can still proceed
 			c.log.Warnf("failed to stop process for update: %w", err)
 		}
-		// kill any remaining plugin processes
-		c.log.Info("cleaning up plugin processes")
-		c.supervisor.KillPlugin()
-		// wait for processes to fully terminate
-		c.log.Info("waiting for processes to terminate")
-		time.Sleep(2 * time.Second)
+		// kill any remaining plugin processes (only if plugin is configured)
+		if c.supervisor.pluginConfig != nil {
+			c.log.Info("cleaning up plugin processes")
+			c.supervisor.KillPlugin()
+			// wait for processes to fully terminate
+			c.log.Info("waiting for processes to terminate")
+			time.Sleep(2 * time.Second)
+		}
 	}
 
 	// replace current db with the snapshot if needed
