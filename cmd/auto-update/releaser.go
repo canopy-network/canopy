@@ -92,14 +92,17 @@ func (rm *ReleaseManager) Check() (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Check if the release is valid to update
 	if err := rm.ShouldUpdate(release); err != nil {
 		return nil, err
 	}
+	// exit
 	return release, nil
 }
 
 // GetLatestRelease returns the latest release from the GitHub API
 func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
+	// build the URL: https://api.github.com/repos/<owner>/<repo>/releases/latest
 	apiURL, err := url.JoinPath("https://api.github.com", "repos",
 		rm.config.RepoOwner, rm.config.RepoName, "releases", "latest")
 	if err != nil {
@@ -109,18 +112,22 @@ func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	// github recommends to add an user agent to any API request
 	req.Header.Set("User-Agent", "canopy-updater/1.0")
 	if token := rm.config.GithubApiToken; token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	// make the request
 	resp, err := rm.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	// check the response status code
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
+	// parse the response
 	var rel GithubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return nil, err
@@ -135,6 +142,7 @@ func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 			}, nil
 		}
 	}
+	// return based on tagName
 	if rm.config.Type == ReleaseTypeCLI {
 		return nil, fmt.Errorf("unsupported architecture: %s-%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -187,6 +195,7 @@ func (rm *ReleaseManager) ShouldUpdate(release *Release) error {
 			candidateTag = "v" + parts[len(parts)-1]
 		}
 	}
+	// check if the versions are valid
 	candidate := semver.Canonical(candidateTag)
 	current := semver.Canonical(rm.Version)
 	// for plugins, if current version is invalid (first run), always update
@@ -202,7 +211,7 @@ func (rm *ReleaseManager) ShouldUpdate(release *Release) error {
 	if current == "" || !semver.IsValid(current) {
 		return fmt.Errorf("invalid local version: %s", rm.Version)
 	}
-	// should update if candidate version is greater than current
+	// should update if the candidate version is greater than the current version
 	release.ShouldUpdate = semver.Compare(candidate, current) > 0
 	if !release.ShouldUpdate {
 		return nil
@@ -210,6 +219,7 @@ func (rm *ReleaseManager) ShouldUpdate(release *Release) error {
 	release.Version = candidate
 	// for CLI, check if snapshot should be applied
 	if rm.config.Type == ReleaseTypeCLI {
+		// should apply snapshot if the candidate's build metadata contains the snapshot key
 		release.ApplySnapshot = strings.Contains(semver.Build(release.Version), rm.config.SnapshotKey)
 	}
 	return nil
@@ -221,6 +231,7 @@ func (rm *ReleaseManager) Download(ctx context.Context, release *Release) error 
 	if err != nil {
 		return err
 	}
+	// github recommends to add an user agent to any API request
 	req.Header.Set("User-Agent", "canopy-updater/1.0")
 	if token := rm.config.GithubApiToken; token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -233,6 +244,7 @@ func (rm *ReleaseManager) Download(ctx context.Context, release *Release) error 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
+	// download the release binary
 	if rm.config.Type == ReleaseTypeCLI {
 		return rm.downloadCLI(resp.Body)
 	}
