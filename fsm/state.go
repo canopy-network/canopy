@@ -452,10 +452,6 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		return nil, err
 	}
 	defer sm.Discard()
-	// if height is equal to latest height, provide the validator cache to the FSM
-	if height == s.height {
-		sm.cache = s.cache
-	}
 	// get the previous state machine height
 	lastSM, err := s.TimeMachine(lastHeight)
 	if err != nil {
@@ -634,6 +630,10 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	// Params caches must not outlive the current store view, otherwise Reset()/rollback
+	// can leave the FSM reading stale values that disagree with the underlying store.
+	s.cache.valParams = nil
+	s.cache.feeParams = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty

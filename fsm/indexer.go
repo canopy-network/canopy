@@ -31,6 +31,15 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if height == 0 || height > s.height {
 		height = s.height
 	}
+	// Height semantics:
+	// - `height` is the state version (pre-block-apply for block `height`).
+	// - The latest committed block corresponding to that state is `height-1`.
+	// This keeps the blob consistent with RPC/state-at-height conventions.
+	if height <= 1 {
+		// No committed block exists yet to pair with the state snapshot.
+		return nil, lib.ErrWrongBlockHeight(0, 1)
+	}
+	blockHeight := height - 1
 	sm, err := s.TimeMachine(height)
 	if err != nil {
 		return nil, err
@@ -38,17 +47,18 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if sm != s {
 		defer sm.Discard()
 	}
-	st := s.store.(lib.StoreI)
+	// Use the snapshot store (not the live store) for all height-based indexer reads.
+	st := sm.store.(lib.StoreI)
 	// retrieve the block, transactions, and events
-	block, err := st.GetBlockByHeight(height)
+	block, err := st.GetBlockByHeight(blockHeight)
 	if err != nil {
 		return nil, err
 	}
 	if block == nil || block.BlockHeader == nil {
 		return nil, lib.ErrNilBlockHeader()
 	}
-	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != height {
-		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, height)
+	if block.BlockHeader.Height == 0 || block.BlockHeader.Height != blockHeight {
+		return nil, lib.ErrWrongBlockHeight(block.BlockHeader.Height, blockHeight)
 	}
 	// use sm for consistent snapshot reads at the requested height
 	// retrieve the accounts
@@ -77,7 +87,7 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 		return nil, err
 	}
 	// retrieve doubleSigners
-	doubleSigners, err := st.GetDoubleSignersAsOf(height)
+	doubleSigners, err := st.GetDoubleSignersAsOf(blockHeight)
 	if err != nil {
 		return nil, err
 	}

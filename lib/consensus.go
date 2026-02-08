@@ -22,26 +22,37 @@ type ValidatorSet struct {
 }
 
 // NewValidatorSet() initializes a ValidatorSet from a given set of consensus validators
-func NewValidatorSet(validators *ConsensusValidators) (ValidatorSet, ErrorI) {
+func NewValidatorSet(validators *ConsensusValidators, delegate ...bool) (ValidatorSet, ErrorI) {
 	// handle empty set
 	if validators == nil {
 		// exit with error
 		return ValidatorSet{}, ErrNoValidators()
 	}
+	// assert whether is a delegator set
+	isDelegators := len(delegate) > 0 && delegate[0]
 	// define tracking variables
 	totalPower, count, pointList := uint64(0), uint64(0), make([]kyber.Point, 0)
 	// iterate through the ValidatorSet to get the count, total power, and convert
 	// the public keys to 'points' on an elliptic curve for the BLS multikey
 	for _, v := range validators.ValidatorSet {
-		// convert the public key into a BLS point
-		point, err := crypto.BytesToBLS12381Point(v.PublicKey)
-		// check for an error during the conversion
-		if err != nil {
-			// exit with error
-			return ValidatorSet{}, ErrPubKeyFromBytes(err)
+		// if not a delegator set, convert the public key into a BLS point
+		if !isDelegators {
+			// convert the public key into a BLS point
+			point, err := crypto.BytesToBLS12381Point(v.PublicKey)
+			// check for an error during the conversion
+			if err != nil {
+				// exit with error
+				return ValidatorSet{}, ErrPubKeyFromBytes(err)
+			}
+			// add the point to the list
+			pointList = append(pointList, point)
+		} else {
+			// otherwise just validate the public key
+			if _, err := crypto.NewPublicKeyFromBytes(v.PublicKey); err != nil {
+				// exit with error
+				return ValidatorSet{}, ErrPubKeyFromBytes(err)
+			}
 		}
-		// add the point to the list
-		pointList = append(pointList, point)
 		// update total voting power
 		totalPower += v.VotingPower
 		// increment the count
@@ -54,12 +65,15 @@ func NewValidatorSet(validators *ConsensusValidators) (ValidatorSet, ErrorI) {
 	}
 	// calculate the minimum power for a two-thirds majority (2f+1)
 	minPowerFor23Maj := (2*totalPower)/3 + 1
-	// create a composite multi-public key out of the public keys (in curve point format)
-	multiPublicKey, err := crypto.NewMultiBLSFromPoints(pointList, nil)
-	// if an error occurred during the conversion
-	if err != nil {
-		// exit with error
-		return ValidatorSet{}, ErrNewMultiPubKey(err)
+	var multiPublicKey crypto.MultiPublicKeyI
+	// for validators, create a composite multi-public key out of the public
+	// keys (in curve point format)
+	if !isDelegators {
+		var err error
+		multiPublicKey, err = crypto.NewMultiBLSFromPoints(pointList, nil)
+		if err != nil {
+			return ValidatorSet{}, ErrNewMultiPubKey(err)
+		}
 	}
 	// return the validator set
 	return ValidatorSet{
@@ -254,8 +268,6 @@ func (x *AggregateSignature) LogNonSigners(validatorList *ConsensusValidators, p
 				val.NetAddress, bls.Address().String(), height, chainId, producerNetAddress, producerAddress)
 		}
 	}
-	// exit
-	return
 }
 
 // getSigners() returns the public keys and corresponding combined voting power of signers or non-signers
