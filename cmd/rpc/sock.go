@@ -50,18 +50,6 @@ type RCManager struct {
 	subscriberCount            int
 }
 
-// subSnapshot returns the current subscription pointer and its cached Info pointer (if any)
-// under the manager lock. Callers should avoid holding the lock across network calls.
-func (r *RCManager) subSnapshot(rootChainId uint64) (sub *RCSubscription, info *lib.RootChainInfo, found bool) {
-	r.l.Lock()
-	sub, found = r.subscriptions[rootChainId]
-	if found && sub != nil {
-		info = sub.Info
-	}
-	r.l.Unlock()
-	return
-}
-
 // NewRCManager() constructs a new instance of a RCManager
 func NewRCManager(controller *controller.Controller, config lib.Config, logger lib.LoggerI) (manager *RCManager) {
 	readLimit := config.RCSubscriberReadLimitBytes
@@ -148,21 +136,31 @@ func (r *RCManager) Publish(chainId uint64, info *lib.RootChainInfo) {
 
 // ChainIds() returns a list of chainIds for subscribers
 func (r *RCManager) ChainIds() (list []uint64) {
-	r.l.Lock()
-	for chainId, subs := range r.subscribers {
-		if chainId != 0 && len(subs) != 0 {
-			list = append(list, chainId)
+	// de-duplicate the results
+	deDupe := lib.NewDeDuplicator[uint64]()
+	// for each client
+	for chainId, chainSubscribers := range r.subscribers {
+		// if the client chain id isn't empty and not duplicate
+		for _, subscriber := range chainSubscribers {
+			if subscriber.chainId != chainId {
+				// remove subscriber with incorrect chain id
+				subscriber.Stop(lib.ErrWrongChainId())
+				continue
+			}
+			if subscriber.chainId != 0 && !deDupe.Found(subscriber.chainId) {
+				list = append(list, subscriber.chainId)
+			}
 		}
 	}
-	r.l.Unlock()
-	return list
+	return
 }
 
 // GetHeight() returns the height from the root-chain
 func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
-	_, info, found := r.subSnapshot(rootChainId)
-	if found && info != nil {
-		return info.Height
+	// check the map to see if the info exists
+	if sub, found := r.subscriptions[rootChainId]; found {
+		// exit with the height of the root-chain-info
+		return sub.Info.Height
 	}
 	return 0
 }
@@ -170,7 +168,11 @@ func (r *RCManager) GetHeight(rootChainId uint64) uint64 {
 // GetRootChainInfo() retrieves the root chain info from the root chain 'on-demand'
 func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.RootChainInfo, err lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// lock for thread safety
+	r.l.Lock()
+	defer r.l.Unlock()
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -180,12 +182,8 @@ func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.Roo
 	if err != nil {
 		return nil, err
 	}
-	// update cached info under lock (don't hold the lock during the RPC call above)
-	r.l.Lock()
-	if cur, ok := r.subscriptions[rootChainId]; ok && cur == sub {
-		sub.Info = info
-	}
-	r.l.Unlock()
+	// update the info
+	sub.Info = info
 	// exit with the info
 	return
 }
@@ -193,27 +191,24 @@ func (r *RCManager) GetRootChainInfo(rootChainId, chainId uint64) (info *lib.Roo
 // GetValidatorSet() returns the validator set from the root-chain
 func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, info, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return lib.ValidatorSet{}, lib.ErrNotSubscribed()
 	}
 	// if rootHeight is the same as the RootChainInfo height
-	if info != nil && (rootHeight == info.Height || rootHeight == 0) {
+	if rootHeight == sub.Info.Height || rootHeight == 0 {
 		// exit with a copy the validator set
-		return lib.NewValidatorSet(info.ValidatorSet)
+		return lib.NewValidatorSet(sub.Info.ValidatorSet)
 	}
 	// if rootHeight is 1 before the RootChainInfo height
-	if info != nil && info.Height != 0 && rootHeight == info.Height-1 {
+	if rootHeight == sub.Info.Height-1 {
 		// exit with a copy of the previous validator set
-		return lib.NewValidatorSet(info.LastValidatorSet)
+		return lib.NewValidatorSet(sub.Info.LastValidatorSet)
 	}
 	// warn of the remote RPC call to the root chain API
-	latest := uint64(0)
-	if info != nil {
-		latest = info.Height
-	}
-	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, latest)
+	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote RPC call to the root chain API
 	return sub.ValidatorSet(rootHeight, id)
 }
@@ -221,22 +216,19 @@ func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.Val
 // GetOrders() returns the order book from the root-chain
 func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBook, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, info, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
 	// if the root chain id and height is the same as the info
-	if info != nil && info.Height == rootHeight {
+	if sub.Info.Height == rootHeight {
 		// exit with the order books from memory
-		return info.Orders, nil
+		return sub.Info.Orders, nil
 	}
 	// warn of the remote RPC call to the root chain API
-	latest := uint64(0)
-	if info != nil {
-		latest = info.Height
-	}
-	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, latest)
+	r.log.Warnf("Executing remote GetOrders call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote call
 	books, err := sub.Orders(rootHeight, id)
 	// if an error occurred during the remote call
@@ -256,7 +248,8 @@ func (r *RCManager) GetOrders(rootChainId, rootHeight, id uint64) (*lib.OrderBoo
 // Order() returns a specific order from the root order book
 func (r *RCManager) GetOrder(rootChainId, height uint64, orderId string, chainId uint64) (*lib.SellOrder, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -267,7 +260,8 @@ func (r *RCManager) GetOrder(rootChainId, height uint64, orderId string, chainId
 // IsValidDoubleSigner() returns if an address is a valid double signer for a specific 'double sign height'
 func (r *RCManager) IsValidDoubleSigner(rootChainId, height uint64, address string) (*bool, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -279,7 +273,8 @@ func (r *RCManager) IsValidDoubleSigner(rootChainId, height uint64, address stri
 // GetMinimumEvidenceHeight() returns the minimum height double sign evidence must have to be 'valid'
 func (r *RCManager) GetMinimumEvidenceHeight(rootChainId, height uint64) (*uint64, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -292,7 +287,8 @@ func (r *RCManager) GetMinimumEvidenceHeight(rootChainId, height uint64) (*uint6
 // TODO should be able to get these from the file or the root-chain upon independence
 func (r *RCManager) GetCheckpoint(rootChainId, height, chainId uint64) (blockHash lib.HexBytes, err lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -304,15 +300,16 @@ func (r *RCManager) GetCheckpoint(rootChainId, height, chainId uint64) (blockHas
 // GetLotteryWinner() returns the winner of the delegate lottery from the root-chain
 func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.LotteryWinner, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, info, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
 	}
 	// if the root chain id and height is the same as the info
-	if info != nil && info.Height == height {
+	if sub.Info.Height == height {
 		// exit with the lottery winner
-		return info.LotteryWinner, nil
+		return sub.Info.LotteryWinner, nil
 	}
 	// exit with the results of the remote RPC call to the API of the 'root chain'
 	return sub.Lottery(height, id)
@@ -321,7 +318,8 @@ func (r *RCManager) GetLotteryWinner(rootChainId, height, id uint64) (*lib.Lotte
 // Transaction() executes a transaction on the root chain
 func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *string, err lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
@@ -332,7 +330,8 @@ func (r *RCManager) Transaction(rootChainId uint64, tx lib.TransactionI) (hash *
 // GetDexBatch() queries a 'dex batch on the root chain
 func (r *RCManager) GetDexBatch(rootChainId, height, committee uint64, withPoints bool) (*lib.DexBatch, lib.ErrorI) {
 	defer lib.TimeTrack(r.log, time.Now(), 500*time.Millisecond)
-	sub, _, found := r.subSnapshot(rootChainId)
+	// if the root chain id is the same as the info
+	sub, found := r.subscriptions[rootChainId]
 	if !found {
 		// exit with 'not subscribed' error
 		return nil, lib.ErrNotSubscribed()
