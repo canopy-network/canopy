@@ -164,6 +164,7 @@ const (
 type StateMachineConfig struct {
 	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
 	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	FaucetAddress         string `json:"faucetAddress"`         // if set: "send" txs from this address will auto-mint on insufficient funds (dev/test only)
 }
 
 // DefaultStateMachineConfig returns FSM defaults
@@ -171,6 +172,7 @@ func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
 		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
 		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+		FaucetAddress:         "",
 	}
 }
 
