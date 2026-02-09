@@ -6,6 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -17,14 +26,6 @@ import (
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/julienschmidt/httprouter"
 	"google.golang.org/protobuf/types/known/anypb"
-	"math"
-	"math/big"
-	"net/http"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 /* This file wraps Canopy with the Ethereum JSON-RPC interface as specified here: https://ethereum.org/en/developers/docs/apis/json-rpc */
@@ -367,7 +368,7 @@ func (s *Server) EthSendRawTransaction(args []any) (any, error) {
 		return nil, err
 	}
 	// send transaction to controller
-	if err = s.controller.SendTxMsg(bz); err != nil {
+	if err = s.controller.SendTxMsgs([][]byte{bz}); err != nil {
 		return nil, err
 	}
 	// get the tx hash string

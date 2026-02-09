@@ -13,6 +13,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/p2p"
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -35,6 +36,32 @@ func (c *Client) Height() (p *lib.HeightResult, err lib.ErrorI) {
 	p = new(lib.HeightResult)
 	err = c.post(HeightRouteName, nil, p)
 	return
+}
+
+// IndexerBlobs retrieves the indexer blob protobuf and unmarshals it.
+func (c *Client) IndexerBlobs(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
+	p = new(fsm.IndexerBlobs)
+	req := heightRequest{Height: height}
+	bz, err := lib.MarshalJSON(req)
+	if err != nil {
+		return nil, err
+	}
+	resp, e := c.client.Post(c.url(IndexerBlobsRouteName, ""), ApplicationJSON, bytes.NewBuffer(bz))
+	if e != nil {
+		return nil, lib.ErrPostRequest(e)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, lib.ErrReadBody(e)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, lib.ErrHttpStatus(resp.Status, resp.StatusCode, body)
+	}
+	if err := proto.Unmarshal(body, p); err != nil {
+		return nil, lib.ErrUnmarshal(err)
+	}
+	return p, nil
 }
 
 func (c *Client) BlockByHeight(height uint64) (p *lib.BlockResult, err lib.ErrorI) {
@@ -369,6 +396,16 @@ func (c *Client) Transaction(tx lib.TransactionI) (hash *string, err lib.ErrorI)
 	}
 	hash = new(string)
 	err = c.post(TxRouteName, bz, hash)
+	return
+}
+
+func (c *Client) Transactions(txs []lib.TransactionI) (hash *string, err lib.ErrorI) {
+	bz, err := lib.MarshalJSON(txs)
+	if err != nil {
+		return nil, err
+	}
+	hash = new(string)
+	err = c.post(TxsRouteName, bz, hash)
 	return
 }
 

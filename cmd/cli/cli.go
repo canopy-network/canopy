@@ -95,7 +95,7 @@ func Start() {
 	l.Infof("Using identity: Address: %s | PublicKey: %s",
 		validatorKey.PublicKey().Address().String(), validatorKey.PublicKey().String())
 	// initialize the state machine
-	sm, err := fsm.New(config, db, metrics, l)
+	sm, err := fsm.New(config, db, nil, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}

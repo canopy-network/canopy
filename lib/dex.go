@@ -299,12 +299,3 @@ func (x *PoolPoints) UnmarshalJSON(bz []byte) (err error) {
 	}
 	return
 }
-
-// DexPrice implements a structure to represent the dex price
-type DexPrice struct {
-	LocalChainId  uint64 `json:"chainId"`
-	RemoteChainId uint64 `json:"remoteChainId"`
-	LocalPool     uint64 `json:"localPool"`
-	RemotePool    uint64 `json:"remotePool"`
-	E6ScaledPrice uint64 `json:"e6ScaledPrice"`
-}

@@ -53,6 +53,7 @@ type P2P struct {
 	config                 lib.Config
 	metrics                *lib.Metrics
 	log                    lib.LoggerI
+	gossip                 bool // whether gossip mode is active
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -383,7 +384,7 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 // NewStreams() creates map of streams for the multiplexing architecture
 func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
 	streams = make(map[lib.Topic]*Stream, lib.Topic_INVALID+1)
-	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
+	for i := range lib.Topic_INVALID {
 		if i == lib.Topic_HEARTBEAT {
 			continue
 		}
@@ -660,4 +661,14 @@ func (p *P2P) UpdateQueueDepthMetrics() {
 	for topic, ch := range p.channels {
 		p.metrics.InboxQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(len(ch)))
 	}
+}
+
+// SetGossipMode sets the gossip mode for the P2P instance
+func (p *P2P) SetGossipMode(gossip bool) {
+	p.gossip = gossip
+}
+
+// GossipMode returns the current gossip mode for the P2P instance
+func (p *P2P) GossipMode() bool {
+	return p.gossip
 }

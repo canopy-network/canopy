@@ -342,6 +342,39 @@ func (t *Indexer) GetDoubleSigners() (ds []*lib.DoubleSigner, err lib.ErrorI) {
 	return
 }
 
+// GetDoubleSignersAsOf() gets double signers in the indexer up to and including the provided height
+// IMPORTANT NOTE: this returns double signers in the form of <address> -> <heights> NOT <public_key> -> <heights>
+func (t *Indexer) GetDoubleSignersAsOf(height uint64) (ds []*lib.DoubleSigner, err lib.ErrorI) {
+	it, err := t.db.Iterator(lib.JoinLenPrefix(doubleSignerPrefix))
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	results := make(map[string][]uint64)
+	for ; it.Valid(); it.Next() {
+		segments := lib.DecodeLengthPrefixed(it.Key())
+		if len(segments) < 3 {
+			return nil, ErrInvalidKey()
+		}
+		address, dsHeight := segments[1], t.decodeBigEndian(segments[2])
+		if dsHeight > height {
+			continue
+		}
+		results[lib.BytesToString(address)] = append(results[lib.BytesToString(address)], dsHeight)
+	}
+	for address, heights := range results {
+		addr, e := lib.StringToBytes(address)
+		if e != nil {
+			return nil, e
+		}
+		ds = append(ds, &lib.DoubleSigner{
+			Id:      addr,
+			Heights: heights,
+		})
+	}
+	return
+}
+
 // IsValidDoubleSigner() checks if the double signer byte is set for a height
 func (t *Indexer) IsValidDoubleSigner(address []byte, height uint64) (bool, lib.ErrorI) {
 	bz, err := t.db.Get(t.doubleSignerHeightKey(address, height))
@@ -620,9 +653,10 @@ func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult,
 		return nil, err
 	}
 	return &lib.BlockResult{
-		BlockHeader: ptr,
-		Meta:        &lib.BlockResultMeta{Size: uint64(len(bz))},
-		Events:      events,
+		BlockHeader:  ptr,
+		Meta:         &lib.BlockResultMeta{Size: uint64(len(bz))},
+		Events:       events,
+		Transactions: txs,
 	}, nil
 }
 

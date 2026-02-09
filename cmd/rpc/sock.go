@@ -33,6 +33,7 @@ const (
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
+	controller    *controller.Controller        // reference to controller for state access
 	subscriptions map[uint64]*RCSubscription    // chainId -> subscription
 	subscribers   map[uint64][]*RCSubscriber    // chainId -> subscribers
 	l             *sync.Mutex                   // thread safety
@@ -75,9 +76,14 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	if maxSubscribersPerChain <= 0 {
 		maxSubscribersPerChain = defaultMaxRCSubscribersPerChain
 	}
+	blobCacheEntries := config.IndexerBlobCacheEntries
+	if blobCacheEntries <= 0 {
+		blobCacheEntries = defaultIndexerBlobCacheEntries
+	}
 	// create the manager
 	manager = &RCManager{
 		c:                          config,
+		controller:                 controller,
 		subscriptions:              make(map[uint64]*RCSubscription),
 		subscribers:                make(map[uint64][]*RCSubscriber),
 		l:                          controller.Mutex,

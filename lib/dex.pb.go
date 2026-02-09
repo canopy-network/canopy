@@ -368,6 +368,88 @@ func (x *DexBatch) GetLivenessFallback() bool {
 	return false
 }
 
+// DexPrice represents the computed swap price between two chains.
+type DexPrice struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// local_chain_id: the local chain id
+	LocalChainId uint64 `protobuf:"varint,1,opt,name=local_chain_id,json=localChainId,proto3" json:"chainId"` // @gotags: json:"chainId"
+	// remote_chain_id: the remote chain id
+	RemoteChainId uint64 `protobuf:"varint,2,opt,name=remote_chain_id,json=remoteChainId,proto3" json:"remoteChainId"` // @gotags: json:"remoteChainId"
+	// local_pool: the local pool size
+	LocalPool uint64 `protobuf:"varint,3,opt,name=local_pool,json=localPool,proto3" json:"localPool"` // @gotags: json:"localPool"
+	// remote_pool: the remote pool size
+	RemotePool uint64 `protobuf:"varint,4,opt,name=remote_pool,json=remotePool,proto3" json:"remotePool"` // @gotags: json:"remotePool"
+	// e6_scaled_price: price scaled by 1e6
+	E6ScaledPrice uint64 `protobuf:"varint,5,opt,name=e6_scaled_price,json=e6ScaledPrice,proto3" json:"e6ScaledPrice"` // @gotags: json:"e6ScaledPrice"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DexPrice) Reset() {
+	*x = DexPrice{}
+	mi := &file_dex_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DexPrice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DexPrice) ProtoMessage() {}
+
+func (x *DexPrice) ProtoReflect() protoreflect.Message {
+	mi := &file_dex_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DexPrice.ProtoReflect.Descriptor instead.
+func (*DexPrice) Descriptor() ([]byte, []int) {
+	return file_dex_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DexPrice) GetLocalChainId() uint64 {
+	if x != nil {
+		return x.LocalChainId
+	}
+	return 0
+}
+
+func (x *DexPrice) GetRemoteChainId() uint64 {
+	if x != nil {
+		return x.RemoteChainId
+	}
+	return 0
+}
+
+func (x *DexPrice) GetLocalPool() uint64 {
+	if x != nil {
+		return x.LocalPool
+	}
+	return 0
+}
+
+func (x *DexPrice) GetRemotePool() uint64 {
+	if x != nil {
+		return x.RemotePool
+	}
+	return 0
+}
+
+func (x *DexPrice) GetE6ScaledPrice() uint64 {
+	if x != nil {
+		return x.E6ScaledPrice
+	}
+	return 0
+}
+
 // PoolPoints represents an ownership 'share' of the pool
 type PoolPoints struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -381,7 +463,7 @@ type PoolPoints struct {
 
 func (x *PoolPoints) Reset() {
 	*x = PoolPoints{}
-	mi := &file_dex_proto_msgTypes[4]
+	mi := &file_dex_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -393,7 +475,7 @@ func (x *PoolPoints) String() string {
 func (*PoolPoints) ProtoMessage() {}
 
 func (x *PoolPoints) ProtoReflect() protoreflect.Message {
-	mi := &file_dex_proto_msgTypes[4]
+	mi := &file_dex_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -406,7 +488,7 @@ func (x *PoolPoints) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolPoints.ProtoReflect.Descriptor instead.
 func (*PoolPoints) Descriptor() ([]byte, []int) {
-	return file_dex_proto_rawDescGZIP(), []int{4}
+	return file_dex_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PoolPoints) GetAddress() []byte {
@@ -455,7 +537,15 @@ const file_dex_proto_rawDesc = "" +
 	"\breceipts\x18\n" +
 	" \x03(\x04R\breceipts\x12#\n" +
 	"\rlocked_height\x18\v \x01(\x04R\flockedHeight\x12+\n" +
-	"\x11liveness_fallback\x18\f \x01(\bR\x10livenessFallback\">\n" +
+	"\x11liveness_fallback\x18\f \x01(\bR\x10livenessFallback\"\xc0\x01\n" +
+	"\bDexPrice\x12$\n" +
+	"\x0elocal_chain_id\x18\x01 \x01(\x04R\flocalChainId\x12&\n" +
+	"\x0fremote_chain_id\x18\x02 \x01(\x04R\rremoteChainId\x12\x1d\n" +
+	"\n" +
+	"local_pool\x18\x03 \x01(\x04R\tlocalPool\x12\x1f\n" +
+	"\vremote_pool\x18\x04 \x01(\x04R\n" +
+	"remotePool\x12&\n" +
+	"\x0fe6_scaled_price\x18\x05 \x01(\x04R\re6ScaledPrice\">\n" +
 	"\n" +
 	"PoolPoints\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
@@ -473,19 +563,20 @@ func file_dex_proto_rawDescGZIP() []byte {
 	return file_dex_proto_rawDescData
 }
 
-var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_dex_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_dex_proto_goTypes = []any{
 	(*DexLimitOrder)(nil),        // 0: types.DexLimitOrder
 	(*DexLiquidityDeposit)(nil),  // 1: types.DexLiquidityDeposit
 	(*DexLiquidityWithdraw)(nil), // 2: types.DexLiquidityWithdraw
 	(*DexBatch)(nil),             // 3: types.DexBatch
-	(*PoolPoints)(nil),           // 4: types.PoolPoints
+	(*DexPrice)(nil),             // 4: types.DexPrice
+	(*PoolPoints)(nil),           // 5: types.PoolPoints
 }
 var file_dex_proto_depIdxs = []int32{
 	0, // 0: types.DexBatch.orders:type_name -> types.DexLimitOrder
 	1, // 1: types.DexBatch.deposits:type_name -> types.DexLiquidityDeposit
 	2, // 2: types.DexBatch.withdrawals:type_name -> types.DexLiquidityWithdraw
-	4, // 3: types.DexBatch.pool_points:type_name -> types.PoolPoints
+	5, // 3: types.DexBatch.pool_points:type_name -> types.PoolPoints
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -504,7 +595,7 @@ func file_dex_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dex_proto_rawDesc), len(file_dex_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

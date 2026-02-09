@@ -12,12 +12,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	pprof2 "runtime/pprof"
 
 	"github.com/alecthomas/units"
 	"github.com/canopy-network/canopy/controller"
@@ -33,7 +32,7 @@ const (
 
 	// uses golang's semver naming convention
 	// https://pkg.go.dev/golang.org/x/mod/semver
-	SoftwareVersion = "v0.1.14+beta"
+	SoftwareVersion = "v0.1.18+beta"
 	ContentType     = "Content-MessageType"
 	ApplicationJSON = "application/json; charset=utf-8"
 
@@ -58,18 +57,22 @@ type Server struct {
 	// handles interactions with the root chain rpc
 	rcManager *RCManager
 
+	// handles the indexer blob caching
+	indexerBlobCache *indexerBlobCache
+
 	logger lib.LoggerI
 }
 
 // NewServer constructs and returns a new Canopy RPC server
 func NewServer(controller *controller.Controller, config lib.Config, logger lib.LoggerI) *Server {
 	return &Server{
-		controller: controller,
-		config:     config,
-		logger:     logger,
-		rcManager:  NewRCManager(controller, config, logger),
-		poll:       make(fsm.Poll),
-		pollMux:    &sync.RWMutex{},
+		controller:       controller,
+		config:           config,
+		logger:           logger,
+		rcManager:        NewRCManager(controller, config, logger),
+		poll:             make(fsm.Poll),
+		pollMux:          &sync.RWMutex{},
+		indexerBlobCache: newIndexerBlobCache(100),
 	}
 }
 
@@ -83,21 +86,11 @@ func (s *Server) Start() {
 	go s.updatePollResults()
 	go s.rcManager.Start()
 	go s.startEthRPCService()
-	go func() { // TODO remove DEBUG ONLY
-		fileName := "heap1.out"
-		for range time.Tick(time.Second * 10) {
-			f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
-			if err != nil {
-				s.logger.Fatalf("could not create memory profile: ", err)
-			}
-			runtime.GC() // get up-to-date statistics
-			if err = pprof2.WriteHeapProfile(f); err != nil {
-				s.logger.Fatalf("could not write memory profile: ", err)
-			}
-			f.Close()
-			fileName = "heap2.out"
-		}
-	}()
+
+	// Start heap profiler if enabled (warning: causes GC pauses which may affect RPC latency)
+	if s.config.HeapProfilingEnabled {
+		go s.startHeapProfiler()
+	}
 
 	if s.config.Headless {
 		return
@@ -175,24 +168,64 @@ func (s *Server) startStaticFileServers() {
 	s.runStaticFileServer(explorerFS, explorerStaticDir, s.config.ExplorerPort, s.config)
 }
 
-// submitTx submits a transaction to the controller and writes http response
-func (s *Server) submitTx(w http.ResponseWriter, tx any) (ok bool) {
+// startHeapProfiler writes periodic heap profiles to the data directory
+// Warning: This calls runtime.GC() which causes pauses and may affect RPC latency
+func (s *Server) startHeapProfiler() {
+	interval := time.Duration(s.config.HeapProfilingIntervalS) * time.Second
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	s.logger.Infof("Starting heap profiler with %s interval", interval)
+	fileName := "heap1.out"
+	for range time.Tick(interval) {
+		f, err := os.Create(filepath.Join(s.config.DataDirPath, fileName))
+		if err != nil {
+			s.logger.Errorf("could not create memory profile: %v", err)
+			continue
+		}
+		runtime.GC() // get up-to-date statistics
+		if err = pprof.WriteHeapProfile(f); err != nil {
+			s.logger.Errorf("could not write memory profile: %v", err)
+		}
+		f.Close()
+		// Alternate between two files
+		if fileName == "heap1.out" {
+			fileName = "heap2.out"
+		} else {
+			fileName = "heap1.out"
+		}
+	}
+}
 
-	// Marshal the transaction
-	bz, err := lib.Marshal(tx)
-	if err != nil {
+// submitTxs submits transactions to the controller and writes http response
+func (s *Server) submitTxs(w http.ResponseWriter, txs []lib.TransactionI) (ok bool) {
+	// marshal each transaction to bytes
+	var txBytes [][]byte
+	for _, tx := range txs {
+		bz, err := lib.Marshal(tx)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		txBytes = append(txBytes, bz)
+	}
+	// send transactions to controller
+	if err := s.controller.SendTxMsgs(txBytes); err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
 	}
-
-	// Send transaction to controller
-	if err = s.controller.SendTxMsg(bz); err != nil {
-		write(w, err, http.StatusBadRequest)
+	// return hashes of all submitted transactions
+	var hashes []string
+	for _, bz := range txBytes {
+		hashes = append(hashes, crypto.HashString(bz))
+	}
+	// if only one transaction was submitted, return the hash as a string
+	if len(hashes) == 1 {
+		write(w, hashes[0], http.StatusOK)
 		return
 	}
-
-	// Write transaction to http response
-	write(w, crypto.HashString(bz), http.StatusOK)
+	// if multiple transactions were submitted, return the hashes as an array
+	write(w, hashes, http.StatusOK)
 	return true
 }
 

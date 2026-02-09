@@ -42,6 +42,23 @@ func (s *StateMachine) EventOrderBookSwap(order *lib.SellOrder) lib.ErrorI {
 	}, order.BuyerReceiveAddress, order.Committee)
 }
 
+// EventOrderBookLock() adds an order book lock event to the indexer when an order is reserved
+func (s *StateMachine) EventOrderBookLock(order *lib.SellOrder) lib.ErrorI {
+	return s.addEvent(lib.EventTypeOrderBookLock, &lib.EventOrderBookLock{
+		OrderId:            order.Id,
+		BuyerReceiveAddress: order.BuyerReceiveAddress,
+		BuyerSendAddress:    order.BuyerSendAddress,
+		BuyerChainDeadline:  order.BuyerChainDeadline,
+	}, order.BuyerReceiveAddress, order.Committee)
+}
+
+// EventOrderBookReset() adds an order book reset event to the indexer when a locked order is reset
+func (s *StateMachine) EventOrderBookReset(order *lib.SellOrder) lib.ErrorI {
+	return s.addEvent(lib.EventTypeOrderBookReset, &lib.EventOrderBookReset{
+		OrderId: order.Id,
+	}, order.SellersSendAddress, order.Committee)
+}
+
 // EventDexSwap() adds an AMM token swap event to the indexer
 func (s *StateMachine) EventDexSwap(address, orderId []byte, soldAmount, boughtAmount, chainId uint64, localOrigin, success bool) lib.ErrorI {
 	return s.addEvent(lib.EventTypeDexSwap, &lib.EventDexSwap{
@@ -102,6 +119,10 @@ func (s *StateMachine) addEvent(eventType lib.EventType, msg interface{}, addres
 		e.Msg = &lib.Event_DexLiquidityWithdrawal{DexLiquidityWithdrawal: msg.(*lib.EventDexLiquidityWithdrawal)}
 	case lib.EventTypeOrderBookSwap:
 		e.Msg = &lib.Event_OrderBookSwap{OrderBookSwap: msg.(*lib.EventOrderBookSwap)}
+	case lib.EventTypeOrderBookLock:
+		e.Msg = &lib.Event_OrderBookLock{OrderBookLock: msg.(*lib.EventOrderBookLock)}
+	case lib.EventTypeOrderBookReset:
+		e.Msg = &lib.Event_OrderBookReset{OrderBookReset: msg.(*lib.EventOrderBookReset)}
 	}
 
 	// optionally set chainId if provided
@@ -111,4 +132,29 @@ func (s *StateMachine) addEvent(eventType lib.EventType, msg interface{}, addres
 
 	// add the event to the tracker
 	return s.events.Add(e)
+}
+
+// addPluginEvents applies plugin events with default metadata.
+func (s *StateMachine) addPluginEvents(events []*lib.Event) lib.ErrorI {
+	if len(events) == 0 {
+		return nil
+	}
+	for _, e := range events {
+		if e == nil {
+			continue
+		}
+		if e.Height == 0 {
+			e.Height = s.Height()
+		}
+		if e.Reference == "" {
+			e.Reference = s.events.GetReference()
+		}
+		if e.ChainId == 0 {
+			e.ChainId = s.Config.ChainId
+		}
+		if err := s.events.Add(e); err != nil {
+			return err
+		}
+	}
+	return nil
 }

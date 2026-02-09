@@ -3471,6 +3471,8 @@ func (m *MockRCManager) SetDexBatch(rootChainId, height, committee uint64, batch
 // RCManagerI interface implementation
 func (m *MockRCManager) Publish(chainId uint64, info *lib.RootChainInfo) {}
 
+func (m *MockRCManager) PublishIndexerBlob(height uint64) {}
+
 func (m *MockRCManager) ChainIds() []uint64 { return []uint64{1, 2} }
 
 func (m *MockRCManager) GetHeight(rootChainId uint64) uint64 { return 100 }

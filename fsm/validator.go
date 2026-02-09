@@ -491,7 +491,7 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 		})
 	}
 	// convert list to a validator set (includes shared public key)
-	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members})
+	return lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address

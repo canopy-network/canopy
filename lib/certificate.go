@@ -123,8 +123,17 @@ func (x *QuorumCertificate) Check(vs ValidatorSet, maxBlockSize int, view *View,
 		// exit with error
 		return false, err
 	}
-	// enforce 'max block size'
-	if len(x.Block) > maxBlockSize {
+	// enforce 'max block size' - check only transaction bytes, not the full serialized block
+	// because the mempool transaction size limit is built using the size of the transactions
+	block := new(Block)
+	if err := Unmarshal(x.Block, block); err != nil {
+		return false, err
+	}
+	txsSize := 0
+	for _, tx := range block.Transactions {
+		txsSize += len(tx)
+	}
+	if txsSize > maxBlockSize {
 		// exit with error
 		return false, ErrExpectedMaxBlockSize()
 	}

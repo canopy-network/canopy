@@ -146,6 +146,7 @@ type FSMMetrics struct {
 	ValidatorNonSignerCount    *prometheus.GaugeVec // was any validator a non signer?
 	ValidatorDoubleSigner      *prometheus.GaugeVec // was this validator a double signer?
 	ValidatorDoubleSignerCount *prometheus.GaugeVec // was any validator a double signer?
+	ValidatorCount             *prometheus.GaugeVec // how many validators are there?
 }
 
 // StoreMetrics represents the telemetry of the 'store' package
@@ -399,6 +400,10 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			ValidatorDoubleSignerCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
 				Name: "canopy_validator_double_signer_count",
 				Help: "Count of double signers for the last block",
+			}, []string{"type"}),
+			ValidatorCount: promauto.NewGaugeVec(prometheus.GaugeOpts{
+				Name: "canopy_validator_count",
+				Help: "Count of validators",
 			}, []string{"type"}),
 		},
 		// STORE
@@ -736,4 +741,13 @@ func (m *Metrics) SetStartupBlock(blockHeight uint64) {
 		m.StartupBlock.Set(float64(blockHeight))
 		m.startupBlockSet = true
 	}
+}
+
+func (m *Metrics) UpdateValidatorCount(count int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	// update the metric
+	m.ValidatorCount.WithLabelValues("total").Set(float64(count))
 }

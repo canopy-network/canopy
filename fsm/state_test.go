@@ -284,6 +284,31 @@ func TestApplyBlock(t *testing.T) {
 	}
 }
 
+func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
+	sm := newTestStateMachine(t)
+	kg := newTestKeyGroup(t)
+	invalidHeight := sm.Height() + BlockAcceptanceRange + 1
+	tx, err := NewSendTransaction(
+		kg.PrivateKey,
+		newTestAddress(t),
+		1,
+		uint64(sm.NetworkID),
+		sm.Config.ChainId,
+		DefaultParams().Fee.SendFee,
+		invalidHeight,
+		"",
+	)
+	require.NoError(t, err)
+	txBytes, err := lib.Marshal(tx)
+	require.NoError(t, err)
+
+	results := new(lib.ApplyBlockResults)
+	err = sm.ApplyTransactions(context.Background(), [][]byte{txBytes}, results, true)
+	require.NoError(t, err)
+	require.Len(t, results.Failed, 1)
+	require.ErrorContains(t, results.Failed[0].Error, "invalid tx height")
+}
+
 func newSingleAccountStateMachine(t *testing.T) StateMachine {
 	sm := newTestStateMachine(t)
 	keyGroup := newTestKeyGroup(t)

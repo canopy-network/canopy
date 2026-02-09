@@ -1,0 +1,24 @@
+syntax = "proto3";
+package types;
+option go_package = "github.com/canopy-network/go-plugin/contract";
+
+// An account is a structure that holds funds and can send or receive transactions using a crypto key pair
+// Each account has a unique address and a balance, think a bank account - but managed by the blockchain
+// instead of a bank
+message Account {
+  // address: the short version of a public key
+  bytes address = 1;
+  // amount: the balance of funds the account has
+  uint64 amount = 2;
+  // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
+}
+
+// A pool is like an account without an owner, holding funds that are managed directly by the blockchain protocol
+// It's very similar to an account but instead of an address it has a unique ID and operates based on predefined
+// blockchain rules rather than individual control
+message Pool {
+  // id: the unique identifier of the pool
+  uint64 id = 1;
+  // amount: the balance of funds the pool has
+  uint64 amount = 2;
+}

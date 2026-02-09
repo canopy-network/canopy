@@ -108,6 +108,20 @@ message DexBatch {
   bool liveness_fallback = 12;  // @gotags: json:"livenessFallback"
 }
 
+// DexPrice represents the computed swap price between two chains.
+message DexPrice {
+  // local_chain_id: the local chain id
+  uint64 local_chain_id = 1; // @gotags: json:"chainId"
+  // remote_chain_id: the remote chain id
+  uint64 remote_chain_id = 2; // @gotags: json:"remoteChainId"
+  // local_pool: the local pool size
+  uint64 local_pool = 3; // @gotags: json:"localPool"
+  // remote_pool: the remote pool size
+  uint64 remote_pool = 4; // @gotags: json:"remotePool"
+  // e6_scaled_price: price scaled by 1e6
+  uint64 e6_scaled_price = 5; // @gotags: json:"e6ScaledPrice"
+}
+
 // PoolPoints represents an ownership 'share' of the pool
 message PoolPoints {
   // address: the recipient address of the points

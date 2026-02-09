@@ -127,6 +127,10 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 				return err
 			}
 		}
+		// clear the locked dex batch data
+		if err = s.Delete(KeyForLockedBatch(params.Consensus.ResetCommittee)); err != nil {
+			return err
+		}
 		// reset the param back to 0
 		params.Consensus.ResetCommittee = 0
 		if err = s.SetParamsCons(params.Consensus); err != nil {

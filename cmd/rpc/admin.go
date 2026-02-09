@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/canopy-network/canopy/fsm"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -567,7 +568,7 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 	// Check if the transaction should be submitted to the network.
 	if ptr.Submit {
 		// Submit the transaction for processing.
-		s.submitTx(w, p)
+		s.submitTxs(w, []lib.TransactionI{p})
 	} else {
 		// Marshal the transaction into JSON and write it to the response
 		bz, e := lib.MarshalJSONIndent(p)

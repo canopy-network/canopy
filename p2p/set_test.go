@@ -2,11 +2,12 @@
 package p2p
 
 import (
-	"github.com/canopy-network/canopy/lib"
-	"github.com/stretchr/testify/require"
 	"net"
 	"sync"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPeerSetAddGetDel(t *testing.T) {

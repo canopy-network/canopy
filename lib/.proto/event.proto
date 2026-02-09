@@ -3,6 +3,8 @@ package types;
 
 option go_package = "github.com/canopy-network/canopy/lib";
 
+import "google/protobuf/any.proto";
+
 message Event {
   // event_type: The type of the transaction like 'slash' or 'unstake'
   string event_type = 1; // @gotags: json:"eventType"
@@ -17,6 +19,9 @@ message Event {
     EventAutoPause auto_pause = 8;
     EventAutoBeginUnstaking auto_begin_unstaking = 9;
     EventFinishUnstaking finish_unstaking = 10;
+    EventOrderBookLock order_book_lock = 11;
+    EventOrderBookReset order_book_reset = 12;
+    EventCustom custom = 13;
   }
   // height: the block height of the event
   uint64 height = 91;
@@ -101,3 +106,25 @@ message EventAutoPause {}
 message EventAutoBeginUnstaking {}
 
 message EventFinishUnstaking {}
+
+message EventOrderBookLock {
+  // order_id: the unique identifier of the order
+  bytes order_id = 1;  // @gotags: json:"orderId"
+  // buyer_receive_address: the address where the buyer will receive the sold tokens
+  bytes buyer_receive_address = 2; // @gotags: json:"buyerReceiveAddress"
+  // buyer_send_address: the address from which the buyer sends the counter asset
+  bytes buyer_send_address = 3; // @gotags: json:"buyerSendAddress"
+  // buyer_chain_deadline: the deadline block height on the buyer's chain
+  uint64 buyer_chain_deadline = 4; // @gotags: json:"buyerChainDeadline"
+}
+
+message EventOrderBookReset {
+  // order_id: the unique identifier of the order that was reset
+  bytes order_id = 1;  // @gotags: json:"orderId"
+}
+
+// EventCustom carries a plugin-defined event payload.
+message EventCustom {
+  // msg: custom payload.
+  google.protobuf.Any msg = 1;
+}

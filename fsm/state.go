@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"context"
+	"math"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ type StateMachine struct {
 	log                lib.LoggerI                             // the logger for standard output and debugging
 	cache              *cache                                  // the state machine cache
 	LastValidatorSet   map[uint64]map[uint64]*lib.ValidatorSet // reference to the last validator set saved in the controller
+	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 }
 
 // cache is the set of items to be cached used by the state machine
@@ -43,7 +45,7 @@ type cache struct {
 }
 
 // New() creates a new instance of a StateMachine
-func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
+func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
 	sm := &StateMachine{
 		store:             nil,
@@ -53,6 +55,7 @@ func New(c lib.Config, store lib.StoreI, metrics *lib.Metrics, log lib.LoggerI) 
 		proposeVoteConfig: AcceptAllProposals,
 		Config:            c,
 		Metrics:           metrics,
+		Plugin:            plugin,
 		log:               log,
 		events:            new(lib.EventsTracker),
 		cache: &cache{
@@ -212,8 +215,8 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	failedCheckTxs := map[int]error{}
 	// first batch validate signatures over the entire set
 	for i, tx := range txs {
-		if _, err = s.CheckTx(tx, "", batchVerifier); err != nil {
-			failedCheckTxs[i] = err
+		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
+			failedCheckTxs[i] = checkErr
 		}
 	}
 	// execute batch verification of the signatures in the block
@@ -322,7 +325,7 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// initialize a new state machine
-	return New(s.Config, heightStore, s.Metrics, s.log)
+	return New(s.Config, heightStore, s.Plugin, s.Metrics, s.log)
 }
 
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
@@ -449,10 +452,6 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		return nil, err
 	}
 	defer sm.Discard()
-	// if height is equal to latest height, provide the validator cache to the FSM
-	if height == s.height {
-		sm.cache = s.cache
-	}
 	// get the previous state machine height
 	lastSM, err := s.TimeMachine(lastHeight)
 	if err != nil {
@@ -514,6 +513,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		proposeVoteConfig:  s.proposeVoteConfig,
 		events:             new(lib.EventsTracker),
 		Config:             s.Config,
+		Plugin:             s.Plugin,
 		log:                s.log,
 		cache: &cache{
 			accounts: make(map[uint64]*Account),
@@ -536,6 +536,22 @@ func (s *StateMachine) Delete(key []byte) lib.ErrorI { return s.Store().Delete(k
 // starting at the specified key and iterating lexicographically
 func (s *StateMachine) Iterator(key []byte) (lib.IteratorI, lib.ErrorI) {
 	return s.Store().Iterator(key)
+}
+
+// IteratorAndAppend() aggregates an array of raw bytes from an iterator
+func (s *StateMachine) IterateAndAppend(prefix []byte) (result [][]byte, err lib.ErrorI) {
+	// iterate through the account prefix
+	it, err := s.Iterator(prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	// for each item of the iterator
+	for ; it.Valid(); it.Next() {
+		result = append(result, it.Value())
+	}
+	// return the result
+	return result, nil
 }
 
 // RevIterator() creates and returns an iterator for the state machine's underlying store
@@ -614,6 +630,10 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	// Params caches must not outlive the current store view, otherwise Reset()/rollback
+	// can leave the FSM reading stale values that disagree with the underlying store.
+	s.cache.valParams = nil
+	s.cache.feeParams = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty
@@ -632,3 +652,77 @@ func (s *StateMachine) Height() uint64                                { return s
 func (s *StateMachine) TotalVDFIterations() uint64                    { return s.totalVDFIterations }
 func (s *StateMachine) Discard()                                      { s.store.(lib.StoreI).Discard() }
 func (s *StateMachine) SetProposalVoteConfig(c GovProposalVoteConfig) { s.proposeVoteConfig = c }
+
+var _ lib.PluginCompatibleFSM = new(StateMachine)
+
+// StateRead() implements the 'state read' interface for plugins
+func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response lib.PluginStateReadResponse, err lib.ErrorI) {
+	// for each 'get' request
+	for _, getRequest := range request.Keys {
+		var value []byte
+		// execute the 'get'
+		value, err = s.Get(getRequest.Key)
+		if err != nil {
+			return
+		}
+		// add to the response
+		response.Results = append(response.Results, &lib.PluginReadResult{
+			QueryId: getRequest.QueryId,
+			Entries: []*lib.PluginStateEntry{{Key: getRequest.Key, Value: value}},
+		})
+	}
+	// for each 'iteration' request
+	for _, r := range request.Ranges {
+		var it lib.IteratorI
+		// execute the 'iteration'
+		if r.Reverse {
+			it, err = s.RevIterator(r.Prefix)
+		} else {
+			it, err = s.Iterator(r.Prefix)
+		}
+		// handle error
+		if err != nil {
+			return
+		}
+		// calculate entries
+		var entries []*lib.PluginStateEntry
+		// allow 0 limit
+		if r.Limit == 0 {
+			r.Limit = math.MaxUint64
+		}
+		// while the iterator is valid and the limit is not reached
+		for i := uint64(0); i < r.Limit && it.Valid(); i++ {
+			entries = append(entries, &lib.PluginStateEntry{
+				Key:   it.Key(),
+				Value: it.Value(),
+			})
+			it.Next()
+		}
+		it.Close()
+		// add to the response
+		response.Results = append(response.Results, &lib.PluginReadResult{
+			QueryId: r.QueryId,
+			Entries: entries,
+		})
+	}
+	return
+}
+
+// StateWrite() implements the 'state write' interface for plugins
+func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (response lib.PluginStateWriteResponse, err lib.ErrorI) {
+	// for each 'set' request
+	for _, setRequest := range request.Sets {
+		// execute the 'set'
+		if err = s.Set(setRequest.Key, setRequest.Value); err != nil {
+			return
+		}
+	}
+	// for each 'del' request
+	for _, delRequest := range request.Deletes {
+		// execute the 'delete'
+		if err = s.Delete(delRequest.Key); err != nil {
+			return
+		}
+	}
+	return
+}

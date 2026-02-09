@@ -208,7 +208,11 @@ func (s *StateMachine) LockOrder(lock *lib.LockOrder, chainId uint64) (err lib.E
 	order.BuyerSendAddress = lock.BuyerSendAddress
 	order.BuyerChainDeadline = lock.BuyerChainDeadline
 	// set the order book back in state
-	return s.SetOrder(order, chainId)
+	if err = s.SetOrder(order, chainId); err != nil {
+		return
+	}
+	// emit order book lock event
+	return s.EventOrderBookLock(order)
 }
 
 // ResetOrder() removes the recipient and deadline height from an existing order and saves it to the state
@@ -216,6 +220,10 @@ func (s *StateMachine) ResetOrder(orderId []byte, chainId uint64) (err lib.Error
 	// get the order from state
 	order, err := s.GetOrder(orderId, chainId)
 	if err != nil {
+		return
+	}
+	// emit order book reset event before resetting the order (so we have access to order details)
+	if err = s.EventOrderBookReset(order); err != nil {
 		return
 	}
 	// reset the buyer's receive, send, and deadline height in the order

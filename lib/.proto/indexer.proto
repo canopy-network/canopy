@@ -1,0 +1,44 @@
+syntax = "proto3";
+package types;
+
+option go_package = "github.com/canopy-network/canopy/fsm";
+
+// *****************************************************************************************************
+// This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
+//
+// Protobuf is a language-neutral, platform-neutral serialization format. It allows users
+// to define objects in a way that’s both efficient to store and fast to transmit over the network.
+// These definitions are compiled into code that *enables different systems and programming languages
+// to communicate in a byte-perfect manner*
+//
+// To update these structures, make changes to the source .proto files, then recompile
+// to regenerate this file.
+// These auto-generated files are easily recognized by checking for a `.pb.go` ending
+// *****************************************************************************************************
+//_
+//_
+//_
+// IndexerBlob contains the protobuf-encoded data needed to hydrate an indexer in one response.
+message IndexerBlob {
+  bytes block = 1;
+  repeated bytes accounts = 2;
+  repeated bytes pools = 3;
+  repeated bytes validators = 4;
+  repeated bytes dex_prices = 5;
+  repeated bytes non_signers = 6;
+  repeated bytes double_signers = 7;
+  bytes orders = 8;
+  bytes params = 9;
+  repeated bytes dex_batches = 10;
+  repeated bytes next_dex_batches = 11;
+  bytes committees_data = 12;
+  repeated uint64 subsidized_committees = 13;
+  repeated uint64 retired_committees = 14;
+  bytes supply = 15;
+}
+
+// IndexerBlobs groups the current and previous indexer blobs.
+message IndexerBlobs {
+  IndexerBlob current = 1;
+  IndexerBlob previous = 2;
+}

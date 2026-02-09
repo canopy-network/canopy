@@ -60,13 +60,15 @@ func DefaultConfig() Config {
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel   string      `json:"logLevel"`   // any level includes the levels above it: debug < info < warning < error
-	ChainId    uint64      `json:"chainId"`    // the identifier of this particular chain within a single 'network id'
-	SleepUntil uint64      `json:"sleepUntil"` // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain  []RootChain `json:"rootChain"`  // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF     bool        `json:"runVDF"`     // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless   bool        `json:"headless"`   // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate bool        `json:"autoUpdate"` // check for new versions of software each X time
+	LogLevel        string      `json:"logLevel"`        // any level includes the levels above it: debug < info < warning < error
+	ChainId         uint64      `json:"chainId"`         // the identifier of this particular chain within a single 'network id'
+	SleepUntil      uint64      `json:"sleepUntil"`      // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain       []RootChain `json:"rootChain"`       // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF          bool        `json:"runVDF"`          // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless        bool        `json:"headless"`        // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate      bool        `json:"autoUpdate"`      // check for new versions of software each X time
+	Plugin          string      `json:"plugin"`          // the configured plugin to use
+	PluginTimeoutMS int         `json:"pluginTimeoutMS"` // plugin request timeout in milliseconds
 }
 
 // DefaultMainConfig() sets log level to 'info'
@@ -79,10 +81,11 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:     true,          // run the VDF by default
-		ChainId:    CanopyChainId, // default chain url is 1
-		Headless:   false,         // serve the web wallet and block explorer by default
-		AutoUpdate: true,          // set it as default while in inmature state
+		RunVDF:          true,          // run the VDF by default
+		ChainId:         CanopyChainId, // default chain url is 1
+		Headless:        false,         // serve the web wallet and block explorer by default
+		AutoUpdate:      true,          // set it as default while in inmature state
+		PluginTimeoutMS: 1000,          // 1 second default plugin timeout
 	}
 }
 
@@ -112,6 +115,7 @@ type RPCConfig struct {
 	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
+	IndexerBlobCacheEntries    int    `json:"indexerBlobCacheEntries"`    // number of cached indexer blobs to keep in memory
 	MaxRCSubscribers           int    `json:"maxRCSubscribers"`           // max total root-chain subscribers
 	MaxRCSubscribersPerChain   int    `json:"maxRCSubscribersPerChain"`   // max root-chain subscribers per chain id
 	RCSubscriberReadLimitBytes int64  `json:"rcSubscriberReadLimitBytes"` // max bytes allowed in a single ws message from a subscriber
@@ -136,6 +140,7 @@ func DefaultRPCConfig() RPCConfig {
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   3,                          // the rpc timeout is 3 seconds
+		IndexerBlobCacheEntries:    64,                         // cache the most recent indexer blobs
 		MaxRCSubscribers:           512,                        // limit total root-chain subscribers
 		MaxRCSubscribersPerChain:   128,                        // limit subscribers per chain id
 		RCSubscriberReadLimitBytes: int64(64 * units.Kilobyte), // cap inbound ws message sizes
@@ -159,6 +164,7 @@ const (
 type StateMachineConfig struct {
 	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
 	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
+	FaucetAddress         string `json:"faucetAddress"`         // if set: "send" txs from this address will auto-mint on insufficient funds (dev/test only)
 }
 
 // DefaultStateMachineConfig returns FSM defaults
@@ -166,6 +172,7 @@ func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
 		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
 		BlocksPerHalvening:    DefaultBlocksPerHalvening,
+		FaucetAddress:         "",
 	}
 }
 
@@ -229,6 +236,7 @@ type P2PConfig struct {
 	BannedIPs           []string          `json:"bannedIPs"`           // banned IPs
 	MinimumPeersToStart int               `json:"minimumPeersToStart"` // the minimum connections required to start consensus
 	ValidatorTCPProxy   map[uint64]string `json:"validator_tcp_proxy"` // tcp proxy config mapping listen port to target address
+	GossipThreshold     uint              `json:"gossipThreshold"`     // number of must connects needed to switch to full gossip
 }
 
 func DefaultP2PConfig() P2PConfig {
@@ -308,15 +316,19 @@ func DefaultMempoolConfig() MempoolConfig {
 
 // MetricsConfig represents the configuration for the metrics server
 type MetricsConfig struct {
-	MetricsEnabled    bool   `json:"metricsEnabled"`    // if the metrics are enabled
-	PrometheusAddress string `json:"prometheusAddress"` // the address of the server
+	MetricsEnabled         bool   `json:"metricsEnabled"`         // if the metrics are enabled
+	PrometheusAddress      string `json:"prometheusAddress"`      // the address of the server
+	HeapProfilingEnabled   bool   `json:"heapProfilingEnabled"`   // enable periodic heap profiling (warning: causes GC pauses)
+	HeapProfilingIntervalS int    `json:"heapProfilingIntervalS"` // interval in seconds between heap profile snapshots
 }
 
 // DefaultMetricsConfig() returns the default metrics configuration
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		MetricsEnabled:    true,           // enabled by default
-		PrometheusAddress: "0.0.0.0:9090", // the default prometheus address
+		MetricsEnabled:         true,           // enabled by default
+		PrometheusAddress:      "0.0.0.0:9090", // the default prometheus address
+		HeapProfilingEnabled:   false,          // disabled by default (causes GC pauses)
+		HeapProfilingIntervalS: 10,             // 10 second interval when enabled
 	}
 }
 
