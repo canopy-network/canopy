@@ -3,6 +3,8 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"sort"
@@ -162,6 +164,36 @@ func (s *StateMachine) AccountSub(address crypto.AddressI, amountToSub uint64) l
 	return s.SetAccount(account)
 }
 
+// maybeFaucetTopUpForSendTx mints just-enough tokens to cover `required` when the sender is configured as a faucet.
+// Faucet mode is disabled when config.faucetAddress is empty or omitted.
+func (s *StateMachine) maybeFaucetTopUpForSendTx(sender crypto.AddressI, required uint64) lib.ErrorI {
+	faucetStr := strings.TrimSpace(s.Config.StateMachineConfig.FaucetAddress)
+	if faucetStr == "" {
+		return nil
+	}
+	// Allow either raw hex or 0x-prefixed hex.
+	faucetStr = strings.TrimPrefix(strings.ToLower(faucetStr), "0x")
+
+	faucetAddr, err := crypto.NewAddressFromString(faucetStr)
+	if err != nil {
+		return lib.ErrInvalidAddress()
+	}
+	if len(faucetAddr.Bytes()) != crypto.AddressSize {
+		return ErrAddressSize()
+	}
+	if !sender.Equals(faucetAddr) {
+		return nil
+	}
+	bal, e := s.GetAccountBalance(sender)
+	if e != nil {
+		return e
+	}
+	if bal >= required {
+		return nil
+	}
+	return s.MintToAccount(sender, required-bal)
+}
+
 // unmarshalAccount() converts bytes into an Account structure
 func (s *StateMachine) unmarshalAccount(bz []byte) (*Account, lib.ErrorI) {
 	// create a new account structure to ensure we never have 'nil' accounts
@@ -292,6 +324,21 @@ func (s *StateMachine) MintToPool(id uint64, amount uint64) lib.ErrorI {
 	}
 	// update the pools balance with the new inflation
 	return s.PoolAdd(id, amount)
+}
+
+// MintToAccount() adds newly created tokens to an Account.
+// NOTE: This should only be used in deterministic, consensus-safe paths.
+func (s *StateMachine) MintToAccount(address crypto.AddressI, amount uint64) lib.ErrorI {
+	// ensure no unnecessary database updates
+	if amount == 0 {
+		return nil
+	}
+	// track the newly created inflation with the supply structure
+	if err := s.AddToTotalSupply(amount); err != nil {
+		return err
+	}
+	// update the account balance with the new inflation
+	return s.AccountAdd(address, amount)
 }
 
 // PoolAdd() adds tokens to the Pool structure

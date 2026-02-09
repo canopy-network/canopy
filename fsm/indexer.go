@@ -13,7 +13,9 @@ import "github.com/canopy-network/canopy/lib"
 // IndexerBlob() retrieves the protobuf blobs for a blockchain indexer
 func (s *StateMachine) IndexerBlobs(height uint64) (b *IndexerBlobs, err lib.ErrorI) {
 	b = &IndexerBlobs{}
-	if height > 1 {
+	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
+	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
+	if height > 2 {
 		b.Previous, err = s.IndexerBlob(height - 1)
 		if err != nil {
 			return nil, err
