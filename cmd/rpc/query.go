@@ -608,7 +608,9 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 	}
 
 	var previous *fsm.IndexerBlob
-	if height > 1 {
+	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
+	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
+	if height > 2 {
 		if cachedPrev, ok := s.indexerBlobCache.getCurrent(height - 1); ok {
 			previous = cachedPrev
 		} else {
