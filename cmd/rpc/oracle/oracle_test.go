@@ -348,6 +348,20 @@ func createOrderStore(orders ...*types.WitnessedOrder) *mockOrderStore {
 	return mockStore
 }
 
+func withCommittee(order *lib.SellOrder, committee uint64) *lib.SellOrder {
+	order.Committee = committee
+	return order
+}
+
+func withData(order *lib.SellOrder, dataHex string) *lib.SellOrder {
+	b, err := lib.StringToBytes(strings.TrimPrefix(dataHex, "0x"))
+	if err != nil {
+		panic(err)
+	}
+	order.Data = b
+	return order
+}
+
 func createOrderBook(orders ...*lib.SellOrder) *lib.OrderBook {
 	orderBook := &lib.OrderBook{}
 	for _, order := range orders {
@@ -1341,8 +1355,8 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 		{
 			name: "USDC and USDT close orders on same committee",
 			orderBook: createOrderBook(
-				createSellOrder(usdcOrderId, usdcContract, buyerReceiveAddress),
-				createSellOrder(usdtOrderId, usdtContract, buyerReceiveAddress),
+				withData(withCommittee(createSellOrderWithSellerAddr(usdcOrderId, buyerReceiveAddress, sellerReceiveAddress), 1), usdcContract),
+				withData(withCommittee(createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress), 1), usdtContract),
 			),
 			witnessedOrders: []*types.WitnessedOrder{
 				createWitnessedCloseOrder(usdcOrderId, 1),
@@ -1352,10 +1366,18 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				&mockTransaction{
 					to:    usdcContract,
 					order: createWitnessedCloseOrder(usdcOrderId, 1),
+					tokenTransfer: types.TokenTransfer{
+						TokenBaseAmount:  big.NewInt(100000000),
+						RecipientAddress: fmt.Sprintf("%x", []byte(sellerReceiveAddress)),
+					},
 				},
 				&mockTransaction{
 					to:    usdtContract,
 					order: createWitnessedCloseOrder(usdtOrderId, 1),
+					tokenTransfer: types.TokenTransfer{
+						TokenBaseAmount:  big.NewInt(100000000),
+						RecipientAddress: fmt.Sprintf("%x", []byte(sellerReceiveAddress)),
+					},
 				},
 			},
 			expectedLockOrders:    0,
@@ -1366,7 +1388,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			name: "mixed USDC lock and USDT close on same committee",
 			orderBook: createOrderBook(
 				createSellOrder(usdcOrderId, usdcContract, ""),
-				createSellOrder(usdtOrderId, usdtContract, buyerReceiveAddress),
+				withData(withCommittee(createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress), 1), usdtContract),
 			),
 			witnessedOrders: []*types.WitnessedOrder{
 				createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
@@ -1380,6 +1402,10 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				&mockTransaction{
 					to:    usdtContract,
 					order: createWitnessedCloseOrder(usdtOrderId, 1),
+					tokenTransfer: types.TokenTransfer{
+						TokenBaseAmount:  big.NewInt(100000000),
+						RecipientAddress: fmt.Sprintf("%x", []byte(sellerReceiveAddress)),
+					},
 				},
 			},
 			expectedLockOrders:    1,
@@ -1390,7 +1416,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			name: "USDT close order validation with exact amount match",
 			orderBook: createOrderBook(
 				// USDT with 6 decimals: 100 USDT = 100,000,000 base units
-				createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress),
+				withData(withCommittee(createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress), 1), usdtContract),
 			),
 			witnessedOrders: []*types.WitnessedOrder{
 				createWitnessedCloseOrder(usdtOrderId, 1),
