@@ -10,6 +10,10 @@ Height Semantics
   `/v1/query/height`).
 - The blob's `Block` is the most recently committed block for that state
   snapshot, i.e. `block_height = height - 1`.
+- Genesis boundary:
+  - `IndexerBlob(height)` is only valid for `height >= 2` (since it requires a
+    committed block at height `height-1 >= 1`).
+  - `IndexerBlobs(height)` returns `Previous=nil` for `height <= 2`.
 
 What's inside
 - Block bytes (protobuf)
