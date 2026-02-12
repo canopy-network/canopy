@@ -261,14 +261,16 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 	defer ticker.Stop()
 	for range ticker.C {
 		var count int
-		p.failedPeers.Range(func(_, rawPeer any) bool {
+		p.failedPeers.Range(func(key, rawPeer any) bool {
 			peer, ok := rawPeer.(*lib.PeerAddress)
-			// ignore error and continue with the next peer
+			// invalid peer, remove
 			if !ok {
+				p.failedPeers.Delete(key)
 				return true
 			}
-			// confirm peer is a must connect
+			// confirm peer is a must connect, otherwise remove
 			if !p.PeerSet.IsMustConnect(peer.PublicKey) {
+				p.failedPeers.Delete(key)
 				return true
 			}
 			// attempt to reconnect to the peer
