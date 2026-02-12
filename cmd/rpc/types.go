@@ -16,6 +16,11 @@ type heightRequest struct {
 	Height uint64 `json:"height"`
 }
 
+type indexerBlobsRequest struct {
+	heightRequest
+	Delta bool `json:"delta,omitempty"`
+}
+
 type chainRequest struct {
 	ChainId uint64 `json:"chainId"`
 }

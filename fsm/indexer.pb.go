@@ -38,24 +38,31 @@ const (
 // _
 // IndexerBlob contains the protobuf-encoded data needed to hydrate an indexer in one response.
 type IndexerBlob struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	Block                []byte                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
-	Accounts             [][]byte               `protobuf:"bytes,2,rep,name=accounts,proto3" json:"accounts,omitempty"`
-	Pools                [][]byte               `protobuf:"bytes,3,rep,name=pools,proto3" json:"pools,omitempty"`
-	Validators           [][]byte               `protobuf:"bytes,4,rep,name=validators,proto3" json:"validators,omitempty"`
-	DexPrices            [][]byte               `protobuf:"bytes,5,rep,name=dex_prices,json=dexPrices,proto3" json:"dex_prices,omitempty"`
-	NonSigners           [][]byte               `protobuf:"bytes,6,rep,name=non_signers,json=nonSigners,proto3" json:"non_signers,omitempty"`
-	DoubleSigners        [][]byte               `protobuf:"bytes,7,rep,name=double_signers,json=doubleSigners,proto3" json:"double_signers,omitempty"`
-	Orders               []byte                 `protobuf:"bytes,8,opt,name=orders,proto3" json:"orders,omitempty"`
-	Params               []byte                 `protobuf:"bytes,9,opt,name=params,proto3" json:"params,omitempty"`
-	DexBatches           [][]byte               `protobuf:"bytes,10,rep,name=dex_batches,json=dexBatches,proto3" json:"dex_batches,omitempty"`
-	NextDexBatches       [][]byte               `protobuf:"bytes,11,rep,name=next_dex_batches,json=nextDexBatches,proto3" json:"next_dex_batches,omitempty"`
-	CommitteesData       []byte                 `protobuf:"bytes,12,opt,name=committees_data,json=committeesData,proto3" json:"committees_data,omitempty"`
-	SubsidizedCommittees []uint64               `protobuf:"varint,13,rep,packed,name=subsidized_committees,json=subsidizedCommittees,proto3" json:"subsidized_committees,omitempty"`
-	RetiredCommittees    []uint64               `protobuf:"varint,14,rep,packed,name=retired_committees,json=retiredCommittees,proto3" json:"retired_committees,omitempty"`
-	Supply               []byte                 `protobuf:"bytes,15,opt,name=supply,proto3" json:"supply,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Block                    []byte                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
+	Accounts                 [][]byte               `protobuf:"bytes,2,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	Pools                    [][]byte               `protobuf:"bytes,3,rep,name=pools,proto3" json:"pools,omitempty"`
+	Validators               [][]byte               `protobuf:"bytes,4,rep,name=validators,proto3" json:"validators,omitempty"`
+	DexPrices                [][]byte               `protobuf:"bytes,5,rep,name=dex_prices,json=dexPrices,proto3" json:"dex_prices,omitempty"`
+	NonSigners               [][]byte               `protobuf:"bytes,6,rep,name=non_signers,json=nonSigners,proto3" json:"non_signers,omitempty"`
+	DoubleSigners            [][]byte               `protobuf:"bytes,7,rep,name=double_signers,json=doubleSigners,proto3" json:"double_signers,omitempty"`
+	Orders                   []byte                 `protobuf:"bytes,8,opt,name=orders,proto3" json:"orders,omitempty"`
+	Params                   []byte                 `protobuf:"bytes,9,opt,name=params,proto3" json:"params,omitempty"`
+	DexBatches               [][]byte               `protobuf:"bytes,10,rep,name=dex_batches,json=dexBatches,proto3" json:"dex_batches,omitempty"`
+	NextDexBatches           [][]byte               `protobuf:"bytes,11,rep,name=next_dex_batches,json=nextDexBatches,proto3" json:"next_dex_batches,omitempty"`
+	CommitteesData           []byte                 `protobuf:"bytes,12,opt,name=committees_data,json=committeesData,proto3" json:"committees_data,omitempty"`
+	SubsidizedCommittees     []uint64               `protobuf:"varint,13,rep,packed,name=subsidized_committees,json=subsidizedCommittees,proto3" json:"subsidized_committees,omitempty"`
+	RetiredCommittees        []uint64               `protobuf:"varint,14,rep,packed,name=retired_committees,json=retiredCommittees,proto3" json:"retired_committees,omitempty"`
+	Supply                   []byte                 `protobuf:"bytes,15,opt,name=supply,proto3" json:"supply,omitempty"`
+	TotalValidatorsActive    uint32                 `protobuf:"varint,16,opt,name=total_validators_active,json=totalValidatorsActive,proto3" json:"total_validators_active,omitempty"`
+	TotalValidatorsPaused    uint32                 `protobuf:"varint,17,opt,name=total_validators_paused,json=totalValidatorsPaused,proto3" json:"total_validators_paused,omitempty"`
+	TotalValidatorsUnstaking uint32                 `protobuf:"varint,18,opt,name=total_validators_unstaking,json=totalValidatorsUnstaking,proto3" json:"total_validators_unstaking,omitempty"`
+	ValidatorsDelta          bool                   `protobuf:"varint,19,opt,name=validators_delta,json=validatorsDelta,proto3" json:"validators_delta,omitempty"`
+	TotalDelegatesActive     uint32                 `protobuf:"varint,20,opt,name=total_delegates_active,json=totalDelegatesActive,proto3" json:"total_delegates_active,omitempty"`
+	TotalDelegatesPaused     uint32                 `protobuf:"varint,21,opt,name=total_delegates_paused,json=totalDelegatesPaused,proto3" json:"total_delegates_paused,omitempty"`
+	TotalDelegatesUnstaking  uint32                 `protobuf:"varint,22,opt,name=total_delegates_unstaking,json=totalDelegatesUnstaking,proto3" json:"total_delegates_unstaking,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *IndexerBlob) Reset() {
@@ -193,6 +200,55 @@ func (x *IndexerBlob) GetSupply() []byte {
 	return nil
 }
 
+func (x *IndexerBlob) GetTotalValidatorsActive() uint32 {
+	if x != nil {
+		return x.TotalValidatorsActive
+	}
+	return 0
+}
+
+func (x *IndexerBlob) GetTotalValidatorsPaused() uint32 {
+	if x != nil {
+		return x.TotalValidatorsPaused
+	}
+	return 0
+}
+
+func (x *IndexerBlob) GetTotalValidatorsUnstaking() uint32 {
+	if x != nil {
+		return x.TotalValidatorsUnstaking
+	}
+	return 0
+}
+
+func (x *IndexerBlob) GetValidatorsDelta() bool {
+	if x != nil {
+		return x.ValidatorsDelta
+	}
+	return false
+}
+
+func (x *IndexerBlob) GetTotalDelegatesActive() uint32 {
+	if x != nil {
+		return x.TotalDelegatesActive
+	}
+	return 0
+}
+
+func (x *IndexerBlob) GetTotalDelegatesPaused() uint32 {
+	if x != nil {
+		return x.TotalDelegatesPaused
+	}
+	return 0
+}
+
+func (x *IndexerBlob) GetTotalDelegatesUnstaking() uint32 {
+	if x != nil {
+		return x.TotalDelegatesUnstaking
+	}
+	return 0
+}
+
 // IndexerBlobs groups the current and previous indexer blobs.
 type IndexerBlobs struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -250,7 +306,7 @@ var File_indexer_proto protoreflect.FileDescriptor
 
 const file_indexer_proto_rawDesc = "" +
 	"\n" +
-	"\rindexer.proto\x12\x05types\"\xfc\x03\n" +
+	"\rindexer.proto\x12\x05types\"\xfd\x06\n" +
 	"\vIndexerBlob\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\fR\x05block\x12\x1a\n" +
 	"\baccounts\x18\x02 \x03(\fR\baccounts\x12\x14\n" +
@@ -272,7 +328,14 @@ const file_indexer_proto_rawDesc = "" +
 	"\x0fcommittees_data\x18\f \x01(\fR\x0ecommitteesData\x123\n" +
 	"\x15subsidized_committees\x18\r \x03(\x04R\x14subsidizedCommittees\x12-\n" +
 	"\x12retired_committees\x18\x0e \x03(\x04R\x11retiredCommittees\x12\x16\n" +
-	"\x06supply\x18\x0f \x01(\fR\x06supply\"l\n" +
+	"\x06supply\x18\x0f \x01(\fR\x06supply\x126\n" +
+	"\x17total_validators_active\x18\x10 \x01(\rR\x15totalValidatorsActive\x126\n" +
+	"\x17total_validators_paused\x18\x11 \x01(\rR\x15totalValidatorsPaused\x12<\n" +
+	"\x1atotal_validators_unstaking\x18\x12 \x01(\rR\x18totalValidatorsUnstaking\x12)\n" +
+	"\x10validators_delta\x18\x13 \x01(\bR\x0fvalidatorsDelta\x124\n" +
+	"\x16total_delegates_active\x18\x14 \x01(\rR\x14totalDelegatesActive\x124\n" +
+	"\x16total_delegates_paused\x18\x15 \x01(\rR\x14totalDelegatesPaused\x12:\n" +
+	"\x19total_delegates_unstaking\x18\x16 \x01(\rR\x17totalDelegatesUnstaking\"l\n" +
 	"\fIndexerBlobs\x12,\n" +
 	"\acurrent\x18\x01 \x01(\v2\x12.types.IndexerBlobR\acurrent\x12.\n" +
 	"\bprevious\x18\x02 \x01(\v2\x12.types.IndexerBlobR\bpreviousB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
