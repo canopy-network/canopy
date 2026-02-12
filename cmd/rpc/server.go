@@ -37,7 +37,7 @@ const (
 	ApplicationJSON = "application/json; charset=utf-8"
 
 	walletStaticDir   = "web/wallet/out"
-	explorerStaticDir = "web/explorer-new/out"
+	explorerStaticDir = "web/explore-new/dist"
 )
 
 // Server represents a Canopy RPC server with configuration options.
@@ -335,7 +335,7 @@ func (h logHandler) Handle(resp http.ResponseWriter, req *http.Request, p httpro
 	h.h(resp, req, p)
 }
 
-//go:embed all:web/explorer/out
+//go:embed all:web/explore-new/dist
 var explorerFS embed.FS
 
 //go:embed all:web/wallet/out
