@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime/debug"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/lib"
@@ -31,13 +32,14 @@ import (
 */
 
 const (
-	transport              = "tcp"
-	dialTimeout            = time.Second
-	minPeerTick            = 100 * time.Millisecond
-	inboxMonitorInterval   = 5 * time.Second
-	defaultMinIOTimeout    = 500 * time.Millisecond
-	defaultMaxWriteTimeout = 2 * time.Second
-	defaultMaxReadTimeout  = 4 * time.Second
+	transport               = "tcp"
+	dialTimeout             = time.Second
+	minPeerTick             = 100 * time.Millisecond
+	inboxMonitorInterval    = 5 * time.Second
+	defaultMinIOTimeout     = 500 * time.Millisecond
+	defaultMaxWriteTimeout  = 2 * time.Second
+	defaultMaxReadTimeout   = 4 * time.Second
+	dialFailedPeersInterval = 2 * time.Second
 )
 
 type P2P struct {
@@ -53,7 +55,8 @@ type P2P struct {
 	config                 lib.Config
 	metrics                *lib.Metrics
 	log                    lib.LoggerI
-	gossip                 bool // whether gossip mode is active
+	gossip                 bool     // whether gossip mode is active
+	failedPeers            sync.Map // peers that have connection errors
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -94,6 +97,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		maxMembersPerCommittee: int(maxMembersPerCommittee),
 		bannedIPs:              bannedIPs,
 		log:                    l,
+		failedPeers:            sync.Map{},
 	}
 }
 
@@ -110,6 +114,8 @@ func (p *P2P) Start() {
 	go p.DialForOutboundPeers()
 	// Start inbox monitoring
 	go p.MonitorInboxStats(inboxMonitorInterval)
+	// Start dialing failed peers
+	go p.DialFailedPeers(dialFailedPeersInterval)
 }
 
 // Stop() stops the P2P service
@@ -248,6 +254,38 @@ func (p *P2P) DialForOutboundPeers() {
 	}
 }
 
+// DialFailedPeers intermittently dials must connect peers that have failed while connected due to
+// network issues, heartbeat timeouts, or any general connection errors
+func (p *P2P) DialFailedPeers(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		var count int
+		p.failedPeers.Range(func(key, rawPeer any) bool {
+			peer, ok := rawPeer.(*lib.PeerAddress)
+			// invalid peer, remove
+			if !ok {
+				p.failedPeers.Delete(key)
+				return true
+			}
+			// confirm peer is a must connect, otherwise remove
+			if !p.PeerSet.IsMustConnect(peer.PublicKey) {
+				p.failedPeers.Delete(key)
+				return true
+			}
+			// attempt to reconnect to the peer
+			go p.DialWithBackoff(peer, false)
+			count++
+			return true
+		})
+		if count > 0 {
+			p.log.Debugf("Executed dial call for %d failed peers", count)
+			// clear map for next iteration
+			p.failedPeers.Clear()
+		}
+	}
+}
+
 // Dial() tries to establish an outbound connection with a peer candidate
 func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) lib.ErrorI {
 	if p.IsSelf(address) || p.PeerSet.Has(address.PublicKey) {
@@ -379,6 +417,11 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
 		p.log.Errorf("Remove error: %s", err.Error())
 	}
+	// add to failed peers
+	p.failedPeers.Store(string(publicKey), &lib.PeerAddress{
+		PublicKey:  publicKey,
+		NetAddress: remoteAddr,
+	})
 }
 
 // NewStreams() creates map of streams for the multiplexing architecture
