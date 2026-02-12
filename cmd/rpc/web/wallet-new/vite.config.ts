@@ -7,11 +7,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   // Determine base path based on environment
-  // Priority: VITE_BASE_PATH env var > production default > development default
+  // Priority: VITE_WALLET_BASE_PATH env var > production default > development default
   const getBasePath = () => {
     // If explicitly set via environment variable, use it
-    if (env.VITE_BASE_PATH) {
-      return env.VITE_BASE_PATH;
+    if (env.VITE_WALLET_BASE_PATH) {
+      return env.VITE_WALLET_BASE_PATH;
     }
     // In development, use / for local dev
     if (mode === "development") {
@@ -37,6 +37,26 @@ export default defineConfig(({ mode }) => {
       outDir: "out",
       assetsDir: "assets",
     },
+
+    // Development server configuration
+    server: {
+      port: 5173,
+      proxy: {
+        // Proxy /rpc to RPC server
+        '/rpc': {
+          target: env.VITE_WALLET_RPC_PROXY_TARGET || 'http://localhost:50002',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rpc/, ''),
+        },
+        // Proxy /adminrpc to Admin RPC server
+        '/adminrpc': {
+          target: env.VITE_WALLET_ADMIN_RPC_PROXY_TARGET || 'http://localhost:50003',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/adminrpc/, ''),
+        },
+      },
+    },
+
     define: {
       // Ensure environment variables are available at build time
       "import.meta.env.VITE_NODE_ENV": JSON.stringify(

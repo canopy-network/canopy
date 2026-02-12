@@ -3,9 +3,23 @@ FROM golang:1.24-alpine AS builder
 RUN apk update && apk add --no-cache make bash nodejs npm
 
 ARG BIN_PATH
+# Wallet-specific build configuration
+# Default: /wallet/ (for monitoring-stack deployment with Traefik reverse proxy)
+# Override with: docker build --build-arg VITE_WALLET_BASE_PATH=/
+ARG VITE_WALLET_BASE_PATH=/wallet/
+# RPC proxy targets for chain.json generation
+# For monitoring-stack, these should be Traefik URLs
+ARG VITE_WALLET_RPC_PROXY_TARGET=/wallet/rpc
+ARG VITE_WALLET_ADMIN_RPC_PROXY_TARGET=/wallet/adminrpc
 
 WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
+
+# Export build configuration to environment
+# These are available during npm build for wallet and explorer
+ENV VITE_WALLET_BASE_PATH=${VITE_WALLET_BASE_PATH}
+ENV VITE_WALLET_RPC_PROXY_TARGET=${VITE_WALLET_RPC_PROXY_TARGET}
+ENV VITE_WALLET_ADMIN_RPC_PROXY_TARGET=${VITE_WALLET_ADMIN_RPC_PROXY_TARGET}
 
 RUN make build/wallet
 RUN make build/explorer
