@@ -30,7 +30,15 @@ import (
 	- Message dissemination: gossip [x]
 */
 
-const transport, dialTimeout, minPeerTick, inboxMonitorInterval = "tcp", time.Second, 100 * time.Millisecond, 60 * time.Second
+const (
+	transport              = "tcp"
+	dialTimeout            = time.Second
+	minPeerTick            = 100 * time.Millisecond
+	inboxMonitorInterval   = 5 * time.Second
+	defaultMinIOTimeout    = 500 * time.Millisecond
+	defaultMaxWriteTimeout = 2 * time.Second
+	defaultMaxReadTimeout  = 4 * time.Second
+)
 
 type P2P struct {
 	privateKey             crypto.PrivateKeyI
@@ -45,6 +53,7 @@ type P2P struct {
 	config                 lib.Config
 	metrics                *lib.Metrics
 	log                    lib.LoggerI
+	gossip                 bool // whether gossip mode is active
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -53,7 +62,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 	peerBook := NewPeerBook(p.PublicKey().Bytes(), c, l)
 	// make inbound multiplexed channels
 	channels := make(lib.Channels)
-	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
+	for i := lib.Topic(0); i <= lib.Topic_HEARTBEAT; i++ {
 		channels[i] = make(chan *lib.MessageAndMetadata, maxInboxQueueSize)
 	}
 	// load banned IPs
@@ -65,10 +74,11 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
-	// set the write timeout to be 2 x the block time
-	WriteTimeout = time.Duration(2*c.BlockTimeMS()) * time.Millisecond
-	// set the read timeout to double of write
-	ReadTimeout = WriteTimeout * 2
+	// derive IO deadlines from config but clamp to short, predictable bounds
+	configuredWriteTimeout := time.Duration(2*c.BlockTimeMS()) * time.Millisecond
+	WriteTimeout = clampDuration(configuredWriteTimeout, defaultMinIOTimeout, defaultMaxWriteTimeout)
+	// ensure read timeout is never shorter than write timeout but still bounded
+	ReadTimeout = clampDuration(WriteTimeout*2, WriteTimeout, defaultMaxReadTimeout)
 	// set the peer meta
 	meta := &lib.PeerMeta{NetworkId: c.NetworkID, ChainId: c.ChainId}
 	// return the p2p structure
@@ -100,8 +110,6 @@ func (p *P2P) Start() {
 	go p.DialForOutboundPeers()
 	// Start inbox monitoring
 	go p.MonitorInboxStats(inboxMonitorInterval)
-	// Wait until peers reaches minimum count
-	p.WaitForMinimumPeers()
 }
 
 // Stop() stops the P2P service
@@ -157,6 +165,7 @@ func (p *P2P) ListenForInboundPeers(listenAddress *lib.PeerAddress) {
 			// tries to create a full peer from the ephemeral connection and just the net address
 			if err = p.AddPeer(c, &lib.PeerInfo{Address: &lib.PeerAddress{NetAddress: netAddress}}, false, false); err != nil {
 				p.log.Error(err.Error())
+				_ = c.Close()
 				return
 			}
 		}(c)
@@ -264,7 +273,6 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	// create the e2e encrypted connection while establishing a full peer info object
 	connection, err := p.NewConnection(conn)
 	if err != nil {
-		_ = conn.Close()
 		return err
 	}
 	// always in case of error close connection
@@ -303,10 +311,10 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		connection.Stop()
 		return nil
 	}
-	p.Lock()
-	defer p.Unlock()
+	unlock := lockWithTrace("p2p", &p.mux, p.log)
 	// check whether the connection has errors
 	if connection.hasError.Load() {
+		unlock()
 		return
 	}
 
@@ -325,16 +333,20 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	for _, item := range p.config.BannedPeerIDs {
 		pubKeyString := lib.BytesToString(info.Address.PublicKey)
 		if pubKeyString == item {
+			unlock()
 			return ErrBannedID(pubKeyString)
 		}
 	}
-	p.book.Add(&BookPeer{Address: info.Address})
+	bookPeer := &BookPeer{Address: info.Address}
 	if err = p.PeerSet.Add(&Peer{
 		conn:     connection,
 		PeerInfo: info,
 	}); err != nil {
+		unlock()
 		return err
 	}
+	unlock()
+	p.book.Add(bookPeer)
 	// add peer to peer set and peer book
 	p.log.Infof("Added peer: %s@%s", lib.BytesToString(info.Address.PublicKey), info.Address.NetAddress)
 	return
@@ -371,15 +383,26 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 
 // NewStreams() creates map of streams for the multiplexing architecture
 func (p *P2P) NewStreams() (streams map[lib.Topic]*Stream) {
-	streams = make(map[lib.Topic]*Stream, lib.Topic_INVALID)
-	for i := lib.Topic(0); i < lib.Topic_INVALID; i++ {
+	streams = make(map[lib.Topic]*Stream, lib.Topic_INVALID+1)
+	for i := range lib.Topic_INVALID {
+		if i == lib.Topic_HEARTBEAT {
+			continue
+		}
 		streams[i] = &Stream{
 			topic:        i,
 			msgAssembler: make([]byte, 0),
-			sendQueue:    make(chan *Packet, maxStreamSendQueueSize),
+			sendQueue:    make(chan *PacketWithTiming, maxStreamSendQueueSize),
 			inbox:        p.Inbox(i),
 			logger:       p.log,
 		}
+	}
+	// reserved stream for heartbeats (not forwarded to application inbox)
+	streams[lib.Topic_HEARTBEAT] = &Stream{
+		topic:        lib.Topic_HEARTBEAT,
+		msgAssembler: make([]byte, 0),
+		sendQueue:    make(chan *PacketWithTiming, maxStreamSendQueueSize),
+		inbox:        nil,
+		logger:       p.log,
 	}
 	return
 }
@@ -482,6 +505,17 @@ func (p *P2P) WaitForMinimumPeers() {
 	}
 }
 
+// clampDuration bounds d between min and max (inclusive).
+func clampDuration(d, min, max time.Duration) time.Duration {
+	if d < min {
+		return min
+	}
+	if d > max {
+		return max
+	}
+	return d
+}
+
 var blockedCountries = []string{
 	"AF", // Afghanistan
 	"BY", // Belarus
@@ -554,6 +588,8 @@ func (p *P2P) MonitorInboxStats(interval time.Duration) {
 		if tickCount%10 == 0 {
 			p.log.Debugf("Inbox monitor heartbeat: tick #%d", tickCount)
 		}
+		// Update queue depth metrics for prometheus
+		p.UpdateQueueDepthMetrics()
 		// Collect stats without blocking
 		stats := p.GetInboxStats()
 		// Calculate total messages across all inboxes
@@ -595,4 +631,44 @@ func (p *P2P) GetInboxStats() map[lib.Topic]int {
 		stats[topic] = len(ch)
 	}
 	return stats
+}
+
+// UpdateQueueDepthMetrics updates prometheus metrics for send and inbox queue depths
+// by iterating through all peer connections and aggregating queue sizes
+func (p *P2P) UpdateQueueDepthMetrics() {
+	if p.metrics == nil {
+		return
+	}
+	// Track send queue depths by aggregating across all peers
+	sendQueueDepths := make(map[lib.Topic]int)
+	// Get all peers and check their stream send queues
+	p.PeerSet.mux.RLock()
+	for _, peer := range p.PeerSet.m {
+		if peer.conn != nil && peer.conn.streams != nil {
+			for topic, stream := range peer.conn.streams {
+				if stream != nil && stream.sendQueue != nil {
+					sendQueueDepths[topic] += len(stream.sendQueue)
+				}
+			}
+		}
+	}
+	p.PeerSet.mux.RUnlock()
+	// Update send queue depth metrics
+	for topic, depth := range sendQueueDepths {
+		p.metrics.SendQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(depth))
+	}
+	// Update inbox queue depth metrics
+	for topic, ch := range p.channels {
+		p.metrics.InboxQueueDepth.WithLabelValues(lib.Topic_name[int32(topic)]).Set(float64(len(ch)))
+	}
+}
+
+// SetGossipMode sets the gossip mode for the P2P instance
+func (p *P2P) SetGossipMode(gossip bool) {
+	p.gossip = gossip
+}
+
+// GossipMode returns the current gossip mode for the P2P instance
+func (p *P2P) GossipMode() bool {
+	return p.gossip
 }

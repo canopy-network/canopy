@@ -4,6 +4,7 @@ package types;
 option go_package = "github.com/canopy-network/canopy/lib";
 
 import "consensus.proto";
+import "dex.proto";
 // *****************************************************************************************************
 // This file is auto-generated from source files in `/lib/.proto/*` using Protocol Buffers (protobuf)
 //
@@ -52,11 +53,16 @@ message CertificateResult {
   SlashRecipients slash_recipients = 2; // @gotags: json:"slashRecipients"
   // orders: contains information regarding the 'buying side' of sell orders
   // including actions like 'buy/reserve order' or 'close/complete order'
-  Orders orders = 3;
+  Orders orders = 3; // @gotags: json:"orders"
   // checkpoint: contains information from the 3rd party chain in order for Canopy to provide Checkpoint-as-a-Service
-  Checkpoint checkpoint = 4;
+  Checkpoint checkpoint = 4; // @gotags: json:"checkpoint"
   // retired: signals if the committee wants to shut down and mark itself as 'forever unsubsidized' on the root-chain
-  bool retired = 5;
+  bool retired = 5; // @gotags: json:"retired"
+  // dex_batch: contains information regarding the selling side 'dex' operations
+  DexBatch dex_batch = 6; // @gotags: json:"dexBatch"
+  // root_dex_batch: ifNested: contains the root chain's dex batch;
+  // without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
+  DexBatch root_dex_batch = 7; // @gotags: json:"rootDexBatch"
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,

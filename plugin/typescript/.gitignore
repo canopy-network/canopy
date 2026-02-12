@@ -1,0 +1,25 @@
+# Build outputs
+dist/
+coverage/
+test-results/
+
+# Dependencies  
+node_modules/
+
+# Logs
+*.log
+
+# Environment
+.env*
+
+# Cache
+.cache/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

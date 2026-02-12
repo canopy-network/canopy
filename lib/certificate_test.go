@@ -425,6 +425,21 @@ func TestCheckpointHash(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestCheckpointJSONHexEncoding(t *testing.T) {
+	original := &Checkpoint{
+		Height:    5,
+		BlockHash: []byte{0x0a, 0xbb},
+	}
+	bz, err := json.Marshal(original)
+	require.NoError(t, err)
+	require.Contains(t, string(bz), `"0abb"`, "block hash should be hex encoded")
+
+	var decoded Checkpoint
+	require.NoError(t, json.Unmarshal(bz, &decoded))
+	require.Equal(t, original.Height, decoded.Height)
+	require.Equal(t, original.BlockHash, decoded.BlockHash)
+}
+
 func newTestOrderId(_ *testing.T, variant int) []byte {
 	return []byte(fmt.Sprintf("%d", variant))
 }

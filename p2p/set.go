@@ -2,10 +2,10 @@ package p2p
 
 import (
 	"bytes"
-	"fmt"
 	"maps"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -19,15 +19,15 @@ const (
 
 // PeerSet is the structure that maintains the connections and metadata of connected peers
 type PeerSet struct {
-	m            map[string]*Peer   // public key -> Peer
-	mustConnect  []*lib.PeerAddress // list of peers that must be connected to
-	inbound      int                // inbound count
-	outbound     int                // outbound count
-	sync.RWMutex                    // read / write mutex
-	metrics      *lib.Metrics       // telemetry
-	config       lib.P2PConfig      // p2p configuration
-	publicKey    []byte             // self public key
-	logger       lib.LoggerI
+	m           map[string]*Peer   // public key -> Peer
+	mustConnect []*lib.PeerAddress // list of peers that must be connected to
+	inbound     int                // inbound count
+	outbound    int                // outbound count
+	mux         sync.RWMutex       // read / write mutex
+	metrics     *lib.Metrics       // telemetry
+	config      lib.P2PConfig      // p2p configuration
+	publicKey   []byte             // self public key
+	logger      lib.LoggerI
 }
 
 func NewPeerSet(c lib.Config, priv crypto.PrivateKeyI, metrics *lib.Metrics, logger lib.LoggerI) PeerSet {
@@ -36,7 +36,7 @@ func NewPeerSet(c lib.Config, priv crypto.PrivateKeyI, metrics *lib.Metrics, log
 		mustConnect: make([]*lib.PeerAddress, 0),
 		inbound:     0,
 		outbound:    0,
-		RWMutex:     sync.RWMutex{},
+		mux:         sync.RWMutex{},
 		metrics:     metrics,
 		config:      c.P2PConfig,
 		publicKey:   priv.PublicKey().Bytes(),
@@ -121,8 +121,8 @@ func (ps *PeerSet) Remove(publicKey []byte, uuid uint64) (err lib.ErrorI) {
 // UpdateMustConnects() updates the list of peers that 'must be connected to'
 // Ex. the peers needed to complete committee consensus
 func (ps *PeerSet) UpdateMustConnects(mustConnect []*lib.PeerAddress) (toDial []*lib.PeerAddress) {
-	ps.Lock()
-	defer ps.Unlock()
+	unlock := lockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	ps.mustConnect = mustConnect
 	for _, peer := range ps.m {
 		peer.IsMustConnect = false
@@ -146,33 +146,33 @@ func (ps *PeerSet) UpdateMustConnects(mustConnect []*lib.PeerAddress) (toDial []
 
 // ChangeReputation() updates the peer reputation +/- based on the int32 delta
 func (ps *PeerSet) ChangeReputation(publicKey []byte, delta int32) {
-	ps.Lock()
-	peer, err := ps.get(publicKey)
-	if err != nil {
-		ps.Unlock()
-		return
-	}
-	// update the peers reputation
-	peer.Reputation += delta
-	// enforce maximum peer reputation
-	if peer.Reputation >= MaxPeerReputation {
-		peer.Reputation = MaxPeerReputation
-	}
-	// if peer isn't trusted nor is 'must connect' and the reputation is below minimum
-	if !peer.IsTrusted && !peer.IsMustConnect && peer.Reputation < MinimumPeerReputation {
-		ps.Unlock()
-		peer.conn.Error(fmt.Errorf("peer %s reputation too low", lib.BytesToTruncatedString(peer.Address.PublicKey)))
-		return
-	}
-	// update the peer
-	ps.set(peer)
-	ps.Unlock()
+	//unlock := lockWithTrace("peerset", &ps.mux, ps.logger)
+	//peer, err := ps.get(publicKey)
+	//if err != nil {
+	//	unlock()
+	//	return
+	//}
+	//
+	//peer.Reputation += delta
+	//if peer.Reputation >= MaxPeerReputation {
+	//	peer.Reputation = MaxPeerReputation
+	//}
+	//
+	//shouldDisconnect := !peer.IsTrusted && !peer.IsMustConnect && peer.Reputation < MinimumPeerReputation
+	//conn := peer.conn
+	//ps.set(peer)
+	//unlock()
+	//
+	//if shouldDisconnect && conn != nil {
+	//	conn.Error(fmt.Errorf("peer %s reputation too low", lib.BytesToTruncatedString(peer.Address.PublicKey)))
+	//}
 }
 
 // GetPeerInfo() returns a copy of the authenticated information from the peer structure
 func (ps *PeerSet) GetPeerInfo(publicKey []byte) (*lib.PeerInfo, lib.ErrorI) {
-	ps.RLock()
-	defer ps.RUnlock()
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	peer, err := ps.get(publicKey)
 	if err != nil {
 		return nil, err
@@ -182,15 +182,15 @@ func (ps *PeerSet) GetPeerInfo(publicKey []byte) (*lib.PeerInfo, lib.ErrorI) {
 
 // PeerCount() returns the total number of peers
 func (ps *PeerSet) PeerCount() int {
-	ps.RLock()
-	defer ps.RUnlock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	return len(ps.m)
 }
 
 // IsMustConnect() checks if a peer is on the must-connect list
 func (ps *PeerSet) IsMustConnect(publicKey []byte) bool {
-	ps.RLock()
-	defer ps.RUnlock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	// check if is must connect
 	for _, item := range ps.mustConnect {
 		if bytes.Equal(item.PublicKey, publicKey) {
@@ -203,9 +203,9 @@ func (ps *PeerSet) IsMustConnect(publicKey []byte) bool {
 // GetAllInfos() returns the information on connected peers and the total inbound / outbound counts
 func (ps *PeerSet) GetAllInfos() (res []*lib.PeerInfo, numInbound, numOutbound int) {
 	// copy the current set to avoid race conditions
-	ps.RLock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
 	set := maps.Clone(ps.m)
-	ps.RUnlock()
+	unlock()
 	// iterate over the copied set
 	for _, p := range set {
 		if p.IsOutbound {
@@ -224,8 +224,8 @@ func (ps *PeerSet) SendToRandPeer(topic lib.Topic, msg proto.Message) (*lib.Peer
 	if err != nil {
 		return nil, err
 	}
-	ps.RLock()
-	defer ps.RUnlock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	for _, p := range ps.m {
 		return p.PeerInfo, ps.send(p, topic, bz)
 	}
@@ -234,12 +234,13 @@ func (ps *PeerSet) SendToRandPeer(topic lib.Topic, msg proto.Message) (*lib.Peer
 
 // SendTo() sends a message to a specific peer based on their public key
 func (ps *PeerSet) SendTo(publicKey []byte, topic lib.Topic, msg proto.Message) lib.ErrorI {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	bz, err := lib.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	ps.RLock()
-	defer ps.RUnlock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	peer, err := ps.get(publicKey)
 	if err != nil {
 		return err
@@ -249,12 +250,13 @@ func (ps *PeerSet) SendTo(publicKey []byte, topic lib.Topic, msg proto.Message) 
 
 // SendToPeers() sends a message to all peers
 func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys ...string) lib.ErrorI {
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
 	bz, err := lib.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	ps.RLock()
-	defer ps.RUnlock()
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	for _, p := range ps.m {
 		// exclude specific public keys to send to
 		if slices.Contains(excludeKeys, lib.BytesToString(p.Address.PublicKey)) {
@@ -270,8 +272,9 @@ func (ps *PeerSet) SendToPeers(topic lib.Topic, msg proto.Message, excludeKeys .
 
 // Has() returns if the set has a peer with a specific public key
 func (ps *PeerSet) Has(publicKey []byte) bool {
-	ps.RLock()
-	defer ps.RUnlock()
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	pubKey := lib.BytesToString(publicKey)
 	_, found := ps.m[pubKey]
 	return found
@@ -279,8 +282,9 @@ func (ps *PeerSet) Has(publicKey []byte) bool {
 
 // Stop() stops the entire peer set
 func (ps *PeerSet) Stop() {
-	ps.RLock()
-	defer ps.RUnlock()
+	defer lib.TimeTrack(ps.logger, time.Now(), time.Second)
+	unlock := rlockWithTrace("peerset", &ps.mux, ps.logger)
+	defer unlock()
 	for _, p := range ps.m {
 		p.conn.Stop()
 	}
@@ -288,7 +292,7 @@ func (ps *PeerSet) Stop() {
 
 // send() sends a message to a specific peer object
 func (ps *PeerSet) send(peer *Peer, topic lib.Topic, bz []byte) lib.ErrorI {
-	// ps.logger.Debugf("sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
+	//ps.logger.Debugf("Sending %s message to %s", topic, lib.BytesToTruncatedString(peer.Address.PublicKey))
 	go func() {
 		ok := peer.conn.Send(topic, bz)
 		if !ok {

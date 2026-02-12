@@ -3,6 +3,7 @@ package lib
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"runtime"
 )
 
@@ -227,42 +228,57 @@ const (
 	CodeInsufficientSupply        ErrorCode = 56
 	CodeUnknownMsgName            ErrorCode = 57
 	CodeUnknownPageable           ErrorCode = 58
+	CodeMismatchDexBatchReceipt   ErrorCode = 59
+	CodeInvalidBlockRange         ErrorCode = 60
+	CodeInvalidPublicKey          ErrorCode = 61
+	CodeInvalidDoubleSignHeights  ErrorCode = 62
+	CodeInvalidDoubleSigner       ErrorCode = 63
+	CodeInvalidNumCommittees      ErrorCode = 64
+	CodeInvalidLiquidityPool      ErrorCode = 65
+	CodeValidatorIsADelegate      ErrorCode = 66
+	CodeMaxDexBatchSize           ErrorCode = 67
+	CodeInvalidChainId            ErrorCode = 68
+	CodeWrongNetworkID            ErrorCode = 69
+	CodePointHolderNotFound       ErrorCode = 70
+	CodeRootHeight                ErrorCode = 71
+	CodeInvalidQCCommitteeHeight  ErrorCode = 72
+	CodeZeroPointHolder           ErrorCode = 73
+	CodeOrderNotFound             ErrorCode = 74
 
-	CodeInvalidBlockRange        ErrorCode = 60
-	CodeInvalidPublicKey         ErrorCode = 61
-	CodeInvalidDoubleSignHeights ErrorCode = 62
-	CodeInvalidDoubleSigner      ErrorCode = 63
-	CodeInvalidNumCommittees     ErrorCode = 64
-
-	CodeValidatorIsADelegate ErrorCode = 66
-
-	CodeInvalidChainId ErrorCode = 68
-	CodeWrongNetworkID ErrorCode = 69
-
-	CodeRootHeight               ErrorCode = 71
-	CodeInvalidQCCommitteeHeight ErrorCode = 72
-
-	CodeOrderNotFound ErrorCode = 74
-
-	CodeMinimumOrderSize     ErrorCode = 76
-	CodeOrderLocked          ErrorCode = 77
-	CodeInvalidLockOrder     ErrorCode = 78
-	CodeDuplicateLockOrder   ErrorCode = 79
-	CodeInvalidBuyerDeadline ErrorCode = 80
-	CodeInvalidCloseOrder    ErrorCode = 81
-
-	CodeInvalidCheckpoint        ErrorCode = 83
-	CodeInvalidSellOrder         ErrorCode = 84
-	CodeStartPollHeight          ErrorCode = 85
-	CodeEmptyChainId             ErrorCode = 86
-	CodeMismatchCertResults      ErrorCode = 87
-	CodeInvalidQCRootChainHeight ErrorCode = 88
-	CodeEmptyCertificateResults  ErrorCode = 89
-	CodeSlashNonValidator        ErrorCode = 90
-	CodeEmptyOrderBook           ErrorCode = 91
-	CodeNoSubsidizedCommittees   ErrorCode = 92
-	CodeEmptyLotteryWinner       ErrorCode = 93
-	CodeStakeBelowMinimum        ErrorCode = 94
+	CodeMinimumOrderSize          ErrorCode = 76
+	CodeOrderLocked               ErrorCode = 77
+	CodeInvalidLockOrder          ErrorCode = 78
+	CodeDuplicateLockOrder        ErrorCode = 79
+	CodeInvalidBuyerDeadline      ErrorCode = 80
+	CodeInvalidCloseOrder         ErrorCode = 81
+	CodeEmptyEventsTracker        ErrorCode = 82
+	CodeInvalidCheckpoint         ErrorCode = 83
+	CodeInvalidSellOrder          ErrorCode = 84
+	CodeStartPollHeight           ErrorCode = 85
+	CodeEmptyChainId              ErrorCode = 86
+	CodeMismatchCertResults       ErrorCode = 87
+	CodeInvalidQCRootChainHeight  ErrorCode = 88
+	CodeEmptyCertificateResults   ErrorCode = 89
+	CodeSlashNonValidator         ErrorCode = 90
+	CodeEmptyOrderBook            ErrorCode = 91
+	CodeNoSubsidizedCommittees    ErrorCode = 92
+	CodeEmptyLotteryWinner        ErrorCode = 93
+	CodeStakeBelowMinimum         ErrorCode = 94
+	CodeTooManyDexWithdrawsError  ErrorCode = 95
+	CodeTooManyDexDepositsError   ErrorCode = 96
+	CodeTooManyDexOrdersError     ErrorCode = 97
+	CodeTooManyDexReceiptsError   ErrorCode = 98
+	CodeNonNilPoolPointsError     ErrorCode = 99
+	CodeRemotePoolSizeDebit       ErrorCode = 100
+	CodeFailedPluginWrite         ErrorCode = 102
+	CodeFailedPluginRead          ErrorCode = 103
+	CodeInvalidPluginToFSMMessage ErrorCode = 104
+	CodeInvalidFSMToPluginmessage ErrorCode = 105
+	CodeInvalidPluginConfig       ErrorCode = 106
+	CodeInvalidPluginRespId       ErrorCode = 107
+	CodeUnexpectedPluginToFSM     ErrorCode = 108
+	CodePluginTimeout             ErrorCode = 109
+	CodeInvalidPluginSchema       ErrorCode = 110
 
 	// P2P Module
 	P2PModule ErrorModule = "p2p"
@@ -815,4 +831,72 @@ func ErrEmptyLotteryWinner() ErrorI {
 
 func ErrFailedTransactions() ErrorI {
 	return NewError(CodeErrFailedTransactions, StateMachineModule, "a block contained failed transactions")
+}
+
+func ErrPointHolderNotFound() ErrorI {
+	return NewError(CodePointHolderNotFound, StateMachineModule, "point holder not found")
+}
+
+func ErrZeroLiquidityPool() ErrorI {
+	return NewError(CodeZeroPointHolder, StateMachineModule, "pool cannot have zero points after allocated")
+}
+
+func ErrEmptyEventsTracker() ErrorI {
+	return NewError(CodeEmptyEventsTracker, StateMachineModule, "events tracker nil")
+}
+
+func ErrTooManyDexDeposits() ErrorI {
+	return NewError(CodeTooManyDexDepositsError, StateMachineModule, "too many dex deposits")
+}
+
+func ErrTooManyDexWithdraws() ErrorI {
+	return NewError(CodeTooManyDexWithdrawsError, StateMachineModule, "too many dex withdrawals")
+}
+
+func ErrTooManyDexOrders() ErrorI {
+	return NewError(CodeTooManyDexOrdersError, StateMachineModule, "too many dex orders")
+}
+
+func ErrTooManyDexReceipts() ErrorI {
+	return NewError(CodeTooManyDexReceiptsError, StateMachineModule, "too many dex receipts")
+}
+
+func ErrNonNilPoolPoints() ErrorI {
+	return NewError(CodeNonNilPoolPointsError, StateMachineModule, "non nil pool points")
+}
+
+func ErrFailedPluginWrite(err error) ErrorI {
+	return NewError(CodeFailedPluginWrite, StateMachineModule, fmt.Sprintf("a plugin write failed with error: %s", err.Error()))
+}
+
+func ErrFailedPluginRead(err error) ErrorI {
+	return NewError(CodeFailedPluginRead, StateMachineModule, fmt.Sprintf("a plugin read failed with error: %s", err.Error()))
+}
+
+func ErrInvalidPluginToFSMMessage(t reflect.Type) ErrorI {
+	return NewError(CodeInvalidPluginToFSMMessage, StateMachineModule, fmt.Sprintf("unrecognized plugin_to_fsm message: %v", t))
+}
+
+func ErrInvalidPluginConfig() ErrorI {
+	return NewError(CodeInvalidPluginConfig, StateMachineModule, "invalid plugin config")
+}
+
+func ErrInvalidPluginSchema(err error) ErrorI {
+	return NewError(CodeInvalidPluginSchema, StateMachineModule, fmt.Sprintf("invalid plugin schema: %s", err.Error()))
+}
+
+func ErrInvalidPluginRespId() ErrorI {
+	return NewError(CodeInvalidPluginRespId, StateMachineModule, "plugin response id is invalid")
+}
+
+func ErrUnexpectedPluginToFSM(t reflect.Type) ErrorI {
+	return NewError(CodeUnexpectedPluginToFSM, StateMachineModule, fmt.Sprintf("unexpected plugin_to_fsm message: %v", t))
+}
+
+func ErrPluginTimeout() ErrorI {
+	return NewError(CodePluginTimeout, StateMachineModule, "a plugin timeout occurred")
+}
+
+func ErrInvalidFSMToPluginMessage(t reflect.Type) ErrorI {
+	return NewError(CodeInvalidFSMToPluginmessage, StateMachineModule, fmt.Sprintf("unrecognized fsm_to_plugin message: %v", t))
 }

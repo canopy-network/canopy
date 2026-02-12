@@ -32,7 +32,19 @@ func (s *Server) Transaction(w http.ResponseWriter, r *http.Request, _ httproute
 		return
 	}
 	// Submit transaction to RPC server
-	s.submitTx(w, tx)
+	s.submitTxs(w, []lib.TransactionI{tx})
+}
+
+// Transactions handles multiple transactions in a single request
+func (s *Server) Transactions(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// create a slice to hold the incoming transactions
+	var txs []lib.TransactionI
+	// unmarshal the HTTP request body into the transactions slice
+	if ok := unmarshal(w, r, &txs); !ok {
+		return
+	}
+	// submit transactions to RPC server
+	s.submitTxs(w, txs)
 }
 
 // Height responds with the next block version
@@ -133,10 +145,8 @@ func (s *Server) RootChainInfo(w http.ResponseWriter, r *http.Request, _ httprou
 	if req.Height == 0 {
 		req.Height = s.controller.FSM.Height()
 	}
-	// retrieve the saved last validator set if available
-	lastVS := s.controller.LastValidatorSet[req.Height][req.ID]
 	// load the root chain info directly
-	got, err := s.controller.FSM.LoadRootChainInfo(req.ID, req.Height, lastVS)
+	got, err := s.controller.FSM.LoadRootChainInfo(req.ID, req.Height)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return
@@ -243,7 +253,7 @@ func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprou
 			proposerCut -= delegate.Cut // sub-validator
 			proposerCut -= delegate.Cut // sub-delegate
 		}
-		daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
+		_, daoCut, totalMint, committeeMint, err := state.GetBlockMintStats(post.ChainId)
 		if err != nil {
 			write(w, err.Error(), http.StatusBadRequest)
 			return nil
@@ -283,6 +293,42 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 			return nil, err
 		}
 		return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{b}}, nil
+	})
+}
+
+// DexPrice retrieves the latest dex price for a committee
+func (s *Server) DexPrice(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexPrices()
+		}
+		// return the dex price
+		return s.GetDexPrice(id)
+	})
+}
+
+// DexBatch retrieves the 'locked' dex batch for a committee
+func (s *Server) DexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(true)
+		}
+		// return the locked batch
+		return s.GetDexBatch(id, true, points) // points augmentation used for liveness safety mirrors
+	})
+}
+
+// NextDexBatch retrieves the 'up-next' dex batch for a committee
+func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIdAndPointsParams(w, r, func(s *fsm.StateMachine, id uint64, points bool) (any, lib.ErrorI) {
+		if id == 0 {
+			return s.GetDexBatches(false)
+		}
+		// return the locked batch
+		return s.GetDexBatch(id, false, points)
 	})
 }
 
@@ -379,6 +425,30 @@ func (s *Server) TransactionByHash(w http.ResponseWriter, r *http.Request, _ htt
 func (s *Server) TransactionsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) { return s.GetTxsByHeight(h, true, p) })
+}
+
+// EventsByHeight response with the events at block height h
+func (s *Server) EventsByHeight(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.heightIndexer(w, r, func(s lib.StoreI, h uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByBlockHeight(h, true, p)
+	})
+}
+
+// EventsByAddress response with the events of address a
+func (s *Server) EventsByAddress(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.addrIndexer(w, r, func(s lib.StoreI, a crypto.AddressI, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByAddress(a, true, p)
+	})
+}
+
+// EventsByChain response with the events for a certain chain id
+func (s *Server) EventsByChain(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Invoke helper with the HTTP request, response writer and an inline callback
+	s.idIndexer(w, r, func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI) {
+		return s.GetEventsByChainId(id, true, p)
+	})
 }
 
 // Pending responds with a page of unconfirmed mempool transactions
@@ -498,6 +568,100 @@ func (s *Server) Poll(w http.ResponseWriter, _ *http.Request, _ httprouter.Param
 	}
 }
 
+// IndexerBlobs returns the current and previous indexer blobs as protobuf bytes
+func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	req := new(indexerBlobsRequest)
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	_, bz, err := s.IndexerBlobsCached(req.Height, req.Delta)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Code() == lib.CodeMarshal {
+			status = http.StatusInternalServerError
+		}
+		write(w, err, status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-protobuf")
+	w.Header().Set(ContentType, "application/x-protobuf")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(bz); err != nil {
+		s.logger.Error(err.Error())
+	}
+}
+
+// IndexerBlobsCached() is a helper function for the indexer blobs implementation
+func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+	currentHeight := s.controller.FSM.Height()
+	if height == 0 || height > currentHeight {
+		height = currentHeight
+	}
+
+	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.blobs != nil && entry.protoBytes != nil {
+		if !delta {
+			return entry.blobs, entry.protoBytes, nil
+		}
+		blobDelta, err := fsm.DeltaIndexerBlobs(entry.blobs)
+		if err != nil {
+			return nil, nil, err
+		}
+		deltaBytes, err := lib.Marshal(blobDelta)
+		if err != nil {
+			return nil, nil, err
+		}
+		return blobDelta, deltaBytes, nil
+	}
+
+	current, err := s.controller.FSM.IndexerBlob(height)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var previous *fsm.IndexerBlob
+	// IndexerBlob(height) is only valid for height >= 2 (it pairs state@height with block height-1).
+	// Therefore "previous" exists only when (height-1) >= 2, i.e. height >= 3.
+	if height > 2 {
+		if cachedPrev, ok := s.indexerBlobCache.getCurrent(height - 1); ok {
+			previous = cachedPrev
+		} else {
+			prev, prevErr := s.controller.FSM.IndexerBlob(height - 1)
+			if prevErr != nil {
+				return nil, nil, prevErr
+			}
+			previous = prev
+		}
+	}
+
+	blobs := &fsm.IndexerBlobs{
+		Current:  current,
+		Previous: previous,
+	}
+	protoBytes, err := lib.Marshal(blobs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	s.indexerBlobCache.put(height, &indexerBlobCacheEntry{
+		height:     height,
+		blobs:      blobs,
+		protoBytes: protoBytes,
+	})
+
+	if !delta {
+		return blobs, protoBytes, nil
+	}
+	blobDelta, err := fsm.DeltaIndexerBlobs(blobs)
+	if err != nil {
+		return nil, nil, err
+	}
+	deltaBytes, err := lib.Marshal(blobDelta)
+	if err != nil {
+		return nil, nil, err
+	}
+	return blobDelta, deltaBytes, nil
+}
+
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request
 func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *orderRequest) (any, lib.ErrorI)) {
 	req := new(orderRequest)
@@ -573,6 +737,20 @@ func (s *Server) heightAndIdParams(w http.ResponseWriter, r *http.Request, callb
 	})
 }
 
+// heightIdAndPointsParams is a helper function to execute a callback with a state machine, ID and points as parameters
+func (s *Server) heightIdAndPointsParams(w http.ResponseWriter, r *http.Request, callback func(*fsm.StateMachine, uint64, bool) (any, lib.ErrorI)) {
+	req := new(heightIdAndPointsRequest)
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req.ID, req.Points)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
+		return
+	})
+}
+
 // getDoubleStateMachineFromHeightParams is a helper function to get two read-only state machines at the specified heights
 func (s *Server) getDoubleStateMachineFromHeightParams(w http.ResponseWriter, r *http.Request, p httprouter.Params) (sm1, sm2 *fsm.StateMachine, o *jsondiff.Options, ok bool) {
 	request, opts := new(heightsRequest), jsondiff.Options{}
@@ -625,6 +803,31 @@ func (s *Server) heightIndexer(w http.ResponseWriter, r *http.Request, callback 
 	}
 	// Execute callback with store, height, and pagination parameters
 	p, err := callback(st, req.Height, req.PageParams)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	// Write the successful result to the response
+	write(w, p, http.StatusOK)
+}
+
+// idIndexer is a helper function to abstract common workflows around a callback requiring id and page params
+func (s *Server) idIndexer(w http.ResponseWriter, r *http.Request, callback func(s lib.StoreI, id uint64, p lib.PageParams) (any, lib.ErrorI)) {
+	// Initialize a new paginatedHeightRequest
+	req := new(paginatedIdRequest)
+	// Attempt to unmarshal the request into the req object
+	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// Set up the store for the request context
+	st, ok := s.setupStore(w)
+	if !ok {
+		return
+	}
+	// Ensure that the store is discarded safely after processing
+	defer st.Discard()
+	// Execute callback with store, height, and pagination parameters
+	p, err := callback(st, req.ID, req.PageParams)
 	if err != nil {
 		write(w, err, http.StatusBadRequest)
 		return

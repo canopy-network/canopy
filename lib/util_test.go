@@ -3,6 +3,8 @@ package lib
 import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/types/known/anypb"
 	"testing"
 	"time"
 )
@@ -477,4 +479,64 @@ func TestStopTimer(t *testing.T) {
 		// timer channel was drained successfully
 	default:
 	}
+}
+
+func TestUnmarshalRejectsUnknownBlockFields(t *testing.T) {
+	block := &Block{BlockHeader: &BlockHeader{NetworkId: 1}}
+	bz, err := Marshal(block)
+	require.NoError(t, err)
+
+	withUnknown := appendUnknownField(bz)
+	err = Unmarshal(withUnknown, &Block{})
+	require.Error(t, err)
+
+	require.NoError(t, Unmarshal(bz, &Block{}))
+}
+
+func TestUnmarshalRejectsUnknownTransactionFields(t *testing.T) {
+	tx := &Transaction{
+		MessageType:   "noop",
+		Msg:           &anypb.Any{},
+		Signature:     &Signature{},
+		Time:          1,
+		CreatedHeight: 1,
+		NetworkId:     1,
+		ChainId:       1,
+	}
+	bz, err := Marshal(tx)
+	require.NoError(t, err)
+
+	withUnknown := appendUnknownField(bz)
+	err = Unmarshal(withUnknown, &Transaction{})
+	require.Error(t, err)
+
+	require.NoError(t, Unmarshal(bz, &Transaction{}))
+}
+
+func appendUnknownField(b []byte) []byte {
+	unknown := protowire.AppendTag(nil, 9999, protowire.VarintType)
+	unknown = protowire.AppendVarint(unknown, 1)
+	return append(b, unknown...)
+}
+
+func TestUnmarshalRejectsOversizedLists(t *testing.T) {
+	block := &Block{BlockHeader: &BlockHeader{NetworkId: 1}}
+	for i := 0; i < protoMaxListLen+1; i++ {
+		block.Transactions = append(block.Transactions, []byte{1})
+	}
+	bz, err := Marshal(block)
+	require.NoError(t, err)
+	require.Error(t, Unmarshal(bz, &Block{}))
+}
+
+func TestUnmarshalPreflightRejectsHugeFieldLengths(t *testing.T) {
+	block := &Block{BlockHeader: &BlockHeader{NetworkId: 1}}
+	bz, err := Marshal(block)
+	require.NoError(t, err)
+
+	extra := protowire.AppendTag(nil, 2, protowire.BytesType)
+	extra = protowire.AppendVarint(extra, protoMaxFieldBytes+1)
+	bz = append(bz, extra...)
+
+	require.Error(t, Unmarshal(bz, &Block{}))
 }

@@ -20,13 +20,21 @@ import (
 	"unsafe"
 
 	"github.com/canopy-network/canopy/lib/crypto"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
 	MaxAllowedPort = 65535 // maxAllowedPort is the maximum port number allowed.
 	MinAllowedPort = 1025  // minAllowedPort is the minimum port number allowed to ensure it avoids commonly reserved system ports.
+
+	protoMaxListLen      = 100000
+	protoMaxMapLen       = 100000
+	protoMaxRecursion    = 32
+	protoMaxFieldBytes   = 32 * 1024 * 1024 // 32MB per length-delimited field
+	protoMaxMessageBytes = 64 * 1024 * 1024 // 64MB overall per message
 )
 
 // PAGE CODE BELOW
@@ -38,6 +46,7 @@ func init() {
 	RegisteredPageables[TxResultsPageName] = new(TxResults)      // preregister the page type for unmarshalling
 	RegisteredPageables[PendingResultsPageName] = new(TxResults) // preregister the page type for unmarshalling
 	RegisteredPageables[FailedTxsPageName] = new(FailedTxs)      // preregister the page type for unmarshalling
+	RegisteredPageables[EventsPageName] = new(Events)            // preregister the page type for unmarshalling
 }
 
 // Page is a pagination wrapper over a slice of data
@@ -265,12 +274,152 @@ func Unmarshal(protoBytes []byte, ptr any) ErrorI {
 		// return with no error
 		return nil
 	}
+	msg, ok := ptr.(proto.Message)
+	if !ok || reflect.ValueOf(ptr).Kind() != reflect.Ptr {
+		return ErrUnmarshal(fmt.Errorf("target must be a pointer to a proto.Message"))
+	}
+	// defensive global proto size check
+	if len(protoBytes) > protoMaxMessageBytes {
+		return ErrUnmarshal(fmt.Errorf("proto message exceeds max size: %d > %d", len(protoBytes), protoMaxMessageBytes))
+	}
+	// detect if the message is a 'critical' message
+	var isCritical bool
+	switch ptr.(type) {
+	case *Block, *Transaction, *QuorumCertificate:
+		isCritical = true
+		if err := preflightProtoBytes(protoBytes); err != nil {
+			return ErrUnmarshal(err)
+		}
+	default:
+	}
 	// populate the ptr with the proto bytes
-	if err := proto.Unmarshal(protoBytes, ptr.(proto.Message)); err != nil {
+	opts := proto.UnmarshalOptions{AllowPartial: false}
+	if err := opts.Unmarshal(protoBytes, msg); err != nil {
 		// exit with wrapped error
 		return ErrUnmarshal(err)
 	}
+	// reject unknown fields for critical messages
+	if isCritical {
+		if err := rejectUnknownForCriticalMessages(msg); err != nil {
+			return ErrUnmarshal(err)
+		}
+	}
 	// exit
+	return nil
+}
+
+// rejectUnknownForCriticalMessages() prevents bloat attacks by enforcing 'no unknown fields' for critical messages
+func rejectUnknownForCriticalMessages(msg proto.Message) error {
+	switch msg.(type) {
+	case *QuorumCertificate, *Block, *Transaction:
+		return detectUnknownProtoFields(msg.ProtoReflect(), 0)
+	default:
+		return nil
+	}
+}
+
+// detectUnknownProtoFields() checks for unknown protobuf messages, caps list/map sizes, and enforces recursion limits
+func detectUnknownProtoFields(m protoreflect.Message, depth int) error {
+	if depth > protoMaxRecursion {
+		return fmt.Errorf("protobuf recursion depth exceeded (%d)", protoMaxRecursion)
+	}
+	if len(m.GetUnknown()) > 0 {
+		return fmt.Errorf("unknown protobuf fields present in %s", m.Descriptor().FullName())
+	}
+	var walkErr error
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		kind := fd.Kind()
+		if fd.IsList() {
+			if v.List().Len() > protoMaxListLen {
+				walkErr = fmt.Errorf("protobuf list %s length %d exceeds max %d", fd.FullName(), v.List().Len(), protoMaxListLen)
+				return false
+			}
+		}
+		if fd.IsMap() {
+			if v.Map().Len() > protoMaxMapLen {
+				walkErr = fmt.Errorf("protobuf map %s length %d exceeds max %d", fd.FullName(), v.Map().Len(), protoMaxMapLen)
+				return false
+			}
+		}
+		if kind == protoreflect.MessageKind || kind == protoreflect.GroupKind {
+			switch {
+			case fd.IsList():
+				list := v.List()
+				for i := 0; i < list.Len(); i++ {
+					if err := detectUnknownProtoFields(list.Get(i).Message(), depth+1); err != nil {
+						walkErr = err
+						return false
+					}
+				}
+			case fd.IsMap():
+				if fd.MapValue().Kind() == protoreflect.MessageKind {
+					v.Map().Range(func(_ protoreflect.MapKey, mv protoreflect.Value) bool {
+						if err := detectUnknownProtoFields(mv.Message(), depth+1); err != nil {
+							walkErr = err
+							return false
+						}
+						return true
+					})
+					if walkErr != nil {
+						return false
+					}
+				}
+			default:
+				if err := detectUnknownProtoFields(v.Message(), depth+1); err != nil {
+					walkErr = err
+					return false
+				}
+			}
+		}
+		return true
+	})
+	return walkErr
+}
+
+// preflightProtoBytes performs a lightweight scan for oversized length-delimited fields before decoding.
+func preflightProtoBytes(b []byte) error {
+	offset := 0
+	for offset < len(b) {
+		_, wireType, n := protowire.ConsumeTag(b[offset:])
+		if n < 0 {
+			return fmt.Errorf("invalid protobuf tag at offset %d", offset)
+		}
+		offset += n
+
+		switch wireType {
+		case protowire.VarintType:
+			_, n = protowire.ConsumeVarint(b[offset:])
+			if n < 0 {
+				return fmt.Errorf("invalid varint at offset %d", offset)
+			}
+			offset += n
+		case protowire.Fixed32Type:
+			if offset+4 > len(b) {
+				return fmt.Errorf("truncated fixed32 field")
+			}
+			offset += 4
+		case protowire.Fixed64Type:
+			if offset+8 > len(b) {
+				return fmt.Errorf("truncated fixed64 field")
+			}
+			offset += 8
+		case protowire.BytesType:
+			l, n := protowire.ConsumeVarint(b[offset:])
+			if n < 0 {
+				return fmt.Errorf("invalid length-delimited size at offset %d", offset)
+			}
+			offset += n
+			if l > protoMaxFieldBytes {
+				return fmt.Errorf("length-delimited field exceeds max size: %d > %d", l, protoMaxFieldBytes)
+			}
+			if l < 0 || offset+int(l) > len(b) {
+				return fmt.Errorf("length-delimited field exceeds buffer bounds")
+			}
+			offset += int(l)
+		default:
+			return fmt.Errorf("unsupported wire type %d", wireType)
+		}
+	}
 	return nil
 }
 
@@ -285,6 +434,14 @@ func MarshalJSON(message any) ([]byte, ErrorI) {
 	}
 	// exit with json bytes
 	return jsonBytes, nil
+}
+
+// MustMarshalJSON() serializes a message into a JSON without error checking
+func MustMarshalJSON(message any) []byte {
+	// convert the message to json bytes
+	jsonBytes, _ := json.Marshal(message)
+	// exit with json bytes
+	return jsonBytes
 }
 
 // UnmarshalJSON() deserializes a JSON byte slice into the specified object
@@ -744,8 +901,11 @@ func (d *DeDuplicator[T]) Delete(k T) { delete(d.m, k) }
 func (d *DeDuplicator[T]) Map() map[T]struct{} { return d.m }
 
 // TimeTrack() a utility function to benchmark the time of caller function
-func TimeTrack(l LoggerI, start time.Time) {
+func TimeTrack(l LoggerI, start time.Time, logOnMax time.Duration) {
 	elapsed, functionName := time.Since(start), "unknown"
+	if elapsed < logOnMax {
+		return
+	}
 	pcs := make([]uintptr, 10)
 	n := runtime.Callers(2, pcs)
 	for _, pc := range pcs[:n] {
@@ -758,7 +918,7 @@ func TimeTrack(l LoggerI, start time.Time) {
 			break
 		}
 	}
-	l.Warnf("%s took %s", functionName, elapsed)
+	l.Errorf("*** %s took %s", functionName, elapsed)
 }
 
 func PrintStackTrace(print bool) (fns []string) {
@@ -813,6 +973,44 @@ func EqualByteSlices(a, b [][]byte) bool {
 		}
 	}
 	return true
+}
+
+func SqrtProductUint64(x, y uint64) uint64 {
+	// p = x * y (big.Int)
+	a := new(big.Int).SetUint64(x)
+	b := new(big.Int).SetUint64(y)
+	p := new(big.Int).Mul(a, b)
+
+	return new(big.Int).Sqrt(p).Uint64()
+}
+
+// SafeMulDiv computes (a * b) / c safely using big.Int.
+func SafeMulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	bigA := new(big.Int).SetUint64(a)
+	bigB := new(big.Int).SetUint64(b)
+	bigC := new(big.Int).SetUint64(c)
+
+	num := new(big.Int).Mul(bigA, bigB)
+	res := new(big.Int).Div(num, bigC)
+
+	return res.Uint64()
+}
+
+// IntSqrt returns the integer square root of n (truncated)
+func IntSqrt(n uint64) uint64 {
+	if n == 0 {
+		return 0
+	}
+	x := n
+	y := (x + 1) / 2
+	for y < x {
+		x = y
+		y = (x + n/x) / 2
+	}
+	return x
 }
 
 // ContainsByteSlice() checks to see if the byte slice is within the list

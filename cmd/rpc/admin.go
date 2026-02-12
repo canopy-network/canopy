@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/canopy-network/canopy/fsm"
 	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -339,6 +340,63 @@ func (s *Server) TransactionDeleteOrder(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
+// TransactionDexLimitOrder creates a new dex limit order for the 'next batch'
+func (s *Server) TransactionDexLimitOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Create a default chainid of 0
+		chainId := uint64(0)
+		// Convert comma separated string of committees to uint64
+		if c, err := stringToCommittees(ptr.Committees); err == nil {
+			chainId = c[0]
+		}
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageDexLimitOrderName); err != nil {
+			return nil, err
+		}
+		// Create and return the transaction to be sent
+		return fsm.NewDexLimitOrder(p, ptr.Amount, ptr.ReceiveAmount, chainId, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionDexLiquidityDeposit creates a new dex liquidity deposit command for the 'next batch'
+func (s *Server) TransactionDexLiquidityDeposit(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Create a default chainid of 0
+		chainId := uint64(0)
+		// Convert comma separated string of committees to uint64
+		if c, err := stringToCommittees(ptr.Committees); err == nil {
+			chainId = c[0]
+		}
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageDexLiquidityDepositName); err != nil {
+			return nil, err
+		}
+		// Create and return the transaction to be sent
+		return fsm.NewDexLiquidityDeposit(p, ptr.Amount, chainId, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
+// TransactionDexLiquidityWithdraw creates a new dex liquidity withdraw command for the 'next batch'
+func (s *Server) TransactionDexLiquidityWithdraw(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the transaction handler with a callback that creates the transaction
+	s.txHandler(w, r, func(p crypto.PrivateKeyI, ptr *txRequest) (lib.TransactionI, error) {
+		// Create a default chainid of 0
+		chainId := uint64(0)
+		// Convert comma separated string of committees to uint64
+		if c, err := stringToCommittees(ptr.Committees); err == nil {
+			chainId = c[0]
+		}
+		// Retrieve the fee required for this type of transaction
+		if err := s.getFeeFromState(ptr, fsm.MessageDexLiquidityWithdrawName); err != nil {
+			return nil, err
+		}
+		// Create and return the transaction to be sent
+		return fsm.NewDexLiquidityWithdraw(p, ptr.Percent, chainId, s.config.NetworkID, s.config.ChainId, ptr.Fee, s.controller.ChainHeight(), ptr.Memo)
+	})
+}
+
 // TransactionLockOrder locks an existing sell order
 func (s *Server) TransactionLockOrder(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the transaction handler with a callback that creates the transaction
@@ -510,7 +568,7 @@ func (s *Server) txHandler(w http.ResponseWriter, r *http.Request, callback func
 	// Check if the transaction should be submitted to the network.
 	if ptr.Submit {
 		// Submit the transaction for processing.
-		s.submitTx(w, p)
+		s.submitTxs(w, []lib.TransactionI{p})
 	} else {
 		// Marshal the transaction into JSON and write it to the response
 		bz, e := lib.MarshalJSONIndent(p)

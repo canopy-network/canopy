@@ -152,11 +152,16 @@ type CertificateResult struct {
 	SlashRecipients *SlashRecipients `protobuf:"bytes,2,opt,name=slash_recipients,json=slashRecipients,proto3" json:"slashRecipients"` // @gotags: json:"slashRecipients"
 	// orders: contains information regarding the 'buying side' of sell orders
 	// including actions like 'buy/reserve order' or 'close/complete order'
-	Orders *Orders `protobuf:"bytes,3,opt,name=orders,proto3" json:"orders,omitempty"`
+	Orders *Orders `protobuf:"bytes,3,opt,name=orders,proto3" json:"orders"` // @gotags: json:"orders"
 	// checkpoint: contains information from the 3rd party chain in order for Canopy to provide Checkpoint-as-a-Service
-	Checkpoint *Checkpoint `protobuf:"bytes,4,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	Checkpoint *Checkpoint `protobuf:"bytes,4,opt,name=checkpoint,proto3" json:"checkpoint"` // @gotags: json:"checkpoint"
 	// retired: signals if the committee wants to shut down and mark itself as 'forever unsubsidized' on the root-chain
-	Retired       bool `protobuf:"varint,5,opt,name=retired,proto3" json:"retired,omitempty"`
+	Retired bool `protobuf:"varint,5,opt,name=retired,proto3" json:"retired"` // @gotags: json:"retired"
+	// dex_batch: contains information regarding the selling side 'dex' operations
+	DexBatch *DexBatch `protobuf:"bytes,6,opt,name=dex_batch,json=dexBatch,proto3" json:"dexBatch"` // @gotags: json:"dexBatch"
+	// root_dex_batch: ifNested: contains the root chain's dex batch;
+	// without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
+	RootDexBatch  *DexBatch `protobuf:"bytes,7,opt,name=root_dex_batch,json=rootDexBatch,proto3" json:"rootDexBatch"` // @gotags: json:"rootDexBatch"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,6 +229,20 @@ func (x *CertificateResult) GetRetired() bool {
 		return x.Retired
 	}
 	return false
+}
+
+func (x *CertificateResult) GetDexBatch() *DexBatch {
+	if x != nil {
+		return x.DexBatch
+	}
+	return nil
+}
+
+func (x *CertificateResult) GetRootDexBatch() *DexBatch {
+	if x != nil {
+		return x.RootDexBatch
+	}
+	return nil
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,
@@ -861,7 +880,7 @@ var File_certificate_proto protoreflect.FileDescriptor
 
 const file_certificate_proto_rawDesc = "" +
 	"\n" +
-	"\x11certificate.proto\x12\x05types\x1a\x0fconsensus.proto\"\xa0\x02\n" +
+	"\x11certificate.proto\x12\x05types\x1a\x0fconsensus.proto\x1a\tdex.proto\"\xa0\x02\n" +
 	"\x11QuorumCertificate\x12#\n" +
 	"\x06header\x18\x01 \x01(\v2\v.types.ViewR\x06header\x122\n" +
 	"\aresults\x18\x02 \x01(\v2\x18.types.CertificateResultR\aresults\x12!\n" +
@@ -870,7 +889,7 @@ const file_certificate_proto_rawDesc = "" +
 	"\n" +
 	"block_hash\x18\x05 \x01(\fR\tblockHash\x12!\n" +
 	"\fproposer_key\x18\x06 \x01(\fR\vproposerKey\x127\n" +
-	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\x90\x02\n" +
+	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\xf5\x02\n" +
 	"\x11CertificateResult\x12D\n" +
 	"\x11reward_recipients\x18\x01 \x01(\v2\x17.types.RewardRecipientsR\x10rewardRecipients\x12A\n" +
 	"\x10slash_recipients\x18\x02 \x01(\v2\x16.types.SlashRecipientsR\x0fslashRecipients\x12%\n" +
@@ -878,7 +897,9 @@ const file_certificate_proto_rawDesc = "" +
 	"\n" +
 	"checkpoint\x18\x04 \x01(\v2\x11.types.CheckpointR\n" +
 	"checkpoint\x12\x18\n" +
-	"\aretired\x18\x05 \x01(\bR\aretired\"\x81\x01\n" +
+	"\aretired\x18\x05 \x01(\bR\aretired\x12,\n" +
+	"\tdex_batch\x18\x06 \x01(\v2\x0f.types.DexBatchR\bdexBatch\x125\n" +
+	"\x0eroot_dex_batch\x18\a \x01(\v2\x0f.types.DexBatchR\frootDexBatch\"\x81\x01\n" +
 	"\x10RewardRecipients\x12A\n" +
 	"\x10payment_percents\x18\x01 \x03(\v2\x16.types.PaymentPercentsR\x0fpaymentPercents\x12*\n" +
 	"\x11number_of_samples\x18\x02 \x01(\x04R\x0fnumberOfSamples\"M\n" +
@@ -950,6 +971,7 @@ var file_certificate_proto_goTypes = []any{
 	(*CommitteeData)(nil),      // 11: types.CommitteeData
 	(*View)(nil),               // 12: types.View
 	(*AggregateSignature)(nil), // 13: types.AggregateSignature
+	(*DexBatch)(nil),           // 14: types.DexBatch
 }
 var file_certificate_proto_depIdxs = []int32{
 	12, // 0: types.QuorumCertificate.header:type_name -> types.View
@@ -959,16 +981,18 @@ var file_certificate_proto_depIdxs = []int32{
 	3,  // 4: types.CertificateResult.slash_recipients:type_name -> types.SlashRecipients
 	4,  // 5: types.CertificateResult.orders:type_name -> types.Orders
 	7,  // 6: types.CertificateResult.checkpoint:type_name -> types.Checkpoint
-	8,  // 7: types.RewardRecipients.payment_percents:type_name -> types.PaymentPercents
-	9,  // 8: types.SlashRecipients.double_signers:type_name -> types.DoubleSigner
-	5,  // 9: types.Orders.lock_orders:type_name -> types.LockOrder
-	11, // 10: types.CommitteesData.list:type_name -> types.CommitteeData
-	8,  // 11: types.CommitteeData.payment_percents:type_name -> types.PaymentPercents
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	14, // 7: types.CertificateResult.dex_batch:type_name -> types.DexBatch
+	14, // 8: types.CertificateResult.root_dex_batch:type_name -> types.DexBatch
+	8,  // 9: types.RewardRecipients.payment_percents:type_name -> types.PaymentPercents
+	9,  // 10: types.SlashRecipients.double_signers:type_name -> types.DoubleSigner
+	5,  // 11: types.Orders.lock_orders:type_name -> types.LockOrder
+	11, // 12: types.CommitteesData.list:type_name -> types.CommitteeData
+	8,  // 13: types.CommitteeData.payment_percents:type_name -> types.PaymentPercents
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_certificate_proto_init() }
@@ -977,6 +1001,7 @@ func file_certificate_proto_init() {
 		return
 	}
 	file_consensus_proto_init()
+	file_dex_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

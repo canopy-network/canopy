@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/canopy-network/canopy/fsm"
 	"slices"
+	"time"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -15,10 +16,13 @@ import (
 func (c *Controller) NewCertificateResults(
 	fsm *fsm.StateMachine, block *lib.Block, blockResult *lib.BlockResult,
 	evidence *bft.ByzantineEvidence, rcBuildHeight uint64) (results *lib.CertificateResult) {
+	defer lib.TimeTrack(c.log, time.Now(), 500*time.Millisecond)
 	// calculate reward recipients, creating a 'certificate results' object reference in the process
 	results = c.CalculateRewardRecipients(fsm, block.BlockHeader.ProposerAddress, rcBuildHeight)
 	// handle swaps
 	c.HandleSwaps(fsm, blockResult, results, rcBuildHeight)
+	// handle dex
+	c.HandleDex(fsm, results, rcBuildHeight)
 	// set slash recipients
 	c.CalculateSlashRecipients(results, evidence)
 	// set checkpoint
@@ -268,4 +272,49 @@ func (c *Controller) HandleRetired(fsm *fsm.StateMachine, results *lib.Certifica
 	}
 	// set the 'retired' field based on the retired consensus param not being 0
 	results.Retired = cons.Retired != 0
+}
+
+// HandleDex() populates the certificate with 'dex' information
+func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateResult, rcBuildHeight uint64) {
+	rcId, err := sm.GetRootChainId()
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	// set the dex batch based on the 'locked batch' for the root chain id
+	batch, err := sm.GetDexBatch(rcId, true)
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	// ensure liquidity pool is enabled
+	balance, err := sm.GetPoolBalance(rcId + fsm.LiquidityPoolAddend)
+	if err != nil {
+		c.log.Error(err.Error())
+		return
+	}
+	if balance == 0 {
+		return
+	}
+	isTriggerBlock := false
+	// check if 'locked' dex batch is non empty
+	if !batch.IsEmpty() {
+		// calculate the 'blocks since' the lock
+		blksSince := sm.Height() - batch.LockedHeight
+		if isTriggerBlock = blksSince%lib.TriggerModuloBlocks == 0; isTriggerBlock {
+			results.DexBatch = batch.Copy()
+		}
+	}
+	// if nested, populate the root dex batch structure with the
+	if rcId != c.Config.ChainId {
+		// determine if we should activate liveness fallback
+		livenessFallback := isTriggerBlock && !batch.IsEmpty() && (sm.Height()-batch.LockedHeight) >= lib.LivenessFallbackBlocks
+		// set the root chain dex batch
+		if results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback); err != nil {
+			c.log.Error(err.Error())
+			return
+		}
+		// set the liveness fallback flag
+		results.RootDexBatch.LivenessFallback = livenessFallback
+	}
 }

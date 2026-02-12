@@ -7,6 +7,7 @@
 package fsm
 
 import (
+	lib "github.com/canopy-network/canopy/lib"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -101,9 +102,15 @@ type Pool struct {
 	// id: the unique identifier of the pool
 	Id uint64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// amount: the balance of funds the pool has
-	Amount        uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Amount uint64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	// LIQUIDITY POOL ONLY
+	// ------------------------------------------------------------------------------------
+	// points: a list of pool share holders and their respective points
+	Points []*lib.PoolPoints `protobuf:"bytes,11,rep,name=points,proto3" json:"poolPoints"` // @gotags: json:"poolPoints"
+	// total_pool_points: the total number of pool points
+	TotalPoolPoints uint64 `protobuf:"varint,12,opt,name=total_pool_points,json=totalPoolPoints,proto3" json:"totalPoolPoints"` // @gotags: json:"totalPoolPoints"
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Pool) Reset() {
@@ -146,6 +153,20 @@ func (x *Pool) GetId() uint64 {
 func (x *Pool) GetAmount() uint64 {
 	if x != nil {
 		return x.Amount
+	}
+	return 0
+}
+
+func (x *Pool) GetPoints() []*lib.PoolPoints {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
+func (x *Pool) GetTotalPoolPoints() uint64 {
+	if x != nil {
+		return x.TotalPoolPoints
 	}
 	return 0
 }
@@ -239,13 +260,15 @@ var File_account_proto protoreflect.FileDescriptor
 
 const file_account_proto_rawDesc = "" +
 	"\n" +
-	"\raccount.proto\x12\x05types\";\n" +
+	"\raccount.proto\x12\x05types\x1a\tdex.proto\";\n" +
 	"\aAccount\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\".\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"\x85\x01\n" +
 	"\x04Pool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\x04R\x06amount\"\xdc\x01\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\x12)\n" +
+	"\x06points\x18\v \x03(\v2\x11.types.PoolPointsR\x06points\x12*\n" +
+	"\x11total_pool_points\x18\f \x01(\x04R\x0ftotalPoolPoints\"\xdc\x01\n" +
 	"\x06Supply\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x04R\x05total\x12\x16\n" +
 	"\x06staked\x18\x02 \x01(\x04R\x06staked\x12%\n" +
@@ -267,18 +290,20 @@ func file_account_proto_rawDescGZIP() []byte {
 
 var file_account_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_account_proto_goTypes = []any{
-	(*Account)(nil), // 0: types.Account
-	(*Pool)(nil),    // 1: types.Pool
-	(*Supply)(nil),  // 2: types.Supply
+	(*Account)(nil),        // 0: types.Account
+	(*Pool)(nil),           // 1: types.Pool
+	(*Supply)(nil),         // 2: types.Supply
+	(*lib.PoolPoints)(nil), // 3: types.PoolPoints
 }
 var file_account_proto_depIdxs = []int32{
-	1, // 0: types.Supply.committee_staked:type_name -> types.Pool
-	1, // 1: types.Supply.committee_delegated_only:type_name -> types.Pool
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: types.Pool.points:type_name -> types.PoolPoints
+	1, // 1: types.Supply.committee_staked:type_name -> types.Pool
+	1, // 2: types.Supply.committee_delegated_only:type_name -> types.Pool
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_account_proto_init() }

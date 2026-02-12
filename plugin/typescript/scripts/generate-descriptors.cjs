@@ -1,0 +1,152 @@
+#!/usr/bin/env node
+// Script to generate file descriptor protos from .proto files
+// This avoids hardcoding base64 proto descriptors in contract.ts
+
+const protobuf = require('protobufjs');
+const descriptor = require('protobufjs/ext/descriptor');
+const fs = require('fs');
+const path = require('path');
+
+async function main() {
+    const protoDir = path.join(__dirname, '..', 'proto');
+    
+    // List of proto files to process - order matters for dependencies
+    const protoFiles = [
+        'account.proto',
+        'event.proto',
+        'tx.proto',
+        'plugin.proto',
+    ];
+
+    // Files that import google/protobuf/any.proto (need to add dependency)
+    const filesWithAnyDependency = ['event.proto', 'tx.proto', 'plugin.proto'];
+    
+    // Files that import other local proto files
+    const localDependencies = {
+        'plugin.proto': ['event.proto', 'tx.proto'],
+    };
+
+    const fileDescriptorProtos = [];
+
+    // Load all proto files together to get proper type resolution
+    const root = new protobuf.Root();
+    root.resolvePath = (origin, target) => {
+        if (target.startsWith('google/protobuf/')) {
+            return target;
+        }
+        return path.join(protoDir, path.basename(target));
+    };
+    
+    // Load all proto files
+    for (const protoFile of protoFiles) {
+        await root.load(path.join(protoDir, protoFile), { keepCase: true });
+    }
+    
+    // Convert to FileDescriptorSet - this gives us all files
+    const descriptorSet = root.toDescriptor('proto3');
+    
+    // First, find and add the google/protobuf/any.proto descriptor
+    for (const file of descriptorSet.file) {
+        if (file.name && (file.name.includes('google') || file.name === 'google_protobuf.proto')) {
+            file.name = 'google/protobuf/any.proto';
+            const encoded = descriptor.FileDescriptorProto.encode(file).finish();
+            fileDescriptorProtos.push(Buffer.from(encoded).toString('base64'));
+            console.log('Added google/protobuf/any.proto descriptor');
+            break;
+        }
+    }
+    
+    // Now process each of our proto files
+    // Since protobufjs consolidates all types into one "types.proto", we need to 
+    // create individual file descriptors by filtering types
+    
+    // Read the original proto files to know which types belong to which file
+    const fileTypes = {};
+    for (const protoFile of protoFiles) {
+        const content = fs.readFileSync(path.join(protoDir, protoFile), 'utf8');
+        const messageMatches = content.matchAll(/^message\s+(\w+)\s*\{/gm);
+        const enumMatches = content.matchAll(/^enum\s+(\w+)\s*\{/gm);
+        
+        fileTypes[protoFile] = {
+            messages: [...messageMatches].map(m => m[1]),
+            enums: [...enumMatches].map(m => m[1]),
+        };
+    }
+    
+    // Find the consolidated types.proto descriptor
+    let typesDescriptor = null;
+    for (const file of descriptorSet.file) {
+        if (file.name === 'types.proto') {
+            typesDescriptor = file;
+            break;
+        }
+    }
+    
+    if (!typesDescriptor) {
+        throw new Error('Could not find types.proto descriptor');
+    }
+    
+    // Create individual file descriptors by cloning and filtering
+    for (const protoFile of protoFiles) {
+        const types = fileTypes[protoFile];
+        
+        // Clone the descriptor and filter to only include types from this file
+        const fileDesc = {
+            name: protoFile,
+            package: typesDescriptor.package,
+            dependency: [],
+            messageType: [],
+            enumType: [],
+            syntax: typesDescriptor.syntax,
+            options: typesDescriptor.options,
+        };
+        
+        // Add google/protobuf/any.proto dependency if needed
+        if (filesWithAnyDependency.includes(protoFile)) {
+            fileDesc.dependency.push('google/protobuf/any.proto');
+        }
+        
+        // Add local file dependencies
+        if (localDependencies[protoFile]) {
+            fileDesc.dependency.push(...localDependencies[protoFile]);
+        }
+        
+        // Filter message types
+        for (const msg of typesDescriptor.messageType || []) {
+            if (types.messages.includes(msg.name)) {
+                fileDesc.messageType.push(msg);
+            }
+        }
+        
+        // Filter enum types
+        for (const en of typesDescriptor.enumType || []) {
+            if (types.enums.includes(en.name)) {
+                fileDesc.enumType.push(en);
+            }
+        }
+        
+        const encoded = descriptor.FileDescriptorProto.encode(fileDesc).finish();
+        fileDescriptorProtos.push(Buffer.from(encoded).toString('base64'));
+        console.log(`Added ${protoFile} descriptor (${fileDesc.messageType.length} messages, dependencies: ${fileDesc.dependency})`);
+    }
+
+    // Generate the TypeScript output file
+    const output = `// Auto-generated file - do not edit manually
+// Generated by scripts/generate-descriptors.cjs
+// Proto files: google/protobuf/any.proto, ${protoFiles.join(', ')}
+
+// File descriptor protos encoded as base64
+export const fileDescriptorProtos = [
+${fileDescriptorProtos.map(b64 => `    Buffer.from("${b64}", "base64")`).join(',\n')}
+];
+`;
+
+    const outputPath = path.join(__dirname, '..', 'src', 'proto', 'descriptors.ts');
+    fs.writeFileSync(outputPath, output);
+    console.log(`Generated ${outputPath} with ${fileDescriptorProtos.length} file descriptors`);
+}
+
+main().catch(err => {
+    console.error('Error generating descriptors:', err);
+    process.exit(1);
+});

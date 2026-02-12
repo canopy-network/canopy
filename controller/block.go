@@ -94,7 +94,7 @@ func (c *Controller) ListenForBlock() {
 
 // PUBLISHERS BELOW
 
-// GossipBlockMsg() gossips a certificate (with block) through the P2P network for a specific chainId
+// GossipBlock() gossips a certificate (with block) through the P2P network for a specific chainId
 func (c *Controller) GossipBlock(certificate *lib.QuorumCertificate, senderPubToExclude []byte, timestamp uint64) {
 	// log the start of the gossip block function
 	c.log.Debugf("Gossiping certificate: %s", lib.BytesToString(certificate.ResultsHash))
@@ -203,7 +203,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		return
 	}
 	// play the block against the state machine to generate a block result
-	blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], false)
+	blockResult, err = c.ApplyAndValidateBlock(block, false)
 	if err != nil {
 		// exit with error
 		return
@@ -244,7 +244,7 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
 		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
+		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
 			// exit with error
 			return
@@ -283,13 +283,11 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 	// set up the finite state machine for the next height
-	c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
 	if err != nil {
 		// exit with error
 		return err
 	}
-	// set the reference to lastCertificate on the new FSM
-	c.FSM.LastValidatorSet = c.LastValidatorSet
 	// reset the current mempool store to prepare for the next height
 	c.Mempool.FSM.Discard()
 	// set up the mempool with the actual new FSM for the next height
@@ -305,14 +303,9 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
 	// publish root chain information to all nested chain subscribers.
-	// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
-	// from RCManager since only these two chains exist. This will be updated to use
-	// dynamic chain discovery when additional chains are added.
-	// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
-	// for _, id := range c.RCManager.ChainIds() {
-	for _, id := range []uint64{1, 2} {
+	for _, id := range c.RCManager.ChainIds() {
 		// get the root chain info
-		info, e := c.FSM.LoadRootChainInfo(id, 0, c.LastValidatorSet[c.ChainHeight()][id])
+		info, e := c.FSM.LoadRootChainInfo(id, 0)
 		if e != nil {
 			// don't log 'no-validators' error as this is possible
 			if e.Error() != lib.ErrNoValidators().Error() {
@@ -322,17 +315,9 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		}
 		// set the timestamp
 		info.Timestamp = ts
-		// save current validator set for the next height
-		valSet, _ := c.FSM.GetCommitteeMembers(id)
-		if _, found := c.LastValidatorSet[c.ChainHeight()+1]; !found {
-			c.LastValidatorSet[c.ChainHeight()+1] = make(map[uint64]*lib.ValidatorSet)
-		}
-		c.LastValidatorSet[c.ChainHeight()+1][id] = &valSet
 		// publish root chain information
 		go c.RCManager.Publish(id, info)
 	}
-	// remove older validator set heights
-	delete(c.LastValidatorSet, c.ChainHeight()-2)
 	// exit
 	return
 }
@@ -356,7 +341,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
 		// apply the block against the state machine
-		blockResult, err = c.ApplyAndValidateBlock(block, c.LastValidatorSet[c.ChainHeight()][c.Config.ChainId], true)
+		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
 			// exit with error
 			return
@@ -405,32 +390,15 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// log to signal finishing the commit
 		c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
 		// set up the finite state machine for the next height
-		c.FSM, err = fsm.New(c.Config, storeI, c.Metrics, c.log)
+		c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
 		if err != nil {
 			// exit with error
 			return err
 		}
-		// set the reference to lastCertificate on the new FSM
-		c.FSM.LastValidatorSet = c.LastValidatorSet
-		// Currently using hardcoded chain IDs (1, 2) instead of dynamically fetching IDs
-		// from RCManager since only these two chains exist. This will be updated to use
-		// dynamic chain discovery when additional chains are added.
-		// TODO: Optimize rcManager publishing for subchains (it should publish to themselves too by default)
-		// publish the root chain info to the nested chain subscribers
-		// for _, id := range c.RCManager.ChainIds() {
-		for _, id := range []uint64{1, 2} {
-			// get latest validator set
-			valSet, err := c.FSM.GetCommitteeMembers(id)
-			if err != nil {
-				return err
-			}
-			// TODO handle err
-			if _, found := c.LastValidatorSet[c.ChainHeight()+1]; !found {
-				c.LastValidatorSet[c.ChainHeight()+1] = make(map[uint64]*lib.ValidatorSet)
-			}
-			c.LastValidatorSet[c.ChainHeight()+1][id] = &valSet
+		// publish root chain information to all nested chain subscribers.
+		for _, id := range c.RCManager.ChainIds() {
 			// get the root chain info
-			info, e := c.FSM.LoadRootChainInfo(id, 0, c.LastValidatorSet[c.ChainHeight()][id])
+			info, e := c.FSM.LoadRootChainInfo(id, 0)
 			if e != nil {
 				// don't log 'no-validators' error as this is possible
 				if e.Error() != lib.ErrNoValidators().Error() {
@@ -448,7 +416,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	})
 	eg.Go(func() error {
 		// set up the mempool for the next height with the temporary FSM
-		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Metrics, c.log)
+		c.Mempool.FSM, err = fsm.New(c.Config, memPoolStore, c.Plugin, c.Metrics, c.log)
 		if err != nil {
 			// exit with error
 			return err
@@ -472,8 +440,6 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 		// exit with error
 		return err
 	}
-	// remove older validator set heights
-	delete(c.LastValidatorSet, c.ChainHeight()-2)
 	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
 	defer c.UpdateTelemetry(qc, block, time.Since(start))
 	// exit
@@ -483,7 +449,7 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 // INTERNAL HELPERS BELOW
 
 // ApplyAndValidateBlock() plays the block against the state machine which returns a result that is compared against the candidate block header
-func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *lib.ValidatorSet, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
+func (c *Controller) ApplyAndValidateBlock(block *lib.Block, commit bool) (b *lib.BlockResult, err lib.ErrorI) {
 	// define convenience variables for the block header, hash, and height
 	candidate, candidateHash, candidateHeight := block.BlockHeader, lib.BytesToString(block.BlockHeader.Hash), block.BlockHeader.Height
 	// check the last qc in the candidate and set it in the ephemeral indexer to prepare for block application
@@ -494,14 +460,14 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *l
 	// log the start of 'apply block'
 	c.log.Debugf("Applying block %s for height %d", candidateHash[:20], candidateHeight)
 	// apply the block against the state machine
-	compare, txResults, _, failed, err := c.FSM.ApplyBlock(context.Background(), block, lastValidatorSet, false)
+	compare, results, err := c.FSM.ApplyBlock(context.Background(), block, false)
 	if err != nil {
 		// exit with error
 		return
 	}
 	// if any transactions failed
-	if len(failed) != 0 {
-		for _, f := range failed {
+	if len(results.Failed) != 0 {
+		for _, f := range results.Failed {
 			c.log.Errorf("From: %s\nType:%s\nErr:%s", f.Address, f.Transaction.MessageType, f.Error.Error())
 		}
 		return nil, lib.ErrFailedTransactions()
@@ -531,7 +497,7 @@ func (c *Controller) ApplyAndValidateBlock(block *lib.Block, lastValidatorSet *l
 	// log that the proposal is valid
 	c.log.Infof("Block %s with %d txs is valid for height %d ✅ ", candidateHash[:20], len(block.Transactions), candidateHeight)
 	// exit with the valid results
-	return &lib.BlockResult{BlockHeader: candidate, Transactions: txResults}, nil
+	return &lib.BlockResult{BlockHeader: candidate, Transactions: results.Results, Events: results.Events}, nil
 }
 
 // HandlePeerBlock() validates and handles an inbound certificate (with a block) from a remote peer
@@ -549,12 +515,18 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 	if syncing {
 		// use checkpoints to protect against long-range attacks
 		if qc.Header.Height%CheckpointFrequency == 0 {
-			// get the checkpoint from the base chain (or file if independent)
-			checkpoint, err := c.RCManager.GetCheckpoint(c.LoadRootChainId(qc.Header.Height), qc.Header.Height, c.Config.ChainId)
-			// if getting the checkpoint failed
-			if err != nil {
-				// warn of the inability to get the checkpoint
-				c.log.Warnf(err.Error())
+			// attempt to load the checkpoint from the file
+			checkpoint := c.checkpointFromFile(qc.Header.Height, qc.Header.ChainId)
+			// if checkpoint loading from file failed
+			if checkpoint == nil {
+				var err lib.ErrorI
+				// get the checkpoint from the base chain (or file if independent)
+				checkpoint, err = c.RCManager.GetCheckpoint(c.LoadRootChainId(qc.Header.Height), qc.Header.Height, c.Config.ChainId)
+				// if getting the checkpoint failed
+				if err != nil {
+					// warn of the inability to get the checkpoint
+					c.log.Warnf(err.Error())
+				}
 			}
 			// if checkpoint fails
 			if len(checkpoint) != 0 && !bytes.Equal(qc.BlockHash, checkpoint) {
@@ -661,7 +633,9 @@ func (c *Controller) CheckAndSetLastCertificate(candidate *lib.BlockHeader) lib.
 
 // SetFSMInConsensusModeForProposals() is how the Validator is configured for `base chain` specific parameter upgrades
 func (c *Controller) SetFSMInConsensusModeForProposals() (reset func()) {
-	if c.Consensus.GetRound() < 3 {
+	elapsed := time.Since(c.Consensus.BFTStartTime).Milliseconds()
+	// if consensus is below round 3 AND it hasn't been more than 3 minutes since the last block
+	if c.Consensus.GetRound() < 3 && elapsed < int64(c.Config.BlockTimeMS()*3) {
 		// if the node is not having 'consensus issues' refer to the approve list
 		c.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)
 		c.Mempool.FSM.SetProposalVoteConfig(fsm.GovProposalVoteConfig_APPROVE_LIST)

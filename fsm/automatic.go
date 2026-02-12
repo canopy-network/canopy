@@ -4,54 +4,78 @@ import (
 	"github.com/canopy-network/canopy/lib"
 )
 
-/* This file handles 'automatic' (non-transaction-induced) state changes that occur ath the beginning and ending of a block */
+/* This file handles 'automatic' (non-transaction-induced) state changes that occur at the beginning and ending of a block */
 
 // BeginBlock() is code that is executed at the start of `applying` the block
-func (s *StateMachine) BeginBlock(lastValidatorSet *lib.ValidatorSet) lib.ErrorI {
+func (s *StateMachine) BeginBlock() (lib.Events, lib.ErrorI) {
+	s.events.Refer(lib.EventStageBeginBlock)
+	// execute plugin begin block if enabled
+	if s.Plugin != nil {
+		resp, err := s.Plugin.BeginBlock(s, &lib.PluginBeginRequest{Height: s.height})
+		if err != nil {
+			return nil, err
+		}
+		if resp != nil {
+			if err = resp.Error.E(); err != nil {
+				return nil, err
+			}
+			if err = s.addPluginEvents(resp.Events); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// prevent attempting to load the certificate for height 0
 	if s.Height() <= 1 {
-		return nil
+		return nil, nil
 	}
 	// enforce protocol upgrades
 	if err := s.CheckProtocolVersion(); err != nil {
-		return err
+		return nil, err
 	}
 	// reward committees
 	if err := s.FundCommitteeRewardPools(); err != nil {
-		return err
+		return nil, err
 	}
 	// handle last certificate results
 	lastCertificate, err := s.LoadCertificate(s.Height() - 1)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// load the root chain id at the certificate height
 	rootChainId, err := s.LoadRootChainId(s.Height() - 1)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// if not root-chain: the committee won't match the certificate result
 	// so just set the committee to nil to ignore the byzantine evidence
 	// the byzantine evidence is handled at `Transaction Level` on the root
 	// chain with a HandleMessageCertificateResults
 	if s.Config.ChainId != rootChainId {
-		return s.HandleCertificateResults(lastCertificate, nil)
+		err = s.HandleCertificateResults(lastCertificate, nil)
+		return s.events.Reset(), err
+	}
+	// load the validator set for the previous height
+	lastValidatorSet, err := s.LoadCommittee(s.Config.ChainId, s.Height()-1)
+	if err != nil {
+		return nil, err
 	}
 	// if is root-chain: load the committee from state as the certificate result
 	// will match the evidence and there's no Transaction to HandleMessageCertificateResults
-	return s.HandleCertificateResults(lastCertificate, lastValidatorSet)
+	err = s.HandleCertificateResults(lastCertificate, &lastValidatorSet)
+	return s.events.Reset(), err
 }
 
 // EndBlock() is code that is executed at the end of `applying` the block
-func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
+func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err lib.ErrorI) {
+	s.events.Refer(lib.EventStageEndBlock)
 	// update the list of addresses who proposed the last blocks
 	// this information is used for leader election
 	if err = s.UpdateLastProposers(proposerAddress); err != nil {
-		return err
+		return nil, err
 	}
 	// distribute the committee rewards based on the various certificate results
 	if err = s.DistributeCommitteeRewards(); err != nil {
-		return err
+		return nil, err
 	}
 	// force unstakes validators who have been paused for MaxPauseBlocks
 	if err = s.ForceUnstakeMaxPaused(); err != nil {
@@ -61,7 +85,26 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (err lib.ErrorI) {
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
-	return
+	// execute plugin end block if enabled
+	if s.Plugin != nil {
+		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{
+			Height:          s.height,
+			ProposerAddress: proposerAddress,
+		})
+		if e != nil {
+			return nil, e
+		}
+		if resp != nil {
+			if err = resp.Error.E(); err != nil {
+				return nil, err
+			}
+			if err = s.addPluginEvents(resp.Events); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// return the events
+	return s.events.Reset(), nil
 }
 
 // CheckProtocolVersion() compares the protocol version against the governance enforced version
@@ -111,7 +154,14 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Header.Height <= data.LastChainHeightUpdated {
 		return lib.ErrInvalidQCCommitteeHeight()
 	}
-	results, chainId := qc.Results, qc.Header.ChainId
+	// setup convenience variables
+	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
+	// handle dex action ordered by the quorum
+	if qc.Header.ChainId != s.Config.ChainId || isNested {
+		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
+			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
+		}
+	}
 	// handle the token swaps ordered by the quorum
 	s.HandleCommitteeSwaps(results.Orders, chainId)
 	// index the 'nested chain' checkpoint

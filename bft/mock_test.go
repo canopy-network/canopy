@@ -1,12 +1,13 @@
 package bft
 
 import (
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 // testConsensus is a mocked structure used by the testing suite
@@ -27,12 +28,13 @@ func newTestConsensus(t *testing.T, phase Phase, numValidators int) (tc *testCon
 	tc.valSet, tc.valKeys, proposers = newTestValSet(t, numValidators)
 	// create the test controller
 	tc.cont = &testController{
-		Mutex:              sync.Mutex{},
-		proposers:          &proposers,
-		valSet:             map[uint64]ValSet{lib.CanopyChainId: tc.valSet},
-		gossipCertChan:     make(chan *lib.QuorumCertificate),
-		sendToProposerChan: make(chan lib.Signable),
-		sendToReplicasChan: make(chan lib.Signable),
+		Mutex:               sync.Mutex{},
+		proposers:           &proposers,
+		valSet:              map[uint64]ValSet{lib.CanopyChainId: tc.valSet},
+		gossipCertChan:      make(chan *lib.QuorumCertificate),
+		gossipConsensusChan: make(chan *Message),
+		sendToProposerChan:  make(chan lib.Signable),
+		sendToReplicasChan:  make(chan lib.Signable),
 	}
 	// Disable VDF service for testing
 	config := lib.DefaultConfig()
@@ -490,11 +492,12 @@ var _ Controller = &testController{}
 
 type testController struct {
 	sync.Mutex
-	proposers          *lib.Proposers
-	valSet             map[uint64]ValSet // height -> id -> valset
-	gossipCertChan     chan *lib.QuorumCertificate
-	sendToProposerChan chan lib.Signable
-	sendToReplicasChan chan lib.Signable
+	proposers           *lib.Proposers
+	valSet              map[uint64]ValSet // height -> id -> valset
+	gossipCertChan      chan *lib.QuorumCertificate
+	gossipConsensusChan chan *Message
+	sendToProposerChan  chan lib.Signable
+	sendToReplicasChan  chan lib.Signable
 }
 
 func (t *testController) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
@@ -571,9 +574,16 @@ func (t *testController) RootChainHeight() uint64 { return 0 }
 func (t *testController) LoadLastProposers(_ uint64) (*lib.Proposers, lib.ErrorI) {
 	return t.proposers, nil
 }
+func (t *testController) LoadMaxBlockSize() int {
+	return lib.GlobalMaxBlockSize
+}
 func (t *testController) ResetFSM() {}
 func (t *testController) GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64) {
 	t.gossipCertChan <- certificate
+}
+
+func (t *testController) GossipConsensus(message *Message, senderPubExclude []byte) {
+	t.gossipConsensusChan <- message
 }
 
 func (t *testController) NewTestBlock() []byte {

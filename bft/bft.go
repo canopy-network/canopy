@@ -42,11 +42,12 @@ type BFT struct {
 
 	PhaseTimer *time.Timer // ensures the node waits for a configured duration (Round x phaseTimeout) to allow for full voter participation
 
-	PublicKey  []byte             // self consensus public key
-	PrivateKey crypto.PrivateKeyI // self consensus private key
-	Config     lib.Config         // self configuration
-	Metrics    *lib.Metrics       // telemetry
-	log        lib.LoggerI        // logging
+	PublicKey    []byte             // self consensus public key
+	PrivateKey   crypto.PrivateKeyI // self consensus private key
+	Config       lib.Config         // self configuration
+	Metrics      *lib.Metrics       // telemetry
+	BFTStartTime time.Time          // start time of BFT for this height
+	log          lib.LoggerI        // logging
 }
 
 // New() creates a new instance of HotstuffBFT for a specific Committee
@@ -115,7 +116,7 @@ func (b *BFT) Start() {
 				b.Controller.Lock()
 				defer b.Controller.Unlock()
 				// Update BFT metrics
-				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.Round, b.Phase, startTime)
+				defer b.Metrics.UpdateBFTMetrics(b.Height, b.RootHeight, b.LoadRootChainId(b.Height), b.Round, b.Phase, startTime)
 				// handle the phase
 				b.HandlePhase()
 			}()
@@ -140,6 +141,7 @@ func (b *BFT) Start() {
 					b.log.Info("Reset BFT (NEW_HEIGHT)")
 					b.NewHeight(false)
 					b.SetWaitTimers(time.Duration(b.Config.NewHeightTimeoutMs)*time.Millisecond, processTime)
+					b.BFTStartTime = time.Now()
 				} else {
 					b.log.Info("Reset BFT (NEW_COMMITTEE)")
 					//if b.LoadIsOwnRoot() {
@@ -194,7 +196,6 @@ func (b *BFT) HandlePhase() {
 	}
 	// after each phase, set the timers for the next phase
 	b.SetTimerForNextPhase(time.Since(startTime))
-	return
 }
 
 // StartElectionPhase() begins the ElectionPhase after the CommitProcess (normal) or Pacemaker (previous Round failure) timeouts
@@ -288,16 +289,12 @@ func (b *BFT) StartProposePhase() {
 	b.log.Info(b.View.ToString())
 	vote, as, err := b.GetMajorityVote()
 	if err != nil {
-		// this errors can be ignored bc it's expected in the consensus process
-		// b.log.Debugf("get majority vote in propose phase failed with %s", err.Error())
 		return
 	}
 	b.log.Info("Self is the proposer")
 	// select the highest VDF from the cache
 	highVDF, err := b.selectHighestVDF()
 	if err != nil {
-		// this errors can be ignored bc it's expected in the consensus process
-		// b.log.Debugf("select highest VDF in propose phase failed with %s", err.Error())
 		return
 	}
 	b.HighVDF = highVDF
@@ -946,6 +943,8 @@ type (
 		CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI)
 		// GossipBlock() is a P2P call to gossip a completed Quorum Certificate with a Proposal
 		GossipBlock(certificate *lib.QuorumCertificate, sender []byte, timestamp uint64)
+		// GossipConsensus() is a P2P call to gossip a completed Quorum Certificate with a Proposal
+		GossipConsensus(message *Message, senderPubExclude []byte)
 		// SendToSelf() is a P2P call to directly send  a completed Quorum Certificate to self
 		SelfSendBlock(qc *lib.QuorumCertificate, timestamp uint64)
 		// SendToReplicas() is a P2P call to directly send a Consensus message to all Replicas
@@ -975,6 +974,8 @@ type (
 		LoadMinimumEvidenceHeight(rootChainId, rootHeight uint64) (*uint64, lib.ErrorI)
 		// IsValidDoubleSigner() checks to see if the double signer is valid for this specific height
 		IsValidDoubleSigner(rootChainId, rootHeight uint64, address []byte) bool
+		// LoadMaxBlockSize() loads the chain enforced maximum block size for valid blocks
+		LoadMaxBlockSize() int
 	}
 )
 

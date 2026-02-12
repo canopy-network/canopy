@@ -22,10 +22,27 @@ func (s *StateMachine) NewFromGenesisFile() (err lib.ErrorI) {
 	if err = s.NewStateFromGenesis(genesis); err != nil {
 		return
 	}
+	// if plugin isn't nil
+	if s.Plugin != nil {
+		// execute plugin genesis
+		resp, e := s.Plugin.Genesis(s, &lib.PluginGenesisRequest{
+			GenesisJson: lib.MustMarshalJSON(genesis),
+		})
+		// handle error
+		if e != nil {
+			return e
+		}
+		// handle plugin error
+		if err = resp.Error.E(); err != nil {
+			return err
+		}
+	}
 	// commit the genesis state to persistence (database)
 	if _, err = s.store.(lib.StoreI).Commit(); err != nil {
 		return
 	}
+	// log the application
+	s.log.Infof("Applied the genesis file with %d validators", len(genesis.Validators))
 	// update the height from 0 to 1
 	s.height += 1
 	// exit

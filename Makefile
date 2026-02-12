@@ -18,7 +18,9 @@ help:
 
 # Targets, this is a list of all available commands which can be executed using the make command.
 .PHONY: build/canopy build/canopy-full build/wallet build/explorer build/explorer-new test/all dev/deps docker/up \
-	docker/down docker/build docker/up-fast docker/down docker/logs
+	docker/down docker/build docker/up-fast docker/down docker/logs \
+	build/plugin build/kotlin-plugin build/go-plugin build/all-plugins docker/plugin \
+	docker/run docker/run-kotlin docker/run-go docker/run-typescript docker/run-python docker/run-csharp
 
 # ==================================================================================== #
 # BUILDING
@@ -95,3 +97,85 @@ docker/up-fast:
 ## docker/logs: show the latest logs of the compose containers
 docker/logs:
 	$(DOCKER_COMPOSE_CMD) -f $(DOCKER_DIR) logs -f --tail=1000
+
+# ==================================================================================== #
+# PLUGINS
+# ==================================================================================== #
+
+# Plugin selection: make build/plugin PLUGIN=kotlin
+PLUGIN ?= kotlin
+
+## build/plugin: build a specific plugin (PLUGIN=kotlin|go|typescript|python|csharp|all)
+build/plugin:
+ifeq ($(PLUGIN),kotlin)
+	cd plugin/kotlin && ./gradlew fatJar --no-daemon
+else ifeq ($(PLUGIN),go)
+	$(MAKE) -C plugin/go build
+else ifeq ($(PLUGIN),typescript)
+	cd plugin/typescript && npm ci && npm run build
+else ifeq ($(PLUGIN),python)
+	cd plugin/python && pip install -e ".[dev]" 2>/dev/null || true
+else ifeq ($(PLUGIN),csharp)
+	cd plugin/csharp && dotnet publish -c Release -o out
+else ifeq ($(PLUGIN),all)
+	$(MAKE) build/plugin PLUGIN=go
+	$(MAKE) build/plugin PLUGIN=kotlin
+	$(MAKE) build/plugin PLUGIN=typescript
+	$(MAKE) build/plugin PLUGIN=python
+	$(MAKE) build/plugin PLUGIN=csharp
+else
+	@echo "Unknown plugin: $(PLUGIN). Options: kotlin, go, typescript, python, csharp, all"
+	@exit 1
+endif
+
+## build/kotlin-plugin: build the Kotlin plugin
+build/kotlin-plugin:
+	$(MAKE) build/plugin PLUGIN=kotlin
+
+## build/go-plugin: build the Go plugin
+build/go-plugin:
+	$(MAKE) build/plugin PLUGIN=go
+
+## build/typescript-plugin: build the TypeScript plugin
+build/typescript-plugin:
+	$(MAKE) build/plugin PLUGIN=typescript
+
+## build/python-plugin: build the Python plugin
+build/python-plugin:
+	$(MAKE) build/plugin PLUGIN=python
+
+## build/csharp-plugin: build the C# plugin
+build/csharp-plugin:
+	$(MAKE) build/plugin PLUGIN=csharp
+
+## build/all-plugins: build all plugins
+build/all-plugins:
+	$(MAKE) build/plugin PLUGIN=all
+
+## docker/plugin: build Docker image with specific plugin (PLUGIN=kotlin|go|typescript|python|csharp)
+docker/plugin:
+	docker build -f plugin/$(PLUGIN)/Dockerfile -t canopy-$(PLUGIN) .
+
+## docker/run: run Docker container with specific plugin (PLUGIN=kotlin|go|typescript|python|csharp)
+docker/run:
+	docker run -v ~/.canopy:/root/.canopy canopy-$(PLUGIN)
+
+## docker/run-kotlin: run Kotlin plugin container
+docker/run-kotlin:
+	docker run -v ~/.canopy:/root/.canopy canopy-kotlin
+
+## docker/run-go: run Go plugin container
+docker/run-go:
+	docker run -v ~/.canopy:/root/.canopy canopy-go
+
+## docker/run-typescript: run TypeScript plugin container
+docker/run-typescript:
+	docker run -v ~/.canopy:/root/.canopy canopy-typescript
+
+## docker/run-python: run Python plugin container
+docker/run-python:
+	docker run -v ~/.canopy:/root/.canopy canopy-python
+
+## docker/run-csharp: run C# plugin container
+docker/run-csharp:
+	docker run -v ~/.canopy:/root/.canopy canopy-csharp

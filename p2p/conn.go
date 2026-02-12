@@ -25,8 +25,14 @@ const (
 	maxMessageSize         = uint32(256 * units.MB)              // the maximum total size of a message once all the packets are added up
 	dataFlowRatePerS       = maxMessageSize                      // the maximum number of bytes that may be sent or received per second per MultiConn
 	maxChanSize            = 1                                   // maximum number of items in a channel before blocking
-	maxInboxQueueSize      = 500_000                             // maximum number of items in inbox queue before blocking
-	maxStreamSendQueueSize = 100_000                             // maximum number of items in a stream send queue before blocking
+	maxInboxQueueSize      = 1000                                // maximum number of items in inbox queue before blocking
+	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
+	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
+	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
+	heartbeatTimeout       = 2 * time.Second                     // how long to wait for a pong before dropping the peer
+	heartbeatTopic         = lib.Topic_HEARTBEAT                 // dedicated heartbeat stream
+	heartbeatPing          = "ping"
+	heartbeatPong          = "pong"
 
 	// "Peer Reputation Points" are actively maintained for each peer the node is connected to
 	// These points allow a node to track peer behavior over its lifetime, allowing it to disconnect from faulty peers
@@ -66,6 +72,7 @@ type MultiConn struct {
 	close         sync.Once                           // flag to identify if MultiConn is closed
 	log           lib.LoggerI                         // logging
 	hasError      atomic.Bool                         // flag to identify if MultiConn has encountered an error
+	lastPong      atomic.Int64                        // last time we saw a pong (unix nano)
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -76,6 +83,14 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		}
 		if err := tcpConn.SetReadBuffer(32 * 1024 * 1024); err != nil {
 			p.log.Warnf("Failed to set write buffer: %v", err)
+		}
+		if err := tcpConn.SetNoDelay(true); err != nil {
+			p.log.Warnf("Failed to disable Nagle: %v", err)
+		}
+		if err := tcpConn.SetKeepAlive(true); err != nil {
+			p.log.Warnf("Failed to enable TCP keepalive: %v", err)
+		} else if err := tcpConn.SetKeepAlivePeriod(keepAlivePeriod); err != nil {
+			p.log.Warnf("Failed to set TCP keepalive period: %v", err)
 		}
 	}
 	// establish an encrypted connection using the handshake
@@ -96,6 +111,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		close:         sync.Once{},
 		log:           p.log,
 	}
+	c.lastPong.Store(time.Now().UnixNano())
 	_ = c.conn.SetReadDeadline(time.Time{})
 	_ = c.conn.SetWriteDeadline(time.Time{})
 	// start the connection service
@@ -107,10 +123,12 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 func (c *MultiConn) Start() {
 	go c.startSendService()
 	go c.startReceiveService()
+	go c.startHeartbeat()
 }
 
 // Stop() sends exit signals for send and receive loops and closes the connection
 func (c *MultiConn) Stop() {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	c.close.Do(func() {
 		c.p2p.log.Debugf("Stopping peer %s", lib.BytesToString(c.Address.PublicKey))
 		c.quitReceiving <- struct{}{}
@@ -127,6 +145,8 @@ func (c *MultiConn) Stop() {
 
 // Send() queues the sending of a message to a specific Stream
 func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
+	startTime := time.Now()
 	stream, ok := c.streams[topic]
 	if !ok {
 		c.log.Errorf("Stream %s does not exist", topic)
@@ -141,7 +161,11 @@ func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
 			Bytes:    chunk,
 		})
 	}
-	ok = stream.queueSends(packets)
+	if c.p2p.metrics != nil {
+		c.p2p.metrics.MessageSize.Observe(float64(len(bz)))
+		c.p2p.metrics.PacketsPerMessage.Observe(float64(len(packets)))
+	}
+	ok = stream.queueSends(packets, startTime, c.p2p.metrics)
 	if !ok {
 		c.log.Errorf("Packet(ID:%s) packet failed in queue for: %s", lib.Topic_name[int32(topic)], lib.BytesToTruncatedString(c.Address.PublicKey))
 	}
@@ -158,23 +182,25 @@ func (c *MultiConn) startSendService() {
 		}
 	}()
 	m := limiter.New(0, 0)
-	var packet *Packet
+	var pwt *PacketWithTiming
 	defer func() { m.Done() }()
 	for {
 		// select statement ensures the sequential coordination of the concurrent processes
 		select {
-		case packet = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_BLOCK].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_BLOCK_REQUEST].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_TX].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_PEERS_RESPONSE].sendQueue:
-			c.sendPacket(packet, m)
-		case packet = <-c.streams[lib.Topic_PEERS_REQUEST].sendQueue:
-			c.sendPacket(packet, m)
+		case pwt = <-c.streams[heartbeatTopic].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_BLOCK].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_BLOCK_REQUEST].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_TX].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_PEERS_RESPONSE].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+		case pwt = <-c.streams[lib.Topic_PEERS_REQUEST].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
 		case <-c.quitSending: // fires when Stop() is called
 			return
 		}
@@ -204,6 +230,10 @@ func (c *MultiConn) startReceiveService() {
 			// handle different message types
 			switch x := msg.(type) {
 			case *Packet: // receive packet is a partial or full 'Message' with a Stream Topic designation and an EOF signal
+				if x.StreamId == heartbeatTopic {
+					c.handleHeartbeatPacket(x)
+					continue
+				}
 				// load the proper stream
 				stream, found := c.streams[x.StreamId]
 				if !found {
@@ -217,7 +247,7 @@ func (c *MultiConn) startReceiveService() {
 					return
 				}
 				// handle the packet within the stream
-				if slash, er := stream.handlePacket(info, x); er != nil {
+				if slash, er := stream.handlePacket(info, x, c.p2p.metrics); er != nil {
 					c.log.Warnf(er.Error())
 					c.Error(er, slash)
 					return
@@ -232,6 +262,61 @@ func (c *MultiConn) startReceiveService() {
 	}
 }
 
+// startHeartbeat periodically sends ping packets and drops the peer if no pong is seen in time.
+func (c *MultiConn) startHeartbeat() {
+	ticker := time.NewTicker(heartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if time.Since(time.Unix(0, c.lastPong.Load())) > heartbeatTimeout {
+				c.log.Warnf("Heartbeat timeout: closing peer %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+				c.Error(ErrPongTimeout())
+				return
+			}
+			c.sendHeartbeat()
+		case <-c.quitSending:
+			return
+		case <-c.quitReceiving:
+			return
+		}
+	}
+}
+
+func (c *MultiConn) sendHeartbeat() {
+	stream, ok := c.streams[heartbeatTopic]
+	if !ok {
+		return
+	}
+	sendStart := time.Now()
+	_ = stream.queueSend(&Packet{
+		StreamId: heartbeatTopic,
+		Eof:      true,
+		Bytes:    []byte(heartbeatPing),
+	}, sendStart, c.p2p.metrics)
+}
+
+func (c *MultiConn) handleHeartbeatPacket(packet *Packet) {
+	switch string(packet.Bytes) {
+	case heartbeatPing:
+		// respond
+		stream, ok := c.streams[heartbeatTopic]
+		if !ok {
+			return
+		}
+		sendStart := time.Now()
+		_ = stream.queueSend(&Packet{
+			StreamId: heartbeatTopic,
+			Eof:      true,
+			Bytes:    []byte(heartbeatPong),
+		}, sendStart, c.p2p.metrics)
+	case heartbeatPong:
+		c.lastPong.Store(time.Now().UnixNano())
+	default:
+		c.log.Warnf("Unknown heartbeat payload from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+	}
+}
+
 // Error() when an error occurs on the MultiConn execute a callback. Optionally pass a reputation delta to slash the peer
 func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 	if len(reputationDelta) == 1 {
@@ -239,16 +324,12 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 	}
 	// call onError() for the peer
 	c.error.Do(func() {
-		// prevent race between adding to peer set and erroring
-		c.p2p.Lock()
-		defer c.p2p.Unlock()
-		// set the connection as failed - this marks the underlying net.Conn as invalid
-		// since it's about to be closed. There's no reliable way to check whether a connection
-		// is closed without attempting read/write operations, which can lead to race conditions,
-		// data corruption, and message loss.
+		// mark the connection as failed under lock, but avoid holding the lock during teardown
+		unlock := lockWithTrace("p2p", &c.p2p.mux, c.p2p.log)
 		c.hasError.Store(true)
-		// run the callback
+		// run the callback after releasing the lock to prevent blocking other readers
 		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
+		unlock()
 		// stop the multi-conn
 		c.Stop()
 	})
@@ -257,21 +338,45 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 // waitForAndHandleWireBytes() a rate limited handler of inbound bytes from the wire.
 // Blocks until bytes are received converts bytes into a proto.Message using an Envelope
 func (c *MultiConn) waitForAndHandleWireBytes(m *limiter.Monitor) (proto.Message, lib.ErrorI) {
+	receiveStart := time.Now()
 	// initialize the wrapper object
 	msg := new(Envelope)
 	// restrict the instantaneous data flow to rate bytes per second
 	// Limit() request maxPacketSize bytes from the limiter and the limiter
 	// will block the execution until at or below the desired rate of flow
-	m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
+	//m.Limit(int(maxPacketSize), int64(dataFlowRatePerS), true)
 	// read the proto message from the wire
-	lenM, err := receiveProtoMsg(c.conn, msg)
+	_, err := receiveProtoMsg(c.conn, msg)
 	if err != nil {
 		return nil, err
 	}
+	if c.p2p.metrics != nil {
+		c.p2p.metrics.ReceiveWireTime.Observe(time.Since(receiveStart).Seconds())
+	}
 	// update the limiter
-	m.Update(lenM)
+	//m.Update(lenM)
 	// unmarshal the payload from proto.any
 	return lib.FromAny(msg.Payload)
+}
+
+// sendPacketWithTiming() a rate limited writer with metrics tracking
+func (c *MultiConn) sendPacketWithTiming(pwt *PacketWithTiming, m *limiter.Monitor) {
+	if pwt == nil || pwt.packet == nil {
+		return
+	}
+	dequeueTime := time.Now()
+	if c.p2p.metrics != nil {
+		queueDuration := dequeueTime.Sub(pwt.queueStart).Seconds()
+		c.p2p.metrics.SendQueueTime.Observe(queueDuration)
+	}
+	wireStart := time.Now()
+	c.sendWireBytes(pwt.packet, m)
+	if c.p2p.metrics != nil {
+		wireDuration := time.Since(wireStart).Seconds()
+		totalDuration := time.Since(pwt.sendStart).Seconds()
+		c.p2p.metrics.SendWireTime.Observe(wireDuration)
+		c.p2p.metrics.SendTotalTime.Observe(totalDuration)
+	}
 }
 
 // sendPacket() a rate limited writer of outbound bytes to the wire
@@ -287,7 +392,6 @@ func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 		//	packet.Eof,
 		//	crypto.ShortHashString(packet.Bytes),
 		//)
-		//defer c.log.Debugf("Done sending: %s", crypto.ShortHashString(packet.Bytes))
 	}
 	// send packet as message over the wire
 	c.sendWireBytes(packet, m)
@@ -298,6 +402,7 @@ func (c *MultiConn) sendPacket(packet *Packet, m *limiter.Monitor) {
 // sends them across the wire without violating the data flow rate limits
 // message may be a Packet, a Ping or a Pong
 func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
+	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	// convert the proto.Message into a proto.Any
 	a, err := lib.NewAny(message)
 	if err != nil {
@@ -317,11 +422,18 @@ func (c *MultiConn) sendWireBytes(message proto.Message, m *limiter.Monitor) {
 	m.Update(lenM)
 }
 
+// PacketWithTiming wraps a Packet with timing information for metrics
+type PacketWithTiming struct {
+	packet     *Packet
+	sendStart  time.Time // when Send() was called
+	queueStart time.Time // when packet was queued
+}
+
 // Stream: an independent, bidirectional communication channel that is scoped to a single topic.
 // In a multiplexed connection there is typically more than one stream per connection
 type Stream struct {
 	topic        lib.Topic                    // the subject and priority of the stream
-	sendQueue    chan *Packet                 // a queue of unsent messages
+	sendQueue    chan *PacketWithTiming       // a queue of unsent messages with timing
 	msgAssembler []byte                       // collects and adds incoming packets until the entire message is received (EOF signal)
 	inbox        chan *lib.MessageAndMetadata // the channel where fully received messages are held for other parts of the app to read
 	mu           sync.Mutex                   // mutex to prevent race conditions when sending packets (all packets of the same message should be one right after the other)
@@ -330,11 +442,12 @@ type Stream struct {
 }
 
 // queueSends() schedules the packets to be sent ensuring coordination with the mutex
-func (s *Stream) queueSends(packets []*Packet) bool {
+func (s *Stream) queueSends(packets []*Packet, sendStart time.Time, metrics *lib.Metrics) bool {
+	defer lib.TimeTrack(s.logger, time.Now(), time.Second)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, packet := range packets {
-		ok := s.queueSend(packet)
+		ok := s.queueSend(packet, sendStart, metrics)
 		if !ok {
 			return false
 		}
@@ -343,20 +456,31 @@ func (s *Stream) queueSends(packets []*Packet) bool {
 }
 
 // queueSend() schedules the packet to be sent
-func (s *Stream) queueSend(p *Packet) bool {
+func (s *Stream) queueSend(p *Packet, sendStart time.Time, metrics *lib.Metrics) bool {
 	if s.closed {
 		return false
 	}
+	queueStart := time.Now()
+	pwt := &PacketWithTiming{
+		packet:     p,
+		sendStart:  sendStart,
+		queueStart: queueStart,
+	}
 	select {
-	case s.sendQueue <- p: // enqueue to the back of the line
+	case s.sendQueue <- pwt: // enqueue to the back of the line
 		return true
 	case <-time.After(queueSendTimeout): // may timeout if queue remains full
+		if metrics != nil {
+			metrics.SendQueueTimeout.Inc()
+			metrics.SendQueueFull.WithLabelValues(lib.Topic_name[int32(p.StreamId)]).Inc()
+		}
 		return false
 	}
 }
 
 // handlePacket() merge the new packet with the previously received ones until the entire message is complete (EOF signal)
-func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, lib.ErrorI) {
+func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet, metrics *lib.Metrics) (int32, lib.ErrorI) {
+	assemblyStart := time.Now()
 	msgAssemblerLen, packetLen := len(s.msgAssembler), len(packet.Bytes)
 	//s.logger.Debugf("Received Packet from %s (ID:%s, L:%d, E:%t), hash: %s",
 	//	lib.BytesToTruncatedString(peerInfo.Address.PublicKey),
@@ -384,10 +508,16 @@ func (s *Stream) handlePacket(peerInfo *lib.PeerInfo, packet *Packet) (int32, li
 			Message: msg,
 			Sender:  peerInfo,
 		}
+		if metrics != nil {
+			metrics.ReceiveAssemblyTime.Observe(time.Since(assemblyStart).Seconds())
+		}
 		//s.logger.Debugf("Inbox %s queue: %d", lib.Topic_name[int32(packet.StreamId)], len(s.inbox))
 		// add to inbox for other parts of the app to read
 		select {
 		case s.inbox <- m:
+			if len(s.inbox) > maxInboxQueueSize/4 {
+				s.logger.Errorf("OVERSIZE INBOX: %d", len(s.inbox))
+			}
 		default:
 			s.logger.Errorf("CRITICAL: Inbox %s queue full in receive service", lib.Topic_name[int32(packet.StreamId)])
 			s.logger.Error("Dropping all messages")
@@ -441,6 +571,7 @@ func receiveProtoMsg(conn net.Conn, ptr proto.Message, timeout ...time.Duration)
 
 // sendLengthPrefixed() sends a message that is prefix by length through a tcp connection
 func sendLengthPrefixed(conn net.Conn, bz []byte, timeout ...time.Duration) lib.ErrorI {
+	defer lib.TimeTrack(l, time.Now(), time.Second)
 	// set the write timeout
 	writeTimeout := WriteTimeout
 	if len(timeout) == 1 {
@@ -461,6 +592,8 @@ func sendLengthPrefixed(conn net.Conn, bz []byte, timeout ...time.Duration) lib.
 	_ = conn.SetWriteDeadline(time.Time{})
 	return nil
 }
+
+var l = lib.NewDefaultLogger()
 
 // receiveLengthPrefixed() reads a length prefixed message from a tcp connection
 func receiveLengthPrefixed(conn net.Conn, timeout ...time.Duration) ([]byte, lib.ErrorI) {

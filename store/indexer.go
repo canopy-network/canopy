@@ -15,15 +15,19 @@ import (
 var _ lib.RWIndexerI = &Indexer{}
 
 var (
-	txHashPrefix       = []byte{1} // store key prefix for transaction by hash
-	txHeightPrefix     = []byte{2} // store key prefix for transactions by height
-	txSenderPrefix     = []byte{3} // store key prefix for transactions from sender
-	txRecipientPrefix  = []byte{4} // store key prefix for transaction by recipient
-	blockHashPrefix    = []byte{5} // store key prefix for block by hash
-	blockHeightPrefix  = []byte{6} // store key prefix for block by height
-	qcHeightPrefix     = []byte{7} // store key prefix for quorum certificate by height
-	doubleSignerPrefix = []byte{8} // store key prefix for double signers by height
-	checkPointPrefix   = []byte{9} // store key prefix for checkpoints for committee chains
+	txHashPrefix       = []byte{1}  // store key prefix for transaction by hash
+	txHeightPrefix     = []byte{2}  // store key prefix for transactions by height
+	txSenderPrefix     = []byte{3}  // store key prefix for transactions from sender
+	txRecipientPrefix  = []byte{4}  // store key prefix for transaction by recipient
+	blockHashPrefix    = []byte{5}  // store key prefix for block by hash
+	blockHeightPrefix  = []byte{6}  // store key prefix for block by height
+	qcHeightPrefix     = []byte{7}  // store key prefix for quorum certificate by height
+	doubleSignerPrefix = []byte{8}  // store key prefix for double signers by height
+	checkPointPrefix   = []byte{9}  // store key prefix for checkpoints for committee chains
+	eventAddressPrefix = []byte{10} // store key prefix for events by address
+	eventHeightPrefix  = []byte{11} // store key prefix for events by block height
+	eventChainIdPrefix = []byte{12} // store key prefix for events by chainId
+	eventHashPrefix    = []byte{13} // store key prefix for events by event hash (concept just used for indexing)
 	// create indexer cache
 	blockCache, _ = lru.New[uint64, *lib.BlockResult](4)
 	//qcCache, _ = lru.New[uint64, *lib.QuorumCertificate](4) TODO add back
@@ -67,6 +71,13 @@ func (t *Indexer) IndexBlock(b *lib.BlockResult) lib.ErrorI {
 		tx := transaction // capture range variable
 		eg.Go(func() error {
 			return t.IndexTx(tx)
+		})
+	}
+	// index events in parallel
+	for i, event := range b.Events {
+		e, idx := event, i // capture range variable
+		eg.Go(func() error {
+			return t.IndexEvent(e, idx)
 		})
 	}
 	// wait for all goroutines to finish
@@ -240,7 +251,7 @@ func (t *Indexer) IndexTx(result *lib.TxResult) lib.ErrorI {
 		return err
 	}
 	// store the hash key by height.index
-	heightAndIndexKey := t.heightAndIndexKey(result.GetHeight(), result.GetIndex())
+	heightAndIndexKey := t.txHeightAndIndexKey(result.GetHeight(), result.GetIndex())
 	if err = t.indexTxByHeightAndIndex(heightAndIndexKey, hashKey); err != nil {
 		return err
 	}
@@ -331,6 +342,39 @@ func (t *Indexer) GetDoubleSigners() (ds []*lib.DoubleSigner, err lib.ErrorI) {
 	return
 }
 
+// GetDoubleSignersAsOf() gets double signers in the indexer up to and including the provided height
+// IMPORTANT NOTE: this returns double signers in the form of <address> -> <heights> NOT <public_key> -> <heights>
+func (t *Indexer) GetDoubleSignersAsOf(height uint64) (ds []*lib.DoubleSigner, err lib.ErrorI) {
+	it, err := t.db.Iterator(lib.JoinLenPrefix(doubleSignerPrefix))
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	results := make(map[string][]uint64)
+	for ; it.Valid(); it.Next() {
+		segments := lib.DecodeLengthPrefixed(it.Key())
+		if len(segments) < 3 {
+			return nil, ErrInvalidKey()
+		}
+		address, dsHeight := segments[1], t.decodeBigEndian(segments[2])
+		if dsHeight > height {
+			continue
+		}
+		results[lib.BytesToString(address)] = append(results[lib.BytesToString(address)], dsHeight)
+	}
+	for address, heights := range results {
+		addr, e := lib.StringToBytes(address)
+		if e != nil {
+			return nil, e
+		}
+		ds = append(ds, &lib.DoubleSigner{
+			Id:      addr,
+			Heights: heights,
+		})
+	}
+	return
+}
+
 // IsValidDoubleSigner() checks if the double signer byte is set for a height
 func (t *Indexer) IsValidDoubleSigner(address []byte, height uint64) (bool, lib.ErrorI) {
 	bz, err := t.db.Get(t.doubleSignerHeightKey(address, height))
@@ -338,6 +382,139 @@ func (t *Indexer) IsValidDoubleSigner(address []byte, height uint64) (bool, lib.
 		return false, err
 	}
 	return !bytes.Equal(bz, doubleSignerPrefix), nil
+}
+
+// EVENTS CODE BELOW
+
+// IndexEvent() indexes the event by hash, height, address and chainId
+func (t *Indexer) IndexEvent(e *lib.Event, index int) lib.ErrorI {
+	// index the event by hash
+	hashKey, err := t.indexEventByHash(e)
+	// index the event by height and index
+	heightAndIndexKey := t.eventHeightAndIndexKey(e.Height, uint64(index))
+	// store the hash key by height.index
+	if err = t.indexEventByHeightAndIndex(heightAndIndexKey, hashKey); err != nil {
+		return err
+	}
+	// index by chain id
+	if e.ChainId != 0 {
+		// store the hash key by chainId
+		if err = t.indexEventByChainId(e.ChainId, heightAndIndexKey, hashKey); err != nil {
+			return err
+		}
+	}
+	// index by accounts indicates if the indexer should index by address
+	if t.config.IndexByAccount && e.Address != nil {
+		// store the hash key by address
+		if err = t.indexEventByAddress(e.Address, heightAndIndexKey, hashKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetEventsByAddress() returns a slice of events ordered by height and index for an address
+func (t *Indexer) GetEventsByAddress(address crypto.AddressI, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventAddressKey(address.Bytes(), nil), newestToOldest, p)
+}
+
+// GetEventsByBlockHeight() returns a slice of events ordered by height and index for a block height
+func (t *Indexer) GetEventsByBlockHeight(blockHeight uint64, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventBlockHeightKey(blockHeight), newestToOldest, p)
+}
+
+// GetEventsByChainId() returns a slice of events ordered by chainId for an event type
+func (t *Indexer) GetEventsByChainId(chainId uint64, newestToOldest bool, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	return t.getEvents(t.eventChainIdKey(chainId, nil), newestToOldest, p)
+}
+
+// GetEventsNonPaginated() returns a slice of events ordered by index for a height
+func (t *Indexer) GetEventsNonPaginated(height uint64, newestToOldest bool) ([]*lib.Event, lib.ErrorI) {
+	return t.getEventsNonPaginated(t.eventHeightKey(height), newestToOldest)
+}
+
+// getEvents() returns a page of events in sorted order by block height
+func (t *Indexer) getEvents(prefix []byte, newestToOldest bool, p lib.PageParams) (page *lib.Page, err lib.ErrorI) {
+	events, page := make(lib.Events, 0), lib.NewPage(p, "events-page")
+	err = page.Load(prefix, newestToOldest, &events, t.db, func(_, b []byte) (e lib.ErrorI) {
+		tx, e := t.getEvent(b)
+		if e == nil {
+			events = append(events, tx)
+		}
+		return
+	})
+	return
+}
+
+// getEventsNonPaginated() gets the events in sorted order by block.index in a slice format
+func (t *Indexer) getEventsNonPaginated(prefix []byte, newestToOldest bool) (results []*lib.Event, err lib.ErrorI) {
+	var it lib.IteratorI
+	switch newestToOldest {
+	case true:
+		it, err = t.db.RevIterator(prefix)
+	case false:
+		it, err = t.db.Iterator(prefix)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		tx, e := t.getEvent(it.Value())
+		if e != nil {
+			return nil, e
+		}
+		results = append(results, tx)
+	}
+	return
+}
+
+// getEvent() gets the event bytes from the DB and converts it into Event object
+func (t *Indexer) getEvent(hashKey []byte) (*lib.Event, lib.ErrorI) {
+	bz, err := t.db.Get(hashKey)
+	if err != nil {
+		return nil, err
+	}
+	ptr := new(lib.Event)
+	if err = lib.Unmarshal(bz, ptr); err != nil {
+		return nil, err
+	}
+	return ptr, nil
+}
+
+// indexEventByHash() indexes an event by its hash
+func (t *Indexer) indexEventByHash(e *lib.Event) (hashKey []byte, err lib.ErrorI) {
+	bz, err := lib.Marshal(e)
+	if err != nil {
+		return nil, err
+	}
+	k := t.key(eventHashPrefix, crypto.Hash(bz), nil)
+	return k, t.db.Set(k, bz)
+}
+
+func (t *Indexer) indexEventByAddress(address, heightAndIndexKey []byte, bz []byte) lib.ErrorI {
+	return t.db.Set(t.eventAddressKey(address, heightAndIndexKey), bz)
+}
+
+func (t *Indexer) indexEventByBlockHeight(blockHeight uint64, bz []byte) (err lib.ErrorI) {
+	k := t.eventBlockHeightKey(blockHeight)
+	return t.db.Set(k, bz)
+}
+
+func (t *Indexer) indexEventByChainId(chainId uint64, blockHeightAndIdxkey, bz []byte) (err lib.ErrorI) {
+	return t.db.Set(t.eventChainIdKey(chainId, blockHeightAndIdxkey), bz)
+}
+
+func (t *Indexer) eventChainIdKey(chainId uint64, heightAndIndexKey []byte) []byte {
+	return t.key(eventChainIdPrefix, t.encodeBigEndian(chainId), heightAndIndexKey)
+}
+
+func (t *Indexer) eventBlockHeightKey(blockHeight uint64) []byte {
+	return t.key(eventHeightPrefix, t.encodeBigEndian(blockHeight), nil)
+}
+
+func (t *Indexer) eventAddressKey(address, heightAndIndexKey []byte) []byte {
+	return t.key(eventAddressPrefix, address, heightAndIndexKey)
 }
 
 // CHECKPOINT CODE BELOW
@@ -387,6 +564,27 @@ func (t *Indexer) GetAllCheckpoints(chainId uint64) (checkpoints []*lib.Checkpoi
 		checkpoints = append(checkpoints, checkPoint)
 	}
 	return
+}
+
+// DeleteCheckpointsForChain() removes all checkpoint records for a committee chain
+func (t *Indexer) DeleteCheckpointsForChain(chainId uint64) (err lib.ErrorI) {
+	it, err := t.db.Iterator(t.checkpointsCommitteeKey(chainId))
+	if err != nil {
+		return err
+	}
+	defer it.Close()
+	var keys [][]byte
+	for ; it.Valid(); it.Next() {
+		key := make([]byte, len(it.Key()))
+		copy(key, it.Key())
+		keys = append(keys, key)
+	}
+	for _, key := range keys {
+		if err = t.db.Delete(key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *Indexer) checkpointFromKeyValue(key, value []byte) (*lib.Checkpoint, lib.ErrorI) {
@@ -443,16 +641,23 @@ func (t *Indexer) getBlock(hashKey []byte, transactions bool) (*lib.BlockResult,
 	if err != nil {
 		return nil, err
 	}
-	result := &lib.BlockResult{
-		BlockHeader:  ptr,
-		Transactions: txs,
-	}
-	resultBz, err := lib.Marshal(result)
+	events, err := t.GetEventsNonPaginated(ptr.Height, false)
 	if err != nil {
 		return nil, err
 	}
-	result.Meta = &lib.BlockResultMeta{Size: uint64(len(resultBz))}
-	return result, nil
+	bz, err = lib.Marshal(&lib.BlockResult{
+		BlockHeader:  ptr,
+		Transactions: txs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &lib.BlockResult{
+		BlockHeader:  ptr,
+		Meta:         &lib.BlockResultMeta{Size: uint64(len(bz))},
+		Events:       events,
+		Transactions: txs,
+	}, nil
 }
 
 // getTx() gets the tx bytes from the DB and converts it into TxResult object
@@ -564,7 +769,19 @@ func (t *Indexer) txHashKey(hash []byte) []byte {
 	return t.key(txHashPrefix, hash, nil)
 }
 
-func (t *Indexer) heightAndIndexKey(height, index uint64) []byte {
+func (t *Indexer) eventHeightKey(height uint64) []byte {
+	return t.key(eventHeightPrefix, t.encodeBigEndian(height), nil)
+}
+
+func (t *Indexer) eventHeightAndIndexKey(height, index uint64) []byte {
+	return t.key(eventHeightPrefix, t.encodeBigEndian(height), t.encodeBigEndian(index))
+}
+
+func (t *Indexer) indexEventByHeightAndIndex(heightAndIndexKey []byte, bz []byte) lib.ErrorI {
+	return t.db.Set(heightAndIndexKey, bz)
+}
+
+func (t *Indexer) txHeightAndIndexKey(height, index uint64) []byte {
 	return t.key(txHeightPrefix, t.encodeBigEndian(height), t.encodeBigEndian(index))
 }
 

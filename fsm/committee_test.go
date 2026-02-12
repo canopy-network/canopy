@@ -114,7 +114,7 @@ func TestGetEconomicParameters(t *testing.T) {
 			// override the minimum percent for paid committee
 			params.Validator.StakePercentForSubsidizedCommittee = minPercentForPaidCommittee
 			// override the mint amount
-			InitialTokensPerBlock = int(test.mintAmount)
+			sm.Config.StateMachineConfig.InitialTokensPerBlock = test.mintAmount
 			// override the DAO cut percent
 			params.Governance.DaoRewardPercentage = test.daoCutPercent
 			// set the params back in state
@@ -128,7 +128,7 @@ func TestGetEconomicParameters(t *testing.T) {
 			// set the supply back in state
 			require.NoError(t, sm.SetSupply(supply))
 			// execute the function call
-			daoCut, totalMint, perCommitteeMint, err := sm.GetBlockMintStats(lib.CanopyChainId)
+			_, daoCut, totalMint, perCommitteeMint, err := sm.GetBlockMintStats(lib.CanopyChainId)
 			require.NoError(t, err)
 			require.EqualValues(t, test.expected, expected{
 				daoCut:           daoCut,
@@ -269,7 +269,7 @@ func TestFundCommitteeRewardPools(t *testing.T) {
 			// override the minimum percent for paid committee
 			params.Validator.StakePercentForSubsidizedCommittee = minPercentForPaidCommittee
 			// override the mint amount
-			InitialTokensPerBlock = int(test.mintAmount)
+			sm.Config.StateMachineConfig.InitialTokensPerBlock = test.mintAmount
 			// override the DAO cut percent
 			params.Governance.DaoRewardPercentage = test.daoCutPercent
 			// set the params back in state
@@ -314,6 +314,7 @@ func TestGetPaidCommittees(t *testing.T) {
 			detail:                     "1there exists no committees",
 			minPercentForPaidCommittee: 10,
 			supply:                     &Supply{Staked: 100},
+			paidChainIds:               []uint64{1}, // always include self chain id
 		},
 		{
 			name:                       "0 paid committee",
@@ -328,6 +329,7 @@ func TestGetPaidCommittees(t *testing.T) {
 					},
 				},
 			},
+			paidChainIds: []uint64{1}, // always include self chain id
 		},
 		{
 			name:                       "1 100% paid committee",
@@ -342,7 +344,7 @@ func TestGetPaidCommittees(t *testing.T) {
 					},
 				},
 			},
-			paidChainIds: []uint64{0},
+			paidChainIds: []uint64{0, 1},
 		},
 		{
 			name:                       "1 paid committee, 1 non paid committee",
@@ -361,7 +363,7 @@ func TestGetPaidCommittees(t *testing.T) {
 					},
 				},
 			},
-			paidChainIds: []uint64{0},
+			paidChainIds: []uint64{0, 1},
 		},
 		{
 			name:                       "2 100% paid committees",

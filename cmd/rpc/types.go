@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"encoding/json"
+	"github.com/canopy-network/canopy/fsm"
+	"sync"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -12,6 +14,11 @@ import (
 // =====================================================
 type heightRequest struct {
 	Height uint64 `json:"height"`
+}
+
+type indexerBlobsRequest struct {
+	heightRequest
+	Delta bool `json:"delta,omitempty"`
 }
 
 type chainRequest struct {
@@ -57,6 +64,11 @@ type paginatedHeightRequest struct {
 	lib.ValidatorFilters
 }
 
+type paginatedIdRequest struct {
+	idRequest
+	lib.PageParams
+}
+
 type heightAndAddressRequest struct {
 	heightRequest
 	addressRequest
@@ -65,6 +77,11 @@ type heightAndAddressRequest struct {
 type heightAndIdRequest struct {
 	heightRequest
 	idRequest
+}
+
+type heightIdAndPointsRequest struct {
+	heightAndIdRequest
+	Points bool `json:"points"`
 }
 
 type keystoreRequest struct {
@@ -247,6 +264,37 @@ type txDeleteOrder struct {
 	committeesRequest
 }
 
+type txDexLimitOrder struct {
+	Fee           uint64 `json:"fee"`
+	Amount        uint64 `json:"amount"`
+	ReceiveAmount uint64 `json:"receiveAmount"`
+	Submit        bool   `json:"submit"`
+	Password      string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txDexLiquidityDeposit struct {
+	Fee      uint64 `json:"fee"`
+	Amount   uint64 `json:"amount"`
+	Submit   bool   `json:"submit"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
+type txDexLiquidityWithdraw struct {
+	Fee      uint64 `json:"fee"`
+	Percent  int    `json:"percent"`
+	Submit   bool   `json:"submit"`
+	Password string `json:"password"`
+	fromFields
+	txChangeParamRequest
+	committeesRequest
+}
+
 type txLockOrder struct {
 	Fee            uint64       `json:"fee"`
 	OrderId        string       `json:"orderId"`
@@ -317,6 +365,7 @@ type txRequest struct {
 	Submit          bool            `json:"submit"`
 	ReceiveAmount   uint64          `json:"receiveAmount"`
 	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
+	Percent         uint64          `json:"percent"`
 	OrderId         string          `json:"orderId"`
 	Memo            string          `json:"memo"`
 	PollJSON        json.RawMessage `json:"pollJSON"`
@@ -328,4 +377,76 @@ type txRequest struct {
 	passwordRequest
 	txChangeParamRequest
 	committeesRequest
+}
+
+const defaultIndexerBlobCacheEntries = 64
+
+type indexerBlobCacheEntry struct {
+	height     uint64
+	blobs      *fsm.IndexerBlobs
+	protoBytes []byte
+}
+
+type indexerBlobCache struct {
+	mu         sync.RWMutex
+	maxEntries int
+	entries    map[uint64]*indexerBlobCacheEntry
+	order      []uint64
+}
+
+func newIndexerBlobCache(maxEntries int) *indexerBlobCache {
+	if maxEntries <= 0 {
+		maxEntries = defaultIndexerBlobCacheEntries
+	}
+	return &indexerBlobCache{
+		maxEntries: maxEntries,
+		entries:    make(map[uint64]*indexerBlobCacheEntry),
+		order:      make([]uint64, 0, maxEntries),
+	}
+}
+
+func (c *indexerBlobCache) get(height uint64) (*indexerBlobCacheEntry, bool) {
+	c.mu.RLock()
+	entry, ok := c.entries[height]
+	c.mu.RUnlock()
+	return entry, ok
+}
+
+func (c *indexerBlobCache) getCurrent(height uint64) (*fsm.IndexerBlob, bool) {
+	entry, ok := c.get(height)
+	if !ok || entry == nil || entry.blobs == nil {
+		return nil, false
+	}
+	return entry.blobs.Current, entry.blobs.Current != nil
+}
+
+func (c *indexerBlobCache) put(height uint64, entry *indexerBlobCacheEntry) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.entries[height]; ok {
+		c.entries[height] = entry
+		c.touch(height)
+		return
+	}
+
+	c.entries[height] = entry
+	c.order = append(c.order, height)
+	if len(c.order) <= c.maxEntries {
+		return
+	}
+
+	evictHeight := c.order[0]
+	c.order = c.order[1:]
+	delete(c.entries, evictHeight)
+}
+
+func (c *indexerBlobCache) touch(height uint64) {
+	for i, h := range c.order {
+		if h == height {
+			c.order = append(c.order[:i], c.order[i+1:]...)
+			c.order = append(c.order, height)
+			return
+		}
+	}
 }
