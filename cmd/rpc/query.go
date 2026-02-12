@@ -570,11 +570,11 @@ func (s *Server) Poll(w http.ResponseWriter, _ *http.Request, _ httprouter.Param
 
 // IndexerBlobs returns the current and previous indexer blobs as protobuf bytes
 func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	req := new(heightRequest)
+	req := new(indexerBlobsRequest)
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
-	_, bz, err := s.IndexerBlobsCached(req.Height)
+	_, bz, err := s.IndexerBlobsCached(req.Height, req.Delta)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err.Code() == lib.CodeMarshal {
@@ -592,14 +592,25 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
-func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
 	currentHeight := s.controller.FSM.Height()
 	if height == 0 || height > currentHeight {
 		height = currentHeight
 	}
 
 	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.blobs != nil && entry.protoBytes != nil {
-		return entry.blobs, entry.protoBytes, nil
+		if !delta {
+			return entry.blobs, entry.protoBytes, nil
+		}
+		blobDelta, err := fsm.DeltaIndexerBlobs(entry.blobs)
+		if err != nil {
+			return nil, nil, err
+		}
+		deltaBytes, err := lib.Marshal(blobDelta)
+		if err != nil {
+			return nil, nil, err
+		}
+		return blobDelta, deltaBytes, nil
 	}
 
 	current, err := s.controller.FSM.IndexerBlob(height)
@@ -637,7 +648,18 @@ func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, l
 		protoBytes: protoBytes,
 	})
 
-	return blobs, protoBytes, nil
+	if !delta {
+		return blobs, protoBytes, nil
+	}
+	blobDelta, err := fsm.DeltaIndexerBlobs(blobs)
+	if err != nil {
+		return nil, nil, err
+	}
+	deltaBytes, err := lib.Marshal(blobDelta)
+	if err != nil {
+		return nil, nil, err
+	}
+	return blobDelta, deltaBytes, nil
 }
 
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request
