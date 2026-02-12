@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeltaIndexerBlobs_AccountsChangedAddedRemoved_PoolsRemainFull(t *testing.T) {
+func TestDeltaIndexerBlobs_ChangedAddedRemoved(t *testing.T) {
 	prevAcc1 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{1}, 20), Amount: 10})
 	prevAcc2 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{2}, 20), Amount: 20})
 	currAcc2 := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{2}, 20), Amount: 21})
@@ -43,11 +43,13 @@ func TestDeltaIndexerBlobs_AccountsChangedAddedRemoved_PoolsRemainFull(t *testin
 	requireEntriesAsSet(t, delta.Previous.Accounts, prevAcc1, prevAcc2)
 	requireEntriesAsSet(t, delta.Current.Pools, currPool2, currPool3)
 	requireEntriesAsSet(t, delta.Previous.Pools, prevPool1, prevPool2)
-	requireEntriesAsSet(t, delta.Current.Validators, currVal1, currVal3)
-	requireEntriesAsSet(t, delta.Previous.Validators, prevVal1, prevVal2)
+	requireEntriesAsSet(t, delta.Current.Validators, currVal3)
+	requireEntriesAsSet(t, delta.Previous.Validators, prevVal2)
+	require.True(t, delta.Current.ValidatorsDelta)
+	require.True(t, delta.Previous.ValidatorsDelta)
 }
 
-func TestDeltaIndexerBlobs_UnchangedAccountsBecomeEmpty_PoolsRemainFull(t *testing.T) {
+func TestDeltaIndexerBlobs_UnchangedEntitiesBecomeEmpty(t *testing.T) {
 	acc := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{7}, 20), Amount: 1})
 	pool := mustMarshalProto(t, &Pool{Id: 7, Amount: 7})
 	val := mustMarshalProto(t, &Validator{Address: bytes.Repeat([]byte{8}, 20), StakedAmount: 8})
@@ -59,10 +61,10 @@ func TestDeltaIndexerBlobs_UnchangedAccountsBecomeEmpty_PoolsRemainFull(t *testi
 	require.NoError(t, err)
 	require.Empty(t, delta.Current.Accounts)
 	require.Empty(t, delta.Previous.Accounts)
-	requireEntriesAsSet(t, delta.Current.Pools, pool)
-	requireEntriesAsSet(t, delta.Previous.Pools, pool)
-	requireEntriesAsSet(t, delta.Current.Validators, val)
-	requireEntriesAsSet(t, delta.Previous.Validators, val)
+	require.Empty(t, delta.Current.Pools)
+	require.Empty(t, delta.Previous.Pools)
+	require.Empty(t, delta.Current.Validators)
+	require.Empty(t, delta.Previous.Validators)
 }
 
 func TestDeltaIndexerBlobs_ForceIncludeRewardSlashAccounts(t *testing.T) {
@@ -89,6 +91,30 @@ func TestDeltaIndexerBlobs_ForceIncludeRewardSlashAccounts(t *testing.T) {
 	requireEntriesAsSet(t, delta.Previous.Accounts, accPrev)
 }
 
+func TestDeltaIndexerBlobs_ForceIncludeValidatorByRewardOutput(t *testing.T) {
+	operator := bytes.Repeat([]byte{10}, 20)
+	output := bytes.Repeat([]byte{11}, 20)
+
+	valPrev := mustMarshalProto(t, &Validator{Address: operator, Output: output, StakedAmount: 1000, Delegate: true})
+	valCurr := mustMarshalProto(t, &Validator{Address: operator, Output: output, StakedAmount: 1000, Delegate: true})
+
+	block := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: 12},
+		Events: []*lib.Event{{
+			EventType: string(lib.EventTypeReward),
+			Address:   output,
+		}},
+	}
+
+	delta, err := DeltaIndexerBlobs(&IndexerBlobs{
+		Current:  &IndexerBlob{Block: mustMarshalProto(t, block), Validators: [][]byte{valCurr}},
+		Previous: &IndexerBlob{Block: mustMarshalProto(t, &lib.BlockResult{}), Validators: [][]byte{valPrev}},
+	})
+	require.NoError(t, err)
+	requireEntriesAsSet(t, delta.Current.Validators, valCurr)
+	requireEntriesAsSet(t, delta.Previous.Validators, valPrev)
+}
+
 func TestDeltaIndexerBlobs_NoPreviousKeepsCurrent(t *testing.T) {
 	acc := mustMarshalProto(t, &Account{Address: bytes.Repeat([]byte{10}, 20), Amount: 42})
 	pool := mustMarshalProto(t, &Pool{Id: 42, Amount: 42})
@@ -101,6 +127,7 @@ func TestDeltaIndexerBlobs_NoPreviousKeepsCurrent(t *testing.T) {
 	requireEntriesAsSet(t, delta.Current.Accounts, acc)
 	requireEntriesAsSet(t, delta.Current.Pools, pool)
 	requireEntriesAsSet(t, delta.Current.Validators, val)
+	require.True(t, delta.Current.ValidatorsDelta)
 	require.Nil(t, delta.Previous)
 }
 

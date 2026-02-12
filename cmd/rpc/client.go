@@ -43,8 +43,8 @@ func (c *Client) IndexerBlobs(height uint64) (p *fsm.IndexerBlobs, err lib.Error
 	return c.indexerBlobs(height, false)
 }
 
-// IndexerBlobsDelta retrieves changed accounts/pools between current and previous blobs.
-// Validators and other entities remain full snapshots.
+// IndexerBlobsDelta retrieves changed accounts/pools/validators between current and previous blobs.
+// Other entities remain full snapshots.
 func (c *Client) IndexerBlobsDelta(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
 	return c.indexerBlobs(height, true)
 }

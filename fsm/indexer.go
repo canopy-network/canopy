@@ -165,120 +165,188 @@ func (s *StateMachine) IndexerBlob(height uint64) (b *IndexerBlob, err lib.Error
 	if err != nil {
 		return nil, err
 	}
+	// calculate validator/delegator status totals from the full snapshot
+	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking,
+		totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking, err := validatorTotals(validators)
+	if err != nil {
+		return nil, err
+	}
 	// return the blob
 	return &IndexerBlob{
-		Block:                blockBz,
-		Accounts:             accounts,
-		Pools:                pools,
-		Validators:           validators,
-		DexPrices:            dexPricesBz,
-		NonSigners:           nonSigners,
-		DoubleSigners:        doubleSignersBz,
-		Orders:               orderBooksBz,
-		Params:               paramsBz,
-		DexBatches:           dexBatches,
-		NextDexBatches:       nextDexBatches,
-		CommitteesData:       committeesData,
-		SubsidizedCommittees: subsidizedCommittees,
-		RetiredCommittees:    retiredCommittees,
-		Supply:               supply,
+		Block:                    blockBz,
+		Accounts:                 accounts,
+		Pools:                    pools,
+		Validators:               validators,
+		DexPrices:                dexPricesBz,
+		NonSigners:               nonSigners,
+		DoubleSigners:            doubleSignersBz,
+		Orders:                   orderBooksBz,
+		Params:                   paramsBz,
+		DexBatches:               dexBatches,
+		NextDexBatches:           nextDexBatches,
+		CommitteesData:           committeesData,
+		SubsidizedCommittees:     subsidizedCommittees,
+		RetiredCommittees:        retiredCommittees,
+		Supply:                   supply,
+		TotalValidatorsActive:    totalValidatorsActive,
+		TotalValidatorsPaused:    totalValidatorsPaused,
+		TotalValidatorsUnstaking: totalValidatorsUnstaking,
+		TotalDelegatesActive:     totalDelegatesActive,
+		TotalDelegatesPaused:     totalDelegatesPaused,
+		TotalDelegatesUnstaking:  totalDelegatesUnstaking,
 	}, nil
 }
 
-// DeltaIndexerBlobs returns a clone of blobs where account payloads are reduced
-// to changed/added/removed entries. Pools, validators, and other entities remain full snapshots.
+// DeltaIndexerBlobs returns a clone of blobs where account, pool, and validator payloads
+// are reduced to changed/added/removed entries. Other entities remain full snapshots.
 func DeltaIndexerBlobs(blobs *IndexerBlobs) (*IndexerBlobs, lib.ErrorI) {
-	// no payload to reduce
 	if blobs == nil {
 		return nil, nil
 	}
-	// clone first to avoid mutating cache-backed or shared pointers
 	out := cloneIndexerBlobs(blobs)
-	// if current is nil there is nothing to diff
 	if out == nil || out.Current == nil {
 		return out, nil
 	}
-	// key current/previous by account address
+	previous := nilSafeBlob(out.Previous)
+
+	// accounts: changed+added in current, changed+removed in previous
 	currentAccounts, currentAccountMap, err := accountEntries(out.Current.Accounts)
 	if err != nil {
 		return nil, err
 	}
-	previousAccounts, previousAccountMap, err := accountEntries(nilSafeBlob(out.Previous).Accounts)
+	previousAccounts, previousAccountMap, err := accountEntries(previous.Accounts)
 	if err != nil {
 		return nil, err
 	}
-	// include changed, added, and removed account keys
-	currentAccountKeys, previousAccountKeys := changedAccountKeys(currentAccountMap, previousAccountMap)
-	// force include reward/slash accounts so downstream reward/slash attribution never misses rows
+	currentAccountKeys, previousAccountKeys := changedBlobKeys(currentAccountMap, previousAccountMap)
 	forcedAccountKeys, err := rewardSlashAccountKeys(out.Current.Block)
 	if err != nil {
 		return nil, err
 	}
-	forceIncludeAccounts(currentAccountKeys, previousAccountKeys, currentAccountMap, previousAccountMap, forcedAccountKeys)
-	// rebuild account slices from selected key sets
-	out.Current.Accounts = selectAccounts(currentAccounts, currentAccountKeys)
+	forceIncludeKeys(currentAccountKeys, previousAccountKeys, currentAccountMap, previousAccountMap, forcedAccountKeys)
+	out.Current.Accounts = selectBlobEntries(currentAccounts, currentAccountKeys)
 	if out.Previous != nil {
-		out.Previous.Accounts = selectAccounts(previousAccounts, previousAccountKeys)
+		out.Previous.Accounts = selectBlobEntries(previousAccounts, previousAccountKeys)
 	}
-	// pools, validators and all other entities remain full snapshots
+
+	// pools: changed+added in current, changed+removed in previous
+	currentPools, currentPoolMap, err := poolEntries(out.Current.Pools)
+	if err != nil {
+		return nil, err
+	}
+	previousPools, previousPoolMap, err := poolEntries(previous.Pools)
+	if err != nil {
+		return nil, err
+	}
+	currentPoolKeys, previousPoolKeys := changedBlobKeys(currentPoolMap, previousPoolMap)
+	out.Current.Pools = selectBlobEntries(currentPools, currentPoolKeys)
+	if out.Previous != nil {
+		out.Previous.Pools = selectBlobEntries(previousPools, previousPoolKeys)
+	}
+
+	// validators: changed+added in current, changed+removed in previous
+	currentValidators, currentValidatorMap, currentOutputIndex, err := validatorEntries(out.Current.Validators)
+	if err != nil {
+		return nil, err
+	}
+	previousValidators, previousValidatorMap, previousOutputIndex, err := validatorEntries(previous.Validators)
+	if err != nil {
+		return nil, err
+	}
+	currentValidatorKeys, previousValidatorKeys := changedBlobKeys(currentValidatorMap, previousValidatorMap)
+	forcedValidatorKeys, err := validatorForceKeys(out.Current.Block, currentOutputIndex, previousOutputIndex)
+	if err != nil {
+		return nil, err
+	}
+	forceIncludeKeys(currentValidatorKeys, previousValidatorKeys, currentValidatorMap, previousValidatorMap, forcedValidatorKeys)
+	out.Current.Validators = selectBlobEntries(currentValidators, currentValidatorKeys)
+	out.Current.ValidatorsDelta = true
+	if out.Previous != nil {
+		out.Previous.Validators = selectBlobEntries(previousValidators, previousValidatorKeys)
+		out.Previous.ValidatorsDelta = true
+	}
 	return out, nil
 }
 
-type accountEntry struct {
+type blobEntry struct {
 	key string
 	bz  []byte
 }
 
-// accountEntries() builds:
-//   - an ordered entry slice (preserves original order)
-//   - an address->entry map for O(1) diff lookups
-func accountEntries(entries [][]byte) ([]accountEntry, map[string][]byte, lib.ErrorI) {
-	list := make([]accountEntry, 0, len(entries))
+func accountEntries(entries [][]byte) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	return entriesByKey(entries, accountEntryKey)
+}
+
+func poolEntries(entries [][]byte) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	return entriesByKey(entries, poolEntryKey)
+}
+
+func validatorEntries(entries [][]byte) ([]blobEntry, map[string][]byte, map[string][]string, lib.ErrorI) {
+	out := make([]blobEntry, 0, len(entries))
+	entriesByAddress := make(map[string][]byte, len(entries))
+	outputToValidator := make(map[string][]string)
+	for _, entry := range entries {
+		validator := new(Validator)
+		if err := lib.Unmarshal(entry, validator); err != nil {
+			return nil, nil, nil, err
+		}
+		key := string(validator.Address)
+		out = append(out, blobEntry{key: key, bz: entry})
+		entriesByAddress[key] = entry
+		if len(validator.Output) > 0 {
+			outputToValidator[string(validator.Output)] = append(outputToValidator[string(validator.Output)], key)
+		}
+	}
+	return out, entriesByAddress, outputToValidator, nil
+}
+
+func entriesByKey(entries [][]byte, keyExtractor func([]byte) (string, error)) ([]blobEntry, map[string][]byte, lib.ErrorI) {
+	out := make([]blobEntry, 0, len(entries))
 	entryMap := make(map[string][]byte, len(entries))
 	for _, entry := range entries {
-		key, err := accountEntryKey(entry)
+		key, err := keyExtractor(entry)
 		if err != nil {
 			return nil, nil, lib.ErrUnmarshal(err)
 		}
-		list = append(list, accountEntry{key: key, bz: entry})
+		out = append(out, blobEntry{key: key, bz: entry})
 		entryMap[key] = entry
 	}
-	return list, entryMap, nil
+	return out, entryMap, nil
 }
 
-// accountEntryKey() extracts Account.address (field 1) without unmarshalling the full message.
 func accountEntryKey(entry []byte) (string, error) {
-	field, err := codec.GetRawProtoField(entry, 1)
+	field, err := codec.GetRawProtoField(entry, 1) // Account.address
 	if err != nil {
 		return "", err
 	}
 	return string(field), nil
 }
 
-// changedAccountKeys() returns the include sets for current and previous:
-//   - current includes changed+added keys
-//   - previous includes changed+removed keys
-func changedAccountKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
+func poolEntryKey(entry []byte) (string, error) {
+	field, err := codec.GetRawProtoField(entry, 1) // Pool.id
+	if err != nil {
+		return "", err
+	}
+	return string(field), nil
+}
+
+func changedBlobKeys(current, previous map[string][]byte) (map[string]struct{}, map[string]struct{}) {
 	currentChanged := make(map[string]struct{})
 	previousChanged := make(map[string]struct{})
-	// changed or added in current
 	for key, currentEntry := range current {
 		if previousEntry, ok := previous[key]; !ok || !bytes.Equal(currentEntry, previousEntry) {
 			currentChanged[key] = struct{}{}
 		}
 	}
-	// changed or removed from previous
 	for key, previousEntry := range previous {
 		if currentEntry, ok := current[key]; !ok || !bytes.Equal(currentEntry, previousEntry) {
 			previousChanged[key] = struct{}{}
 		}
 	}
-
 	return currentChanged, previousChanged
 }
 
-// selectAccounts() keeps original entry order while filtering to the provided key set.
-func selectAccounts(entries []accountEntry, include map[string]struct{}) [][]byte {
+func selectBlobEntries(entries []blobEntry, include map[string]struct{}) [][]byte {
 	selected := make([][]byte, 0, len(include))
 	seen := make(map[string]struct{}, len(include))
 	for _, entry := range entries {
@@ -294,8 +362,7 @@ func selectAccounts(entries []accountEntry, include map[string]struct{}) [][]byt
 	return selected
 }
 
-// forceIncludeAccounts() injects required account keys into current/previous include sets when present.
-func forceIncludeAccounts(
+func forceIncludeKeys(
 	currentInclude, previousInclude map[string]struct{},
 	current, previous map[string][]byte,
 	keys map[string]struct{},
@@ -311,7 +378,6 @@ func forceIncludeAccounts(
 }
 
 // rewardSlashAccountKeys() finds reward/slash event addresses in the current block.
-// These addresses are always included in account deltas to preserve event attribution.
 func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
 	keys := make(map[string]struct{})
 	if len(blockBz) == 0 {
@@ -333,6 +399,72 @@ func rewardSlashAccountKeys(blockBz []byte) (map[string]struct{}, lib.ErrorI) {
 	return keys, nil
 }
 
+// validatorForceKeys() includes validators tied to lifecycle/reward events.
+func validatorForceKeys(blockBz []byte, currentOutputIndex, previousOutputIndex map[string][]string) (map[string]struct{}, lib.ErrorI) {
+	keys := make(map[string]struct{})
+	if len(blockBz) == 0 {
+		return keys, nil
+	}
+	block := new(lib.BlockResult)
+	if err := lib.Unmarshal(blockBz, block); err != nil {
+		return nil, err
+	}
+	for _, event := range block.Events {
+		if event == nil || len(event.Address) == 0 {
+			continue
+		}
+		eventKey := string(event.Address)
+		switch event.EventType {
+		case string(lib.EventTypeReward):
+			keys[eventKey] = struct{}{}
+			for _, validatorKey := range currentOutputIndex[eventKey] {
+				keys[validatorKey] = struct{}{}
+			}
+			for _, validatorKey := range previousOutputIndex[eventKey] {
+				keys[validatorKey] = struct{}{}
+			}
+		case string(lib.EventTypeSlash),
+			string(lib.EventTypeAutoPause),
+			string(lib.EventTypeAutoBeginUnstaking),
+			string(lib.EventTypeFinishUnstaking):
+			keys[eventKey] = struct{}{}
+		}
+	}
+	return keys, nil
+}
+
+func validatorTotals(validators [][]byte) (
+	totalValidatorsActive, totalValidatorsPaused, totalValidatorsUnstaking uint32,
+	totalDelegatesActive, totalDelegatesPaused, totalDelegatesUnstaking uint32,
+	err lib.ErrorI,
+) {
+	for _, entry := range validators {
+		validator := new(Validator)
+		if err = lib.Unmarshal(entry, validator); err != nil {
+			return
+		}
+		if validator.UnstakingHeight > 0 {
+			totalValidatorsUnstaking++
+			if validator.Delegate {
+				totalDelegatesUnstaking++
+			}
+			continue
+		}
+		if validator.MaxPausedHeight > 0 {
+			totalValidatorsPaused++
+			if validator.Delegate {
+				totalDelegatesPaused++
+			}
+			continue
+		}
+		totalValidatorsActive++
+		if validator.Delegate {
+			totalDelegatesActive++
+		}
+	}
+	return
+}
+
 // cloneIndexerBlobs() clones the top-level current/previous wrapper.
 func cloneIndexerBlobs(src *IndexerBlobs) *IndexerBlobs {
 	if src == nil {
@@ -346,27 +478,34 @@ func cloneIndexerBlobs(src *IndexerBlobs) *IndexerBlobs {
 
 // cloneIndexerBlob() performs a lightweight structural copy.
 // The underlying byte payloads are shared read-only; delta logic replaces only
-// Accounts slice headers on the clone so cached snapshots remain untouched.
+// Accounts/Pools/Validators slice headers on the clone so cached snapshots remain untouched.
 func cloneIndexerBlob(src *IndexerBlob) *IndexerBlob {
 	if src == nil {
 		return nil
 	}
 	return &IndexerBlob{
-		Block:                src.Block,
-		Accounts:             src.Accounts,
-		Pools:                src.Pools,
-		Validators:           src.Validators,
-		DexPrices:            src.DexPrices,
-		NonSigners:           src.NonSigners,
-		DoubleSigners:        src.DoubleSigners,
-		Orders:               src.Orders,
-		Params:               src.Params,
-		DexBatches:           src.DexBatches,
-		NextDexBatches:       src.NextDexBatches,
-		CommitteesData:       src.CommitteesData,
-		SubsidizedCommittees: src.SubsidizedCommittees,
-		RetiredCommittees:    src.RetiredCommittees,
-		Supply:               src.Supply,
+		Block:                    src.Block,
+		Accounts:                 src.Accounts,
+		Pools:                    src.Pools,
+		Validators:               src.Validators,
+		DexPrices:                src.DexPrices,
+		NonSigners:               src.NonSigners,
+		DoubleSigners:            src.DoubleSigners,
+		Orders:                   src.Orders,
+		Params:                   src.Params,
+		DexBatches:               src.DexBatches,
+		NextDexBatches:           src.NextDexBatches,
+		CommitteesData:           src.CommitteesData,
+		SubsidizedCommittees:     src.SubsidizedCommittees,
+		RetiredCommittees:        src.RetiredCommittees,
+		Supply:                   src.Supply,
+		TotalValidatorsActive:    src.TotalValidatorsActive,
+		TotalValidatorsPaused:    src.TotalValidatorsPaused,
+		TotalValidatorsUnstaking: src.TotalValidatorsUnstaking,
+		ValidatorsDelta:          src.ValidatorsDelta,
+		TotalDelegatesActive:     src.TotalDelegatesActive,
+		TotalDelegatesPaused:     src.TotalDelegatesPaused,
+		TotalDelegatesUnstaking:  src.TotalDelegatesUnstaking,
 	}
 }
 
