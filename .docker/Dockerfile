@@ -7,6 +7,7 @@ COPY . /go/src/github.com/canopy-network/canopy
 
 RUN make build/wallet
 RUN make build/explorer
+RUN make build/explorer-new
 RUN go build -a -o bin ./cmd/main/...
 
 FROM alpine:3.19
