@@ -273,15 +273,24 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 				p.failedPeers.Delete(key)
 				return true
 			}
-			// attempt to reconnect to the peer
-			go p.DialWithBackoff(peer, false)
+			// skip if already reconnected
+			if p.PeerSet.Has(peer.PublicKey) {
+				p.failedPeers.Delete(key)
+				return true
+			}
+			// attempt to reconnect to the peer, clear after attempt
+			go func(k any, pa *lib.PeerAddress) {
+				p.DialWithBackoff(pa, false)
+				// only remove from failed list if successfully reconnected
+				if p.PeerSet.Has(pa.PublicKey) {
+					p.failedPeers.Delete(k)
+				}
+			}(key, peer)
 			count++
 			return true
 		})
 		if count > 0 {
-			p.log.Debugf("Executed dial call for %d failed peers", count)
-			// clear map for next iteration
-			p.failedPeers.Clear()
+			p.log.Debugf("Dialing %d failed peers", count)
 		}
 	}
 }
@@ -417,10 +426,19 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
 		p.log.Errorf("Remove error: %s", err.Error())
 	}
-	// add to failed peers
+	// add to failed peers using the configured address from mustConnects
+	// (remoteAddr may be an ephemeral port for inbound connections)
+	// NOTE: caller already holds PeerSet.mux, so access mustConnect directly
+	netAddr := remoteAddr
+	for _, mc := range p.mustConnect {
+		if bytes.Equal(mc.PublicKey, publicKey) {
+			netAddr = mc.NetAddress
+			break
+		}
+	}
 	p.failedPeers.Store(string(publicKey), &lib.PeerAddress{
 		PublicKey:  publicKey,
-		NetAddress: remoteAddr,
+		NetAddress: netAddr,
 	})
 }
 
