@@ -260,6 +260,7 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
+		var count int
 		p.failedPeers.Range(func(key, rawPeer any) bool {
 			peer, ok := rawPeer.(*lib.PeerAddress)
 			// invalid peer, remove
@@ -279,15 +280,18 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 			}
 			// attempt to reconnect to the peer, clear after attempt
 			go func(k any, pa *lib.PeerAddress) {
-				p.log.Debugf("Dialing %x failed peer", pa.PublicKey)
 				p.DialWithBackoff(pa, false)
 				// only remove from failed list if successfully reconnected
 				if p.PeerSet.Has(pa.PublicKey) {
 					p.failedPeers.Delete(k)
 				}
 			}(key, peer)
+			count++
 			return true
 		})
+		if count > 0 {
+			p.log.Debugf("Dialing %d failed peers", count)
+		}
 	}
 }
 
