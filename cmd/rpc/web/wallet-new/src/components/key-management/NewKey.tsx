@@ -3,10 +3,14 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useToast } from '@/toast/ToastContext';
+import { useDSFetcher } from '@/core/dsFetch';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const NewKey = (): JSX.Element => {
-    const { createNewAccount } = useAccounts();
+    const { switchAccount } = useAccounts();
     const toast = useToast();
+    const dsFetch = useDSFetcher();
+    const queryClient = useQueryClient();
 
     const [newKeyForm, setNewKeyForm] = useState({
         password: '',
@@ -23,13 +27,13 @@ export const NewKey = (): JSX.Element => {
     };
 
     const handleCreateWallet = async () => {
-        if (!newKeyForm.password) {
-            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
+        if (!newKeyForm.walletName) {
+            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
             return;
         }
 
-        if (!newKeyForm.walletName) {
-            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
+        if (!newKeyForm.password) {
+            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
         }
 
@@ -40,18 +44,35 @@ export const NewKey = (): JSX.Element => {
         });
 
         try {
-            await createNewAccount(newKeyForm.walletName, newKeyForm.password);
+            const response = await dsFetch('keystoreNewKey', {
+                nickname: newKeyForm.walletName,
+                password: newKeyForm.password
+            });
+
+            // Invalidate keystore cache to refetch
+            await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+
             toast.dismiss(loadingToast);
             toast.success({
                 title: 'Wallet created',
                 description: `Wallet "${newKeyForm.walletName}" is ready.`,
             });
+
             setNewKeyForm({ password: '', walletName: '' });
+
+            // Switch to the newly created account if response contains address
+            const newAddress = typeof response === 'string' ? response : (response as any)?.address;
+            if (newAddress) {
+                // Wait a bit for keystore to update, then try to switch
+                setTimeout(() => {
+                    queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+                }, 500);
+            }
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error({
                 title: 'Error creating wallet',
-                description: String(error),
+                description: error instanceof Error ? error.message : String(error),
             });
         }
     };

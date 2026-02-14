@@ -4,17 +4,22 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useToast } from '@/toast/ToastContext';
+import { useDSFetcher } from '@/core/dsFetch';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const ImportWallet = (): JSX.Element => {
-    const { createNewAccount } = useAccounts();
+    const { switchAccount } = useAccounts();
     const toast = useToast();
+    const dsFetch = useDSFetcher();
+    const queryClient = useQueryClient();
 
     const [showPrivateKey, setShowPrivateKey] = useState(false);
     const [activeTab, setActiveTab] = useState<'key' | 'keystore'>('key');
     const [importForm, setImportForm] = useState({
         privateKey: '',
         password: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        nickname: ''
     });
 
     const panelVariants = {
@@ -32,6 +37,11 @@ export const ImportWallet = (): JSX.Element => {
             return;
         }
 
+        if (!importForm.nickname) {
+            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
+            return;
+        }
+
         if (!importForm.password) {
             toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
@@ -42,6 +52,16 @@ export const ImportWallet = (): JSX.Element => {
             return;
         }
 
+        // Validate private key format (should be hex, 64-128 chars)
+        const cleanPrivateKey = importForm.privateKey.trim().replace(/^0x/, '');
+        if (!/^[0-9a-fA-F]{64,128}$/.test(cleanPrivateKey)) {
+            toast.error({
+                title: 'Invalid private key',
+                description: 'Private key must be 64-128 hexadecimal characters.'
+            });
+            return;
+        }
+
         const loadingToast = toast.info({
             title: 'Importing wallet...',
             description: 'Please wait while your wallet is imported.',
@@ -49,18 +69,37 @@ export const ImportWallet = (): JSX.Element => {
         });
 
         try {
-            // Here you would implement the import functionality
-            // For now, we'll create a new account with the provided name
-            await createNewAccount(importForm.password, 'Imported Wallet');
+            const response = await dsFetch('keystoreImportRaw', {
+                nickname: importForm.nickname,
+                password: importForm.password,
+                privateKey: cleanPrivateKey
+            });
+
+            // Invalidate keystore cache to refetch
+            await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+
             toast.dismiss(loadingToast);
             toast.success({
                 title: 'Wallet imported',
-                description: 'Your wallet has been imported successfully.',
+                description: `Wallet "${importForm.nickname}" has been imported successfully.`,
             });
-            setImportForm({ privateKey: '', password: '', confirmPassword: '' });
+
+            setImportForm({ privateKey: '', password: '', confirmPassword: '', nickname: '' });
+
+            // Switch to the newly imported account if response contains address
+            const newAddress = typeof response === 'string' ? response : (response as any)?.address;
+            if (newAddress) {
+                // Wait a bit for keystore to update, then try to switch
+                setTimeout(() => {
+                    queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+                }, 500);
+            }
         } catch (error) {
             toast.dismiss(loadingToast);
-            toast.error({ title: 'Error importing wallet', description: String(error) });
+            toast.error({
+                title: 'Error importing wallet',
+                description: error instanceof Error ? error.message : String(error)
+            });
         }
     };
 
@@ -96,6 +135,19 @@ export const ImportWallet = (): JSX.Element => {
 
             {activeTab === 'key' && (
                 <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Wallet Name
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Imported Wallet"
+                            value={importForm.nickname}
+                            onChange={(e) => setImportForm({ ...importForm, nickname: e.target.value })}
+                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                        />
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                             Private Key

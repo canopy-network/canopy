@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useDSFetcher } from "@/core/dsFetch";
 import { useConfig } from "@/app/providers/ConfigProvider";
 
@@ -91,6 +91,7 @@ export const useAvailableNodes = () => {
     refetchInterval: 10000,
     staleTime: 5000,
     retry: 1,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -141,7 +142,8 @@ export const useNodeData = (nodeId: string) => {
         throw error;
       }
     },
-    refetchInterval: 20000,
-    staleTime: 5000,
+    refetchInterval: 5000,
+    staleTime: 2000,
+    placeholderData: keepPreviousData,
   });
 };

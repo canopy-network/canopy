@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Coins } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
@@ -7,7 +7,7 @@ import { useBalanceChart } from "@/hooks/useBalanceChart";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 
-export const StakedBalanceCard = () => {
+export const StakedBalanceCard = React.memo(() => {
   const { totalStaked, stakingData, loading } = useAccountData();
 
   const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({
@@ -22,11 +22,25 @@ export const StakedBalanceCard = () => {
     y: number;
   } | null>(null);
 
+  // Throttled mouse move handler to reduce re-renders
+  const lastMouseMoveTime = React.useRef(0);
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const now = Date.now();
+    if (now - lastMouseMoveTime.current < 50) return; // Throttle to 50ms
+    lastMouseMoveTime.current = now;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePosition({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  }, []);
+
   // Calculate total rewards from all staking data
   const totalRewards = stakingData.reduce((sum, data) => sum + data.rewards, 0);
   return (
     <motion.div
-      className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent relative overflow-hidden h-full"
+      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden h-full"
       initial={hasAnimated ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.1 }}
@@ -111,13 +125,7 @@ export const StakedBalanceCard = () => {
             return (
               <div
                 className="relative w-full h-full"
-                onMouseMove={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setMousePosition({
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top,
-                  });
-                }}
+                onMouseMove={handleMouseMove}
                 onMouseLeave={() => {
                   setHoveredPoint(null);
                   setMousePosition(null);
@@ -163,7 +171,7 @@ export const StakedBalanceCard = () => {
                     strokeLinejoin="round"
                     initial={hasAnimated ? false : { pathLength: 0 }}
                     animate={{ pathLength: 1 }}
-                    transition={{ duration: 2, delay: 0.8 }}
+                    transition={{ duration: 0.8, delay: 0.2 }}
                   />
 
                   {/* Gradient fill under the line */}
@@ -172,7 +180,7 @@ export const StakedBalanceCard = () => {
                     fill="url(#staking-gradient)"
                     initial={hasAnimated ? false : { opacity: 0 }}
                     animate={{ opacity: 0.2 }}
-                    transition={{ duration: 1, delay: 1.5 }}
+                    transition={{ duration: 0.4, delay: 0.4 }}
                   />
 
                   {/* Data points with hover areas */}
@@ -196,7 +204,7 @@ export const StakedBalanceCard = () => {
                         fill="#6fe3b4"
                         initial={hasAnimated ? false : { scale: 0 }}
                         animate={{ scale: 1 }}
-                        transition={{ delay: 2.2 + index * 0.15 }}
+                        transition={{ delay: 0.6 + index * 0.05 }}
                         style={{ pointerEvents: "none" }}
                       />
                     </g>
@@ -254,4 +262,6 @@ export const StakedBalanceCard = () => {
       </div>
     </motion.div>
   );
-};
+});
+
+StakedBalanceCard.displayName = 'StakedBalanceCard';

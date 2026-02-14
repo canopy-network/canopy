@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
-import {useDSFetcher} from "@/core/dsFetch";
-import {hasDsKey} from "@/core/dsCore";
-import {useAccounts} from "@/app/providers/AccountsProvider";
+import { useDSFetcher } from "@/core/dsFetch"
+import { hasDsKey } from "@/core/dsCore"
+import { useAccountsList } from "@/app/providers/AccountsProvider"
+import { useMemo } from 'react'
 
 interface AccountBalance {
     address: string
@@ -22,7 +23,8 @@ const parseMaybeJson = (v: any) =>
 
 
 export function useAccountData() {
-    const { accounts, loading: accountsLoading } = useAccounts()
+    // Use granular hook - only re-renders when accounts list changes, not selection
+    const { accounts, loading: accountsLoading } = useAccountsList()
     const dsFetch = useDSFetcher()
     const { chain } = useConfig()
 
@@ -30,81 +32,95 @@ export function useAccountData() {
     const chainReadyBalances = !!chain && hasDsKey(chain, 'account')
     const chainReadyValidators = !!chain && hasDsKey(chain, 'validators')
 
-    // ---- BALANCES ----
-    const balanceQuery = useQuery({
-        queryKey: ['accountBalances.ds', chainId, accounts.map(a => a.address)],
-        enabled: !accountsLoading && accounts.length > 0 && chainReadyBalances,
-        staleTime: 10_000,
+    // Create stable query key from addresses (sorted, joined string)
+    const addressesKey = useMemo(
+        () => accounts.map(a => a.address).sort().join(','),
+        [accounts]
+    )
+
+    // ---- CONSOLIDATED QUERY: Balances + Staking ----
+    const accountDataQuery = useQuery({
+        queryKey: ['accountData.consolidated', chainId, addressesKey],
+        enabled: !accountsLoading && accounts.length > 0 && (chainReadyBalances || chainReadyValidators),
+        staleTime: 30_000,
+        refetchInterval: 30_000,
         retry: 2,
         retryDelay: 1000,
+        // Keep previous data while refetching to avoid flashing
+        placeholderData: keepPreviousData,
         queryFn: async () => {
-            // doble guard por seguridad
-            if (!chainReadyBalances || accounts.length === 0) {
-                return { totalBalance: 0, balances: [] as AccountBalance[] }
+            const result = {
+                totalBalance: 0,
+                totalStaked: 0,
+                balances: [] as AccountBalance[],
+                stakingData: [] as StakingData[]
             }
 
-            const balances = await Promise.all(
-                accounts.map(async (acc): Promise<AccountBalance> => {
-                    try {
-                        const res = await dsFetch<number | any>('account', { account: { address: acc.address }})
-                        const val = typeof res === 'number'
-                            ? res
-                            : Number(parseMaybeJson(res)?.amount ?? 0)
+            // Fetch balances and validators in parallel
+            const [balancesResult, validatorsResult] = await Promise.all([
+                // Balances
+                chainReadyBalances
+                    ? Promise.all(
+                        accounts.map(async (acc): Promise<AccountBalance> => {
+                            try {
+                                const res = await dsFetch<number | any>('account', { account: { address: acc.address } })
+                                const val = typeof res === 'number'
+                                    ? res
+                                    : Number(parseMaybeJson(res)?.amount ?? 0)
+                                return { address: acc.address, amount: val || 0, nickname: acc.nickname }
+                            } catch {
+                                return { address: acc.address, amount: 0, nickname: acc.nickname }
+                            }
+                        })
+                    )
+                    : Promise.resolve([] as AccountBalance[]),
 
-                        return { address: acc.address, amount: val || 0, nickname: acc.nickname }
-                    } catch (err) {
-                        // si el chain aún no estaba listo, regresamos 0 silenciosamente
-                        return { address: acc.address, amount: 0, nickname: acc.nickname }
-                    }
-                })
-            )
+                // Validators/Staking
+                chainReadyValidators
+                    ? dsFetch<any[]>('validators', {}).catch(() => [])
+                    : Promise.resolve([])
+            ])
 
-            const totalBalance = balances.reduce((s, b) => s + (b.amount || 0), 0)
-            return { totalBalance, balances }
-        }
-    })
+            // Process balances
+            result.balances = balancesResult
+            result.totalBalance = balancesResult.reduce((s, b) => s + (b.amount || 0), 0)
 
-    // ---- STAKING ----
-    const stakingQuery = useQuery({
-        queryKey: ['stakingData.ds', chainId, accounts.map(a => a.address)],
-        enabled: !accountsLoading && accounts.length > 0 && chainReadyValidators,
-        staleTime: 10_000,
-        retry: 2,
-        retryDelay: 1000,
-        queryFn: async () => {
-            if (!chainReadyValidators || accounts.length === 0) {
-                return { totalStaked: 0, stakingData: [] as StakingData[] }
-            }
-
-            const rows = await dsFetch<any[]>('validators', {})
-            const list = Array.isArray(rows) ? rows : []
-
+            // Process staking data
+            const validatorsList = Array.isArray(validatorsResult) ? validatorsResult : []
             const byAddr = new Map<string, any>()
-            for (const v of list) {
+            for (const v of validatorsList) {
                 const obj = parseMaybeJson(v)
                 const key = obj?.address ?? obj?.validatorAddress ?? obj?.operatorAddress
                 if (key) byAddr.set(String(key), obj)
             }
 
-            const stakingData = accounts.map((acc): StakingData => {
+            result.stakingData = accounts.map((acc): StakingData => {
                 const v = byAddr.get(acc.address)
                 const staked = Number(v?.stakedAmount ?? v?.stake ?? 0)
                 return { address: acc.address, staked: staked || 0, rewards: 0, nickname: acc.nickname }
             })
+            result.totalStaked = result.stakingData.reduce((s, d) => s + (d.staked || 0), 0)
 
-            const totalStaked = stakingData.reduce((s, d) => s + (d.staked || 0), 0)
-            return { totalStaked, stakingData }
+            return result
         }
     })
 
+    // Only show loading on initial load (no data yet), not on background refetches
+    const isInitialLoading = accountsLoading || (accountDataQuery.isLoading && !accountDataQuery.data)
+
     return {
-        totalBalance: balanceQuery.data?.totalBalance || 0,
-        totalStaked: stakingQuery.data?.totalStaked || 0,
-        balances: balanceQuery.data?.balances || [],
-        stakingData: stakingQuery.data?.stakingData || [],
-        loading: accountsLoading || balanceQuery.isLoading || stakingQuery.isLoading,
-        error: balanceQuery.error || stakingQuery.error,
-        refetchBalances: balanceQuery.refetch,
-        refetchStaking: stakingQuery.refetch,
+        totalBalance: accountDataQuery.data?.totalBalance || 0,
+        totalStaked: accountDataQuery.data?.totalStaked || 0,
+        balances: accountDataQuery.data?.balances || [],
+        stakingData: accountDataQuery.data?.stakingData || [],
+        // loading = only true on initial load (prevents flash on refetch)
+        loading: isInitialLoading,
+        // isFetching = true during any fetch (including background)
+        isFetching: accountDataQuery.isFetching,
+        error: accountDataQuery.error,
+        refetch: accountDataQuery.refetch,
+        // Backward compatibility aliases
+        refetchBalances: accountDataQuery.refetch,
+        refetchStaking: accountDataQuery.refetch,
     }
 }

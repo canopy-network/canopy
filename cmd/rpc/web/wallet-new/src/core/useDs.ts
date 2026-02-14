@@ -1,5 +1,5 @@
 // src/core/useDS.ts
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import { resolveLeaf, buildRequest, parseResponse } from './dsCore'
 
@@ -74,8 +74,8 @@ export function useDS<T = any>(
         refetchOnReconnect: opts?.refetchOnReconnect ?? false,
         retry: opts?.retry ?? 1,
         retryDelay: opts?.retryDelay,
-        // Don't use placeholderData - it causes stale data to show when params change
-        // placeholderData: (prev) => prev,
+        // Keep previous data during refetch to prevent UI flashing
+        placeholderData: keepPreviousData,
         structuralSharing: (old, data) =>
             (JSON.stringify(old) === JSON.stringify(data) ? old as any : data as any),
         queryFn: async () => {

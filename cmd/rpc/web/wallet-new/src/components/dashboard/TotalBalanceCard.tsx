@@ -5,14 +5,14 @@ import { useAccountData } from "@/hooks/useAccountData";
 import { useBalanceHistory } from "@/hooks/useBalanceHistory";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 
-export const TotalBalanceCard = () => {
+export const TotalBalanceCard = React.memo(() => {
   const { totalBalance, loading } = useAccountData();
   const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
   const [hasAnimated, setHasAnimated] = useState(false);
 
   return (
     <motion.div
-      className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent relative overflow-hidden h-full"
+      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden h-full"
       initial={hasAnimated ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -24,7 +24,7 @@ export const TotalBalanceCard = () => {
       </div>
 
       {/* Title */}
-      <h3 className="text-text-secondary text-xl font-sans font-medium mb-4">
+      <h3 className="text-text-muted text-sm font-medium mb-4">
         Total Balance (All Addresses)
       </h3>
 
@@ -85,4 +85,6 @@ export const TotalBalanceCard = () => {
       </div>
     </motion.div>
   );
-};
+});
+
+TotalBalanceCard.displayName = 'TotalBalanceCard';

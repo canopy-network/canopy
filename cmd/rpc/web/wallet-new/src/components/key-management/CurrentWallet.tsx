@@ -8,6 +8,7 @@ import {
   Shield,
   Eye,
   EyeOff,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
@@ -23,6 +24,7 @@ import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useDSFetcher } from "@/core/dsFetch";
 import { useDS } from "@/core/useDs";
 import { downloadJson } from "@/helpers/download";
+import { useQueryClient } from "@tanstack/react-query";
 
 export const CurrentWallet = (): JSX.Element => {
   const { accounts, selectedAccount, switchAccount } = useAccounts();
@@ -33,9 +35,13 @@ export const CurrentWallet = (): JSX.Element => {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isFetchingKey, setIsFetchingKey] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const { copyToClipboard } = useCopyToClipboard();
   const toast = useToast();
   const dsFetch = useDSFetcher();
+  const queryClient = useQueryClient();
   const { data: keystore } = useDS("keystore", {});
 
   const panelVariants = {
@@ -176,6 +182,74 @@ export const CurrentWallet = (): JSX.Element => {
     }
   };
 
+  const handleDeleteAccount = () => {
+    if (!selectedAccount) {
+      toast.error({
+        title: "No Account Selected",
+        description: "Please select an account to delete",
+      });
+      return;
+    }
+
+    if (accounts.length === 1) {
+      toast.error({
+        title: "Cannot Delete",
+        description: "You must have at least one account",
+      });
+      return;
+    }
+
+    setDeleteConfirmation("");
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedAccount) return;
+
+    const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
+    if (deleteConfirmation !== nickname) {
+      toast.error({
+        title: "Confirmation Failed",
+        description: `Please type "${nickname}" to confirm deletion`,
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await dsFetch("keystoreDelete", {
+        nickname: nickname,
+      });
+
+      // Invalidate keystore cache
+      await queryClient.invalidateQueries({ queryKey: ["ds", "keystore"] });
+
+      toast.success({
+        title: "Account Deleted",
+        description: `Account "${nickname}" has been permanently deleted.`,
+      });
+
+      setShowDeleteModal(false);
+      setDeleteConfirmation("");
+
+      // Switch to another account
+      const otherAccounts = accounts.filter((acc) => acc.id !== selectedAccount.id);
+      if (otherAccounts.length > 0) {
+        setTimeout(() => {
+          switchAccount(otherAccounts[0].id);
+        }, 500);
+      }
+    } catch (error) {
+      toast.error({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <motion.div
       variants={panelVariants}
@@ -300,6 +374,15 @@ export const CurrentWallet = (): JSX.Element => {
             <Key className="w-4 h-4 mr-2" />
             {privateKeyVisible ? "Hide Private Key" : "Reveal Private Key"}
           </Button>
+          <Button
+            onClick={handleDeleteAccount}
+            variant="destructive"
+            className="flex-1 py-3 bg-red-600 hover:bg-red-700"
+            disabled={accounts.length === 1}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Account
+          </Button>
         </div>
 
         <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
@@ -351,6 +434,66 @@ export const CurrentWallet = (): JSX.Element => {
                 disabled={isFetchingKey}
               >
                 {isFetchingKey ? "Unlocking..." : "Unlock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-md bg-bg-secondary border border-red-500/50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-500/20 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-xl text-white font-semibold">
+                Delete Account
+              </h3>
+            </div>
+
+            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4">
+              <p className="text-red-300 text-sm font-medium mb-2">
+                ⚠️ This action is permanent and irreversible
+              </p>
+              <p className="text-red-300 text-sm">
+                Make sure you have backed up your private key before deleting this account.
+                You will lose access to all funds if you haven't saved your private key.
+              </p>
+            </div>
+
+            <p className="text-sm text-gray-400 mb-4">
+              Type <span className="font-mono font-semibold text-white">
+                {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
+              </span> to confirm deletion:
+            </p>
+
+            <input
+              type="text"
+              value={deleteConfirmation}
+              onChange={(e) => setDeleteConfirmation(e.target.value)}
+              placeholder="Type wallet name to confirm"
+              className="w-full bg-bg-tertiary text-white border border-bg-accent rounded-lg px-3 py-2.5 mb-4"
+              autoFocus
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmation("");
+                }}
+                className="px-4 py-2 rounded-lg bg-bg-tertiary text-white hover:bg-bg-accent"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isDeleting || deleteConfirmation !== (selectedKeyEntry?.keyNickname || selectedAccount?.nickname)}
+              >
+                {isDeleting ? "Deleting..." : "Delete Permanently"}
               </button>
             </div>
           </div>

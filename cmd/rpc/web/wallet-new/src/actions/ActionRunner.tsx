@@ -25,6 +25,7 @@ import { cx } from "@/ui/cx";
 import { motion } from "framer-motion";
 import { ToastTemplateOptions } from "@/toast/types";
 import { useActionDs } from "./useActionDs";
+import { usePopulateController } from "./usePopulateController";
 
 type Stage = "form" | "confirm" | "executing" | "result";
 
@@ -46,25 +47,27 @@ export default function ActionRunner({
   const [form, setForm] = React.useState<Record<string, any>>(
     prefilledData || {},
   );
+
   // Reduce debounce time from 250ms to 100ms for better responsiveness
   // especially important for prefilledData and DS-dependent fields
   const debouncedForm = useDebouncedValue(form, 100);
   const [txRes, setTxRes] = React.useState<any>(null);
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
-  // Track which fields have been auto-populated at least once
-  // Initialize with prefilled field names to prevent auto-populate from overriding them
-  const [autoPopulatedOnce, setAutoPopulatedOnce] = React.useState<Set<string>>(
-    new Set(prefilledData ? Object.keys(prefilledData) : []),
-  );
   // Track which fields were programmatically prefilled (from prefilledData or modules)
   // These fields should hide paste button even when they have values
   const [programmaticallyPrefilled, setProgrammaticallyPrefilled] = React.useState<Set<string>>(
     new Set(prefilledData ? Object.keys(prefilledData) : []),
   );
 
-  const { manifest, chain, params, isLoading } = useConfig();
+  const { manifest, chain, params: globalParams, isLoading } = useConfig();
   const { selectedAccount } = useAccounts?.() ?? { selectedAccount: undefined };
   const session = useSession();
+
+  // Merge global params with prefilledData so templates can access both via {{ params.fieldName }}
+  const params = React.useMemo(() => ({
+    ...globalParams,
+    ...prefilledData,
+  }), [globalParams, prefilledData]);
 
   const action = React.useMemo(
     () => manifest?.actions.find((a) => a.id === actionId),
@@ -93,12 +96,26 @@ export default function ActionRunner({
     [form, chain, selectedAccount, params],
   );
 
-  const { ds: actionDs } = useActionDs(
+  const { ds: actionDs, isLoading: isDsLoading, fetchStatus: dsFetchStatus } = useActionDs(
     actionDsConfig,
     dsCtx,
     actionId,
     selectedAccount?.address,
   );
+
+  // Extract critical DS keys from manifest (DS that must load before showing form)
+  const criticalDsKeys = React.useMemo(() => {
+    const dsOptions = actionDsConfig?.__options || {};
+    const critical = dsOptions.critical;
+    if (Array.isArray(critical)) return critical;
+    // Default: keystore is always critical for address selects
+    return ["keystore"];
+  }, [actionDsConfig]);
+
+  // Detect if this is an edit operation (prefilledData contains operator/address)
+  const isEditMode = React.useMemo(() => {
+    return !!(prefilledData?.operator || prefilledData?.address);
+  }, [prefilledData]);
 
   // Merge action-level DS with field-level DS (for backwards compatibility)
   const mergedDs = React.useMemo(
@@ -467,102 +484,20 @@ export default function ActionRunner({
     });
   }, [fieldsForStep, templatingCtx, form]);
 
-  // Auto-populate form with default values from field.value when DS data or visible fields change
-  const prevStateRef = React.useRef<{ ds: string; fieldNames: string }>({
-    ds: "",
-    fieldNames: "",
+  // Use PopulateController for phase-based form initialization
+  // This replaces the old auto-populate useEffect with a cleaner approach
+  const { phase: populatePhase, showLoading: showPopulateLoading } = usePopulateController({
+    fields: allFields, // Use all fields, not just visible ones, for initial populate
+    form,
+    ds: mergedDs,
+    isDsLoading,
+    criticalDsKeys,
+    dsFetchStatus, // Pass fetch status to check if DS completed (success or error)
+    templateContext: templatingCtx,
+    onFormChange: (patch) => setForm(prev => ({ ...prev, ...patch })),
+    prefilledData,
+    isEditMode,
   });
-  React.useEffect(() => {
-    const dsSnapshot = JSON.stringify(mergedDs);
-    const fieldNamesSnapshot = visibleFieldsForStep
-      .map((f: any) => f.name)
-      .join(",");
-    const stateSnapshot = { ds: dsSnapshot, fieldNames: fieldNamesSnapshot };
-
-    // Only run when DS or visible fields change
-    if (
-      prevStateRef.current.ds === dsSnapshot &&
-      prevStateRef.current.fieldNames === fieldNamesSnapshot
-    ) {
-      return;
-    }
-    prevStateRef.current = stateSnapshot;
-
-    setForm((prev) => {
-      const defaults: Record<string, any> = {};
-      let hasDefaults = false;
-
-      // Build template context with current form state
-      const ctx = {
-        form: prev,
-        chain,
-        account: selectedAccount
-          ? {
-              address: selectedAccount.address,
-              nickname: selectedAccount.nickname,
-              pubKey: selectedAccount.publicKey,
-            }
-          : undefined,
-        fees: { ...feesResolved },
-        params: { ...params },
-        ds: mergedDs,
-      };
-
-      for (const field of visibleFieldsForStep) {
-        const fieldName = (field as any).name;
-        const fieldValue = (field as any).value;
-        const autoPopulate = (field as any).autoPopulate ?? "always"; // 'always' | 'once' | false
-
-        // Skip auto-population if field has autoPopulate: false
-        if (autoPopulate === false) {
-          continue;
-        }
-
-        // Skip if autoPopulate: 'once' and field was already populated
-        if (autoPopulate === "once" && autoPopulatedOnce.has(fieldName)) {
-          continue;
-        }
-
-        // For 'always' mode: always update, for 'once': only if empty
-        const shouldPopulate =
-          fieldValue != null &&
-          (autoPopulate === "always" ||
-            prev[fieldName] === undefined ||
-            prev[fieldName] === "" ||
-            prev[fieldName] === null);
-
-        if (shouldPopulate) {
-          try {
-            const resolved = template(fieldValue, ctx);
-            if (
-              resolved !== undefined &&
-              resolved !== "" &&
-              resolved !== null
-            ) {
-              defaults[fieldName] = resolved;
-              hasDefaults = true;
-
-              // Mark as populated if autoPopulate is 'once'
-              if (autoPopulate === "once") {
-                setAutoPopulatedOnce((prev) => new Set([...prev, fieldName]));
-              }
-            }
-          } catch (e) {
-            // Template resolution failed, skip
-          }
-        }
-      }
-
-      return hasDefaults ? { ...prev, ...defaults } : prev;
-    });
-  }, [
-    mergedDs,
-    visibleFieldsForStep,
-    chain,
-    selectedAccount,
-    feesResolved,
-    params,
-  ]);
 
   const handleErrorsChange = React.useCallback(
     (errs: Record<string, string>, hasErrors: boolean) => {
@@ -573,14 +508,26 @@ export default function ActionRunner({
   );
 
   const hasStepErrors = React.useMemo(() => {
-    const missingRequired = visibleFieldsForStep.some(
-      (f: any) => f.required && (form[f.name] == null || form[f.name] === ""),
-    );
+    const evalCtx = { ...templatingCtx, form };
+    const missingRequired = visibleFieldsForStep.some((f: any) => {
+      // Evaluate required - can be boolean or template string
+      let isRequired = false;
+      if (typeof f.required === "boolean") {
+        isRequired = f.required;
+      } else if (typeof f.required === "string") {
+        try {
+          isRequired = templateBool(f.required, evalCtx);
+        } catch {
+          isRequired = false;
+        }
+      }
+      return isRequired && (form[f.name] == null || form[f.name] === "");
+    });
     const fieldErrors = visibleFieldsForStep.some(
       (f: any) => !!errorsMap[f.name],
     );
     return missingRequired || fieldErrors;
-  }, [visibleFieldsForStep, form, errorsMap]);
+  }, [visibleFieldsForStep, form, errorsMap, templatingCtx]);
 
   const isLastStep = !wizard || stepIdx >= steps.length - 1;
 
@@ -620,14 +567,27 @@ export default function ActionRunner({
           <>
             {stage === "form" && (
               <motion.div className="space-y-4">
-                <FormRenderer
-                  fields={visibleFieldsForStep}
-                  value={form}
-                  onChange={onFormChange}
-                  ctx={templatingCtx}
-                  onErrorsChange={handleErrorsChange}
-                  onDsChange={setLocalDs}
-                />
+                {/* Show skeleton loading while waiting for critical DS */}
+                {showPopulateLoading && (
+                  <div className="space-y-4 animate-pulse">
+                    <div className="h-10 bg-neutral-800/50 rounded-lg w-full" />
+                    <div className="h-10 bg-neutral-800/50 rounded-lg w-full" />
+                    <div className="h-10 bg-neutral-800/50 rounded-lg w-3/4" />
+                    <div className="flex justify-center pt-4">
+                      <div className="text-sm text-neutral-400">Loading form data...</div>
+                    </div>
+                  </div>
+                )}
+                {!showPopulateLoading && (
+                  <FormRenderer
+                    fields={visibleFieldsForStep}
+                    value={form}
+                    onChange={onFormChange}
+                    ctx={templatingCtx}
+                    onErrorsChange={handleErrorsChange}
+                    onDsChange={setLocalDs}
+                  />
+                )}
 
                 {wizard && steps.length > 0 && (
                   <div className="flex items-center justify-between text-xs text-neutral-400">

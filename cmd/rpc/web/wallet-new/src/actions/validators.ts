@@ -1,6 +1,23 @@
 // validators.ts
 import type { Field, AmountField } from "@/manifest/types";
-import {template} from "@/core/templater";
+import {template, templateBool} from "@/core/templater";
+
+/**
+ * Evaluate the required field which can be a boolean or a template string
+ */
+function evalRequired(required: boolean | string | undefined, ctx: Record<string, any>): boolean {
+    if (required === undefined || required === null) return false;
+    if (typeof required === "boolean") return required;
+    if (typeof required === "string") {
+        // Use templateBool which handles "undefined", "null", "", "false" correctly
+        try {
+            return templateBool(required, ctx);
+        } catch {
+            return false;
+        }
+    }
+    return !!required;
+}
 
 type RuleCode =
     | "required"
@@ -86,7 +103,7 @@ export async function validateField(
 
     // OPTIONCARD
     if (field.type === "optionCard") {
-        if (field.required && (value === undefined || value === null || value === "")) {
+        if (evalRequired(field.required, ctx) && (value === undefined || value === null || value === "")) {
             return {
                 ok: false,
                 code: "required",
@@ -103,7 +120,7 @@ export async function validateField(
     // TABLESELECT
     if (field.type === "tableSelect") {
         const arr = Array.isArray(value) ? value : value ? [value] : [];
-        if (field.required && arr.length === 0) {
+        if (evalRequired(field.required, ctx) && arr.length === 0) {
             return {
                 ok: false,
                 code: "required",
@@ -145,7 +162,7 @@ export async function validateField(
     const asString = value == null ? "" : String(value);
 
     // REQUIRED
-    if (field.required && (formattedValue == null || formattedValue === "")) {
+    if (evalRequired(field.required, ctx) && (formattedValue == null || formattedValue === "")) {
         return {
             ok: false,
             code: "required",

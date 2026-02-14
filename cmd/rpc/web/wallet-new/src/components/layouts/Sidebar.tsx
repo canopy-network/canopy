@@ -11,7 +11,8 @@ import {
     ChevronRight,
     Plus,
     Menu,
-    X
+    X,
+    KeyRound
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/Select";
 import { useAccounts } from "@/app/providers/AccountsProvider";
@@ -30,7 +31,8 @@ const navItems: NavItem[] = [
     { name: 'Accounts', path: '/accounts', icon: Wallet },
     { name: 'Staking', path: '/staking', icon: TrendingUp },
     { name: 'Governance', path: '/governance', icon: Vote },
-    { name: 'Monitoring', path: '/monitoring', icon: Activity }
+    { name: 'Monitoring', path: '/monitoring', icon: Activity },
+    { name: 'Keys', path: '/key-management', icon: KeyRound }
 ];
 
 export const Sidebar = (): JSX.Element => {
@@ -199,27 +201,38 @@ export const Sidebar = (): JSX.Element => {
                             isMobile && setIsMobileOpen(false);
                         }}
                     >
-                        <SelectTrigger className="w-full bg-muted border-[#3a3b45] text-white rounded-lg px-3 py-2 h-auto min-h-[40px]">
-                            <div className="flex items-center justify-between w-full min-w-0">
-                                <span className="text-xs font-medium truncate">
+                        <SelectTrigger className="w-full bg-muted border-[#3a3b45] text-white rounded-lg px-3 py-2 h-auto min-h-[44px]">
+                            <div className="flex items-center gap-2.5 w-full min-w-0">
+                                {/* Avatar */}
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs font-bold text-white">
+                                        {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                    </span>
+                                </div>
+                                <span className="text-sm font-medium truncate">
                                     {loading ? 'Loading...' :
-                                        selectedAccount?.address ?
-                                            `${selectedAccount.address.slice(0, 6)}...${selectedAccount?.address.slice(-6)}` :
-                                            'Account'
+                                        selectedAccount?.nickname || 'Select Account'
                                     }
                                 </span>
-                                <svg className="w-3 h-3 text-white flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+
                             </div>
                         </SelectTrigger>
                         <SelectContent className="bg-bg-secondary border-bg-accent">
-                            {accounts.map((account) => (
+                            {accounts.map((account, index) => (
                                 <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
                                     <div className="flex items-center gap-3 w-full">
+                                        {/* Avatar */}
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                            <span className="text-xs font-bold text-white">
+                                                {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                            </span>
+                                        </div>
                                         <div className="flex flex-col items-start flex-1 min-w-0">
-                                            <span className="text-sm font-medium text-white hover:text-black truncate">
-                                                {account.address.slice(0, 6)}...{account.address.slice(-6)} ({account.nickname})
+                                            <span className="text-sm font-medium text-white truncate">
+                                                {account.nickname || `Account ${index + 1}`}
+                                            </span>
+                                            <span className="text-xs text-text-muted truncate">
+                                                {account.address.slice(0, 6)}...{account.address.slice(-4)}
                                             </span>
                                         </div>
                                         {account.isActive && (

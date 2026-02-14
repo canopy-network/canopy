@@ -128,10 +128,19 @@ export const Governance = () => {
   }, [manifest]);
 
   const handleCreatePoll = useCallback(() => {
-    alert(
-      "Create Poll functionality\n\nThis will open a modal to create a new poll.",
+    const createPollAction = manifest?.actions?.find(
+      (action: any) => action.id === "createPoll",
     );
-  }, []);
+
+    if (createPollAction) {
+      setSelectedActions([createPollAction]);
+      setIsActionModalOpen(true);
+    } else {
+      alert(
+        'Create poll functionality\n\nAdd "createPoll" action to manifest.json to enable.',
+      );
+    }
+  }, [manifest]);
 
   const handleViewDetails = useCallback(
     (hash: string) => {

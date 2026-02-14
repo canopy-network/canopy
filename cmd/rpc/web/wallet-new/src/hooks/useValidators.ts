@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useDSFetcher } from "@/core/dsFetch";
-import { useAccounts } from "@/app/providers/AccountsProvider";
+import { useAccountsList } from "@/app/providers/AccountsProvider";
+import { useMemo } from "react";
 
 interface Validator {
   address: string;
@@ -20,11 +21,18 @@ interface Validator {
 }
 
 export function useValidators() {
-  const { accounts, loading: accountsLoading } = useAccounts();
+  // Use granular hook - only re-renders when accounts list changes
+  const { accounts, loading: accountsLoading } = useAccountsList();
   const dsFetch = useDSFetcher();
 
+  // Create stable query key from addresses
+  const addressesKey = useMemo(
+    () => accounts.map((a) => a.address).sort().join(","),
+    [accounts]
+  );
+
   return useQuery({
-    queryKey: ["validators", accounts.map((acc) => acc.address)],
+    queryKey: ["validators.byAccounts", addressesKey],
     enabled: !accountsLoading && accounts.length > 0,
     queryFn: async (): Promise<Validator[]> => {
       try {
@@ -72,5 +80,6 @@ export function useValidators() {
     staleTime: 10000,
     retry: 2,
     retryDelay: 1000,
+    placeholderData: keepPreviousData,
   });
 }

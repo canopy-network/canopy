@@ -20,7 +20,8 @@ export const Dashboard = () => {
         onRunAction,
         isActionModalOpen,
         setIsActionModalOpen,
-        selectedActions
+        selectedActions,
+        prefilledData
     } = useDashboard();
 
     const containerVariants = {
@@ -92,8 +93,12 @@ export const Dashboard = () => {
                     </div>
                 </div>
 
-                <ActionsModal actions={selectedActions} isOpen={isActionModalOpen}
-                              onClose={() => setIsActionModalOpen(false)}/>
+                <ActionsModal
+                    actions={selectedActions}
+                    isOpen={isActionModalOpen}
+                    onClose={setIsActionModalOpen}
+                    prefilledData={prefilledData}
+                />
             </motion.div>
         </ErrorBoundary>
     );

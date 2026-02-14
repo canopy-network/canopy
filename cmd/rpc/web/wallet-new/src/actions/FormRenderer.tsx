@@ -5,6 +5,7 @@ import { validateField } from "./validators";
 import { useSession } from "@/state/session";
 import { FieldControl } from "@/actions/FieldControl";
 import { motion } from "framer-motion";
+import { templateBool } from "@/core/templater";
 
 const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <motion.div className="grid grid-cols-12 gap-3 sm:gap-3.5 md:gap-4">{children}</motion.div>
@@ -74,9 +75,10 @@ export default function FormRenderer({
 
   const fieldsKeyed = React.useMemo(
     () =>
-      fields.map((f: any) => ({
+      fields.map((f: any, index: number) => ({
         ...f,
-        __key: `${f.tab ?? "default"}:${f.group ?? ""}:${f.name}`,
+        // Use id, name, or index for unique key - important for visual fields (section, heading, etc) that don't have name
+        __key: `${f.tab ?? "default"}:${f.group ?? ""}:${f.id ?? f.name ?? `field-${index}`}`,
       })),
     [fields],
   );
@@ -108,11 +110,22 @@ export default function FormRenderer({
 
   const hasActiveErrors = React.useMemo(() => {
     const anyMsg = Object.values(errors).some((m) => !!m);
-    const requiredMissing = fields.some(
-      (f) => f.required && (value[f.name] == null || value[f.name] === ""),
-    );
+    const requiredMissing = fields.some((f) => {
+      // Evaluate required - can be boolean or template string
+      let isRequired = false;
+      if (typeof f.required === "boolean") {
+        isRequired = f.required;
+      } else if (typeof f.required === "string") {
+        try {
+          isRequired = templateBool(f.required, templateContext);
+        } catch {
+          isRequired = false;
+        }
+      }
+      return isRequired && (value[f.name] == null || value[f.name] === "");
+    });
     return anyMsg || requiredMissing;
-  }, [errors, fields, value]);
+  }, [errors, fields, value, templateContext]);
 
   React.useEffect(() => {
     onErrorsChange?.(errors, hasActiveErrors);

@@ -17,10 +17,31 @@ export const TextField: React.FC<BaseFieldProps> = ({
     const Component: any = isTextarea ? 'textarea' : 'input'
 
     const resolvedValue = resolveTemplate(field.value)
+
+    // Track previous resolved value to sync when template changes
+    const prevResolvedRef = React.useRef<string | null>(null)
+
+    // Sync field value when the resolved template changes (e.g., table selection)
+    // This allows computed fields to stay in sync while still being editable
+    React.useEffect(() => {
+        if (field.value && resolvedValue != null) {
+            const resolvedStr = String(resolvedValue)
+            if (prevResolvedRef.current !== null && prevResolvedRef.current !== resolvedStr) {
+                // Template value changed, sync the input
+                onChange(resolvedStr)
+            }
+            prevResolvedRef.current = resolvedStr
+        }
+    }, [resolvedValue, field.value, onChange])
+
+    // For readOnly fields with a value template, always use the resolved template
+    // For editable fields, use form value but initialize from template if empty
     const currentValue =
-        value === '' && resolvedValue != null
+        field.readOnly && field.value && resolvedValue != null
             ? resolvedValue
-            : value || (dsValue?.amount ?? dsValue?.value ?? '')
+            : value === '' && resolvedValue != null
+                ? resolvedValue
+                : value || (dsValue?.amount ?? dsValue?.value ?? '')
 
     const hasFeatures = !!(field.features?.length)
     const common = 'w-full bg-transparent border placeholder-text-muted text-white rounded px-3 py-2 focus:outline-none'

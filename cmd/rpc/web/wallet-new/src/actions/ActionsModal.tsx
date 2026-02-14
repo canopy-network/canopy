@@ -1,22 +1,35 @@
 // ActionsModal.tsx
-import React, {useEffect, useMemo, useState} from 'react'
+import React, {useEffect, useMemo, useState, Suspense} from 'react'
 import {motion, AnimatePresence} from 'framer-motion'
 import {ModalTabs, Tab} from './ModalTabs'
 import {Action as ManifestAction} from '@/manifest/types'
-import ActionRunner from '@/actions/ActionRunner'
-import {XIcon} from 'lucide-react'
+import {XIcon, Loader2} from 'lucide-react'
 import {cx} from '@/ui/cx'
+
+// Lazy load ActionRunner for better initial bundle size
+const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'))
+
+// Loading fallback component
+const ActionRunnerFallback = () => (
+    <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span className="text-text-muted text-sm">Loading action...</span>
+    </div>
+)
 
 interface ActionModalProps {
     actions?: (ManifestAction & { prefilledData?: Record<string, any> })[]
     isOpen: boolean
     onClose: () => void
+    /** Prefilled data to pass to ActionRunner (alternative to per-action prefilledData) */
+    prefilledData?: Record<string, any>
 }
 
 export const ActionsModal: React.FC<ActionModalProps> = ({
                                                              actions,
                                                              isOpen,
-                                                             onClose
+                                                             onClose,
+                                                             prefilledData: propPrefilledData
                                                          }) => {
     const [selectedTab, setSelectedTab] = useState<Tab | undefined>(undefined)
 
@@ -101,12 +114,14 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                                 transition={{duration: 0.5, delay: 0.4}}
                                 className="flex-1 overflow-y-auto scrollbar-hide hover:scrollbar-default min-h-0"
                             >
-                                <ActionRunner
-                                    actionId={selectedTab.value}
-                                    onFinish={onClose}
-                                    className="p-2 sm:p-3 md:p-4"
-                                    prefilledData={actions?.find(a => a.id === selectedTab.value)?.prefilledData}
-                                />
+                                <Suspense fallback={<ActionRunnerFallback />}>
+                                    <ActionRunner
+                                        actionId={selectedTab.value}
+                                        onFinish={onClose}
+                                        className="p-2 sm:p-3 md:p-4"
+                                        prefilledData={propPrefilledData ?? actions?.find(a => a.id === selectedTab.value)?.prefilledData}
+                                    />
+                                </Suspense>
                             </motion.div>
                         )}
                     </motion.div>

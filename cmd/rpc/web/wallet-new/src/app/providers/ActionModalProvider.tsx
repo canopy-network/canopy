@@ -1,11 +1,21 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ActionRunner from '@/actions/ActionRunner';
 import { useManifest } from '@/hooks/useManifest';
-import { XIcon } from 'lucide-react';
+import { XIcon, Loader2 } from 'lucide-react';
 import { cx } from '@/ui/cx';
 import { ModalTabs, Tab } from '@/actions/ModalTabs';
 import {LucideIcon} from "@/components/ui/LucideIcon";
+
+// Lazy load ActionRunner for better code splitting
+const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'));
+
+// Loading fallback component
+const ActionRunnerFallback = () => (
+    <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <span className="text-text-muted text-sm">Loading action...</span>
+    </div>
+);
 
 interface ActionModalContextType {
     openAction: (actionId: string, options?: ActionModalOptions) => void;
@@ -189,12 +199,14 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                     transition={{ duration: 0.5, delay: 0.4 }}
                                     className="max-h-[80vh] overflow-y-auto scrollbar-hide hover:scrollbar-default"
                                 >
-                                    <ActionRunner
-                                        actionId={selectedTab.value}
-                                        onFinish={handleFinish}
-                                        className="p-4"
-                                        prefilledData={options.prefilledData}
-                                    />
+                                    <Suspense fallback={<ActionRunnerFallback />}>
+                                        <ActionRunner
+                                            actionId={selectedTab.value}
+                                            onFinish={handleFinish}
+                                            className="p-4"
+                                            prefilledData={options.prefilledData}
+                                        />
+                                    </Suspense>
                                 </motion.div>
                             )}
                         </motion.div>

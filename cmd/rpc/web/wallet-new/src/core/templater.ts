@@ -68,7 +68,7 @@ function evalJsExpression(expr: string, ctx: any): any {
 
 function replaceBalanced(
   input: string,
-  resolver: (expr: string) => string,
+  resolver: (expr: string) => any,
 ): string {
   let out = "";
   let i = 0;
@@ -107,7 +107,8 @@ function replaceBalanced(
 
     const exprRaw = input.slice(start + 2, j - 2);
     const replacement = resolver(exprRaw.trim());
-    out += replacement;
+    // Convert undefined/null to empty string to avoid "undefined" in output
+    out += replacement == null ? "" : String(replacement);
     i = j;
   }
   return out;

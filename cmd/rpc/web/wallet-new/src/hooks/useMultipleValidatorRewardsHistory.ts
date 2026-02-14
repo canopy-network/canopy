@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation';
-import {useDSFetcher} from "@/core/dsFetch";
+import { useDSFetcher } from "@/core/dsFetch";
+import { useMemo } from 'react';
 
 interface RewardEvent {
     eventType: string;
@@ -31,11 +32,18 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
     const dsFetch = useDSFetcher();
     const { currentHeight, height24hAgo, isReady } = useHistoryCalculation();
 
+    // Create stable query key from addresses
+    const addressesKey = useMemo(
+        () => addresses.sort().join(','),
+        [addresses]
+    );
 
     return useQuery({
-        queryKey: ['multipleValidatorRewardsHistory', addresses, currentHeight],
+        queryKey: ['multipleValidatorRewardsHistory', addressesKey, currentHeight],
         enabled: addresses.length > 0 && isReady,
-        staleTime: 30_000,
+        staleTime: 60_000, // Increased staleTime since rewards don't change rapidly
+        refetchInterval: 60_000,
+        placeholderData: keepPreviousData,
 
         queryFn: async (): Promise<Record<string, HistoryResult & { rewards24h: number; totalRewards: number }>> => {
             const results: Record<string, HistoryResult & { rewards24h: number; totalRewards: number }> = {};
@@ -43,12 +51,13 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
             // Fetch rewards for all validators in parallel
             const validatorPromises = addresses.map(async (address) => {
                 try {
-                    // Fetch all reward events for this validator
+                    // Fetch recent reward events (reduced from 10000 to 100)
+                    // Most validators won't have more than 100 reward events in 24h
                     const eventsResponse = await dsFetch<RewardEvent[] | EventsResponse>('events.byAddress', {
                         address,
-                        height: 0,
+                        height: height24hAgo, // Start from 24h ago to reduce data
                         page: 1,
-                        perPage: 10000 // Large number to get all rewards
+                        perPage: 100
                     });
 
 

@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useValidators } from './useValidators';
 import { useMultipleValidatorRewardsHistory } from './useMultipleValidatorRewardsHistory';
 import { useDS } from '@/core/useDs';
-import {useAccounts} from "@/app/providers/AccountsProvider";
+import { useAccountsList } from "@/app/providers/AccountsProvider";
+import { useMemo } from 'react';
 
 interface StakingInfo {
   totalStaked: number;
@@ -20,14 +21,25 @@ interface StakingInfo {
 }
 
 export function useStakingData() {
-  const { accounts, loading: accountsLoading } = useAccounts();
+  // Use granular hook - only re-renders when accounts list changes
+  const { accounts, loading: accountsLoading } = useAccountsList();
   const { data: validators = [], isLoading: validatorsLoading } = useValidators();
   const { data: currentHeight = 0 } = useDS<number>('height', {}, { staleTimeMs: 30_000 });
-  const validatorAddresses = validators.map((v: any) => v.address);
+  const validatorAddresses = useMemo(() => validators.map((v: any) => v.address), [validators]);
   const { data: rewardsHistory = {}, isLoading: rewardsLoading } = useMultipleValidatorRewardsHistory(validatorAddresses);
 
+  // Create stable query key
+  const addressesKey = useMemo(
+    () => accounts.map(a => a.address).sort().join(','),
+    [accounts]
+  );
+  const validatorAddressesKey = useMemo(
+    () => validatorAddresses.sort().join(','),
+    [validatorAddresses]
+  );
+
   return useQuery({
-    queryKey: ['stakingData', accounts.map(acc => acc.address), validatorAddresses, rewardsHistory, currentHeight],
+    queryKey: ['stakingData.computed', addressesKey, validatorAddressesKey, currentHeight],
     enabled: !accountsLoading && !validatorsLoading && accounts.length > 0,
     queryFn: async (): Promise<StakingInfo> => {
       if (accounts.length === 0 || validators.length === 0) {
@@ -63,5 +75,6 @@ export function useStakingData() {
     staleTime: 30000,
     retry: 2,
     retryDelay: 2000,
+    placeholderData: keepPreviousData,
   });
 }

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Menu, X } from 'lucide-react';
+import { Plus, Menu, X, Activity } from 'lucide-react';
 import {motion, AnimatePresence, Variants} from 'framer-motion';
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/Select";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useTotalStage } from "@/hooks/useTotalStage";
+import { useDS } from "@/core/useDs";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
 import { Link, NavLink } from 'react-router-dom';
@@ -21,6 +22,10 @@ export const Navbar = (): JSX.Element => {
     } = useAccounts();
 
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
+    const { data: currentHeight, isLoading: heightLoading } = useDS<number>('height', {}, {
+        staleTimeMs: 5000,
+        refetchIntervalMs: 10000,
+    });
 
     const containerVariants = {
         hidden: { opacity: 0, y: -20 },
@@ -139,6 +144,49 @@ export const Navbar = (): JSX.Element => {
                         <span className="text-[#6fe3b4] font-semibold text-xs lg:text-sm">CNPY</span>
                     </motion.div>
 
+                    {/* Blockchain Height - Always visible */}
+                    <motion.div
+                        className="flex items-center gap-1 sm:gap-1.5 bg-muted px-2 sm:px-2.5 lg:px-3 py-1 rounded-full flex-shrink-0"
+                        variants={itemVariants}
+                        whileHover={{ scale: 1.05, backgroundColor: "#323340" }}
+                        transition={{ duration: 0.2 }}
+                        title="Current blockchain height"
+                    >
+                        <motion.div
+                            animate={{
+                                scale: [1, 1.2, 1],
+                                opacity: [0.5, 1, 0.5],
+                            }}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        >
+                            <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
+                        </motion.div>
+                        <span className="text-gray-400 text-[10px] sm:text-xs lg:text-sm whitespace-nowrap hidden sm:inline">Height</span>
+                        <motion.div
+                            className="text-primary font-semibold text-[10px] sm:text-xs lg:text-sm font-mono"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3, duration: 0.4 }}
+                        >
+                            {heightLoading ? (
+                                '...'
+                            ) : (
+                                <AnimatedNumber
+                                    value={currentHeight || 0}
+                                    format={{
+                                        notation: 'standard',
+                                        maximumFractionDigits: 0
+                                    }}
+                                    className="text-primary font-semibold text-[10px] sm:text-xs lg:text-sm font-mono"
+                                />
+                            )}
+                        </motion.div>
+                    </motion.div>
+
                     {/* Navigation - Desktop only */}
                     <motion.nav
                         className="hidden xl:flex items-center gap-3 2xl:gap-5 flex-shrink-0 overflow-hidden"
@@ -189,27 +237,40 @@ export const Navbar = (): JSX.Element => {
                             value={selectedAccount?.id || ''}
                             onValueChange={switchAccount}
                         >
-                            <SelectTrigger className="w-36 lg:w-44 xl:w-52 bg-muted border-[#3a3b45] text-white rounded-lg px-2 lg:px-3 py-1.5 lg:py-2 h-8 lg:h-9 xl:h-10">
-                                <div className="flex items-center justify-between w-full min-w-0">
+                            <SelectTrigger className="w-40 lg:w-48 bg-muted border-[#3a3b45] text-white rounded-lg px-2 lg:px-3 py-1.5 lg:py-2 h-9 lg:h-10">
+                                <div className="flex items-center gap-2 w-full min-w-0">
+                                    {/* Avatar */}
+                                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-xs font-bold text-white">
+                                            {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                        </span>
+                                    </div>
                                     <span className="text-xs lg:text-sm font-medium truncate">
                                         {loading ? 'Loading...' :
-                                            selectedAccount?.address ?
-                                                `${selectedAccount.address.slice(0, 4)}...${selectedAccount?.address.slice(-4)}` :
-                                                'Account'
+                                            selectedAccount?.nickname || 'Select Account'
                                         }
                                     </span>
-                                    <svg className="w-3 h-3 lg:w-4 lg:h-4 text-white flex-shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-3 h-3 lg:w-4 lg:h-4 text-white flex-shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </div>
                             </SelectTrigger>
                             <SelectContent className="bg-bg-secondary border-bg-accent">
-                                {accounts.map((account) => (
+                                {accounts.map((account, index) => (
                                     <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
                                         <div className="flex items-center gap-3 w-full">
+                                            {/* Avatar */}
+                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-white">
+                                                    {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                                </span>
+                                            </div>
                                             <div className="flex flex-col items-start flex-1 min-w-0">
-                                                <span className="text-sm font-medium text-white hover:text-black truncate">
-                                                    {account.address.slice(0, 4)}...{account.address.slice(-4)} ({account.nickname})
+                                                <span className="text-sm font-medium text-white truncate">
+                                                    {account.nickname || `Account ${index + 1}`}
+                                                </span>
+                                                <span className="text-xs text-text-muted truncate">
+                                                    {account.address.slice(0, 6)}...{account.address.slice(-4)}
                                                 </span>
                                             </div>
                                             {account.isActive && (
@@ -302,26 +363,39 @@ export const Navbar = (): JSX.Element => {
                                     }}
                                 >
                                     <SelectTrigger className="w-full bg-muted border-[#3a3b45] text-white rounded-lg px-3 py-2.5 h-auto min-h-[44px]">
-                                        <div className="flex items-center justify-between w-full min-w-0">
+                                        <div className="flex items-center gap-3 w-full min-w-0">
+                                            {/* Avatar */}
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-sm font-bold text-white">
+                                                    {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                                </span>
+                                            </div>
                                             <span className="text-sm font-medium truncate">
                                                 {loading ? 'Loading...' :
-                                                    selectedAccount?.address ?
-                                                        `${selectedAccount.address.slice(0, 6)}...${selectedAccount?.address.slice(-6)} (${selectedAccount?.nickname})` :
-                                                        'Select an account'
+                                                    selectedAccount?.nickname || 'Select an account'
                                                 }
                                             </span>
-                                            <svg className="w-4 h-4 text-white flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-4 h-4 text-white flex-shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                             </svg>
                                         </div>
                                     </SelectTrigger>
                                     <SelectContent className="bg-bg-secondary border-bg-accent">
-                                        {accounts.map((account) => (
+                                        {accounts.map((account, index) => (
                                             <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
                                                 <div className="flex items-center gap-3 w-full">
+                                                    {/* Avatar */}
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                        <span className="text-sm font-bold text-white">
+                                                            {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                                        </span>
+                                                    </div>
                                                     <div className="flex flex-col items-start flex-1 min-w-0">
-                                                        <span className="text-sm font-medium text-white hover:text-black truncate">
-                                                            {account.address.slice(0, 6)}...{account.address.slice(-6)} ({account.nickname})
+                                                        <span className="text-sm font-medium text-white truncate">
+                                                            {account.nickname || `Account ${index + 1}`}
+                                                        </span>
+                                                        <span className="text-xs text-text-muted truncate">
+                                                            {account.address.slice(0, 6)}...{account.address.slice(-4)}
                                                         </span>
                                                     </div>
                                                     {account.isActive && (
@@ -370,6 +444,44 @@ export const Navbar = (): JSX.Element => {
                                                 )}
                                             </span>
                                             <span className="text-[#6fe3b4] font-semibold text-sm">CNPY</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Mobile Blockchain Height */}
+                            <div className="px-2">
+                                <div className="bg-muted/50 rounded-lg px-3 py-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <motion.div
+                                                animate={{
+                                                    scale: [1, 1.2, 1],
+                                                    opacity: [0.5, 1, 0.5],
+                                                }}
+                                                transition={{
+                                                    duration: 2,
+                                                    repeat: Infinity,
+                                                    ease: "easeInOut"
+                                                }}
+                                            >
+                                                <Activity className="w-4 h-4 text-primary" />
+                                            </motion.div>
+                                            <span className="text-gray-400 text-sm">Blockchain Height</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-primary font-semibold text-sm font-mono">
+                                                {heightLoading ? '...' : (
+                                                    <AnimatedNumber
+                                                        value={currentHeight || 0}
+                                                        format={{
+                                                            notation: 'standard',
+                                                            maximumFractionDigits: 0
+                                                        }}
+                                                        className="text-primary font-semibold text-sm font-mono"
+                                                    />
+                                                )}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

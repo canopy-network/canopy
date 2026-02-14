@@ -37,12 +37,12 @@ export function useValidatorRewardsHistory(address?: string) {
         staleTime: 30_000,
 
         queryFn: async (): Promise<HistoryResult> => {
-            // Fetch all reward events
+            // Fetch recent reward events (reduced from 10000 to 100)
             const events = await dsFetch<RewardEvent[]>('events.byAddress', {
                 address,
-                height: 0,
+                height: height24hAgo, // Start from 24h ago to reduce data
                 page: 1,
-                perPage: 10000 // Large number to get all rewards
+                perPage: 100
             });
 
             // Filter rewards from the last 24h (between height24hAgo and currentHeight)

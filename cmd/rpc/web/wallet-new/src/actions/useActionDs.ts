@@ -1,6 +1,6 @@
 import React from "react";
 import { useDS } from "@/core/useDs";
-import { template, collectDepsFromObject } from "@/core/templater";
+import { template, templateBool, collectDepsFromObject } from "@/core/templater";
 
 /**
  * Hook to load all DS for an action/form level
@@ -73,12 +73,16 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
     // Helper to check if a value is empty/invalid for DS params
     const isEmptyValue = (val: any): boolean => {
         if (val === null || val === undefined) return true;
-        if (typeof val === 'string' && val.trim() === '') return true;
-        if (typeof val === 'object' && Object.keys(val).length === 0) return true;
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            // Consider "undefined" string as empty (failed template resolution)
+            if (trimmed === '' || trimmed === 'undefined' || trimmed === 'null') return true;
+        }
         return false;
     };
 
     // Helper to check if DS params have all required values
+    // Returns true only if ALL leaf values are non-empty
     const hasRequiredValues = (params: Record<string, any>): boolean => {
         // Empty object {} means no params required, which is valid (e.g., keystore DS)
         if (typeof params === 'object' && !Array.isArray(params)) {
@@ -86,21 +90,42 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
             if (keys.length === 0) return true; // {} is valid
         }
 
-        // Check all nested values for empty strings, null, or undefined
-        const checkDeep = (obj: any): boolean => {
-            if (obj == null) return false;
-            if (typeof obj === 'string') return obj.trim() !== '';
-            if (Array.isArray(obj)) return obj.length > 0;
-            if (typeof obj === 'object') {
-                // For objects, check if at least one value is non-empty
-                const values = Object.values(obj);
-                if (values.length === 0) return false;
-                return values.some(v => checkDeep(v));
+        // Check ALL nested values - ALL must be non-empty for the DS to be valid
+        const checkDeep = (obj: any, depth = 0): boolean => {
+            if (obj === null || obj === undefined) return false;
+
+            if (typeof obj === 'string') {
+                const trimmed = obj.trim();
+                // Reject empty strings and "undefined"/"null" strings
+                if (trimmed === '' || trimmed === 'undefined' || trimmed === 'null') {
+                    return false;
+                }
+                return true;
             }
+
+            if (typeof obj === 'number' || typeof obj === 'boolean') {
+                return true;
+            }
+
+            if (Array.isArray(obj)) {
+                // Empty arrays at depth 0 are invalid, but nested empty arrays are ok
+                if (obj.length === 0 && depth === 0) return false;
+                // ALL array items must be valid
+                return obj.every(item => checkDeep(item, depth + 1));
+            }
+
+            if (typeof obj === 'object') {
+                const values = Object.values(obj);
+                // Empty object at depth 0 is valid (no params needed)
+                if (values.length === 0) return depth === 0;
+                // ALL object values must be valid
+                return values.every(v => checkDeep(v, depth + 1));
+            }
+
             return true;
         };
 
-        return checkDeep(params);
+        return checkDeep(params, 0);
     };
 
     // Pre-calculate all DS configurations (no hooks here)
@@ -137,15 +162,18 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
             }
 
             // Check if DS is enabled (manual override from manifest)
+            // Use templateBool which properly handles "undefined", "null", "", "false" as false
             const enabledValue = dsLocalOptions.enabled ?? globalOptions.enabled ?? true;
             let isManuallyEnabled = true;
             if (typeof enabledValue === 'string') {
                 try {
-                    const resolved = template(enabledValue, ctx);
-                    isManuallyEnabled = !!resolved && resolved !== 'false';
+                    // templateBool correctly handles edge cases like empty string, "undefined", etc.
+                    isManuallyEnabled = templateBool(enabledValue, ctx);
                 } catch {
                     isManuallyEnabled = false;
                 }
+            } else if (typeof enabledValue === 'boolean') {
+                isManuallyEnabled = enabledValue;
             } else {
                 isManuallyEnabled = !!enabledValue;
             }
@@ -195,11 +223,21 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
     // Collect all DS results
     const allDsResults = [ds0, ds1, ds2, ds3, ds4, ds5, ds6, ds7, ds8, ds9];
     const dsResults = React.useMemo(() => {
-        return dsConfigs.map((config, idx) => ({
-            dsKey: config.dsKey,
-            ...allDsResults[idx]
-        }));
-    }, [dsConfigs, ...allDsResults.map(d => d.data)]);
+        return dsConfigs.map((config, idx) => {
+            const queryResult = allDsResults[idx];
+            return {
+                dsKey: config.dsKey,
+                // Spread query result but override isEnabled with our config value
+                data: queryResult.data,
+                isLoading: queryResult.isLoading,
+                isFetched: queryResult.isFetched,
+                error: queryResult.error,
+                refetch: queryResult.refetch,
+                // Our config-based enabled flag (whether we intended to enable this DS)
+                isEnabled: config.dsOptions?.enabled ?? false,
+            };
+        });
+    }, [dsConfigs, ...allDsResults.map(d => d.data), ...allDsResults.map(d => d.isFetched)]);
 
     // Merge all DS data into a single object
     const allDsData = React.useMemo(() => {
@@ -229,10 +267,29 @@ export function useActionDs(actionDs: any, ctx: any, actionId: string, accountAd
     const isLoading = dsResults.some(r => r.isLoading);
     const hasError = dsResults.some(r => r.error);
 
+    // Build a map of DS key -> fetch status
+    // A DS is "fetched" when:
+    // - It's not enabled (no fetch needed), OR
+    // - It has been fetched at least once (success or error)
+    const fetchStatus = React.useMemo(() => {
+        const status: Record<string, { isFetched: boolean; isLoading: boolean; hasError: boolean }> = {};
+        for (const result of dsResults) {
+            if (!result.dsKey || result.dsKey === "__disabled__") continue;
+            status[result.dsKey] = {
+                // Consider "fetched" if: disabled (no fetch needed) OR actually fetched
+                isFetched: !result.isEnabled || result.isFetched === true,
+                isLoading: result.isLoading ?? false,
+                hasError: !!result.error,
+            };
+        }
+        return status;
+    }, [dsResults]);
+
     return {
         ds: allDsData,
         isLoading,
         hasError,
+        fetchStatus, // New: per-DS fetch status
         refetchAll: () => {
             dsResults.forEach(r => r.refetch?.());
         }

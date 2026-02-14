@@ -8,6 +8,7 @@ import {Action as ManifestAction} from "@/manifest/types";
 export const useDashboard = () => {
     const [isActionModalOpen, setIsActionModalOpen] = React.useState(false);
     const [selectedActions, setSelectedActions] = React.useState<ManifestAction[]>([]);
+    const [prefilledData, setPrefilledData] = React.useState<Record<string, any> | undefined>(undefined);
     const { manifest ,loading: manifestLoading } = useManifest();
 
 
@@ -19,7 +20,7 @@ export const useDashboard = () => {
         {account: {address: selectedAddress}},
         {
             enabled: !!selectedAddress && isAccountReady,
-            refetchIntervalMs: 15_000,
+            refetchIntervalMs: 60_000,
             perPage: 20,
             getNextPageParam: (lastPage, pages) => {
                 if (lastPage.length < 20) return undefined;
@@ -37,7 +38,7 @@ export const useDashboard = () => {
         {account: {address: selectedAddress}},
         {
             enabled: !!selectedAddress && isAccountReady,
-            refetchIntervalMs: 15_000,
+            refetchIntervalMs: 60_000,
             perPage: 20,
             getNextPageParam: (lastPage, pages) => {
                 if (lastPage.length < 20) return undefined;
@@ -54,7 +55,7 @@ export const useDashboard = () => {
         {account: {address: selectedAddress}},
         {
             enabled: !!selectedAddress && isAccountReady,
-            refetchIntervalMs: 15_000,
+            refetchIntervalMs: 60_000,
             perPage: 20,
             getNextPageParam: (lastPage, pages) => {
                 if (lastPage.length < 20) return undefined;
@@ -127,7 +128,7 @@ export const useDashboard = () => {
 
     }, [txSentQuery.data, txReceivedQuery.data, txFailedQuery.data])
 
-    const onRunAction = (action: ManifestAction) => {
+    const onRunAction = (action: ManifestAction, actionPrefilledData?: Record<string, any>) => {
         const actions = [action] ;
         if (action.relatedActions) {
             const relatedActions = manifest?.actions.filter(a => action?.relatedActions?.includes(a.id))
@@ -136,12 +137,19 @@ export const useDashboard = () => {
                 actions.push(...relatedActions)
         }
         setSelectedActions(actions);
+        setPrefilledData(actionPrefilledData);
         setIsActionModalOpen(true);
     }
 
+    // Clear prefilledData when modal closes
+    const handleCloseModal = React.useCallback(() => {
+        setIsActionModalOpen(false);
+        setPrefilledData(undefined);
+    }, []);
+
     return {
        isActionModalOpen,
-       setIsActionModalOpen,
+       setIsActionModalOpen: handleCloseModal,
        selectedActions,
        setSelectedActions,
        manifest,
@@ -149,5 +157,6 @@ export const useDashboard = () => {
        isTxLoading,
        allTxs,
        onRunAction,
+       prefilledData,
     }
 }
