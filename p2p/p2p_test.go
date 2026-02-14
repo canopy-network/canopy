@@ -690,6 +690,73 @@ func TestGetInboxStats(t *testing.T) {
 	}
 }
 
+func TestOnPeerError_StoresMustConnectNetAddress(t *testing.T) {
+	n := newTestP2PNode(t)
+
+	peerPub := []byte("peer-pubkey-1")
+	remoteObserved := "203.0.113.10:54321" // looks like an ephemeral inbound source port
+	mustConnectAddr := "example.com:9001"
+
+	// In prod this is populated by ListenForMustConnects() from controller updates.
+	n.mustConnectIndex.Store(string(peerPub), mustConnectAddr)
+
+	n.OnPeerError(errors.New("boom"), peerPub, remoteObserved, 123)
+
+	raw, ok := n.failedPeers.Load(string(peerPub))
+	require.True(t, ok)
+	addr, ok := raw.(*lib.PeerAddress)
+	require.True(t, ok)
+	require.Equal(t, mustConnectAddr, addr.NetAddress)
+	require.Equal(t, peerPub, addr.PublicKey)
+}
+
+func TestDialFailedPeers_PrefersMustConnectNetAddress(t *testing.T) {
+	n1 := newStartedTestP2PNode(t)
+	n2 := newStartedTestP2PNode(t)
+	defer n1.Stop()
+	defer n2.Stop()
+
+	// First connect so we know the address is dialable in this environment.
+	require.NoError(t, connectStartedNodes(t, n1, n2))
+
+	// Seed the must-connect net address index (normally done by ListenForMustConnects()).
+	dialable := n2.listener.Addr().String()
+	n1.mustConnectIndex.Store(string(n2.pub), dialable)
+	n1.UpdateMustConnects([]*lib.PeerAddress{{
+		PublicKey:  n2.pub,
+		NetAddress: dialable,
+		PeerMeta:   &lib.PeerMeta{NetworkId: n1.meta.NetworkId, ChainId: n1.meta.ChainId},
+	}})
+
+	// Capture the real connection uuid so OnPeerError() can remove the peer cleanly.
+	key := lib.BytesToString(n2.pub)
+	peer := n1.PeerSet.m[key]
+	require.NotNil(t, peer)
+
+	// Simulate a failure where we observed a non-dialable remote endpoint (e.g. inbound ephemeral source port).
+	n1.OnPeerError(errors.New("boom"), n2.pub, "127.0.0.1:1", peer.conn.uuid)
+	require.False(t, n1.PeerSet.Has(n2.pub))
+	raw, ok := n1.failedPeers.Load(string(n2.pub))
+	require.True(t, ok)
+	fp := raw.(*lib.PeerAddress)
+	require.Equal(t, dialable, fp.NetAddress)
+
+	go n1.DialFailedPeers(10 * time.Millisecond)
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("timeout waiting for redial")
+		default:
+			if n1.PeerSet.Has(n2.pub) {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
 func TestGetInboxStatsThreadSafety(t *testing.T) {
 	// Create test P2P node
 	p2pNode := newTestP2PNode(t)
