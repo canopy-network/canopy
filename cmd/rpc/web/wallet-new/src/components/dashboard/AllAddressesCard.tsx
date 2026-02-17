@@ -8,61 +8,36 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-// Helper functions moved outside component
-const formatAddress = (address: string) => {
-  return address.substring(0, 6) + "..." + address.substring(address.length - 4);
-};
+const formatAddress = (address: string) =>
+    `${address.slice(0, 6)}…${address.slice(-4)}`;
 
-// Address data type
 interface AddressData {
   id: string;
   address: string;
-  fullAddress: string;
   nickname: string;
-  balance: string;
   totalValue: string;
   status: string;
 }
 
-// Memoized address row component
-interface AddressRowProps {
-  address: AddressData;
-  index: number;
-}
-
-const AddressRow = React.memo<AddressRowProps>(({ address, index }) => (
+const AddressRow = React.memo<{ address: AddressData; index: number }>(({ address, index }) => (
   <motion.div
-    className="p-3 bg-bg-tertiary/30 rounded-lg hover:bg-bg-tertiary/50 transition-colors"
-    initial={{ opacity: 0, y: 10 }}
+    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-white/[0.06] hover:border-white/10 hover:bg-white/[0.02] transition-all duration-150"
+    initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.2, delay: index * 0.05 }}
   >
-    <div className="flex items-start gap-3">
-      {/* Icon */}
-      <div className="w-10 h-10 bg-gradient-to-r from-primary/80 to-primary/40 rounded-full flex items-center justify-center flex-shrink-0">
-        <Wallet className="text-white w-4 h-4" />
-      </div>
+    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+      <Wallet className="w-3.5 h-3.5 text-white" />
+    </div>
 
-      {/* Content Container */}
-      <div className="flex-1 min-w-0 space-y-2">
-        {/* Top Row: Nickname and Address */}
-        <div>
-          <div className="text-text-primary text-sm font-medium mb-1 truncate">
-            {address.nickname}
-          </div>
-          <div className="text-text-muted text-xs font-mono truncate">
-            {address.address}
-          </div>
-        </div>
+    <div className="flex-1 min-w-0">
+      <div className="text-sm font-medium text-white truncate leading-tight">{address.nickname}</div>
+      <div className="text-xs text-back font-mono mt-0.5">{address.address}</div>
+    </div>
 
-        {/* Bottom Row: Balance and Status */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-text-primary text-sm font-medium whitespace-nowrap">
-            {address.totalValue} CNPY
-          </div>
-          <StatusBadge label={address.status} size="sm" />
-        </div>
-      </div>
+    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+      <span className="text-sm font-semibold text-white tabular-nums">{Number(address.totalValue).toLocaleString()}</span>
+      <StatusBadge label={address.status} size="sm" />
     </div>
   </motion.div>
 ));
@@ -70,48 +45,38 @@ const AddressRow = React.memo<AddressRowProps>(({ address, index }) => (
 AddressRow.displayName = 'AddressRow';
 
 export const AllAddressesCard = React.memo(() => {
-  // Use granular hook - only re-renders when accounts list changes
   const { accounts, loading: accountsLoading } = useAccountsList();
   const { balances, stakingData, loading: dataLoading } = useAccountData();
 
-  const formatBalance = useCallback((amount: number) => {
-    return (amount / 1000000).toFixed(2);
-  }, []);
+  const formatBalance = useCallback((amount: number) => (amount / 1_000_000).toFixed(2), []);
 
-  const getAccountStatus = useCallback((address: string) => {
-    const stakingInfo = stakingData.find((data) => data.address === address);
-    if (stakingInfo && stakingInfo.staked > 0) {
-      return "Staked";
-    }
-    return "Liquid";
+  const getStatus = useCallback((address: string) => {
+    const info = stakingData.find(d => d.address === address);
+    return info && info.staked > 0 ? "Staked" : "Liquid";
   }, [stakingData]);
 
-  const processedAddresses = useMemo((): AddressData[] => {
-    return accounts.map((account) => {
-      const balanceInfo = balances.find((b) => b.address === account.address);
-      const balance = balanceInfo?.amount || 0;
-      const formattedBalance = formatBalance(balance);
-      const status = getAccountStatus(account.address);
-
+  const processedAddresses = useMemo((): AddressData[] =>
+    accounts.map(account => {
+      const balance = balances.find(b => b.address === account.address)?.amount || 0;
       return {
         id: account.address,
         address: formatAddress(account.address),
-        fullAddress: account.address,
         nickname: account.nickname || "Unnamed",
-        balance: `${formattedBalance} CNPY`,
-        totalValue: formattedBalance,
-        status: status,
+        totalValue: formatBalance(balance),
+        status: getStatus(account.address),
       };
-    });
-  }, [accounts, balances, formatBalance, getAccountStatus]);
+    }),
+    [accounts, balances, formatBalance, getStatus]
+  );
 
   if (accountsLoading || dataLoading) {
     return (
       <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
+        className="rounded-2xl p-6 border border-white/10 h-full"
+        style={{ background: '#22232E' }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.4 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
       >
         <LoadingState message="Loading addresses..." size="md" />
       </motion.div>
@@ -120,34 +85,29 @@ export const AllAddressesCard = React.memo(() => {
 
   return (
     <motion.div
-      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-      initial={{ opacity: 0, y: 20 }}
+      className="rounded-2xl p-6 border border-white/10 h-full flex flex-col"
+      style={{ background: '#22232E' }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.4 }}
+      transition={{ duration: 0.4, delay: 0.3 }}
     >
-      {/* Title with See All link */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-text-primary text-lg font-semibold">
-          All Addresses
-        </h3>
-        <NavLink to="/all-addresses" className="text-text-muted hover:text-primary/80 text-sm font-medium transition-colors">
-          See All ({processedAddresses.length})
+      <div className="flex items-center justify-between mb-5">
+        <span className="text-xs font-medium text-back uppercase tracking-wider">All Addresses</span>
+        <NavLink
+          to="/all-addresses"
+          className="text-xs text-back hover:text-primary transition-colors font-medium"
+        >
+          See all ({processedAddresses.length})
         </NavLink>
       </div>
 
-      {/* Addresses List */}
-      <div className="space-y-3">
+      <div className="space-y-2 flex-1">
         {processedAddresses.length > 0 ? (
           processedAddresses.slice(0, 4).map((address, index) => (
             <AddressRow key={address.id} address={address} index={index} />
           ))
         ) : (
-          <EmptyState
-            icon="Wallet"
-            title="No addresses found"
-            description="Add an address to get started"
-            size="sm"
-          />
+          <EmptyState icon="Wallet" title="No addresses found" description="Add an address to get started" size="sm" />
         )}
       </div>
     </motion.div>

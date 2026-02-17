@@ -37,8 +37,8 @@ export const Dashboard = () => {
 
     if (manifestLoading) {
         return (
-            <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-                <div className="text-white text-xl">Loading dashboard...</div>
+            <div className="flex items-center justify-center py-20">
+                <div className="text-back text-sm">Loading dashboard...</div>
             </div>
         );
     }
@@ -46,12 +46,11 @@ export const Dashboard = () => {
     return (
         <ErrorBoundary>
             <motion.div
-                className="min-h-screen bg-bg-primary"
                 initial="hidden"
                 animate="visible"
                 variants={containerVariants}
             >
-                <div className="px-4 sm:px-6 py-6 sm:py-8">
+                <div className="py-2">
                     {/* Top Section - Balance Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                         <div className="w-full">

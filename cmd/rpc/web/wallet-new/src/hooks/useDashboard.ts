@@ -1,5 +1,5 @@
 import {useDSInfinite} from "@/core/useDSInfinite";
-import React, {useMemo} from "react";
+import React, {useCallback, useMemo} from "react";
 import {Transaction} from "@/components/dashboard/RecentTransactionsCard";
 import {useAccounts} from "@/app/providers/AccountsProvider";
 import {useManifest} from "@/hooks/useManifest";
@@ -22,14 +22,6 @@ export const useDashboard = () => {
             enabled: !!selectedAddress && isAccountReady,
             refetchIntervalMs: 60_000,
             perPage: 20,
-            getNextPageParam: (lastPage, pages) => {
-                if (lastPage.length < 20) return undefined;
-                return pages.length + 1;
-            },
-            selectItems: (d: any) => {
-                return Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
-            }
-
         }
     )
 
@@ -40,13 +32,6 @@ export const useDashboard = () => {
             enabled: !!selectedAddress && isAccountReady,
             refetchIntervalMs: 60_000,
             perPage: 20,
-            getNextPageParam: (lastPage, pages) => {
-                if (lastPage.length < 20) return undefined;
-                return pages.length + 1;
-            },
-            selectItems: (d: any) => {
-                return Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
-            }
         }
     )
 
@@ -57,74 +42,64 @@ export const useDashboard = () => {
             enabled: !!selectedAddress && isAccountReady,
             refetchIntervalMs: 60_000,
             perPage: 20,
-            getNextPageParam: (lastPage, pages) => {
-                if (lastPage.length < 20) return undefined;
-                return pages.length + 1;
-            },
-            selectItems: (d: any) => {
-                return Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
-            }
         }
     )
 
 
     const isTxLoading = txSentQuery.isLoading || txReceivedQuery.isLoading || txFailedQuery.isLoading;
 
+    const hasMoreTxs =
+        (txSentQuery.hasNextPage ?? false) ||
+        (txReceivedQuery.hasNextPage ?? false) ||
+        (txFailedQuery.hasNextPage ?? false);
+
+    const isFetchingMoreTxs =
+        txSentQuery.isFetchingNextPage ||
+        txReceivedQuery.isFetchingNextPage ||
+        txFailedQuery.isFetchingNextPage;
+
+    const fetchMoreTxs = useCallback(async () => {
+        const promises: Promise<any>[] = [];
+        if (txSentQuery.hasNextPage) promises.push(txSentQuery.fetchNextPage());
+        if (txReceivedQuery.hasNextPage) promises.push(txReceivedQuery.fetchNextPage());
+        if (txFailedQuery.hasNextPage) promises.push(txFailedQuery.fetchNextPage());
+        if (promises.length > 0) await Promise.all(promises);
+    }, [txSentQuery, txReceivedQuery, txFailedQuery]);
+
+    // Total count hint from the first page of txs.sent (most reliable source for totalCount)
+    const serverTotalCount = useMemo(() => {
+        const raw = txSentQuery.data?.pages?.[0]?.raw;
+        return typeof raw?.totalCount === 'number' ? raw.totalCount : undefined;
+    }, [txSentQuery.data]);
+
     const allTxs = useMemo(() => {
-        const sent =
-            txSentQuery.data?.pages.flatMap(p =>
-                p.items.map(i => ({
-                    ...i,
-                    transaction: {
-                        // @ts-ignore
-                        ...i.transaction,
-                    },
-                }))
-            ) ?? [];
+        const toTx = (i: any, typeOverride?: string, statusOverride?: string): Transaction => ({
+            hash: String(i.txHash ?? ''),
+            type: typeOverride ?? i.transaction?.type ?? '',
+            amount: i.transaction?.msg?.amount ?? 0,
+            fee: i.transaction?.fee,
+            status: statusOverride ?? i.transaction?.status ?? 'Confirmed',
+            time: i.transaction?.time,
+            address: i.address,
+            error: i.error ?? undefined,
+        });
 
-        const received =
-            txReceivedQuery.data?.pages.flatMap(p =>
-                p.items.map(i => ({
-                    ...i,
-                    transaction: {
-                        // @ts-ignore
-                        ...i.transaction,
-                        type: 'receive',
-                    },
-                }))
-            ) ?? [];
+        const received = (txReceivedQuery.data?.pages.flatMap(p => p.items) ?? [])
+            .map(i => toTx(i, 'receive'));
 
-        const failed =
-            txFailedQuery.data?.pages.flatMap(p =>
-                p.items.map(i => ({
-                    ...i,
-                    transaction: {
-                        // @ts-ignore
-                        ...i.transaction,
-                        type: 'stake',
-                        status: 'Failed',
-                    },
+        const sent = (txSentQuery.data?.pages.flatMap(p => p.items) ?? [])
+            .map(i => toTx(i));
 
-                }))
-            ) ?? [];
+        const failed = (txFailedQuery.data?.pages.flatMap(p => p.items) ?? [])
+            .map(i => toTx(i, undefined, 'Failed'));
 
+        // Deduplicate by txHash — priority: failed > sent > received (last write wins)
+        const byHash = new Map<string, Transaction>();
+        for (const tx of [...received, ...sent, ...failed]) {
+            if (tx.hash) byHash.set(tx.hash, tx);
+        }
 
-        const mergedTxs = [...sent, ...received, ...failed]
-
-        return mergedTxs.map(tx => {
-            return {
-                // @ts-ignore
-                hash: String(tx.txHash ?? ''),
-                type: tx.transaction.type,
-                amount: tx.transaction.msg.amount ?? 0,
-                fee: tx.transaction.fee,
-                //TODO: CHECK HOW TO GET THIS VALUE
-                status:  tx.transaction.status ?? 'Confirmed',
-                time: tx?.transaction?.time,
-                // @ts-ignore
-                address: tx.address,
-            } as Transaction;
-        }).sort((a, b) => b.time - a.time);
+        return Array.from(byHash.values()).sort((a, b) => b.time - a.time);
 
     }, [txSentQuery.data, txReceivedQuery.data, txFailedQuery.data])
 
@@ -158,5 +133,9 @@ export const useDashboard = () => {
        allTxs,
        onRunAction,
        prefilledData,
+       hasMoreTxs,
+       isFetchingMoreTxs,
+       fetchMoreTxs,
+       serverTotalCount,
     }
 }

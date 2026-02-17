@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy } from "lucide-react";
 
 interface NodeStatusProps {
   nodeStatus: {
@@ -30,89 +31,87 @@ export default function NodeStatus({
   nodeStatus,
   selectedNode,
   availableNodes,
-  onNodeChange,
   onCopyAddress,
 }: NodeStatusProps): JSX.Element {
-  const formatTruncatedAddress = (address: string) => {
-    return (
-      address.substring(0, 8) + "..." + address.substring(address.length - 4)
-    );
-  };
-
   const currentNode =
-    availableNodes.find((node) => node.id === selectedNode) ||
-    availableNodes[0];
+    availableNodes.find((n) => n.id === selectedNode) || availableNodes[0];
+
+  const truncate = (addr: string) =>
+    addr ? `${addr.slice(0, 8)}…${addr.slice(-4)}` : "Connecting…";
 
   return (
     <>
-      {/* Current node info and copy address */}
-      <div className="flex items-center justify-between gap-4 mb-6">
+      {/* Node identity row */}
+      <div className="flex items-center justify-between gap-4 mb-5">
         <div className="flex items-center gap-3">
-          <div
-            className={`w-3 h-3 rounded-full ${nodeStatus.synced ? "bg-primary" : "bg-status-warning"}`}
-          ></div>
+          <span className="relative flex h-2.5 w-2.5">
+            {nodeStatus.synced && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-50" />
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                nodeStatus.synced ? "bg-primary" : "bg-status-warning"
+              }`}
+            />
+          </span>
           <div>
-            <h2 className="text-text-primary font-medium">
+            <p className="text-sm font-semibold text-white">
               {currentNode?.name || "Current Node"}
-            </h2>
+            </p>
             {currentNode?.netAddress && (
-              <p className="text-xs text-text-muted">
-                {currentNode.netAddress}
-              </p>
+              <p className="text-xs text-back mt-0.5">{currentNode.netAddress}</p>
             )}
           </div>
         </div>
+
         <button
           onClick={onCopyAddress}
-          className="flex items-center gap-2 text-sm bg-bg-secondary hover:bg-bg-accent text-text-primary px-3 py-2 rounded-md border border-bg-secondary transition-colors"
+          className="flex items-center gap-1.5 text-xs text-back hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-150"
         >
-          <i className="fa-regular fa-copy"></i>
+          <Copy className="w-3.5 h-3.5" />
           Copy Address
         </button>
       </div>
 
-      {/* Node Status */}
-      <div className="bg-bg-secondary rounded-xl border border-bg-accent p-4 mb-6">
-        <div className="grid grid-cols-4 gap-4">
-          <div className="flex items-center gap-2">
+      {/* Status bar */}
+      <div
+        className="grid grid-cols-4 gap-4 rounded-xl border border-white/10 p-4 mb-6"
+        style={{ background: '#22232E' }}
+      >
+        {/* Sync */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-back">Sync Status</span>
+          <span className={`text-sm font-semibold ${nodeStatus.synced ? "text-primary" : "text-status-warning"}`}>
+            {nodeStatus.synced ? "SYNCED" : "SYNCING"}
+          </span>
+        </div>
+
+        {/* Block height */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-back">Block Height</span>
+          <span className="text-sm font-semibold text-white font-mono">
+            #{nodeStatus.blockHeight.toLocaleString()}
+          </span>
+        </div>
+
+        {/* Progress */}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-back">Round Progress</span>
+          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className={`w-3 h-3 rounded-full ${nodeStatus.synced ? "bg-primary" : "bg-status-warning"}`}
-            ></div>
-            <div className="flex flex-col gap-2 items-center">
-              <div className="text-xs text-text-muted">Sync Status</div>
-              <div className="text-primary text-sm font-medium">
-                {nodeStatus.synced ? "SYNCED" : "CONNECTING"}
-              </div>
-            </div>
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${nodeStatus.syncProgress}%` }}
+            />
           </div>
-          <div className="flex flex-col gap-2 justify-center">
-            <div className="text-xs text-text-muted">Block Height</div>
-            <div className="text-gray-300 font-mono text-sm font-medium">
-              #{nodeStatus.blockHeight.toLocaleString()}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="text-xs text-text-muted">Round Progress</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-bg-secondary h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-primary h-full rounded-full"
-                  style={{ width: `${nodeStatus.syncProgress}%` }}
-                ></div>
-              </div>
-            </div>
-            <p className="text-text-muted text-xs">
-              {nodeStatus.syncProgress}% complete
-            </p>
-          </div>
-          <div className="col-span-1">
-            <div className="text-xs text-text-muted">Node Address</div>
-            <div className="text-text-primary font-medium font-mono">
-              {nodeStatus.nodeAddress
-                ? formatTruncatedAddress(nodeStatus.nodeAddress)
-                : "Connecting..."}
-            </div>
-          </div>
+          <span className="text-xs text-back">{nodeStatus.syncProgress}%</span>
+        </div>
+
+        {/* Address */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-back">Node Address</span>
+          <span className="text-sm font-mono text-white">
+            {truncate(nodeStatus.nodeAddress)}
+          </span>
         </div>
       </div>
     </>

@@ -96,10 +96,11 @@ export const useAvailableNodes = () => {
 };
 
 /**
- * Hook to fetch all node data for the current node using DS pattern
+ * Hook to fetch all node data for the current node using DS pattern.
+ * Logs are intentionally excluded — use useNodeLogs() separately so that a
+ * potentially large text response does not block the fast metrics cycle.
  */
 export const useNodeData = (nodeId: string) => {
-  const config = useConfig();
   const dsFetch = useDSFetcher();
   const { data: availableNodes = [] } = useAvailableNodes();
   const selectedNode =
@@ -112,20 +113,17 @@ export const useNodeData = (nodeId: string) => {
       if (!selectedNode) throw new Error("Node not found");
 
       try {
-        // Fetch all required data using DS pattern
         const [
           heightData,
           consensusData,
           peerData,
           resourceData,
-          logsData,
           validatorSetData,
         ] = await Promise.all([
           dsFetch("height"),
           dsFetch("admin.consensusInfo"),
           dsFetch("admin.peerInfo"),
           dsFetch("admin.resourceUsage"),
-          dsFetch("admin.log"),
           dsFetch("validatorSet", { height: 0, committeeId: 1 }),
         ]);
 
@@ -134,7 +132,7 @@ export const useNodeData = (nodeId: string) => {
           consensus: consensusData,
           peers: peerData,
           resources: resourceData,
-          logs: logsData,
+          logs: "",
           validatorSet: validatorSetData,
         };
       } catch (error) {
@@ -142,8 +140,38 @@ export const useNodeData = (nodeId: string) => {
         throw error;
       }
     },
-    refetchInterval: 5000,
-    staleTime: 2000,
+    // Poll every 2 s so CPU/RAM/consensus metrics feel near-real-time
+    refetchInterval: 2000,
+    staleTime: 1000,
+    placeholderData: keepPreviousData,
+  });
+};
+
+/**
+ * Hook to stream node logs independently of the fast metrics cycle.
+ * Logs can be a large text payload; keeping them in a separate query
+ * prevents them from blocking consensus/resource updates.
+ */
+export const useNodeLogs = (nodeId: string) => {
+  const dsFetch = useDSFetcher();
+  const { data: availableNodes = [] } = useAvailableNodes();
+  const selectedNode =
+    availableNodes.find((n) => n.id === nodeId) || availableNodes[0];
+
+  return useQuery({
+    queryKey: ["nodeLogs", nodeId],
+    enabled: !!nodeId && !!selectedNode,
+    queryFn: async (): Promise<string> => {
+      if (!selectedNode) throw new Error("Node not found");
+      try {
+        return await dsFetch("admin.log");
+      } catch (error) {
+        console.error(`Error fetching logs for ${nodeId}:`, error);
+        return "";
+      }
+    },
+    refetchInterval: 1000,
+    staleTime: 500,
     placeholderData: keepPreviousData,
   });
 };

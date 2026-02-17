@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useBalanceHistory } from "@/hooks/useBalanceHistory";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
@@ -10,77 +10,64 @@ export const TotalBalanceCard = React.memo(() => {
   const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
   const [hasAnimated, setHasAnimated] = useState(false);
 
+  const isPositive = (historyData?.changePercentage ?? 0) >= 0;
+
   return (
     <motion.div
-      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden h-full"
-      initial={hasAnimated ? false : { opacity: 0, y: 20 }}
+      className="rounded-2xl p-6 border border-white/10 relative overflow-hidden h-full flex flex-col"
+      style={{ background: '#22232E' }}
+      initial={hasAnimated ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
       onAnimationComplete={() => setHasAnimated(true)}
     >
-      {/* Wallet Icon */}
-      <div className="absolute top-4 right-4">
-        <Wallet className="text-primary w-6 h-6" />
+      {/* Subtle glow accent */}
+      <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-primary/5 blur-2xl pointer-events-none" />
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <span className="text-xs font-medium text-back uppercase tracking-wider">Total Balance</span>
+        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Wallet className="w-4 h-4 text-primary" />
+        </div>
       </div>
 
-      {/* Title */}
-      <h3 className="text-text-muted text-sm font-medium mb-4">
-        Total Balance (All Addresses)
-      </h3>
-
       {/* Balance */}
-      <div className="mb-4">
+      <div className="flex-1">
         {loading ? (
-          <div className="text-3xl font-bold text-text-primary">...</div>
+          <div className="h-10 w-40 rounded-lg bg-white/5 animate-pulse mb-1" />
         ) : (
-          <div className="flex items-center gap-3">
-            <div className="text-4xl font-bold font-sans text-text-primary">
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-4xl font-bold text-white tabular-nums leading-none">
               <AnimatedNumber
-                value={totalBalance / 1000000}
-                format={{
-                  notation: "standard",
-                  maximumFractionDigits: 2,
-                }}
+                value={totalBalance / 1_000_000}
+                format={{ notation: "standard", maximumFractionDigits: 2 }}
               />
-            </div>
+            </span>
+            <span className="text-base font-semibold text-white/40">CNPY</span>
           </div>
         )}
       </div>
 
-      {/* 24h Change */}
-      <div className="flex items-center gap-2">
+      {/* 24h change */}
+      <div className="mt-4 pt-4 border-t border-white/[0.06]">
         {historyLoading ? (
-          <span className="text-sm text-text-muted">Loading 24h change...</span>
+          <div className="h-4 w-28 rounded bg-white/5 animate-pulse" />
         ) : historyData ? (
-          <span
-            className={`text-sm flex items-center gap-1 ${
-              historyData.changePercentage >= 0
-                ? "text-primary"
-                : "text-status-error"
-            }`}
-          >
-            <svg
-              className={`w-4 h-4 ${historyData.changePercentage < 0 ? "rotate-180" : ""}`}
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
+          <div className={`flex items-center gap-1.5 text-sm font-medium ${isPositive ? "text-primary" : "text-red-400"}`}>
+            {isPositive
+              ? <TrendingUp className="w-4 h-4" />
+              : <TrendingDown className="w-4 h-4" />
+            }
             <AnimatedNumber
               value={Math.abs(historyData.changePercentage)}
-              format={{
-                notation: "standard",
-                maximumFractionDigits: 1,
-              }}
+              format={{ notation: "standard", maximumFractionDigits: 1 }}
             />
-            %<span className="text-sm text-text-muted ml-1">24h change</span>
-          </span>
+            <span>%</span>
+            <span className="text-back font-normal ml-0.5">24h change</span>
+          </div>
         ) : (
-          <span className="text-sm text-text-muted">No historical data</span>
+          <span className="text-sm text-back">No historical data</span>
         )}
       </div>
     </motion.div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { useAvailableNodes, useNodeData } from "@/hooks/useNodes";
+import { useAvailableNodes, useNodeData, useNodeLogs } from "@/hooks/useNodes";
 import NodeStatus from "@/components/monitoring/NodeStatus";
 import NetworkPeers from "@/components/monitoring/NetworkPeers";
 import NodeLogs from "@/components/monitoring/NodeLogs";
@@ -11,7 +11,7 @@ import MonitoringSkeleton from "@/components/monitoring/MonitoringSkeleton";
 
 export default function Monitoring(): JSX.Element {
   const [activeTab, setActiveTab] = useState<
-    "quorum" | "logger" | "config" | "peerInfo" | "peerBook"
+    "quorum" | "config" | "peerInfo" | "peerBook"
   >("quorum");
   const [isPaused, setIsPaused] = useState(false);
 
@@ -24,6 +24,9 @@ export default function Monitoring(): JSX.Element {
   const { data: nodeData, isLoading: nodeDataLoading } = useNodeData(
     currentNode?.id || "",
   );
+
+  // Logs are fetched independently so a large log payload never delays metrics
+  const { data: rawLogs } = useNodeLogs(currentNode?.id || "");
 
   // Process node data from React Query
   const nodeStatus = {
@@ -60,8 +63,8 @@ export default function Monitoring(): JSX.Element {
   };
 
   const logs =
-    typeof nodeData?.logs === "string"
-      ? nodeData.logs.split("\n").filter(Boolean)
+    typeof rawLogs === "string"
+      ? rawLogs.split("\n").filter(Boolean)
       : [];
 
   const metrics = {

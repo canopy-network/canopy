@@ -2,101 +2,93 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
-import {selectQuickActions} from "@/core/actionForm";
-import {Action} from "@/manifest/types";
+import { selectQuickActions } from "@/core/actionForm";
+import { Action } from "@/manifest/types";
 import { useAccountData } from '@/hooks/useAccountData';
+import { useValidators } from '@/hooks/useValidators';
 import { useSelectedAccount } from '@/app/providers/AccountsProvider';
 
-export const QuickActionsCard = React.memo(function QuickActionsCard({actions, onRunAction, maxNumberOfItems }:{
+export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, onRunAction, maxNumberOfItems }: {
     actions?: Action[];
     onRunAction?: (a: Action, prefilledData?: Record<string, any>) => void;
     maxNumberOfItems?: number;
 }) {
     const { selectedAccount } = useSelectedAccount();
     const { stakingData } = useAccountData();
+    const { data: validators = [] } = useValidators();
 
-    // Check if selected account has stake and get stake info
     const selectedAccountStake = React.useMemo(() => {
         if (!selectedAccount?.address) return null;
         const stakeInfo = stakingData.find(s => s.address === selectedAccount.address);
         return stakeInfo && stakeInfo.staked > 0 ? stakeInfo : null;
     }, [selectedAccount?.address, stakingData]);
 
+    const selectedValidator = React.useMemo(() => {
+        if (!selectedAccount?.address) return null;
+        return (validators as any[]).find(v => v.address === selectedAccount.address) || null;
+    }, [validators, selectedAccount?.address]);
+
     const hasStake = !!selectedAccountStake;
 
-    // Modify actions to show "Edit Stake" instead of "Stake" when user has stake
     const modifiedActions = React.useMemo(() => {
         const quickActions = selectQuickActions(actions, maxNumberOfItems);
         return quickActions.map(action => {
             if (action.id === 'stake' && hasStake) {
-                return {
-                    ...action,
-                    title: 'Edit Stake',
-                    icon: 'Lock',
-                    // Mark this as an edit action so we know to pass prefilledData
-                    __isEditStake: true,
-                };
+                return { ...action, title: 'Edit Stake', icon: 'Lock', __isEditStake: true };
             }
             return action;
         });
     }, [actions, maxNumberOfItems, hasStake]);
 
-    // Handle action click - pass prefilledData for Edit Stake
     const handleRunAction = React.useCallback((action: Action & { __isEditStake?: boolean }) => {
         if (action.__isEditStake && selectedAccount?.address) {
-            // For Edit Stake, pass the selected account as operator
             onRunAction?.(action, {
                 operator: selectedAccount.address,
+                selectCommittees: (selectedValidator as any)?.committees || [],
             });
         } else {
             onRunAction?.(action);
         }
-    }, [onRunAction, selectedAccount?.address]);
-
-    const sortedActions = modifiedActions;
+    }, [onRunAction, selectedAccount?.address, selectedValidator]);
 
     const cols = React.useMemo(
-        () => Math.min(Math.max(sortedActions.length || 1, 1), 2),
-        [sortedActions.length]
-    );
-    const gridTemplateColumns = React.useMemo(
-        () => `repeat(${cols}, minmax(0, 1fr))`,
-        [cols]
+        () => Math.min(Math.max(modifiedActions.length || 1, 1), 2),
+        [modifiedActions.length]
     );
 
     return (
         <motion.div
-            className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-            initial={{ opacity: 0, y: 12 }}
+            className="rounded-2xl p-6 border border-white/10 h-full flex flex-col"
+            style={{ background: '#22232E' }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
         >
-            <h3 className="text-text-muted text-sm font-medium mb-6">Quick Actions</h3>
+            <span className="text-xs font-medium text-back uppercase tracking-wider mb-5">Quick Actions</span>
 
-            <div className="grid gap-3" style={{ gridTemplateColumns }}>
-                {sortedActions.map((a, i) => (
+            <div
+                className="grid gap-3 flex-1"
+                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+            >
+                {modifiedActions.map((a) => (
                     <motion.button
                         key={a.id}
                         onClick={() => handleRunAction(a)}
-                        className="group bg-bg-tertiary hover:bg-primary rounded-xl p-4 flex flex-col items-center justify-center gap-2.5 transition-all min-h-[80px]"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.25 }}
+                        className="group flex flex-col items-center justify-center gap-2.5 rounded-xl border border-white/[0.06] p-4 min-h-[80px] transition-all duration-150 hover:border-primary/40 hover:bg-primary/5"
                         whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                        whileTap={{ scale: 0.97 }}
                         aria-label={a.title ?? a.id}
                     >
-                        <LucideIcon name={a.icon || a.id} className="w-6 h-6 text-primary group-hover:text-white transition-colors" />
-                        <span className="text-sm font-medium text-text-primary group-hover:text-white transition-colors">{a.title ?? a.id}</span>
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors duration-150">
+                            <LucideIcon name={a.icon || a.id} className="w-4.5 h-4.5 text-primary" />
+                        </div>
+                        <span className="text-xs font-semibold text-back group-hover:text-white transition-colors duration-150 text-center leading-tight">
+                            {a.title ?? a.id}
+                        </span>
                     </motion.button>
                 ))}
-                {sortedActions.length === 0 && (
-                    <EmptyState
-                      icon="Zap"
-                      title="No quick actions"
-                      description="Actions will appear here"
-                      size="sm"
-                    />
+                {modifiedActions.length === 0 && (
+                    <EmptyState icon="Zap" title="No quick actions" description="Actions will appear here" size="sm" />
                 )}
             </div>
         </motion.div>

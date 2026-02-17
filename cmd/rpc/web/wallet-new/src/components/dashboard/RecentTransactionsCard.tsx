@@ -1,19 +1,29 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { ExternalLink } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { NavLink } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { TransactionDetailModal, type TxDetail } from "@/components/transactions/TransactionDetailModal";
+
+export interface TxError {
+  code: number;
+  module: string;
+  msg: string;
+}
 
 export interface Transaction {
   hash: string;
   time: number;
   type: string;
   amount: number;
+  fee?: number;
   status: string;
+  address?: string;
+  error?: TxError;
 }
 
 export interface RecentTransactionsCardProps {
@@ -50,7 +60,7 @@ interface TransactionRowProps {
   getFundWay: (type: string) => string;
   toDisplay: (amount: number) => number;
   symbol: string;
-  explorerUrl?: string;
+  onViewDetail: (tx: Transaction) => void;
 }
 
 const TransactionRow = React.memo<TransactionRowProps>(({
@@ -61,82 +71,77 @@ const TransactionRow = React.memo<TransactionRowProps>(({
   getFundWay,
   toDisplay,
   symbol,
-  explorerUrl
+  onViewDetail,
 }) => {
   const fundsWay = getFundWay(tx?.type);
-  const prefix = fundsWay === "out" ? "-" : fundsWay === "in" ? "+" : "";
+  const isFailed = tx.status === "Failed";
+  const prefix = fundsWay === "out" ? "−" : fundsWay === "in" ? "+" : "";
   const amountTxt = `${prefix}${toDisplay(Number(tx.amount || 0)).toFixed(2)} ${symbol}`;
   const timeAgo = formatTimeAgo(toEpochMs(tx.time));
 
+  const iconBg = isFailed
+    ? "bg-red-500/15"
+    : fundsWay === "in"
+      ? "bg-green-500/15"
+      : fundsWay === "out"
+        ? "bg-primary/10"
+        : "bg-white/[0.05]";
+
+  const iconColor = isFailed
+    ? "text-red-400"
+    : fundsWay === "in"
+      ? "text-green-400"
+      : fundsWay === "out"
+        ? "text-primary"
+        : "text-back";
+
+  const amountColor = isFailed
+    ? "text-red-400 line-through opacity-60"
+    : fundsWay === "in"
+      ? "text-green-400"
+      : fundsWay === "out"
+        ? "text-red-400"
+        : "text-white";
+
   return (
-    <motion.div
-      className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4 items-start md:items-center py-3 border-b border-bg-accent/30 last:border-b-0"
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
+    <motion.button
+      className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left
+        transition-all duration-150 cursor-pointer
+        ${isFailed
+          ? "border-red-500/25 hover:border-red-500/40 hover:bg-red-500/5"
+          : "border-white/[0.06] hover:border-primary/30 hover:bg-white/[0.02]"
+        }`}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.04 }}
+      whileHover={{ scale: 1.005 }}
+      whileTap={{ scale: 0.995 }}
+      onClick={() => onViewDetail(tx)}
     >
-      {/* Mobile: All info stacked */}
-      <div className="md:hidden space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <LucideIcon
-              name={getIcon(tx?.type)}
-              className="w-5 text-text-primary"
-            />
-            <span className="text-text-primary text-sm font-medium">
-              {getTxMap(tx?.type)}
-            </span>
-          </div>
-          <StatusBadge label={tx.status} size="sm" />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-text-muted text-xs">{timeAgo}</span>
-          <span
-            className={`text-sm font-medium ${
-              fundsWay === "in"
-                ? "text-green-400"
-                : fundsWay === "out"
-                  ? "text-red-400"
-                  : "text-text-primary"
-            }`}
-          >
-            {amountTxt}
-          </span>
-        </div>
+      {/* Icon avatar */}
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+        <LucideIcon name={getIcon(tx?.type)} className={`w-4 h-4 ${iconColor}`} />
       </div>
 
-      {/* Desktop: Row layout */}
-      <div className="hidden md:block text-text-primary text-sm">{timeAgo}</div>
-      <div className="hidden md:flex items-center gap-2">
-        <LucideIcon
-          name={getIcon(tx?.type)}
-          className="w-6 text-text-primary"
-        />
-        <span className="text-text-primary text-sm">{getTxMap(tx?.type)}</span>
+      {/* Type + time */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-white truncate leading-tight">
+          {getTxMap(tx?.type)}
+        </div>
+        <div className="text-xs text-back mt-0.5">{timeAgo}</div>
       </div>
-      <div
-        className={`hidden md:block text-sm font-medium ${
-          fundsWay === "in"
-            ? "text-green-400"
-            : fundsWay === "out"
-              ? "text-red-400"
-              : "text-text-primary"
-        }`}
-      >
-        {amountTxt}
-      </div>
-      <div className="hidden md:flex items-center justify-between">
+
+      {/* Amount + status */}
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <span className={`text-sm font-semibold tabular-nums ${amountColor}`}>
+          {amountTxt}
+        </span>
         <StatusBadge label={tx.status} size="sm" />
-        <a
-          href={explorerUrl + tx.hash}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:text-primary/80 text-xs font-medium flex items-center gap-1 transition-colors"
-        >
-          <ExternalLink className="w-3 h-3" />
-        </a>
       </div>
-    </motion.div>
+
+      {/* Chevron — the explicit "I'm clickable" signal */}
+      <ChevronRight className="w-4 h-4 text-back/40 group-hover:text-primary shrink-0 transition-colors" />
+    </motion.button>
   );
 });
 
@@ -148,6 +153,18 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
   hasError = false,
 }) => {
   const { manifest, chain } = useConfig();
+  const [selectedTx, setSelectedTx] = useState<TxDetail | null>(null);
+
+  const openDetail = useCallback((tx: Transaction) => {
+    setSelectedTx({
+      hash: tx.hash,
+      type: tx.type,
+      amount: tx.amount,
+      status: tx.status,
+      time: tx.time,
+      error: tx.error,
+    });
+  }, []);
 
   const getIcon = useCallback(
     (txType: string) => manifest?.ui?.tx?.typeIconMap?.[txType] ?? "Circle",
@@ -173,32 +190,21 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
     [chain],
   );
 
+  const cardClass = "rounded-2xl p-6 border border-white/10 h-full";
+  const cardStyle = { background: '#22232E' };
+  const cardMotion = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay: 0.3 } };
+
   if (!transactions) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
-        <EmptyState
-          icon="Wallet"
-          title="No account selected"
-          description="Select an account to view transactions"
-          size="md"
-        />
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+        <EmptyState icon="Wallet" title="No account selected" description="Select an account to view transactions" size="md" />
       </motion.div>
     );
   }
 
   if (isLoading) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
         <LoadingState message="Loading transactions..." size="md" />
       </motion.div>
     );
@@ -206,94 +212,71 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 
   if (hasError) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
-        <EmptyState
-          icon="AlertCircle"
-          title="Error loading transactions"
-          description="There was a problem loading your transactions"
-          size="md"
-        />
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+        <EmptyState icon="AlertCircle" title="Error loading transactions" description="There was a problem loading your transactions" size="md" />
       </motion.div>
     );
   }
 
   if (!transactions?.length) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
-        <EmptyState
-          icon="Receipt"
-          title="No transactions found"
-          description="Your transaction history will appear here"
-          size="md"
-        />
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+        <EmptyState icon="Receipt" title="No transactions found" description="Your transaction history will appear here" size="md" />
       </motion.div>
     );
   }
 
   return (
-    <motion.div
-      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.3 }}
-    >
+    <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
       {/* Title */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <h3 className="text-text-primary text-lg font-semibold">
-            Recent Transactions
-          </h3>
+          <span className="text-xs font-medium text-back uppercase tracking-wider">Recent Transactions</span>
           <StatusBadge status="live" label="Live" size="sm" pulse />
         </div>
-      </div>
-
-      {/* Header - Hidden on mobile */}
-      <div className="hidden md:grid md:grid-cols-4 gap-4 mb-4 text-text-muted text-sm font-medium">
-        <div>Time</div>
-        <div>Action</div>
-        <div>Amount</div>
-        <div>Status</div>
+        <NavLink
+          to="/all-transactions"
+          className="text-xs text-back hover:text-primary transition-colors font-medium"
+        >
+          See all →
+        </NavLink>
       </div>
 
       {/* Rows */}
-      <div className="space-y-3">
-        {transactions.length > 0 ? (
-          transactions.slice(0, 5).map((tx, i) => (
-            <TransactionRow
-              key={`${tx.hash}-${i}`}
-              tx={tx}
-              index={i}
-              getIcon={getIcon}
-              getTxMap={getTxMap}
-              getFundWay={getFundWay}
-              toDisplay={toDisplay}
-              symbol={symbol}
-              explorerUrl={chain?.explorer}
-            />
-          ))
-        ) : (
-          <div className="text-center py-8 text-text-muted">
-            No transactions found
-          </div>
-        )}
+      <div className="space-y-2">
+        {transactions.slice(0, 5).map((tx, i) => (
+          <TransactionRow
+            key={`${tx.hash}-${i}`}
+            tx={tx}
+            index={i}
+            getIcon={getIcon}
+            getTxMap={getTxMap}
+            getFundWay={getFundWay}
+            toDisplay={toDisplay}
+            symbol={symbol}
+            onViewDetail={openDetail}
+          />
+        ))}
       </div>
 
-      {/* See All */}
-      <div className="text-center mt-6">
-        <NavLink to="/all-transactions" className="text-primary hover:text-primary/80 text-sm font-medium transition-colors">
-          See All ({transactions.length})
-        </NavLink>
-      </div>
+      {/* See All — bottom link when there are more than 5 */}
+      {transactions.length > 5 && (
+        <div className="text-center mt-4">
+          <NavLink
+            to="/all-transactions"
+            className="text-xs text-back hover:text-primary font-medium transition-colors"
+          >
+            See all {transactions.length} transactions →
+          </NavLink>
+        </div>
+      )}
+
+      {/* Transaction Detail Modal */}
+      <TransactionDetailModal
+        tx={selectedTx}
+        open={selectedTx !== null}
+        onClose={() => setSelectedTx(null)}
+      />
     </motion.div>
   );
 });

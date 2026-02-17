@@ -1,319 +1,265 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import {motion, AnimatePresence, Variants} from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import {
     LayoutDashboard,
     Wallet,
     TrendingUp,
     Vote,
     Activity,
-    ChevronLeft,
-    ChevronRight,
-    Plus,
     Menu,
     X,
-    KeyRound
+    KeyRound,
+    Blocks,
+    Key,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/Select";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useTotalStage } from "@/hooks/useTotalStage";
+import { useDS } from "@/core/useDs";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
 
-interface NavItem {
-    name: string;
-    path: string;
-    icon: React.ElementType;
-}
-
-const navItems: NavItem[] = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Accounts', path: '/accounts', icon: Wallet },
-    { name: 'Staking', path: '/staking', icon: TrendingUp },
-    { name: 'Governance', path: '/governance', icon: Vote },
-    { name: 'Monitoring', path: '/monitoring', icon: Activity },
-    { name: 'Keys', path: '/key-management', icon: KeyRound }
+const navItems = [
+    { name: 'Dashboard',  path: '/',               icon: LayoutDashboard },
+    { name: 'Accounts',   path: '/accounts',       icon: Wallet },
+    { name: 'Staking',    path: '/staking',        icon: TrendingUp },
+    { name: 'Governance', path: '/governance',     icon: Vote },
+    { name: 'Monitoring', path: '/monitoring',     icon: Activity },
+    { name: 'Keys',       path: '/key-management', icon: KeyRound },
 ];
 
+const drawerVariants: Variants = {
+    open:   { x: 0,       transition: { duration: 0.28, ease: 'easeOut' } },
+    closed: { x: '-100%', transition: { duration: 0.25, ease: 'easeIn'  } },
+};
+
 export const Sidebar = (): JSX.Element => {
-    const [isCollapsed, setIsCollapsed] = useState(() => {
-        const saved = localStorage.getItem('sidebarCollapsed');
-        return saved ? JSON.parse(saved) : false;
-    });
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
 
-    const {
-        accounts,
-        loading,
-        error: hasErrorInAccounts,
-        switchAccount,
-        selectedAccount
-    } = useAccounts();
-
+    const { accounts, loading, error: hasErrorInAccounts, switchAccount, selectedAccount } = useAccounts();
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
+    const { data: blockHeight } = useDS<{ height: number }>('height', {}, {
+        staleTimeMs: 10_000,
+        refetchIntervalMs: 10_000,
+    });
 
-    useEffect(() => {
-        localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed));
-    }, [isCollapsed]);
-
-    const toggleSidebar = () => {
-        setIsCollapsed(!isCollapsed);
-    };
-
-    const toggleMobileSidebar = () => {
-        setIsMobileOpen(!isMobileOpen);
-    };
-
-
-    const mobileSidebarVariants = {
-        open: {
-            x: 0,
-            transition: {
-                duration: 0.3,
-                ease: 'easeOut'
-            }
-        },
-        closed: {
-            x: '-100%',
-            transition: {
-                duration: 0.3,
-                ease: 'easeIn'
-            }
-        }
-    } as Variants;
-
-    const SidebarContent = ({ isMobile = false }: { isMobile?: boolean }) => (
-        <>
-            {/* Logo Section */}
-            <div className={`p-4 border-b border-bg-accent flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'}`}>
-                {(!isCollapsed || isMobile) && (
-                    <Link to="/" className="flex items-center" onClick={() => isMobile && setIsMobileOpen(false)}>
-                        <div className="scale-90 origin-left">
-                            <Logo size={100} showText={!isCollapsed} />
-                        </div>
-                    </Link>
-                )}
-                {isCollapsed && !isMobile && (
-                    <Link to="/" className="flex items-center justify-center">
-                        <div className="scale-75">
-                            <Logo size={40} showText={false} />
-                        </div>
-                    </Link>
-                )}
-                {!isMobile && (
-                    <motion.button
-                        onClick={toggleSidebar}
-                        className={`p-1.5 rounded-lg hover:bg-bg-accent transition-colors ${isCollapsed ? 'hidden' : ''}`}
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        {isCollapsed ? (
-                            <ChevronRight className="w-5 h-5 text-text-primary" />
-                        ) : (
-                            <ChevronLeft className="w-5 h-5 text-text-primary" />
-                        )}
-                    </motion.button>
-                )}
-                {isMobile && (
-                    <button
-                        onClick={() => setIsMobileOpen(false)}
-                        className="p-1.5 rounded-lg hover:bg-bg-accent transition-colors"
-                    >
-                        <X className="w-5 h-5 text-text-primary" />
-                    </button>
-                )}
-            </div>
-
-            {/* Collapse/Expand Button for Collapsed State */}
-            {isCollapsed && !isMobile && (
-                <div className="p-2 border-b border-bg-accent flex justify-center">
-                    <motion.button
-                        onClick={toggleSidebar}
-                        className="p-2 rounded-lg hover:bg-bg-accent transition-colors"
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        <ChevronRight className="w-5 h-5 text-text-primary" />
-                    </motion.button>
-                </div>
-            )}
-
-            {/* Navigation */}
-            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                        <NavLink
-                            key={item.name}
-                            to={item.path}
-                            onClick={() => isMobile && setIsMobileOpen(false)}
-                            className={({ isActive }) =>
-                                `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                                    isActive
-                                        ? 'bg-primary/20 text-primary'
-                                        : 'text-text-muted hover:bg-bg-accent hover:text-text-primary'
-                                } ${isCollapsed && !isMobile ? 'justify-center' : ''}`
-                            }
-                        >
-                            <Icon className="w-5 h-5 flex-shrink-0" />
-                            {(!isCollapsed || isMobile) && (
-                                <span className="text-sm font-medium">{item.name}</span>
-                            )}
-                        </NavLink>
-                    );
-                })}
-            </nav>
-
-            {/* Bottom Section */}
-            <div className="p-3 space-y-3 border-t border-bg-accent">
-                {/* Total Stage */}
-                {(!isCollapsed || isMobile) && (
-                    <motion.div
-                        className="bg-muted/50 rounded-lg px-3 py-2.5"
-                        whileHover={{ backgroundColor: '#323340' }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        <div className="flex items-center justify-between">
-                            <span className="text-gray-400 text-xs">Total Tokens</span>
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-[#6fe3b4] font-semibold text-xs">
-                                    {stageLoading ? '...' : (
-                                        <AnimatedNumber
-                                            value={totalStage ? totalStage / 1000000 : 0}
-                                            format={{
-                                                notation: 'compact',
-                                                maximumFractionDigits: 1
-                                            }}
-                                            className="text-[#6fe3b4] font-semibold text-xs"
-                                        />
-                                    )}
-                                </span>
-                                <span className="text-[#6fe3b4] font-semibold text-xs">CNPY</span>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* Account Selector */}
-                {(!isCollapsed || isMobile) && (
-                    <Select
-                        value={selectedAccount?.id || ''}
-                        onValueChange={(value) => {
-                            switchAccount(value);
-                            isMobile && setIsMobileOpen(false);
-                        }}
-                    >
-                        <SelectTrigger className="w-full bg-muted border-[#3a3b45] text-white rounded-lg px-3 py-2 h-auto min-h-[44px]">
-                            <div className="flex items-center gap-2.5 w-full min-w-0">
-                                {/* Avatar */}
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-xs font-bold text-white">
-                                        {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
-                                    </span>
-                                </div>
-                                <span className="text-sm font-medium truncate">
-                                    {loading ? 'Loading...' :
-                                        selectedAccount?.nickname || 'Select Account'
-                                    }
-                                </span>
-
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent className="bg-bg-secondary border-bg-accent">
-                            {accounts.map((account, index) => (
-                                <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
-                                    <div className="flex items-center gap-3 w-full">
-                                        {/* Avatar */}
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                            <span className="text-xs font-bold text-white">
-                                                {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col items-start flex-1 min-w-0">
-                                            <span className="text-sm font-medium text-white truncate">
-                                                {account.nickname || `Account ${index + 1}`}
-                                            </span>
-                                            <span className="text-xs text-text-muted truncate">
-                                                {account.address.slice(0, 6)}...{account.address.slice(-4)}
-                                            </span>
-                                        </div>
-                                        {account.isActive && (
-                                            <motion.div
-                                                initial={{ scale: 0 }}
-                                                animate={{ scale: 1 }}
-                                                className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"
-                                            />
-                                        )}
-                                    </div>
-                                </SelectItem>
-                            ))}
-                            {(accounts.length === 0 && !loading || hasErrorInAccounts) && (
-                                <div className="p-2 text-center text-text-muted text-sm">
-                                    No accounts available
-                                </div>
-                            )}
-                        </SelectContent>
-                    </Select>
-                )}
-
-                {/* Key Management Button */}
-                <Link
-                    to="/key-management"
-                    onClick={() => isMobile && setIsMobileOpen(false)}
-                    className={`bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-3 py-2.5 flex items-center gap-2 transition-colors duration-200 ${
-                        isCollapsed && !isMobile ? 'justify-center' : ''
-                    }`}
-                >
-                    <Plus className="w-4 h-4 flex-shrink-0" />
-                    {(!isCollapsed || isMobile) && (
-                        <span className="text-sm font-medium">Key Management</span>
-                    )}
-                </Link>
-            </div>
-        </>
-    );
+    const close = () => setIsOpen(false);
 
     return (
-        <>
-            {/* Mobile/Tablet Header - Only visible below lg */}
-            <div className="lg:hidden bg-bg-secondary border-b border-bg-accent px-4 py-3 flex items-center gap-3 sticky top-0 z-40">
-                <button
-                    onClick={toggleMobileSidebar}
-                    className="p-2 rounded-lg hover:bg-bg-accent transition-colors flex-shrink-0"
-                >
-                    <Menu className="w-6 h-6 text-text-primary" />
-                </button>
-                <Link to="/" className="flex-1">
-                    <div className="scale-75 origin-left">
-                        <Logo size={100} showText={true} />
-                    </div>
-                </Link>
-            </div>
+        // Only visible on mobile/tablet (hidden on lg+)
+        <div className="lg:hidden">
 
-            {/* Mobile/Tablet Sidebar - Only visible below lg */}
+            {/* ── Sticky header bar ── */}
+            <header
+                className="sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-white/[0.06]"
+                style={{ background: '#14151C' }}
+            >
+                {/* Left: hamburger + logo */}
+                <div className="flex items-center gap-3">
+                    <motion.button
+                        onClick={() => setIsOpen(true)}
+                        className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                        whileTap={{ scale: 0.92 }}
+                        aria-label="Open menu"
+                    >
+                        <Menu className="w-5 h-5 text-back" />
+                    </motion.button>
+
+                    <Link to="/" className="flex items-center gap-2 group">
+                        <Logo size={26} showText={false} />
+                        <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                            Wallet
+                        </span>
+                    </Link>
+                </div>
+
+                {/* Right: block height pill */}
+                <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                    style={{ background: 'rgba(74,222,128,0.07)' }}
+                >
+                    <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                    </span>
+                    <Blocks className="w-3 h-3 text-primary/70" />
+                    <span className="text-xs font-semibold tabular-nums text-primary">
+                        {blockHeight != null ? blockHeight.height.toLocaleString() : '—'}
+                    </span>
+                </div>
+            </header>
+
+            {/* ── Slide-out drawer ── */}
             <AnimatePresence>
-                {isMobileOpen && (
+                {isOpen && (
                     <>
                         {/* Backdrop */}
                         <motion.div
+                            key="backdrop"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="lg:hidden fixed inset-0 bg-black/50 z-40"
-                            onClick={() => setIsMobileOpen(false)}
+                            transition={{ duration: 0.25 }}
+                            className="fixed inset-0 bg-black/60 z-40"
+                            onClick={close}
                         />
-                        {/* Sidebar */}
+
+                        {/* Drawer panel */}
                         <motion.aside
+                            key="drawer"
                             initial="closed"
                             animate="open"
                             exit="closed"
-                            variants={mobileSidebarVariants}
-                            className="lg:hidden fixed left-0 top-0 bottom-0 w-64 bg-bg-secondary border-r border-bg-accent z-50 flex flex-col"
+                            variants={drawerVariants}
+                            className="fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col border-r border-white/[0.06]"
+                            style={{ background: '#14151C' }}
                         >
-                            <SidebarContent isMobile />
+                            {/* Drawer header */}
+                            <div className="h-14 px-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+                                <Link to="/" onClick={close} className="flex items-center gap-2 group">
+                                    <Logo size={28} showText={false} />
+                                    <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                                        Wallet
+                                    </span>
+                                </Link>
+                                <button
+                                    onClick={close}
+                                    className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                                    aria-label="Close menu"
+                                >
+                                    <X className="w-5 h-5 text-back" />
+                                </button>
+                            </div>
+
+                            {/* Nav links */}
+                            <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+                                {navItems.map(({ name, path, icon: Icon }) => (
+                                    <NavLink
+                                        key={name}
+                                        to={path}
+                                        end={path === '/'}
+                                        onClick={close}
+                                        className={({ isActive }) =>
+                                            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                                                isActive
+                                                    ? 'bg-primary/10 text-primary'
+                                                    : 'text-back hover:text-white hover:bg-white/5'
+                                            }`
+                                        }
+                                    >
+                                        <Icon className="w-5 h-5 flex-shrink-0" />
+                                        {name}
+                                    </NavLink>
+                                ))}
+                            </nav>
+
+                            {/* Bottom section */}
+                            <div className="px-3 pb-4 pt-3 space-y-3 border-t border-white/[0.06] flex-shrink-0">
+
+                                {/* Block height */}
+                                <div
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg"
+                                    style={{ background: 'rgba(74,222,128,0.06)' }}
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="relative flex h-1.5 w-1.5">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                                        </span>
+                                        <Blocks className="w-3.5 h-3.5 text-primary/70" />
+                                        <span className="text-xs text-back">Block</span>
+                                    </div>
+                                    <span className="text-xs font-semibold tabular-nums text-primary">
+                                        {blockHeight != null ? `#${blockHeight.height.toLocaleString()}` : '—'}
+                                    </span>
+                                </div>
+
+                                {/* Total CNPY */}
+                                <div
+                                    className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                                    style={{ background: '#22232E' }}
+                                >
+                                    <span className="text-xs text-back">Total</span>
+                                    <div className="flex items-center gap-1.5">
+                                        {stageLoading ? (
+                                            <span className="text-xs font-semibold text-primary">…</span>
+                                        ) : (
+                                            <AnimatedNumber
+                                                value={totalStage ? totalStage / 1_000_000 : 0}
+                                                format={{ notation: 'compact', maximumFractionDigits: 1 }}
+                                                className="text-xs font-semibold text-primary tabular-nums"
+                                            />
+                                        )}
+                                        <span className="text-xs font-semibold text-white/40">CNPY</span>
+                                    </div>
+                                </div>
+
+                                {/* Account selector */}
+                                <Select
+                                    value={selectedAccount?.id || ''}
+                                    onValueChange={(value) => { switchAccount(value); close(); }}
+                                >
+                                    <SelectTrigger
+                                        className="w-full h-11 rounded-lg border border-white/10 px-3 text-sm font-medium text-white"
+                                        style={{ background: '#22232E' }}
+                                    >
+                                        <div className="flex items-center gap-2.5 w-full min-w-0">
+                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-white">
+                                                    {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                                </span>
+                                            </div>
+                                            <span className="text-sm font-medium truncate">
+                                                {loading ? 'Loading…' : selectedAccount?.nickname || 'Select Account'}
+                                            </span>
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-bg-secondary border border-white/10">
+                                        {accounts.map((account, index) => (
+                                            <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
+                                                <div className="flex items-center gap-3 w-full">
+                                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                        <span className="text-xs font-bold text-white">
+                                                            {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col items-start flex-1 min-w-0">
+                                                        <span className="text-sm font-medium text-white truncate">
+                                                            {account.nickname || `Account ${index + 1}`}
+                                                        </span>
+                                                        <span className="text-xs text-back truncate">
+                                                            {account.address.slice(0, 6)}…{account.address.slice(-4)}
+                                                        </span>
+                                                    </div>
+                                                    {account.isActive && (
+                                                        <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0" />
+                                                    )}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                        {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
+                                            <div className="p-2 text-center text-back text-sm">
+                                                No accounts available
+                                            </div>
+                                        ) : null}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Key Management */}
+                                <Link
+                                    to="/key-management"
+                                    onClick={close}
+                                    className="h-11 w-full bg-primary hover:bg-primary-light text-primary-foreground rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-colors duration-150"
+                                >
+                                    <Key className="w-4 h-4 flex-shrink-0" />
+                                    Key Management
+                                </Link>
+                            </div>
                         </motion.aside>
                     </>
                 )}
             </AnimatePresence>
-        </>
+        </div>
     );
 };

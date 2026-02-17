@@ -20,63 +20,43 @@ interface PerformanceMetricsProps {
     };
 }
 
+/** Returns tailwind color classes based on usage level */
+const barColor = (pct: number) =>
+    pct >= 85 ? 'bg-red-500'
+    : pct >= 60 ? 'bg-status-warning'
+    : 'bg-primary';
+
 export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps): JSX.Element {
-    const performanceData = [
-        {
-            label: 'Process CPU',
-            value: metrics.processCPU.toFixed(2),
-            unit: '%',
-            percentage: Math.max(metrics.processCPU, 0.5)
-        },
-        {
-            label: 'System CPU',
-            value: metrics.systemCPU.toFixed(2),
-            unit: '%',
-            percentage: Math.max(metrics.systemCPU, 0.5)
-        },
-        {
-            label: 'Process RAM',
-            value: metrics.processRAM.toFixed(2),
-            unit: '%',
-            percentage: Math.min(metrics.processRAM, 100)
-        },
-        {
-            label: 'System RAM',
-            value: metrics.systemRAM.toFixed(2),
-            unit: '%',
-            percentage: Math.min(metrics.systemRAM, 100)
-        },
-        {
-            label: 'Disk Usage',
-            value: metrics.diskUsage.toFixed(2),
-            unit: '%',
-            percentage: Math.min(metrics.diskUsage, 100)
-        },
-        {
-            label: 'Network I/O',
-            value: metrics.networkIO.toFixed(2),
-            unit: ' MB/s',
-            percentage: Math.min((metrics.networkIO / 10) * 100, 100)
-        }
+    const items = [
+        { label: 'Process CPU', value: metrics.processCPU,  unit: '%',    pct: Math.max(metrics.processCPU, 0.5) },
+        { label: 'System CPU',  value: metrics.systemCPU,   unit: '%',    pct: Math.max(metrics.systemCPU, 0.5) },
+        { label: 'Process RAM', value: metrics.processRAM,  unit: '%',    pct: Math.min(metrics.processRAM, 100) },
+        { label: 'System RAM',  value: metrics.systemRAM,   unit: '%',    pct: Math.min(metrics.systemRAM, 100) },
+        { label: 'Disk Usage',  value: metrics.diskUsage,   unit: '%',    pct: Math.min(metrics.diskUsage, 100) },
+        { label: 'Network I/O', value: metrics.networkIO,   unit: ' MB/s', pct: Math.min((metrics.networkIO / 10) * 100, 100) },
     ];
 
     return (
-        <div className="bg-bg-secondary rounded-xl border border-bg-accent p-6">
-            <h2 className="text-text-primary text-lg font-bold mb-4">Performance Metrics</h2>
-            <div className="grid grid-cols-2 gap-6">
-                {performanceData.map((metric, index) => (
-                    <div key={index}>
-                        <div className="text-text-muted text-center text-xs mb-2">{metric.label}</div>
-                        <div className="h-24 bg-gray-600/10 rounded-md flex items-end justify-center relative">
-                            <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-text-primary text-xl font-bold">
-                  {metric.value}{metric.unit}
-                </span>
-                            </div>
+        <div
+            className="rounded-xl border border-white/10 p-6"
+            style={{ background: '#22232E' }}
+        >
+            <h2 className="text-white text-base font-semibold mb-5">Performance Metrics</h2>
+
+            <div className="grid grid-cols-2 gap-5">
+                {items.map((item) => (
+                    <div key={item.label}>
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-back">{item.label}</span>
+                            <span className="text-xs font-semibold text-white tabular-nums">
+                                {item.value.toFixed(1)}{item.unit}
+                            </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                             <div
-                                className="w-full self-end bg-primary rounded-b-md"
-                                style={{ height: `${metric.percentage}%` }}
-                            ></div>
+                                className={`h-full rounded-full transition-all duration-500 ${barColor(item.pct)}`}
+                                style={{ width: `${item.pct}%` }}
+                            />
                         </div>
                     </div>
                 ))}

@@ -1,4 +1,3 @@
-import { useManifest } from '@/hooks/useManifest';
 import React from 'react';
 
 interface SystemResourcesProps {
@@ -10,43 +9,50 @@ interface SystemResourcesProps {
 }
 
 export default function SystemResources({ systemResources }: SystemResourcesProps): JSX.Element {
-    // Calculate percentage for file descriptors (using realistic max of 1024 for typical process)
-    const fileDescriptorPercentage = systemResources.maxFileDescriptors
-        ? (systemResources.fileDescriptors / systemResources.maxFileDescriptors) * 100
-        : (systemResources.fileDescriptors / 1024) * 100;
+    const fdMax = systemResources.maxFileDescriptors || 1024;
+    const fdPct = Math.min((systemResources.fileDescriptors / fdMax) * 100, 100);
+    const threadPct = Math.min((systemResources.threadCount / 100) * 100, 100);
 
-    // Calculate percentage for thread count (using realistic max of 100 threads for typical process)
-    const threadPercentage = Math.min((systemResources.threadCount / 100) * 100, 100);
-
+    const barColor = (pct: number) =>
+        pct >= 85 ? 'bg-red-500' : pct >= 60 ? 'bg-status-warning' : 'bg-primary';
 
     return (
-        <div className="bg-bg-secondary rounded-xl border border-bg-accent p-6">
-            <h2 className="text-text-primary text-lg font-bold mb-4">System Resources</h2>
-            <div className="grid grid-cols-2 gap-6">
+        <div
+            className="rounded-xl border border-white/10 p-6"
+            style={{ background: '#22232E' }}
+        >
+            <h2 className="text-white text-base font-semibold mb-5">System Resources</h2>
+
+            <div className="grid grid-cols-2 gap-5">
+                {/* Thread Count */}
                 <div>
-                    <div className="text-text-muted text-xs mb-2">Thread Count</div>
-                    <div className="h-24 bg-gray-600/10 rounded-md flex items-end justify-center relative">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-text-primary text-xl font-bold">{systemResources.threadCount} threads</span>
-                        </div>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-back">Thread Count</span>
+                        <span className="text-xs font-semibold text-white tabular-nums">
+                            {systemResources.threadCount}
+                        </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                         <div
-                            className="w-full self-end bg-primary rounded-b-md"
-                            style={{ height: `${Math.max(threadPercentage, 0.5)}%` }}
-                        ></div>
+                            className={`h-full rounded-full transition-all duration-500 ${barColor(threadPct)}`}
+                            style={{ width: `${Math.max(threadPct, 0.5)}%` }}
+                        />
                     </div>
                 </div>
+
+                {/* File Descriptors */}
                 <div>
-                    <div className="text-text-muted text-xs mb-2">File Descriptors</div>
-                    <div className="h-24 bg-gray-600/10 rounded-md flex items-end justify-center relative">
-                        <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-text-primary text-xl font-bold">
-                {systemResources.fileDescriptors.toLocaleString()} / {systemResources.maxFileDescriptors ? systemResources.maxFileDescriptors.toLocaleString() : '1,024'}
-              </span>
-                        </div>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-back">File Descriptors</span>
+                        <span className="text-xs font-semibold text-white tabular-nums">
+                            {systemResources.fileDescriptors.toLocaleString()} / {fdMax.toLocaleString()}
+                        </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                         <div
-                            className="w-full self-end bg-primary rounded-b-md"
-                            style={{ height: `${Math.max(fileDescriptorPercentage, 0.5)}%` }}
-                        ></div>
+                            className={`h-full rounded-full transition-all duration-500 ${barColor(fdPct)}`}
+                            style={{ width: `${Math.max(fdPct, 0.5)}%` }}
+                        />
                     </div>
                 </div>
             </div>

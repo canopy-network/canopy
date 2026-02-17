@@ -5,15 +5,15 @@ import { Footer } from "./Footer";
 
 export default function MainLayout() {
     return (
-        <div className="flex flex-col h-screen overflow-hidden">
-            {/* Top Navbar - Desktop only (lg+) */}
+        <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
+            {/* Desktop top bar — hidden on mobile */}
             <TopNavbar />
 
-            {/* Mobile/Tablet Header + Sidebar (< lg) */}
+            {/* Mobile header + slide-out drawer — hidden on desktop */}
             <Sidebar />
 
-            {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto bg-primary-foreground">
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto">
                 <div className="py-4 px-4 sm:px-6 lg:px-8 max-w-[1920px] mx-auto">
                     <Outlet />
                 </div>

@@ -1,4 +1,3 @@
-import { useManifest } from '@/hooks/useManifest';
 import React, { useMemo, useCallback, useRef, useEffect } from 'react';
 
 interface NodeLogsProps {

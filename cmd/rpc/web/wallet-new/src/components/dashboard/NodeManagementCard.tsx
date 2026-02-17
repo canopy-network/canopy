@@ -107,53 +107,46 @@ const ValidatorTableRow = React.memo<ValidatorTableRowProps>(({
   onPauseUnpause,
 }) => (
   <motion.tr
-    className="border-b border-bg-accent/50"
+    className="border-b border-white/[0.06]"
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.2, delay: index * 0.05 }}
   >
-    <td className="py-4">
+    <td className="py-3.5">
       <div className="flex items-center gap-3">
-        <div
-          className={`w-8 h-8 rounded-full ${getNodeColor(index)} flex items-center justify-center`}
-        />
+        <div className={`w-7 h-7 rounded-full ${getNodeColor(index)} flex items-center justify-center flex-shrink-0`} />
         <div className="flex flex-col">
-          <span className="text-text-primary text-sm font-medium">
+          <span className="text-white text-sm font-medium leading-tight">
             {node.originalValidator.nickname || `Node ${index + 1}`}
           </span>
-          <span className="text-text-muted text-xs font-mono">
+          <span className="text-back text-xs font-mono mt-0.5">
             {formatAddress(node.originalValidator.address)}
           </span>
         </div>
       </div>
     </td>
-    <td className="py-4">
+    <td className="py-3.5">
       <div className="flex items-center gap-2">
-        <span className="text-text-primary text-sm">{node.stakeAmount}</span>
+        <span className="text-white text-sm tabular-nums">{node.stakeAmount}</span>
         <MiniChart index={index} />
       </div>
     </td>
-    <td className="py-4">
+    <td className="py-3.5">
       <StatusBadge label={node.status} size="sm" />
     </td>
-    <td className="py-4">
-      <span className="text-primary text-sm font-medium">{node.rewards24h}</span>
+    <td className="py-3.5">
+      <span className="text-primary text-sm font-medium tabular-nums">{node.rewards24h}</span>
     </td>
-    <td className="py-4">
+    <td className="py-3.5">
       <button
-        onClick={() =>
-          onPauseUnpause(
-            node.originalValidator,
-            node.status === "Staked" ? "pause" : "unpause"
-          )
-        }
-        className="p-2.5 hover:bg-bg-accent rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+        onClick={() => onPauseUnpause(node.originalValidator, node.status === "Staked" ? "pause" : "unpause")}
+        className="p-2 hover:bg-white/5 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
         aria-label={node.status === "Staked" ? "Pause validator" : "Resume validator"}
       >
         {node.status === "Staked" ? (
-          <Pause className="text-text-muted hover:text-text-primary w-5 h-5" />
+          <Pause className="text-back hover:text-white w-4 h-4" />
         ) : (
-          <Play className="text-text-muted hover:text-text-primary w-5 h-5" />
+          <Play className="text-back hover:text-white w-4 h-4" />
         )}
       </button>
     </td>
@@ -169,52 +162,48 @@ const ValidatorMobileCard = React.memo<ValidatorTableRowProps>(({
   onPauseUnpause,
 }) => (
   <motion.div
-    className="bg-bg-tertiary/30 rounded-lg p-4 space-y-3"
+    className="rounded-xl p-4 space-y-3 border border-white/[0.06]"
+    style={{ background: '#14151C' }}
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.2, delay: index * 0.05 }}
   >
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-full ${getNodeColor(index)}`} />
+        <div className={`w-7 h-7 rounded-full ${getNodeColor(index)} flex-shrink-0`} />
         <div>
-          <div className="text-text-primary text-sm font-medium">
+          <div className="text-white text-sm font-medium leading-tight">
             {node.originalValidator.nickname || `Node ${index + 1}`}
           </div>
-          <div className="text-text-muted text-xs font-mono">
+          <div className="text-back text-xs font-mono mt-0.5">
             {formatAddress(node.originalValidator.address)}
           </div>
         </div>
       </div>
       <button
-        onClick={() =>
-          onPauseUnpause(
-            node.originalValidator,
-            node.status === "Staked" ? "pause" : "unpause"
-          )
-        }
-        className="p-2.5 hover:bg-bg-accent rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+        onClick={() => onPauseUnpause(node.originalValidator, node.status === "Staked" ? "pause" : "unpause")}
+        className="p-2 hover:bg-white/5 rounded-lg transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
         aria-label={node.status === "Staked" ? "Pause validator" : "Resume validator"}
       >
         {node.status === "Staked" ? (
-          <Pause className="text-text-muted hover:text-text-primary w-5 h-5" />
+          <Pause className="text-back w-4 h-4" />
         ) : (
-          <Play className="text-text-muted hover:text-text-primary w-5 h-5" />
+          <Play className="text-back w-4 h-4" />
         )}
       </button>
     </div>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/[0.06]">
       <div>
-        <div className="text-text-muted text-xs mb-1">Stake</div>
-        <div className="text-text-primary text-sm">{node.stakeAmount}</div>
+        <div className="text-back text-xs mb-1">Stake</div>
+        <div className="text-white text-sm tabular-nums">{node.stakeAmount}</div>
       </div>
       <div>
-        <div className="text-text-muted text-xs mb-1">Status</div>
+        <div className="text-back text-xs mb-1">Status</div>
         <StatusBadge label={node.status} size="sm" />
       </div>
       <div>
-        <div className="text-text-muted text-xs mb-1">Rewards (24h)</div>
-        <div className="text-primary text-sm font-medium">{node.rewards24h}</div>
+        <div className="text-back text-xs mb-1">Rewards (24h)</div>
+        <div className="text-primary text-sm font-medium tabular-nums">{node.rewards24h}</div>
       </div>
     </div>
   </motion.div>
@@ -344,14 +333,13 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
       });
   }, [keystore, validators, formatStakeAmount, getStatus, formatRewards, rewardsData]);
 
+  const cardClass = "rounded-2xl p-6 border border-white/10 h-full";
+  const cardStyle = { background: '#22232E' };
+  const cardMotion = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay: 0.5 } };
+
   if (isLoading) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.5 }}
-      >
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
         <LoadingState message="Loading validators..." size="md" />
       </motion.div>
     );
@@ -359,51 +347,37 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
 
   if (error) {
     return (
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.5 }}
-      >
-        <EmptyState
-          icon="AlertCircle"
-          title="Error loading validators"
-          description="There was a problem loading your validators"
-          size="md"
-        />
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+        <EmptyState icon="AlertCircle" title="Error loading validators" description="There was a problem loading your validators" size="md" />
       </motion.div>
     );
   }
 
   return (
     <>
-      <motion.div
-        className="bg-bg-secondary rounded-xl p-6 border border-bg-accent h-full"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.5 }}
-      >
+      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
         {/* Header with action buttons */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-          <div className="flex items-center gap-2">
-            <Key className="w-5 h-5 text-primary" />
-            <h3 className="text-text-primary text-lg font-semibold">
-              Key Management
-            </h3>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Key className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <span className="text-xs font-medium text-back uppercase tracking-wider">Key Management</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleResumeAll}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors min-h-[44px]"
+              className="flex items-center gap-2 px-3.5 py-2 bg-primary hover:bg-primary-light text-primary-foreground rounded-lg text-sm font-semibold transition-colors"
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-3.5 h-3.5" />
               Resume All
             </button>
             <button
               onClick={handlePauseAll}
-              className="flex items-center gap-2 px-4 py-2.5 bg-bg-tertiary hover:bg-bg-accent text-text-primary rounded-lg text-sm font-medium transition-colors min-h-[44px]"
+              className="flex items-center gap-2 px-3.5 py-2 border border-white/[0.06] text-back hover:text-white hover:bg-white/5 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: '#14151C' }}
             >
-              <Pause className="w-4 h-4" />
+              <Pause className="w-3.5 h-3.5" />
               Pause All
             </button>
           </div>
@@ -413,22 +387,12 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-bg-accent">
-                <th className="text-left text-text-muted text-sm font-medium pb-3">
-                  Key
-                </th>
-                <th className="text-left text-text-muted text-sm font-medium pb-3">
-                  Staked
-                </th>
-                <th className="text-left text-text-muted text-sm font-medium pb-3">
-                  Status
-                </th>
-                <th className="text-left text-text-muted text-sm font-medium pb-3">
-                  Rewards (24h)
-                </th>
-                <th className="text-left text-text-muted text-sm font-medium pb-3">
-                  Actions
-                </th>
+              <tr className="border-b border-white/[0.06]">
+                <th className="text-left text-back text-xs font-medium pb-3 uppercase tracking-wider">Key</th>
+                <th className="text-left text-back text-xs font-medium pb-3 uppercase tracking-wider">Staked</th>
+                <th className="text-left text-back text-xs font-medium pb-3 uppercase tracking-wider">Status</th>
+                <th className="text-left text-back text-xs font-medium pb-3 uppercase tracking-wider">Rewards (24h)</th>
+                <th className="text-left text-back text-xs font-medium pb-3 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>

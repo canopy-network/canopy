@@ -2,54 +2,65 @@ import React from 'react';
 import { useDSFetcher } from '@/core/dsFetch';
 import { useQuery } from '@tanstack/react-query';
 
+type RawJSONTab = 'quorum' | 'config' | 'peerInfo' | 'peerBook';
+
 interface RawJSONProps {
-    activeTab: 'quorum' | 'logger' | 'config' | 'peerInfo' | 'peerBook';
-    onTabChange: (tab: 'quorum' | 'logger' | 'config' | 'peerInfo' | 'peerBook') => void;
+    activeTab: RawJSONTab;
+    onTabChange: (tab: RawJSONTab) => void;
     onExportLogs: () => void;
 }
 
+const tabData: Array<{
+    id: RawJSONTab;
+    label: string;
+    icon: string;
+    dsKey: string;
+    refetchInterval: number;
+    staleTime: number;
+}> = [
+    {
+        id: 'quorum',
+        label: 'Quorum',
+        icon: 'fa-users',
+        dsKey: 'admin.consensusInfo',
+        refetchInterval: 2000,
+        staleTime: 1000,
+    },
+    {
+        id: 'config',
+        label: 'Config',
+        icon: 'fa-gear',
+        dsKey: 'admin.config',
+        refetchInterval: 30000,
+        staleTime: 25000,
+    },
+    {
+        id: 'peerInfo',
+        label: 'Peer Info',
+        icon: 'fa-circle-info',
+        dsKey: 'admin.peerInfo',
+        refetchInterval: 5000,
+        staleTime: 4000,
+    },
+    {
+        id: 'peerBook',
+        label: 'Peer Book',
+        icon: 'fa-address-book',
+        dsKey: 'admin.peerBook',
+        refetchInterval: 30000,
+        staleTime: 25000,
+    },
+];
+
 export default function RawJSON({
-                                    activeTab,
-                                    onTabChange,
-                                    onExportLogs
-                                }: RawJSONProps): JSX.Element {
+    activeTab,
+    onTabChange,
+    onExportLogs,
+}: RawJSONProps): JSX.Element {
     const dsFetch = useDSFetcher();
 
-    const tabData = [
-        {
-            id: 'quorum' as const,
-            label: 'Quorum',
-            icon: 'fa-users',
-            dsKey: 'admin.consensusInfo'
-        },
-        {
-            id: 'logger' as const,
-            label: 'Logger',
-            icon: 'fa-list',
-            dsKey: 'admin.log'
-        },
-        {
-            id: 'config' as const,
-            label: 'Config',
-            icon: 'fa-gear',
-            dsKey: 'admin.config'
-        },
-        {
-            id: 'peerInfo' as const,
-            label: 'Peer Info',
-            icon: 'fa-circle-info',
-            dsKey: 'admin.peerInfo'
-        },
-        {
-            id: 'peerBook' as const,
-            label: 'Peer Book',
-            icon: 'fa-address-book',
-            dsKey: 'admin.peerBook'
-        }
-    ];
-
-    // Fetch data for active tab
     const currentTab = tabData.find(t => t.id === activeTab);
+
     const { data: tabContentData, isLoading } = useQuery({
         queryKey: ['rawJSON', activeTab],
         enabled: !!currentTab,
@@ -62,8 +73,8 @@ export default function RawJSON({
                 return null;
             }
         },
-        refetchInterval: 10000,
-        staleTime: 5000
+        refetchInterval: currentTab?.refetchInterval ?? 5000,
+        staleTime: currentTab?.staleTime ?? 4000,
     });
 
     const handleExportJSON = () => {
@@ -96,7 +107,7 @@ export default function RawJSON({
             </div>
 
             {/* Tab buttons */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="grid grid-cols-4 gap-2 mb-4">
                 {tabData.map((tab) => (
                     <button
                         key={tab.id}
