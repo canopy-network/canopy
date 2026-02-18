@@ -624,7 +624,7 @@ export async function TxDeleteOrder(address, chainId, orderId, memo, fee, passwo
   return POST(
     adminRPCURL,
     txDeleteOrder,
-    newSellOrderTxRequest(address, chainId, orderId, 0, 0, "", memo, Number(fee), submit, password),
+    newSellOrderTxRequest(address, chainId, orderId, "", 0, 0, "", memo, Number(fee), submit, password),
   );
 }
 
