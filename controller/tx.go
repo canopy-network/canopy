@@ -99,25 +99,29 @@ func (c *Controller) CheckMempool() {
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
 		// if recheck is necessary
-		if c.Mempool.recheck.Load() {
-			// execute in a function call to allow defer
-			func() {
-				c.Mempool.L.Lock()
-				defer c.Mempool.L.Unlock()
-				// be mempool strict on proposals
-				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
-				// once done proposing, 'reset' the proposal mode back to default to 'accept all'
-				defer func() { resetProposalConfig() }()
-				// reset the mempool
-				c.Mempool.FSM.Reset()
-				// check the mempool to cache a proposal block and validate the mempool itself
-				c.Mempool.CheckMempool()
-				// get the transactions to gossip
-				toGossip = c.Mempool.GetTransactions(math.MaxUint64)
-				// set recheck to false
-				c.Mempool.recheck.Store(false)
-			}()
-		}
+		// NOTE: recheck is temporarily disabled — on nested chains with matching block times,
+		// there's a race condition where root chain info isn't updated before the mempool cache
+		// queries it right after a block commit; the mempool runs continuously with a minimum frequency
+		// of LazyMempoolCheckFrequencyS seconds until this is resolved, or may be removed in the future
+		// if c.Mempool.recheck.Load() {
+		// execute in a function call to allow defer
+		func() {
+			c.Mempool.L.Lock()
+			defer c.Mempool.L.Unlock()
+			// be mempool strict on proposals
+			resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+			// once done proposing, 'reset' the proposal mode back to default to 'accept all'
+			defer func() { resetProposalConfig() }()
+			// reset the mempool
+			c.Mempool.FSM.Reset()
+			// check the mempool to cache a proposal block and validate the mempool itself
+			c.Mempool.CheckMempool()
+			// get the transactions to gossip
+			toGossip = c.Mempool.GetTransactions(math.MaxUint64)
+			// set recheck to false
+			c.Mempool.recheck.Store(false)
+		}()
+		// } mempool recheck `if` end
 		// for each transaction to gossip
 		var dedupedTxs [][]byte
 		for _, tx := range toGossip {
