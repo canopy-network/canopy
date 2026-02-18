@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Download } from 'lucide-react';
+import { Download, ShieldCheck, KeyRound, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { CurrentWallet } from '@/components/key-management/CurrentWallet';
 import { ImportWallet } from '@/components/key-management/ImportWallet';
@@ -14,6 +14,7 @@ import { useToast } from '@/toast/ToastContext';
 export const KeyManagement = (): JSX.Element => {
     const toast = useToast();
     const { data: keystore } = useDS('keystore', {});
+    const walletCount = Object.keys(keystore?.addressMap || {}).length;
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -43,29 +44,48 @@ export const KeyManagement = (): JSX.Element => {
     };
 
     return (
-        <div className="bg-background">
-            {/* Main Content */}
-            <div className="px-6 py-8">
-                <div className="flex justify-between items-center">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className="mb-8"
-                    >
-                        <h1 className="text-3xl font-bold text-foreground mb-2">Key Management</h1>
-                        <p className="text-muted-foreground">Manage your wallet keys and security settings</p>
-                    </motion.div>
-                    <Button
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
-                        onClick={handleDownloadKeys}
-                    >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Keys
-                    </Button>
-                </div>
+        <div className="bg-background min-h-screen">
+            <div className="px-6 py-8 space-y-7">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 md:p-6"
+                >
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                        <div>
+                            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-3">
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                Security Control Center
+                            </div>
+                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">Key Management</h1>
+                            <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
+                                Create, import, protect, and maintain wallet keys with explicit security safeguards.
+                            </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="rounded-xl border border-border bg-background/80 px-4 py-3 min-w-[150px]">
+                                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                                    <WalletCards className="w-3.5 h-3.5" />
+                                    Wallets
+                                </div>
+                                <div className="text-xl font-bold text-foreground mt-1">{walletCount}</div>
+                            </div>
+                            <Button
+                                className="h-12 px-5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+                                onClick={handleDownloadKeys}
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download Full Keystore
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="mt-4 inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        <KeyRound className="w-3.5 h-3.5 text-primary" />
+                        Always keep encrypted backups offline before deleting or rotating keys.
+                    </div>
+                </motion.div>
 
-                {/* Three Panel Layout */}
                 <motion.div
                     className="grid grid-cols-1 lg:grid-cols-3 gap-6"
                     variants={containerVariants}

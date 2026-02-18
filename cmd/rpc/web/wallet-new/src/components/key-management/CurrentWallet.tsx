@@ -5,10 +5,10 @@ import {
   Download,
   Key,
   AlertTriangle,
-  Shield,
   Eye,
   EyeOff,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
@@ -253,11 +253,19 @@ export const CurrentWallet = (): JSX.Element => {
   return (
     <motion.div
       variants={panelVariants}
-      className="bg-card rounded-lg p-6 border border-border"
+      className="bg-card rounded-2xl p-6 border border-border/80 shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
     >
       <div className="flex items-center justify-between gap-2 mb-6">
-        <h2 className="text-xl font-bold text-foreground">Current Wallet</h2>
-        <Shield className="text-primary w-6 h-6" />
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Current Wallet</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Inspect keys, export backups, and manage account lifecycle.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary uppercase tracking-wider">
+          <Wallet className="w-3 h-3" />
+          Active
+        </span>
       </div>
 
       <div className="space-y-5">
@@ -269,7 +277,7 @@ export const CurrentWallet = (): JSX.Element => {
             value={selectedAccount?.id || ""}
             onValueChange={switchAccount}
           >
-            <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg">
+            <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg focus:ring-2 focus:ring-primary/35">
               <SelectValue placeholder="Select wallet" />
             </SelectTrigger>
             <SelectContent className="bg-muted border-border">
@@ -361,7 +369,7 @@ export const CurrentWallet = (): JSX.Element => {
         <div className="flex gap-2 flex-col">
           <Button
             onClick={handleDownloadKeyfile}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 py-3"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 py-3 font-semibold"
           >
             <Download className="w-4 h-4 mr-2" />
             Download Keyfile
@@ -377,7 +385,7 @@ export const CurrentWallet = (): JSX.Element => {
           <Button
             onClick={handleDeleteAccount}
             variant="destructive"
-            className="flex-1 py-3 bg-red-600 hover:bg-red-700"
+            className="flex-1 py-3 bg-red-600 hover:bg-red-700 font-semibold"
             disabled={accounts.length === 1}
           >
             <Trash2 className="w-4 h-4 mr-2" />
@@ -403,7 +411,7 @@ export const CurrentWallet = (): JSX.Element => {
 
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm bg-card border border-border rounded-xl p-5">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
             <h3 className="text-lg text-foreground font-semibold mb-2">
               Unlock Private Key
             </h3>
@@ -415,7 +423,7 @@ export const CurrentWallet = (): JSX.Element => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5"
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
             />
             {passwordError && (
               <div className="text-sm text-red-400 mt-2">{passwordError}</div>
@@ -442,7 +450,7 @@ export const CurrentWallet = (): JSX.Element => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-md bg-card border border-red-500/50 rounded-xl p-6">
+          <div className="w-full max-w-md bg-card border border-red-500/50 rounded-2xl p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-3 bg-red-500/20 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-red-500" />
@@ -454,7 +462,7 @@ export const CurrentWallet = (): JSX.Element => {
 
             <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4">
               <p className="text-red-300 text-sm font-medium mb-2">
-                ⚠️ This action is permanent and irreversible
+                This action is permanent and irreversible
               </p>
               <p className="text-red-300 text-sm">
                 Make sure you have backed up your private key before deleting this account.
@@ -473,7 +481,7 @@ export const CurrentWallet = (): JSX.Element => {
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
               placeholder="Type wallet name to confirm"
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 mb-4"
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35"
               autoFocus
             />
 
@@ -502,4 +510,5 @@ export const CurrentWallet = (): JSX.Element => {
     </motion.div>
   );
 };
+
 

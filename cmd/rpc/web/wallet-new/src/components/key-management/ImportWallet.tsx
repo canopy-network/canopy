@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, KeyRound, FileJson } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useToast } from '@/toast/ToastContext';
 import { useDSFetcher } from '@/core/dsFetch';
 import { useQueryClient } from '@tanstack/react-query';
 
 export const ImportWallet = (): JSX.Element => {
-    const { switchAccount } = useAccounts();
     const toast = useToast();
     const dsFetch = useDSFetcher();
     const queryClient = useQueryClient();
@@ -106,27 +104,34 @@ export const ImportWallet = (): JSX.Element => {
     return (
         <motion.div
             variants={panelVariants}
-            className="bg-card rounded-lg p-6 border border-border w-full"
+            className="bg-card rounded-2xl p-6 border border-border/80 w-full shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
         >
-            <div className="flex items-center gap-2 mb-6">
-                <h2 className="text-xl font-bold text-foreground">Import Wallet</h2>
+            <div className="flex items-center justify-between gap-2 mb-6">
+                <div>
+                    <h2 className="text-xl font-bold text-foreground">Import Wallet</h2>
+                    <p className="text-xs text-muted-foreground mt-1">Bring an existing key into this node securely.</p>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary uppercase tracking-wider">
+                    <KeyRound className="w-3 h-3" />
+                    Recovery
+                </span>
             </div>
 
-            <div className="flex gap-2 mb-6 lg:w-6/12 w-full justify-between">
+            <div className="grid grid-cols-2 gap-2 mb-6">
                 <button
                     onClick={() => setActiveTab('key')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors bg-transparent w-full ${activeTab === 'key'
-                        ? 'text-primary border-white border-b-2'
-                        : 'text-muted-foreground'
+                    className={`px-3 py-2.5 text-sm font-medium rounded-lg transition-all border ${activeTab === 'key'
+                        ? 'text-primary border-primary/40 bg-primary/10'
+                        : 'text-muted-foreground border-border hover:text-foreground hover:bg-muted/60'
                         }`}
                 >
-                    Key
+                    Private Key
                 </button>
                 <button
                     onClick={() => setActiveTab('keystore')}
-                    className={`px-4 py-2  text-sm font-medium transition-colors bg-transparent w-full ${activeTab === 'keystore'
-                        ? 'text-primary border-white border-b-2'
-                        : 'text-muted-foreground '
+                    className={`px-3 py-2.5 text-sm font-medium rounded-lg transition-all border ${activeTab === 'keystore'
+                        ? 'text-primary border-primary/40 bg-primary/10'
+                        : 'text-muted-foreground border-border hover:text-foreground hover:bg-muted/60'
                         }`}
                 >
                     Keystore
@@ -158,13 +163,13 @@ export const ImportWallet = (): JSX.Element => {
                                 placeholder="Enter your private key..."
                                 value={importForm.privateKey}
                                 onChange={(e) => setImportForm({ ...importForm, privateKey: e.target.value })}
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10 placeholder:font-mono"
+                                className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10 placeholder:font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                             />
                             <button
                                 onClick={() => setShowPrivateKey(!showPrivateKey)}
                                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             >
-                                {showPrivateKey ? <i className="fa-solid fa-eye-slash text-muted-foreground text-md"></i> : <i className="fa-solid fa-eye text-muted-foreground text-md"></i>}
+                                {showPrivateKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
                     </div>
@@ -197,7 +202,7 @@ export const ImportWallet = (): JSX.Element => {
 
                     <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
                         <div className="flex items-start gap-3">
-                            <i className="fa-solid fa-triangle-exclamation text-red-500 text-md translate-y-1"></i>
+                            <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5" />
                             <div>
                                 <h4 className="text-red-400 font-medium mb-1">Import Security Warning</h4>
                                 <p className="text-red-300 text-sm">
@@ -209,7 +214,7 @@ export const ImportWallet = (): JSX.Element => {
 
                     <Button
                         onClick={handleImportWallet}
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-medium"
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold"
                     >
                         Import Wallet
                     </Button>
@@ -222,6 +227,10 @@ export const ImportWallet = (): JSX.Element => {
                         <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Keystore File
                         </label>
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
+                            <FileJson className="w-3.5 h-3.5" />
+                            Upload encrypted JSON keystore
+                        </div>
                         <input
                             type="file"
                             accept=".json"
@@ -265,7 +274,7 @@ export const ImportWallet = (): JSX.Element => {
 
                     <Button
                         onClick={handleImportWallet}
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-medium"
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold"
                     >
                         Import Keystore
                     </Button>
