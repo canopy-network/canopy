@@ -144,6 +144,14 @@ export type AmountField = FieldBase & {
   max?: number;
 };
 
+export type NumberField = FieldBase & {
+  type: "number";
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  integer?: boolean;
+};
+
 export type TextField = FieldBase & {
   type: "text" | "textarea";
 };
@@ -214,6 +222,7 @@ export type AdvancedSelectField = FieldBase & {
 export type Field =
   | AddressField
   | AmountField
+  | NumberField
   | SwitchField
   | OptionCardField
   | OptionField

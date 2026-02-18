@@ -1,7 +1,12 @@
+import { useMemo } from "react";
 import { useDS } from "@/core/useDs";
 
+type RpcProposalRecord = Record<string, any>;
+type RpcPollRecord = Record<string, any>;
+type RpcParamsRecord = Record<string, Record<string, string>>;
+
 export interface Proposal {
-  id: string; // Hash of the proposal
+  id: string;
   hash: string;
   title: string;
   description: string;
@@ -14,14 +19,12 @@ export interface Proposal {
   startHeight: number;
   yesPercent: number;
   noPercent: number;
-  // Vote counts
   yesVotes: number;
   noVotes: number;
   abstainVotes: number;
   totalVotes?: number;
   votingStartTime?: string;
   votingEndTime?: string;
-  // Raw proposal data from backend
   type?: string;
   msg?: any;
   approve?: boolean | null;
@@ -48,252 +51,204 @@ export interface Poll {
     yes: number;
     no: number;
   };
-  // Raw data
-  approve?: boolean | null;
-  createdHeight?: number;
-  endHeight?: number;
-  time?: number;
+  proposal: string;
+  endBlock: number;
+  url: string;
+  proposalHash?: string;
 }
 
-export const useGovernance = () => {
-  return useDS<Proposal[]>(
-    "gov.proposals",
-    {},
-    {
-      staleTimeMs: 10000,
-      refetchIntervalMs: 30000,
-      refetchOnMount: true,
-      refetchOnWindowFocus: false,
-      select: (data) => {
-        // Handle null or undefined
-        if (!data) {
-          return [];
-        }
+const POLL_INTERVAL_MS = 4_000;
 
-        // If it's already an array, return it
-        if (Array.isArray(data)) {
-          return data;
-        }
+const asNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 
-        // If it's an object with hash keys, transform it to an array
-        if (typeof data === "object") {
-          const proposals: Proposal[] = Object.entries(data).map(
-            ([hash, value]: [string, any]) => {
-              const proposalData = value?.proposal || value;
-              const msg = proposalData?.msg || {};
+const normalizeDate = (raw: unknown): string => {
+  const numeric = asNumber(raw, 0);
+  if (!numeric) return new Date().toISOString();
+  // Backend returns microseconds in several responses.
+  if (numeric > 1e15) return new Date(Math.floor(numeric / 1_000)).toISOString();
+  if (numeric > 1e12) return new Date(numeric).toISOString();
+  if (numeric > 1e9) return new Date(numeric * 1000).toISOString();
+  return new Date().toISOString();
+};
 
-              // Determine status and result based on approve field
-              let status: "active" | "passed" | "rejected" | "pending" =
-                "pending";
-              let result: "Pass" | "Fail" | "Pending" = "Pending";
+const categoryFromType = (type?: string): string => {
+  const map: Record<string, string> = {
+    changeParameter: "Gov",
+    daoTransfer: "Subsidy",
+  };
+  return map[type ?? ""] ?? "Other";
+};
 
-              if (value?.approve === true) {
-                status = "passed";
-                result = "Pass";
-              } else if (value?.approve === false) {
-                status = "rejected";
-                result = "Fail";
-              } else if (
-                value?.approve === null ||
-                value?.approve === undefined
-              ) {
-                status = "active";
-                result = "Pending";
-              }
+const buildProposalList = (rpcProposals: RpcProposalRecord | undefined): Proposal[] => {
+  if (!rpcProposals || typeof rpcProposals !== "object") return [];
 
-              // Calculate percentages (simplified for now)
-              const yesPercent =
-                value?.approve === true
-                  ? 100
-                  : value?.approve === false
-                    ? 0
-                    : 50;
-              const noPercent = 100 - yesPercent;
+  return Object.entries(rpcProposals).map(([hash, value]) => {
+    const proposalData = value?.proposal ?? {};
+    const msg = proposalData?.msg ?? {};
+    const approve = value?.approve;
 
-              // Get category from type
-              const categoryMap: Record<string, string> = {
-                changeParameter: "Gov",
-                daoTransfer: "Subsidy",
-                default: "Other",
-              };
-              const category =
-                categoryMap[proposalData?.type] || categoryMap.default;
+    let status: Proposal["status"] = "pending";
+    let result: Proposal["result"] = "Pending";
+    if (approve === true) {
+      status = "passed";
+      result = "Pass";
+    } else if (approve === false) {
+      status = "rejected";
+      result = "Fail";
+    } else if (approve == null) {
+      status = "active";
+      result = "Pending";
+    }
 
-              return {
-                id: hash,
-                hash: hash,
-                title: msg.parameterSpace
-                  ? `${msg.parameterSpace.toUpperCase()}: ${msg.parameterKey}`
-                  : proposalData?.memo ||
-                    `${proposalData?.type || "Unknown"} Proposal`,
-                description: msg.parameterSpace
-                  ? `Change ${msg.parameterKey} to ${msg.parameterValue}`
-                  : proposalData?.memo || "No description available",
-                status: status,
-                category: category,
-                result: result,
-                proposer:
-                  msg.signer ||
-                  proposalData?.signature?.publicKey?.slice(0, 40) ||
-                  "Unknown",
-                submitTime: proposalData?.time
-                  ? new Date(proposalData.time / 1000).toISOString()
-                  : new Date().toISOString(),
-                endHeight: msg.endHeight || 0,
-                startHeight: msg.startHeight || 0,
-                yesPercent: yesPercent,
-                noPercent: noPercent,
-                // Vote counts (simplified for now)
-                yesVotes: value?.approve === true ? 1 : 0,
-                noVotes: value?.approve === false ? 1 : 0,
-                abstainVotes: 0,
-                totalVotes: 1,
-                votingStartTime: msg.startHeight
-                  ? `Height ${msg.startHeight}`
-                  : proposalData?.time
-                    ? new Date(proposalData.time / 1000).toISOString()
-                    : new Date().toISOString(),
-                votingEndTime: msg.endHeight
-                  ? `Height ${msg.endHeight}`
-                  : new Date(
-                      Date.now() + 7 * 24 * 60 * 60 * 1000,
-                    ).toISOString(),
-                // Include raw data
-                type: proposalData?.type,
-                msg: msg,
-                approve: value?.approve,
-                createdHeight: proposalData?.createdHeight,
-                fee: proposalData?.fee,
-                memo: proposalData?.memo,
-                time: proposalData?.time,
-              };
-            },
-          );
+    const yesPercent = approve === true ? 100 : approve === false ? 0 : 50;
+    const noPercent = 100 - yesPercent;
+    const proposer = msg?.signer ?? proposalData?.signature?.publicKey ?? "Unknown";
+    const title =
+      msg?.parameterSpace && msg?.parameterKey
+        ? `${String(msg.parameterSpace).toUpperCase()}: ${msg.parameterKey}`
+        : proposalData?.memo || `${proposalData?.type || "Proposal"} ${hash.slice(0, 8)}`;
+    const description =
+      msg?.parameterSpace && msg?.parameterKey
+        ? `Change ${msg.parameterKey} to ${msg.parameterValue}`
+        : proposalData?.memo || "No description available";
 
-          return proposals;
-        }
+    return {
+      id: hash,
+      hash,
+      title,
+      description,
+      status,
+      category: categoryFromType(proposalData?.type),
+      result,
+      proposer,
+      submitTime: normalizeDate(proposalData?.time),
+      endHeight: asNumber(msg?.endHeight, 0),
+      startHeight: asNumber(msg?.startHeight, 0),
+      yesPercent,
+      noPercent,
+      yesVotes: approve === true ? 1 : 0,
+      noVotes: approve === false ? 1 : 0,
+      abstainVotes: 0,
+      totalVotes: 1,
+      votingStartTime: msg?.startHeight ? `Height ${msg.startHeight}` : normalizeDate(proposalData?.time),
+      votingEndTime: msg?.endHeight ? `Height ${msg.endHeight}` : "",
+      type: proposalData?.type,
+      msg,
+      approve,
+      createdHeight: asNumber(proposalData?.createdHeight, 0),
+      fee: asNumber(proposalData?.fee, 0),
+      memo: proposalData?.memo,
+      time: asNumber(proposalData?.time, 0),
+    };
+  });
+};
 
-        return [];
-      },
-    },
+const buildPollList = (
+  rpcPolls: RpcPollRecord | undefined,
+  rpcProposals: RpcProposalRecord | undefined,
+): Poll[] => {
+  if (!rpcPolls || typeof rpcPolls !== "object") return [];
+
+  return Object.entries(rpcPolls).map(([pollKey, value]) => {
+    const proposalHash = String(value?.proposalHash ?? "");
+    const relatedProposal =
+      (proposalHash ? rpcProposals?.[proposalHash] : undefined) ??
+      rpcProposals?.[pollKey];
+    const relatedMsg = relatedProposal?.proposal?.msg ?? {};
+
+    const accountApprove = asNumber(value?.accounts?.approvedPercent, 0);
+    const accountReject = asNumber(value?.accounts?.rejectPercent, 0);
+    const validatorApprove = asNumber(value?.validators?.approvedPercent, 0);
+    const validatorReject = asNumber(value?.validators?.rejectPercent, 0);
+
+    const yesPercent = (accountApprove + validatorApprove) / 2;
+    const noPercent = (accountReject + validatorReject) / 2;
+    const endBlock = asNumber(relatedMsg?.endHeight, 0);
+
+    return {
+      id: proposalHash || pollKey,
+      hash: proposalHash || pollKey,
+      title: pollKey,
+      description: value?.proposalURL || "Community governance poll",
+      status: "active",
+      endTime: endBlock ? `Block ${endBlock}` : "Active",
+      yesPercent,
+      noPercent,
+      accountVotes: { yes: accountApprove, no: accountReject },
+      validatorVotes: { yes: validatorApprove, no: validatorReject },
+      proposal: pollKey,
+      endBlock,
+      url: value?.proposalURL || "",
+      proposalHash,
+    };
+  });
+};
+
+export const useGovernanceData = () => {
+  const pollsQuery = useDS<RpcPollRecord>("gov.poll", {}, {
+    staleTimeMs: POLL_INTERVAL_MS,
+    refetchIntervalMs: POLL_INTERVAL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  });
+
+  const proposalsQuery = useDS<RpcProposalRecord>("gov.proposals", {}, {
+    staleTimeMs: POLL_INTERVAL_MS,
+    refetchIntervalMs: POLL_INTERVAL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  });
+
+  const paramsQuery = useDS<RpcParamsRecord>("params", {}, {
+    staleTimeMs: POLL_INTERVAL_MS,
+    refetchIntervalMs: POLL_INTERVAL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  });
+
+  const proposals = useMemo(
+    () => buildProposalList(proposalsQuery.data),
+    [proposalsQuery.data],
   );
+
+  const polls = useMemo(
+    () => buildPollList(pollsQuery.data, proposalsQuery.data),
+    [pollsQuery.data, proposalsQuery.data],
+  );
+
+  return {
+    proposals,
+    polls,
+    params: paramsQuery.data ?? {},
+    isLoading: pollsQuery.isLoading || proposalsQuery.isLoading || paramsQuery.isLoading,
+    isRefetching: pollsQuery.isFetching || proposalsQuery.isFetching || paramsQuery.isFetching,
+    errors: {
+      polls: pollsQuery.error,
+      proposals: proposalsQuery.error,
+      params: paramsQuery.error,
+    },
+    refetchAll: () => {
+      void pollsQuery.refetch();
+      void proposalsQuery.refetch();
+      void paramsQuery.refetch();
+    },
+  };
+};
+
+export const useGovernance = () => {
+  const { proposals, isLoading } = useGovernanceData();
+  return { data: proposals, isLoading };
 };
 
 export const useProposal = (proposalId: string) => {
-  return useDS<Proposal | undefined>(
-    "gov.proposals",
-    {},
-    {
-      enabled: !!proposalId,
-      staleTimeMs: 10000,
-      select: (data) => {
-        if (!data) return undefined;
-
-        // If it's already an array
-        if (Array.isArray(data)) {
-          return data.find(
-            (p: Proposal) => p.id === proposalId || p.hash === proposalId,
-          );
-        }
-
-        // If it's the object format
-        if (typeof data === "object") {
-          const proposals: Proposal[] = Object.entries(data).map(
-            ([hash, value]: [string, any]) => {
-              const proposalData = value?.proposal || value;
-              const msg = proposalData?.msg || {};
-
-              let status: "active" | "passed" | "rejected" | "pending" =
-                "pending";
-              let result: "Pass" | "Fail" | "Pending" = "Pending";
-
-              if (value?.approve === true) {
-                status = "passed";
-                result = "Pass";
-              } else if (value?.approve === false) {
-                status = "rejected";
-                result = "Fail";
-              } else {
-                status = "active";
-                result = "Pending";
-              }
-
-              // Get category from type
-              const categoryMap: Record<string, string> = {
-                changeParameter: "Gov",
-                daoTransfer: "Subsidy",
-                default: "Other",
-              };
-              const category =
-                categoryMap[proposalData?.type] || categoryMap.default;
-
-              // Calculate percentages
-              const yesPercent =
-                value?.approve === true
-                  ? 100
-                  : value?.approve === false
-                    ? 0
-                    : 50;
-              const noPercent = 100 - yesPercent;
-
-              return {
-                id: hash,
-                hash: hash,
-                title: msg.parameterSpace
-                  ? `${msg.parameterSpace.toUpperCase()}: ${msg.parameterKey}`
-                  : proposalData?.memo ||
-                    `${proposalData?.type || "Unknown"} Proposal`,
-                description: msg.parameterSpace
-                  ? `Change ${msg.parameterKey} in ${msg.parameterSpace} to ${msg.parameterValue}`
-                  : proposalData?.memo || "No description available",
-                status: status,
-                category: category,
-                result: result,
-                proposer:
-                  msg.signer ||
-                  proposalData?.signature?.publicKey?.slice(0, 40) ||
-                  "Unknown",
-                submitTime: proposalData?.time
-                  ? new Date(proposalData.time / 1000).toISOString()
-                  : new Date().toISOString(),
-                endHeight: msg.endHeight || 0,
-                startHeight: msg.startHeight || 0,
-                yesPercent: yesPercent,
-                noPercent: noPercent,
-                votingStartTime: msg.startHeight
-                  ? `Height ${msg.startHeight}`
-                  : proposalData?.time
-                    ? new Date(proposalData.time / 1000).toISOString()
-                    : new Date().toISOString(),
-                votingEndTime: msg.endHeight
-                  ? `Height ${msg.endHeight}`
-                  : new Date(
-                      Date.now() + 7 * 24 * 60 * 60 * 1000,
-                    ).toISOString(),
-                yesVotes: value?.approve ? 1 : 0,
-                noVotes: value?.approve === false ? 1 : 0,
-                abstainVotes: 0,
-                totalVotes: 1,
-                type: proposalData?.type,
-                msg: msg,
-                approve: value?.approve,
-                createdHeight: proposalData?.createdHeight,
-                fee: proposalData?.fee,
-                memo: proposalData?.memo,
-                time: proposalData?.time,
-              };
-            },
-          );
-
-          return proposals.find(
-            (p) => p.id === proposalId || p.hash === proposalId,
-          );
-        }
-
-        return undefined;
-      },
-    },
-  );
+  const { proposals, isLoading } = useGovernanceData();
+  return {
+    data: proposals.find((p) => p.id === proposalId || p.hash === proposalId),
+    isLoading,
+  };
 };
 
 export const useVotingPower = (address: string) => {
@@ -319,7 +274,7 @@ export const useVotingPower = (address: string) => {
         return {
           votingPower: validator.stakedAmount,
           stakedAmount: validator.stakedAmount,
-          percentage: 0, // This would need total staked to calculate
+          percentage: 0,
         };
       },
     },

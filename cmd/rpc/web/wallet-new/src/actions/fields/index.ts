@@ -1,5 +1,6 @@
 export { TextField } from './TextField'
 export { AmountField } from './AmountField'
+export { NumberField } from './NumberField'
 export { AddressField } from './AddressField'
 export { SelectField } from './SelectField'
 export { AdvancedSelectField } from './AdvancedSelectField'

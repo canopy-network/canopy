@@ -348,24 +348,43 @@ export default function ActionRunner({
       typeof action!.submit?.path === "string"
         ? template(action!.submit.path, templatingCtx)
         : action!.submit?.path;
-    const res = await fetch(host + submitPath, {
+    const httpRes = await fetch(host + submitPath, {
       method: action!.submit?.method,
       headers: action!.submit?.headers ?? {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    }).then((r) => r.json());
+    });
+
+    let res: any = null;
+    try {
+      res = await httpRes.json();
+    } catch {
+      // Some endpoints may return plain text (e.g., tx hash) or empty body.
+      try {
+        const txt = await httpRes.text();
+        res = txt || null;
+      } catch {
+        res = null;
+      }
+    }
 
 
     setTxRes(res);
 
-    // Fix success detection - handle both string (tx hash) and object responses
+    // Success detection prioritizes HTTP status to avoid false negatives on valid payloads
+    // like {"approve": false, ...} or {"address":"..."}.
+    const hasExplicitError =
+      !!res?.error ||
+      res?.ok === false ||
+      res?.success === false ||
+      (typeof res?.status === "number" && res.status >= 400);
+
     const isSuccess =
-      typeof res === "string" // If response is a string (tx hash), it's a success
-        ? true
-        : res?.ok === true ||
-          (res?.status && res.status >= 200 && res.status < 300) ||
-          (!res?.error && !res?.ok && res?.status !== false);
+      httpRes.ok &&
+      (typeof res === "string" ||
+        res == null ||
+        (typeof res === "object" && !hasExplicitError));
     const key = isSuccess ? "onSuccess" : "onError";
     const t = resolveToastFromManifest(action, key as any, templatingCtx, res);
 

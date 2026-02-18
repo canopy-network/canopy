@@ -6,6 +6,7 @@ interface ProposalTableProps {
     title: string;
     isPast?: boolean;
     onVote?: (proposalHash: string, vote: 'approve' | 'reject') => void;
+    onDeleteVote?: (proposalHash: string) => void;
     onViewDetails?: (proposalHash: string) => void;
 }
 
@@ -14,6 +15,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     title,
     isPast = false,
     onVote,
+    onDeleteVote,
     onViewDetails
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -83,6 +85,11 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                     {!isPast && (
                         <p className="text-sm text-muted-foreground">
                             Vote on proposals that shape the future of the Canopy ecosystem
+                        </p>
+                    )}
+                    {!isPast && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Approve/Reject/Delete opens a guided voting flow with explicit proposal changes.
                         </p>
                     )}
                 </div>
@@ -180,20 +187,28 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                                     {/* Actions */}
                                     <td className="py-4 px-4">
                                         <div className="flex items-center justify-end gap-2">
-                                            {!isPast && proposal.status === 'active' && onVote && (
+                                            {!isPast && (proposal.status === 'active' || proposal.status === 'pending') && onVote && (
                                                 <>
                                                     <button
                                                         onClick={() => onVote(proposal.hash, 'approve')}
                                                         className="px-3 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded text-xs font-medium transition-all duration-200"
                                                     >
-                                                        For
+                                                        Approve
                                                     </button>
                                                     <button
                                                         onClick={() => onVote(proposal.hash, 'reject')}
                                                         className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs font-medium transition-all duration-200"
                                                     >
-                                                        Against
+                                                        Reject
                                                     </button>
+                                                    {onDeleteVote && (
+                                                        <button
+                                                            onClick={() => onDeleteVote(proposal.hash)}
+                                                            className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded text-xs font-medium transition-all duration-200"
+                                                        >
+                                                            Delete Vote
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                             <button

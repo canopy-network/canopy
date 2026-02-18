@@ -3,7 +3,7 @@ import { cx } from '@/ui/cx'
 import { FieldWrapper } from './FieldWrapper'
 import { BaseFieldProps } from './types'
 
-export const AmountField: React.FC<BaseFieldProps> = ({
+export const NumberField: React.FC<BaseFieldProps> = ({
     field,
     value,
     error,
@@ -13,21 +13,13 @@ export const AmountField: React.FC<BaseFieldProps> = ({
     resolveTemplate,
     setVal,
 }) => {
-    const currentValue = value ?? (dsValue?.amount ?? dsValue?.value ?? '')
+    const currentValue = value ?? (dsValue?.value ?? '')
     const hasFeatures = !!(field.features?.length)
 
-    // Get denomination from chain context.
-    // showDenom can be disabled per field from manifest (config-first behavior).
-    const explicitShowDenom = (field as any).showDenom
-    const denom = (field as any).denom ?? templateContext?.chain?.denom?.symbol ?? ''
-    const showDenom = explicitShowDenom === false ? false : !!denom
-
-    // Calculate padding based on features and denom
-    // Increased padding for better spacing with the MAX button
-    const paddingRight = hasFeatures && showDenom ? 'pr-36' : hasFeatures ? 'pr-24' : showDenom ? 'pr-16' : ''
-
+    const step = (field as any).integer ? 1 : (field as any).step ?? 'any'
     const common = 'w-full bg-transparent border placeholder-text-muted text-foreground rounded px-3 py-2 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
     const border = error ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
+    const paddingRight = hasFeatures ? 'pr-24' : ''
 
     return (
         <FieldWrapper
@@ -41,7 +33,7 @@ export const AmountField: React.FC<BaseFieldProps> = ({
         >
             <input
                 type="number"
-                step="any"
+                step={step}
                 className={cx(common, border, paddingRight)}
                 placeholder={resolveTemplate(field.placeholder)}
                 value={currentValue ?? ''}
@@ -51,14 +43,6 @@ export const AmountField: React.FC<BaseFieldProps> = ({
                 min={(field as any).min}
                 max={(field as any).max}
             />
-            {showDenom && (
-                <div className={cx(
-                    "absolute top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none",
-                    hasFeatures ? "right-24" : "right-3"
-                )}>
-                    {denom}
-                </div>
-            )}
         </FieldWrapper>
     )
 }

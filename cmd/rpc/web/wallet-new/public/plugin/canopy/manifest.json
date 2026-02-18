@@ -1939,6 +1939,7 @@
       "title": "Change Parameter Proposal",
       "icon": "Settings",
       "ds": {
+        "height": {},
         "params": {},
         "account": {
           "account": {
@@ -2054,9 +2055,12 @@
           {
             "id": "startHeight",
             "name": "startHeight",
-            "type": "text",
+            "type": "number",
             "label": "Start Height",
             "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
             "placeholder": "Block height to start voting",
             "help": "Block height when voting begins",
             "validation": {
@@ -2069,14 +2073,22 @@
           {
             "id": "endHeight",
             "name": "endHeight",
-            "type": "text",
+            "type": "number",
             "label": "End Height",
             "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
             "placeholder": "Block height to end voting",
-            "help": "Block height when voting ends",
+            "help": "Block height when voting ends. Must be > start height and within 10,000 blocks.",
             "validation": {
+              "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
               "messages": {
-                "required": "End height is required"
+                "required": "End height is required",
+                "min": "End height must be at least {{min}} (start height + 1).",
+                "max": "End height must be at most {{max}} (start height + 10,000)."
               }
             },
             "span": { "base": 12, "md": 6 }
@@ -2146,11 +2158,11 @@
           "coerce": "string"
         },
         "startHeight": {
-          "value": "{{form.startHeight}}",
+          "value": "{{resolveHeight(ds.height)}}",
           "coerce": "number"
         },
         "endHeight": {
-          "value": "{{form.endHeight}}",
+          "value": "{{(() => { const s = Number(form.startHeight || resolveHeight(ds.height)); const eRaw = Number(form.endHeight); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
           "coerce": "number"
         },
         "signer": {
@@ -2193,6 +2205,7 @@
       "title": "DAO Treasury Transfer Proposal",
       "icon": "Coins",
       "ds": {
+        "height": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -2281,9 +2294,12 @@
           {
             "id": "startHeight",
             "name": "startHeight",
-            "type": "text",
+            "type": "number",
             "label": "Start Height",
             "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
             "placeholder": "Block height to start voting",
             "help": "Block height when voting begins",
             "span": { "base": 12, "md": 6 },
@@ -2296,15 +2312,23 @@
           {
             "id": "endHeight",
             "name": "endHeight",
-            "type": "text",
+            "type": "number",
             "label": "End Height",
             "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
             "placeholder": "Block height to end voting",
-            "help": "Block height when voting ends",
+            "help": "Block height when voting ends. Must be > start height and within 10,000 blocks.",
             "span": { "base": 12, "md": 6 },
             "validation": {
+              "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
               "messages": {
-                "required": "End height is required"
+                "required": "End height is required",
+                "min": "End height must be at least {{min}} (start height + 1).",
+                "max": "End height must be at most {{max}} (start height + 10,000)."
               }
             }
           },
@@ -2381,11 +2405,11 @@
           "coerce": "number"
         },
         "startHeight": {
-          "value": "{{form.startHeight}}",
+          "value": "{{resolveHeight(ds.height)}}",
           "coerce": "number"
         },
         "endHeight": {
-          "value": "{{form.endHeight}}",
+          "value": "{{(() => { const s = Number(form.startHeight || resolveHeight(ds.height)); const eRaw = Number(form.endHeight); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
           "coerce": "number"
         },
         "signer": {
@@ -2539,6 +2563,7 @@
       "title": "Vote on Community Poll",
       "icon": "CheckSquare",
       "ds": {
+        "height": {},
         "polls": {
           "id": "gov.poll"
         },
@@ -2595,15 +2620,18 @@
           {
             "id": "pollEndBlock",
             "name": "pollEndBlock",
-            "type": "text",
+            "type": "number",
             "label": "Poll End Block",
             "required": true,
+            "min": "{{resolveHeight(ds.height) + 1}}",
             "placeholder": "Block height when poll ends",
             "help": "The end block height of the poll",
             "span": { "base": 12, "md": 6 },
             "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
               "messages": {
-                "required": "Poll end block is required"
+                "required": "Poll end block is required",
+                "min": "Poll end block must be at least {{min}} (current height + 1)."
               }
             }
           },
@@ -2694,7 +2722,7 @@
           "coerce": "string"
         },
         "pollJSON": {
-          "value": "{{JSON.stringify({ proposal: form.pollQuestion, endBlock: parseInt(form.pollEndBlock), URL: form.pollURL || '' })}}",
+          "value": "{{JSON.stringify({ proposal: form.pollQuestion, endBlock: Math.max(parseInt(form.pollEndBlock || '0', 10), resolveHeight(ds.height) + 1), URL: form.pollURL || '' })}}",
           "coerce": "string"
         },
         "pollApprove": {
@@ -2725,6 +2753,993 @@
           "title": "Poll Vote Submitted!",
           "description": "Your vote on the community poll has been recorded",
           "actions": []
+        }
+      }
+    },
+    {
+      "id": "govStartPoll",
+      "title": "Start New Poll",
+      "icon": "BarChart3",
+      "ds": {
+        "height": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposal",
+            "name": "proposal",
+            "type": "text",
+            "label": "Proposal",
+            "required": true,
+            "placeholder": "Poll proposal or question",
+            "help": "Clearly describe the question or decision being voted on.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (current height + 1)."
+              }
+            },
+            "placeholder": "Block height when poll ends",
+            "help": "Use a valid future block height to allow participation.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "URL",
+            "name": "URL",
+            "type": "text",
+            "label": "Discussion URL",
+            "required": false,
+            "placeholder": "https://...",
+            "help": "Optional link to Discord, forum, or proposal context.",
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm New Poll",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposal}}"
+            },
+            {
+              "label": "End Block",
+              "value": "{{form.endBlock}}"
+            },
+            {
+              "label": "URL",
+              "value": "{{form.URL || 'No URL'}}"
+            }
+          ],
+          "btn": {
+            "icon": "BarChart3",
+            "label": "Start Poll"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "pollJSON": {
+          "proposal": "{{form.proposal}}",
+          "endBlock": "{{Math.max(Number(form.endBlock || 0), resolveHeight(ds.height) + 1)}}",
+          "URL": "{{form.URL || ''}}"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-start-poll",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Poll Submitted",
+          "description": "The new governance poll transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govVotePoll",
+      "title": "Vote Poll",
+      "icon": "CheckSquare",
+      "ds": {
+        "height": {},
+        "gov.poll": {},
+        "gov.proposals": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalHash",
+            "name": "proposalHash",
+            "type": "select",
+            "label": "Proposal Hash",
+            "required": true,
+            "map": "{{Object.entries(ds['gov.poll'] || {}).map(([k, v]) => { const h = v?.proposalHash || k; return { label: String(h).slice(0, 12) + '...', value: h }; })}}",
+            "help": "Select the poll hash to auto-fill proposal details.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposal",
+            "name": "proposal",
+            "type": "text",
+            "label": "Proposal",
+            "required": true,
+            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg; if (direct) return selected; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) return byMsgHashKey; return selected; })()}}",
+            "autoPopulate": "always",
+            "placeholder": "Poll proposal",
+            "help": "Must match the existing poll proposal text.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg?.endHeight; if (direct != null && direct !== '') return direct; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) { const fallback = proposals[byMsgHashKey]?.proposal?.msg?.endHeight; if (fallback != null && fallback !== '') return fallback; } return form.endBlock ?? ''; })()}}",
+            "autoPopulate": "always",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (current height + 1)."
+              }
+            },
+            "placeholder": "Block height",
+            "help": "Must match the poll endBlock value.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "URL",
+            "name": "URL",
+            "type": "text",
+            "label": "Discussion URL",
+            "required": false,
+            "value": "{{(() => { const selected = form.proposalHash || ''; const polls = ds['gov.poll'] || {}; const byKey = polls[selected]?.proposalURL; if (byKey) return byKey; const byProposalHashKey = Object.keys(polls).find(k => polls[k]?.proposalHash === selected); if (byProposalHashKey) return polls[byProposalHashKey]?.proposalURL || ''; return form.URL ?? ''; })()}}",
+            "autoPopulate": "always",
+            "placeholder": "https://...",
+            "help": "Should match the poll URL when one exists.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "voteApprove",
+            "name": "voteApprove",
+            "type": "optionCard",
+            "label": "Vote",
+            "required": true,
+            "value": true,
+            "options": [
+              {
+                "label": "Approve",
+                "value": true,
+                "help": "Vote in favor"
+              },
+              {
+                "label": "Reject",
+                "value": false,
+                "help": "Vote against"
+              }
+            ],
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Poll Vote",
+          "summary": [
+            {
+              "label": "Proposal Hash",
+              "value": "{{form.proposalHash}}"
+            },
+            {
+              "label": "Proposal",
+              "value": "{{form.proposal}}"
+            },
+            {
+              "label": "End Block",
+              "value": "{{form.endBlock}}"
+            },
+            {
+              "label": "Vote",
+              "value": "{{form.voteApprove ? 'Approve' : 'Reject'}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckSquare",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "pollJSON": {
+          "proposal": "{{form.proposal}}",
+          "endBlock": "{{Math.max(Number(form.endBlock || 0), resolveHeight(ds.height) + 1)}}",
+          "URL": "{{form.URL || ''}}"
+        },
+        "pollApprove": {
+          "value": "{{form.voteApprove}}",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-vote-poll",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "govGenerateParamChange",
+      "title": "Create Parameter Change Proposal",
+      "icon": "Settings",
+      "ds": {
+        "height": {},
+        "params": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[44rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "paramSpace",
+            "name": "paramSpace",
+            "type": "select",
+            "label": "Parameter Space",
+            "required": true,
+            "map": "{{Object.keys(ds.params || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "paramKey",
+            "name": "paramKey",
+            "type": "select",
+            "label": "Parameter Key",
+            "required": true,
+            "map": "{{Object.keys(ds.params?.[form.paramSpace] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "paramValue",
+            "name": "paramValue",
+            "type": "text",
+            "label": "New Value",
+            "required": true,
+            "value": "{{ds.params?.[form.paramSpace]?.[form.paramKey] ?? ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "startBlock",
+            "name": "startBlock",
+            "type": "number",
+            "label": "Start Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "help": "Always uses current chain height.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+            "validation": {
+              "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (start block + 1).",
+                "max": "End block must be at most {{max}} (start block + 10,000)."
+              }
+            },
+            "help": "Must be greater than start block and within 10,000 blocks.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo",
+            "placeholder": "Description/reason for change",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "required": true,
+            "value": "{{fromMicroDenom<{{fees.raw.changeParameterFee ?? 0}}>}}",
+            "autoPopulate": "once",
+            "span": { "base": 12, "md": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Parameter Change Proposal",
+          "summary": [
+            {
+              "label": "Parameter",
+              "value": "{{form.paramSpace}} / {{form.paramKey}}"
+            },
+            {
+              "label": "Value",
+              "value": "{{form.paramValue}}"
+            },
+            {
+              "label": "Voting Window",
+              "value": "{{form.startBlock}} -> {{form.endBlock}}"
+            }
+          ],
+          "btn": {
+            "icon": "Settings",
+            "label": "Create Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": 0,
+          "coerce": "number"
+        },
+        "paramSpace": {
+          "value": "{{form.paramSpace}}",
+          "coerce": "string"
+        },
+        "paramKey": {
+          "value": "{{form.paramKey}}",
+          "coerce": "string"
+        },
+        "paramValue": {
+          "value": "{{form.paramValue}}",
+          "coerce": "string"
+        },
+        "startBlock": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endBlock": {
+          "value": "{{(() => { const s = Number(form.startBlock || resolveHeight(ds.height)); const eRaw = Number(form.endBlock); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-change-param",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Parameter Change Proposal Submitted",
+          "description": "Your proposal transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govGenerateDaoTransfer",
+      "title": "Create Treasury Subsidy Proposal",
+      "icon": "Coins",
+      "ds": {
+        "height": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[44rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount (CNPY)",
+            "required": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "required": true,
+            "value": "{{fromMicroDenom<{{fees.raw.sendFee ?? 0}}>}}",
+            "min": "{{ fromMicroDenom<{{fees.raw.sendFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "autoPopulate": "once",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "startBlock",
+            "name": "startBlock",
+            "type": "number",
+            "label": "Start Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "help": "Always uses current chain height.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+            "validation": {
+              "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (start block + 1).",
+                "max": "End block must be at most {{max}} (start block + 10,000)."
+              }
+            },
+            "help": "Must be greater than start block and within 10,000 blocks.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo",
+            "placeholder": "Description/reason for transfer",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Treasury Subsidy Proposal",
+          "summary": [
+            {
+              "label": "Amount",
+              "value": "{{form.amount}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Voting Window",
+              "value": "{{form.startBlock}} -> {{form.endBlock}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            }
+          ],
+          "btn": {
+            "icon": "Coins",
+            "label": "Create Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "paramSpace": {
+          "value": "",
+          "coerce": "string"
+        },
+        "paramKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "paramValue": {
+          "value": "",
+          "coerce": "string"
+        },
+        "startBlock": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endBlock": {
+          "value": "{{(() => { const s = Number(form.startBlock || resolveHeight(ds.height)); const eRaw = Number(form.endBlock); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dao-transfer",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Treasury Subsidy Proposal Submitted",
+          "description": "Your treasury proposal transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govSubmitProposalTx",
+      "title": "Manual Raw TX Broadcast",
+      "icon": "Send",
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalTx",
+            "name": "proposalTx",
+            "type": "textarea",
+            "label": "Raw Proposal JSON",
+            "required": true,
+            "placeholder": "{\"type\":\"...\"}",
+            "help": "Advanced mode: paste a fully signed raw transaction JSON to broadcast via /v1/tx.",
+            "rows": 12,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Manual Broadcast",
+          "summary": [
+            {
+              "label": "Payload",
+              "value": "Raw JSON transaction will be sent to /v1/tx"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Submit"
+          }
+        }
+      },
+      "payload": {
+        "__raw": {
+          "value": "{{JSON.parse(form.proposalTx)}}"
+        }
+      },
+      "submit": {
+        "base": "rpc",
+        "path": "/v1/tx",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Raw Transaction Broadcast",
+          "description": "The raw transaction was sent to the network endpoint."
+        }
+      }
+    },
+    {
+      "id": "govAddProposalVote",
+      "title": "Vote Proposal",
+      "icon": "Vote",
+      "ds": {
+        "gov.proposals": {},
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "select",
+            "label": "Proposal",
+            "required": true,
+            "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "approve",
+            "name": "approve",
+            "type": "optionCard",
+            "label": "Vote",
+            "required": true,
+            "value": true,
+            "options": [
+              {
+                "label": "Approve",
+                "value": true
+              },
+              {
+                "label": "Reject",
+                "value": false
+              }
+            ],
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalMsg",
+            "name": "proposalMsg",
+            "type": "textarea",
+            "label": "Proposal JSON (Auto-filled)",
+            "value": "{{JSON.stringify(ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}, null, 2)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 10,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalType",
+            "name": "proposalType",
+            "type": "text",
+            "label": "Proposal Type",
+            "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "currentVoteStatus",
+            "name": "currentVoteStatus",
+            "type": "text",
+            "label": "Current Vote Status",
+            "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "changeSummary",
+            "name": "changeSummary",
+            "type": "textarea",
+            "label": "Proposed Change (Explicit)",
+            "value": "{{(() => { const p = ds['gov.proposals']?.[form.proposalId]?.proposal || {}; const m = p.msg || {}; if (m.parameterSpace && m.parameterKey) return `Parameter change: ${m.parameterSpace}.${m.parameterKey} -> ${m.parameterValue}`; if (p.type === 'daoTransfer') return `Treasury subsidy: amount=${m.amount ?? p.amount ?? 'N/A'}; memo=${p.memo ?? ''}`; return `Type=${p.type || 'unknown'}; memo=${p.memo || 'N/A'}`; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 3,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Proposal Vote",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Vote",
+              "value": "{{form.approve ? 'Approve' : 'Reject'}}"
+            },
+            {
+              "label": "Change",
+              "value": "{{form.changeSummary}}"
+            }
+          ],
+          "btn": {
+            "icon": "Vote",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "approve": {
+          "value": "{{form.approve}}",
+          "coerce": "boolean"
+        },
+        "proposal": {
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/gov/add-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Vote Saved",
+          "description": "Your proposal vote preference has been updated."
+        }
+      }
+    },
+    {
+      "id": "govDeleteProposalVote",
+      "title": "Delete Proposal Vote",
+      "icon": "XCircle",
+      "ds": {
+        "gov.proposals": {},
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "select",
+            "label": "Proposal",
+            "required": true,
+            "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalMsg",
+            "name": "proposalMsg",
+            "type": "textarea",
+            "label": "Proposal JSON (Auto-filled)",
+            "value": "{{JSON.stringify(ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}, null, 2)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 10,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalType",
+            "name": "proposalType",
+            "type": "text",
+            "label": "Proposal Type",
+            "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "currentVoteStatus",
+            "name": "currentVoteStatus",
+            "type": "text",
+            "label": "Current Vote Status",
+            "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "changeSummary",
+            "name": "changeSummary",
+            "type": "textarea",
+            "label": "Proposed Change (Explicit)",
+            "value": "{{(() => { const p = ds['gov.proposals']?.[form.proposalId]?.proposal || {}; const m = p.msg || {}; if (m.parameterSpace && m.parameterKey) return `Parameter change: ${m.parameterSpace}.${m.parameterKey} -> ${m.parameterValue}`; if (p.type === 'daoTransfer') return `Treasury subsidy: amount=${m.amount ?? p.amount ?? 'N/A'}; memo=${p.memo ?? ''}`; return `Type=${p.type || 'unknown'}; memo=${p.memo || 'N/A'}`; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 3,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Delete Vote",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Change",
+              "value": "{{form.changeSummary}}"
+            }
+          ],
+          "btn": {
+            "icon": "XCircle",
+            "label": "Delete Vote"
+          }
+        }
+      },
+      "payload": {
+        "approve": {
+          "value": null
+        },
+        "proposal": {
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/gov/del-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Vote Removed",
+          "description": "Your proposal vote preference was removed."
         }
       }
     }

@@ -76,13 +76,16 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                 <p className="text-sm text-muted-foreground line-clamp-3">
                     {poll.description}
                 </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                    Vote actions auto-fill proposal, endBlock, and URL fields.
+                </p>
             </div>
 
             {/* Voting Progress Bars */}
             <div className="mb-6 flex-1">
                 <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                    <span>FOR: {poll.yesPercent.toFixed(1)}%</span>
-                    <span>AGAINST: {poll.noPercent.toFixed(1)}%</span>
+                    <span>APPROVE: {poll.yesPercent.toFixed(1)}%</span>
+                    <span>REJECT: {poll.noPercent.toFixed(1)}%</span>
                 </div>
 
                 {/* Combined Progress Bar */}
@@ -107,13 +110,13 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                         </div>
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs">
-                                <span className="text-green-400">For</span>
+                                <span className="text-green-400">Approve</span>
                                 <span className="text-foreground font-medium">
                                     {poll.accountVotes.yes}
                                 </span>
                             </div>
                             <div className="flex justify-between text-xs">
-                                <span className="text-red-400">Against</span>
+                                <span className="text-red-400">Reject</span>
                                 <span className="text-foreground font-medium">
                                     {poll.accountVotes.no}
                                 </span>
@@ -129,13 +132,13 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                         </div>
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs">
-                                <span className="text-green-400">For</span>
+                                <span className="text-green-400">Approve</span>
                                 <span className="text-foreground font-medium">
                                     {poll.validatorVotes.yes}
                                 </span>
                             </div>
                             <div className="flex justify-between text-xs">
-                                <span className="text-red-400">Against</span>
+                                <span className="text-red-400">Reject</span>
                                 <span className="text-foreground font-medium">
                                     {poll.validatorVotes.no}
                                 </span>
@@ -153,13 +156,13 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                             onClick={() => onVote(poll.hash, 'approve')}
                             className="flex-1 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-all duration-200 border border-green-500/40"
                         >
-                            For
+                            Approve
                         </button>
                         <button
                             onClick={() => onVote(poll.hash, 'reject')}
                             className="flex-1 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-all duration-200 border border-red-500/40"
                         >
-                            Against
+                            Reject
                         </button>
                     </>
                 )}
@@ -175,3 +178,4 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
         </motion.div>
     );
 };
+

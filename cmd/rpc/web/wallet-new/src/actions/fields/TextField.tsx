@@ -60,6 +60,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
         >
             <Component
                 className={cx(common, border, paddingRight)}
+                type={!isTextarea ? (field as any).inputType ?? 'text' : undefined}
                 placeholder={resolveTemplate(field.placeholder)}
                 value={currentValue ?? ''}
                 readOnly={field.readOnly}

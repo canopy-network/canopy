@@ -1,3 +1,5 @@
+.agents/*
+.claude/*
 node_modules
 out
 vite.config.ts.*

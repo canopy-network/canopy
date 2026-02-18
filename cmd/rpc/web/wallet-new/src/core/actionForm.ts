@@ -1,4 +1,4 @@
-import { template } from "@/core/templater";
+import { resolveTemplatesDeep, template, templateAny } from "@/core/templater";
 import type { Action, Field } from "@/manifest/types";
 
 /** Get fields from manifest */
@@ -57,17 +57,28 @@ export type BuildPayloadCtx = {
 };
 
 export function buildPayloadFromAction(action: Action, ctx: any) {
+  const rawEntry = (action.payload as Record<string, any> | undefined)?.__raw;
+  if (rawEntry !== undefined) {
+    if (typeof rawEntry === "string") return templateAny(rawEntry, ctx);
+    if (typeof rawEntry === "object" && rawEntry?.value !== undefined) {
+      return templateAny(rawEntry.value, ctx);
+    }
+    return resolveTemplatesDeep(rawEntry, ctx);
+  }
+
   const result: Record<string, any> = {};
 
   for (const [key, val] of Object.entries(action.payload || {})) {
+    if (key === "__raw") continue;
+
     // caso 1: simple string => resolver plantilla
     if (typeof val === "string") {
-      result[key] = template(val, ctx);
+      result[key] = templateAny(val, ctx);
       continue;
     }
 
     if (typeof val === "object" && val?.value !== undefined) {
-      let resolved: any = template(val?.value, ctx);
+      let resolved: any = templateAny(val?.value, ctx);
 
       if (val?.coerce) {
         switch (val.coerce) {
@@ -89,7 +100,7 @@ export function buildPayloadFromAction(action: Action, ctx: any) {
       continue;
     }
     // fallback
-    result[key] = val;
+    result[key] = resolveTemplatesDeep(val, ctx);
   }
 
   return result;

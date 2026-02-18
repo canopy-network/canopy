@@ -311,6 +311,14 @@
       "body": "{\"height\":0,\"address\":\"\"}"
     },
     "gov": {
+      "poll": {
+        "source": {
+          "base": "rpc",
+          "path": "/v1/gov/poll",
+          "method": "GET"
+        },
+        "selector": ""
+      },
       "proposals": {
         "source": {
           "base": "rpc",

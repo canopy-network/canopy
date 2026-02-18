@@ -68,16 +68,16 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                     />
 
                     {/* Modal */}
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none ">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
                         <motion.div
-                            className="bg-card rounded-2xl border border-border shadow-2xl max-w-4xl w-full max-h-[93vh] overflow-hidden pointer-events-auto"
+                            className="bg-card rounded-xl sm:rounded-2xl border border-border shadow-2xl w-full max-w-[min(96vw,56rem)] h-[92vh] sm:h-auto sm:max-h-[88vh] overflow-hidden pointer-events-auto flex flex-col"
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             transition={{ type: 'spring', duration: 0.5 }}
                         >
                             {/* Header */}
-                            <div className="flex items-start justify-between p-6 border-b border-border">
+                            <div className="flex items-start justify-between p-4 sm:p-6 border-b border-border shrink-0">
                                 <div className="flex-1 pr-4">
                                     <div className="flex items-center gap-3 mb-3">
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(proposal.category)}`}>
@@ -103,8 +103,8 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="overflow-y-auto max-h-[calc(90vh-200px)]">
-                                <div className="p-6 space-y-6">
+                            <div className="overflow-y-auto flex-1 min-h-0">
+                                <div className="p-4 sm:p-6 space-y-6">
                                     {/* Description */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-foreground mb-3">
@@ -138,7 +138,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <i className="fa-solid fa-check-circle text-green-400"></i>
@@ -166,9 +166,9 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             Proposal Information
                                         </h3>
                                         <div className="bg-background rounded-xl p-4 space-y-3">
-                                            <div className="flex justify-between items-center py-2 border-b border-border">
+                                            <div className="flex justify-between items-center py-2 border-b border-border gap-3">
                                                 <span className="text-sm text-muted-foreground">Proposer</span>
-                                                <span className="text-sm text-foreground font-mono">
+                                                <span className="text-sm text-foreground font-mono break-all text-right">
                                                     {formatAddress(proposal.proposer)}
                                                 </span>
                                             </div>
@@ -205,8 +205,8 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             <h3 className="text-lg font-semibold text-foreground mb-4">
                                                 Technical Details
                                             </h3>
-                                            <div className="bg-background rounded-xl p-4">
-                                                <pre className="text-xs text-foreground/80 font-mono overflow-x-auto">
+                                            <div className="bg-background rounded-xl p-4 overflow-x-auto">
+                                                <pre className="text-xs text-foreground/80 font-mono whitespace-pre">
                                                     {JSON.stringify(proposal.msg, null, 2)}
                                                 </pre>
                                             </div>
@@ -243,11 +243,11 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             </div>
 
                             {/* Footer with Actions */}
-                            <div className="p-6 border-t border-border bg-background/50">
-                                <div className="flex items-center justify-end gap-3">
+                            <div className="p-4 sm:p-6 border-t border-border bg-background/50 shrink-0">
+                                <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                                     <button
                                         onClick={onClose}
-                                        className="px-6 py-2 bg-accent hover:bg-accent/80 text-foreground rounded-lg font-medium transition-all duration-200"
+                                        className="px-4 sm:px-6 py-2 bg-accent hover:bg-accent/80 text-foreground rounded-lg font-medium transition-all duration-200"
                                     >
                                         Close
                                     </button>
@@ -258,7 +258,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                                     onVote(proposal.hash, 'reject');
                                                     onClose();
                                                 }}
-                                                className="px-6 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg font-medium transition-all duration-200 border border-red-500/40"
+                                                className="px-4 sm:px-6 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg font-medium transition-all duration-200 border border-red-500/40"
                                             >
                                                 <i className="fa-solid fa-times mr-2"></i>
                                                 Vote Against
@@ -268,7 +268,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                                     onVote(proposal.hash, 'approve');
                                                     onClose();
                                                 }}
-                                                className="px-6 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg font-medium transition-all duration-200 border border-green-500/40"
+                                                className="px-4 sm:px-6 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg font-medium transition-all duration-200 border border-green-500/40"
                                             >
                                                 <i className="fa-solid fa-check mr-2"></i>
                                                 Vote For
