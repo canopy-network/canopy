@@ -1,23 +1,23 @@
 import { Outlet } from 'react-router-dom'
-import { Sidebar } from "./Sidebar";
-import { TopNavbar } from "./TopNavbar";
-import { Footer } from "./Footer";
+import { AppSidebar } from './AppSidebar'
+import { TopBar } from './TopBar'
 
 export default function MainLayout() {
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-background">
-            {/* Desktop top bar — hidden on mobile */}
-            <TopNavbar />
+        <div className="flex h-screen overflow-hidden bg-background relative">
+            {/* Permanent left sidebar — desktop */}
+            <AppSidebar />
 
-            {/* Mobile header + slide-out drawer — hidden on desktop */}
-            <Sidebar />
+            {/* Right column: topbar + scrollable content */}
+            <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                <TopBar />
 
-            {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto">
-                <div className="py-4 px-4 sm:px-6 lg:px-8 max-w-[1920px] mx-auto">
-                    <Outlet />
-                </div>
-                <Footer />
+                <main className="flex-1 overflow-y-auto relative z-10">
+                    {/* pt-[52px] on mobile to clear the fixed mobile header */}
+                    <div className="px-4 py-4 pt-[68px] lg:pt-4 sm:px-5 sm:py-5 max-w-[1600px] mx-auto">
+                        <Outlet />
+                    </div>
+                </main>
             </div>
         </div>
     )

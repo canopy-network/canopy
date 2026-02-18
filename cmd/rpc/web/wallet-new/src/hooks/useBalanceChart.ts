@@ -25,6 +25,9 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
         enabled: !accountsLoading && addresses.length > 0 && isReady,
         staleTime: 60_000, // 1 minute
         retry: 1,
+        // Keep previous data visible while refetching — prevents skeleton flash
+        // every time currentHeight changes (every ~10 s).
+        placeholderData: (prev) => prev,
 
         queryFn: async (): Promise<ChartDataPoint[]> => {
             if (addresses.length === 0 || currentHeight === 0) {

@@ -209,7 +209,7 @@
           },
           "response": {
             "items": "results",
-            "totalPages": "totalPages"
+            "totalPages": "paging.totalPages"
           },
           "defaults": {
             "perPage": 20,
@@ -236,8 +236,7 @@
             "perPage": "perPage"
           },
           "response": {
-            "items": "results",
-            "totalPages": "totalPages"
+            "items": "results"
           },
           "defaults": {
             "perPage": 20,
@@ -264,8 +263,7 @@
             "perPage": "perPage"
           },
           "response": {
-            "items": "results",
-            "totalPages": "totalPages"
+            "items": "results"
           },
           "defaults": {
             "perPage": 20,

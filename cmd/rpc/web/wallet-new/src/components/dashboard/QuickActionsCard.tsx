@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Zap } from 'lucide-react';
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { selectQuickActions } from "@/core/actionForm";
-import { Action } from "@/manifest/types";
+import { selectQuickActions } from '@/core/actionForm';
+import { Action } from '@/manifest/types';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useValidators } from '@/hooks/useValidators';
 import { useSelectedAccount } from '@/app/providers/AccountsProvider';
@@ -58,37 +59,44 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
 
     return (
         <motion.div
-            className="relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)] flex flex-col"
-            initial={{ opacity: 0, y: 16 }}
+            className="canopy-card p-5 h-full flex flex-col"
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
+            transition={{ duration: 0.35, delay: 0.12 }}
         >
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-5">Quick Actions</span>
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
+                    <Zap className="text-primary" style={{ width: 14, height: 14 }} />
+                </div>
+                <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    Quick Actions
+                </span>
+            </div>
 
             <div
-                className="grid gap-3 flex-1"
+                className="grid gap-2.5 flex-1"
                 style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
-                {modifiedActions.map((a) => (
+                {modifiedActions.map(a => (
                     <motion.button
                         key={a.id}
                         onClick={() => handleRunAction(a)}
-                        className="group flex flex-col items-center justify-center gap-2.5 rounded-xl border border-border/60 p-4 min-h-[80px] transition-all duration-150 hover:border-primary/40 hover:bg-primary/5"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.97 }}
+                        className="group flex flex-col items-center justify-center gap-2 rounded-lg border border-border/60 p-3.5 min-h-[72px] transition-all duration-150 hover:border-primary/35 hover:bg-primary/5 btn-glow"
+                        whileHover={{ scale: 1.015 }}
+                        whileTap={{ scale: 0.975 }}
                         aria-label={a.title ?? a.id}
                     >
-                        <div className="w-9 h-9 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors duration-150">
-                            <LucideIcon name={a.icon || a.id} className="w-4.5 h-4.5 text-primary" />
+                        <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-primary/15 flex items-center justify-center transition-colors duration-150 border border-border/40 group-hover:border-primary/20">
+                            <LucideIcon name={a.icon || a.id} className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-150" />
                         </div>
-                        <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
+                        <span className="text-xs font-display font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
                             {a.title ?? a.id}
                         </span>
                     </motion.button>
                 ))}
                 {modifiedActions.length === 0 && (
-                    <EmptyState icon="Zap" title="No quick actions" description="Actions will appear here" size="sm" />
+                    <EmptyState icon="Zap" title="No quick actions" description="Actions from manifest" size="sm" />
                 )}
             </div>
         </motion.div>
@@ -96,4 +104,3 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
 });
 
 QuickActionsCard.displayName = 'QuickActionsCard';
-
