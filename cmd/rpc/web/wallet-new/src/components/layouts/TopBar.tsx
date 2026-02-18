@@ -93,7 +93,6 @@ export const TopBar = (): JSX.Element => {
                                             : 'Account'
                                 }
                             </span>
-                            <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0 ml-auto" />
                         </div>
                     </SelectTrigger>
                     <SelectContent className="bg-card border border-border/70 shadow-wallet-lg">

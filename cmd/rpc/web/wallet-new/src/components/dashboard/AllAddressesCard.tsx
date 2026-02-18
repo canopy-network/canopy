@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, ChevronRight } from 'lucide-react';
+import { ChevronRight, WalletCards} from 'lucide-react';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useAccountsList } from '@/app/providers/AccountsProvider';
 import { NavLink } from 'react-router-dom';
@@ -94,7 +94,7 @@ export const AllAddressesCard = React.memo(() => {
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <MapPin className="text-primary" style={{ width: 13, height: 13 }} />
+                        <WalletCards className="text-primary" style={{ width: 13, height: 13 }} />
                     </div>
                     <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                         Addresses
