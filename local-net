@@ -1,0 +1,13 @@
+make build/canopy-full
+canopy start
+
+make docker/build
+make docker/up-fast
+make docker/logs
+
+or simply
+
+make docker/up && make docker/logs
+
+
+make test
