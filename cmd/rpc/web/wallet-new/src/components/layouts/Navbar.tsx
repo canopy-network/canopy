@@ -42,12 +42,12 @@ export const Navbar = (): JSX.Element => {
     return (
         <motion.header
             className="sticky top-0 z-30 lg:hidden"
-            style={{ background: '#14151C' }}
+            style={{ background: 'hsl(var(--background))' }}
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
         >
-            <div className="absolute bottom-0 inset-x-0 h-px bg-white/[0.06]" />
+            <div className="absolute bottom-0 inset-x-0 h-px bg-border/60" />
 
             {/* ── Mobile header bar ── */}
             <div className="flex items-center justify-between px-4 h-14">
@@ -56,7 +56,7 @@ export const Navbar = (): JSX.Element => {
                 <div className="flex items-center gap-3">
                     <Link to="/" className="flex items-center gap-2 group">
                         <Logo size={28} showText={false} />
-                        <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                        <span className="text-foreground font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
                             Wallet
                         </span>
                     </Link>
@@ -64,7 +64,7 @@ export const Navbar = (): JSX.Element => {
                     {/* Block height pill */}
                     <div
                         className="flex items-center gap-1 px-2 py-0.5 rounded-full"
-                        style={{ background: 'rgba(74,222,128,0.07)' }}
+                        style={{ background: 'hsl(var(--primary) / 0.07)' }}
                     >
                         <span className="relative flex h-1.5 w-1.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
@@ -79,13 +79,13 @@ export const Navbar = (): JSX.Element => {
 
                 {/* Hamburger */}
                 <motion.button
-                    className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                    className="p-2 rounded-lg hover:bg-accent/60 transition-colors"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                     whileTap={{ scale: 0.93 }}
                 >
                     {isMobileMenuOpen
-                        ? <X className="w-5 h-5 text-white" />
-                        : <Menu className="w-5 h-5 text-back" />
+                        ? <X className="w-5 h-5 text-foreground" />
+                        : <Menu className="w-5 h-5 text-muted-foreground" />
                     }
                 </motion.button>
             </div>
@@ -98,8 +98,8 @@ export const Navbar = (): JSX.Element => {
                         animate="open"
                         exit="closed"
                         variants={mobileMenuVariants}
-                        className="overflow-hidden border-t border-white/[0.06]"
-                        style={{ background: '#14151C' }}
+                        className="overflow-hidden border-t border-border/60"
+                        style={{ background: 'hsl(var(--background))' }}
                     >
                         <div className="px-4 py-4 space-y-4 max-h-[calc(100dvh-56px)] overflow-y-auto">
 
@@ -115,7 +115,7 @@ export const Navbar = (): JSX.Element => {
                                             `px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                                                 isActive
                                                     ? 'bg-primary/10 text-primary'
-                                                    : 'text-back hover:text-white hover:bg-white/5'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                                             }`
                                         }
                                     >
@@ -124,14 +124,14 @@ export const Navbar = (): JSX.Element => {
                                 ))}
                             </nav>
 
-                            <div className="h-px bg-white/[0.06]" />
+                            <div className="h-px bg-border/60" />
 
                             {/* Total CNPY */}
                             <div
                                 className="flex items-center justify-between px-3 py-2.5 rounded-lg"
-                                style={{ background: '#22232E' }}
+                                style={{ background: 'hsl(var(--card))' }}
                             >
-                                <span className="text-sm text-back">Total</span>
+                                <span className="text-sm text-muted-foreground">Total</span>
                                 <div className="flex items-center gap-1.5">
                                     {stageLoading ? (
                                         <span className="text-sm font-semibold text-primary">…</span>
@@ -142,7 +142,7 @@ export const Navbar = (): JSX.Element => {
                                             className="text-sm font-semibold text-primary tabular-nums"
                                         />
                                     )}
-                                    <span className="text-xs font-semibold text-white/40">CNPY</span>
+                                    <span className="text-xs font-semibold text-muted-foreground/60">CNPY</span>
                                 </div>
                             </div>
 
@@ -155,12 +155,12 @@ export const Navbar = (): JSX.Element => {
                                 }}
                             >
                                 <SelectTrigger
-                                    className="w-full h-11 rounded-lg border border-white/10 px-3 text-sm font-medium text-white"
-                                    style={{ background: '#22232E' }}
+                                    className="w-full h-11 rounded-lg border border-border/60 px-3 text-sm font-medium text-foreground"
+                                    style={{ background: 'hsl(var(--card))' }}
                                 >
                                     <div className="flex items-center gap-3 w-full min-w-0">
                                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                            <span className="text-xs font-bold text-white">
+                                            <span className="text-xs font-bold text-foreground">
                                                 {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                             </span>
                                         </div>
@@ -169,20 +169,20 @@ export const Navbar = (): JSX.Element => {
                                         </span>
                                     </div>
                                 </SelectTrigger>
-                                <SelectContent className="bg-bg-secondary border border-white/10">
+                                <SelectContent className="bg-card border border-border/60">
                                     {accounts.map((account, index) => (
-                                        <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
+                                        <SelectItem key={account.id} value={account.id} className="text-foreground hover:bg-muted">
                                             <div className="flex items-center gap-3 w-full">
                                                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-xs font-bold text-white">
+                                                    <span className="text-xs font-bold text-foreground">
                                                         {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-col items-start flex-1 min-w-0">
-                                                    <span className="text-sm font-medium text-white truncate">
+                                                    <span className="text-sm font-medium text-foreground truncate">
                                                         {account.nickname || `Account ${index + 1}`}
                                                     </span>
-                                                    <span className="text-xs text-back truncate">
+                                                    <span className="text-xs text-muted-foreground truncate">
                                                         {account.address.slice(0, 6)}…{account.address.slice(-4)}
                                                     </span>
                                                 </div>
@@ -193,7 +193,7 @@ export const Navbar = (): JSX.Element => {
                                         </SelectItem>
                                     ))}
                                     {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
-                                        <div className="p-2 text-center text-back text-sm">
+                                        <div className="p-2 text-center text-muted-foreground text-sm">
                                             No accounts available
                                         </div>
                                     ) : null}
@@ -216,3 +216,4 @@ export const Navbar = (): JSX.Element => {
         </motion.header>
     );
 };
+

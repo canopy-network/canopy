@@ -12,7 +12,7 @@ import AllTransactions from '@/app/pages/AllTransactions'
 import AllAddresses from '@/app/pages/AllAddresses'
 
 // Placeholder components for the new routes
-const Portfolio = () => <div className="min-h-screen bg-bg-primary flex items-center justify-center"><div className="text-white text-xl">Portfolio - Próximamente</div></div>
+const Portfolio = () => <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-foreground text-xl">Portfolio - Próximamente</div></div>
 
 const router = createBrowserRouter([
     {

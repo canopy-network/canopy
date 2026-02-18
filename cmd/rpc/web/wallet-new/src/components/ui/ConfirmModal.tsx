@@ -81,7 +81,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className={`bg-bg-secondary rounded-xl border ${styles.borderColor} p-6 w-full max-w-md`}
+          className={`bg-card rounded-xl border ${styles.borderColor} p-6 w-full max-w-md`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-4 mb-4">
@@ -89,24 +89,24 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               <i className={`${styles.icon} ${styles.iconColor} text-xl`}></i>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+              <h3 className="text-lg font-semibold text-foreground">{title}</h3>
             </div>
           </div>
 
           <div className="mb-6">
-            <p className="text-text-muted leading-relaxed whitespace-pre-line">{message}</p>
+            <p className="text-muted-foreground leading-relaxed whitespace-pre-line">{message}</p>
           </div>
 
           <div className="flex gap-3 justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-bg-tertiary hover:bg-bg-accent text-text-primary font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-muted hover:bg-accent text-foreground font-medium rounded-lg transition-colors"
             >
               {cancelText}
             </button>
             <button
               onClick={handleConfirm}
-              className={`px-4 py-2 ${styles.buttonColor} text-white font-medium rounded-lg transition-colors`}
+              className={`px-4 py-2 ${styles.buttonColor} text-foreground font-medium rounded-lg transition-colors`}
             >
               {confirmText}
             </button>

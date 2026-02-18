@@ -1,14 +1,56 @@
 import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import {cx} from "@/ui/cx";
+
+const cardVariants = cva("border text-card-foreground shadow-sm", {
+    variants: {
+        variant: {
+            default: "bg-card border-border",
+            dark: "bg-background border-border/70",
+            glass: "bg-card/70 border-border/70 backdrop-blur-md",
+            outline: "bg-transparent border-border",
+            ghost: "bg-transparent border-transparent shadow-none",
+            gradient: "bg-gradient-to-br from-card via-card to-accent/50 border-border",
+            launchpad: "bg-card border-border shadow-[0_0_0_1px_hsl(var(--foreground)/0.04),0_18px_40px_hsl(var(--background)/0.55)]",
+        },
+        size: {
+            default: "min-h-0",
+            launchpad: "min-h-[18rem]",
+            sm: "min-h-[8rem]",
+            lg: "min-h-[14rem]",
+            xl: "min-h-[20rem]",
+            none: "min-h-0",
+        },
+        padding: {
+            default: "p-6",
+            launchpad: "p-7",
+            sm: "p-3",
+            lg: "p-8",
+            xl: "p-10",
+            none: "p-0",
+            explorer: "p-4 sm:p-5 lg:p-6",
+        },
+        rounded: {
+            default: "rounded-xl",
+            lg: "rounded-2xl",
+        },
+    },
+    defaultVariants: {
+        variant: "default",
+        size: "default",
+        padding: "none",
+        rounded: "default",
+    },
+});
 
 const Card = React.forwardRef<
     HTMLDivElement,
-    React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+    React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardVariants>
+>(({ className, variant, size, padding, rounded, ...props }, ref) => (
     <div
         ref={ref}
         className={cx(
-            "bg-bg-secondary rounded-xl border border-bg-accent",
+            cardVariants({ variant, size, padding, rounded }),
             className,
         )}
         {...props}
@@ -79,4 +121,5 @@ export {
     CardTitle,
     CardDescription,
     CardContent,
+    cardVariants,
 };

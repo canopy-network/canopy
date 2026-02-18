@@ -24,7 +24,7 @@ export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = ({
             id: 'processCPU',
             label: 'Process CPU',
             value: processCPU,
-            color: '#6fe3b4'
+            color: 'hsl(var(--primary))'
         },
         {
             id: 'systemCPU',
@@ -48,10 +48,10 @@ export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = ({
 
     const renderMetricBar = (metric: typeof performanceMetrics[0]) => (
         <div key={metric.id}>
-            <div className="text-gray-400 text-sm mb-2">{metric.label}</div>
-            <div className="h-24 bg-[#16171D] rounded-md flex items-end justify-center relative">
+            <div className="text-muted-foreground text-sm mb-2">{metric.label}</div>
+            <div className="h-24 bg-background rounded-md flex items-end justify-center relative">
                 <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-white text-xl font-bold">{metric.value.toFixed(2)}%</span>
+                    <span className="text-foreground text-xl font-bold">{metric.value.toFixed(2)}%</span>
                 </div>
                 <div
                     className="w-full rounded-md transition-all duration-500"
@@ -67,12 +67,13 @@ export const PerformanceMetricsCard: React.FC<PerformanceMetricsCardProps> = ({
     return (
         <motion.div
             variants={itemVariants}
-            className="bg-[#1E1F26] rounded-xl border border-[#2A2C35] p-6"
+            className="bg-card rounded-xl border border-border/60 p-6"
         >
-            <h2 className="text-white text-lg font-bold mb-4">Performance Metrics</h2>
+            <h2 className="text-foreground text-lg font-bold mb-4">Performance Metrics</h2>
             <div className="grid grid-cols-2 gap-6">
                 {performanceMetrics.map(renderMetricBar)}
             </div>
         </motion.div>
     );
 };
+

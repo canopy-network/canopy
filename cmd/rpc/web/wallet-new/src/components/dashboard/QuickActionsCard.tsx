@@ -58,13 +58,13 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
 
     return (
         <motion.div
-            className="rounded-2xl p-6 border border-white/10 h-full flex flex-col"
-            style={{ background: '#22232E' }}
+            className="rounded-2xl p-6 border border-border/60 h-full flex flex-col"
+            style={{ background: 'hsl(var(--card))' }}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
         >
-            <span className="text-xs font-medium text-back uppercase tracking-wider mb-5">Quick Actions</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-5">Quick Actions</span>
 
             <div
                 className="grid gap-3 flex-1"
@@ -74,7 +74,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
                     <motion.button
                         key={a.id}
                         onClick={() => handleRunAction(a)}
-                        className="group flex flex-col items-center justify-center gap-2.5 rounded-xl border border-white/[0.06] p-4 min-h-[80px] transition-all duration-150 hover:border-primary/40 hover:bg-primary/5"
+                        className="group flex flex-col items-center justify-center gap-2.5 rounded-xl border border-border/60 p-4 min-h-[80px] transition-all duration-150 hover:border-primary/40 hover:bg-primary/5"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.97 }}
                         aria-label={a.title ?? a.id}
@@ -82,7 +82,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
                         <div className="w-9 h-9 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors duration-150">
                             <LucideIcon name={a.icon || a.id} className="w-4.5 h-4.5 text-primary" />
                         </div>
-                        <span className="text-xs font-semibold text-back group-hover:text-white transition-colors duration-150 text-center leading-tight">
+                        <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
                             {a.title ?? a.id}
                         </span>
                     </motion.button>
@@ -96,3 +96,4 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
 });
 
 QuickActionsCard.displayName = 'QuickActionsCard';
+

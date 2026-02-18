@@ -21,36 +21,37 @@ interface NetworkPeersProps {
 export default function NetworkPeers({ networkPeers }: NetworkPeersProps): JSX.Element {
     return (
         <div
-            className="rounded-xl border border-white/10 p-6"
-            style={{ background: '#22232E' }}
+            className="rounded-xl border border-border/60 p-6"
+            style={{ background: 'hsl(var(--card))' }}
         >
-            <h2 className="text-white text-base font-semibold mb-4">Network Peers</h2>
+            <h2 className="text-foreground text-base font-semibold mb-4">Network Peers</h2>
 
             <div className="grid grid-cols-2 gap-4 mb-5">
                 <div>
-                    <div className="text-xs text-back mb-1">Total Peers</div>
+                    <div className="text-xs text-muted-foreground mb-1">Total Peers</div>
                     <div className="text-2xl font-bold text-primary">{networkPeers.totalPeers}</div>
                 </div>
                 <div>
-                    <div className="text-xs text-back mb-1">Connections</div>
+                    <div className="text-xs text-muted-foreground mb-1">Connections</div>
                     <div className="flex items-center gap-2 text-sm font-medium">
                         <span className="text-primary">{networkPeers.connections.in} in</span>
-                        <span className="text-back">/</span>
-                        <span className="text-back">{networkPeers.connections.out} out</span>
+                        <span className="text-muted-foreground">/</span>
+                        <span className="text-muted-foreground">{networkPeers.connections.out} out</span>
                     </div>
                 </div>
             </div>
 
             <div className="space-y-3">
                 <div>
-                    <div className="text-xs text-back mb-0.5">Peer ID</div>
-                    <div className="text-sm font-mono text-white truncate">{networkPeers.peerId || '—'}</div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Peer ID</div>
+                    <div className="text-sm font-mono text-foreground truncate">{networkPeers.peerId || '—'}</div>
                 </div>
                 <div>
-                    <div className="text-xs text-back mb-0.5">Network Address</div>
-                    <div className="text-sm font-mono text-white">{networkPeers.networkAddress || '—'}</div>
+                    <div className="text-xs text-muted-foreground mb-0.5">Network Address</div>
+                    <div className="text-sm font-mono text-foreground">{networkPeers.networkAddress || '—'}</div>
                 </div>
             </div>
         </div>
     );
 }
+

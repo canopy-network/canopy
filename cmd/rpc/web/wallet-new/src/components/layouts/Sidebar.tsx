@@ -52,23 +52,23 @@ export const Sidebar = (): JSX.Element => {
 
             {/* ── Sticky header bar ── */}
             <header
-                className="sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-white/[0.06]"
-                style={{ background: '#14151C' }}
+                className="sticky top-0 z-40 h-14 flex items-center justify-between px-4 border-b border-border/60"
+                style={{ background: 'hsl(var(--background))' }}
             >
                 {/* Left: hamburger + logo */}
                 <div className="flex items-center gap-3">
                     <motion.button
                         onClick={() => setIsOpen(true)}
-                        className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                        className="p-2 rounded-lg hover:bg-accent/60 transition-colors"
                         whileTap={{ scale: 0.92 }}
                         aria-label="Open menu"
                     >
-                        <Menu className="w-5 h-5 text-back" />
+                        <Menu className="w-5 h-5 text-muted-foreground" />
                     </motion.button>
 
                     <Link to="/" className="flex items-center gap-2 group">
                         <Logo size={26} showText={false} />
-                        <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                        <span className="text-foreground font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
                             Wallet
                         </span>
                     </Link>
@@ -77,7 +77,7 @@ export const Sidebar = (): JSX.Element => {
                 {/* Right: block height pill */}
                 <div
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                    style={{ background: 'rgba(74,222,128,0.07)' }}
+                    style={{ background: 'hsl(var(--primary) / 0.07)' }}
                 >
                     <span className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
@@ -112,23 +112,23 @@ export const Sidebar = (): JSX.Element => {
                             animate="open"
                             exit="closed"
                             variants={drawerVariants}
-                            className="fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col border-r border-white/[0.06]"
-                            style={{ background: '#14151C' }}
+                            className="fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col border-r border-border/60"
+                            style={{ background: 'hsl(var(--background))' }}
                         >
                             {/* Drawer header */}
-                            <div className="h-14 px-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+                            <div className="h-14 px-4 border-b border-border/60 flex items-center justify-between flex-shrink-0">
                                 <Link to="/" onClick={close} className="flex items-center gap-2 group">
                                     <Logo size={28} showText={false} />
-                                    <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                                    <span className="text-foreground font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
                                         Wallet
                                     </span>
                                 </Link>
                                 <button
                                     onClick={close}
-                                    className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                                    className="p-1.5 rounded-lg hover:bg-accent/60 transition-colors"
                                     aria-label="Close menu"
                                 >
-                                    <X className="w-5 h-5 text-back" />
+                                    <X className="w-5 h-5 text-muted-foreground" />
                                 </button>
                             </div>
 
@@ -144,7 +144,7 @@ export const Sidebar = (): JSX.Element => {
                                             `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                                                 isActive
                                                     ? 'bg-primary/10 text-primary'
-                                                    : 'text-back hover:text-white hover:bg-white/5'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                                             }`
                                         }
                                     >
@@ -155,12 +155,12 @@ export const Sidebar = (): JSX.Element => {
                             </nav>
 
                             {/* Bottom section */}
-                            <div className="px-3 pb-4 pt-3 space-y-3 border-t border-white/[0.06] flex-shrink-0">
+                            <div className="px-3 pb-4 pt-3 space-y-3 border-t border-border/60 flex-shrink-0">
 
                                 {/* Block height */}
                                 <div
                                     className="flex items-center justify-between px-3 py-2 rounded-lg"
-                                    style={{ background: 'rgba(74,222,128,0.06)' }}
+                                    style={{ background: 'hsl(var(--primary) / 0.06)' }}
                                 >
                                     <div className="flex items-center gap-1.5">
                                         <span className="relative flex h-1.5 w-1.5">
@@ -168,7 +168,7 @@ export const Sidebar = (): JSX.Element => {
                                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                                         </span>
                                         <Blocks className="w-3.5 h-3.5 text-primary/70" />
-                                        <span className="text-xs text-back">Block</span>
+                                        <span className="text-xs text-muted-foreground">Block</span>
                                     </div>
                                     <span className="text-xs font-semibold tabular-nums text-primary">
                                         {blockHeight != null ? `#${blockHeight.height.toLocaleString()}` : '—'}
@@ -178,9 +178,9 @@ export const Sidebar = (): JSX.Element => {
                                 {/* Total CNPY */}
                                 <div
                                     className="flex items-center justify-between px-3 py-2.5 rounded-lg"
-                                    style={{ background: '#22232E' }}
+                                    style={{ background: 'hsl(var(--card))' }}
                                 >
-                                    <span className="text-xs text-back">Total</span>
+                                    <span className="text-xs text-muted-foreground">Total</span>
                                     <div className="flex items-center gap-1.5">
                                         {stageLoading ? (
                                             <span className="text-xs font-semibold text-primary">…</span>
@@ -191,7 +191,7 @@ export const Sidebar = (): JSX.Element => {
                                                 className="text-xs font-semibold text-primary tabular-nums"
                                             />
                                         )}
-                                        <span className="text-xs font-semibold text-white/40">CNPY</span>
+                                        <span className="text-xs font-semibold text-muted-foreground/60">CNPY</span>
                                     </div>
                                 </div>
 
@@ -201,12 +201,12 @@ export const Sidebar = (): JSX.Element => {
                                     onValueChange={(value) => { switchAccount(value); close(); }}
                                 >
                                     <SelectTrigger
-                                        className="w-full h-11 rounded-lg border border-white/10 px-3 text-sm font-medium text-white"
-                                        style={{ background: '#22232E' }}
+                                        className="w-full h-11 rounded-lg border border-border/60 px-3 text-sm font-medium text-foreground"
+                                        style={{ background: 'hsl(var(--card))' }}
                                     >
                                         <div className="flex items-center gap-2.5 w-full min-w-0">
                                             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-xs font-bold text-white">
+                                                <span className="text-xs font-bold text-foreground">
                                                     {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                                 </span>
                                             </div>
@@ -215,20 +215,20 @@ export const Sidebar = (): JSX.Element => {
                                             </span>
                                         </div>
                                     </SelectTrigger>
-                                    <SelectContent className="bg-bg-secondary border border-white/10">
+                                    <SelectContent className="bg-card border border-border/60">
                                         {accounts.map((account, index) => (
-                                            <SelectItem key={account.id} value={account.id} className="text-white hover:bg-muted">
+                                            <SelectItem key={account.id} value={account.id} className="text-foreground hover:bg-muted">
                                                 <div className="flex items-center gap-3 w-full">
                                                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-                                                        <span className="text-xs font-bold text-white">
+                                                        <span className="text-xs font-bold text-foreground">
                                                             {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-col items-start flex-1 min-w-0">
-                                                        <span className="text-sm font-medium text-white truncate">
+                                                        <span className="text-sm font-medium text-foreground truncate">
                                                             {account.nickname || `Account ${index + 1}`}
                                                         </span>
-                                                        <span className="text-xs text-back truncate">
+                                                        <span className="text-xs text-muted-foreground truncate">
                                                             {account.address.slice(0, 6)}…{account.address.slice(-4)}
                                                         </span>
                                                     </div>
@@ -239,7 +239,7 @@ export const Sidebar = (): JSX.Element => {
                                             </SelectItem>
                                         ))}
                                         {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
-                                            <div className="p-2 text-center text-back text-sm">
+                                            <div className="p-2 text-center text-muted-foreground text-sm">
                                                 No accounts available
                                             </div>
                                         ) : null}
@@ -263,3 +263,4 @@ export const Sidebar = (): JSX.Element => {
         </div>
     );
 };
+

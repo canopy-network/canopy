@@ -75,13 +75,13 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     };
 
     return (
-        <div className="bg-bg-secondary rounded-xl p-6 border border-bg-accent">
+        <div className="bg-card rounded-xl p-6 border border-border">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-text-primary mb-1">{title}</h2>
+                    <h2 className="text-2xl font-bold text-foreground mb-1">{title}</h2>
                     {!isPast && (
-                        <p className="text-sm text-text-muted">
+                        <p className="text-sm text-muted-foreground">
                             Vote on proposals that shape the future of the Canopy ecosystem
                         </p>
                     )}
@@ -91,19 +91,19 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
             {/* Filters */}
             <div className="flex items-center gap-4 mb-6">
                 <div className="relative flex-1 max-w-md">
-                    <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm"></i>
+                    <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm"></i>
                     <input
                         type="text"
                         placeholder="Search proposals..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-primary/40 transition-colors"
+                        className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-sm text-foreground placeholder-text-muted focus:outline-none focus:border-primary/40 transition-colors"
                     />
                 </div>
                 <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="px-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
+                    className="px-4 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40 transition-colors"
                 >
                     {categories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -115,19 +115,19 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-bg-accent">
-                            <th className="text-left py-3 px-4 text-xs font-medium text-text-muted uppercase">Proposal</th>
-                            <th className="text-left py-3 px-4 text-xs font-medium text-text-muted uppercase">Category</th>
-                            <th className="text-left py-3 px-4 text-xs font-medium text-text-muted uppercase">Result</th>
-                            <th className="text-left py-3 px-4 text-xs font-medium text-text-muted uppercase">Turnout</th>
-                            <th className="text-left py-3 px-4 text-xs font-medium text-text-muted uppercase">Ended</th>
-                            <th className="text-right py-3 px-4 text-xs font-medium text-text-muted uppercase">Actions</th>
+                        <tr className="border-b border-border">
+                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Proposal</th>
+                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Category</th>
+                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Result</th>
+                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Turnout</th>
+                            <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Ended</th>
+                            <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filteredProposals.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="py-12 text-center text-text-muted">
+                                <td colSpan={6} className="py-12 text-center text-muted-foreground">
                                     No proposals found
                                 </td>
                             </tr>
@@ -135,15 +135,15 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                             filteredProposals.map((proposal) => (
                                 <tr
                                     key={proposal.hash}
-                                    className="border-b border-bg-accent hover:bg-bg-primary/50 transition-colors"
+                                    className="border-b border-border hover:bg-background/50 transition-colors"
                                 >
                                     {/* Proposal */}
                                     <td className="py-4 px-4">
                                         <div>
-                                            <div className="text-sm font-medium text-text-primary mb-1">
+                                            <div className="text-sm font-medium text-foreground mb-1">
                                                 {proposal.title}
                                             </div>
-                                            <div className="text-xs text-text-muted line-clamp-1">
+                                            <div className="text-xs text-muted-foreground line-clamp-1">
                                                 {proposal.description}
                                             </div>
                                         </div>
@@ -165,14 +165,14 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
 
                                     {/* Turnout */}
                                     <td className="py-4 px-4">
-                                        <div className="text-sm text-text-primary">
+                                        <div className="text-sm text-foreground">
                                             {proposal.yesPercent.toFixed(1)}%
                                         </div>
                                     </td>
 
                                     {/* Ended */}
                                     <td className="py-4 px-4">
-                                        <div className="text-sm text-text-muted">
+                                        <div className="text-sm text-muted-foreground">
                                             {isPast ? formatTimeAgo(proposal.submitTime) : `Block ${proposal.endHeight}`}
                                         </div>
                                     </td>

@@ -18,7 +18,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
             case 'rejected':
                 return 'bg-red-500/20 text-red-400 border-red-500/40';
             default:
-                return 'bg-text-muted/20 text-text-muted border-text-muted/40';
+                return 'bg-muted/20 text-muted-foreground border-border/40';
         }
     };
 
@@ -46,7 +46,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
 
     return (
         <motion.div
-            className="bg-bg-secondary rounded-xl p-6 border border-bg-accent hover:border-primary/40 transition-all duration-300 h-full flex flex-col"
+            className="bg-card rounded-xl p-6 border border-border hover:border-primary/40 transition-all duration-300 h-full flex flex-col"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             whileHover={{ y: -4 }}
@@ -63,30 +63,30 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                         </span>
                     )}
                 </div>
-                <span className="text-xs text-text-muted font-mono">
+                <span className="text-xs text-muted-foreground font-mono">
                     #{poll.hash.slice(0, 8)}...
                 </span>
             </div>
 
             {/* Title and Description */}
             <div className="mb-6">
-                <h3 className="text-lg font-semibold text-text-primary mb-2 line-clamp-2">
+                <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2">
                     {poll.title}
                 </h3>
-                <p className="text-sm text-text-muted line-clamp-3">
+                <p className="text-sm text-muted-foreground line-clamp-3">
                     {poll.description}
                 </p>
             </div>
 
             {/* Voting Progress Bars */}
             <div className="mb-6 flex-1">
-                <div className="flex justify-between text-xs text-text-muted mb-2">
+                <div className="flex justify-between text-xs text-muted-foreground mb-2">
                     <span>FOR: {poll.yesPercent.toFixed(1)}%</span>
                     <span>AGAINST: {poll.noPercent.toFixed(1)}%</span>
                 </div>
 
                 {/* Combined Progress Bar */}
-                <div className="h-3 bg-bg-accent rounded-full overflow-hidden mb-4 flex">
+                <div className="h-3 bg-accent rounded-full overflow-hidden mb-4 flex">
                     <div
                         className="bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
                         style={{ width: `${poll.yesPercent}%` }}
@@ -100,21 +100,21 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                 {/* Account vs Validator Stats */}
                 <div className="grid grid-cols-2 gap-4">
                     {/* Account Votes */}
-                    <div className="bg-bg-primary rounded-lg p-3">
+                    <div className="bg-background rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-2">
                             <i className="fa-solid fa-user text-primary text-sm"></i>
-                            <span className="text-xs text-text-muted">Accounts</span>
+                            <span className="text-xs text-muted-foreground">Accounts</span>
                         </div>
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs">
                                 <span className="text-green-400">For</span>
-                                <span className="text-text-primary font-medium">
+                                <span className="text-foreground font-medium">
                                     {poll.accountVotes.yes}
                                 </span>
                             </div>
                             <div className="flex justify-between text-xs">
                                 <span className="text-red-400">Against</span>
-                                <span className="text-text-primary font-medium">
+                                <span className="text-foreground font-medium">
                                     {poll.accountVotes.no}
                                 </span>
                             </div>
@@ -122,21 +122,21 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                     </div>
 
                     {/* Validator Votes */}
-                    <div className="bg-bg-primary rounded-lg p-3">
+                    <div className="bg-background rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-2">
                             <i className="fa-solid fa-shield-halved text-primary text-sm"></i>
-                            <span className="text-xs text-text-muted">Validators</span>
+                            <span className="text-xs text-muted-foreground">Validators</span>
                         </div>
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs">
                                 <span className="text-green-400">For</span>
-                                <span className="text-text-primary font-medium">
+                                <span className="text-foreground font-medium">
                                     {poll.validatorVotes.yes}
                                 </span>
                             </div>
                             <div className="flex justify-between text-xs">
                                 <span className="text-red-400">Against</span>
-                                <span className="text-text-primary font-medium">
+                                <span className="text-foreground font-medium">
                                     {poll.validatorVotes.no}
                                 </span>
                             </div>
@@ -146,7 +146,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t border-bg-accent">
+            <div className="flex gap-2 pt-4 border-t border-border">
                 {poll.status === 'active' && onVote && (
                     <>
                         <button
@@ -166,7 +166,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                 {onViewDetails && (
                     <button
                         onClick={() => onViewDetails(poll.hash)}
-                        className="flex-1 px-4 py-2 bg-bg-primary hover:bg-bg-accent text-text-primary rounded-lg text-sm font-medium transition-all duration-200"
+                        className="flex-1 px-4 py-2 bg-background hover:bg-accent text-foreground rounded-lg text-sm font-medium transition-all duration-200"
                     >
                         Details
                     </button>

@@ -49,18 +49,18 @@ export const SystemResourcesCard: React.FC<SystemResourcesCardProps> = ({
     return (
         <motion.div
             variants={itemVariants}
-            className="bg-[#1E1F26] rounded-xl border border-[#2A2C35] p-6"
+            className="bg-card rounded-xl border border-border/60 p-6"
         >
-            <h2 className="text-white text-lg font-bold mb-4">System Resources</h2>
+            <h2 className="text-foreground text-lg font-bold mb-4">System Resources</h2>
             <div className="grid grid-cols-2 gap-6">
                 {systemStats.map((stat) => (
                     <div key={stat.id} className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#2A2C35] rounded-lg flex items-center justify-center">
-                            <i className={`${stat.icon} text-[#6fe3b4] text-lg`}></i>
+                        <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                            <i className={`${stat.icon} text-primary text-lg`}></i>
                         </div>
                         <div>
-                            <div className="text-gray-400 text-sm">{stat.label}</div>
-                            <div className="text-white text-2xl font-bold">{stat.value}</div>
+                            <div className="text-muted-foreground text-sm">{stat.label}</div>
+                            <div className="text-foreground text-2xl font-bold">{stat.value}</div>
                         </div>
                     </div>
                 ))}
@@ -68,3 +68,4 @@ export const SystemResourcesCard: React.FC<SystemResourcesCardProps> = ({
         </motion.div>
     );
 };
+

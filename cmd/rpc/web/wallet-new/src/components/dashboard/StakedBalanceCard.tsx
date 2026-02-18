@@ -31,8 +31,8 @@ export const StakedBalanceCard = React.memo(() => {
 
   return (
     <motion.div
-      className="rounded-2xl p-6 border border-white/10 relative overflow-hidden h-full flex flex-col"
-      style={{ background: '#22232E' }}
+      className="rounded-2xl p-6 border border-border/60 relative overflow-hidden h-full flex flex-col"
+      style={{ background: 'hsl(var(--card))' }}
       initial={hasAnimated ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.1 }}
@@ -43,7 +43,7 @@ export const StakedBalanceCard = React.memo(() => {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <span className="text-xs font-medium text-back uppercase tracking-wider">Staked Balance</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Staked Balance</span>
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
           <Coins className="w-4 h-4 text-primary" />
         </div>
@@ -52,29 +52,29 @@ export const StakedBalanceCard = React.memo(() => {
       {/* Balance */}
       <div className="flex-1">
         {loading ? (
-          <div className="h-10 w-40 rounded-lg bg-white/5 animate-pulse mb-1" />
+          <div className="h-10 w-40 rounded-lg bg-muted/50 animate-pulse mb-1" />
         ) : (
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-4xl font-bold text-white tabular-nums leading-none">
+            <span className="text-4xl font-bold text-foreground tabular-nums leading-none">
               <AnimatedNumber
                 value={totalStaked / 1_000_000}
                 format={{ notation: "standard", maximumFractionDigits: 2 }}
               />
             </span>
-            <span className="text-base font-semibold text-white/40">CNPY</span>
+            <span className="text-base font-semibold text-muted-foreground/60">CNPY</span>
           </div>
         )}
       </div>
 
       {/* Mini chart */}
-      <div className="mt-4 pt-4 border-t border-white/[0.06]">
+      <div className="mt-4 pt-4 border-t border-border/60">
         <div className="relative h-16 w-full">
           {(() => {
             if (chartLoading || loading) {
-              return <div className="h-4 w-28 rounded bg-white/5 animate-pulse" />;
+              return <div className="h-4 w-28 rounded bg-muted/50 animate-pulse" />;
             }
             if (chartData.length === 0) {
-              return <span className="text-xs text-back">No chart data</span>;
+              return <span className="text-xs text-muted-foreground">No chart data</span>;
             }
 
             const maxValue = Math.max(...chartData.map((d) => d.value), 1);
@@ -158,15 +158,15 @@ export const StakedBalanceCard = React.memo(() => {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute rounded-lg px-3 py-2 shadow-lg pointer-events-none z-10 whitespace-nowrap border border-white/10"
+                      className="absolute rounded-lg px-3 py-2 shadow-lg pointer-events-none z-10 whitespace-nowrap border border-border/60"
                       style={{
-                        background: '#14151C',
+                        background: 'hsl(var(--background))',
                         left: `${mousePosition.x}px`,
                         top: `${mousePosition.y}px`,
                         transform: "translate(-50%, -100%) translateY(-8px)",
                       }}
                     >
-                      <div className="text-xs text-back mb-1">{chartData[hoveredPoint].label}</div>
+                      <div className="text-xs text-muted-foreground mb-1">{chartData[hoveredPoint].label}</div>
                       <div className="text-sm font-semibold text-primary">
                         {(chartData[hoveredPoint].value / Math.pow(10, decimals)).toLocaleString("en-US", {
                           maximumFractionDigits: 2,
@@ -186,3 +186,5 @@ export const StakedBalanceCard = React.memo(() => {
 });
 
 StakedBalanceCard.displayName = 'StakedBalanceCard';
+
+

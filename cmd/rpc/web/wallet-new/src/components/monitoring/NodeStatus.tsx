@@ -37,7 +37,7 @@ export default function NodeStatus({
     availableNodes.find((n) => n.id === selectedNode) || availableNodes[0];
 
   const truncate = (addr: string) =>
-    addr ? `${addr.slice(0, 8)}…${addr.slice(-4)}` : "Connecting…";
+    addr ? `${addr.slice(0, 8)}...${addr.slice(-4)}` : "Connecting...";
 
   return (
     <>
@@ -55,18 +55,18 @@ export default function NodeStatus({
             />
           </span>
           <div>
-            <p className="text-sm font-semibold text-white">
+            <p className="text-sm font-semibold text-foreground">
               {currentNode?.name || "Current Node"}
             </p>
             {currentNode?.netAddress && (
-              <p className="text-xs text-back mt-0.5">{currentNode.netAddress}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{currentNode.netAddress}</p>
             )}
           </div>
         </div>
 
         <button
           onClick={onCopyAddress}
-          className="flex items-center gap-1.5 text-xs text-back hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all duration-150"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg border border-border/60 hover:border-border hover:bg-accent/60 transition-all duration-150"
         >
           <Copy className="w-3.5 h-3.5" />
           Copy Address
@@ -75,12 +75,12 @@ export default function NodeStatus({
 
       {/* Status bar */}
       <div
-        className="grid grid-cols-4 gap-4 rounded-xl border border-white/10 p-4 mb-6"
-        style={{ background: '#22232E' }}
+        className="grid grid-cols-4 gap-4 rounded-xl border border-border/60 p-4 mb-6"
+        style={{ background: "hsl(var(--card))" }}
       >
         {/* Sync */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-back">Sync Status</span>
+          <span className="text-xs text-muted-foreground">Sync Status</span>
           <span className={`text-sm font-semibold ${nodeStatus.synced ? "text-primary" : "text-status-warning"}`}>
             {nodeStatus.synced ? "SYNCED" : "SYNCING"}
           </span>
@@ -88,28 +88,28 @@ export default function NodeStatus({
 
         {/* Block height */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-back">Block Height</span>
-          <span className="text-sm font-semibold text-white font-mono">
+          <span className="text-xs text-muted-foreground">Block Height</span>
+          <span className="text-sm font-semibold text-foreground font-mono">
             #{nodeStatus.blockHeight.toLocaleString()}
           </span>
         </div>
 
         {/* Progress */}
         <div className="flex flex-col gap-2">
-          <span className="text-xs text-back">Round Progress</span>
+          <span className="text-xs text-muted-foreground">Round Progress</span>
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
               className="h-full rounded-full bg-primary transition-all duration-500"
               style={{ width: `${nodeStatus.syncProgress}%` }}
             />
           </div>
-          <span className="text-xs text-back">{nodeStatus.syncProgress}%</span>
+          <span className="text-xs text-muted-foreground">{nodeStatus.syncProgress}%</span>
         </div>
 
         {/* Address */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-back">Node Address</span>
-          <span className="text-sm font-mono text-white">
+          <span className="text-xs text-muted-foreground">Node Address</span>
+          <span className="text-sm font-mono text-foreground">
             {truncate(nodeStatus.nodeAddress)}
           </span>
         </div>

@@ -18,7 +18,7 @@ const getStatusColor = (status: Proposal["status"]) => {
     case "pending":
       return "bg-yellow-500/20 text-yellow-400 border-yellow-500/40";
     default:
-      return "bg-text-muted/20 text-text-muted border-text-muted/40";
+      return "bg-muted/20 text-muted-foreground border-border/40";
   }
 };
 
@@ -65,7 +65,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
   return (
     <motion.div
-      className="bg-bg-secondary rounded-xl p-6 border border-bg-accent hover:border-primary/40 transition-all duration-300"
+      className="bg-card rounded-xl p-6 border border-border hover:border-primary/40 transition-all duration-300"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
@@ -74,7 +74,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-text-muted text-sm font-mono">
+            <span className="text-muted-foreground text-sm font-mono">
               #{proposal.id.slice(0, 8)}...
             </span>
             <span
@@ -83,10 +83,10 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               {getStatusLabel(proposal.status)}
             </span>
           </div>
-          <h3 className="text-text-primary text-lg font-semibold mb-2">
+          <h3 className="text-foreground text-lg font-semibold mb-2">
             {proposal.title}
           </h3>
-          <p className="text-text-muted text-sm line-clamp-2">
+          <p className="text-muted-foreground text-sm line-clamp-2">
             {proposal.description}
           </p>
         </div>
@@ -94,7 +94,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
       {/* Voting Progress */}
       <div className="mb-4">
-        <div className="flex justify-between text-xs text-text-muted mb-2">
+        <div className="flex justify-between text-xs text-muted-foreground mb-2">
           <span>Voting Progress</span>
           <span>{totalVotes.toLocaleString()} votes</span>
         </div>
@@ -105,11 +105,11 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-green-400">Yes</span>
-              <span className="text-text-muted">
+              <span className="text-muted-foreground">
                 {yesPercentage.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-bg-accent rounded-full overflow-hidden">
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 transition-all duration-500"
                 style={{ width: `${yesPercentage}%` }}
@@ -121,11 +121,11 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-red-400">No</span>
-              <span className="text-text-muted">
+              <span className="text-muted-foreground">
                 {noPercentage.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-bg-accent rounded-full overflow-hidden">
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
               <div
                 className="h-full bg-red-500 transition-all duration-500"
                 style={{ width: `${noPercentage}%` }}
@@ -137,11 +137,11 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-yellow-400">Abstain</span>
-              <span className="text-text-muted">
+              <span className="text-muted-foreground">
                 {abstainPercentage.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-bg-accent rounded-full overflow-hidden">
+            <div className="h-2 bg-accent rounded-full overflow-hidden">
               <div
                 className="h-full bg-yellow-500 transition-all duration-500"
                 style={{ width: `${abstainPercentage}%` }}
@@ -152,13 +152,13 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       </div>
 
       {/* Timeline */}
-      <div className="flex items-center justify-between text-xs text-text-muted mb-4 pb-4 border-b border-bg-accent">
+      <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 pb-4 border-b border-border">
         <div>
-          <span className="block text-text-secondary mb-1">Voting Start</span>
+          <span className="block text-foreground/80 mb-1">Voting Start</span>
           <span>{formatDate(proposal.votingStartTime || "")}</span>
         </div>
         <div className="text-right">
-          <span className="block text-text-secondary mb-1">Voting End</span>
+          <span className="block text-foreground/80 mb-1">Voting End</span>
           <span>{formatDate(proposal.votingEndTime || "")}</span>
         </div>
       </div>
@@ -188,10 +188,10 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       )}
 
       {/* Proposer info */}
-      <div className="mt-4 pt-4 border-t border-bg-accent">
+      <div className="mt-4 pt-4 border-t border-border">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-text-muted">Proposed by:</span>
-          <span className="text-text-secondary font-mono">
+          <span className="text-muted-foreground">Proposed by:</span>
+          <span className="text-foreground/80 font-mono">
             {proposal.proposer.slice(0, 6)}...{proposal.proposer.slice(-4)}
           </span>
         </div>

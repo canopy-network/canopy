@@ -26,13 +26,13 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+        <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="text-center">
             <div className="text-status-error text-6xl mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-2">
               Something went wrong
             </h1>
-            <p className="text-text-muted mb-4">
+            <p className="text-muted-foreground mb-4">
               An unexpected error occurred. Please reload the page.
             </p>
             <button
@@ -43,10 +43,10 @@ export class ErrorBoundary extends Component<Props, State> {
             </button>
             {this.state.error && (
               <details className="mt-4 text-left">
-                <summary className="text-text-muted cursor-pointer">
+                <summary className="text-muted-foreground cursor-pointer">
                   Error details
                 </summary>
-                <pre className="text-xs text-text-muted mt-2 p-2 bg-bg-secondary rounded">
+                <pre className="text-xs text-muted-foreground mt-2 p-2 bg-card rounded">
                   {this.state.error.message}
                 </pre>
               </details>

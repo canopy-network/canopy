@@ -81,7 +81,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
   return (
     <motion.div
       variants={itemVariants}
-      className="bg-bg-secondary rounded-xl border border-gray-600/60 relative overflow-hidden"
+      className="bg-card rounded-xl border border-border/60 relative overflow-hidden"
     >
       <div className="p-4">
         {/* Grid layout for responsive design */}
@@ -94,10 +94,10 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                   {validator.nickname || `Node ${index + 1}`}
                 </span>
                 <button className="text-bg-accent">
-                  <i className="fa-solid fa-server text-text-muted text-xs"></i>
+                  <i className="fa-solid fa-server text-muted-foreground text-xs"></i>
                 </button>
               </div>
-              <div className="text-text-muted text-sm font-mono">
+              <div className="text-muted-foreground text-sm font-mono">
                 {truncateAddress(validator.address)}
               </div>
               <button
@@ -117,13 +117,13 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                 {(validator.committees || []).slice(0, 2).map((chain, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 text-xs bg-bg-accent text-white rounded"
+                    className="px-2 py-0.5 text-xs bg-accent text-foreground rounded"
                   >
                     {chain}
                   </span>
                 ))}
                 {(validator.committees || []).length > 2 && (
-                  <span className="text-text-muted text-xs">
+                  <span className="text-muted-foreground text-xs">
                     +{(validator.committees || []).length - 2} more
                   </span>
                 )}
@@ -135,10 +135,10 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
           <div className="lg:col-span-6 grid grid-cols-2 sm:grid-cols-2 gap-4">
             {/* Total Staked */}
             <div className="flex flex-col">
-              <div className="text-text-primary font-medium">
+              <div className="text-foreground font-medium">
                 {formatStakedAmount(validator.stakedAmount)} CNPY
               </div>
-              <div className="text-text-muted text-xs">Total Staked</div>
+              <div className="text-muted-foreground text-xs">Total Staked</div>
             </div>
 
             {/* 24h Rewards */}
@@ -148,7 +148,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                   ? "..."
                   : formatRewards(rewardsHistory?.change24h || 0)}
               </div>
-              <div className="text-text-muted text-xs">24h Rewards</div>
+              <div className="text-muted-foreground text-xs">24h Rewards</div>
             </div>
           </div>
 
@@ -176,7 +176,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
             {validator.status !== "Unstaking" && (
               <div className="flex items-center gap-2">
                 <button
-                  className="p-2 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
+                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors"
                   onClick={handlePauseUnpause}
                   title={
                     validator.status === "Staked"
@@ -186,31 +186,31 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                 >
                     {
                         validator.status === 'Paused' ?
-                        (<Play className={"w-4 h-4 text-white text-sm group-hover:text-primary"}/>) :
-                        (<Pause className={"w-4 h-4 text-white text-sm group-hover:text-primary"}/>)
+                        (<Play className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>) :
+                        (<Pause className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>)
                     }
 
                 </button>
                 <button
-                  className="p-2 hover:bg-bg-accent group hover:border-primary/40 border border-gray-600/60 rounded-lg transition-colors"
+                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors"
                   onClick={handleEditStake}
                   title="Edit Stake"
                 >
                   <Pen
                     className={
-                      "w-4 h-4 text-white text-sm group-hover:text-primary"
+                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
                     }
                   />
                 </button>
 
                 <button
-                  className="p-2 hover:bg-bg-accent group hover:border-red-400/40 border border-gray-600/60 rounded-lg transition-colors"
+                  className="p-2 hover:bg-accent group hover:border-red-400/40 border border-border/60 rounded-lg transition-colors"
                   onClick={handleUnstake}
                   title="Unstake Validator"
                 >
                   <LockOpen
                     className={
-                      "w-4 h-4 text-white text-sm group-hover:text-primary"
+                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
                     }
                   />
                 </button>
@@ -222,3 +222,4 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
     </motion.div>
   );
 };
+

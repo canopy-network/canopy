@@ -93,9 +93,9 @@ export default function RawJSON({
     };
 
     return (
-        <div className="bg-bg-secondary rounded-xl border border-bg-accent p-6">
+        <div className="bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-text-primary text-lg font-bold">Raw JSON</h2>
+                <h2 className="text-foreground text-lg font-bold">Raw JSON</h2>
                 <button
                     onClick={handleExportJSON}
                     className="text-primary hover:text-primary/80 text-sm flex items-center gap-2"
@@ -115,7 +115,7 @@ export default function RawJSON({
                         className={`p-2 rounded-md flex items-center justify-center gap-2 text-sm ${
                             activeTab === tab.id
                                 ? 'bg-primary text-primary-foreground'
-                                : 'bg-bg-tertiary text-text-muted hover:bg-bg-accent'
+                                : 'bg-muted text-muted-foreground hover:bg-accent'
                         }`}
                     >
                         <i className={`fa-solid ${tab.icon}`}></i>
@@ -125,18 +125,18 @@ export default function RawJSON({
             </div>
 
             {/* JSON content */}
-            <div className="bg-bg-tertiary rounded-lg p-4 max-h-96 overflow-auto">
+            <div className="bg-muted rounded-lg p-4 max-h-96 overflow-auto">
                 {isLoading ? (
-                    <div className="text-text-muted text-center py-8">
+                    <div className="text-muted-foreground text-center py-8">
                         <i className="fa-solid fa-spinner fa-spin mr-2"></i>
                         Loading...
                     </div>
                 ) : tabContentData ? (
-                    <pre className="text-text-secondary text-xs font-mono whitespace-pre-wrap break-words">
+                    <pre className="text-foreground/80 text-xs font-mono whitespace-pre-wrap break-words">
                         {JSON.stringify(tabContentData, null, 2)}
                     </pre>
                 ) : (
-                    <div className="text-text-muted text-center py-8">
+                    <div className="text-muted-foreground text-center py-8">
                         No data available
                     </div>
                 )}

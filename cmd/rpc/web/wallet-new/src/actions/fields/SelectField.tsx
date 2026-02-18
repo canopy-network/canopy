@@ -54,12 +54,12 @@ export const SelectField: React.FC<BaseFieldProps> = ({
                 disabled={field.readOnly}
                 required={field.required}
             >
-                <SelectTrigger className="w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg">
+                <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg">
                     <SelectValue placeholder={field.placeholder} />
                 </SelectTrigger>
-                <SelectContent className="bg-bg-tertiary border-bg-accent">
+                <SelectContent className="bg-muted border-border">
                     {builtOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value} className="text-white">
+                        <SelectItem key={o.value} value={o.value} className="text-foreground">
                             {o.label}
                         </SelectItem>
                     ))}

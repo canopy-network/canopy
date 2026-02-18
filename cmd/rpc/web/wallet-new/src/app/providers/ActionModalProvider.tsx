@@ -13,7 +13,7 @@ const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'));
 const ActionRunnerFallback = () => (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="text-text-muted text-sm">Loading action...</span>
+        <span className="text-muted-foreground text-sm">Loading action...</span>
     </div>
 );
 
@@ -155,7 +155,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                 width: { duration: 0.3, ease: 'easeInOut' }
                             }}
                             className={cx(
-                                'relative bg-bg-secondary rounded-xl border border-bg-accent p-6 max-h-[95vh] max-w-[40vw]',
+                                'relative bg-card rounded-xl border border-border p-6 max-h-[95vh] max-w-[40vw]',
                                 modalClassName
                             )}
                             style={modalStyle}
@@ -164,7 +164,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             {/* Close Button */}
                             <XIcon
                                 onClick={closeAction}
-                                className="absolute top-4 right-4 text-text-muted cursor-pointer hover:text-white z-10"
+                                className="absolute top-4 right-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
                             />
 
                             {/* Tabs - only show if there are multiple actions */}
@@ -183,7 +183,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                                                 <LucideIcon name={availableTabs[0].icon} className="w-6 h-6 text-primary" />
                                             </div>
                                         )}
-                                        <h2 className="text-2xl font-semibold text-white">
+                                        <h2 className="text-2xl font-semibold text-foreground">
                                             {availableTabs[0].label}
                                         </h2>
                                     </div>

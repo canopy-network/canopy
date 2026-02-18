@@ -19,12 +19,12 @@ const statusBadgeVariants = cva(
         paused: "bg-red-500/15 text-red-400 ring-1 ring-red-500/20",
 
         // Account statuses
-        liquid: "bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20",
+        liquid: "bg-muted/60 text-muted-foreground ring-1 ring-border",
         delegated: "bg-primary/15 text-primary ring-1 ring-primary/20",
 
         // Generic
         active: "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20",
-        inactive: "bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20",
+        inactive: "bg-muted/60 text-muted-foreground ring-1 ring-border",
         warning: "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/20",
         error: "bg-red-500/15 text-red-400 ring-1 ring-red-500/20",
         info: "bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/20",

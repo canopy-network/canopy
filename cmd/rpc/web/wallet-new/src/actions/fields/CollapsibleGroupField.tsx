@@ -65,11 +65,11 @@ export const CollapsibleGroupField: React.FC<CollapsibleGroupFieldProps> = ({
   // Variant styling
   const variantStyles: Record<string, { bg: string; border: string; text: string; icon: string; hover: string }> = {
     default: {
-      bg: "bg-bg-secondary/30",
-      border: "border-bg-accent/50",
-      text: "text-text-muted",
-      icon: "text-text-muted",
-      hover: "hover:bg-bg-secondary/50 hover:border-bg-accent",
+      bg: "bg-card/30",
+      border: "border-border/50",
+      text: "text-muted-foreground",
+      icon: "text-muted-foreground",
+      hover: "hover:bg-card/50 hover:border-border",
     },
     primary: {
       bg: "bg-primary/5",
@@ -108,7 +108,7 @@ export const CollapsibleGroupField: React.FC<CollapsibleGroupFieldProps> = ({
             {title}
           </span>
           {description && !isExpanded && (
-            <span className="text-xs text-text-muted ml-2">
+            <span className="text-xs text-muted-foreground ml-2">
               {description}
             </span>
           )}

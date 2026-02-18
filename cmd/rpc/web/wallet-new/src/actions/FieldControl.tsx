@@ -101,7 +101,7 @@ export const FieldControl: React.FC<Props> = ({
 
   if (!FieldRenderer) {
     return (
-      <div className="col-span-12 text-sm text-text-muted">
+      <div className="col-span-12 text-sm text-muted-foreground">
         Unsupported field type: {f.type}
       </div>
     );

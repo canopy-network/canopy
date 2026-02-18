@@ -18,7 +18,7 @@ export const VotingPowerCard = () => {
 
     return (
         <motion.div
-            className="bg-bg-secondary rounded-3xl p-6 border border-bg-accent relative overflow-hidden h-full"
+            className="bg-card rounded-3xl p-6 border border-border relative overflow-hidden h-full"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
@@ -29,19 +29,19 @@ export const VotingPowerCard = () => {
             </div>
 
             {/* Title */}
-            <h3 className="text-text-secondary text-xl font-sans font-medium mb-4">
+            <h3 className="text-foreground/80 text-xl font-sans font-medium mb-4">
                 Your Voting Power
             </h3>
 
             {/* Voting Power */}
             <div className="mb-4">
                 {isLoading ? (
-                    <div className="text-3xl font-bold text-text-primary">
+                    <div className="text-3xl font-bold text-foreground">
                         ...
                     </div>
                 ) : (
                     <div className="flex items-center gap-3">
-                        <div className="text-4xl font-bold font-sans text-text-primary">
+                        <div className="text-4xl font-bold font-sans text-foreground">
                             <AnimatedNumber
                                 value={votingPowerData?.votingPower ? votingPowerData.votingPower / 1000000 : 0}
                                 format={{
@@ -50,14 +50,14 @@ export const VotingPowerCard = () => {
                                 }}
                             />
                         </div>
-                        <span className="text-xl text-text-muted">CNPY</span>
+                        <span className="text-xl text-muted-foreground">CNPY</span>
                     </div>
                 )}
             </div>
 
             {/* Additional Info */}
             <div className="flex items-center gap-2">
-                <span className="text-sm text-text-muted">
+                <span className="text-sm text-muted-foreground">
                     Based on staked amount
                 </span>
             </div>

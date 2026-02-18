@@ -27,7 +27,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
                                                             title,
                                                             metrics,
                                                             columns = 3,
-                                                            className = "bg-[#1E1F26] rounded-xl border border-[#2A2C35] p-4 mb-6"
+                                                            className = "bg-card rounded-xl border border-border/60 p-4 mb-6"
                                                         }) => {
     const gridCols = {
         1: 'grid-cols-1',
@@ -43,8 +43,8 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
                     <div key={metric.id} className="flex items-center gap-2">
                         <div className={`w-2 h-2 ${metric.color || 'bg-green-500'} rounded-full`}></div>
                         <div>
-                            <div className="text-xs text-gray-400">{metric.label}</div>
-                            <div className="text-white font-medium">{metric.value}</div>
+                            <div className="text-xs text-muted-foreground">{metric.label}</div>
+                            <div className="text-foreground font-medium">{metric.value}</div>
                         </div>
                     </div>
                 );
@@ -52,15 +52,15 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
             case 'progress':
                 return (
                     <div key={metric.id}>
-                        <div className="text-xs text-gray-400">{metric.label}</div>
+                        <div className="text-xs text-muted-foreground">{metric.label}</div>
                         <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-[#2A2C35] h-2 rounded-full overflow-hidden">
+                            <div className="flex-1 bg-muted h-2 rounded-full overflow-hidden">
                                 <div
-                                    className="bg-[#6fe3b4] h-full rounded-full"
+                                    className="bg-primary h-full rounded-full"
                                     style={{ width: `${metric.progress || 0}%` }}
                                 ></div>
                             </div>
-                            <span className="text-white text-xs">{metric.progress}% complete</span>
+                            <span className="text-foreground text-xs">{metric.progress}% complete</span>
                         </div>
                     </div>
                 );
@@ -68,16 +68,16 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
             case 'address':
                 return (
                     <div key={metric.id} className="col-span-3">
-                        <div className="text-xs text-gray-400">{metric.label}</div>
-                        <div className="text-white font-medium font-mono">{metric.value}</div>
+                        <div className="text-xs text-muted-foreground">{metric.label}</div>
+                        <div className="text-foreground font-medium font-mono">{metric.value}</div>
                     </div>
                 );
 
             default:
                 return (
                     <div key={metric.id}>
-                        <div className="text-xs text-gray-400">{metric.label}</div>
-                        <div className="text-white font-medium">{metric.value}</div>
+                        <div className="text-xs text-muted-foreground">{metric.label}</div>
+                        <div className="text-foreground font-medium">{metric.value}</div>
                     </div>
                 );
         }
@@ -89,7 +89,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
             className={className}
         >
             {title && (
-                <h2 className="text-white text-lg font-bold mb-4">{title}</h2>
+                <h2 className="text-foreground text-lg font-bold mb-4">{title}</h2>
             )}
             <div className={`grid ${gridCols[columns as keyof typeof gridCols]} gap-4`}>
                 {metrics.map(renderMetric)}
@@ -97,3 +97,4 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
         </motion.div>
     );
 };
+

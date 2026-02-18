@@ -13,7 +13,7 @@ const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'))
 const ActionRunnerFallback = () => (
     <div className="flex flex-col items-center justify-center py-12 gap-3">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="text-text-muted text-sm">Loading action...</span>
+        <span className="text-muted-foreground text-sm">Loading action...</span>
     </div>
 )
 
@@ -84,7 +84,7 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                         }}
                         // 🧩 base + clases opcionales + estilos inline del manifest
                         className={cx(
-                            'relative bg-bg-secondary border border-bg-accent overflow-hidden flex flex-col',
+                            'relative bg-card border border-border overflow-hidden flex flex-col',
                             // Mobile: casi pantalla completa
                             'w-full h-[96vh] max-h-[96vh] rounded-lg p-3',
                             // Small tablets: un poco más pequeño
@@ -98,7 +98,7 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
                     >
                         <XIcon
                             onClick={onClose}
-                            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-5 h-5 sm:w-6 sm:h-6 text-text-muted cursor-pointer hover:text-white z-10"
+                            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground cursor-pointer hover:text-foreground z-10"
                         />
 
                         <ModalTabs

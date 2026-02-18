@@ -21,22 +21,22 @@ interface AddressData {
 
 const AddressRow = React.memo<{ address: AddressData; index: number }>(({ address, index }) => (
   <motion.div
-    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-white/[0.06] hover:border-white/10 hover:bg-white/[0.02] transition-all duration-150"
+    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 hover:border-border/60 hover:bg-accent/30 transition-all duration-150"
     initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.2, delay: index * 0.05 }}
   >
     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
-      <Wallet className="w-3.5 h-3.5 text-white" />
+      <Wallet className="w-3.5 h-3.5 text-foreground" />
     </div>
 
     <div className="flex-1 min-w-0">
-      <div className="text-sm font-medium text-white truncate leading-tight">{address.nickname}</div>
-      <div className="text-xs text-back font-mono mt-0.5">{address.address}</div>
+      <div className="text-sm font-medium text-foreground truncate leading-tight">{address.nickname}</div>
+      <div className="text-xs text-muted-foreground font-mono mt-0.5">{address.address}</div>
     </div>
 
     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-      <span className="text-sm font-semibold text-white tabular-nums">{Number(address.totalValue).toLocaleString()}</span>
+      <span className="text-sm font-semibold text-foreground tabular-nums">{Number(address.totalValue).toLocaleString()}</span>
       <StatusBadge label={address.status} size="sm" />
     </div>
   </motion.div>
@@ -72,8 +72,8 @@ export const AllAddressesCard = React.memo(() => {
   if (accountsLoading || dataLoading) {
     return (
       <motion.div
-        className="rounded-2xl p-6 border border-white/10 h-full"
-        style={{ background: '#22232E' }}
+        className="rounded-2xl p-6 border border-border/60 h-full"
+        style={{ background: 'hsl(var(--card))' }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.3 }}
@@ -85,17 +85,17 @@ export const AllAddressesCard = React.memo(() => {
 
   return (
     <motion.div
-      className="rounded-2xl p-6 border border-white/10 h-full flex flex-col"
-      style={{ background: '#22232E' }}
+      className="rounded-2xl p-6 border border-border/60 h-full flex flex-col"
+      style={{ background: 'hsl(var(--card))' }}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
     >
       <div className="flex items-center justify-between mb-5">
-        <span className="text-xs font-medium text-back uppercase tracking-wider">All Addresses</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">All Addresses</span>
         <NavLink
           to="/all-addresses"
-          className="text-xs text-back hover:text-primary transition-colors font-medium"
+          className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium"
         >
           See all ({processedAddresses.length})
         </NavLink>
@@ -115,3 +115,4 @@ export const AllAddressesCard = React.memo(() => {
 });
 
 AllAddressesCard.displayName = 'AllAddressesCard';
+

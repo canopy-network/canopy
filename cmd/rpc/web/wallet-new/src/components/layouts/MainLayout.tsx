@@ -5,7 +5,7 @@ import { Footer } from "./Footer";
 
 export default function MainLayout() {
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
+        <div className="flex flex-col h-screen overflow-hidden bg-background">
             {/* Desktop top bar — hidden on mobile */}
             <TopNavbar />
 

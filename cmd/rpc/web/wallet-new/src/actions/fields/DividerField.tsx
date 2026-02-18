@@ -34,9 +34,9 @@ export const DividerField: React.FC<DividerFieldProps> = ({
   };
 
   const variantStyles: Record<string, string> = {
-    solid: "border-t border-bg-accent",
-    dashed: "border-t border-dashed border-bg-accent",
-    dotted: "border-t border-dotted border-bg-accent",
+    solid: "border-t border-border",
+    dashed: "border-t border-dashed border-border",
+    dotted: "border-t border-dotted border-border",
     gradient:
       "h-px bg-gradient-to-r from-transparent via-bg-accent to-transparent",
   };
@@ -47,7 +47,7 @@ export const DividerField: React.FC<DividerFieldProps> = ({
         <div className="relative">
           <div className={variantStyles[variant]} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="bg-bg-primary px-3 text-xs text-text-muted uppercase tracking-wider">
+            <span className="bg-background px-3 text-xs text-muted-foreground uppercase tracking-wider">
               {label}
             </span>
           </div>

@@ -13,7 +13,7 @@ export const DynamicHtmlField: React.FC<BaseFieldProps> = ({
     return (
         <FieldWrapper field={field} error={error} templateContext={templateContext} resolveTemplate={resolveTemplate}>
             <div
-                className="text-sm text-text-muted w-full"
+                className="text-sm text-muted-foreground w-full"
                 dangerouslySetInnerHTML={{ __html: resolvedHtml ?? '' }}
             />
         </FieldWrapper>

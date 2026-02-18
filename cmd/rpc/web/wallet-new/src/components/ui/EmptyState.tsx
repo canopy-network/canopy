@@ -72,22 +72,22 @@ export const EmptyState = React.memo<EmptyStateProps>(({
     >
       <div
         className={cx(
-          "flex items-center justify-center rounded-full bg-bg-accent/50",
+          "flex items-center justify-center rounded-full bg-accent/50",
           config.iconBg
         )}
       >
         <LucideIcon
           name={icon}
-          className={cx("text-text-muted", config.icon)}
+          className={cx("text-muted-foreground", config.icon)}
         />
       </div>
 
       <div className="space-y-1">
-        <h4 className={cx("font-medium text-text-primary", config.title)}>
+        <h4 className={cx("font-medium text-foreground", config.title)}>
           {title}
         </h4>
         {description && (
-          <p className={cx("text-text-muted max-w-xs", config.description)}>
+          <p className={cx("text-muted-foreground max-w-xs", config.description)}>
             {description}
           </p>
         )}

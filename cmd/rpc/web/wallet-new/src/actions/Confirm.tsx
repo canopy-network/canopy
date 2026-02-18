@@ -16,11 +16,11 @@ function ConfirmInner({
 
   return (
     <div className="space-y-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded p-3 sm:p-4">
+      <div className="bg-card border border-border rounded p-3 sm:p-4">
         <ul className="space-y-2">
           {summary.map((s, i) => (
             <li key={i} className="flex flex-col sm:grid sm:grid-cols-3 gap-1 sm:gap-2">
-              <span className="text-neutral-400 text-xs sm:text-sm sm:col-span-1">{s.label}</span>
+              <span className="text-muted-foreground text-xs sm:text-sm sm:col-span-1">{s.label}</span>
               <span className="text-sm sm:col-span-2 break-words">{s.value}</span>
             </li>
           ))}
@@ -28,13 +28,13 @@ function ConfirmInner({
       </div>
 
       {payload != null && (
-        <div className="bg-neutral-900 border border-neutral-800 rounded">
+        <div className="bg-card border border-border rounded">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2">
-            <div className="text-sm text-neutral-300">Raw Payload</div>
+            <div className="text-sm text-foreground/80">Raw Payload</div>
             <button className="text-sm text-emerald-400" onClick={()=>setOpen(!open)}>{open ? 'Hide' : 'Show'}</button>
           </div>
           {open && (
-            <pre className="px-3 sm:px-4 py-3 text-xs overflow-auto border-t border-neutral-800">
+            <pre className="px-3 sm:px-4 py-3 text-xs overflow-auto border-t border-border">
 {JSON.stringify(payload, null, 2)}
             </pre>
           )}
@@ -42,7 +42,7 @@ function ConfirmInner({
       )}
 
       <div className="flex flex-col sm:flex-row gap-2">
-        <button onClick={onBack} className="px-3 py-2 bg-neutral-800 rounded text-sm sm:text-base">Back</button>
+        <button onClick={onBack} className="px-3 py-2 bg-muted rounded text-sm sm:text-base">Back</button>
         <button
           onClick={onConfirm}
           className={cx(
@@ -58,6 +58,7 @@ function ConfirmInner({
 }
 
 export default React.memo(ConfirmInner);
+
 
 
 

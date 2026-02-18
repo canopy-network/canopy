@@ -253,31 +253,31 @@ export const CurrentWallet = (): JSX.Element => {
   return (
     <motion.div
       variants={panelVariants}
-      className="bg-bg-secondary rounded-lg p-6 border border-bg-accent"
+      className="bg-card rounded-lg p-6 border border-border"
     >
       <div className="flex items-center justify-between gap-2 mb-6">
-        <h2 className="text-xl font-bold text-white">Current Wallet</h2>
+        <h2 className="text-xl font-bold text-foreground">Current Wallet</h2>
         <Shield className="text-primary w-6 h-6" />
       </div>
 
       <div className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-foreground/80 mb-2">
             Wallet Name
           </label>
           <Select
             value={selectedAccount?.id || ""}
             onValueChange={switchAccount}
           >
-            <SelectTrigger className="w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg">
+            <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg">
               <SelectValue placeholder="Select wallet" />
             </SelectTrigger>
-            <SelectContent className="bg-bg-tertiary border-bg-accent">
+            <SelectContent className="bg-muted border-border">
               {accounts.map((account) => (
                 <SelectItem
                   key={account.id}
                   value={account.id}
-                  className="text-white"
+                  className="text-foreground"
                 >
                   {account.nickname}
                 </SelectItem>
@@ -287,7 +287,7 @@ export const CurrentWallet = (): JSX.Element => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-foreground/80 mb-2">
             Wallet Address
           </label>
           <div className="relative flex items-center justify-between gap-2">
@@ -295,7 +295,7 @@ export const CurrentWallet = (): JSX.Element => {
               type="text"
               value={selectedAccount?.address || ""}
               readOnly
-              className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10"
             />
             <button
               onClick={() =>
@@ -304,7 +304,7 @@ export const CurrentWallet = (): JSX.Element => {
                   "Wallet address",
                 )
               }
-              className="text-primary-foreground hover:text-white bg-primary rounded-lg px-3 py-2.5"
+              className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
             >
               <Copy className="w-4 h-4" />
             </button>
@@ -312,7 +312,7 @@ export const CurrentWallet = (): JSX.Element => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-foreground/80 mb-2">
             Public Key
           </label>
           <div className="relative flex items-center justify-between gap-2">
@@ -320,13 +320,13 @@ export const CurrentWallet = (): JSX.Element => {
               type="text"
               value={selectedAccount?.publicKey || ""}
               readOnly
-              className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10"
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10"
             />
             <button
               onClick={() =>
                 copyToClipboard(selectedAccount?.publicKey || "", "Public key")
               }
-              className="text-primary-foreground hover:text-white bg-primary rounded-lg px-3 py-2.5"
+              className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
             >
               <Copy className="w-4 h-4" />
             </button>
@@ -334,7 +334,7 @@ export const CurrentWallet = (): JSX.Element => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-foreground/80 mb-2">
             Private Key
           </label>
           <div className="relative flex items-center justify-between gap-2">
@@ -343,16 +343,16 @@ export const CurrentWallet = (): JSX.Element => {
               value={privateKeyVisible ? privateKey : ""}
               readOnly
               placeholder="Hidden until unlocked"
-              className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10 placeholder:text-gray-500"
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10 placeholder:text-muted-foreground"
             />
             <button
               onClick={handleRevealPrivateKeys}
-              className="hover:text-primary bg-muted rounded-lg px-3 py-2 text-white"
+              className="hover:text-primary bg-muted rounded-lg px-3 py-2 text-foreground"
             >
               {privateKeyVisible ? (
-                <EyeOff className="text-white w-4 h-4" />
+                <EyeOff className="text-foreground w-4 h-4" />
               ) : (
-                <Eye className="text-white w-4 h-4" />
+                <Eye className="text-foreground w-4 h-4" />
               )}
             </button>
           </div>
@@ -403,11 +403,11 @@ export const CurrentWallet = (): JSX.Element => {
 
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm bg-bg-secondary border border-bg-accent rounded-xl p-5">
-            <h3 className="text-lg text-white font-semibold mb-2">
+          <div className="w-full max-w-sm bg-card border border-border rounded-xl p-5">
+            <h3 className="text-lg text-foreground font-semibold mb-2">
               Unlock Private Key
             </h3>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Enter your wallet password to reveal the private key.
             </p>
             <input
@@ -415,7 +415,7 @@ export const CurrentWallet = (): JSX.Element => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
-              className="w-full bg-bg-tertiary text-white border border-bg-accent rounded-lg px-3 py-2.5"
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5"
             />
             {passwordError && (
               <div className="text-sm text-red-400 mt-2">{passwordError}</div>
@@ -423,7 +423,7 @@ export const CurrentWallet = (): JSX.Element => {
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowPasswordModal(false)}
-                className="px-4 py-2 rounded-lg bg-bg-tertiary text-white hover:bg-bg-accent"
+                className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-accent"
                 disabled={isFetchingKey}
               >
                 Cancel
@@ -442,12 +442,12 @@ export const CurrentWallet = (): JSX.Element => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-md bg-bg-secondary border border-red-500/50 rounded-xl p-6">
+          <div className="w-full max-w-md bg-card border border-red-500/50 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-3 bg-red-500/20 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-red-500" />
               </div>
-              <h3 className="text-xl text-white font-semibold">
+              <h3 className="text-xl text-foreground font-semibold">
                 Delete Account
               </h3>
             </div>
@@ -462,8 +462,8 @@ export const CurrentWallet = (): JSX.Element => {
               </p>
             </div>
 
-            <p className="text-sm text-gray-400 mb-4">
-              Type <span className="font-mono font-semibold text-white">
+            <p className="text-sm text-muted-foreground mb-4">
+              Type <span className="font-mono font-semibold text-foreground">
                 {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
               </span> to confirm deletion:
             </p>
@@ -473,7 +473,7 @@ export const CurrentWallet = (): JSX.Element => {
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
               placeholder="Type wallet name to confirm"
-              className="w-full bg-bg-tertiary text-white border border-bg-accent rounded-lg px-3 py-2.5 mb-4"
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 mb-4"
               autoFocus
             />
 
@@ -483,14 +483,14 @@ export const CurrentWallet = (): JSX.Element => {
                   setShowDeleteModal(false);
                   setDeleteConfirmation("");
                 }}
-                className="px-4 py-2 rounded-lg bg-bg-tertiary text-white hover:bg-bg-accent"
+                className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-accent"
                 disabled={isDeleting}
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-red-600 text-foreground hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isDeleting || deleteConfirmation !== (selectedKeyEntry?.keyNickname || selectedAccount?.nickname)}
               >
                 {isDeleting ? "Deleting..." : "Delete Permanently"}
@@ -502,3 +502,4 @@ export const CurrentWallet = (): JSX.Element => {
     </motion.div>
   );
 };
+

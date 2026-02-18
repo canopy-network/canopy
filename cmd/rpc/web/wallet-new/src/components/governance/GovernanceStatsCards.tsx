@@ -36,7 +36,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
             subtitle: 'Based on staked amount',
             icon: 'fa-solid fa-balance-scale',
             iconColor: 'text-primary',
-            valueColor: 'text-white'
+            valueColor: 'text-foreground'
         },
         {
             id: 'activeProposals',
@@ -50,7 +50,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
             ),
             icon: 'fa-solid fa-vote-yea',
             iconColor: 'text-primary',
-            valueColor: 'text-white'
+            valueColor: 'text-foreground'
         },
         {
             id: 'passedProposals',
@@ -59,7 +59,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
             subtitle: `${totalProposals} total proposals`,
             icon: 'fa-solid fa-check-circle',
             iconColor: 'text-primary',
-            valueColor: 'text-white'
+            valueColor: 'text-foreground'
         },
         {
             id: 'participation',
@@ -67,8 +67,8 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
             value: '0',
             subtitle: 'Votes cast',
             icon: 'fa-solid fa-chart-line',
-            iconColor: 'text-text-secondary',
-            valueColor: 'text-white'
+            iconColor: 'text-muted-foreground',
+            valueColor: 'text-foreground'
         }
     ];
 
@@ -78,18 +78,18 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
                 <motion.div
                     key={stat.id}
                     variants={itemVariants}
-                    className="bg-bg-secondary flex flex-col justify-center rounded-xl p-6 border border-bg-accent relative overflow-hidden gap-4"
+                    className="bg-card flex flex-col justify-center rounded-xl p-6 border border-border relative overflow-hidden gap-4"
                 >
                     <div className="flex items-center justify-between">
-                        <h3 className="text-text-muted text-sm font-medium">
+                        <h3 className="text-muted-foreground text-sm font-medium">
                             {stat.title}
                         </h3>
-                        <i className={`${stat.icon} text-primary text-2xl`}></i>
+                        <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>
                     </div>
                     <p className={`${stat.valueColor} text-2xl font-bold`}>
                         {stat.value}
                     </p>
-                    <div className="text-text-muted text-xs">
+                    <div className="text-muted-foreground text-xs">
                         {stat.subtitle}
                     </div>
                 </motion.div>

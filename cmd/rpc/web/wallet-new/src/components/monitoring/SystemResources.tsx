@@ -18,17 +18,17 @@ export default function SystemResources({ systemResources }: SystemResourcesProp
 
     return (
         <div
-            className="rounded-xl border border-white/10 p-6"
-            style={{ background: '#22232E' }}
+            className="rounded-xl border border-border/60 p-6"
+            style={{ background: "hsl(var(--card))" }}
         >
-            <h2 className="text-white text-base font-semibold mb-5">System Resources</h2>
+            <h2 className="text-foreground text-base font-semibold mb-5">System Resources</h2>
 
             <div className="grid grid-cols-2 gap-5">
                 {/* Thread Count */}
                 <div>
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-back">Thread Count</span>
-                        <span className="text-xs font-semibold text-white tabular-nums">
+                        <span className="text-xs text-muted-foreground">Thread Count</span>
+                        <span className="text-xs font-semibold text-foreground tabular-nums">
                             {systemResources.threadCount}
                         </span>
                     </div>
@@ -43,8 +43,8 @@ export default function SystemResources({ systemResources }: SystemResourcesProp
                 {/* File Descriptors */}
                 <div>
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-back">File Descriptors</span>
-                        <span className="text-xs font-semibold text-white tabular-nums">
+                        <span className="text-xs text-muted-foreground">File Descriptors</span>
+                        <span className="text-xs font-semibold text-foreground tabular-nums">
                             {systemResources.fileDescriptors.toLocaleString()} / {fdMax.toLocaleString()}
                         </span>
                     </div>

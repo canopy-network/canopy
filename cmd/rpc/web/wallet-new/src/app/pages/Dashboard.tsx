@@ -38,7 +38,7 @@ export const Dashboard = () => {
     if (manifestLoading) {
         return (
             <div className="flex items-center justify-center py-20">
-                <div className="text-back text-sm">Loading dashboard...</div>
+                <div className="text-muted-foreground text-sm">Loading dashboard...</div>
             </div>
         );
     }

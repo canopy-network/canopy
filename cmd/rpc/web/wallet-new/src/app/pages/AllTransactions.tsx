@@ -19,7 +19,7 @@ const getStatusColor = (s: string) =>
         ? "bg-orange-500/20 text-orange-400"
         : s === "Pending"
           ? "bg-yellow-500/20 text-yellow-400"
-          : "bg-gray-500/20 text-gray-400";
+          : "bg-muted/20 text-muted-foreground";
 
 const toEpochMs = (t: any) => {
   const n = Number(t ?? 0);
@@ -82,12 +82,12 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
   const pages = getPageNumbers(current, total);
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-bg-accent/30">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-border/30">
       {/* Left: result range + load more */}
-      <div className="flex items-center gap-3 text-sm text-text-muted">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <span>
-          Showing <span className="text-text-primary font-medium">{from}–{to}</span> of{" "}
-          <span className="text-text-primary font-medium">{count}</span> loaded
+          Showing <span className="text-foreground font-medium">{from}–{to}</span> of{" "}
+          <span className="text-foreground font-medium">{count}</span> loaded
         </span>
         {hasMore && (
           <button
@@ -111,8 +111,8 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
           <button
             onClick={() => onChange(current - 1)}
             disabled={current === 1}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-bg-accent/50
-              text-text-muted hover:text-text-primary hover:border-primary/40 hover:bg-bg-accent/30
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-border/50
+              text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-accent/30
               disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -122,7 +122,7 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
             p === "…" ? (
               <span
                 key={`ellipsis-${idx}`}
-                className="w-8 h-8 flex items-center justify-center text-text-muted text-sm select-none"
+                className="w-8 h-8 flex items-center justify-center text-muted-foreground text-sm select-none"
               >
                 …
               </span>
@@ -132,8 +132,8 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
                 onClick={() => onChange(p as number)}
                 className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all
                   ${p === current
-                    ? "bg-primary text-white border border-primary"
-                    : "border border-bg-accent/50 text-text-muted hover:text-text-primary hover:border-primary/40 hover:bg-bg-accent/30"
+                    ? "bg-primary text-foreground border border-primary"
+                    : "border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-accent/30"
                   }`}
               >
                 {p}
@@ -144,8 +144,8 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
           <button
             onClick={() => onChange(current + 1)}
             disabled={current === total}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-bg-accent/50
-              text-text-muted hover:text-text-primary hover:border-primary/40 hover:bg-bg-accent/30
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-border/50
+              text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-accent/30
               disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ChevronRight className="w-4 h-4" />
@@ -245,8 +245,8 @@ export const AllTransactions = () => {
 
   if (isTxLoading) {
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <div className="flex items-center gap-3 text-text-muted">
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span>Loading transactions...</span>
         </div>
@@ -256,7 +256,7 @@ export const AllTransactions = () => {
 
   return (
     <motion.div
-      className="min-h-screen bg-bg-primary"
+      className="min-h-screen bg-background"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
@@ -264,26 +264,26 @@ export const AllTransactions = () => {
       <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary mb-1">
+          <h1 className="text-3xl font-bold text-foreground mb-1">
             All Transactions
           </h1>
-          <p className="text-text-muted text-sm">
+          <p className="text-muted-foreground text-sm">
             View and manage your complete transaction history
           </p>
         </div>
 
         {/* Filters */}
-        <div className="bg-bg-secondary rounded-xl p-4 border border-bg-accent mb-6">
+        <div className="bg-card rounded-xl p-4 border border-border mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Search */}
             <div className="relative md:col-span-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search by hash or type…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-text-primary
+                className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-lg text-foreground
                   placeholder-text-muted text-sm focus:outline-none focus:border-primary/40 transition-colors"
               />
             </div>
@@ -292,7 +292,7 @@ export const AllTransactions = () => {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-text-primary text-sm
+              className="px-4 py-2 bg-background border border-border rounded-lg text-foreground text-sm
                 focus:outline-none focus:border-primary/40 transition-colors"
             >
               {txTypes.map((type) => (
@@ -306,7 +306,7 @@ export const AllTransactions = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-text-primary text-sm
+              className="px-4 py-2 bg-background border border-border rounded-lg text-foreground text-sm
                 focus:outline-none focus:border-primary/40 transition-colors"
             >
               <option value="all">All Status</option>
@@ -321,30 +321,30 @@ export const AllTransactions = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Loaded", value: allTxs.length, color: "text-text-primary" },
+            { label: "Loaded", value: allTxs.length, color: "text-foreground" },
             { label: "Confirmed", value: allTxs.filter(tx => tx.status === "Confirmed").length, color: "text-green-400" },
             { label: "Failed", value: allTxs.filter(tx => tx.status === "Failed").length, color: "text-red-400" },
             { label: "Filtered", value: filteredTransactions.length, color: "text-primary" },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-bg-secondary rounded-xl p-4 border border-bg-accent">
-              <div className="text-xs text-text-muted mb-1">{label}</div>
+            <div key={label} className="bg-card rounded-xl p-4 border border-border">
+              <div className="text-xs text-muted-foreground mb-1">{label}</div>
               <div className={`text-2xl font-bold ${color}`}>{value}</div>
             </div>
           ))}
         </div>
 
         {/* Table */}
-        <div className="bg-bg-secondary rounded-xl border border-bg-accent overflow-hidden">
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-bg-accent/30">
+              <thead className="bg-accent/30">
                 <tr>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Time</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Type</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Hash</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Amount</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Status</th>
-                  <th className="text-right px-6 py-3 text-xs font-medium text-text-muted uppercase tracking-wider">Detail</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Time</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Hash</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Amount</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Detail</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-bg-accent/20">
@@ -359,22 +359,22 @@ export const AllTransactions = () => {
                     return (
                       <tr
                         key={`${tx.hash}-${i}`}
-                        className={`group hover:bg-bg-accent/15 transition-colors cursor-pointer
+                        className={`group hover:bg-accent/15 transition-colors cursor-pointer
                           ${isFailed ? "bg-red-500/3" : ""}`}
                         onClick={() => openDetail(tx)}
                       >
                         <td className="px-6 py-4">
-                          <div className="text-sm text-text-primary">{formatTimeAgo(epochMs)}</div>
-                          <div className="text-xs text-text-muted mt-0.5">{formatDate(epochMs)}</div>
+                          <div className="text-sm text-foreground">{formatTimeAgo(epochMs)}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{formatDate(epochMs)}</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <LucideIcon name={getIcon(tx.type)} className="w-4 h-4 text-text-muted" />
-                            <span className="text-sm text-text-primary">{getTxMap(tx.type)}</span>
+                            <LucideIcon name={getIcon(tx.type)} className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">{getTxMap(tx.type)}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm text-text-primary font-mono">
+                          <span className="text-sm text-foreground font-mono">
                             {tx.hash.slice(0, 8)}…{tx.hash.slice(-6)}
                           </span>
                         </td>
@@ -387,7 +387,7 @@ export const AllTransactions = () => {
                                   ? "text-green-400"
                                   : fundsWay === "out"
                                     ? "text-red-400"
-                                    : "text-text-primary"
+                                    : "text-foreground"
                               }`}
                           >
                             {amountTxt}
@@ -401,7 +401,7 @@ export const AllTransactions = () => {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); openDetail(tx); }}
-                            className="text-xs text-text-muted group-hover:text-primary font-medium transition-colors"
+                            className="text-xs text-muted-foreground group-hover:text-primary font-medium transition-colors"
                           >
                             View →
                           </button>
@@ -411,7 +411,7 @@ export const AllTransactions = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center text-text-muted text-sm">
+                    <td colSpan={6} className="px-6 py-16 text-center text-muted-foreground text-sm">
                       No transactions match the current filters
                     </td>
                   </tr>
@@ -446,3 +446,4 @@ export const AllTransactions = () => {
 };
 
 export default AllTransactions;
+

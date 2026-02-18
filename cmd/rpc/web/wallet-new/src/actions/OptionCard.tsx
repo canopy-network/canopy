@@ -24,7 +24,7 @@ export const OptionCard: React.FC<{
       <span
           className={cx(
               "mt-1  h-4 w-4 rounded-full border relative",
-              selected ? "border-emerald-400" : "border-neutral-500"
+              selected ? "border-emerald-400" : "border-border"
           )}
           aria-hidden
       >
@@ -32,8 +32,9 @@ export const OptionCard: React.FC<{
       </span>
             <div className="flex-1">
                 <div className="font-medium text-canopy-50">{label}</div>
-                {help ? <div className="text-xs text-neutral-400 mt-0.5">{help}</div> : null}
+                {help ? <div className="text-xs text-muted-foreground mt-0.5">{help}</div> : null}
             </div>
         </div>
     </button>
 );
+

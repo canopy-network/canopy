@@ -148,7 +148,7 @@ export default function FormRenderer({
   return (
     <>
       {tabs.length > 0 && (
-        <div className="mb-3 flex gap-2 border-b border-neutral-800">
+        <div className="mb-3 flex gap-2 border-b border-border">
           {tabs.map((t) => (
             <button
               key={t}
@@ -156,7 +156,7 @@ export default function FormRenderer({
                 "px-3 py-2 -mb-px border-b-2",
                 activeTab === t
                   ? "border-emerald-400 text-emerald-400"
-                  : "border-transparent text-neutral-400",
+                  : "border-transparent text-muted-foreground",
               )}
               onClick={() => setActiveTab(t)}
             >
@@ -181,3 +181,4 @@ export default function FormRenderer({
     </>
   );
 }
+

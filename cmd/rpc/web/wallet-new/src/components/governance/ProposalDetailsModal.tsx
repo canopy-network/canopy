@@ -70,14 +70,14 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                     {/* Modal */}
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none ">
                         <motion.div
-                            className="bg-bg-secondary rounded-2xl border border-bg-accent shadow-2xl max-w-4xl w-full max-h-[93vh] overflow-hidden pointer-events-auto"
+                            className="bg-card rounded-2xl border border-border shadow-2xl max-w-4xl w-full max-h-[93vh] overflow-hidden pointer-events-auto"
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             transition={{ type: 'spring', duration: 0.5 }}
                         >
                             {/* Header */}
-                            <div className="flex items-start justify-between p-6 border-b border-bg-accent">
+                            <div className="flex items-start justify-between p-6 border-b border-border">
                                 <div className="flex-1 pr-4">
                                     <div className="flex items-center gap-3 mb-3">
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(proposal.category)}`}>
@@ -87,18 +87,18 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             {proposal.result}
                                         </span>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-text-primary mb-2">
+                                    <h2 className="text-2xl font-bold text-foreground mb-2">
                                         {proposal.title}
                                     </h2>
-                                    <p className="text-sm text-text-muted">
+                                    <p className="text-sm text-muted-foreground">
                                         Proposal ID: <span className="font-mono">{proposal.hash.slice(0, 16)}...</span>
                                     </p>
                                 </div>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 hover:bg-bg-accent rounded-lg transition-colors"
+                                    className="p-2 hover:bg-accent rounded-lg transition-colors"
                                 >
-                                    <i className="fa-solid fa-times text-text-muted text-xl"></i>
+                                    <i className="fa-solid fa-times text-muted-foreground text-xl"></i>
                                 </button>
                             </div>
 
@@ -107,26 +107,26 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                 <div className="p-6 space-y-6">
                                     {/* Description */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-text-primary mb-3">
+                                        <h3 className="text-lg font-semibold text-foreground mb-3">
                                             Description
                                         </h3>
-                                        <p className="text-text-secondary leading-relaxed">
+                                        <p className="text-foreground/80 leading-relaxed">
                                             {proposal.description}
                                         </p>
                                     </div>
 
                                     {/* Voting Results */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-text-primary mb-4">
+                                        <h3 className="text-lg font-semibold text-foreground mb-4">
                                             Voting Results
                                         </h3>
 
-                                        <div className="bg-bg-primary rounded-xl p-4 mb-4">
+                                        <div className="bg-background rounded-xl p-4 mb-4">
                                             <div className="flex justify-between text-sm mb-2">
                                                 <span className="text-green-400 font-medium">For: {proposal.yesPercent.toFixed(1)}%</span>
                                                 <span className="text-red-400 font-medium">Against: {proposal.noPercent.toFixed(1)}%</span>
                                             </div>
-                                            <div className="h-4 bg-bg-accent rounded-full overflow-hidden flex">
+                                            <div className="h-4 bg-accent rounded-full overflow-hidden flex">
                                                 <div
                                                     className="bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
                                                     style={{ width: `${proposal.yesPercent}%` }}
@@ -142,7 +142,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <i className="fa-solid fa-check-circle text-green-400"></i>
-                                                    <span className="text-sm text-text-muted">Votes For</span>
+                                                    <span className="text-sm text-muted-foreground">Votes For</span>
                                                 </div>
                                                 <div className="text-2xl font-bold text-green-400">
                                                     {proposal.yesPercent.toFixed(1)}%
@@ -151,7 +151,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <i className="fa-solid fa-times-circle text-red-400"></i>
-                                                    <span className="text-sm text-text-muted">Votes Against</span>
+                                                    <span className="text-sm text-muted-foreground">Votes Against</span>
                                                 </div>
                                                 <div className="text-2xl font-bold text-red-400">
                                                     {proposal.noPercent.toFixed(1)}%
@@ -162,37 +162,37 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
 
                                     {/* Proposal Information */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-text-primary mb-4">
+                                        <h3 className="text-lg font-semibold text-foreground mb-4">
                                             Proposal Information
                                         </h3>
-                                        <div className="bg-bg-primary rounded-xl p-4 space-y-3">
-                                            <div className="flex justify-between items-center py-2 border-b border-bg-accent">
-                                                <span className="text-sm text-text-muted">Proposer</span>
-                                                <span className="text-sm text-text-primary font-mono">
+                                        <div className="bg-background rounded-xl p-4 space-y-3">
+                                            <div className="flex justify-between items-center py-2 border-b border-border">
+                                                <span className="text-sm text-muted-foreground">Proposer</span>
+                                                <span className="text-sm text-foreground font-mono">
                                                     {formatAddress(proposal.proposer)}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between items-center py-2 border-b border-bg-accent">
-                                                <span className="text-sm text-text-muted">Submit Time</span>
-                                                <span className="text-sm text-text-primary">
+                                            <div className="flex justify-between items-center py-2 border-b border-border">
+                                                <span className="text-sm text-muted-foreground">Submit Time</span>
+                                                <span className="text-sm text-foreground">
                                                     {formatDate(proposal.submitTime)}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between items-center py-2 border-b border-bg-accent">
-                                                <span className="text-sm text-text-muted">Start Block</span>
-                                                <span className="text-sm text-text-primary font-mono">
+                                            <div className="flex justify-between items-center py-2 border-b border-border">
+                                                <span className="text-sm text-muted-foreground">Start Block</span>
+                                                <span className="text-sm text-foreground font-mono">
                                                     #{proposal.startHeight.toLocaleString()}
                                                 </span>
                                             </div>
-                                            <div className="flex justify-between items-center py-2 border-b border-bg-accent">
-                                                <span className="text-sm text-text-muted">End Block</span>
-                                                <span className="text-sm text-text-primary font-mono">
+                                            <div className="flex justify-between items-center py-2 border-b border-border">
+                                                <span className="text-sm text-muted-foreground">End Block</span>
+                                                <span className="text-sm text-foreground font-mono">
                                                     #{proposal.endHeight.toLocaleString()}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center py-2">
-                                                <span className="text-sm text-text-muted">Type</span>
-                                                <span className="text-sm text-text-primary">
+                                                <span className="text-sm text-muted-foreground">Type</span>
+                                                <span className="text-sm text-foreground">
                                                     {proposal.type || 'Unknown'}
                                                 </span>
                                             </div>
@@ -202,11 +202,11 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                     {/* Technical Details */}
                                     {proposal.msg && (
                                         <div>
-                                            <h3 className="text-lg font-semibold text-text-primary mb-4">
+                                            <h3 className="text-lg font-semibold text-foreground mb-4">
                                                 Technical Details
                                             </h3>
-                                            <div className="bg-bg-primary rounded-xl p-4">
-                                                <pre className="text-xs text-text-secondary font-mono overflow-x-auto">
+                                            <div className="bg-background rounded-xl p-4">
+                                                <pre className="text-xs text-foreground/80 font-mono overflow-x-auto">
                                                     {JSON.stringify(proposal.msg, null, 2)}
                                                 </pre>
                                             </div>
@@ -216,22 +216,22 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                     {/* Transaction Details */}
                                     {(proposal.fee || proposal.memo) && (
                                         <div>
-                                            <h3 className="text-lg font-semibold text-text-primary mb-4">
+                                            <h3 className="text-lg font-semibold text-foreground mb-4">
                                                 Transaction Details
                                             </h3>
-                                            <div className="bg-bg-primary rounded-xl p-4 space-y-3">
+                                            <div className="bg-background rounded-xl p-4 space-y-3">
                                                 {proposal.fee && (
-                                                    <div className="flex justify-between items-center py-2 border-b border-bg-accent">
-                                                        <span className="text-sm text-text-muted">Fee</span>
-                                                        <span className="text-sm text-text-primary">
+                                                    <div className="flex justify-between items-center py-2 border-b border-border">
+                                                        <span className="text-sm text-muted-foreground">Fee</span>
+                                                        <span className="text-sm text-foreground">
                                                             {(proposal.fee / 1000000).toFixed(6)} CNPY
                                                         </span>
                                                     </div>
                                                 )}
                                                 {proposal.memo && (
                                                     <div className="flex justify-between items-center py-2">
-                                                        <span className="text-sm text-text-muted">Memo</span>
-                                                        <span className="text-sm text-text-primary">
+                                                        <span className="text-sm text-muted-foreground">Memo</span>
+                                                        <span className="text-sm text-foreground">
                                                             {proposal.memo}
                                                         </span>
                                                     </div>
@@ -243,11 +243,11 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                             </div>
 
                             {/* Footer with Actions */}
-                            <div className="p-6 border-t border-bg-accent bg-bg-primary/50">
+                            <div className="p-6 border-t border-border bg-background/50">
                                 <div className="flex items-center justify-end gap-3">
                                     <button
                                         onClick={onClose}
-                                        className="px-6 py-2 bg-bg-accent hover:bg-bg-accent/80 text-text-primary rounded-lg font-medium transition-all duration-200"
+                                        className="px-6 py-2 bg-accent hover:bg-accent/80 text-foreground rounded-lg font-medium transition-all duration-200"
                                     >
                                         Close
                                     </button>

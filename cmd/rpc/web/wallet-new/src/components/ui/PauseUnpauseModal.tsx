@@ -244,16 +244,16 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-bg-secondary rounded-xl border border-bg-accent p-6 w-full max-w-md"
+          className="bg-card rounded-xl border border-border p-6 w-full max-w-md"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-text-primary capitalize">
+            <h2 className="text-xl font-semibold text-foreground capitalize">
               {action} Validator
             </h2>
             <button
               onClick={onClose}
-              className="text-text-muted hover:text-text-primary transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <i className="fa-solid fa-times text-lg"></i>
             </button>
@@ -268,10 +268,10 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
               <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <i className="fa-solid fa-check text-green-400 text-2xl"></i>
               </div>
-              <h3 className="text-lg font-semibold text-text-primary mb-2">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 Transaction Successful!
               </h3>
-              <p className="text-text-muted">
+              <p className="text-muted-foreground">
                 Validator {action}d successfully
               </p>
             </motion.div>
@@ -279,12 +279,12 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Validator Selection */}
               {isBulkAction && sortedValidators.length > 0 && (
-                <div className="bg-bg-tertiary/30 rounded-lg p-4 border border-bg-accent">
+                <div className="bg-muted/30 rounded-lg p-4 border border-border">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-medium text-text-primary">
+                    <label className="text-sm font-medium text-foreground">
                       Select Validators
                     </label>
-                    <span className="text-xs text-text-muted bg-bg-accent px-2 py-1 rounded-full">
+                    <span className="text-xs text-muted-foreground bg-accent px-2 py-1 rounded-full">
                       {selectedValidators.length} of {sortedValidators.length}{" "}
                       selected
                     </span>
@@ -297,9 +297,9 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                         type="checkbox"
                         checked={selectAll}
                         onChange={handleSelectAll}
-                        className="w-4 h-4 text-primary bg-bg-secondary border-bg-accent rounded focus:ring-primary focus:ring-2"
+                        className="w-4 h-4 text-primary bg-card border-border rounded focus:ring-primary focus:ring-2"
                       />
-                      <span className="text-sm text-text-primary font-medium">
+                      <span className="text-sm text-foreground font-medium">
                         Select All ({sortedValidators.length} validators)
                       </span>
                     </label>
@@ -322,7 +322,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                       return (
                         <label
                           key={validator.address}
-                          className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-bg-accent/30 transition-colors"
+                          className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-accent/30 transition-colors"
                         >
                           <input
                             type="checkbox"
@@ -330,12 +330,12 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                             onChange={() =>
                               handleValidatorSelect(validator.address)
                             }
-                            className="w-4 h-4 text-primary bg-bg-secondary border-bg-accent rounded focus:ring-primary focus:ring-2"
+                            className="w-4 h-4 text-primary bg-card border-border rounded focus:ring-primary focus:ring-2"
                           />
-                          <span className="text-sm text-text-primary">
+                          <span className="text-sm text-foreground">
                             {displayName}
                           </span>
-                          <span className="text-xs text-text-muted font-mono">
+                          <span className="text-xs text-muted-foreground font-mono">
                             ({validator.address.substring(0, 8)}...
                             {validator.address.substring(
                               validator.address.length - 4,
@@ -353,7 +353,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Account */}
                 <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     <i className="fa-solid fa-user mr-2 text-primary"></i>
                     Account
                   </label>
@@ -362,7 +362,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                     onChange={(e) =>
                       handleInputChange("account", e.target.value)
                     }
-                    className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   >
                     {accounts.map((account: any) => (
@@ -375,7 +375,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
                 {/* Signer */}
                 <div>
-                  <label className="block text-sm font-medium text-text-primary mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     <i className="fa-solid fa-signature mr-2 text-primary"></i>
                     Signer
                   </label>
@@ -384,7 +384,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                     onChange={(e) =>
                       handleInputChange("signer", e.target.value)
                     }
-                    className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   >
                     {accounts.map((account: any) => (
@@ -398,7 +398,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
               {/* Memo */}
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-sticky-note mr-2 text-primary"></i>
                   Memo
                 </label>
@@ -407,17 +407,17 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                   value={formData.memo}
                   onChange={(e) => handleInputChange("memo", e.target.value)}
                   placeholder="Optional note attached with the transaction"
-                  className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                   maxLength={200}
                 />
-                <p className="text-xs text-text-muted mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {formData.memo.length}/200 characters
                 </p>
               </div>
 
               {/* Transaction Fee */}
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-coins mr-2 text-primary"></i>
                   Transaction Fee
                 </label>
@@ -430,23 +430,23 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                     }
                     step="0.001"
                     min="0"
-                    className="w-full px-3 py-2 pr-12 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                    className="w-full px-3 py-2 pr-12 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                     required
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <span className="text-xs text-text-muted font-medium">
+                    <span className="text-xs text-muted-foreground font-medium">
                       CNPY
                     </span>
                   </div>
                 </div>
-                <p className="text-xs text-text-muted mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Recommended: 0.01 CNPY
                 </p>
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-lock mr-2 text-primary"></i>
                   Password
                 </label>
@@ -457,7 +457,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                     handleInputChange("password", e.target.value)
                   }
                   placeholder="Enter your key password"
-                  className="w-full px-3 py-2 bg-bg-tertiary border border-bg-accent rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
                   required
                 />
               </div>

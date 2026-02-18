@@ -95,50 +95,50 @@ export default function NodeLogs({
         </div>
     ));
     return (
-        <div className="bg-bg-secondary rounded-xl border border-bg-accent p-6 min-h-[48rem]">
+        <div className="bg-card rounded-xl border border-border p-6 min-h-[48rem]">
             <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h2 className="text-text-primary text-lg font-bold">
+                    <h2 className="text-foreground text-lg font-bold">
                         Node Logs
                     </h2>
-                    <p className="text-xs text-text-muted">
+                    <p className="text-xs text-muted-foreground">
                         ({limitedLogs.length} lines, showing last {ITEMS_PER_PAGE})
                     </p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={onPauseToggle}
-                        className="p-2 hover:bg-bg-secondary rounded-md transition-colors"
+                        className="p-2 hover:bg-card rounded-md transition-colors"
                         title={isPaused ? "Resume" : "Pause"}
                     >
-                        <i className={`fa-solid ${isPaused ? 'fa-play' : 'fa-pause'} text-text-muted`}></i>
+                        <i className={`fa-solid ${isPaused ? 'fa-play' : 'fa-pause'} text-muted-foreground`}></i>
                     </button>
                     <button
                         onClick={onClearLogs}
-                        className="p-2 hover:bg-bg-secondary rounded-md transition-colors"
+                        className="p-2 hover:bg-card rounded-md transition-colors"
                         title="Clear"
                     >
-                        <i className="fa-solid fa-trash text-text-muted"></i>
+                        <i className="fa-solid fa-trash text-muted-foreground"></i>
                     </button>
                     <button
                         onClick={onExportLogs}
-                        className="p-2 hover:bg-bg-secondary rounded-md transition-colors"
+                        className="p-2 hover:bg-card rounded-md transition-colors"
                         title="Export Logs"
                     >
-                        <i className="fa-solid fa-download text-text-muted"></i>
+                        <i className="fa-solid fa-download text-muted-foreground"></i>
                     </button>
                 </div>
             </div>
             <div
                 ref={containerRef}
-                className="bg-bg-primary rounded-lg text-gray-400 p-4 max-h-[41rem] overflow-y-auto font-mono text-xs"
+                className="bg-background rounded-lg text-muted-foreground p-4 max-h-[41rem] overflow-y-auto font-mono text-xs"
             >
                 {visibleLogs.length > 0 ? (
                     visibleLogs.map((log, index) => (
                         <LogLine key={`${index}-${log.slice(0, 20)}`} log={log} index={index} />
                     ))
                 ) : (
-                    <div className="text-text-muted">No logs available</div>
+                    <div className="text-muted-foreground">No logs available</div>
                 )}
             </div>
         </div>

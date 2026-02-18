@@ -156,7 +156,7 @@ export const Governance = () => {
   return (
     <ErrorBoundary>
       <motion.div
-        className="min-h-screen bg-bg-primary"
+        className="min-h-screen bg-background"
         initial="hidden"
         animate="visible"
         variants={containerVariants}
@@ -168,10 +168,10 @@ export const Governance = () => {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-text-primary mb-1">
+                  <h2 className="text-2xl font-bold text-foreground mb-1">
                     Active Proposals
                   </h2>
-                  <p className="text-sm text-text-muted">
+                  <p className="text-sm text-muted-foreground">
                     Vote on proposals that shape the future of the Canopy
                     ecosystem
                   </p>
@@ -192,7 +192,7 @@ export const Governance = () => {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-text-primary mb-1">
+                  <h2 className="text-2xl font-bold text-foreground mb-1">
                     Active Polls
                   </h2>
                 </div>
@@ -217,9 +217,9 @@ export const Governance = () => {
               {/* Polls Grid */}
               <div className="space-y-4">
                 {mockPolls.length === 0 ? (
-                  <div className="bg-bg-secondary rounded-xl p-12 border border-bg-accent text-center">
-                    <BarChart3 className="w-16 h-16 text-text-muted mb-4 mx-auto" />
-                    <p className="text-text-muted">No active polls</p>
+                  <div className="bg-card rounded-xl p-12 border border-border text-center">
+                    <BarChart3 className="w-16 h-16 text-muted-foreground mb-4 mx-auto" />
+                    <p className="text-muted-foreground">No active polls</p>
                   </div>
                 ) : (
                   mockPolls.map((poll) => (

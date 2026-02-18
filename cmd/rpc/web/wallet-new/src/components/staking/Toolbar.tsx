@@ -26,7 +26,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     <motion.div variants={itemVariants} className="mb-6 flex flex-col gap-4">
       {/* Title section */}
       <div className="flex items-center gap-3">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2 flex-wrap">
           <span>All Validators</span>
           <span className="bg-primary/20 text-primary text-xs px-2 py-1 font-medium rounded-full">
             {activeValidatorsCount} active
@@ -43,19 +43,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             placeholder="Search validators..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-bg-secondary border border-gray-600 rounded-lg pl-10 pr-4 py-2 text-white placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="w-full bg-card border border-border rounded-lg pl-10 pr-4 py-2 text-foreground placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
-          <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted"></i>
+          <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"></i>
         </div>
 
         {/* Action buttons - group together */}
         <div className="flex gap-2 items-center flex-shrink-0">
           {/* Filter button */}
           <button
-            className="p-2 border border-gray-600 hover:bg-bg-accent hover:border-primary/40 rounded-lg transition-colors flex-shrink-0"
+            className="p-2 border border-border hover:bg-accent hover:border-primary/40 rounded-lg transition-colors flex-shrink-0"
             title="Filter validators"
           >
-            <Filter className="w-4 h-4 text-text-muted" />
+            <Filter className="w-4 h-4 text-muted-foreground" />
           </button>
 
           {/* Add Stake button */}
@@ -63,7 +63,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             onClick={onAddStake}
             className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 text-text-muted" />
+            <Plus className="w-4 h-4 text-muted-foreground" />
             <span className="hidden sm:inline">Add Stake</span>
           </button>
 
@@ -72,7 +72,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             onClick={onExportCSV}
             className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
           >
-            <Download className="w-4 h-4 text-text-muted" />
+            <Download className="w-4 h-4 text-muted-foreground" />
             <span className="hidden sm:inline">Export CSV</span>
           </button>
         </div>
@@ -80,3 +80,4 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     </motion.div>
   );
 };
+

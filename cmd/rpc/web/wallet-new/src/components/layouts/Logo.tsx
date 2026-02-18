@@ -25,7 +25,7 @@ const Logo: React.FC<LogoProps> = ({ size = 100, className = '', showText = true
 
 
             {showText && (
-                <span className="text-white font-semibold text-lg">
+                <span className="text-foreground font-semibold text-lg">
                     Wallet
                 </span>
             )}

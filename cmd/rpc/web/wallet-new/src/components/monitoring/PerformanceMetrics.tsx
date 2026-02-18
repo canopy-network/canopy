@@ -38,17 +38,17 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
 
     return (
         <div
-            className="rounded-xl border border-white/10 p-6"
-            style={{ background: '#22232E' }}
+            className="rounded-xl border border-border/60 p-6"
+            style={{ background: 'hsl(var(--card))' }}
         >
-            <h2 className="text-white text-base font-semibold mb-5">Performance Metrics</h2>
+            <h2 className="text-foreground text-base font-semibold mb-5">Performance Metrics</h2>
 
             <div className="grid grid-cols-2 gap-5">
                 {items.map((item) => (
                     <div key={item.label}>
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-back">{item.label}</span>
-                            <span className="text-xs font-semibold text-white tabular-nums">
+                            <span className="text-xs text-muted-foreground">{item.label}</span>
+                            <span className="text-xs font-semibold text-foreground tabular-nums">
                                 {item.value.toFixed(1)}{item.unit}
                             </span>
                         </div>
@@ -64,3 +64,4 @@ export default function PerformanceMetrics({ metrics }: PerformanceMetricsProps)
         </div>
     );
 }
+

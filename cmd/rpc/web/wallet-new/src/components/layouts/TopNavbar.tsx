@@ -36,13 +36,13 @@ export const TopNavbar = (): JSX.Element => {
     return (
         <motion.header
             className="sticky top-0 z-30 hidden lg:block"
-            style={{ background: '#14151C' }}
+            style={{ background: 'hsl(var(--background))' }}
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
         >
             {/* thin accent line at the very bottom */}
-            <div className="absolute bottom-0 inset-x-0 h-px bg-white/[0.06]" />
+            <div className="absolute bottom-0 inset-x-0 h-px bg-border/60" />
 
             <div className="flex items-center justify-between gap-4 px-6 py-0 h-14 max-w-[1920px] mx-auto">
 
@@ -52,18 +52,18 @@ export const TopNavbar = (): JSX.Element => {
                     {/* Logo */}
                     <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
                         <CnpyLogo size={28}/>
-                        <span className="text-white font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
+                        <span className="text-foreground font-semibold text-base tracking-tight group-hover:text-primary transition-colors duration-150">
                             Wallet
                         </span>
                     </Link>
 
                     {/* Divider */}
-                    <div className="h-5 w-px bg-white/10 flex-shrink-0" />
+                    <div className="h-5 w-px bg-accent/60 flex-shrink-0" />
 
                     {/* Block height */}
                     <div
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full flex-shrink-0"
-                        style={{ background: 'rgba(74,222,128,0.07)' }}
+                        style={{ background: 'hsl(var(--primary) / 0.07)' }}
                         title="Current synced block height"
                     >
                         <span className="relative flex h-1.5 w-1.5">
@@ -77,7 +77,7 @@ export const TopNavbar = (): JSX.Element => {
                     </div>
 
                     {/* Divider */}
-                    <div className="h-5 w-px bg-white/10 flex-shrink-0" />
+                    <div className="h-5 w-px bg-accent/60 flex-shrink-0" />
 
                     {/* Nav links */}
                     <nav className="flex items-center gap-0.5">
@@ -90,7 +90,7 @@ export const TopNavbar = (): JSX.Element => {
                                     `px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-150 whitespace-nowrap ${
                                         isActive
                                             ? 'bg-primary/10 text-primary'
-                                            : 'text-back hover:text-white hover:bg-white/5'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                                     }`
                                 }
                             >
@@ -106,9 +106,9 @@ export const TopNavbar = (): JSX.Element => {
                     {/* Total CNPY */}
                     <div
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-                        style={{ background: '#22232E' }}
+                        style={{ background: 'hsl(var(--card))' }}
                     >
-                        <span className="text-xs text-back">Total</span>
+                        <span className="text-xs text-muted-foreground">Total</span>
                         {stageLoading ? (
                             <span className="text-sm font-semibold text-primary">…</span>
                         ) : (
@@ -118,7 +118,7 @@ export const TopNavbar = (): JSX.Element => {
                                 className="text-sm font-semibold text-primary tabular-nums"
                             />
                         )}
-                        <span className="text-xs font-semibold text-white/40">CNPY</span>
+                        <span className="text-xs font-semibold text-muted-foreground/60">CNPY</span>
                     </div>
 
                     {/* Account Selector */}
@@ -127,8 +127,8 @@ export const TopNavbar = (): JSX.Element => {
                         onValueChange={switchAccount}
                     >
                         <SelectTrigger
-                            className="w-44 h-9 rounded-lg border border-white/10 px-3 text-sm font-medium text-white"
-                            style={{ background: '#22232E' }}
+                            className="w-44 h-9 rounded-lg border border-border/60 px-3 text-sm font-medium text-foreground"
+                            style={{ background: 'hsl(var(--card))' }}
                         >
                             <div className="flex items-center justify-between w-full min-w-0 gap-2">
                                 <span className="truncate">
@@ -138,18 +138,18 @@ export const TopNavbar = (): JSX.Element => {
                                             ? `${selectedAccount.address.slice(0, 4)}…${selectedAccount.address.slice(-4)}`
                                             : 'Account'}
                                 </span>
-                                <ChevronDown className="w-3.5 h-3.5 text-back flex-shrink-0" />
+                                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                             </div>
                         </SelectTrigger>
-                        <SelectContent className="bg-bg-secondary border border-white/10">
+                        <SelectContent className="bg-card border border-border/60">
                             {accounts.map((account) => (
                                 <SelectItem
                                     key={account.id}
                                     value={account.id}
-                                    className="text-white hover:bg-muted"
+                                    className="text-foreground hover:bg-muted"
                                 >
                                     <div className="flex items-center gap-3 w-full">
-                                        <span className="text-sm font-medium text-white truncate">
+                                        <span className="text-sm font-medium text-foreground truncate">
                                             {account.address.slice(0, 4)}…{account.address.slice(-4)}
                                             {account.nickname ? ` (${account.nickname})` : ''}
                                         </span>
@@ -164,7 +164,7 @@ export const TopNavbar = (): JSX.Element => {
                                 </SelectItem>
                             ))}
                             {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
-                                <div className="p-2 text-center text-back text-sm">
+                                <div className="p-2 text-center text-muted-foreground text-sm">
                                     No accounts available
                                 </div>
                             ) : null}
@@ -184,3 +184,4 @@ export const TopNavbar = (): JSX.Element => {
         </motion.header>
     );
 };
+

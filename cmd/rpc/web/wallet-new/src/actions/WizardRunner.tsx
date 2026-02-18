@@ -122,10 +122,10 @@ export default function WizardRunner({ action }: { action: Action }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-neutral-900 border border-neutral-800 rounded p-4">
+      <div className="bg-card border border-border rounded p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg">{step.title ?? "Step"}</h3>
-          <div className="text-sm text-neutral-400">
+          <div className="text-sm text-muted-foreground">
             Step {stepIndex + 1} / {action.steps?.length ?? 1}
           </div>
         </div>
@@ -141,7 +141,7 @@ export default function WizardRunner({ action }: { action: Action }) {
               {stepIndex > 0 && (
                 <button
                   onClick={onPrev}
-                  className="px-3 py-2 bg-neutral-800 rounded"
+                  className="px-3 py-2 bg-muted rounded"
                 >
                   Back
                 </button>
@@ -159,9 +159,9 @@ export default function WizardRunner({ action }: { action: Action }) {
 
           {asideOn && (
             <div className={`col-span-${asideWidth}`}>
-              <div className="bg-neutral-950 border border-neutral-800 rounded p-3">
-                <div className="text-sm text-neutral-400 mb-2">Sidebar</div>
-                <div className="text-xs text-neutral-400">
+              <div className="bg-background border border-border rounded p-3">
+                <div className="text-sm text-muted-foreground mb-2">Sidebar</div>
+                <div className="text-xs text-muted-foreground">
                   Add widget: {step.aside?.widget ?? "custom"}
                 </div>
               </div>
@@ -218,3 +218,4 @@ export default function WizardRunner({ action }: { action: Action }) {
     </div>
   );
 }
+

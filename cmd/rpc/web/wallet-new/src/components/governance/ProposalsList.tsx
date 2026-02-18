@@ -51,32 +51,32 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
     if (isLoading) {
         return (
-            <div className="bg-bg-secondary rounded-xl p-8 border border-bg-accent">
+            <div className="bg-card rounded-xl p-8 border border-border">
                 <div className="flex items-center justify-center">
-                    <div className="text-text-muted">Loading proposals...</div>
+                    <div className="text-muted-foreground">Loading proposals...</div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-bg-secondary rounded-xl p-6 border border-bg-accent">
+        <div className="bg-card rounded-xl p-6 border border-border">
             {/* Header with filters */}
             <div className="mb-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                    <h2 className="text-2xl font-bold text-text-primary">
+                    <h2 className="text-2xl font-bold text-foreground">
                         Proposals
                     </h2>
 
                     {/* Search */}
                     <div className="relative flex-1 max-w-md">
-                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"></i>
+                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
                         <input
                             type="text"
                             placeholder="Search proposals..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-bg-primary border border-bg-accent rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-primary/40 transition-colors"
+                            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-text-muted focus:outline-none focus:border-primary/40 transition-colors"
                         />
                     </div>
                 </div>
@@ -89,13 +89,13 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                             onClick={() => setFilter(option.value)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                                 filter === option.value
-                                    ? 'bg-primary text-white'
-                                    : 'bg-bg-primary text-text-muted hover:text-text-primary hover:bg-bg-accent'
+                                    ? 'bg-primary text-foreground'
+                                    : 'bg-background text-muted-foreground hover:text-foreground hover:bg-accent'
                             }`}
                         >
                             {option.label}
                             {option.count > 0 && (
-                                <span className="ml-2 px-2 py-0.5 rounded-full bg-bg-accent text-xs">
+                                <span className="ml-2 px-2 py-0.5 rounded-full bg-accent text-xs">
                                     {option.count}
                                 </span>
                             )}
@@ -107,8 +107,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
             {/* Proposals grid */}
             {filteredProposals.length === 0 ? (
                 <div className="py-12 text-center">
-                    <i className="fa-solid fa-inbox text-4xl text-text-muted mb-4"></i>
-                    <p className="text-text-muted">
+                    <i className="fa-solid fa-inbox text-4xl text-muted-foreground mb-4"></i>
+                    <p className="text-muted-foreground">
                         {searchTerm
                             ? 'No proposals found matching your search.'
                             : filter === 'all'

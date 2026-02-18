@@ -40,10 +40,10 @@ export const SectionField: React.FC<SectionFieldProps> = ({
   // Variant styling
   const variantStyles: Record<string, { bg: string; border: string; text: string; icon: string }> = {
     default: {
-      bg: "bg-bg-secondary/50",
-      border: "border-bg-accent",
-      text: "text-text-primary",
-      icon: "text-text-muted",
+      bg: "bg-card/50",
+      border: "border-border",
+      text: "text-foreground",
+      icon: "text-muted-foreground",
     },
     info: {
       bg: "bg-blue-950/30",
@@ -106,7 +106,7 @@ export const SectionField: React.FC<SectionFieldProps> = ({
               </h4>
             )}
             {description && !collapsed && (
-              <p className="text-xs text-text-muted mt-1">{description}</p>
+              <p className="text-xs text-muted-foreground mt-1">{description}</p>
             )}
           </div>
           {collapsible && (

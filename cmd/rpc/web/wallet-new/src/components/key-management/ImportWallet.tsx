@@ -106,10 +106,10 @@ export const ImportWallet = (): JSX.Element => {
     return (
         <motion.div
             variants={panelVariants}
-            className="bg-bg-secondary rounded-lg p-6 border border-bg-accent w-full"
+            className="bg-card rounded-lg p-6 border border-border w-full"
         >
             <div className="flex items-center gap-2 mb-6">
-                <h2 className="text-xl font-bold text-white">Import Wallet</h2>
+                <h2 className="text-xl font-bold text-foreground">Import Wallet</h2>
             </div>
 
             <div className="flex gap-2 mb-6 lg:w-6/12 w-full justify-between">
@@ -117,7 +117,7 @@ export const ImportWallet = (): JSX.Element => {
                     onClick={() => setActiveTab('key')}
                     className={`px-4 py-2 text-sm font-medium transition-colors bg-transparent w-full ${activeTab === 'key'
                         ? 'text-primary border-white border-b-2'
-                        : 'text-gray-400'
+                        : 'text-muted-foreground'
                         }`}
                 >
                     Key
@@ -126,7 +126,7 @@ export const ImportWallet = (): JSX.Element => {
                     onClick={() => setActiveTab('keystore')}
                     className={`px-4 py-2  text-sm font-medium transition-colors bg-transparent w-full ${activeTab === 'keystore'
                         ? 'text-primary border-white border-b-2'
-                        : 'text-gray-400 '
+                        : 'text-muted-foreground '
                         }`}
                 >
                     Keystore
@@ -136,7 +136,7 @@ export const ImportWallet = (): JSX.Element => {
             {activeTab === 'key' && (
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Wallet Name
                         </label>
                         <input
@@ -144,12 +144,12 @@ export const ImportWallet = (): JSX.Element => {
                             placeholder="Imported Wallet"
                             value={importForm.nickname}
                             onChange={(e) => setImportForm({ ...importForm, nickname: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Private Key
                         </label>
                         <div className="relative">
@@ -158,19 +158,19 @@ export const ImportWallet = (): JSX.Element => {
                                 placeholder="Enter your private key..."
                                 value={importForm.privateKey}
                                 onChange={(e) => setImportForm({ ...importForm, privateKey: e.target.value })}
-                                className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white pr-10 placeholder:font-mono"
+                                className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10 placeholder:font-mono"
                             />
                             <button
                                 onClick={() => setShowPrivateKey(!showPrivateKey)}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             >
-                                {showPrivateKey ? <i className="fa-solid fa-eye-slash text-gray-400 text-md"></i> : <i className="fa-solid fa-eye text-gray-400 text-md"></i>}
+                                {showPrivateKey ? <i className="fa-solid fa-eye-slash text-muted-foreground text-md"></i> : <i className="fa-solid fa-eye text-muted-foreground text-md"></i>}
                             </button>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Wallet Password
                         </label>
                         <input
@@ -178,12 +178,12 @@ export const ImportWallet = (): JSX.Element => {
                             placeholder="Password"
                             value={importForm.password}
                             onChange={(e) => setImportForm({ ...importForm, password: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Confirm Password
                         </label>
                         <input
@@ -191,7 +191,7 @@ export const ImportWallet = (): JSX.Element => {
                             placeholder="Confirm your password...."
                             value={importForm.confirmPassword}
                             onChange={(e) => setImportForm({ ...importForm, confirmPassword: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2.5 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground"
                         />
                     </div>
 
@@ -219,35 +219,35 @@ export const ImportWallet = (): JSX.Element => {
             {activeTab === 'keystore' && (
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Keystore File
                         </label>
                         <input
                             type="file"
                             accept=".json"
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Keystore Password
                         </label>
                         <input
                             type="password"
                             placeholder="Enter keystore password"
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Wallet Name
                         </label>
                         <input
                             type="text"
                             placeholder="Imported Wallet"
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
 
@@ -274,3 +274,4 @@ export const ImportWallet = (): JSX.Element => {
         </motion.div>
     );
 };
+

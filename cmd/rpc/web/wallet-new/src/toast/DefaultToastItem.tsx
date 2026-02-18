@@ -31,7 +31,7 @@ const VARIANT_STYLES: Record<NonNullable<ToastRenderData["variant"]>, {
     },
     neutral: {
         container: "bg-gradient-to-r from-bg-secondary to-bg-tertiary border-l-4 border-l-gray-500 shadow-lg shadow-gray-500/10",
-        icon: <Bell className="h-5 w-5 text-gray-400" />,
+        icon: <Bell className="h-5 w-5 text-muted-foreground" />,
         iconBg: "bg-gray-500/20"
     },
 };
@@ -44,7 +44,7 @@ export const DefaultToastItem: React.FC<{
 
     return (
         <motion.div
-            className={`w-[420px] max-w-[92vw] rounded-xl border border-bg-accent backdrop-blur-md p-4 ${styles.container}`}
+            className={`w-[420px] max-w-[92vw] rounded-xl border border-border backdrop-blur-md p-4 ${styles.container}`}
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 50 }}
@@ -64,12 +64,12 @@ export const DefaultToastItem: React.FC<{
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                     {data.title && (
-                        <div className="font-semibold text-base leading-5 text-text-primary mb-1">
+                        <div className="font-semibold text-base leading-5 text-foreground mb-1">
                             {data.title}
                         </div>
                     )}
                     {data.description && (
-                        <div className="text-sm text-text-muted leading-relaxed">
+                        <div className="text-sm text-muted-foreground leading-relaxed">
                             {data.description}
                         </div>
                     )}
@@ -106,11 +106,12 @@ export const DefaultToastItem: React.FC<{
                 <button
                     onClick={onClose}
                     aria-label="Close"
-                    className="flex-shrink-0 rounded-lg p-1.5 hover:bg-bg-accent/50 transition-colors active:scale-95"
+                    className="flex-shrink-0 rounded-lg p-1.5 hover:bg-accent/50 transition-colors active:scale-95"
                 >
-                    <X className="h-4 w-4 text-text-muted hover:text-text-primary" />
+                    <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                 </button>
             </div>
         </motion.div>
     );
 };
+

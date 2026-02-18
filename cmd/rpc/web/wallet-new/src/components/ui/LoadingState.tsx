@@ -57,14 +57,14 @@ export const LoadingState = React.memo<LoadingStateProps>(({
     >
       <Loader2 className={cx("text-primary animate-spin", config.spinner)} />
       {message && (
-        <span className={cx("text-text-muted", config.text)}>{message}</span>
+        <span className={cx("text-muted-foreground", config.text)}>{message}</span>
       )}
     </motion.div>
   );
 
   if (overlay) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-bg-secondary/80 backdrop-blur-sm rounded-xl z-10">
+      <div className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm rounded-xl z-10">
         {content}
       </div>
     );
@@ -82,7 +82,7 @@ export const Skeleton = React.memo<{
 }>(({ className, animate = true }) => (
   <div
     className={cx(
-      "bg-bg-accent rounded",
+      "bg-accent rounded",
       animate && "animate-pulse",
       className
     )}
@@ -113,7 +113,7 @@ SkeletonText.displayName = "SkeletonText";
 export const SkeletonCard = React.memo<{ className?: string }>(({ className }) => (
   <div
     className={cx(
-      "bg-bg-secondary rounded-xl border border-bg-accent p-6 space-y-4",
+      "bg-card rounded-xl border border-border p-6 space-y-4",
       className
     )}
   >

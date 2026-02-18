@@ -143,12 +143,12 @@ export default function ComboSelect({
                     disabled={disabled}
                     className={
                         buttonClassName ??
-                        "flex items-center justify-between whitespace-nowrap border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 w-full bg-bg-tertiary border-bg-accent text-white h-11 rounded-lg"
+                        "flex items-center justify-between whitespace-nowrap border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 w-full bg-muted border-border text-foreground h-11 rounded-lg"
                     }
                     aria-haspopup="listbox"
                     aria-expanded={open}
                 >
-          <span className={!selected ? "text-neutral-400 truncate" : "truncate"}>
+          <span className={!selected ? "text-muted-foreground truncate" : "truncate"}>
             {selected ? selected.label : placeholder}
           </span>
                     <ChevronsUpDown className="h-4 w-4 opacity-60"/>
@@ -173,7 +173,7 @@ export default function ComboSelect({
                 }}
                 className={
                     className ??
-                    "z-50 w-[--radix-popover-trigger-width] min-w-56 rounded-xl p-2 shadow-xl bg-bg-tertiary border border-bg-accent"
+                    "z-50 w-[--radix-popover-trigger-width] min-w-56 rounded-xl p-2 shadow-xl bg-muted border border-border"
                 }
             >
                 {/* Input */}
@@ -184,13 +184,13 @@ export default function ComboSelect({
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={onKeyDown}
                         placeholder={placeholder}
-                        className="w-full bg-transparent outline-none placeholder:text-neutral-400"
+                        className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
                     />
                 </div>
 
                 <div className="mt-2 text-sm">
                     {filtered.length === 0 && (
-                        <div className="px-2 py-2 text-neutral-500">{emptyText}</div>
+                        <div className="px-2 py-2 text-muted-foreground">{emptyText}</div>
                     )}
 
                     {filtered.length > 0 && (
@@ -222,7 +222,7 @@ export default function ComboSelect({
                                 </ul>
                             </ScrollArea.Viewport>
                             <ScrollArea.Scrollbar orientation="vertical" className="flex select-none touch-none p-0.5">
-                                <ScrollArea.Thumb className="flex-1 rounded bg-neutral-300"/>
+                                <ScrollArea.Thumb className="flex-1 rounded bg-muted-foreground/40"/>
                             </ScrollArea.Scrollbar>
                         </ScrollArea.Root>
                     )}
@@ -244,3 +244,4 @@ export default function ComboSelect({
         </Popover.Root>
     );
 }
+

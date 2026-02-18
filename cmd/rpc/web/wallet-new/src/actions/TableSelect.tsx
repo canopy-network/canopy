@@ -180,7 +180,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
                 className={cx(
                     "px-4 py-1.5 rounded-full border text-xs font-semibold transition-colors",
                     disabled
-                        ? "border-neutral-600 text-neutral-600 cursor-not-allowed opacity-50"
+                        ? "border-border text-muted-foreground cursor-not-allowed opacity-50"
                         : selected
                             ? "border-emerald-400 bg-emerald-400/20 text-emerald-400"
                             : "border-emerald-400 text-emerald-400 hover:bg-emerald-400/20"
@@ -246,8 +246,8 @@ const TableSelect: React.FC<TableSelectProps> = ({
                     {initials}
                 </span>
                 <div className="flex flex-col">
-                    <span className="text-white font-medium">{name}</span>
-                    <span className="text-neutral-400 text-xs">Min: {minStake}</span>
+                    <span className="text-foreground font-medium">{name}</span>
+                    <span className="text-muted-foreground text-xs">Min: {minStake}</span>
                 </div>
             </div>
         )
@@ -278,12 +278,12 @@ const TableSelect: React.FC<TableSelectProps> = ({
 
     return (
         <div className="col-span-12 w-full">
-            {!!label && <div className="text-sm mb-3 text-neutral-300 font-medium">{label}</div>}
+            {!!label && <div className="text-sm mb-3 text-foreground/80 font-medium">{label}</div>}
 
             <div className="rounded-lg bg-[#1a1d24] overflow-x-auto overflow-y-hidden">
                 <div className="min-w-full">
                     {/* Header */}
-                    <div className="grid grid-cols-12 gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-xs text-neutral-400 font-medium">
+                    <div className="grid grid-cols-12 gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-xs text-muted-foreground font-medium">
                         {columns.map((c, i) => (
                             <div key={c.key ?? i} className={cx(colSpanCls, cellAlign(c.align), 'truncate')}>
                                 {safe(c.title)}
@@ -307,7 +307,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
                                     key={k}
                                     onClick={() => toggleRow(row)}
                                     className={cx(
-                                        'w-full grid grid-cols-12 gap-3 sm:gap-4 items-center px-3 sm:px-4 py-3 text-sm hover:bg-white/5 transition-colors text-white',
+                                        'w-full grid grid-cols-12 gap-3 sm:gap-4 items-center px-3 sm:px-4 py-3 text-sm hover:bg-accent/60 transition-colors text-foreground',
                                         selectMode !== 'row' && 'cursor-default'
                                     )}
                                     aria-pressed={selected}
@@ -326,14 +326,14 @@ const TableSelect: React.FC<TableSelectProps> = ({
                             )
                         })}
                         {rows.length === 0 && (
-                            <div className="px-3 sm:px-4 py-8 text-center text-sm text-neutral-500">No data</div>
+                            <div className="px-3 sm:px-4 py-8 text-center text-sm text-muted-foreground">No data</div>
                         )}
                     </div>
                 </div>
             </div>
 
             {(errors[tf.name]) && (
-                <div className={cx('text-xs mt-1.5', errors[tf.name] ? 'text-red-400' : 'text-neutral-400')}>
+                <div className={cx('text-xs mt-1.5', errors[tf.name] ? 'text-red-400' : 'text-muted-foreground')}>
                     {errors[tf.name]}
                 </div>
             )}

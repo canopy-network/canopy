@@ -108,7 +108,7 @@ export const Accounts = () => {
     }
     return {
       status: "Liquid",
-      color: "bg-gray-500/20 text-gray-400",
+      color: "bg-muted/20 text-muted-foreground",
     };
   };
 
@@ -124,11 +124,11 @@ export const Accounts = () => {
       case unstakingText:
         return "bg-orange-500/20 text-orange-400";
       case liquidText:
-        return "bg-gray-500/20 text-gray-400";
+        return "bg-muted/20 text-muted-foreground";
       case delegatedText:
         return "bg-primary/20 text-primary";
       default:
-        return "bg-gray-500/20 text-gray-400";
+        return "bg-muted/20 text-muted-foreground";
     }
   };
 
@@ -171,8 +171,8 @@ export const Accounts = () => {
     datasets: [
       {
         data: balanceChartData.map((d) => d.value / 1000000),
-        borderColor: "#6fe3b4",
-        backgroundColor: "rgba(111, 227, 180, 0.1)",
+        borderColor: "hsl(var(--primary))",
+        backgroundColor: "hsl(var(--primary) / 0.1)",
         borderWidth: 2,
         fill: true,
         tension: 0.4,
@@ -187,8 +187,8 @@ export const Accounts = () => {
     datasets: [
       {
         data: stakedChartData.map((d) => d.value / 1000000),
-        borderColor: "#6fe3b4",
-        backgroundColor: "rgba(111, 227, 180, 0.1)",
+        borderColor: "hsl(var(--primary))",
+        backgroundColor: "hsl(var(--primary) / 0.1)",
         borderWidth: 2,
         fill: true,
         tension: 0.4,
@@ -302,15 +302,15 @@ export const Accounts = () => {
 
   if (accountsLoading || dataLoading) {
     return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <div className="text-white text-xl">{"Loading accounts..."}</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-foreground text-xl">{"Loading accounts..."}</div>
       </div>
     );
   }
 
   return (
     <motion.div
-      className="min-h-screen bg-bg-primary"
+      className="min-h-screen bg-background"
       initial="hidden"
       animate="visible"
       variants={containerVariants}
@@ -320,10 +320,10 @@ export const Accounts = () => {
         <motion.div className="mb-8" variants={cardVariants}>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
+              <h1 className="text-3xl font-bold text-foreground mb-2">
                 All Addresses
               </h1>
-              <p className="text-text-muted">
+              <p className="text-muted-foreground">
                 Manage and monitor all your blockchain addresses across
                 different networks
               </p>
@@ -332,25 +332,25 @@ export const Accounts = () => {
             {/* Search and Filter Bar */}
             <div className="flex items-center gap-4">
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <input
                   type="text"
                   placeholder={"Search addresses..."}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-bg-secondary lg:w-96 border border-bg-accent rounded-lg pl-10 pr-4 py-2 text-white placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full bg-card lg:w-96 border border-border rounded-lg pl-10 pr-4 py-2 text-foreground placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>
               <div className="relative">
                 <select
                   value={selectedNetwork}
                   onChange={(e) => setSelectedNetwork(e.target.value)}
-                  className="bg-bg-secondary border border-bg-accent rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none pr-8"
+                  className="bg-card border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none pr-8"
                 >
                   <option value="All Networks">{"All Networks"}</option>
                   <option value="Canopy Mainnet">{"Canopy Mainnet"}</option>
                 </select>
-                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-text-muted w-4 h-4 pointer-events-none" />
+                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -362,14 +362,14 @@ export const Accounts = () => {
           variants={cardVariants}
         >
           {/* Total Balance Card */}
-          <div className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden">
+          <div className="bg-card rounded-xl p-6 border border-border relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <h3 className="text-text-muted text-sm font-medium mb-2">
+              <h3 className="text-muted-foreground text-sm font-medium mb-2">
                 Total Balance
               </h3>
               <Wallet className="text-primary w-5 h-5" />
             </div>
-            <div className="text-3xl font-medium  text-white mb-2">
+            <div className="text-3xl font-medium  text-foreground mb-2">
               <AnimatedNumber
                 value={totalBalance / 1000000}
                 format={{
@@ -381,7 +381,7 @@ export const Accounts = () => {
             </div>
             <div className="flex items-center justify-between">
               {balanceHistoryLoading ? (
-                <span className="text-sm text-text-muted">Loading...</span>
+                <span className="text-sm text-muted-foreground">Loading...</span>
               ) : balanceHistory ? (
                 <span
                   className={`text-sm flex items-center gap-1 ${balanceChangePercentage >= 0 ? "text-primary" : "text-status-error"}`}
@@ -399,10 +399,10 @@ export const Accounts = () => {
                   </svg>
                   {balanceChangePercentage >= 0 ? "+" : ""}
                   {balanceChangePercentage.toFixed(2)}%
-                  <span className="text-text-muted ml-1">24h change</span>
+                  <span className="text-muted-foreground ml-1">24h change</span>
                 </span>
               ) : (
-                <span className="text-sm text-text-muted">No data</span>
+                <span className="text-sm text-muted-foreground">No data</span>
               )}
               {!balanceChartLoading && balanceChartData.length > 0 && (
                 <div className="w-20 h-12">
@@ -417,14 +417,14 @@ export const Accounts = () => {
           </div>
 
           {/* Total Staked Card */}
-          <div className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden">
+          <div className="bg-card rounded-xl p-6 border border-border relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <h3 className="text-text-muted text-sm font-medium mb-2">
+              <h3 className="text-muted-foreground text-sm font-medium mb-2">
                 Total Staked
               </h3>
               <Lock className="text-primary w-5 h-5" />
             </div>
-            <div className="text-3xl font-medium text-white mb-2">
+            <div className="text-3xl font-medium text-foreground mb-2">
               <AnimatedNumber
                 value={totalStaked / 1000000}
                 format={{
@@ -436,7 +436,7 @@ export const Accounts = () => {
             </div>
             <div className="flex items-center justify-between">
               {stakedHistoryLoading ? (
-                <span className="text-sm text-text-muted">Loading...</span>
+                <span className="text-sm text-muted-foreground">Loading...</span>
               ) : stakedHistory ? (
                 <span
                   className={`text-sm flex items-center gap-1 ${stakedChangePercentage >= 0 ? "text-primary" : "text-status-error"}`}
@@ -454,10 +454,10 @@ export const Accounts = () => {
                   </svg>
                   {stakedChangePercentage >= 0 ? "+" : ""}
                   {stakedChangePercentage.toFixed(2)}%
-                  <span className="text-text-muted ml-1">24h change</span>
+                  <span className="text-muted-foreground ml-1">24h change</span>
                 </span>
               ) : (
-                <span className="text-sm text-text-muted">No data</span>
+                <span className="text-sm text-muted-foreground">No data</span>
               )}
               {!stakedChartLoading && stakedChartData.length > 0 && (
                 <div className="w-20 h-12">
@@ -472,20 +472,20 @@ export const Accounts = () => {
           </div>
 
           {/* Active Addresses Card */}
-          <div className="bg-bg-secondary rounded-xl p-6 border border-bg-accent relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-card rounded-xl p-6 border border-border relative overflow-hidden flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <h3 className="text-text-muted text-sm font-medium mb-2">
+              <h3 className="text-muted-foreground text-sm font-medium mb-2">
                 Active Addresses
               </h3>
               <CheckCircle className="text-primary w-5 h-5" />
             </div>
 
-            <div className="text-3xl font-medium text-white mb-2">
+            <div className="text-3xl font-medium text-foreground mb-2">
               {activeAddressesCount} of {accounts.length}
             </div>
             <div className="flex items-center gap-2">
               <Circle className="text-primary w-3 h-3" />
-              <span className="text-gray-400 text-sm font-medium">
+              <span className="text-muted-foreground text-sm font-medium">
                 All Validators Synced
               </span>
             </div>
@@ -494,12 +494,12 @@ export const Accounts = () => {
 
         {/* Address Portfolio Section */}
         <motion.div
-          className="bg-bg-secondary rounded-xl border border-bg-accent overflow-hidden"
+          className="bg-card rounded-xl border border-border overflow-hidden"
           variants={cardVariants}
         >
-          <div className="p-4 md:p-6 border-b border-bg-accent">
+          <div className="p-4 md:p-6 border-b border-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-xl font-bold text-foreground">
                 Address Portfolio
               </h2>
               <div className="flex items-center gap-2">
@@ -513,24 +513,24 @@ export const Accounts = () => {
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
-              <thead className="bg-bg-tertiary">
+              <thead className="bg-muted">
                 <tr className="text-sm">
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Address
                   </th>
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Total Balance
                   </th>
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Staked
                   </th>
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Liquid
                   </th>
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Status
                   </th>
-                  <th className="text-left p-3 md:p-4 text-text-muted font-medium">
+                  <th className="text-left p-3 md:p-4 text-muted-foreground font-medium">
                     Actions
                   </th>
                 </tr>
@@ -540,7 +540,7 @@ export const Accounts = () => {
                   return (
                     <motion.tr
                       key={address.id}
-                      className="border-b border-bg-accent/50 hover:bg-bg-tertiary/30 transition-colors"
+                      className="border-b border-border/50 hover:bg-muted/30 transition-colors"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
@@ -550,13 +550,13 @@ export const Accounts = () => {
                           <div
                             className={`w-8 h-8 md:w-10 md:h-10 ${address.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}
                           >
-                            <address.icon className="text-white w-3 h-3 md:w-4 md:h-4" />
+                            <address.icon className="text-foreground w-3 h-3 md:w-4 md:h-4" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-white font-medium text-sm md:text-base truncate">
+                            <div className="text-foreground font-medium text-sm md:text-base truncate">
                               {address.nickname}
                             </div>
-                            <div className="text-text-muted text-xs font-mono truncate">
+                            <div className="text-muted-foreground text-xs font-mono truncate">
                               {address.address}
                             </div>
                           </div>
@@ -564,27 +564,27 @@ export const Accounts = () => {
                       </td>
                       <td className="p-3 md:p-4">
                         <div>
-                          <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">
+                          <div className="text-foreground font-medium font-mono text-sm md:text-base whitespace-nowrap">
                             {Number(address.balance).toLocaleString()} CNPY
                           </div>
                         </div>
                       </td>
                       <td className="p-3 md:p-4">
                         <div>
-                          <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">
+                          <div className="text-foreground font-medium font-mono text-sm md:text-base whitespace-nowrap">
                             {Number(address.staked).toLocaleString()} CNPY
                           </div>
-                          <div className="text-text-muted text-xs">
+                          <div className="text-muted-foreground text-xs">
                             {address.stakedPercentage.toFixed(2)}%
                           </div>
                         </div>
                       </td>
                       <td className="p-3 md:p-4">
                         <div>
-                          <div className="text-white font-medium font-mono text-sm md:text-base whitespace-nowrap">
+                          <div className="text-foreground font-medium font-mono text-sm md:text-base whitespace-nowrap">
                             {Number(address.liquid).toLocaleString()} CNPY
                           </div>
-                          <div className="text-text-muted text-xs">
+                          <div className="text-muted-foreground text-xs">
                             {address.liquidPercentage.toFixed(2)}%
                           </div>
                         </div>
@@ -599,27 +599,27 @@ export const Accounts = () => {
                       <td className="p-3 md:p-4">
                         <div className="flex items-center gap-1 md:gap-2">
                           {/*<button*/}
-                          {/*    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"*/}
+                          {/*    className="p-1.5 md:p-2 hover:bg-muted rounded-lg transition-colors group"*/}
                           {/*    onClick={() => handleViewDetails(address.fullAddress)}*/}
                           {/*    title="View Details"*/}
                           {/*>*/}
-                          {/*    <i className="fa-solid fa-eye w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>*/}
+                          {/*    <i className="fa-solid fa-eye w-3 h-3 md:w-4 md:h-4 text-muted-foreground group-hover:text-primary"></i>*/}
                           {/*</button>*/}
                           <button
-                            className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"
+                            className="p-1.5 md:p-2 hover:bg-muted rounded-lg transition-colors group"
                             onClick={() =>
                               handleSendAction(address.fullAddress)
                             }
                             title="Send"
                           >
-                            <Send className="w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary" />
+                            <Send className="w-3 h-3 md:w-4 md:h-4 text-muted-foreground group-hover:text-primary" />
                           </button>
                           {/*<button*/}
-                          {/*    className="p-1.5 md:p-2 hover:bg-bg-tertiary rounded-lg transition-colors group"*/}
+                          {/*    className="p-1.5 md:p-2 hover:bg-muted rounded-lg transition-colors group"*/}
                           {/*    onClick={() => handleMoreActions(address.fullAddress)}*/}
                           {/*    title="More Actions"*/}
                           {/*>*/}
-                          {/*    <i className="fa-solid fa-ellipsis-h w-3 h-3 md:w-4 md:h-4 text-text-muted group-hover:text-primary"></i>*/}
+                          {/*    <i className="fa-solid fa-ellipsis-h w-3 h-3 md:w-4 md:h-4 text-muted-foreground group-hover:text-primary"></i>*/}
                           {/*</button>*/}
                         </div>
                       </td>
@@ -634,3 +634,4 @@ export const Accounts = () => {
     </motion.div>
   );
 };
+

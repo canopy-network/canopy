@@ -80,16 +80,16 @@ export const NewKey = (): JSX.Element => {
     return (
         <motion.div
             variants={panelVariants}
-            className="bg-bg-secondary rounded-lg p-6 border border-bg-accent h-full"
+            className="bg-card rounded-lg p-6 border border-border h-full"
         >
             <div className="flex items-center gap-2 mb-6">
-                <h2 className="text-xl font-bold text-white">New Key</h2>
+                <h2 className="text-xl font-bold text-foreground">New Key</h2>
             </div>
 
             <div className="flex flex-col justify-between h-[90%]">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Wallet Name
                         </label>
                         <input
@@ -97,11 +97,11 @@ export const NewKey = (): JSX.Element => {
                             placeholder="Primary Wallet"
                             value={newKeyForm.walletName}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, walletName: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                        <label className="block text-sm font-medium text-foreground/80 mb-2">
                             Password
                         </label>
                         <input
@@ -109,7 +109,7 @@ export const NewKey = (): JSX.Element => {
                             placeholder="Password"
                             value={newKeyForm.password}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
-                            className="w-full bg-bg-tertiary border border-bg-accent rounded-lg px-3 py-2 text-white"
+                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
                 </div>
@@ -124,3 +124,4 @@ export const NewKey = (): JSX.Element => {
         </motion.div>
     );
 };
+

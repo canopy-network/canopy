@@ -570,11 +570,11 @@ export default function ActionRunner({
                 {/* Show skeleton loading while waiting for critical DS */}
                 {showPopulateLoading && (
                   <div className="space-y-4 animate-pulse">
-                    <div className="h-10 bg-neutral-800/50 rounded-lg w-full" />
-                    <div className="h-10 bg-neutral-800/50 rounded-lg w-full" />
-                    <div className="h-10 bg-neutral-800/50 rounded-lg w-3/4" />
+                    <div className="h-10 bg-muted/50 rounded-lg w-full" />
+                    <div className="h-10 bg-muted/50 rounded-lg w-full" />
+                    <div className="h-10 bg-muted/50 rounded-lg w-3/4" />
                     <div className="flex justify-center pt-4">
-                      <div className="text-sm text-neutral-400">Loading form data...</div>
+                      <div className="text-sm text-muted-foreground">Loading form data...</div>
                     </div>
                   </div>
                 )}
@@ -590,7 +590,7 @@ export default function ActionRunner({
                 )}
 
                 {wizard && steps.length > 0 && (
-                  <div className="flex items-center justify-between text-xs text-neutral-400">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <div>{steps[stepIdx]?.title ?? `Step ${stepIdx + 1}`}</div>
                     <div>
                       {stepIdx + 1} / {steps.length}
@@ -599,7 +599,7 @@ export default function ActionRunner({
                 )}
 
                 {infoItems.length > 0 && (
-                  <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-bg-primary">
+                  <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-background">
                     {action?.form?.info?.title && (
                       <h4 className="text-canopy-50 text-base sm:text-lg mb-2">
                         {template(action?.form?.info?.title, templatingCtx)}
@@ -630,7 +630,7 @@ export default function ActionRunner({
                             key={i}
                             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
                           >
-                            <div className="flex items-center gap-2 text-neutral-400 font-light text-xs sm:text-sm">
+                            <div className="flex items-center gap-2 text-muted-foreground font-light text-xs sm:text-sm">
                               {d.icon ? (
                                 <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               ) : null}
@@ -678,7 +678,7 @@ export default function ActionRunner({
 
             {stage === "confirm" && (
               <motion.div className="space-y-4">
-                <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-bg-primary">
+                <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-background">
                   {summaryTitle && (
                     <h4 className="text-canopy-50 text-base sm:text-lg mb-3">{summaryTitle}</h4>
                   )}
@@ -689,7 +689,7 @@ export default function ActionRunner({
                         key={i}
                         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
                       >
-                        <div className="flex items-center gap-2 text-neutral-400 font-light text-xs sm:text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground font-light text-xs sm:text-sm">
                           {d.icon ? (
                             <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           ) : null}
@@ -727,10 +727,10 @@ export default function ActionRunner({
                   <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
                 </div>
                 <div className="text-center space-y-2">
-                  <h3 className="text-lg font-semibold text-text-primary">
+                  <h3 className="text-lg font-semibold text-foreground">
                     Processing Transaction...
                   </h3>
-                  <p className="text-sm text-text-muted">
+                  <p className="text-sm text-muted-foreground">
                     Please wait while your transaction is being processed
                   </p>
                 </div>
@@ -749,3 +749,4 @@ export default function ActionRunner({
     </div>
   );
 }
+

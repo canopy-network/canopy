@@ -177,7 +177,7 @@ export default function Staking(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-bg-primary"
+      className="min-h-screen bg-background"
       initial="hidden"
       animate="visible"
       variants={containerVariants}
@@ -195,7 +195,7 @@ export default function Staking(): JSX.Element {
           activeValidatorsCount={activeValidatorsCount}
         />
 
-        <div className="flex flex-col bg-bg-secondary rounded-xl p-6 border border-bg-accent">
+        <div className="flex flex-col bg-card rounded-xl p-6 border border-border">
           {/* Toolbar */}
           <Toolbar
             searchTerm={searchTerm}

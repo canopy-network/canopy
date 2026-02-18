@@ -85,7 +85,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
       ? "bg-green-500/15"
       : fundsWay === "out"
         ? "bg-primary/10"
-        : "bg-white/[0.05]";
+        : "bg-muted/40";
 
   const iconColor = isFailed
     ? "text-red-400"
@@ -93,7 +93,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
       ? "text-green-400"
       : fundsWay === "out"
         ? "text-primary"
-        : "text-back";
+        : "text-muted-foreground";
 
   const amountColor = isFailed
     ? "text-red-400 line-through opacity-60"
@@ -101,7 +101,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
       ? "text-green-400"
       : fundsWay === "out"
         ? "text-red-400"
-        : "text-white";
+        : "text-foreground";
 
   return (
     <motion.button
@@ -109,7 +109,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
         transition-all duration-150 cursor-pointer
         ${isFailed
           ? "border-red-500/25 hover:border-red-500/40 hover:bg-red-500/5"
-          : "border-white/[0.06] hover:border-primary/30 hover:bg-white/[0.02]"
+          : "border-border/60 hover:border-primary/30 hover:bg-accent/30"
         }`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -125,10 +125,10 @@ const TransactionRow = React.memo<TransactionRowProps>(({
 
       {/* Type + time */}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-white truncate leading-tight">
+        <div className="text-sm font-medium text-foreground truncate leading-tight">
           {getTxMap(tx?.type)}
         </div>
-        <div className="text-xs text-back mt-0.5">{timeAgo}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{timeAgo}</div>
       </div>
 
       {/* Amount + status */}
@@ -140,7 +140,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
       </div>
 
       {/* Chevron — the explicit "I'm clickable" signal */}
-      <ChevronRight className="w-4 h-4 text-back/40 group-hover:text-primary shrink-0 transition-colors" />
+      <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
     </motion.button>
   );
 });
@@ -190,8 +190,8 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
     [chain],
   );
 
-  const cardClass = "rounded-2xl p-6 border border-white/10 h-full";
-  const cardStyle = { background: '#22232E' };
+  const cardClass = "rounded-2xl p-6 border border-border/60 h-full";
+  const cardStyle = { background: 'hsl(var(--card))' };
   const cardMotion = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay: 0.3 } };
 
   if (!transactions) {
@@ -231,12 +231,12 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
       {/* Title */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-back uppercase tracking-wider">Recent Transactions</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent Transactions</span>
           <StatusBadge status="live" label="Live" size="sm" pulse />
         </div>
         <NavLink
           to="/all-transactions"
-          className="text-xs text-back hover:text-primary transition-colors font-medium"
+          className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium"
         >
           See all →
         </NavLink>
@@ -264,7 +264,7 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
         <div className="text-center mt-4">
           <NavLink
             to="/all-transactions"
-            className="text-xs text-back hover:text-primary font-medium transition-colors"
+            className="text-xs text-muted-foreground hover:text-primary font-medium transition-colors"
           >
             See all {transactions.length} transactions →
           </NavLink>
@@ -282,3 +282,5 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 });
 
 RecentTransactionsCard.displayName = 'RecentTransactionsCard';
+
+

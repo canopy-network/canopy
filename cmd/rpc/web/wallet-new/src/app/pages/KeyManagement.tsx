@@ -43,7 +43,7 @@ export const KeyManagement = (): JSX.Element => {
     };
 
     return (
-        <div className="bg-bg-primary">
+        <div className="bg-background">
             {/* Main Content */}
             <div className="px-6 py-8">
                 <div className="flex justify-between items-center">
@@ -53,8 +53,8 @@ export const KeyManagement = (): JSX.Element => {
                         transition={{ duration: 0.4 }}
                         className="mb-8"
                     >
-                        <h1 className="text-3xl font-bold text-white mb-2">Key Management</h1>
-                        <p className="text-gray-400">Manage your wallet keys and security settings</p>
+                        <h1 className="text-3xl font-bold text-foreground mb-2">Key Management</h1>
+                        <p className="text-muted-foreground">Manage your wallet keys and security settings</p>
                     </motion.div>
                     <Button
                         className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
@@ -81,3 +81,4 @@ export const KeyManagement = (): JSX.Element => {
         </div>
     );
 };
+

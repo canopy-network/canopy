@@ -81,7 +81,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
 
                     {/* Modal */}
                     <motion.div
-                        className="relative w-full max-w-md bg-gradient-to-b from-bg-secondary to-bg-primary border border-neutral-700/50 rounded-2xl shadow-2xl overflow-hidden"
+                        className="relative w-full max-w-md bg-gradient-to-b from-bg-secondary to-bg-primary border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -93,7 +93,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                         {/* Close button */}
                         <button
                             onClick={onClose}
-                            className="absolute top-4 right-4 p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                            className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -110,12 +110,12 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                             </div>
 
                             {/* Title */}
-                            <h2 className="text-xl font-semibold text-white text-center mb-2">
+                            <h2 className="text-xl font-semibold text-foreground text-center mb-2">
                                 Unlock Wallet
                             </h2>
 
                             {/* Description */}
-                            <p className="text-sm text-neutral-400 text-center mb-6">
+                            <p className="text-sm text-muted-foreground text-center mb-6">
                                 Enter your password to authorize transactions
                             </p>
 
@@ -131,7 +131,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
 
                             {/* Password input */}
                             <div className="space-y-2">
-                                <label className="block text-sm font-medium text-neutral-300">
+                                <label className="block text-sm font-medium text-foreground/80">
                                     Password
                                 </label>
                                 <div className="relative">
@@ -146,12 +146,12 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                                         onKeyDown={handleKeyDown}
                                         placeholder="Enter your wallet password"
                                         className={`
-                                            w-full bg-bg-primary/50 text-white rounded-xl px-4 py-3 pr-12
+                                            w-full bg-background/50 text-foreground rounded-xl px-4 py-3 pr-12
                                             border transition-all duration-200 outline-none
-                                            placeholder:text-neutral-500
+                                            placeholder:text-muted-foreground
                                             ${err
                                                 ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-                                                : 'border-neutral-700/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20'
+                                                : 'border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20'
                                             }
                                         `}
                                         disabled={isSubmitting}
@@ -159,7 +159,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-white transition-colors"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
                                         tabIndex={-1}
                                     >
                                         {showPassword ? (
@@ -191,8 +191,8 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                                 <button
                                     onClick={onClose}
                                     disabled={isSubmitting}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-neutral-800/50 text-neutral-300 font-medium
-                                        hover:bg-neutral-700/50 hover:text-white transition-all duration-200
+                                    className="flex-1 px-4 py-3 rounded-xl bg-muted/50 text-foreground/80 font-medium
+                                        hover:bg-muted/70 hover:text-foreground transition-all duration-200
                                         disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Cancel
@@ -223,8 +223,8 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                         </div>
 
                         {/* Footer hint */}
-                        <div className="px-6 py-4 bg-neutral-900/50 border-t border-neutral-800/50">
-                            <p className="text-xs text-neutral-500 text-center">
+                        <div className="px-6 py-4 bg-card/50 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground text-center">
                                 Your session will automatically extend while you're active
                             </p>
                         </div>
@@ -234,3 +234,4 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
         </AnimatePresence>
     )
 }
+

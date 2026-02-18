@@ -27,9 +27,9 @@ export const ValidatorList: React.FC<ValidatorListProps> = ({ validators }) => {
         return (
             <motion.div
                 variants={itemVariants}
-                className="bg-bg-secondary rounded-xl p-12 border border-gray-600/60"
+                className="bg-card rounded-xl p-12 border border-border/60"
             >
-                <div className="text-center text-text-muted">
+                <div className="text-center text-muted-foreground">
                     {'No validators found'}
                 </div>
             </motion.div>
@@ -48,3 +48,4 @@ export const ValidatorList: React.FC<ValidatorListProps> = ({ validators }) => {
         </div>
     );
 };
+

@@ -19,13 +19,13 @@ export const SwitchField: React.FC<BaseFieldProps> = ({
                     checked={checked}
                     disabled={field.readOnly}
                     onCheckedChange={(next) => onChange(next)}
-                    className="relative h-5 w-9 rounded-full bg-neutral-700 data-[state=checked]:bg-emerald-500 outline-none shadow-inner transition-colors"
+                    className="relative h-5 w-9 rounded-full bg-muted data-[state=checked]:bg-emerald-500 outline-none shadow-inner transition-colors"
                     aria-label={String(resolveTemplate(field.label) ?? field.name)}
                 >
                     <Switch.Thumb className="block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[18px]" />
                 </Switch.Root>
             </div>
-            {field.help && <span className="text-xs text-text-muted">{resolveTemplate(field.help)}</span>}
+            {field.help && <span className="text-xs text-muted-foreground">{resolveTemplate(field.help)}</span>}
         </div>
     )
 }

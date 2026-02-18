@@ -24,40 +24,41 @@ export const NetworkStatsCard: React.FC<NetworkStatsCardProps> = ({
             id: 'totalPeers',
             label: 'Total Peers',
             value: totalPeers,
-            color: 'text-[#6fe3b4]'
+            color: 'text-primary'
         },
         {
             id: 'connections',
             label: 'Connections',
             value: `${connections.in} in / ${connections.out} out`,
-            color: 'text-white'
+            color: 'text-foreground'
         }
     ];
 
     return (
         <motion.div
             variants={itemVariants}
-            className="bg-[#1E1F26] rounded-xl border border-[#2A2C35] p-6"
+            className="bg-card rounded-xl border border-border/60 p-6"
         >
-            <h2 className="text-white text-lg font-bold mb-4">Network Peers</h2>
+            <h2 className="text-foreground text-lg font-bold mb-4">Network Peers</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
                 {networkStats.map((stat) => (
                     <div key={stat.id}>
-                        <div className="text-gray-400 text-sm">{stat.label}</div>
+                        <div className="text-muted-foreground text-sm">{stat.label}</div>
                         <div className={`${stat.color} text-2xl font-bold`}>{stat.value}</div>
                     </div>
                 ))}
             </div>
             <div className="space-y-2">
                 <div>
-                    <div className="text-gray-400 text-sm">Peer ID</div>
-                    <div className="text-white font-mono text-xs break-all">{peerId}</div>
+                    <div className="text-muted-foreground text-sm">Peer ID</div>
+                    <div className="text-foreground font-mono text-xs break-all">{peerId}</div>
                 </div>
                 <div>
-                    <div className="text-gray-400 text-sm">Network Address</div>
-                    <div className="text-white font-mono text-sm">{networkAddress}</div>
+                    <div className="text-muted-foreground text-sm">Network Address</div>
+                    <div className="text-foreground font-mono text-sm">{networkAddress}</div>
                 </div>
             </div>
         </motion.div>
     );
 };
+

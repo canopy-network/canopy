@@ -3,8 +3,48 @@
 @tailwind utilities;
 
 :root {
-  --primary: #22d3a6;
-  --primary-foreground: #1a1b23;
+  --background: 228 15% 7%;
+  --foreground: 0 0% 100%;
+  --card: 228 14% 16%;
+  --card-foreground: 0 0% 100%;
+  --popover: 228 15% 7%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 150 66% 66%;
+  --primary-foreground: 228 15% 12%;
+  --secondary: 229 13% 20%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 229 13% 20%;
+  --muted-foreground: 220 9% 65%;
+  --accent: 229 13% 20%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 229 11% 28%;
+  --input: 229 11% 28%;
+  --ring: 150 66% 66%;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: 228 15% 7%;
+  --foreground: 0 0% 100%;
+  --card: 228 14% 16%;
+  --card-foreground: 0 0% 100%;
+  --popover: 228 15% 7%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 150 66% 66%;
+  --primary-foreground: 228 15% 12%;
+  --secondary: 229 13% 20%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 229 13% 20%;
+  --muted-foreground: 220 9% 65%;
+  --accent: 229 13% 20%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 229 11% 28%;
+  --input: 229 11% 28%;
+  --ring: 150 66% 66%;
 }
 
 html,
@@ -16,6 +56,9 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  line-height: 1.5;
 }
 
 html {
@@ -32,6 +75,7 @@ html {
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  outline-color: hsl(var(--ring) / 0.5);
 }
 
 /* Custom scrollbar for sidebar and main content */
@@ -44,12 +88,12 @@ html {
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: hsl(var(--foreground) / 0.2);
   border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: hsl(var(--foreground) / 0.3);
 }
 
 
@@ -60,14 +104,14 @@ html {
 
 /* Track */
 ::-webkit-scrollbar-track {
-    background: var(--primary-foreground);
+    background: hsl(var(--background));
 
 
 }
 
 /* Handle */
 ::-webkit-scrollbar-thumb {
-    background: #ffffff;
+    background: hsl(var(--foreground));
     border-radius: 5px;
 }
 

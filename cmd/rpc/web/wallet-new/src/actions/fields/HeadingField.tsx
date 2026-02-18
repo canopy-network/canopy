@@ -44,9 +44,9 @@ export const HeadingField: React.FC<HeadingFieldProps> = ({
   };
 
   const colorStyles: Record<string, string> = {
-    primary: "text-text-primary",
+    primary: "text-foreground",
     secondary: "text-text-secondary",
-    muted: "text-text-muted",
+    muted: "text-muted-foreground",
     accent: "text-primary",
   };
 

@@ -58,7 +58,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             ),
             icon: 'fa-solid fa-coins',
             iconColor: 'text-primary',
-            valueColor: 'text-white'
+            valueColor: 'text-foreground'
         },
         {
             id: 'rewardsEarned',
@@ -66,7 +66,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             value: `${formatRewards(totalRewards)} CNPY`,
             subtitle: 'Last 24 hours',
             icon: 'fa-solid fa-ellipsis',
-            iconColor: 'text-text-muted',
+            iconColor: 'text-muted-foreground',
             valueColor: 'text-primary',
             hasButton: true
         },
@@ -81,16 +81,16 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                 </span>
             ),
             icon: 'fa-solid fa-shield-halved',
-            iconColor: 'text-text-secondary',
-            valueColor: 'text-white'
+            iconColor: 'text-muted-foreground',
+            valueColor: 'text-foreground'
         },
         {
             id: 'chainsStaked',
             title:  'Chains Staked',
             value: (chainCount || 0).toString(),
             icon: 'fa-solid fa-link',
-            iconColor: 'text-text-secondary',
-            valueColor: 'text-white'
+            iconColor: 'text-muted-foreground',
+            valueColor: 'text-foreground'
         }
     ];
 
@@ -100,24 +100,24 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                 <motion.div
                     key={stat.id}
                     variants={itemVariants}
-                    className="bg-bg-secondary flex flex-col justify-center rounded-xl p-6 border border-bg-accent relative overflow-hidden gap-4"
+                    className="bg-card flex flex-col justify-center rounded-xl p-6 border border-border relative overflow-hidden gap-4"
                 >
                     <div className="flex items-center justify-between">
-                        <h3 className="text-text-muted text-sm font-medium">
+                        <h3 className="text-muted-foreground text-sm font-medium">
                             {stat.title}
                         </h3>
                         {stat.hasButton ? (
-                            <button className="text-text-muted">
+                            <button className="text-muted-foreground">
                                 <i className={`${stat.icon} text-xl`}></i>
                             </button>
                         ) : (
-                            <i className={`${stat.icon} text-primary text-2xl`}></i>
+                            <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>
                         )}
                     </div>
                     <p className={`${stat.valueColor} text-2xl font-bold`}>
                         {stat.value}
                     </p>
-                    <div className="text-text-muted text-xs">
+                    <div className="text-muted-foreground text-xs">
                         {stat.subtitle}
                     </div>
                 </motion.div>

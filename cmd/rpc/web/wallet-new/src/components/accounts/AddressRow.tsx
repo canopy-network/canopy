@@ -46,13 +46,13 @@ export const AddressRow: React.FC<AddressRowProps> = ({
             case 'Pending':
                 return 'bg-yellow-500/20 text-yellow-400';
             default:
-                return 'bg-gray-500/20 text-gray-400';
+                return 'bg-muted/20 text-muted-foreground';
         }
     };
 
     return (
         <motion.tr
-            className="border-b border-bg-accent/50 hover:bg-bg-tertiary/30 transition-colors"
+            className="border-b border-border/50 hover:bg-muted/30 transition-colors"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
@@ -60,22 +60,22 @@ export const AddressRow: React.FC<AddressRowProps> = ({
             <td className="p-4">
                 <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 ${address.iconBg} rounded-full flex items-center justify-center flex-shrink-0`}>
-                        <i className={`${address.icon} text-white text-sm`}></i>
+                        <i className={`${address.icon} text-foreground text-sm`}></i>
                     </div>
                     <div>
-                        <div className="text-white font-medium">{formatAddress(address.address)}</div>
-                        <div className="text-text-muted text-xs">{address.address}</div>
+                        <div className="text-foreground font-medium">{formatAddress(address.address)}</div>
+                        <div className="text-muted-foreground text-xs">{address.address}</div>
                     </div>
                 </div>
             </td>
             <td className="p-4">
-                <div className="text-white font-medium">{formatBalance(address.totalBalance)} CNPY</div>
+                <div className="text-foreground font-medium">{formatBalance(address.totalBalance)} CNPY</div>
             </td>
             <td className="p-4">
-                <div className="text-white font-medium">{formatBalance(address.staked)} CNPY</div>
+                <div className="text-foreground font-medium">{formatBalance(address.staked)} CNPY</div>
             </td>
             <td className="p-4">
-                <div className="text-white font-medium">{formatBalance(address.liquid)} CNPY</div>
+                <div className="text-foreground font-medium">{formatBalance(address.liquid)} CNPY</div>
             </td>
             <td className="p-4">
                 <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(address.status)}`}>
@@ -107,3 +107,4 @@ export const AddressRow: React.FC<AddressRowProps> = ({
         </motion.tr>
     );
 };
+

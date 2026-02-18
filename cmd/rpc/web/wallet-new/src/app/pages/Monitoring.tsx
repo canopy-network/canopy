@@ -131,7 +131,7 @@ export default function Monitoring(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-bg-primary"
+      className="min-h-screen bg-background"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}

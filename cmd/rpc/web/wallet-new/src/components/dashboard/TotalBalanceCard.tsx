@@ -14,8 +14,8 @@ export const TotalBalanceCard = React.memo(() => {
 
   return (
     <motion.div
-      className="rounded-2xl p-6 border border-white/10 relative overflow-hidden h-full flex flex-col"
-      style={{ background: '#22232E' }}
+      className="rounded-2xl p-6 border border-border/60 relative overflow-hidden h-full flex flex-col"
+      style={{ background: 'hsl(var(--card))' }}
       initial={hasAnimated ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -26,7 +26,7 @@ export const TotalBalanceCard = React.memo(() => {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <span className="text-xs font-medium text-back uppercase tracking-wider">Total Balance</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Balance</span>
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
           <Wallet className="w-4 h-4 text-primary" />
         </div>
@@ -35,24 +35,24 @@ export const TotalBalanceCard = React.memo(() => {
       {/* Balance */}
       <div className="flex-1">
         {loading ? (
-          <div className="h-10 w-40 rounded-lg bg-white/5 animate-pulse mb-1" />
+          <div className="h-10 w-40 rounded-lg bg-muted/50 animate-pulse mb-1" />
         ) : (
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-4xl font-bold text-white tabular-nums leading-none">
+            <span className="text-4xl font-bold text-foreground tabular-nums leading-none">
               <AnimatedNumber
                 value={totalBalance / 1_000_000}
                 format={{ notation: "standard", maximumFractionDigits: 2 }}
               />
             </span>
-            <span className="text-base font-semibold text-white/40">CNPY</span>
+            <span className="text-base font-semibold text-muted-foreground/60">CNPY</span>
           </div>
         )}
       </div>
 
       {/* 24h change */}
-      <div className="mt-4 pt-4 border-t border-white/[0.06]">
+      <div className="mt-4 pt-4 border-t border-border/60">
         {historyLoading ? (
-          <div className="h-4 w-28 rounded bg-white/5 animate-pulse" />
+          <div className="h-4 w-28 rounded bg-muted/50 animate-pulse" />
         ) : historyData ? (
           <div className={`flex items-center gap-1.5 text-sm font-medium ${isPositive ? "text-primary" : "text-red-400"}`}>
             {isPositive
@@ -64,10 +64,10 @@ export const TotalBalanceCard = React.memo(() => {
               format={{ notation: "standard", maximumFractionDigits: 1 }}
             />
             <span>%</span>
-            <span className="text-back font-normal ml-0.5">24h change</span>
+            <span className="text-muted-foreground font-normal ml-0.5">24h change</span>
           </div>
         ) : (
-          <span className="text-sm text-back">No historical data</span>
+          <span className="text-sm text-muted-foreground">No historical data</span>
         )}
       </div>
     </motion.div>
@@ -75,3 +75,5 @@ export const TotalBalanceCard = React.memo(() => {
 });
 
 TotalBalanceCard.displayName = 'TotalBalanceCard';
+
+
