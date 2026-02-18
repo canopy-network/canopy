@@ -49,6 +49,7 @@ export const Dashboard = () => {
                 initial="hidden"
                 animate="visible"
                 variants={containerVariants}
+                className="space-y-6 lg:space-y-8"
             >
                 <div className="py-2">
                     {/* Top Section - Balance Cards */}

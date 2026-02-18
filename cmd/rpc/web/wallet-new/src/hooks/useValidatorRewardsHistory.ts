@@ -1,27 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation';
 import {useDSFetcher} from "@/core/dsFetch";
-
-interface RewardEvent {
-    eventType: string;
-    msg: {
-        amount: number;
-    };
-    height: number;
-    reference: string;
-    chainId: number;
-    address: string;
-}
-
-interface EventsResponse {
-    pageNumber: number;
-    perPage: number;
-    results: RewardEvent[];
-    type: string;
-    count: number;
-    totalPages: number;
-    totalCount: number;
-}
+import { fetchRewardEventsInRange, sumRewards } from "./stakingRewardsEvents";
 
 /**
  * Hook to calculate validator rewards using block height comparison
@@ -29,7 +9,7 @@ interface EventsResponse {
  */
 export function useValidatorRewardsHistory(address?: string) {
     const dsFetch = useDSFetcher();
-    const { currentHeight, height24hAgo, calculateHistory, isReady } = useHistoryCalculation();
+    const { currentHeight, secondsPerBlock, isReady } = useHistoryCalculation();
 
     return useQuery({
         queryKey: ['validatorRewardsHistory', address, currentHeight],
@@ -37,22 +17,16 @@ export function useValidatorRewardsHistory(address?: string) {
         staleTime: 30_000,
 
         queryFn: async (): Promise<HistoryResult> => {
-            // Fetch recent reward events (reduced from 10000 to 100)
-            const events = await dsFetch<RewardEvent[]>('events.byAddress', {
-                address,
-                height: height24hAgo, // Start from 24h ago to reduce data
-                page: 1,
-                perPage: 100
+            const { events } = await fetchRewardEventsInRange(dsFetch, {
+                address: address || "",
+                toHeight: currentHeight,
+                secondsPerBlock,
+                hours: 24,
+                perPage: 100,
+                maxPages: 100,
             });
 
-            // Filter rewards from the last 24h (between height24hAgo and currentHeight)
-            const rewardsLast24h = events
-                .filter(event =>
-                    event.eventType === 'reward' &&
-                    event.height > height24hAgo &&
-                    event.height <= currentHeight
-                )
-                .reduce((sum, event) => sum + (event.msg?.amount || 0), 0);
+            const rewardsLast24h = sumRewards(events);
 
             // Return the total as both current and change24h
             // This will display the actual rewards earned in the last 24h

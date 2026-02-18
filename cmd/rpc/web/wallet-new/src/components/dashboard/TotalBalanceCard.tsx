@@ -14,13 +14,13 @@ export const TotalBalanceCard = React.memo(() => {
 
   return (
     <motion.div
-      className="rounded-2xl p-6 border border-border/60 relative overflow-hidden h-full flex flex-col"
-      style={{ background: 'hsl(var(--card))' }}
+      className="relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)] flex flex-col"
       initial={hasAnimated ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       onAnimationComplete={() => setHasAnimated(true)}
     >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       {/* Subtle glow accent */}
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-primary/5 blur-2xl pointer-events-none" />
 

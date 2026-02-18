@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Play, Pause, Key } from "lucide-react";
+import {Play, Pause, Key, Workflow} from "lucide-react";
 import { useValidators } from "@/hooks/useValidators";
 import { useMultipleValidatorRewardsHistory } from "@/hooks/useMultipleValidatorRewardsHistory";
 import { useMultipleValidatorSets } from "@/hooks/useValidatorSet";
@@ -162,8 +162,7 @@ const ValidatorMobileCard = React.memo<ValidatorTableRowProps>(({
   onPauseUnpause,
 }) => (
   <motion.div
-    className="rounded-xl p-4 space-y-3 border border-border/60"
-    style={{ background: 'hsl(var(--background))' }}
+    className="rounded-xl p-4 space-y-3 border border-border/60 bg-background/60"
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.2, delay: index * 0.05 }}
@@ -333,13 +332,13 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
       });
   }, [keystore, validators, formatStakeAmount, getStatus, formatRewards, rewardsData]);
 
-  const cardClass = "rounded-2xl p-6 border border-border/60 h-full";
-  const cardStyle = { background: 'hsl(var(--card))' };
+  const cardClass = "relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)]";
   const cardMotion = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay: 0.5 } };
 
   if (isLoading) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <LoadingState message="Loading validators..." size="md" />
       </motion.div>
     );
@@ -347,7 +346,8 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
 
   if (error) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <EmptyState icon="AlertCircle" title="Error loading validators" description="There was a problem loading your validators" size="md" />
       </motion.div>
     );
@@ -355,31 +355,15 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
 
   return (
     <>
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         {/* Header with action buttons */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Key className="w-3.5 h-3.5 text-primary" />
+              <Workflow className="w-3.5 h-3.5 text-primary" />
             </div>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Key Management</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleResumeAll}
-              className="flex items-center gap-2 px-3.5 py-2 bg-primary hover:bg-primary-light text-primary-foreground rounded-lg text-sm font-semibold transition-colors"
-            >
-              <Play className="w-3.5 h-3.5" />
-              Resume All
-            </button>
-            <button
-              onClick={handlePauseAll}
-              className="flex items-center gap-2 px-3.5 py-2 border border-border/60 text-muted-foreground hover:text-foreground hover:bg-accent/60 rounded-lg text-sm font-medium transition-colors"
-              style={{ background: 'hsl(var(--background))' }}
-            >
-              <Pause className="w-3.5 h-3.5" />
-              Pause All
-            </button>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Node Management</span>
           </div>
         </div>
 

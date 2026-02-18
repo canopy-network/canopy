@@ -75,7 +75,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
 }) => {
   const fundsWay = getFundWay(tx?.type);
   const isFailed = tx.status === "Failed";
-  const prefix = fundsWay === "out" ? "−" : fundsWay === "in" ? "+" : "";
+  const prefix = fundsWay === "out" ? "-" : fundsWay === "in" ? "+" : "";
   const amountTxt = `${prefix}${toDisplay(Number(tx.amount || 0)).toFixed(2)} ${symbol}`;
   const timeAgo = formatTimeAgo(toEpochMs(tx.time));
 
@@ -139,7 +139,7 @@ const TransactionRow = React.memo<TransactionRowProps>(({
         <StatusBadge label={tx.status} size="sm" />
       </div>
 
-      {/* Chevron — the explicit "I'm clickable" signal */}
+      {/* Chevron - click affordance */}
       <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
     </motion.button>
   );
@@ -190,13 +190,13 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
     [chain],
   );
 
-  const cardClass = "rounded-2xl p-6 border border-border/60 h-full";
-  const cardStyle = { background: 'hsl(var(--card))' };
+  const cardClass = "relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)]";
   const cardMotion = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay: 0.3 } };
 
   if (!transactions) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <EmptyState icon="Wallet" title="No account selected" description="Select an account to view transactions" size="md" />
       </motion.div>
     );
@@ -204,7 +204,8 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 
   if (isLoading) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <LoadingState message="Loading transactions..." size="md" />
       </motion.div>
     );
@@ -212,7 +213,8 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 
   if (hasError) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <EmptyState icon="AlertCircle" title="Error loading transactions" description="There was a problem loading your transactions" size="md" />
       </motion.div>
     );
@@ -220,14 +222,16 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 
   if (!transactions?.length) {
     return (
-      <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+      <motion.div className={cardClass} {...cardMotion}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <EmptyState icon="Receipt" title="No transactions found" description="Your transaction history will appear here" size="md" />
       </motion.div>
     );
   }
 
   return (
-    <motion.div className={cardClass} style={cardStyle} {...cardMotion}>
+    <motion.div className={cardClass} {...cardMotion}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       {/* Title */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
@@ -238,7 +242,7 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
           to="/all-transactions"
           className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium"
         >
-          See all →
+          See all {"->"}
         </NavLink>
       </div>
 
@@ -259,14 +263,14 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
         ))}
       </div>
 
-      {/* See All — bottom link when there are more than 5 */}
+      {/* See All - bottom link when there are more than 5 */}
       {transactions.length > 5 && (
         <div className="text-center mt-4">
           <NavLink
             to="/all-transactions"
             className="text-xs text-muted-foreground hover:text-primary font-medium transition-colors"
           >
-            See all {transactions.length} transactions →
+            See all {transactions.length} transactions {"->"}
           </NavLink>
         </div>
       )}

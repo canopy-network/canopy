@@ -9,13 +9,15 @@ import { motion } from "framer-motion";
 import { useStakingData } from "@/hooks/useStakingData";
 import { useValidators } from "@/hooks/useValidators";
 import { useAccountData } from "@/hooks/useAccountData";
-import { useMultipleBlockProducerData } from "@/hooks/useBlockProducerData";
+import { useMultipleValidatorRewardsHistory } from "@/hooks/useMultipleValidatorRewardsHistory";
+import { useStakingRewardsChart } from "@/hooks/useStakingRewardsChart";
 import { useManifest } from "@/hooks/useManifest";
 import { useDSFetcher } from "@/core/dsFetch";
 import { StatsCards } from "@/components/staking/StatsCards";
 import { Toolbar } from "@/components/staking/Toolbar";
 import { ValidatorList } from "@/components/staking/ValidatorList";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import { useSelectedAccount } from "@/app/providers/AccountsProvider";
 
 type ValidatorRow = {
   address: string;
@@ -51,6 +53,7 @@ export default function Staking(): JSX.Element {
   const { data: validators = [] } = useValidators();
   const { openAction } = useActionModal();
   const dsFetch = useDSFetcher();
+  const { selectedAddress } = useSelectedAccount();
 
   const csvRef = useRef<HTMLAnchorElement>(null);
 
@@ -62,8 +65,14 @@ export default function Staking(): JSX.Element {
     [validators],
   );
 
-  const { data: blockProducerData = {} } =
-    useMultipleBlockProducerData(validatorAddresses);
+  const { data: rewardsHistory = {} } =
+    useMultipleValidatorRewardsHistory(validatorAddresses);
+  const { data: selectedRewardsChart, isLoading: selectedRewardsChartLoading } =
+    useStakingRewardsChart({
+      address: selectedAddress,
+      points: 12,
+      hours: 24,
+    });
 
   useEffect(() => {
     let isCancelled = false;
@@ -101,7 +110,7 @@ export default function Staking(): JSX.Element {
       nickname: v.nickname,
       stakedAmount: v.stakedAmount || 0,
       status: v.unstaking ? "Unstaking" : v.paused ? "Paused" : "Staked",
-      rewards24h: blockProducerData[v.address]?.rewards24h || 0,
+      rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
       chains:
         v.committees?.map(
           (id: number) => chainLabels[id % chainLabels.length],
@@ -117,7 +126,7 @@ export default function Staking(): JSX.Element {
       publicKey: v.publicKey,
       unstakingHeight: v.unstakingHeight,
     }));
-  }, [validators, blockProducerData]);
+  }, [validators, rewardsHistory]);
 
   const filtered: ValidatorRow[] = useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -193,6 +202,9 @@ export default function Staking(): JSX.Element {
           validatorsCount={validators.length}
           chainCount={chainCount}
           activeValidatorsCount={activeValidatorsCount}
+          rewardsChartPoints={selectedRewardsChart?.points}
+          rewardsChartLoading={selectedRewardsChartLoading}
+          rewardsChartAddress={selectedAddress}
         />
 
         <div className="flex flex-col bg-card rounded-xl p-6 border border-border">

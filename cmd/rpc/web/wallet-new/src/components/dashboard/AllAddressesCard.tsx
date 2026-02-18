@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 const formatAddress = (address: string) =>
-    `${address.slice(0, 6)}…${address.slice(-4)}`;
+    `${address.slice(0, 6)}...${address.slice(-4)}`;
 
 interface AddressData {
   id: string;
@@ -72,12 +72,12 @@ export const AllAddressesCard = React.memo(() => {
   if (accountsLoading || dataLoading) {
     return (
       <motion.div
-        className="rounded-2xl p-6 border border-border/60 h-full"
-        style={{ background: 'hsl(var(--card))' }}
+        className="relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)]"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.3 }}
       >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
         <LoadingState message="Loading addresses..." size="md" />
       </motion.div>
     );
@@ -85,12 +85,12 @@ export const AllAddressesCard = React.memo(() => {
 
   return (
     <motion.div
-      className="rounded-2xl p-6 border border-border/60 h-full flex flex-col"
-      style={{ background: 'hsl(var(--card))' }}
+      className="relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)] flex flex-col"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
     >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       <div className="flex items-center justify-between mb-5">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">All Addresses</span>
         <NavLink

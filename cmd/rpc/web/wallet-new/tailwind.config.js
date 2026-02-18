@@ -86,7 +86,7 @@ module.exports = {
           foreground: "#ffffff",
         },
         card: {
-          DEFAULT: "#22232e",
+          DEFAULT: "#1A1B1F",
           foreground: "#ffffff",
         },
       },

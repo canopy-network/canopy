@@ -15,7 +15,13 @@ export interface HistoryResult {
  */
 export function useHistoryCalculation() {
     const { chain } = useConfig()
-    const { data: currentHeight = 0 } = useDS<number>('height', {}, { staleTimeMs: 30_000 })
+    const { data: currentHeightRaw } = useDS<any>('height', {}, { staleTimeMs: 30_000 })
+
+    // DS `height` can come as number or object ({ height: number }).
+    const currentHeight =
+        typeof currentHeightRaw === "number"
+            ? currentHeightRaw
+            : Number(currentHeightRaw?.height ?? 0)
 
     // Calculate height 24h ago using consistent logic
     const secondsPerBlock = Number(chain?.params?.avgBlockTimeSec) > 0

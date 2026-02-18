@@ -2,27 +2,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation';
 import { useDSFetcher } from "@/core/dsFetch";
 import { useMemo } from 'react';
-
-interface RewardEvent {
-    eventType: string;
-    msg: {
-        amount: number;
-    };
-    height: number;
-    reference: string;
-    chainId: number;
-    address: string;
-}
-
-interface EventsResponse {
-    pageNumber: number;
-    perPage: number;
-    results: RewardEvent[];
-    type: string;
-    count: number;
-    totalPages: number;
-    totalCount: number;
-}
+import { fetchRewardEventsInRange, sumRewards } from "./stakingRewardsEvents";
 
 /**
  * Hook to calculate rewards for multiple validators
@@ -30,7 +10,7 @@ interface EventsResponse {
  */
 export function useMultipleValidatorRewardsHistory(addresses: string[]) {
     const dsFetch = useDSFetcher();
-    const { currentHeight, height24hAgo, isReady } = useHistoryCalculation();
+    const { currentHeight, secondsPerBlock, isReady } = useHistoryCalculation();
 
     // Create stable query key from addresses
     const addressesKey = useMemo(
@@ -51,37 +31,15 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
             // Fetch rewards for all validators in parallel
             const validatorPromises = addresses.map(async (address) => {
                 try {
-                    // Fetch recent reward events (reduced from 10000 to 100)
-                    // Most validators won't have more than 100 reward events in 24h
-                    const eventsResponse = await dsFetch<RewardEvent[] | EventsResponse>('events.byAddress', {
+                    const { events } = await fetchRewardEventsInRange(dsFetch, {
                         address,
-                        height: height24hAgo, // Start from 24h ago to reduce data
-                        page: 1,
-                        perPage: 100
+                        toHeight: currentHeight,
+                        secondsPerBlock,
+                        hours: 24,
+                        perPage: 100,
+                        maxPages: 100,
                     });
-
-
-                    // Handle both array format and object format
-                    let allEvents: RewardEvent[] = [];
-                    if (Array.isArray(eventsResponse)) {
-                        allEvents = eventsResponse;
-                    } else if (eventsResponse?.results) {
-                        allEvents = eventsResponse.results;
-                    }
-
-                    const rewardEvents = allEvents.filter(event => event.eventType === 'reward');
-
-
-                    // Calculate total rewards (all time)
-                    const totalRewards = rewardEvents.reduce((sum, event) => sum + (event.msg?.amount || 0), 0);
-
-                    // Calculate rewards from the last 24h
-                    const rewards24h = rewardEvents
-                        .filter(event =>
-                            event.height > height24hAgo &&
-                            event.height <= currentHeight
-                        )
-                        .reduce((sum, event) => sum + (event.msg?.amount || 0), 0);
+                    const rewards24h = sumRewards(events);
 
                     results[address] = {
                         current: rewards24h,
@@ -90,7 +48,8 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
                         changePercentage: 0,
                         progressPercentage: 100,
                         rewards24h: rewards24h,
-                        totalRewards: totalRewards
+                        // With a bounded 24h query we only guarantee 24h totals here.
+                        totalRewards: rewards24h
                     };
                 } catch (error) {
                     console.error(`Error fetching rewards for ${address}:`, error);

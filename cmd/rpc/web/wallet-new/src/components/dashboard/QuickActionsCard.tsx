@@ -58,12 +58,12 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
 
     return (
         <motion.div
-            className="rounded-2xl p-6 border border-border/60 h-full flex flex-col"
-            style={{ background: 'hsl(var(--card))' }}
+            className="relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-[0_10px_35px_hsl(var(--background)/0.35)] flex flex-col"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
         >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-5">Quick Actions</span>
 
             <div
