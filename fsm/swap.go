@@ -263,11 +263,11 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
-	var existingOrder *lib.SellOrder
 	// check if order already exists to handle buyer index cleanup
-	existingOrder, err = s.GetOrder(order.Id, chainId)
-	if err != nil {
-		return
+	existingOrder, getErr := s.GetOrder(order.Id, chainId)
+	// if error is anything other than "not found", return it
+	if getErr != nil && getErr.Code() != lib.CodeOrderNotFound {
+		return getErr
 	}
 	// if existing order has a buyer and it differs from the new order's buyer, clean up the old index
 	if existingOrder != nil && len(existingOrder.BuyerSendAddress) > 0 {
