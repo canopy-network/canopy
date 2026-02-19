@@ -1,0 +1,162 @@
+module.exports = {
+  content: [
+    "./src/**/*.{html,js,ts,jsx,tsx}",
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Canopy Wallet Brand Colors
+        canopy: {
+          50:  '#f0fdf9',
+          100: '#ccfbef',
+          200: '#99f6e0',
+          300: '#5eead4',
+          400: '#2dd4bf',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
+          950: '#042f2e',
+        },
+        bg: {
+          primary:   '#0c0d12',
+          secondary: '#111318',
+          tertiary:  '#161820',
+          accent:    '#1a1c24',
+        },
+        text: {
+          primary:   '#ffffff',
+          secondary: '#e2e4ea',
+          muted:     '#6b7280',
+          accent:    '#4ade80',
+        },
+        status: {
+          success: '#10b981',
+          warning: '#f59e0b',
+          error:   '#ef4444',
+          info:    '#3b82f6',
+        },
+        border:     'hsl(var(--border))',
+        input:      'hsl(var(--input))',
+        ring:       'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT:   '#4ADE80',
+          foreground:'#0c0d12',
+          light:     '#86EFAC',
+          50:  '#f0fdf9',
+          100: '#ccfbef',
+          200: '#99f6e0',
+          300: '#5eead4',
+          400: '#2dd4bf',
+          500: '#4ADE80',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
+        },
+        navbar:    '#0a0b10',
+        back:      '#6B7280',
+        secondary: {
+          DEFAULT:   '#111318',
+          foreground:'#ffffff',
+        },
+        destructive: {
+          DEFAULT:   '#ef4444',
+          foreground:'#ffffff',
+        },
+        muted: {
+          DEFAULT:   '#161820',
+          foreground:'#6b7280',
+        },
+        'input-surface': '#161820',
+        accent: {
+          DEFAULT:   '#4ade80',
+          foreground:'#0c0d12',
+        },
+        popover: {
+          DEFAULT:   '#111318',
+          foreground:'#ffffff',
+        },
+        card: {
+          DEFAULT:   '#0f1015',
+          foreground:'#ffffff',
+        },
+      },
+      spacing: {
+        '18':  '4.5rem',
+        '88':  '22rem',
+        '52':  '13rem',
+        '220': '220px',
+      },
+      fontSize: {
+        'xs':  ['0.6875rem', { lineHeight: '1rem'    }],
+        'sm':  ['0.8125rem', { lineHeight: '1.25rem' }],
+        'base':['0.9375rem', { lineHeight: '1.5rem'  }],
+        'lg':  ['1.0625rem', { lineHeight: '1.75rem' }],
+        'xl':  ['1.1875rem', { lineHeight: '1.75rem' }],
+        '2xl': ['1.4375rem', { lineHeight: '2rem'    }],
+        '3xl': ['1.8125rem', { lineHeight: '2.25rem' }],
+      },
+      boxShadow: {
+        'wallet':    '0 4px 24px hsl(220 20% 3% / 0.6)',
+        'wallet-lg': '0 12px 40px hsl(220 20% 3% / 0.7)',
+        'glow':      '0 0 20px hsl(142 69% 66% / 0.18), 0 0 40px hsl(142 69% 66% / 0.08)',
+        'glow-sm':   '0 0 10px hsl(142 69% 66% / 0.14)',
+        'inner-top': 'inset 0 1px 0 hsl(0 0% 100% / 0.06)',
+      },
+      fontFamily: {
+        display: ['Syne', 'sans-serif'],
+        mono:    ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
+        body:    ['DM Sans', 'sans-serif'],
+        // keep legacy
+        inter:   ['DM Sans', 'sans-serif'],
+      },
+      borderRadius: {
+        'sm':  '0.25rem',
+        DEFAULT: '0.5rem',
+        'md':  '0.5rem',
+        'lg':  '0.625rem',
+        'xl':  '0.75rem',
+        '2xl': '1rem',
+        '3xl': '1.25rem',
+      },
+      keyframes: {
+        'accordion-down': {
+          from: { height: '0' },
+          to:   { height: 'var(--radix-accordion-content-height)' },
+        },
+        'accordion-up': {
+          from: { height: 'var(--radix-accordion-content-height)' },
+          to:   { height: '0' },
+        },
+        'pulse-glow': {
+          '0%, 100%': { boxShadow: '0 0 8px hsl(142 69% 66% / 0.1)' },
+          '50%':      { boxShadow: '0 0 20px hsl(142 69% 66% / 0.3)' },
+        },
+        'slide-in-left': {
+          from: { transform: 'translateX(-100%)' },
+          to:   { transform: 'translateX(0)' },
+        },
+        'fade-up': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'accordion-down': 'accordion-down 0.2s ease-out',
+        'accordion-up':   'accordion-up 0.2s ease-out',
+        'pulse-glow':     'pulse-glow 2.4s ease-in-out infinite',
+        'slide-in-left':  'slide-in-left 0.28s ease-out',
+        'fade-up':        'fade-up 0.3s ease-out',
+      },
+    },
+    container: { center: true, padding: '2rem', screens: { '2xl': '1400px' } },
+  },
+  plugins: [],
+  darkMode: ['class'],
+};
