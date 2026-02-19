@@ -135,7 +135,8 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
+            className="fixed inset-x-0 bottom-0 bg-black/45 backdrop-blur-md flex items-center justify-center z-[1200] p-2 sm:p-4"
+            style={{ top: "var(--topbar-height, 52px)" }}
             onClick={closeAction}
           >
             <motion.div
@@ -149,8 +150,9 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
               className={cx(
                 'relative bg-card border border-border overflow-hidden flex flex-col min-h-0',
                 'w-full max-w-[min(100vw-1rem,72rem)] rounded-lg sm:rounded-xl',
-                'h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)]',
-                'sm:h-auto sm:max-h-[calc(100dvh-2rem)]',
+                'h-[calc(100dvh-var(--topbar-height,52px)-1rem)]',
+                'max-h-[calc(100dvh-var(--topbar-height,52px)-1rem)]',
+                'sm:h-auto sm:max-h-[calc(100dvh-var(--topbar-height,52px)-1.5rem)]',
                 modalClassName,
               )}
               style={modalStyle}

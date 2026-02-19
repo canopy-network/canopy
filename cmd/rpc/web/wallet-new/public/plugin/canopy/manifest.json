@@ -542,14 +542,14 @@
             "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
             "autoPopulate": "once",
             "required": "{{ !ds.validator }}",
-            "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
+            "min": 0,
             "max": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}> }}",
-            "help": "{{ ds.validator ? 'Leave unchanged to keep current stake amount' : 'Minimum stake amount applies' }}",
+            "help": "{{ ds.validator ? 'For edit stake: if you enter an amount lower/equal to current stake, blockchain keeps current stake and only updates settings (committees/output/compound).' : 'Amount to lock for a new validator/delegation. Blockchain enforces minimum stake.' }}",
             "validation": {
-              "min": "{{ fromMicroDenom<{{ds.validator?.stakedAmount ?? 0}}> }}",
+              "min": 0,
               "messages": {
                 "required": "Amount is required for new stakes",
-                "min": "Stakes can only increase. Current stake: {{min}} {{chain.denom.symbol}}",
+                "min": "Amount must be greater than or equal to {{min}} {{chain.denom.symbol}}",
                 "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
               }
             },
@@ -569,7 +569,7 @@
           {
             "type": "section",
             "title": "Current Stake: {{numberToLocaleString<{{fromMicroDenom<{{ds.validator.stakedAmount}}>}}>}} CNPY",
-            "description": "Stakes can only increase. You cannot reduce your staked amount here.",
+            "description": "Edit stake follows blockchain behavior: amount <= current stake will not decrease locked stake; it only applies configuration updates.",
             "icon": "TrendingUp",
             "variant": "success",
             "showIf": "{{ ds.validator }}",
@@ -815,7 +815,7 @@
           "coerce": "string"
         },
         "amount": {
-          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "value": "{{(() => { const entered = Number(form.amount ?? 0); const current = Number(fromMicroDenom(ds.validator?.stakedAmount ?? 0)); const effective = ds.validator ? Math.max(entered, current) : entered; return toMicroDenom(effective); })()}}",
           "coerce": "number"
         },
         "delegate": {
