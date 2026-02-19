@@ -269,7 +269,7 @@ func (s *Server) EcoParameters(w http.ResponseWriter, r *http.Request, _ httprou
 	})
 }
 
-// Order gets an order for the specified chain
+// Order gets an order for the specified committee
 func (s *Server) Order(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
 	s.orderParams(w, r, func(s *fsm.StateMachine, p *orderRequest) (any, lib.ErrorI) {
@@ -277,7 +277,7 @@ func (s *Server) Order(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 		if err != nil {
 			return nil, err
 		}
-		return s.GetOrder(orderId, p.ChainId)
+		return s.GetOrder(orderId, p.Committee)
 	})
 }
 
@@ -667,8 +667,9 @@ func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlob
 
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request
 func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *orderRequest) (any, lib.ErrorI)) {
+	// initialize a new orderRequest object
 	req := new(orderRequest)
-
+	// execute the callback with the state machine and request
 	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
 		p, err := callback(state, req)
 		if err != nil {
@@ -682,8 +683,9 @@ func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback fu
 
 // ordersParams is a helper function to abstract common workflows around a callback requiring a state machine and orders request
 func (s *Server) ordersParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *ordersRequest) (any, lib.ErrorI)) {
+	// initialize a new ordersRequest object
 	req := new(ordersRequest)
-
+	// execute the callback with the state machine and request
 	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
 		p, err := callback(state, req)
 		if err != nil {

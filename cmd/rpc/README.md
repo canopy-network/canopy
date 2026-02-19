@@ -2506,14 +2506,14 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 
 **Route:** `/v1/query/order`
 
-**Description**: view a sell order by its unique idnetifier
+**Description**: view a sell order by its unique identifier
 
 **HTTP Method**: `POST`
 
 **Request**:
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **chainId**: `uint64` – the unique identifier of the committee
+- **committee**: `uint64` – the unique identifier of the committee
 - **orderId**: `hex-string` – the unique identifier of the order
 
 **Response**:
@@ -2532,7 +2532,7 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 $ curl -X POST localhost:50002/v1/query/order \
   -H "Content-Type: application/json" \
   -d '{
-        "chainId": 1,
+        "committee": 1,
         "orderId": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
         "height": 1000
       }'
@@ -2604,12 +2604,22 @@ $ curl -X POST localhost:50002/v1/query/orders \
             "requestedAmount": 2000000000000,
             "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
             "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+        },
+        {
+            "id": "ccd2f425f6f411e426b67692ddc1f21gf2776ga1d9g1a777g8d69bcdbacddfec",
+            "committee": 1,
+            "amountForSale": 500000000000,
+            "requestedAmount": 1000000000000,
+            "sellerReceiveAddress": "613d1c4e7dde2d7g275bb6647c3cb3dc0f91d822",
+            "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
+            "buyerChainDeadline": 17585,
+            "sellersSendAddress": "cc54d57355dfg26g3562b557dfb122gd2b3feegh"
         }
     ],
     "type": "orders",
-    "count": 1,
+    "count": 2,
     "totalPages": 1,
-    "totalCount": 1
+    "totalCount": 2
 }
 ```
 
