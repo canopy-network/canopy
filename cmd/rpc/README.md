@@ -2506,14 +2506,14 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 
 **Route:** `/v1/query/order`
 
-**Description**: view a sell order by its unique idnetifier
+**Description**: view a sell order by its unique identifier
 
 **HTTP Method**: `POST`
 
 **Request**:
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **chainId**: `uint64` – the unique identifier of the committee
+- **committee**: `uint64` – the unique identifier of the committee
 - **orderId**: `hex-string` – the unique identifier of the order
 
 **Response**:
@@ -2532,7 +2532,7 @@ $ curl -X POST localhost:50002/v1/query/tx-by-hash \
 $ curl -X POST localhost:50002/v1/query/order \
   -H "Content-Type: application/json" \
   -d '{
-        "chainId": 1,
+        "committee": 1,
         "orderId": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
         "height": 1000
       }'
@@ -2554,54 +2554,107 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 **Route:** `/v1/query/orders`
 
-**Description**: view all sell orders for a counter-asset pair
+**Description**: view all sell orders for a counter-asset pair with optional filters and pagination
 
 **HTTP Method**: `POST`
 
 **Request**:
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
-- **id**: `uint64` – the unique identifier of the committee (optional: use 0 to get all committees)
+- **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
+- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: when provided, uses indexed lookup for efficient querying)
+- **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
+- **perPage**: `int` – the number of orders per page (optional: defaults to system default)
 
 **Response**:
-- **orders**: `object` - the swap order book from the 'root chain' for the 'nested chain'
-  - **chainId**: `uint64` - the unique identifier of the committee
-  - **orders**: `sell order array` - the actual list of sell orders
-    - **id**: `hex string` - the 20 byte identifier of the order
-    - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
-    - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
-    - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
-    - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
-    - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
-    - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
-    - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
-    - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+- **pageNumber**: `int` - the current page number
+- **perPage**: `int` - the number of items per page
+- **results**: `sell order array` - the paginated list of sell orders
+  - **id**: `hex string` - the 20 byte identifier of the order
+  - **committee**: `uint64` - the id of the committee that is in-charge of escrow for the swap
+  - **data**: `hex-string` - a generic data field which can allow a committee to execute specific functionality for the swap
+  - **amountForSale**: `uint64` - amount of 'root-chain-asset' for sale
+  - **requestedAmount**: `uint64` - amount of 'counter-asset' the seller of the 'root-chain-asset' receives
+  - **sellerReceiveAddress**: `hex-string` - the external chain address to receive the 'counter-asset'
+  - **buyerSendAddress**: `hex-string` - if reserved (locked): the address the buyer will be transferring the funds from
+  - **buyerChainDeadline**: `hex-string` - the external chain height deadline to send the 'tokens' to SellerReceiveAddress
+  - **sellersSendAddress**: `hex-string` - the signing address of seller who is selling the CNPY
+- **type**: `string` - the type of paginated results ("orders")
+- **count**: `int` - the number of items in this page
+- **totalPages**: `int` - the total number of pages available
+- **totalCount**: `int` - the total number of orders matching the filters
 
-
+**Example 1: Basic pagination**
 ```
 $ curl -X POST localhost:50002/v1/query/orders \
   -H "Content-Type: application/json" \
   -d '{
-        "chainId": 1,
-        "height": 1000
+        "pageNumber": 1,
+        "perPage": 10
       }'
 
 > {
-    "chainID": 1,
-    "orders": [
+    "pageNumber": 1,
+    "perPage": 10,
+    "results": [
         {
-        "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
-        "committee": "1",
-        "data": "",
-        "amountForSale": 1000000000000,
-        "requestedAmount": 2000000000000,
-        "sellersReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
-        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
-        "buyerChainDeadline": 17585,
-        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
-      }
-    ]
+            "id": "abb1f314f5f300d315a56581ccb0f10fe1665f90c8f09666f7c58abcabfbcedb",
+            "committee": 1,
+            "amountForSale": 1000000000000,
+            "requestedAmount": 2000000000000,
+            "sellerReceiveAddress": "502c0b3d6ccd1c6f164aa5536b2ba2cb9e80c711",
+            "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe"
+        },
+        {
+            "id": "ccd2f425f6f411e426b67692ddc1f21gf2776ga1d9g1a777g8d69bcdbacddfec",
+            "committee": 1,
+            "amountForSale": 500000000000,
+            "requestedAmount": 1000000000000,
+            "sellerReceiveAddress": "613d1c4e7dde2d7g275bb6647c3cb3dc0f91d822",
+            "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
+            "buyerChainDeadline": 17585,
+            "sellersSendAddress": "cc54d57355dfg26g3562b557dfb122gd2b3feegh"
+        }
+    ],
+    "type": "orders",
+    "count": 2,
+    "totalPages": 1,
+    "totalCount": 2
 }
+```
+
+**Example 2: Filter by committee with pagination**
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "committee": 1,
+        "pageNumber": 1,
+        "perPage": 20
+      }'
+```
+
+**Example 3: Filter by sellersSendAddress with pagination (uses indexed lookup)**
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
+        "pageNumber": 1,
+        "perPage": 10
+      }'
+```
+
+**Example 4: Filter by both committee and sellersSendAddress with pagination (most efficient)**
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "committee": 1,
+        "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
+        "pageNumber": 1,
+        "perPage": 10
+      }'
 ```
 
 ## Dex Batch
