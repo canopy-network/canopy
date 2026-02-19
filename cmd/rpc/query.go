@@ -281,18 +281,21 @@ func (s *Server) Order(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 	})
 }
 
-// Orders retrieves the order book for a committee
+// Orders retrieves the order book for a committee with optional filters and pagination
 func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightAndIdParams(w, r, func(s *fsm.StateMachine, id uint64) (any, lib.ErrorI) {
-		if id == 0 {
-			return s.GetOrderBooks()
+	s.ordersParams(w, r, func(s *fsm.StateMachine, req *ordersRequest) (any, lib.ErrorI) {
+		// convert seller address if provided
+		var sellerAddr []byte
+		if req.SellersSendAddress != "" {
+			var err lib.ErrorI
+			sellerAddr, err = lib.StringToBytes(req.SellersSendAddress)
+			if err != nil {
+				return nil, err
+			}
 		}
-		b, err := s.GetOrderBook(id)
-		if err != nil {
-			return nil, err
-		}
-		return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{b}}, nil
+		// use paginated query
+		return s.GetOrdersPaginated(sellerAddr, req.Committee, req.PageParams)
 	})
 }
 
@@ -665,6 +668,21 @@ func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlob
 // orderParams is a helper function to abstract common workflows around a callback requiring a state machine and order request
 func (s *Server) orderParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *orderRequest) (any, lib.ErrorI)) {
 	req := new(orderRequest)
+
+	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
+		p, err := callback(state, req)
+		if err != nil {
+			write(w, err, http.StatusBadRequest)
+			return
+		}
+		write(w, p, http.StatusOK)
+		return
+	})
+}
+
+// ordersParams is a helper function to abstract common workflows around a callback requiring a state machine and orders request
+func (s *Server) ordersParams(w http.ResponseWriter, r *http.Request, callback func(s *fsm.StateMachine, request *ordersRequest) (any, lib.ErrorI)) {
+	req := new(ordersRequest)
 
 	s.readOnlyStateFromHeightParams(w, r, req, func(state *fsm.StateMachine) (err lib.ErrorI) {
 		p, err := callback(state, req)
