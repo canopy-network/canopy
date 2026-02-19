@@ -134,6 +134,10 @@ Defines dynamic UI and transaction forms:
 - **UI Mapping**: Icons, labels, and transaction categorization
 - **Payload Construction**: Data transformation for API calls
 
+### Declarative Architecture Docs
+- **Declarative Actions + Chain Guide**: `docs/declarative-actions-and-chain.md`
+- Covers the config-first runtime flow, purpose of `chain.json` and `manifest.json`, and implementation guidelines.
+
 ## 🖥️ Main Features
 
 ### Dashboard
