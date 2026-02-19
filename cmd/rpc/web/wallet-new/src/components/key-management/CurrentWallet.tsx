@@ -410,8 +410,8 @@ export const CurrentWallet = (): JSX.Element => {
       </div>
 
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
+          <div className="w-full max-w-sm max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-[0_18px_40px_rgba(0,0,0,0.45)] overflow-y-auto">
             <h3 className="text-lg text-foreground font-semibold mb-2">
               Unlock Private Key
             </h3>
@@ -449,8 +449,8 @@ export const CurrentWallet = (): JSX.Element => {
       )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-md bg-card border border-red-500/50 rounded-2xl p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-card border border-red-500/50 rounded-2xl p-4 sm:p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-3 bg-red-500/20 rounded-full">
                 <AlertTriangle className="w-6 h-6 text-red-500" />

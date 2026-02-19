@@ -41,6 +41,23 @@ export function normalizeFormForAction(
 
     // por tipo
     if (f.type === "amount" || NUMERIC_HINTS.has(n)) out[n] = asNum(out[n]);
+    if (f.type === "switch" || f.type === "option" || f.type === "optionCard") {
+      const raw = out[n];
+      if (
+        raw === true ||
+        raw === false ||
+        raw === "true" ||
+        raw === "false" ||
+        raw === 1 ||
+        raw === 0 ||
+        raw === "1" ||
+        raw === "0" ||
+        raw === "on" ||
+        raw === "off"
+      ) {
+        out[n] = asBool(raw);
+      }
+    }
     // por “hint” de nombre (p.ej. select true/false)
     if (BOOL_HINTS.has(n)) out[n] = asBool(out[n]);
   }
@@ -87,7 +104,7 @@ export function buildPayloadFromAction(action: Action, ctx: any) {
             resolved = Number(resolved);
             break;
           case "string":
-            resolved = String(resolved);
+            resolved = resolved == null ? "" : String(resolved);
             break;
           case "boolean":
             const resolvedStr = String(resolved).toLowerCase();

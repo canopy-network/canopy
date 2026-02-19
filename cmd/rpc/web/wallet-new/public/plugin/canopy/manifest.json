@@ -718,7 +718,7 @@
             "type": "text",
             "label": "Validator Address",
             "required": true,
-            "showIf": "{{ form.isDelegate && form.isDelegate !== true }}",
+            "showIf": "{{ form.isDelegate === false || form.isDelegate === 'false' }}",
             "value": "{{ ds.validator?.netAddress ?? '' }}",
             "autoPopulate": "once",
             "placeholder": "tcp://127.0.0.1:xxxx",
@@ -782,7 +782,7 @@
             },
             {
               "label": "Net Address",
-              "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}"
+              "value": "{{(form?.isDelegate === false || form?.isDelegate === 'false') ? form.validatorAddress : ''}}"
             },
             {
               "label": "Transaction Fee",
@@ -811,7 +811,7 @@
           "coerce": "string"
         },
         "netAddress": {
-          "value": "{{form?.isDelegate && form?.isDelegate != 'true' ? form.validatorAddress : ''}}",
+          "value": "{{(form?.isDelegate === false || form?.isDelegate === 'false') ? form.validatorAddress : ''}}",
           "coerce": "string"
         },
         "amount": {

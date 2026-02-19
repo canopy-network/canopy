@@ -166,7 +166,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
             onClick={onClose}
           >
             <motion.div
-              className="w-full max-w-lg bg-card rounded-2xl border border-border shadow-2xl overflow-hidden"
+              className="w-full max-w-lg max-h-[calc(100dvh-2rem)] bg-card rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col"
               initial={{ scale: 0.95, y: 16 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 16, opacity: 0 }}
@@ -205,7 +205,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </div>
               </div>
 
-              <div className="px-6 py-2 max-h-[65vh] overflow-y-auto">
+              <div className="px-4 sm:px-6 py-2 overflow-y-auto min-h-0">
                 <section className="py-4 border-b border-border/30">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">
                     Transaction Hash

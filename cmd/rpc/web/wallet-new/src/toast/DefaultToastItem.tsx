@@ -44,7 +44,7 @@ export const DefaultToastItem: React.FC<{
 
     return (
         <motion.div
-            className={`w-[420px] max-w-[92vw] rounded-xl border border-border backdrop-blur-md p-4 ${styles.container}`}
+            className={`w-full rounded-xl border border-border backdrop-blur-md p-3 sm:p-4 ${styles.container}`}
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 50 }}
@@ -64,12 +64,12 @@ export const DefaultToastItem: React.FC<{
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                     {data.title && (
-                        <div className="font-semibold text-base leading-5 text-foreground mb-1">
+                        <div className="font-semibold text-sm sm:text-base leading-5 text-foreground mb-1 break-words">
                             {data.title}
                         </div>
                     )}
                     {data.description && (
-                        <div className="text-sm text-muted-foreground leading-relaxed">
+                        <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
                             {data.description}
                         </div>
                     )}
@@ -84,7 +84,7 @@ export const DefaultToastItem: React.FC<{
                                         href={a.href}
                                         target={a.newTab ? "_blank" : undefined}
                                         rel={a.newTab ? "noreferrer" : undefined}
-                                        className="text-sm font-medium text-primary hover:text-primary/80 underline underline-offset-2 transition-colors"
+                                        className="text-xs sm:text-sm font-medium text-primary hover:text-primary/80 underline underline-offset-2 transition-colors break-words"
                                     >
                                         {a.label}
                                     </a>
@@ -92,7 +92,7 @@ export const DefaultToastItem: React.FC<{
                                     <button
                                         key={i}
                                         onClick={a.onClick}
-                                        className="text-sm font-medium rounded-lg px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all active:scale-95"
+                                        className="text-xs sm:text-sm font-medium rounded-lg px-2.5 sm:px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all active:scale-95"
                                     >
                                         {a.label}
                                     </button>

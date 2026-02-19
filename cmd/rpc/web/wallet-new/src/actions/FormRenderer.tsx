@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { templateBool } from "@/core/templater";
 
 const Grid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <motion.div className="grid grid-cols-12 gap-3 sm:gap-3.5 md:gap-4">{children}</motion.div>
+  <motion.div className="grid grid-cols-12 gap-3 sm:gap-3.5 md:gap-4 min-w-0">{children}</motion.div>
 );
 
 type Props = {
@@ -50,7 +50,9 @@ export default function FormRenderer({
   // For text input fields, use debounced values
   const templateContext = React.useMemo(
     () => ({
-      form: value, // Use immediate form values for DS reactivity
+      // Prefer parent-provided form context (already normalized by runtime),
+      // fallback to raw value for backwards compatibility.
+      form: ctx?.form ?? value,
       chain: ctx?.chain,
       account: ctx?.account,
       ds: { ...(ctx?.ds || {}), ...localDs },
@@ -148,12 +150,12 @@ export default function FormRenderer({
   return (
     <>
       {tabs.length > 0 && (
-        <div className="mb-3 flex gap-2 border-b border-border">
+        <div className="mb-3 flex gap-2 border-b border-border overflow-x-auto pb-1">
           {tabs.map((t) => (
             <button
               key={t}
               className={cx(
-                "px-3 py-2 -mb-px border-b-2",
+                "px-3 py-2 -mb-px border-b-2 whitespace-nowrap shrink-0",
                 activeTab === t
                   ? "border-emerald-400 text-emerald-400"
                   : "border-transparent text-muted-foreground",

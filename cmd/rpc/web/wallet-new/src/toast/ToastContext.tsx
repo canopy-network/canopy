@@ -95,17 +95,23 @@ export const ToastProvider: React.FC<ProviderProps> = ({
     }), [add, dismiss, clear, fromResult]);
 
     const posClasses = {
-        "top-right": "top-4 right-4",
-        "top-left": "top-4 left-4",
-        "bottom-right": "bottom-4 right-4",
-        "bottom-left": "bottom-4 left-4",
+        "top-right": "top-3 right-3 sm:top-4 sm:right-4",
+        "top-left": "top-3 left-3 sm:top-4 sm:left-4",
+        "bottom-right": "bottom-3 right-3 sm:bottom-4 sm:right-4",
+        "bottom-left": "bottom-3 left-3 sm:bottom-4 sm:left-4",
     }[position];
 
     return (
         <ToastContext.Provider value={api}>
             {children}
             {/* Container */}
-            <div className={`pointer-events-none fixed z-[9999] ${posClasses} flex flex-col gap-3`}>
+            <div
+                className={`pointer-events-none fixed z-[9999] ${posClasses} flex flex-col gap-2.5 sm:gap-3 w-[min(100vw-1.5rem,28rem)] sm:w-[min(100vw-2rem,28rem)]`}
+                style={{
+                    paddingTop: "max(env(safe-area-inset-top), 0px)",
+                    paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+                }}
+            >
                 <AnimatePresence initial={false}>
                     {queue.map((t) =>
                         <motion.div

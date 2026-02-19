@@ -8,13 +8,6 @@ interface StatsCardsProps {
     validatorsCount: number;
     chainCount: number;
     activeValidatorsCount: number;
-    rewardsChartPoints?: Array<{
-        index: number;
-        label: string;
-        amount: number;
-    }>;
-    rewardsChartLoading?: boolean;
-    rewardsChartAddress?: string;
 }
 
 const formatStakedAmount = (amount: number) => {
@@ -37,10 +30,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                                                           totalRewards,
                                                           validatorsCount,
                                                           chainCount,
-                                                          activeValidatorsCount,
-                                                          rewardsChartPoints = [],
-                                                          rewardsChartLoading = false,
-                                                          rewardsChartAddress
+                                                          activeValidatorsCount
                                                       }) => {
     const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
     const stakedChangePercentage = stakedHistory?.changePercentage || 0;
@@ -74,11 +64,10 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             id: 'rewardsEarned',
             title: 'Rewards Earned',
             value: `${formatRewards(totalRewards)} CNPY`,
-            subtitle: 'Last 24 hours',
+            subtitle: `Last 24 hours - ${validatorsCount} validators`,
             icon: 'fa-solid fa-ellipsis',
             iconColor: 'text-muted-foreground',
-            valueColor: 'text-primary',
-            hasButton: true
+            valueColor: 'text-primary'
         },
         {
             id: 'activeValidators',
@@ -116,49 +105,13 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                         <h3 className="text-muted-foreground text-sm font-medium">
                             {stat.title}
                         </h3>
-                        {stat.hasButton ? (
-                            <button className="text-muted-foreground">
-                                <i className={`${stat.icon} text-xl`}></i>
-                            </button>
-                        ) : (
-                            <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>
-                        )}
+                        <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>
                     </div>
                     <p className={`${stat.valueColor} text-2xl font-bold`}>
                         {stat.value}
                     </p>
-                    {stat.id === "rewardsEarned" && (
-                        <div className="h-10 rounded-lg border border-border/60 bg-background/50 px-2 py-1">
-                            {rewardsChartLoading ? (
-                                <div className="h-full w-full animate-pulse rounded bg-muted/60" />
-                            ) : rewardsChartPoints.length > 0 ? (
-                                <div className="flex h-full items-end gap-1">
-                                    {(() => {
-                                        const max = Math.max(...rewardsChartPoints.map((p) => p.amount), 1);
-                                        return rewardsChartPoints.map((p) => {
-                                            const h = Math.max(8, Math.round((p.amount / max) * 100));
-                                            return (
-                                                <div
-                                                    key={`${p.index}-${p.label}`}
-                                                    className="flex-1 rounded-sm bg-primary/70"
-                                                    style={{ height: `${h}%` }}
-                                                    title={`${p.label}: ${formatRewards(p.amount)} CNPY`}
-                                                />
-                                            );
-                                        });
-                                    })()}
-                                </div>
-                            ) : (
-                                <div className="flex h-full items-center text-[11px] text-muted-foreground">
-                                    No reward events in last 24h
-                                </div>
-                            )}
-                        </div>
-                    )}
                     <div className="text-muted-foreground text-xs">
-                        {stat.id === "rewardsEarned" && rewardsChartAddress
-                            ? `Last 24 hours (account ${rewardsChartAddress.slice(0, 6)}...${rewardsChartAddress.slice(-4)})`
-                            : stat.subtitle}
+                        {stat.subtitle}
                     </div>
                 </motion.div>
             ))}

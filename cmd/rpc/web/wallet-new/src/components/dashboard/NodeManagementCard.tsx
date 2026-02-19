@@ -20,35 +20,20 @@ const NODE_ACCENT_COLORS = [
     'from-rose-500/60 to-rose-500/30',
 ];
 
-const MiniSparkline = React.memo<{ index: number }>(({ index }) => {
-    const patterns = [
-        [30, 35, 40, 45, 50, 55, 60, 65],
-        [50, 48, 52, 50, 49, 51, 50, 52],
-        [70, 65, 60, 55, 50, 45, 40, 35],
-        [50, 60, 40, 55, 35, 50, 45, 50],
-    ];
-    const pattern = patterns[index % patterns.length];
-    const pts = pattern.map((y, i) => ({ x: (i / (pattern.length - 1)) * 100, y }));
-    const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-    const isUp = pattern[pattern.length - 1] > pattern[0];
-    const color = isUp ? 'hsl(var(--primary))' : '#ef4444';
-
-    return (
-        <svg width="28" height="14" viewBox="0 0 100 70" className="flex-shrink-0 opacity-80">
-            <path d={path} stroke={color} strokeWidth="7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-});
-
-MiniSparkline.displayName = 'MiniSparkline';
-
 interface ProcessedNode {
     address: string;
     stakeAmount: string;
     status: string;
-    rewards24h: string;
+    rewardsDelta24h: string;
+    rewardsDelta24hValue: number;
     originalValidator: any;
 }
+
+const rewardDeltaClass = (value: number) => {
+    if (value > 0) return 'text-primary';
+    if (value < 0) return 'text-red-400';
+    return 'text-muted-foreground';
+};
 
 const ValidatorRow = React.memo<{
     node: ProcessedNode;
@@ -75,16 +60,13 @@ const ValidatorRow = React.memo<{
             </div>
         </td>
         <td className="py-3 pr-4">
-            <div className="flex items-center gap-2">
-                <span className="text-sm font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
-                <MiniSparkline index={index} />
-            </div>
+            <span className="text-sm font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
         </td>
         <td className="py-3 pr-4">
             <StatusBadge label={node.status} size="sm" />
         </td>
         <td className="py-3 pr-4">
-            <span className="text-xs font-mono font-medium text-primary">{node.rewards24h}</span>
+            <span className={`text-xs font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
         </td>
         <td className="py-3">
             <button
@@ -142,7 +124,7 @@ const ValidatorMobileCard = React.memo<{
             </div>
             <div>
                 <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
-                <div className="text-xs font-mono text-primary">{node.rewards24h}</div>
+                <div className={`text-xs font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
             </div>
         </div>
     </motion.div>
@@ -175,8 +157,11 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
     const formatStakeAmount = useCallback((amount: number) =>
         (amount / 1000000).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), []);
 
-    const formatRewards = useCallback((rewards: number) =>
-        `+${(rewards / 1000000).toFixed(2)} CNPY`, []);
+    const formatRewardsDelta = useCallback((rewards: number) => {
+        const value = rewards / 1000000;
+        const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+        return `${sign}${Math.abs(value).toFixed(2)} CNPY`;
+    }, []);
 
     const getStatus = useCallback((validator: any) => {
         if (!validator) return 'Liquid';
@@ -208,7 +193,8 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                     address: shortAddr(address),
                     stakeAmount: validator ? formatStakeAmount(validator.stakedAmount) : '0.00',
                     status: getStatus(validator),
-                    rewards24h: validator ? formatRewards(rewardsData[address]?.change24h || 0) : '+0.00 CNPY',
+                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : '0.00 CNPY',
+                    rewardsDelta24hValue: validator ? Number(rewardsData[address]?.change24h || 0) : 0,
                     originalValidator: validator || { address, nickname: keyData.keyNickname || 'Unnamed Key', stakedAmount: 0 },
                 };
             })
@@ -217,7 +203,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                 if (a.status !== 'Staked' && b.status === 'Staked') return 1;
                 return 0;
             });
-    }, [keystore, validators, formatStakeAmount, getStatus, formatRewards, rewardsData]);
+    }, [keystore, validators, formatStakeAmount, getStatus, formatRewardsDelta, rewardsData]);
 
     const cardBase = 'canopy-card p-5';
     const cardMotion = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, delay: 0.28 } };
@@ -257,7 +243,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-border/50">
-                                    {['Key', 'Staked', 'Status', 'Rewards (24h)', 'Action'].map(h => (
+                                    {['Key', 'Staked', 'Status', 'Rewards Δ24h', 'Action'].map(h => (
                                         <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-[10px] font-display font-semibold text-muted-foreground uppercase tracking-widest">
                                             {h}
                                         </th>

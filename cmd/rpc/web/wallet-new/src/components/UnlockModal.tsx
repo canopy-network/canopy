@@ -64,7 +64,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -81,7 +81,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
 
                     {/* Modal */}
                     <motion.div
-                        className="relative w-full max-w-md bg-gradient-to-b from-bg-secondary to-bg-primary border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
+                        className="relative w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-gradient-to-b from-bg-secondary to-bg-primary border border-border/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -98,7 +98,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                             <X className="w-5 h-5" />
                         </button>
 
-                        <div className="p-6 pt-8">
+                        <div className="p-4 pt-7 sm:p-6 sm:pt-8 overflow-y-auto min-h-0">
                             {/* Icon */}
                             <div className="flex justify-center mb-5">
                                 <div className="relative">
@@ -223,7 +223,7 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                         </div>
 
                         {/* Footer hint */}
-                        <div className="px-6 py-4 bg-card/50 border-t border-border/50">
+                        <div className="px-4 py-3 sm:px-6 sm:py-4 bg-card/50 border-t border-border/50 shrink-0">
                             <p className="text-xs text-muted-foreground text-center">
                                 Your session will automatically extend while you're active
                             </p>

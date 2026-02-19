@@ -5,7 +5,6 @@ import FormRenderer from "./FormRenderer";
 import { useResolvedFees } from "@/core/fees";
 import { useSession, attachIdleRenew } from "@/state/session";
 import UnlockModal from "../components/UnlockModal";
-import useDebouncedValue from "../core/useDebouncedValue";
 import {
   getFieldsFromAction,
   normalizeFormForAction,
@@ -47,10 +46,6 @@ export default function ActionRunner({
   const [form, setForm] = React.useState<Record<string, any>>(
     prefilledData || {},
   );
-
-  // Reduce debounce time from 250ms to 100ms for better responsiveness
-  // especially important for prefilledData and DS-dependent fields
-  const debouncedForm = useDebouncedValue(form, 100);
   const [txRes, setTxRes] = React.useState<any>(null);
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
   // Track which fields were programmatically prefilled (from prefilledData or modules)
@@ -74,6 +69,12 @@ export default function ActionRunner({
     [manifest, actionId],
   );
 
+  // Keep a normalized, non-debounced form for dynamic visibility/showIf and payload coherence.
+  const normalizedLiveForm = React.useMemo(
+    () => normalizeFormForAction(action as any, form),
+    [action, form],
+  );
+
   // NEW: Load action-level DS (replaces per-field DS for better performance)
   const actionDsConfig = React.useMemo(() => (action as any)?.ds, [action]);
 
@@ -82,7 +83,7 @@ export default function ActionRunner({
   // The DS hook itself handles debouncing internally where needed
   const dsCtx = React.useMemo(
     () => ({
-      form: form,
+      form: normalizedLiveForm,
       chain,
       account: selectedAccount
         ? {
@@ -93,7 +94,7 @@ export default function ActionRunner({
         : undefined,
       params,
     }),
-    [form, chain, selectedAccount, params],
+    [normalizedLiveForm, chain, selectedAccount, params],
   );
 
   const { ds: actionDs, isLoading: isDsLoading, fetchStatus: dsFetchStatus } = useActionDs(
@@ -182,7 +183,7 @@ export default function ActionRunner({
 
   const templatingCtx = React.useMemo(
     () => ({
-      form: debouncedForm,
+      form: normalizedLiveForm,
       layout: (action as any)?.form?.layout,
       chain,
       account: selectedAccount
@@ -209,7 +210,7 @@ export default function ActionRunner({
       __unmarkFieldsAsPrefilled: unmarkFieldsAsPrefilled,
     }),
     [
-      debouncedForm,
+      normalizedLiveForm,
       chain,
       selectedAccount,
       feesResolved,
@@ -292,8 +293,8 @@ export default function ActionRunner({
   }, [action, isReady]);
 
   const normForm = React.useMemo(
-    () => normalizeFormForAction(action as any, debouncedForm),
-    [action, debouncedForm],
+    () => normalizedLiveForm,
+    [normalizedLiveForm],
   );
   const payload = React.useMemo(
     () =>

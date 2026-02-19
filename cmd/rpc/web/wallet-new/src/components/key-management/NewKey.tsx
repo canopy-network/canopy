@@ -94,7 +94,7 @@ export const NewKey = (): JSX.Element => {
                 </span>
             </div>
 
-            <div className="flex flex-col justify-between h-[90%]">
+            <div className="flex flex-col justify-between h-full min-h-0">
                 <div className="space-y-5">
                     <div>
                         <label className="block text-sm font-medium text-foreground/80 mb-2">
