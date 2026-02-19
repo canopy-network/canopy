@@ -263,20 +263,9 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
-	// check if order already exists to handle buyer index cleanup
-	existingOrder, getErr := s.GetOrder(order.Id, chainId)
-	// if error is anything other than "not found", return it
-	if getErr != nil && getErr.Code() != lib.CodeOrderNotFound {
-		return getErr
-	}
-	// if existing order has a buyer and it differs from the new order's buyer, clean up the old index
-	if existingOrder != nil && len(existingOrder.BuyerSendAddress) > 0 {
-		// remove old buyer index if buyer changed or was removed
-		if !bytes.Equal(existingOrder.BuyerSendAddress, order.BuyerSendAddress) {
-			if err = s.Delete(KeyForOrderByBuyer(existingOrder.BuyerSendAddress, chainId, order.Id)); err != nil {
-				return
-			}
-		}
+	// clean up stale buyer index if buyer changed or was removed
+	if err = s.cleanupStaleBuyerIndex(order, chainId); err != nil {
+		return
 	}
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
@@ -298,6 +287,27 @@ func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.E
 		}
 	}
 	return
+}
+
+// cleanupStaleBuyerIndex() removes the old buyer index entry if the buyer changed or was removed
+func (s *StateMachine) cleanupStaleBuyerIndex(order *lib.SellOrder, chainId uint64) lib.ErrorI {
+	// check if order already exists
+	existingOrder, err := s.GetOrder(order.Id, chainId)
+	// if order not found, nothing to clean up
+	if err != nil && err.Code() == lib.CodeOrderNotFound {
+		return nil
+	}
+	// if other error, return it
+	if err != nil {
+		return err
+	}
+	// if existing order has a buyer and it differs from the new order's buyer, clean up the old index
+	if existingOrder != nil && len(existingOrder.BuyerSendAddress) > 0 {
+		if !bytes.Equal(existingOrder.BuyerSendAddress, order.BuyerSendAddress) {
+			return s.Delete(KeyForOrderByBuyer(existingOrder.BuyerSendAddress, chainId, order.Id))
+		}
+	}
+	return nil
 }
 
 // DeleteOrder() deletes an existing order in the order book for a committee in the state db

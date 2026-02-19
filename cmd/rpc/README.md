@@ -2562,8 +2562,8 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
-- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: uses indexed lookup for efficient querying)
-- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: uses indexed lookup for efficient querying)
+- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: use "" to get all seller addresses)
+- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: use "" to get all buyer addresses)
 - **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
 - **perPage**: `int` – the number of orders per page (optional: defaults to system default)
 
