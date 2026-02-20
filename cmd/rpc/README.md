@@ -2562,9 +2562,12 @@ $ curl -X POST localhost:50002/v1/query/order \
 
 - **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
 - **committee**: `uint64` – the unique identifier of the committee to filter by (optional: use 0 to get all committees)
-- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: when provided, uses indexed lookup for efficient querying)
+- **sellersSendAddress**: `hex-string` – the seller address to filter orders by (optional: use "" to get all seller addresses)
+- **buyerSendAddress**: `hex-string` – the buyer address to filter locked orders by (optional: use "" to get all buyer addresses)
 - **pageNumber**: `int` – the page number to retrieve (optional: starts at 1)
 - **perPage**: `int` – the number of orders per page (optional: defaults to system default)
+
+**Note**: `sellersSendAddress` and `buyerSendAddress` are mutually exclusive filters. You cannot use both in the same request.
 
 **Response**:
 - **pageNumber**: `int` - the current page number
@@ -2652,6 +2655,17 @@ $ curl -X POST localhost:50002/v1/query/orders \
   -d '{
         "committee": 1,
         "sellersSendAddress": "bb43c46244cef15f2451a446cea011fc1a2eddfe",
+        "pageNumber": 1,
+        "perPage": 10
+      }'
+```
+
+**Example 5: Filter by buyerSendAddress with pagination (locked orders only)**
+```
+$ curl -X POST localhost:50002/v1/query/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+        "buyerSendAddress": "aaac0b3d64c12c6f164545545b2ba2ab4d80deff",
         "pageNumber": 1,
         "perPage": 10
       }'

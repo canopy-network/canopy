@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -262,6 +263,10 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
+	// clean up stale buyer index if buyer changed or was removed
+	if err = s.cleanupStaleBuyerIndex(order, chainId); err != nil {
+		return
+	}
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
 	if err != nil {
@@ -272,12 +277,42 @@ func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.E
 		return
 	}
 	// set the secondary index for seller address lookup (value is empty, key is sufficient)
-	return s.Set(KeyForOrderBySeller(order.SellersSendAddress, chainId, order.Id), []byte{})
+	if err = s.Set(KeyForOrderBySeller(order.SellersSendAddress, chainId, order.Id), []byte{}); err != nil {
+		return
+	}
+	// set the secondary index for buyer address lookup if buyer exists (locked order)
+	if len(order.BuyerSendAddress) > 0 {
+		if err = s.Set(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, order.Id), []byte{}); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// cleanupStaleBuyerIndex() removes the old buyer index entry if the buyer changed or was removed
+func (s *StateMachine) cleanupStaleBuyerIndex(order *lib.SellOrder, chainId uint64) lib.ErrorI {
+	// check if order already exists
+	existingOrder, err := s.GetOrder(order.Id, chainId)
+	// if order not found, nothing to clean up
+	if err != nil && err.Code() == lib.CodeOrderNotFound {
+		return nil
+	}
+	// if other error, return it
+	if err != nil {
+		return err
+	}
+	// if existing order has a buyer and it differs from the new order's buyer, clean up the old index
+	if existingOrder != nil && len(existingOrder.BuyerSendAddress) > 0 {
+		if !bytes.Equal(existingOrder.BuyerSendAddress, order.BuyerSendAddress) {
+			return s.Delete(KeyForOrderByBuyer(existingOrder.BuyerSendAddress, chainId, order.Id))
+		}
+	}
+	return nil
 }
 
 // DeleteOrder() deletes an existing order in the order book for a committee in the state db
 func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.ErrorI) {
-	// get the order first to retrieve the seller address for index cleanup
+	// get the order first to retrieve addresses for index cleanup
 	order, err := s.GetOrder(orderId, chainId)
 	if err != nil {
 		return
@@ -286,8 +321,17 @@ func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.Erro
 	if err = s.Delete(KeyForOrder(chainId, orderId)); err != nil {
 		return
 	}
-	// delete the secondary index entry
-	return s.Delete(KeyForOrderBySeller(order.SellersSendAddress, chainId, orderId))
+	// delete the seller secondary index entry
+	if err = s.Delete(KeyForOrderBySeller(order.SellersSendAddress, chainId, orderId)); err != nil {
+		return
+	}
+	// delete the buyer secondary index entry if buyer exists
+	if len(order.BuyerSendAddress) > 0 {
+		if err = s.Delete(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, orderId)); err != nil {
+			return
+		}
+	}
+	return
 }
 
 // GetOrder() gets the sell order from state
@@ -472,8 +516,22 @@ func (s *StateMachine) parseOrderBySellerKey(key []byte) (chainId uint64, orderI
 	return
 }
 
+// parseOrderByBuyerKey() extracts chainId and orderId from an order-by-buyer index key
+func (s *StateMachine) parseOrderByBuyerKey(key []byte) (chainId uint64, orderId []byte, err lib.ErrorI) {
+	// key format: orderByBuyerPrefix + buyer + chainId + orderId (all length-prefixed)
+	segments := lib.DecodeLengthPrefixed(key)
+	if len(segments) < 4 {
+		return 0, nil, ErrInvalidKey(key)
+	}
+	// segments[0] = prefix, segments[1] = buyer, segments[2] = chainId, segments[3] = orderId
+	chainId = binary.BigEndian.Uint64(segments[2])
+	orderId = segments[3]
+	return
+}
+
 // GetOrdersPaginated() retrieves orders with optional filters and pagination
-func (s *StateMachine) GetOrdersPaginated(seller []byte, chainId uint64, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+// Note: seller and buyer filters are mutually exclusive
+func (s *StateMachine) GetOrdersPaginated(seller, buyer []byte, chainId uint64, p lib.PageParams) (*lib.Page, lib.ErrorI) {
 	// create the page object
 	page := lib.NewPage(p, "orders")
 	results := &lib.SellOrders{}
@@ -481,6 +539,10 @@ func (s *StateMachine) GetOrdersPaginated(seller []byte, chainId uint64, p lib.P
 	if len(seller) > 0 {
 		// use seller index for efficient lookup
 		return s.getOrdersBySellerPaginated(seller, chainId, page, results)
+	}
+	if len(buyer) > 0 {
+		// use buyer index for efficient lookup
+		return s.getOrdersByBuyerPaginated(buyer, chainId, page, results)
 	}
 	if chainId != 0 {
 		// filter by chainId only - iterate orders for that chain
@@ -503,6 +565,33 @@ func (s *StateMachine) getOrdersBySellerPaginated(seller []byte, chainId uint64,
 	err := page.Load(prefix, false, results, s, func(k, v []byte) lib.ErrorI {
 		// extract chainId and orderId from the index key
 		cId, orderId, e := s.parseOrderBySellerKey(k)
+		if e != nil {
+			return e
+		}
+		// get the actual order from the primary store
+		order, e := s.GetOrder(orderId, cId)
+		if e != nil {
+			return e
+		}
+		*results = append(*results, order)
+		return nil
+	})
+	return page, err
+}
+
+// getOrdersByBuyerPaginated() retrieves paginated orders using the buyer index
+func (s *StateMachine) getOrdersByBuyerPaginated(buyer []byte, chainId uint64, page *lib.Page, results *lib.SellOrders) (*lib.Page, lib.ErrorI) {
+	// determine the prefix based on whether chainId filter is provided
+	var prefix []byte
+	if chainId == 0 {
+		prefix = OrderByBuyerPrefix(buyer)
+	} else {
+		prefix = OrderByBuyerAndChainPrefix(buyer, chainId)
+	}
+	// use the page Load function with the index prefix
+	err := page.Load(prefix, false, results, s, func(k, v []byte) lib.ErrorI {
+		// extract chainId and orderId from the index key
+		cId, orderId, e := s.parseOrderByBuyerKey(k)
 		if e != nil {
 			return e
 		}
