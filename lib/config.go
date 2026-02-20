@@ -158,21 +158,25 @@ const (
 	DefaultInitialTokensPerBlock = uint64(80 * 1000000) // 80 CNPY
 	// the number of blocks between each halvening (block reward is cut in half) event
 	DefaultBlocksPerHalvening = uint64(3150000) // ~ 2 years - 20 second blocks
+	// whether to index orders by seller/buyer address for efficient lookups
+	DefaultIndexOrdersByAddresses = true
 )
 
 // StateMachineConfig houses FSM level options
 type StateMachineConfig struct {
-	InitialTokensPerBlock uint64 `json:"initialTokensPerBlock"` // initial micro tokens minted per block (before halvenings)
-	BlocksPerHalvening    uint64 `json:"blocksPerHalvening"`    // number of blocks between block reward halvings
-	FaucetAddress         string `json:"faucetAddress"`         // if set: "send" txs from this address will auto-mint on insufficient funds (dev/test only)
+	InitialTokensPerBlock  uint64 `json:"initialTokensPerBlock"`  // initial micro tokens minted per block (before halvenings)
+	BlocksPerHalvening     uint64 `json:"blocksPerHalvening"`     // number of blocks between block reward halvings
+	FaucetAddress          string `json:"faucetAddress"`          // if set: "send" txs from this address will auto-mint on insufficient funds (dev/test only)
+	IndexOrdersByAddresses bool   `json:"indexOrdersByAddresses"` // index orders by seller/buyer address for efficient lookups
 }
 
 // DefaultStateMachineConfig returns FSM defaults
 func DefaultStateMachineConfig() StateMachineConfig {
 	return StateMachineConfig{
-		InitialTokensPerBlock: DefaultInitialTokensPerBlock,
-		BlocksPerHalvening:    DefaultBlocksPerHalvening,
-		FaucetAddress:         "",
+		InitialTokensPerBlock:  DefaultInitialTokensPerBlock,
+		BlocksPerHalvening:     DefaultBlocksPerHalvening,
+		FaucetAddress:          "",
+		IndexOrdersByAddresses: DefaultIndexOrdersByAddresses,
 	}
 }
 
