@@ -541,6 +541,13 @@ async function testPluginTransactions(): Promise<void> {
     console.log(`Final balances - Account 1: ${bal1Final}, Account 2: ${bal2Final}`);
 
     console.log('\n=== All transactions confirmed successfully! ===');
+    
+    // Print tip about verifying balances via RPC
+    console.log('\n--- Verify Account Balances ---');
+    console.log('You can manually check account balances at any time using the /v1/query/account RPC endpoint:');
+    console.log(`  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account1Addr}"}'`);
+    console.log(`  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account2Addr}"}'`);
+    console.log('See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account');
 }
 
 // Run the test
