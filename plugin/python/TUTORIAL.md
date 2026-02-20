@@ -6,10 +6,20 @@ This tutorial walks you through implementing two custom transaction types for th
 
 ## Prerequisites
 
+- Go 1.24.0 or higher (required to build Canopy)
 - Python 3.9 or later
 - `protoc` compiler installed (or use `grpcio-tools`)
 - The python plugin base code from `plugin/python`
-- Canopy node (running with the plugin will be explained in Step 7)
+
+## Step 0: Build Canopy
+
+Before working with plugins, build the Canopy binary from the repository root:
+
+```bash
+make build/canopy
+```
+
+This installs the `canopy` binary to your Go bin directory (`~/go/bin/canopy`).
 
 ## Step 1: Define the Protobuf Messages
 
@@ -118,22 +128,45 @@ async def check_tx(self, request: PluginCheckRequest) -> PluginCheckResponse:
 
 ### CheckMessageFaucet Implementation
 
+Add this method inside the `Contract` class in `contract/contract.py`, after the existing `_check_message_send` method:
+
 ```python
 def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
-    """CheckMessageFaucet statelessly validates a 'faucet' message."""
-    # Check signer address (must be exactly 20 bytes)
+    """
+    CheckMessageFaucet statelessly validates a 'faucet' message.
+    
+    This is called during mempool validation BEFORE the transaction is included in a block.
+    Faucet is a test transaction that mints tokens to any address without balance checks.
+    
+    Args:
+        msg: The faucet message containing signer_address, recipient_address, and amount
+        
+    Returns:
+        PluginCheckResponse with authorized signers set
+        
+    Raises:
+        PluginError: If any validation fails (invalid address or amount)
+    """
+    # Validate signer address - all Canopy addresses are exactly 20 bytes.
+    # This prevents malformed addresses from entering the mempool.
     if len(msg.signer_address) != 20:
         raise err_invalid_address()
 
-    # Check recipient address (must be exactly 20 bytes)
+    # Validate recipient address - same 20-byte requirement.
+    # The recipient will receive the minted tokens.
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Check amount (must be greater than 0)
+    # Validate amount - must be greater than zero.
+    # Zero-amount transactions are meaningless and waste block space.
     if msg.amount == 0:
         raise err_invalid_amount()
 
-    # Return authorized signers (signer must sign)
+    # Build and return the successful check response:
+    # - recipient: who receives funds (used for indexing/notifications)
+    # - authorized_signers: list of addresses that MUST sign this transaction.
+    #   The FSM will verify ALL addresses in this list have valid BLS signatures.
+    #   For faucet, only the signer needs to authorize the mint request.
     response = PluginCheckResponse()
     response.recipient = msg.recipient_address
     response.authorized_signers.append(msg.signer_address)
@@ -142,22 +175,42 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
 
 ### CheckMessageReward Implementation
 
+Add this method inside the `Contract` class in `contract/contract.py`, after `_check_message_faucet`:
+
 ```python
 def _check_message_reward(self, msg: MessageReward) -> PluginCheckResponse:
-    """CheckMessageReward statelessly validates a 'reward' message."""
-    # Check admin address (must be exactly 20 bytes)
+    """
+    CheckMessageReward statelessly validates a 'reward' message.
+    
+    Rewards allow an admin to mint tokens to any recipient address.
+    The admin pays the transaction fee but the recipient gets the tokens.
+    
+    Args:
+        msg: The reward message containing admin_address, recipient_address, and amount
+        
+    Returns:
+        PluginCheckResponse with authorized signers set
+        
+    Raises:
+        PluginError: If any validation fails (invalid address or amount)
+    """
+    # Validate admin address - the admin is the authority who can mint rewards.
+    # In production, you might check against a whitelist of admin addresses.
     if len(msg.admin_address) != 20:
         raise err_invalid_address()
 
-    # Check recipient address (must be exactly 20 bytes)
+    # Validate recipient address - who will receive the minted tokens.
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Check amount (must be greater than 0)
+    # Validate amount - must be positive to be meaningful.
     if msg.amount == 0:
         raise err_invalid_amount()
 
-    # Return authorized signers (admin must sign)
+    # Build and return the successful check response:
+    # - authorized_signers: the ADMIN must sign to authorize this mint.
+    #   Unlike faucet, the admin (not recipient) must sign, making this
+    #   suitable for controlled token distribution.
     response = PluginCheckResponse()
     response.recipient = msg.recipient_address
     response.authorized_signers.append(msg.admin_address)
@@ -189,21 +242,43 @@ async def deliver_tx(self, request: PluginDeliverRequest) -> PluginDeliverRespon
 
 ### DeliverMessageFaucet Implementation
 
+Add this async method inside the `Contract` class in `contract/contract.py`, after the existing `_deliver_message_send` method:
+
 The faucet transaction mints tokens without requiring the signer to have any balance:
 
 ```python
 async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResponse:
-    """DeliverMessageFaucet handles a 'faucet' message (mints tokens to recipient - no fee, no balance check)."""
+    """
+    DeliverMessageFaucet handles a faucet message by minting tokens to the recipient.
+    
+    This is called AFTER CheckTx passes and the transaction is included in a block.
+    Unlike CheckTx, DeliverTx CAN read and write blockchain state.
+    Faucet is special: it mints tokens without requiring any existing balance (for testing).
+    
+    Args:
+        msg: The faucet message containing recipient_address and amount to mint
+        
+    Returns:
+        PluginDeliverResponse with empty error field on success
+    """
+    # Guard clause: verify the plugin infrastructure is initialized.
+    # plugin is the connection to Canopy FSM; config holds chain settings.
     if not self.plugin or not self.config:
         raise PluginError(1, "plugin", "plugin or config not initialized")
 
-    # Generate query ID
+    # Generate a unique query ID to correlate request/response in batch reads.
+    # When reading multiple keys, each gets a query_id so we can match results.
+    # Use random number in safe JavaScript integer range for compatibility.
     recipient_query_id = random.randint(0, 2**53)
 
-    # Calculate key
+    # Generate the state key for the recipient's account.
+    # key_for_account creates a length-prefixed key: [prefix][address]
+    # This ensures unique keys in the key-value store.
     recipient_key = key_for_account(msg.recipient_address)
 
-    # Read current recipient state
+    # Request the current state of the recipient's account from the FSM.
+    # state_read sends a request over the Unix socket to the Canopy FSM,
+    # which reads from the blockchain's state database.
     response = await self.plugin.state_read(
         self,
         PluginStateReadRequest(
@@ -213,28 +288,36 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
         ),
     )
 
-    # Check for internal error
+    # Check for application-level errors from the FSM read operation.
+    # HasField checks if the optional error field is populated in protobuf.
     if response.HasField("error"):
         result = PluginDeliverResponse()
-        result.error.CopyFrom(response.error)
+        result.error.CopyFrom(response.error)  # Copy error to response
         return result
 
-    # Get recipient bytes
+    # Extract the recipient's current account bytes from the response.
+    # Results are returned with their query_id so we can match them.
+    # If the account doesn't exist yet, recipient_bytes will be None.
     recipient_bytes = None
     for resp in response.results:
         if resp.query_id == recipient_query_id and resp.entries:
             recipient_bytes = resp.entries[0].value
 
-    # Unmarshal recipient account (or create new if doesn't exist)
+    # Unmarshal the protobuf Account message.
+    # If bytes are None, create a new empty Account with default values (amount=0).
     recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
 
-    # Mint tokens to recipient
+    # CORE LOGIC: Add the faucet amount to the recipient's balance.
+    # This is where tokens are "minted" - we simply increase the balance.
+    # No balance check needed because faucet creates tokens from nothing.
     recipient_account.amount += msg.amount
 
-    # Marshal updated state
+    # Marshal the updated account back to protobuf bytes for storage.
     recipient_bytes_new = marshal(recipient_account)
 
-    # Write state changes
+    # Write the updated state back to the blockchain via the FSM.
+    # sets contains key-value pairs to write; deletes would remove keys.
+    # This persists the recipient's new balance to the blockchain.
     write_resp = await self.plugin.state_write(
         self,
         PluginStateWriteRequest(
@@ -244,33 +327,53 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
         ),
     )
 
+    # Build the response, copying any error from the write operation.
     result = PluginDeliverResponse()
     if write_resp.HasField("error"):
         result.error.CopyFrom(write_resp.error)
+    # Empty error field means success
     return result
 ```
 
 ### DeliverMessageReward Implementation
 
+Add this async method inside the `Contract` class in `contract/contract.py`, after `_deliver_message_faucet`:
+
 The reward transaction mints tokens to a recipient, with the admin paying the transaction fee:
 
 ```python
 async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginDeliverResponse:
-    """DeliverMessageReward handles a 'reward' message (mints tokens to recipient)."""
+    """
+    DeliverMessageReward handles a reward message by minting tokens to the recipient.
+    
+    The admin authorizes this transaction and pays the transaction fee.
+    This demonstrates a more complex DeliverTx with multiple account updates.
+    
+    Args:
+        msg: The reward message containing admin_address, recipient_address, and amount
+        fee: The transaction fee that the admin must pay
+        
+    Returns:
+        PluginDeliverResponse with empty error field on success
+    """
+    # Guard clause: verify the plugin infrastructure is initialized.
     if not self.plugin or not self.config:
         raise PluginError(1, "plugin", "plugin or config not initialized")
 
-    # Generate query IDs
+    # Generate unique query IDs for each key to correlate responses with requests.
+    # This is necessary because results may come back in any order.
     admin_query_id = random.randint(0, 2**53)
     recipient_query_id = random.randint(0, 2**53)
     fee_query_id = random.randint(0, 2**53)
 
-    # Calculate keys
-    admin_key = key_for_account(msg.admin_address)
-    recipient_key = key_for_account(msg.recipient_address)
-    fee_pool_key = key_for_fee_pool(self.config.chain_id)
+    # Calculate the state database keys for each entity we need to read/write.
+    # Each key type has a unique prefix to avoid collisions in the key-value store.
+    admin_key = key_for_account(msg.admin_address)        # Admin's account (pays fee)
+    recipient_key = key_for_account(msg.recipient_address) # Recipient's account (gets tokens)
+    fee_pool_key = key_for_fee_pool(self.config.chain_id)  # Fee pool for this chain
 
-    # Read current state
+    # Batch read all three accounts in a single round-trip to the FSM.
+    # This is more efficient than making three separate read requests.
     response = await self.plugin.state_read(
         self,
         PluginStateReadRequest(
@@ -282,13 +385,14 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
         ),
     )
 
-    # Check for internal error
+    # Check for application-level errors from the FSM read operation.
     if response.HasField("error"):
         result = PluginDeliverResponse()
         result.error.CopyFrom(response.error)
         return result
 
-    # Parse results by query_id
+    # Extract each account's bytes from the response, matching by query_id.
+    # None means the account doesn't exist yet (new account).
     admin_bytes = None
     recipient_bytes = None
     fee_pool_bytes = None
@@ -301,28 +405,35 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
         elif resp.query_id == fee_query_id:
             fee_pool_bytes = resp.entries[0].value if resp.entries else None
 
-    # Unmarshal accounts
+    # Unmarshal the protobuf messages using the appropriate type schemas.
+    # If bytes are None, create empty objects with default values (amount=0).
     admin_account = unmarshal(Account, admin_bytes) if admin_bytes else Account()
     recipient_account = unmarshal(Account, recipient_bytes) if recipient_bytes else Account()
     fee_pool = unmarshal(Pool, fee_pool_bytes) if fee_pool_bytes else Pool()
 
-    # Admin must have enough to pay the fee
+    # BUSINESS LOGIC: Verify admin has sufficient funds to pay the transaction fee.
+    # This is a critical check - without it, admins could spam free transactions.
     if admin_account.amount < fee:
         raise err_insufficient_funds()
 
-    # Apply state changes
-    admin_account.amount -= fee  # Admin pays fee
-    recipient_account.amount += msg.amount  # Mint tokens to recipient
+    # CORE STATE CHANGES: Update balances for all three entities.
+    # 1. Deduct fee from admin's balance
+    admin_account.amount -= fee  # Admin pays the transaction fee
+    # 2. Mint new tokens to recipient (this increases total supply!)
+    recipient_account.amount += msg.amount  # Mint tokens (created from nothing)
+    # 3. Add fee to the pool for validator rewards
     fee_pool.amount += fee
 
-    # Marshal updated state
+    # Marshal all updated accounts to protobuf bytes for storage.
     admin_bytes_new = marshal(admin_account)
     recipient_bytes_new = marshal(recipient_account)
     fee_pool_bytes_new = marshal(fee_pool)
 
-    # Write state changes
+    # Write all state changes atomically.
+    # Special case: if admin's balance is now zero, delete their account to save space.
+    # This is a common pattern - zero-balance accounts are removed from state.
     if admin_account.amount == 0:
-        # Delete drained admin account
+        # Admin account is empty - delete it instead of storing zeros.
         write_resp = await self.plugin.state_write(
             self,
             PluginStateWriteRequest(
@@ -330,10 +441,11 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
                     PluginSetOp(key=fee_pool_key, value=fee_pool_bytes_new),
                     PluginSetOp(key=recipient_key, value=recipient_bytes_new),
                 ],
-                deletes=[PluginDeleteOp(key=admin_key)],
+                deletes=[PluginDeleteOp(key=admin_key)],  # Remove empty account
             ),
         )
     else:
+        # Admin still has balance - update all three accounts.
         write_resp = await self.plugin.state_write(
             self,
             PluginStateWriteRequest(
@@ -345,9 +457,11 @@ async def _deliver_message_reward(self, msg: MessageReward, fee: int) -> PluginD
             ),
         )
 
+    # Build the response, copying any error from the write operation.
     result = PluginDeliverResponse()
     if write_resp.HasField("error"):
         result.error.CopyFrom(write_resp.error)
+    # Empty error field means success
     return result
 ```
 
@@ -360,9 +474,11 @@ To run Canopy with the Python plugin enabled, you need to configure the `plugin`
 The configuration file is typically located at `~/.canopy/config.json`. If it doesn't exist, start Canopy once to generate the default configuration:
 
 ```bash
-~/go/bin/canopy start
+canopy start
 # Stop it after it generates the config (Ctrl+C)
 ```
+
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy` instead of `canopy`.
 
 ### 2. Enable the Python plugin
 
@@ -380,8 +496,12 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"python"`:
 ### 3. Start Canopy
 
 ```bash
-~/go/bin/canopy start
+canopy start
 ```
+
+> **Note**: If your Go bin directory is not in your PATH, use `~/go/bin/canopy start` instead.
+
+> **Warning**: You may see error logs about the plugin failing to start on the first attempt. This is normal - Canopy will retry and the plugin should start successfully within a few seconds, then begin producing blocks.
 
 Canopy will automatically start the Python plugin and connect to it.
 
