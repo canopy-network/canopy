@@ -276,14 +276,17 @@ func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.E
 	if err = s.Set(KeyForOrder(chainId, order.Id), protoBytes); err != nil {
 		return
 	}
-	// set the secondary index for seller address lookup (value is empty, key is sufficient)
-	if err = s.Set(KeyForOrderBySeller(order.SellersSendAddress, chainId, order.Id), []byte{}); err != nil {
-		return
-	}
-	// set the secondary index for buyer address lookup if buyer exists (locked order)
-	if len(order.BuyerSendAddress) > 0 {
-		if err = s.Set(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, order.Id), []byte{}); err != nil {
+	// set secondary indexes only if configured
+	if s.Config.StateMachineConfig.IndexOrdersByAddresses {
+		// set the secondary index for seller address lookup (value is empty, key is sufficient)
+		if err = s.Set(KeyForOrderBySeller(order.SellersSendAddress, chainId, order.Id), []byte{}); err != nil {
 			return
+		}
+		// set the secondary index for buyer address lookup if buyer exists (locked order)
+		if len(order.BuyerSendAddress) > 0 {
+			if err = s.Set(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, order.Id), []byte{}); err != nil {
+				return
+			}
 		}
 	}
 	return
@@ -291,6 +294,10 @@ func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.E
 
 // cleanupStaleBuyerIndex() removes the old buyer index entry if the buyer changed or was removed
 func (s *StateMachine) cleanupStaleBuyerIndex(order *lib.SellOrder, chainId uint64) lib.ErrorI {
+	// skip if indexing is disabled
+	if !s.Config.StateMachineConfig.IndexOrdersByAddresses {
+		return nil
+	}
 	// check if order already exists
 	existingOrder, err := s.GetOrder(order.Id, chainId)
 	// if order not found, nothing to clean up
@@ -321,14 +328,17 @@ func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.Erro
 	if err = s.Delete(KeyForOrder(chainId, orderId)); err != nil {
 		return
 	}
-	// delete the seller secondary index entry
-	if err = s.Delete(KeyForOrderBySeller(order.SellersSendAddress, chainId, orderId)); err != nil {
-		return
-	}
-	// delete the buyer secondary index entry if buyer exists
-	if len(order.BuyerSendAddress) > 0 {
-		if err = s.Delete(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, orderId)); err != nil {
+	// delete secondary indexes only if configured
+	if s.Config.StateMachineConfig.IndexOrdersByAddresses {
+		// delete the seller secondary index entry
+		if err = s.Delete(KeyForOrderBySeller(order.SellersSendAddress, chainId, orderId)); err != nil {
 			return
+		}
+		// delete the buyer secondary index entry if buyer exists
+		if len(order.BuyerSendAddress) > 0 {
+			if err = s.Delete(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, orderId)); err != nil {
+				return
+			}
 		}
 	}
 	return
