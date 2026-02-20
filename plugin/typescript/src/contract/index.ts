@@ -1,5 +1,12 @@
 // Re-export all contract components
-export { Contract, ContractConfig, ContractAsync, KeyForAccount, KeyForFeeParams, KeyForFeePool } from './contract.js';
+export {
+    Contract,
+    ContractConfig,
+    ContractAsync,
+    KeyForAccount,
+    KeyForFeeParams,
+    KeyForFeePool
+} from './contract.js';
 export {
     Plugin,
     Config,
@@ -10,6 +17,6 @@ export {
     Marshal,
     Unmarshal,
     FromAny,
-    JoinLenPrefix,
+    JoinLenPrefix
 } from './plugin.js';
 export * from './error.js';

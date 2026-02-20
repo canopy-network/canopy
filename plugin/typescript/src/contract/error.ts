@@ -2,7 +2,7 @@
 
 import { types } from '../proto/types.js';
 
-const DefaultModule = "plugin";
+const DefaultModule = 'plugin';
 
 // PluginError interface matching the protobuf definition
 export interface IPluginError {
@@ -17,7 +17,7 @@ export function NewError(code: number, module: string, message: string): IPlugin
 }
 
 export function ErrPluginTimeout(): IPluginError {
-    return NewError(1, DefaultModule, "a plugin timeout occurred");
+    return NewError(1, DefaultModule, 'a plugin timeout occurred');
 }
 
 export function ErrMarshal(err: Error): IPluginError {
@@ -37,7 +37,7 @@ export function ErrFailedPluginWrite(err: Error): IPluginError {
 }
 
 export function ErrInvalidPluginRespId(): IPluginError {
-    return NewError(6, DefaultModule, "plugin response id is invalid");
+    return NewError(6, DefaultModule, 'plugin response id is invalid');
 }
 
 export function ErrUnexpectedFSMToPlugin(t: string): IPluginError {
@@ -49,7 +49,7 @@ export function ErrInvalidFSMToPluginMMessage(t: string): IPluginError {
 }
 
 export function ErrInsufficientFunds(): IPluginError {
-    return NewError(9, DefaultModule, "insufficient funds");
+    return NewError(9, DefaultModule, 'insufficient funds');
 }
 
 export function ErrFromAny(err: Error): IPluginError {
@@ -57,17 +57,17 @@ export function ErrFromAny(err: Error): IPluginError {
 }
 
 export function ErrInvalidMessageCast(): IPluginError {
-    return NewError(11, DefaultModule, "the message cast failed");
+    return NewError(11, DefaultModule, 'the message cast failed');
 }
 
 export function ErrInvalidAddress(): IPluginError {
-    return NewError(12, DefaultModule, "address is invalid");
+    return NewError(12, DefaultModule, 'address is invalid');
 }
 
 export function ErrInvalidAmount(): IPluginError {
-    return NewError(13, DefaultModule, "amount is invalid");
+    return NewError(13, DefaultModule, 'amount is invalid');
 }
 
 export function ErrTxFeeBelowStateLimit(): IPluginError {
-    return NewError(14, DefaultModule, "tx.fee is below state limit");
+    return NewError(14, DefaultModule, 'tx.fee is below state limit');
 }
