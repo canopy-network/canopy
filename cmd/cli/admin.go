@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/canopy/store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -72,6 +74,7 @@ func init() {
 	adminCmd.AddCommand(approveProposalCmd)
 	adminCmd.AddCommand(rejectProposalCmd)
 	adminCmd.AddCommand(deleteVoteCmd)
+	adminCmd.AddCommand(rollbackCmd)
 }
 
 var (
@@ -391,6 +394,36 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.DelVote(args[0]))
+		},
+	}
+
+	rollbackCmd = &cobra.Command{
+		Use:   "rollback <height>",
+		Short: "rollback local blockchain state to a specific height (node must be stopped)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			targetHeight, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			db, err := store.New(config, nil, l)
+			if err != nil {
+				l.Fatal(err.Error())
+			}
+			defer func() {
+				if closeErr := db.Close(); closeErr != nil {
+					l.Errorf(closeErr.Error())
+				}
+			}()
+			st, ok := db.(*store.Store)
+			if !ok {
+				l.Fatal("unexpected store type for rollback")
+			}
+			currentHeight := st.Version()
+			if err = st.Rollback(targetHeight); err != nil {
+				l.Fatal(err.Error())
+			}
+			writeToConsole(fmt.Sprintf("Rolled back local chain from height %d to %d", currentHeight, targetHeight), nil)
 		},
 	}
 )
