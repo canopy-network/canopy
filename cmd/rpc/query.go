@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -347,6 +350,86 @@ func (s *Server) NextDexBatch(w http.ResponseWriter, r *http.Request, _ httprout
 		return s.GetDexBatch(id, false, points)
 	})
 }
+
+// OracleOrdersResponse holds categorized witnessed orders
+type OracleOrdersResponse struct {
+	LockOrders  []*types.WitnessedOrder `json:"lock_orders"`
+	CloseOrders []*types.WitnessedOrder `json:"close_orders"`
+}
+
+// OracleOrders returns oracle orders stored in the order store
+func (s *Server) OracleOrders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// use the standard heightPaginated helper for paginated height requests
+	s.heightPaginated(w, r, func(state *fsm.StateMachine, p *paginatedHeightRequest) (any, lib.ErrorI) {
+		// create order store instance using config data dir path
+		orderStorePath := filepath.Join(s.config.DataDirPath, "oracle/store")
+		fmt.Println(orderStorePath)
+		orderStore, err := oracle.NewOracleDiskStorage(orderStorePath, s.logger)
+		if err != nil {
+			return nil, lib.ErrNewStore(err)
+		}
+		// get all lock orders
+		lockOrderIds, libErr := orderStore.GetAllOrderIds(types.LockOrderType)
+		if libErr != nil {
+			return nil, libErr
+		}
+		// get all close orders
+		closeOrderIds, libErr := orderStore.GetAllOrderIds(types.CloseOrderType)
+		if libErr != nil {
+			return nil, libErr
+		}
+		fmt.Println("OracleOrders()", lockOrderIds, closeOrderIds)
+		// create response structure to hold categorized orders
+		response := &OracleOrdersResponse{
+			LockOrders:  make([]*types.WitnessedOrder, 0, len(lockOrderIds)),
+			CloseOrders: make([]*types.WitnessedOrder, 0, len(closeOrderIds)),
+		}
+		// read lock orders
+		for _, orderId := range lockOrderIds {
+			order, readErr := orderStore.ReadOrder(orderId, types.LockOrderType)
+			if readErr != nil {
+				s.logger.Errorf("Failed to read lock order %x: %v", orderId, readErr)
+				continue
+			}
+			response.LockOrders = append(response.LockOrders, order)
+		}
+		// read close orders
+		for _, orderId := range closeOrderIds {
+			order, readErr := orderStore.ReadOrder(orderId, types.CloseOrderType)
+			if readErr != nil {
+				s.logger.Errorf("Failed to read close order %x: %v", orderId, readErr)
+				continue
+			}
+			response.CloseOrders = append(response.CloseOrders, order)
+		}
+		// return categorized witnessed orders
+		return response, nil
+	})
+}
+
+// // orderMatchesAddress checks if a witnessed order is related to the given address
+// func (s *Server) orderMatchesAddress(order *types.WitnessedOrder, address crypto.AddressI) bool {
+// 	// check if address matches any address in lock order
+// 	if order.LockOrder != nil {
+// 		if order.LockOrder.BuyerReceiveAddress != nil {
+// 			if bytes.Equal(order.LockOrder.BuyerReceiveAddress, address.Bytes()) {
+// 				return true
+// 			}
+// 		}
+// 		if order.LockOrder.BuyerSendAddress != nil {
+// 			if bytes.Equal(order.LockOrder.BuyerSendAddress, address.Bytes()) {
+// 				return true
+// 			}
+// 		}
+// 	}
+// 	// check if address matches any address in close order (close orders have limited address info)
+// 	if order.CloseOrder != nil {
+// 		// CloseOrder doesn't have specific address fields, so we'll rely on OrderId matching
+// 		// which would be related to the original SellOrder
+// 		return true
+// 	}
+// 	return false
+// }
 
 // LastProposers returns the last Proposer addresses
 func (s *Server) LastProposers(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
