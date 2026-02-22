@@ -2,10 +2,12 @@ package fsm
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"sort"
 )
 
 /* This file contains state machine changes related to 'token swapping' */
@@ -261,18 +263,75 @@ func (s *StateMachine) CloseOrder(orderId []byte, chainId uint64) (err lib.Error
 
 // SetOrder() sets the sell order in state
 func (s *StateMachine) SetOrder(order *lib.SellOrder, chainId uint64) (err lib.ErrorI) {
+	// clean up stale buyer index if buyer changed or was removed
+	if err = s.cleanupStaleBuyerIndex(order, chainId); err != nil {
+		return
+	}
 	// convert the order into proto bytes
 	protoBytes, err := s.marshalOrder(order)
 	if err != nil {
 		return
 	}
 	// set the order book in state
-	return s.Set(KeyForOrder(chainId, order.Id), protoBytes)
+	if err = s.Set(KeyForOrder(chainId, order.Id), protoBytes); err != nil {
+		return
+	}
+	// set the secondary index for seller address lookup (value is empty, key is sufficient)
+	if err = s.Set(KeyForOrderBySeller(order.SellersSendAddress, chainId, order.Id), []byte{}); err != nil {
+		return
+	}
+	// set the secondary index for buyer address lookup if buyer exists (locked order)
+	if len(order.BuyerSendAddress) > 0 {
+		if err = s.Set(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, order.Id), []byte{}); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// cleanupStaleBuyerIndex() removes the old buyer index entry if the buyer changed or was removed
+func (s *StateMachine) cleanupStaleBuyerIndex(order *lib.SellOrder, chainId uint64) lib.ErrorI {
+	// check if order already exists
+	existingOrder, err := s.GetOrder(order.Id, chainId)
+	// if order not found, nothing to clean up
+	if err != nil && err.Code() == lib.CodeOrderNotFound {
+		return nil
+	}
+	// if other error, return it
+	if err != nil {
+		return err
+	}
+	// if existing order has a buyer and it differs from the new order's buyer, clean up the old index
+	if existingOrder != nil && len(existingOrder.BuyerSendAddress) > 0 {
+		if !bytes.Equal(existingOrder.BuyerSendAddress, order.BuyerSendAddress) {
+			return s.Delete(KeyForOrderByBuyer(existingOrder.BuyerSendAddress, chainId, order.Id))
+		}
+	}
+	return nil
 }
 
 // DeleteOrder() deletes an existing order in the order book for a committee in the state db
 func (s *StateMachine) DeleteOrder(orderId []byte, chainId uint64) (err lib.ErrorI) {
-	return s.Delete(KeyForOrder(chainId, orderId))
+	// get the order first to retrieve addresses for index cleanup
+	order, err := s.GetOrder(orderId, chainId)
+	if err != nil {
+		return
+	}
+	// delete the primary order entry
+	if err = s.Delete(KeyForOrder(chainId, orderId)); err != nil {
+		return
+	}
+	// delete the seller secondary index entry
+	if err = s.Delete(KeyForOrderBySeller(order.SellersSendAddress, chainId, orderId)); err != nil {
+		return
+	}
+	// delete the buyer secondary index entry if buyer exists
+	if len(order.BuyerSendAddress) > 0 {
+		if err = s.Delete(KeyForOrderByBuyer(order.BuyerSendAddress, chainId, orderId)); err != nil {
+			return
+		}
+	}
+	return
 }
 
 // GetOrder() gets the sell order from state
@@ -394,6 +453,185 @@ func (s *StateMachine) GetOrderBooks() (b *lib.OrderBooks, err lib.ErrorI) {
 	})
 	// exit
 	return
+}
+
+// GetOrdersBySeller() retrieves all orders for a specific seller address, optionally filtered by chainId
+func (s *StateMachine) GetOrdersBySeller(seller []byte, chainId uint64) (b *lib.OrderBooks, err lib.ErrorI) {
+	b = new(lib.OrderBooks)
+	// determine the prefix to iterate based on whether chainId filter is provided
+	var prefix []byte
+	if chainId == 0 {
+		prefix = OrderBySellerPrefix(seller)
+	} else {
+		prefix = OrderBySellerAndChainPrefix(seller, chainId)
+	}
+	// create an iterator over the seller index prefix
+	it, err := s.Iterator(prefix)
+	if err != nil {
+		return
+	}
+	defer it.Close()
+	// map to collect orders by chainId
+	ordersByChain := make(map[uint64][]*lib.SellOrder)
+	// for each index entry
+	for ; it.Valid(); it.Next() {
+		// extract chainId and orderId from the index key
+		cId, orderId, e := s.parseOrderBySellerKey(it.Key())
+		if e != nil {
+			s.log.Error(e.Error())
+			continue
+		}
+		// get the actual order from the primary store
+		order, e := s.GetOrder(orderId, cId)
+		if e != nil {
+			s.log.Error(e.Error())
+			continue
+		}
+		ordersByChain[cId] = append(ordersByChain[cId], order)
+	}
+	// convert map to OrderBooks structure
+	for cId, orders := range ordersByChain {
+		b.OrderBooks = append(b.OrderBooks, &lib.OrderBook{
+			ChainId: cId,
+			Orders:  orders,
+		})
+	}
+	// sort by chain id for consistent output
+	sort.Slice(b.OrderBooks, func(i, j int) bool {
+		return b.OrderBooks[i].ChainId < b.OrderBooks[j].ChainId
+	})
+	return
+}
+
+// parseOrderBySellerKey() extracts chainId and orderId from an order-by-seller index key
+func (s *StateMachine) parseOrderBySellerKey(key []byte) (chainId uint64, orderId []byte, err lib.ErrorI) {
+	// key format: orderBySellerPrefix + seller + chainId + orderId (all length-prefixed)
+	segments := lib.DecodeLengthPrefixed(key)
+	if len(segments) < 4 {
+		return 0, nil, ErrInvalidKey(key)
+	}
+	// segments[0] = prefix, segments[1] = seller, segments[2] = chainId, segments[3] = orderId
+	chainId = binary.BigEndian.Uint64(segments[2])
+	orderId = segments[3]
+	return
+}
+
+// parseOrderByBuyerKey() extracts chainId and orderId from an order-by-buyer index key
+func (s *StateMachine) parseOrderByBuyerKey(key []byte) (chainId uint64, orderId []byte, err lib.ErrorI) {
+	// key format: orderByBuyerPrefix + buyer + chainId + orderId (all length-prefixed)
+	segments := lib.DecodeLengthPrefixed(key)
+	if len(segments) < 4 {
+		return 0, nil, ErrInvalidKey(key)
+	}
+	// segments[0] = prefix, segments[1] = buyer, segments[2] = chainId, segments[3] = orderId
+	chainId = binary.BigEndian.Uint64(segments[2])
+	orderId = segments[3]
+	return
+}
+
+// GetOrdersPaginated() retrieves orders with optional filters and pagination
+// Note: seller and buyer filters are mutually exclusive
+func (s *StateMachine) GetOrdersPaginated(seller, buyer []byte, chainId uint64, p lib.PageParams) (*lib.Page, lib.ErrorI) {
+	// create the page object
+	page := lib.NewPage(p, "orders")
+	results := &lib.SellOrders{}
+	// determine which query path to use based on filters
+	if len(seller) > 0 {
+		// use seller index for efficient lookup
+		return s.getOrdersBySellerPaginated(seller, chainId, page, results)
+	}
+	if len(buyer) > 0 {
+		// use buyer index for efficient lookup
+		return s.getOrdersByBuyerPaginated(buyer, chainId, page, results)
+	}
+	if chainId != 0 {
+		// filter by chainId only - iterate orders for that chain
+		return s.getOrdersByChainPaginated(chainId, page, results)
+	}
+	// no filters - iterate all orders across all chains
+	return s.getAllOrdersPaginated(page, results)
+}
+
+// getOrdersBySellerPaginated() retrieves paginated orders using the seller index
+func (s *StateMachine) getOrdersBySellerPaginated(seller []byte, chainId uint64, page *lib.Page, results *lib.SellOrders) (*lib.Page, lib.ErrorI) {
+	// determine the prefix based on whether chainId filter is provided
+	var prefix []byte
+	if chainId == 0 {
+		prefix = OrderBySellerPrefix(seller)
+	} else {
+		prefix = OrderBySellerAndChainPrefix(seller, chainId)
+	}
+	// use the page Load function with the index prefix
+	err := page.Load(prefix, false, results, s, func(k, v []byte) lib.ErrorI {
+		// extract chainId and orderId from the index key
+		cId, orderId, e := s.parseOrderBySellerKey(k)
+		if e != nil {
+			return e
+		}
+		// get the actual order from the primary store
+		order, e := s.GetOrder(orderId, cId)
+		if e != nil {
+			return e
+		}
+		*results = append(*results, order)
+		return nil
+	})
+	return page, err
+}
+
+// getOrdersByBuyerPaginated() retrieves paginated orders using the buyer index
+func (s *StateMachine) getOrdersByBuyerPaginated(buyer []byte, chainId uint64, page *lib.Page, results *lib.SellOrders) (*lib.Page, lib.ErrorI) {
+	// determine the prefix based on whether chainId filter is provided
+	var prefix []byte
+	if chainId == 0 {
+		prefix = OrderByBuyerPrefix(buyer)
+	} else {
+		prefix = OrderByBuyerAndChainPrefix(buyer, chainId)
+	}
+	// use the page Load function with the index prefix
+	err := page.Load(prefix, false, results, s, func(k, v []byte) lib.ErrorI {
+		// extract chainId and orderId from the index key
+		cId, orderId, e := s.parseOrderByBuyerKey(k)
+		if e != nil {
+			return e
+		}
+		// get the actual order from the primary store
+		order, e := s.GetOrder(orderId, cId)
+		if e != nil {
+			return e
+		}
+		*results = append(*results, order)
+		return nil
+	})
+	return page, err
+}
+
+// getOrdersByChainPaginated() retrieves paginated orders for a specific chain
+func (s *StateMachine) getOrdersByChainPaginated(chainId uint64, page *lib.Page, results *lib.SellOrders) (*lib.Page, lib.ErrorI) {
+	// use the page Load function with the order book prefix
+	err := page.Load(OrderBookPrefix(chainId), false, results, s, func(k, v []byte) lib.ErrorI {
+		order, e := s.unmarshalOrder(v)
+		if e != nil {
+			return e
+		}
+		*results = append(*results, order)
+		return nil
+	})
+	return page, err
+}
+
+// getAllOrdersPaginated() retrieves paginated orders across all chains
+func (s *StateMachine) getAllOrdersPaginated(page *lib.Page, results *lib.SellOrders) (*lib.Page, lib.ErrorI) {
+	// use the page Load function with the base order book prefix
+	err := page.Load(lib.JoinLenPrefix(orderBookPrefix), false, results, s, func(k, v []byte) lib.ErrorI {
+		order, e := s.unmarshalOrder(v)
+		if e != nil {
+			return e
+		}
+		*results = append(*results, order)
+		return nil
+	})
+	return page, err
 }
 
 // GetTotalEscrowed() checks all order books for escrowed funds for a specific address

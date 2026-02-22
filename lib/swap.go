@@ -106,3 +106,12 @@ func (x *OrderBooks) UnmarshalJSON(jsonBytes []byte) (err error) {
 	// exit
 	return
 }
+
+// SellOrders is a slice of SellOrder pointers that implements the Pageable interface
+type SellOrders []*SellOrder
+
+// Len returns the number of orders in the slice
+func (s *SellOrders) Len() int { return len(*s) }
+
+// New returns a new empty SellOrders instance (satisfies Pageable interface)
+func (s *SellOrders) New() Pageable { return &SellOrders{} }

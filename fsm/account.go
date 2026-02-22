@@ -818,8 +818,8 @@ type pool struct {
 }
 
 type poolPoints struct {
-	Address lib.HexBytes
-	Points  uint64
+	Address lib.HexBytes `json:"address"`
+	Points  uint64       `json:"points"`
 }
 
 // MarshalJSON() is the json.Marshaller implementation for the Pool object

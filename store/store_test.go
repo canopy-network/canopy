@@ -127,6 +127,156 @@ func TestDoublyNestedTxn(t *testing.T) {
 	require.Equal(t, doublyNestedKey, value)
 }
 
+func TestRollback(t *testing.T) {
+	st, db, cleanup := testStore(t)
+	defer cleanup()
+	key := lib.JoinLenPrefix([]byte("state/"), []byte("balance"))
+
+	require.NoError(t, st.Set(key, []byte("v1")))
+	_, err := st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, st.Version())
+
+	require.NoError(t, st.Set(key, []byte("v2")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 2, st.Version())
+
+	require.NoError(t, st.Set(key, []byte("v3")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 3, st.Version())
+
+	require.NoError(t, st.Rollback(1))
+	require.EqualValues(t, 1, st.Version())
+
+	value, err := st.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, []byte("v1"), value)
+
+	// Querying a higher historical version after rollback should not leak old future state.
+	rolledBackReadOnly, err := st.NewReadOnly(2)
+	require.NoError(t, err)
+	defer rolledBackReadOnly.Discard()
+	value, err = rolledBackReadOnly.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, []byte("v1"), value)
+
+	// Re-opening from DB should restore the rolled back height from the latest commit pointer.
+	reopened, err := NewStoreWithDB(lib.DefaultConfig(), db, nil, lib.NewDefaultLogger())
+	require.NoError(t, err)
+	defer reopened.Discard()
+	require.EqualValues(t, 1, reopened.Version())
+	value, err = reopened.Get(key)
+	require.NoError(t, err)
+	require.Equal(t, []byte("v1"), value)
+}
+
+func TestRollbackSelectiveStateRestore(t *testing.T) {
+	st, _, cleanup := testStore(t)
+	defer cleanup()
+
+	stableKey := lib.JoinLenPrefix([]byte("state/"), []byte("stable"))
+	revertedKey := lib.JoinLenPrefix([]byte("state/"), []byte("reverted"))
+	futureKey := lib.JoinLenPrefix([]byte("state/"), []byte("future"))
+
+	require.NoError(t, st.Set(stableKey, []byte("stable-v1")))
+	require.NoError(t, st.Set(revertedKey, []byte("reverted-v1")))
+	_, err := st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, st.Version())
+
+	require.NoError(t, st.Set(revertedKey, []byte("reverted-v2")))
+	require.NoError(t, st.Set(futureKey, []byte("future-v2")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 2, st.Version())
+
+	require.NoError(t, st.Set(revertedKey, []byte("reverted-v3")))
+	require.NoError(t, st.Delete(futureKey))
+	_, err = st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 3, st.Version())
+
+	require.NoError(t, st.Rollback(1))
+	require.EqualValues(t, 1, st.Version())
+
+	value, err := st.Get(stableKey)
+	require.NoError(t, err)
+	require.Equal(t, []byte("stable-v1"), value)
+
+	value, err = st.Get(revertedKey)
+	require.NoError(t, err)
+	require.Equal(t, []byte("reverted-v1"), value)
+
+	value, err = st.Get(futureKey)
+	require.NoError(t, err)
+	require.Nil(t, value)
+
+	// Rollback must remove future-only keys from latest-state iteration, not just return nil on Get().
+	statePrefix := lib.JoinLenPrefix([]byte("state/"))
+	it, err := st.Iterator(statePrefix)
+	require.NoError(t, err)
+	defer it.Close()
+	seen := make(map[string]struct{})
+	for ; it.Valid(); it.Next() {
+		seen[string(it.Key())] = struct{}{}
+	}
+	require.Len(t, seen, 2)
+	require.Contains(t, seen, string(stableKey))
+	require.Contains(t, seen, string(revertedKey))
+	require.NotContains(t, seen, string(futureKey))
+}
+
+func TestGetDoesNotMatchPrefixSuperset(t *testing.T) {
+	st, _, cleanup := testStore(t)
+	defer cleanup()
+
+	parentKey := lib.JoinLenPrefix([]byte("a"))
+	childKey := lib.JoinLenPrefix([]byte("a"), []byte("b"))
+
+	require.NoError(t, st.Set(childKey, []byte("child-v1")))
+	_, err := st.Commit()
+	require.NoError(t, err)
+
+	value, err := st.Get(parentKey)
+	require.NoError(t, err)
+	require.Nil(t, value)
+
+	value, err = st.Get(childKey)
+	require.NoError(t, err)
+	require.Equal(t, []byte("child-v1"), value)
+}
+
+func TestRollbackWithPrefixOverlappingKeys(t *testing.T) {
+	st, _, cleanup := testStore(t)
+	defer cleanup()
+
+	parentKey := lib.JoinLenPrefix([]byte("a"))
+	childKey := lib.JoinLenPrefix([]byte("a"), []byte("b"))
+
+	require.NoError(t, st.Set(childKey, []byte("child-v1")))
+	_, err := st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, st.Version())
+
+	require.NoError(t, st.Set(parentKey, []byte("parent-v2")))
+	_, err = st.Commit()
+	require.NoError(t, err)
+	require.EqualValues(t, 2, st.Version())
+
+	require.NoError(t, st.Rollback(1))
+	require.EqualValues(t, 1, st.Version())
+
+	value, err := st.Get(parentKey)
+	require.NoError(t, err)
+	require.Nil(t, value)
+
+	value, err = st.Get(childKey)
+	require.NoError(t, err)
+	require.Equal(t, []byte("child-v1"), value)
+}
+
 func testStore(t *testing.T) (*Store, *pebble.DB, func()) {
 	fs := vfs.NewMem()
 	db, err := pebble.Open("", &pebble.Options{

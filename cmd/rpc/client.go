@@ -1018,10 +1018,10 @@ func (c *Client) heightRequest(routeName string, height uint64, ptr any) (err li
 	return
 }
 
-func (c *Client) orderRequest(routeName string, height uint64, orderId string, chainId uint64, ptr any) (err lib.ErrorI) {
+func (c *Client) orderRequest(routeName string, height uint64, orderId string, committee uint64, ptr any) (err lib.ErrorI) {
 	bz, err := lib.MarshalJSON(orderRequest{
-		ChainId: chainId,
-		OrderId: orderId,
+		Committee: committee,
+		OrderId:   orderId,
 		heightRequest: heightRequest{
 			Height: height,
 		},
