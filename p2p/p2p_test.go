@@ -395,6 +395,87 @@ func TestOnPeerError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestShouldReplaceDuplicatePeer(t *testing.T) {
+	tests := []struct {
+		name             string
+		localPub         []byte
+		remotePub        []byte
+		existingOutbound bool
+		incomingOutbound bool
+		existingErrored  bool
+		want             bool
+	}{
+		{
+			name:             "same direction keeps existing",
+			localPub:         []byte{0x01},
+			remotePub:        []byte{0x02},
+			existingOutbound: true,
+			incomingOutbound: true,
+			want:             false,
+		},
+		{
+			name:             "same direction inbound replaces existing",
+			localPub:         []byte{0x01},
+			remotePub:        []byte{0x02},
+			existingOutbound: false,
+			incomingOutbound: false,
+			want:             true,
+		},
+		{
+			name:             "lower key keeps outbound",
+			localPub:         []byte{0x01},
+			remotePub:        []byte{0x02},
+			existingOutbound: true,
+			incomingOutbound: false,
+			want:             false,
+		},
+		{
+			name:             "higher key keeps inbound",
+			localPub:         []byte{0x02},
+			remotePub:        []byte{0x01},
+			existingOutbound: true,
+			incomingOutbound: false,
+			want:             true,
+		},
+		{
+			name:             "lower key replaces inbound with outbound",
+			localPub:         []byte{0x01},
+			remotePub:        []byte{0x02},
+			existingOutbound: false,
+			incomingOutbound: true,
+			want:             true,
+		},
+		{
+			name:             "errored existing is always replaced",
+			localPub:         []byte{0x01},
+			remotePub:        []byte{0x02},
+			existingOutbound: true,
+			incomingOutbound: false,
+			existingErrored:  true,
+			want:             true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &P2P{PeerSet: PeerSet{publicKey: tt.localPub}}
+			existingConn := &MultiConn{}
+			existingConn.hasError.Store(tt.existingErrored)
+			existing := &Peer{
+				conn: existingConn,
+				PeerInfo: &lib.PeerInfo{
+					Address:    &lib.PeerAddress{PublicKey: tt.remotePub},
+					IsOutbound: tt.existingOutbound,
+				},
+			}
+			incoming := &lib.PeerInfo{
+				Address:    &lib.PeerAddress{PublicKey: tt.remotePub},
+				IsOutbound: tt.incomingOutbound,
+			}
+			require.Equal(t, tt.want, p.shouldReplaceDuplicatePeer(existing, incoming))
+		})
+	}
+}
+
 func TestNewStreams(t *testing.T) {
 	n1, n2, cleanup := newTestP2PPair(t)
 	defer cleanup()

@@ -32,11 +32,11 @@ import (
 */
 
 const (
-	transport               = "tcp"
-	dialTimeout             = time.Second
-	minPeerTick             = 100 * time.Millisecond
-	inboxMonitorInterval    = 5 * time.Second
-	defaultMinIOTimeout     = 500 * time.Millisecond
+	transport            = "tcp"
+	dialTimeout          = time.Second
+	minPeerTick          = 100 * time.Millisecond
+	inboxMonitorInterval = 5 * time.Second
+	defaultMinIOTimeout  = 500 * time.Millisecond
 	// Keep IO deadlines bounded, but not so tight that normal WAN jitter/GC pauses cause churn.
 	// These values are further shaped by block-time-derived defaults in New().
 	defaultMaxWriteTimeout  = 5 * time.Second
@@ -357,13 +357,6 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		if err != nil {
 			p.log.Warn(err.Error())
 			connection.Stop()
-			pk := connection.p2p.publicKey
-			peer, peerErr := p.get(pk)
-			// peer was not added, nothing to do
-			if peerErr != nil {
-				return
-			}
-			p.PeerSet.Remove(pk, peer.conn.uuid)
 		}
 	}()
 	// log the peer add attempt
@@ -423,14 +416,40 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		}
 	}
 	bookPeer := &BookPeer{Address: info.Address}
-	if err = p.PeerSet.Add(&Peer{
+	newPeer := &Peer{
 		conn:     connection,
 		PeerInfo: info,
-	}); err != nil {
-		unlock()
-		return err
+	}
+	var replacedPeer *Peer
+	if err = p.PeerSet.Add(newPeer); err != nil {
+		// Simultaneous dialing can establish one inbound and one outbound connection for the
+		// same peer. If both sides blindly keep whichever arrived first, both TCP sessions can
+		// be dropped. Resolve duplicates deterministically based on pubkey ordering.
+		if err.Code() != lib.CodePeerAlreadyExists {
+			unlock()
+			return err
+		}
+		existingPeer, getErr := p.get(info.Address.PublicKey)
+		if getErr != nil || existingPeer == nil || existingPeer.conn == nil || !p.shouldReplaceDuplicatePeer(existingPeer, info) {
+			unlock()
+			return err
+		}
+		if removeErr := p.PeerSet.Remove(info.Address.PublicKey, existingPeer.conn.uuid); removeErr != nil {
+			unlock()
+			return removeErr
+		}
+		// Force replacement after exact-uuid eviction so deterministic duplicate resolution
+		// cannot be blocked by transient directional max-in/max-out limits.
+		if err = p.PeerSet.AddForce(newPeer); err != nil {
+			unlock()
+			return err
+		}
+		replacedPeer = existingPeer
 	}
 	unlock()
+	if replacedPeer != nil && replacedPeer.conn != nil {
+		replacedPeer.conn.Stop()
+	}
 	p.book.Add(bookPeer)
 	if p.metrics != nil && p.metrics.PeerBookAdd != nil {
 		p.metrics.PeerBookAdd.WithLabelValues(expectedPortLabel(info.Address.NetAddress, p.meta.ChainId)).Inc()
@@ -438,6 +457,27 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 	// add peer to peer set and peer book
 	p.log.Infof("Added peer: %s@%s", lib.BytesToString(info.Address.PublicKey), info.Address.NetAddress)
 	return
+}
+
+// shouldReplaceDuplicatePeer picks which duplicate session to keep when both inbound and
+// outbound connections exist for the same remote peer.
+//
+// Rule: lower public key keeps outbound, higher public key keeps inbound.
+// This makes both sides converge on the same physical TCP session under simultaneous dial.
+func (p *P2P) shouldReplaceDuplicatePeer(existing *Peer, incoming *lib.PeerInfo) bool {
+	if existing == nil || incoming == nil || incoming.Address == nil {
+		return false
+	}
+	if existing.conn != nil && existing.conn.hasError.Load() {
+		return true
+	}
+	if existing.IsOutbound == incoming.IsOutbound {
+		// For same-direction inbound duplicates, prefer the freshest authenticated session.
+		// This allows quick recovery when the remote has dropped state and reconnects.
+		return !incoming.IsOutbound
+	}
+	keepOutbound := bytes.Compare(p.publicKey, incoming.Address.PublicKey) < 0
+	return incoming.IsOutbound == keepOutbound
 }
 
 // DialWithBackoff() dials the peer with exponential backoff retry
