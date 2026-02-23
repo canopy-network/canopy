@@ -16,7 +16,15 @@
         "daoTransfer": "DAO Transfer",
         "deleteVote": "Remove Vote",
         "votePoll": "Vote Poll",
-        "createPoll": "Create Poll"
+        "createPoll": "Create Poll",
+        "createOrder": "Create Order",
+        "editOrder": "Reprice Order",
+        "deleteOrder": "Void Order",
+        "lockOrder": "Lock Order",
+        "closeOrder": "Close Order",
+        "dexLimitOrder": "DEX Limit Order",
+        "dexLiquidityDeposit": "DEX Liquidity Deposit",
+        "dexLiquidityWithdraw": "DEX Liquidity Withdraw"
       },
       "typeIconMap": {
         "editStake": "Lock",
@@ -33,7 +41,15 @@
         "daoTransfer": "Coins",
         "deleteVote": "XCircle",
         "votePoll": "CheckSquare",
-        "createPoll": "BarChart3"
+        "createPoll": "BarChart3",
+        "createOrder": "PlusCircle",
+        "editOrder": "Pencil",
+        "deleteOrder": "Trash2",
+        "lockOrder": "Lock",
+        "closeOrder": "CheckCircle2",
+        "dexLimitOrder": "ArrowLeftRight",
+        "dexLiquidityDeposit": "Droplets",
+        "dexLiquidityWithdraw": "CircleDashed"
       },
       "fundsWay": {
         "editStake": "out",
@@ -47,7 +63,15 @@
         "daoTransfer": "neutral",
         "deleteVote": "neutral",
         "votePoll": "neutral",
-        "createPoll": "neutral"
+        "createPoll": "neutral",
+        "createOrder": "out",
+        "editOrder": "neutral",
+        "deleteOrder": "neutral",
+        "lockOrder": "neutral",
+        "closeOrder": "neutral",
+        "dexLimitOrder": "neutral",
+        "dexLiquidityDeposit": "out",
+        "dexLiquidityWithdraw": "in"
       }
     }
   },
@@ -3443,7 +3467,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
           }
         }
       },
@@ -3509,7 +3533,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
           }
         }
       },
@@ -3646,7 +3670,7 @@
       "ui": {
         "slots": {
           "modal": {
-            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
           }
         }
       },
@@ -3740,6 +3764,1724 @@
           "variant": "success",
           "title": "Proposal Vote Removed",
           "description": "Your proposal vote preference was removed."
+        }
+      }
+    },
+    {
+      "id": "orderCreate",
+      "title": "Create Order",
+      "icon": "PlusCircle",
+      "ds": {
+        "admin.config": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config",
+            "account",
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[36rem] md:max-w-[56rem]"
+          }
+        }
+      },
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "context",
+              "title": "Order Context"
+            },
+            {
+              "id": "pricing",
+              "title": "Pricing & Submit"
+            }
+          ]
+        },
+        "info": {
+          "title": "Create Order Guide",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Create runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            },
+            {
+              "label": "Rule",
+              "value": "Only unlocked orders can be repriced or voided",
+              "icon": "AlertTriangle"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Counter-Asset)",
+            "required": true,
+            "value": "{{params.receiveAddress || account.address || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount For Sale",
+            "required": true,
+            "min": 0.000001,
+            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Amount for sale is required",
+                "min": "Amount must be greater than 0",
+                "max": "Insufficient balance. Max available: {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Requested Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Requested amount is required",
+                "min": "Requested amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "data",
+            "name": "data",
+            "type": "text",
+            "label": "Data (optional)",
+            "placeholder": "Sub-asset contract address (hex)",
+            "value": "{{params.data || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "pricing"
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Create Order",
+          "summary": [
+            {
+              "label": "Seller",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "PlusCircle",
+            "label": "Create Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "data": {
+          "value": "{{form.data || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-create-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Created",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderReprice",
+      "title": "Reprice Order",
+      "icon": "Pencil",
+      "ds": {
+        "admin.config": {},
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config",
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[36rem] md:max-w-[56rem]"
+          }
+        }
+      },
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "context",
+              "title": "Order Context"
+            },
+            {
+              "id": "pricing",
+              "title": "New Pricing"
+            }
+          ]
+        },
+        "info": {
+          "title": "Reprice Rules",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Reprice runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Editable",
+              "value": "Only unlocked orders can be edited",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Counter-Asset)",
+            "required": true,
+            "value": "{{params.receiveAddress || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount For Sale",
+            "required": true,
+            "min": 0.000001,
+            "value": "{{params.amount ?? ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Amount for sale is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Requested Amount",
+            "required": true,
+            "value": "{{params.receiveAmount ?? ''}}",
+            "autoPopulate": "once",
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Requested amount is required",
+                "min": "Requested amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "data",
+            "name": "data",
+            "type": "text",
+            "label": "Data (optional)",
+            "placeholder": "Sub-asset contract address (hex)",
+            "value": "{{params.data || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "pricing"
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Reprice Order",
+          "summary": [
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Pencil",
+            "label": "Reprice Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "data": {
+          "value": "{{form.data || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-edit-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Repriced",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderVoid",
+      "title": "Void Order",
+      "icon": "Trash2",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Void Order Rules",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Void runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Restriction",
+              "value": "Locked orders cannot be voided",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "Trash2"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Void Order",
+          "summary": [
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            }
+          ],
+          "btn": {
+            "icon": "Trash2",
+            "label": "Void Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-delete-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Voided",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderLock",
+      "title": "Lock Order",
+      "icon": "Lock",
+      "ds": {
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Lock Order Notes",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Lock runs on nested chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Receive Address",
+              "value": "Set root-chain address to receive CNPY",
+              "icon": "Lock"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "ShoppingCart"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Buyer Address (Nested Chain)",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Root Chain)",
+            "required": true,
+            "value": "{{params.receiveAddress || account.address || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Lock Order",
+          "summary": [
+            {
+              "label": "Buyer",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Receive Address",
+              "value": "{{shortAddress<{{form.receiveAddress}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Lock",
+            "label": "Lock Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-lock-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Locked",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderClose",
+      "title": "Close Order",
+      "icon": "CheckCircle2",
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[30rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Close Order Preconditions",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Close runs on nested chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Restriction",
+              "value": "Address must match order buyer and be before deadline",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "CheckCircle2"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Buyer Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Close Order",
+          "summary": [
+            {
+              "label": "Buyer",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckCircle2",
+            "label": "Close Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-close-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Closed",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLimitOrder",
+      "title": "DEX Limit Order",
+      "icon": "ArrowLeftRight",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Limit Order Notes",
+          "items": [
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Minimum Receive",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the limit order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Minimum Receive Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Minimum receive amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Limit Order",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Min Receive",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "ArrowLeftRight",
+            "label": "Create DEX Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-limit-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Limit Order Submitted",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLiquidityDeposit",
+      "title": "DEX Liquidity Deposit",
+      "icon": "Droplets",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Deposit Notes",
+          "items": [
+            {
+              "label": "Operation",
+              "value": "Deposit adds liquidity to the selected pool",
+              "icon": "Droplets"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the liquidity deposit.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Deposit",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Droplets",
+            "label": "Deposit Liquidity"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-liquidity-deposit",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Deposit Submitted",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLiquidityWithdraw",
+      "title": "DEX Liquidity Withdraw",
+      "icon": "CircleDashed",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Withdraw Notes",
+          "items": [
+            {
+              "label": "Operation",
+              "value": "Withdraw removes liquidity by percent (1-100)",
+              "icon": "CircleDashed"
+            },
+            {
+              "label": "Percent",
+              "value": "{{form.percent || 0}}%",
+              "icon": "BarChart3"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the liquidity withdraw.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "percent",
+            "name": "percent",
+            "type": "range",
+            "label": "Withdraw Percentage",
+            "required": true,
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "suffix": "%",
+            "showInput": true,
+            "marks": [1, 25, 50, 75, 100],
+            "presets": [
+              { "label": "25%", "value": 25 },
+              { "label": "50%", "value": 50 },
+              { "label": "75%", "value": 75 },
+              { "label": "100%", "value": 100 }
+            ],
+            "help": "Use the slider or direct input. Allowed range: 1% to 100%.",
+            "value": "{{params.percent ?? 50}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Percent is required",
+                "min": "Percent must be at least {{min}}",
+                "max": "Percent cannot exceed {{max}}"
+              }
+            },
+            "span": { "base": 12, "md": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Withdraw",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Percent",
+              "value": "{{form.percent}}%"
+            }
+          ],
+          "btn": {
+            "icon": "CircleDashed",
+            "label": "Withdraw Liquidity"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "percent": {
+          "value": "{{form.percent}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-liquidity-withdraw",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Withdraw Submitted",
+          "description": "{{result}}"
         }
       }
     }

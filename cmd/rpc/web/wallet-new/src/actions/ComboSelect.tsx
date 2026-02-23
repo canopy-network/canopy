@@ -143,7 +143,7 @@ export default function ComboSelect({
                     disabled={disabled}
                     className={
                         buttonClassName ??
-                        "flex items-center justify-between whitespace-nowrap border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 w-full bg-muted border-border text-foreground h-11 rounded-lg"
+                        "flex items-center justify-between whitespace-nowrap border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 w-full bg-background/60 border-border/70 text-foreground h-11 sm:h-12 rounded-xl transition-colors"
                     }
                     aria-haspopup="listbox"
                     aria-expanded={open}
@@ -173,18 +173,18 @@ export default function ComboSelect({
                 }}
                 className={
                     className ??
-                    "z-50 w-[--radix-popover-trigger-width] min-w-56 rounded-xl p-2 shadow-xl bg-muted border border-border"
+                    "z-50 w-[--radix-popover-trigger-width] min-w-56 rounded-xl p-2 shadow-xl bg-card border border-border/70"
                 }
             >
                 {/* Input */}
-                <div className="flex items-center gap-2 border-b px-2 py-1.5 text-canopy-50">
+                <div className="flex items-center gap-2 border-b border-border/70 px-2 py-1.5 text-canopy-50">
                     <input
                         ref={inputRef}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={onKeyDown}
                         placeholder={placeholder}
-                        className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
+                        className="w-full bg-transparent outline-none placeholder:text-muted-foreground text-sm"
                     />
                 </div>
 

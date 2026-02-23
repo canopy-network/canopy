@@ -1,5 +1,5 @@
 // validators.ts
-import type { Field, AmountField, NumberField } from "@/manifest/types";
+import type { Field, AmountField, NumberField, RangeField } from "@/manifest/types";
 import {template, templateBool} from "@/core/templater";
 
 /**
@@ -171,8 +171,8 @@ export async function validateField(
     }
 
     // AMOUNT / NUMBER
-    if (field.type === "amount" || field.type === "number") {
-        const f = field as AmountField | NumberField;
+    if (field.type === "amount" || field.type === "number" || field.type === "range") {
+        const f = field as AmountField | NumberField | RangeField;
 
         const n = typeof formattedValue === "string"
             ? Number(formattedValue.trim().replace(/,/g, ""))

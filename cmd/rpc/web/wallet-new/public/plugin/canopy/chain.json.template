@@ -116,6 +116,80 @@
         }
       }
     },
+    "orders": {
+      "bySeller": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "sellersSendAddress": "{{account.address}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "body": {
+            "height": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "byCommittee": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "committee": "{{committee}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "byBuyer": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "buyerSendAddress": "{{account.address}}",
+          "committee": "{{committee}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "single": {
+        "source": { "base": "rpc", "path": "/v1/query/order", "method": "POST" },
+        "body": {
+          "height": 0,
+          "orderId": "{{orderId}}",
+          "committee": "{{committee}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int"
+          }
+        },
+        "selector": ""
+      }
+    },
 
     "activity": {
       "all": {

@@ -550,6 +550,9 @@ export default function ActionRunner({
   }, [visibleFieldsForStep, form, errorsMap, templatingCtx]);
 
   const isLastStep = !wizard || stepIdx >= steps.length - 1;
+  const isOrdersAction = React.useMemo(() => /^(order|dex)/i.test(actionId), [actionId]);
+  const stepProgress =
+    wizard && steps.length > 0 ? Math.round(((stepIdx + 1) / steps.length) * 100) : 0;
 
   const goNext = React.useCallback(() => {
     if (hasStepErrors) return;
@@ -571,7 +574,7 @@ export default function ActionRunner({
       {stage === "confirm" && (
         <button
           onClick={onBackToForm}
-          className="flex  justify-between items-center gap-2 z-10 p-1 font-bold text-canopy-50 "
+          className="inline-flex items-center gap-2 z-10 px-2 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
           <LucideIcon name="arrow-left" />
           Go back
@@ -587,6 +590,46 @@ export default function ActionRunner({
           <>
             {stage === "form" && (
               <motion.div className="space-y-4">
+                {wizard && steps.length > 0 && (
+                  <div className="rounded-xl border border-border/70 bg-background/70 p-3 sm:p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="font-medium">
+                        {steps[stepIdx]?.title ?? `Step ${stepIdx + 1}`}
+                      </div>
+                      <div>
+                        {stepIdx + 1} / {steps.length}
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300"
+                        style={{ width: `${stepProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {steps.map((step: any, idx: number) => {
+                        const isActive = idx === stepIdx;
+                        const isCompleted = idx < stepIdx;
+                        return (
+                          <span
+                            key={String(step?.id ?? idx)}
+                            className={cx(
+                              "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] border",
+                              isActive
+                                ? "border-primary/60 bg-primary/15 text-primary"
+                                : isCompleted
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                                  : "border-border/70 text-muted-foreground",
+                            )}
+                          >
+                            <span>{idx + 1}</span>
+                            <span>{step?.title ?? `Step ${idx + 1}`}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {/* Show skeleton loading while waiting for critical DS */}
                 {showPopulateLoading && (
                   <div className="space-y-4 animate-pulse">
@@ -599,33 +642,33 @@ export default function ActionRunner({
                   </div>
                 )}
                 {!showPopulateLoading && (
-                  <FormRenderer
-                    fields={visibleFieldsForStep}
-                    value={form}
-                    onChange={onFormChange}
-                    ctx={templatingCtx}
-                    onErrorsChange={handleErrorsChange}
-                    onDsChange={setLocalDs}
-                  />
-                )}
-
-                {wizard && steps.length > 0 && (
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div>{steps[stepIdx]?.title ?? `Step ${stepIdx + 1}`}</div>
-                    <div>
-                      {stepIdx + 1} / {steps.length}
-                    </div>
+                  <div
+                    className={cx(
+                      "rounded-xl border p-3 sm:p-4 md:p-5",
+                      isOrdersAction
+                        ? "border-primary/25 bg-primary/[0.04]"
+                        : "border-border/70 bg-background/60",
+                    )}
+                  >
+                    <FormRenderer
+                      fields={visibleFieldsForStep}
+                      value={form}
+                      onChange={onFormChange}
+                      ctx={templatingCtx}
+                      onErrorsChange={handleErrorsChange}
+                      onDsChange={setLocalDs}
+                    />
                   </div>
                 )}
 
                 {infoItems.length > 0 && (
-                  <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-background">
+                  <div className="flex-col h-full p-3 sm:p-4 rounded-xl border border-border/70 bg-background/60">
                     {action?.form?.info?.title && (
-                      <h4 className="text-canopy-50 text-base sm:text-lg mb-2">
+                      <h4 className="text-foreground text-sm sm:text-base font-semibold mb-2">
                         {template(action?.form?.info?.title, templatingCtx)}
                       </h4>
                     )}
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-2.5">
                       {infoItems.map(
                         (
                           d: {
@@ -648,9 +691,9 @@ export default function ActionRunner({
                         ) => (
                           <div
                             key={i}
-                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm"
                           >
-                            <div className="flex items-center gap-2 text-muted-foreground font-light text-xs sm:text-sm">
+                            <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] sm:text-xs uppercase tracking-wide">
                               {d.icon ? (
                                 <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               ) : null}
@@ -660,7 +703,7 @@ export default function ActionRunner({
                               </span>
                             </div>
                             {d.value && (
-                              <span className="font-normal text-canopy-50 break-words text-sm sm:text-base">
+                              <span className="font-normal text-foreground break-words text-sm sm:text-[15px]">
                                 {String(d.value ?? "—")}
                               </span>
                             )}
@@ -672,11 +715,11 @@ export default function ActionRunner({
                 )}
 
                 {!hideSubmit && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col-reverse sm:flex-row gap-2">
                     {wizard && stepIdx > 0 && (
                       <button
                         onClick={goPrev}
-                        className="px-4 py-2 sm:py-2.5 rounded border border-muted text-canopy-50 text-sm sm:text-base"
+                        className="px-4 py-2.5 rounded-lg border border-border/80 text-foreground text-sm sm:text-base hover:bg-muted/40 transition-colors"
                       >
                         Back
                       </button>
@@ -685,7 +728,7 @@ export default function ActionRunner({
                       disabled={hasStepErrors}
                       onClick={goNext}
                       className={cx(
-                        "flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-bold rounded text-sm sm:text-base",
+                        "flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg text-sm sm:text-base",
                         hasStepErrors && "opacity-50 cursor-not-allowed",
                       )}
                     >
@@ -698,24 +741,31 @@ export default function ActionRunner({
 
             {stage === "confirm" && (
               <motion.div className="space-y-4">
-                <div className="flex-col h-full p-3 sm:p-4 rounded-lg bg-background">
+                <div
+                  className={cx(
+                    "flex-col h-full p-3 sm:p-4 rounded-xl border",
+                    isOrdersAction
+                      ? "border-primary/25 bg-primary/[0.04]"
+                      : "border-border/70 bg-background/60",
+                  )}
+                >
                   {summaryTitle && (
-                    <h4 className="text-canopy-50 text-base sm:text-lg mb-3">{summaryTitle}</h4>
+                    <h4 className="text-foreground text-sm sm:text-base font-semibold mb-3">{summaryTitle}</h4>
                   )}
 
                   <div className="mt-3 space-y-2.5">
                     {resolvedSummary.map((d, i) => (
                       <div
                         key={i}
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm sm:text-md"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-sm"
                       >
-                        <div className="flex items-center gap-2 text-muted-foreground font-light text-xs sm:text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] sm:text-xs uppercase tracking-wide">
                           {d.icon ? (
                             <LucideIcon name={d.icon} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                           ) : null}
                           <span>{d.label}:</span>
                         </div>
-                        <span className="font-normal text-canopy-50 break-words text-sm sm:text-base sm:text-right">
+                        <span className="font-normal text-foreground break-words text-sm sm:text-[15px] sm:text-right">
                           {String(d.value ?? "—")}
                         </span>
                       </div>
@@ -726,7 +776,7 @@ export default function ActionRunner({
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={onConfirm}
-                    className="flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-bold rounded flex items-center justify-center gap-2 text-sm sm:text-base"
+                    className="flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg flex items-center justify-center gap-2 text-sm sm:text-base"
                   >
                     {confirmBtn.icon ? (
                       <LucideIcon name={confirmBtn.icon} className="w-4 h-4 sm:w-5 sm:h-5" />

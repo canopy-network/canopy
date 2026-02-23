@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Key, ChevronDown, Blocks } from 'lucide-react';
+import { Key, Blocks } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/Select';
 import { useAccounts } from '@/app/providers/AccountsProvider';
 import { useTotalStage } from '@/hooks/useTotalStage';
@@ -25,117 +25,96 @@ export const TopBar = (): JSX.Element => {
 
     return (
         <motion.header
-            className="h-[52px] flex-shrink-0 hidden lg:flex items-center justify-between gap-3 px-5 border-b border-border/60 bg-card/40 backdrop-blur-sm relative z-20"
+            className="relative z-20 hidden h-[52px] flex-shrink-0 items-center justify-between gap-3 border-b border-border/70 bg-[linear-gradient(180deg,rgba(20,20,20,0.82),rgba(13,13,13,0.72))] px-5 backdrop-blur-xl lg:flex"
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
         >
-            {/* ── LEFT: block height ── */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
+
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-primary/6 border border-primary/12">
-                    {/* Pulse dot */}
+                <div className="flex items-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(53,205,72,0.12)]">
                     <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                     </span>
-                    <Blocks className="w-3 h-3 text-primary/70 flex-shrink-0" />
-                    <span className="font-mono text-xs font-medium text-primary tabular-nums">
-                        {blockHeight != null
-                            ? `#${blockHeight.height.toLocaleString()}`
-                            : '—'
-                        }
+                    <Blocks className="h-3 w-3 flex-shrink-0 text-primary/80" />
+                    <span className="num text-xs font-semibold text-primary">
+                        {blockHeight != null ? `#${blockHeight.height.toLocaleString()}` : '-'}
                     </span>
                 </div>
             </div>
 
-            {/* ── RIGHT: total + account + keys ── */}
             <div className="flex items-center gap-2">
-                {/* Total CNPY */}
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-secondary/80 border border-border/60">
-                    <span className="text-xs text-muted-foreground font-body">Total</span>
+                <div className="hidden items-center gap-1.5 rounded-md border border-border/70 bg-secondary/75 px-2.5 py-1.5 sm:flex">
+                    <span className="text-xs text-muted-foreground">Total</span>
                     {stageLoading ? (
-                        <span className="text-xs font-mono font-semibold text-primary">…</span>
+                        <span className="num text-xs font-semibold text-primary">...</span>
                     ) : (
                         <AnimatedNumber
                             value={totalStage ? totalStage / 1_000_000 : 0}
                             format={{ notation: 'compact', maximumFractionDigits: 1 }}
-                            className="text-xs font-mono font-semibold text-primary tabular-nums"
+                            className="num text-xs font-semibold text-primary"
                         />
                     )}
-                    <span className="text-xs font-mono text-muted-foreground/50">CNPY</span>
+                    <span className="num text-xs text-muted-foreground/60">CNPY</span>
                 </div>
 
-                {/* Divider */}
-                <div className="hidden sm:block h-4 w-px bg-border/60" />
+                <div className="hidden h-4 w-px bg-border/70 sm:block" />
 
-                {/* Account selector */}
-                <Select
-                    value={selectedAccount?.id || ''}
-                    onValueChange={switchAccount}
-                >
-                    <SelectTrigger
-                        className="h-8 w-40 rounded-md border border-border/60 bg-secondary/80 px-2.5 text-xs font-medium text-foreground hover:border-primary/30 transition-colors"
-                    >
-                        <div className="flex items-center gap-2 w-full min-w-0">
-                            {/* Account avatar */}
-                            <div className="w-5 h-5 rounded-sm bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center flex-shrink-0">
-                                <span className="font-mono text-[9px] font-bold text-primary-foreground">
+                <Select value={selectedAccount?.id || ''} onValueChange={switchAccount}>
+                    <SelectTrigger className="h-8 w-44 rounded-md border-border/75 bg-secondary/80 px-2.5 text-xs font-medium">
+                        <div className="flex w-full min-w-0 items-center gap-2">
+                            <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm bg-primary/90 text-primary-foreground shadow-[0_0_10px_rgba(53,205,72,0.22)]">
+                                <span className="num text-[9px] font-bold">
                                     {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                 </span>
                             </div>
-                            <span className="truncate font-body text-xs">
+                            <span className="truncate text-xs text-foreground">
                                 {loading
-                                    ? 'Loading…'
+                                    ? 'Loading...'
                                     : selectedAccount?.nickname
-                                        ? selectedAccount.nickname
-                                        : selectedAccount?.address
-                                            ? `${selectedAccount.address.slice(0, 5)}…${selectedAccount.address.slice(-4)}`
-                                            : 'Account'
-                                }
+                                      ? selectedAccount.nickname
+                                      : selectedAccount?.address
+                                        ? `${selectedAccount.address.slice(0, 5)}...${selectedAccount.address.slice(-4)}`
+                                        : 'Account'}
                             </span>
                         </div>
                     </SelectTrigger>
-                    <SelectContent className="bg-card border border-border/70 shadow-wallet-lg">
+                    <SelectContent className="border-border/80 bg-card/95 shadow-[0_16px_34px_rgba(0,0,0,0.42)]">
                         {accounts.map((account) => (
-                            <SelectItem
-                                key={account.id}
-                                value={account.id}
-                                className="text-foreground hover:bg-muted focus:bg-muted"
-                            >
-                                <div className="flex items-center gap-2.5 w-full">
-                                    <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center flex-shrink-0">
-                                        <span className="font-mono text-[9px] font-bold text-primary-foreground">
+                            <SelectItem key={account.id} value={account.id}>
+                                <div className="flex w-full items-center gap-2.5">
+                                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm bg-primary/85 text-primary-foreground shadow-[0_0_10px_rgba(53,205,72,0.2)]">
+                                        <span className="num text-[9px] font-bold">
                                             {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                         </span>
                                     </div>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className="text-xs font-medium text-foreground truncate font-body">
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="truncate text-xs font-medium text-foreground">
                                             {account.nickname || 'Unnamed'}
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground font-mono truncate">
-                                            {account.address.slice(0, 6)}…{account.address.slice(-4)}
+                                        <span className="num truncate text-[10px] text-muted-foreground">
+                                            {account.address.slice(0, 6)}...{account.address.slice(-4)}
                                         </span>
                                     </div>
                                     {account.isActive && (
-                                        <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0 ml-auto" />
+                                        <div className="ml-auto h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
                                     )}
                                 </div>
                             </SelectItem>
                         ))}
                         {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
-                            <div className="p-2 text-center text-muted-foreground text-xs font-body">
-                                No accounts
-                            </div>
+                            <div className="p-2 text-center text-xs text-muted-foreground">No accounts</div>
                         ) : null}
                     </SelectContent>
                 </Select>
 
-                {/* Key management CTA */}
                 <Link
                     to="/key-management"
-                    className="h-8 flex items-center gap-1.5 px-3 rounded-md text-xs font-semibold transition-all duration-150 bg-primary hover:bg-primary-light text-primary-foreground btn-glow font-display"
+                    className="btn-glow flex h-8 items-center gap-1.5 rounded-md border border-primary/35 bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all duration-150 hover:bg-primary/90"
                 >
-                    <Key className="w-3 h-3 flex-shrink-0" />
+                    <Key className="h-3 w-3 flex-shrink-0" />
                     <span className="hidden sm:inline">Keys</span>
                 </Link>
             </div>

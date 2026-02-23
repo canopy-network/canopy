@@ -48,16 +48,16 @@ export const SelectField: React.FC<BaseFieldProps> = ({
 
     return (
         <FieldWrapper field={field} error={error} templateContext={templateContext} resolveTemplate={resolveTemplate}>
-            <Select
-                value={currentValue ?? ''}
-                onValueChange={(val) => onChange(val)}
-                disabled={field.readOnly}
-                required={field.required}
-            >
-                <SelectTrigger className="w-full bg-muted border-border text-foreground h-11 rounded-lg">
+                <Select
+                    value={currentValue ?? ''}
+                    onValueChange={(val) => onChange(val)}
+                    disabled={field.readOnly}
+                    required={field.required}
+                >
+                <SelectTrigger className="w-full bg-background/60 border-border/70 text-foreground h-11 sm:h-12 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors">
                     <SelectValue placeholder={field.placeholder} />
                 </SelectTrigger>
-                <SelectContent className="bg-muted border-border">
+                <SelectContent className="bg-card border-border/70">
                     {builtOptions.map((o) => (
                         <SelectItem key={o.value} value={o.value} className="text-foreground">
                             {o.label}

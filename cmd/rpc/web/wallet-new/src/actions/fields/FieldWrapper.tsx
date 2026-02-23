@@ -20,7 +20,9 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
         <div className={spanClasses(field, templateContext?.layout)}>
             <label className="block">
                 {resolveTemplate(field.label) && (
-                    <div className="text-sm mb-1 text-muted-foreground">{resolveTemplate(field.label)}</div>
+                    <div className="text-[11px] sm:text-xs uppercase tracking-[0.08em] mb-1.5 text-muted-foreground/90">
+                        {resolveTemplate(field.label)}
+                    </div>
                 )}
                 <div className="relative">
                     {children}
@@ -37,7 +39,7 @@ export const FieldWrapper: React.FC<FieldWrapperProps> = ({
                 {help && (
                     <div
                         className={cx(
-                            'text-xs mt-1.5 break-words overflow-wrap-anywhere',
+                            'text-[11px] sm:text-xs mt-1.5 break-words overflow-wrap-anywhere',
                             error ? 'text-red-400' : 'text-muted-foreground'
                         )}
                     >

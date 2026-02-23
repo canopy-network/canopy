@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => {
   return {
     base: getBasePath(),
     resolve: {
+      dedupe: ["react", "react-dom"],
+      extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"],
       alias: {
         "@": "/src",
       },

@@ -4,6 +4,9 @@ import { useDSFetcher } from "@/core/dsFetch";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { AlertModal } from "./AlertModal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 
 interface PauseUnpauseModalProps {
   isOpen: boolean;
@@ -251,12 +254,15 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
             <h2 className="text-xl font-semibold text-foreground capitalize">
               {action} Validator
             </h2>
-            <button
+            <Button
+              type="button"
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              variant="clear2"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
             >
               <i className="fa-solid fa-times text-lg"></i>
-            </button>
+            </Button>
           </div>
 
           {success ? (
@@ -353,10 +359,10 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Account */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <Label className="block text-sm font-medium text-foreground mb-2">
                     <i className="fa-solid fa-user mr-2 text-primary"></i>
                     Account
-                  </label>
+                  </Label>
                   <select
                     value={formData.account}
                     onChange={(e) =>
@@ -375,10 +381,10 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
                 {/* Signer */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <Label className="block text-sm font-medium text-foreground mb-2">
                     <i className="fa-solid fa-signature mr-2 text-primary"></i>
                     Signer
-                  </label>
+                  </Label>
                   <select
                     value={formData.signer}
                     onChange={(e) =>
@@ -398,16 +404,16 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
               {/* Memo */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <Label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-sticky-note mr-2 text-primary"></i>
                   Memo
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
                   value={formData.memo}
                   onChange={(e) => handleInputChange("memo", e.target.value)}
                   placeholder="Optional note attached with the transaction"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
                   maxLength={200}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -417,12 +423,12 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
               {/* Transaction Fee */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <Label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-coins mr-2 text-primary"></i>
                   Transaction Fee
-                </label>
+                </Label>
                 <div className="relative">
-                  <input
+                  <Input
                     type="number"
                     value={formData.fee}
                     onChange={(e) =>
@@ -430,7 +436,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                     }
                     step="0.001"
                     min="0"
-                    className="w-full px-3 py-2 pr-12 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                    className="w-full px-3 py-2 pr-12 bg-muted border border-border rounded-lg text-foreground"
                     required
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -446,27 +452,27 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <Label className="block text-sm font-medium text-foreground mb-2">
                   <i className="fa-solid fa-lock mr-2 text-primary"></i>
                   Password
-                </label>
-                <input
+                </Label>
+                <Input
                   type="password"
                   value={formData.password}
                   onChange={(e) =>
                     handleInputChange("password", e.target.value)
                   }
                   placeholder="Enter your key password"
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
+                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-foreground"
                   required
                 />
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button
+                <Button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-muted font-medium py-3 px-4 rounded-lg  transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 text-muted font-medium py-3 px-4 flex items-center justify-center gap-2"
                 >
                   {isLoading ? (
                     <>
@@ -479,7 +485,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                       Generate Transaction
                     </>
                   )}
-                </button>
+                </Button>
               </div>
             </form>
           )}

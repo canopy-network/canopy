@@ -152,6 +152,17 @@ export type NumberField = FieldBase & {
   integer?: boolean;
 };
 
+export type RangeField = FieldBase & {
+  type: "range";
+  min?: number;
+  max?: number;
+  step?: number;
+  showInput?: boolean;
+  suffix?: string;
+  marks?: number[];
+  presets?: Array<{ label: string; value: number }>;
+};
+
 export type TextField = FieldBase & {
   type: "text" | "textarea";
 };
@@ -223,6 +234,7 @@ export type Field =
   | AddressField
   | AmountField
   | NumberField
+  | RangeField
   | SwitchField
   | OptionCardField
   | OptionField

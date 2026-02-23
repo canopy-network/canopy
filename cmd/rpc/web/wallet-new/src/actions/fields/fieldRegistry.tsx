@@ -1,6 +1,7 @@
 import { TextField } from "./TextField";
 import { AmountField } from "./AmountField";
 import { NumberField } from "./NumberField";
+import { RangeField } from "./RangeField";
 import { AddressField } from "./AddressField";
 import { SelectField } from "./SelectField";
 import { AdvancedSelectField } from "./AdvancedSelectField";
@@ -30,6 +31,7 @@ export const fieldRegistry: Record<string, FieldComponent> = {
     textarea: TextField,
     amount: AmountField,
     number: NumberField,
+    range: RangeField,
     address: AddressField,
     select: SelectField,
     advancedSelect: AdvancedSelectField,

@@ -16,9 +16,9 @@ export const AddressField: React.FC<BaseFieldProps> = ({
     const currentValue = value === '' && resolved != null ? resolved : value
 
     const hasFeatures = !!(field.features?.length)
-    const common = 'w-full bg-transparent border placeholder-text-muted text-foreground rounded px-3 py-2 focus:outline-none'
+    const common = 'w-full h-11 sm:h-12 bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors'
     const paddingRight = hasFeatures ? 'pr-20' : ''
-    const border = error ? 'border-red-600' : 'border-muted-foreground border-opacity-50'
+    const border = error ? 'border-red-600' : 'border-border/70'
 
     return (
         <FieldWrapper

@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/Button';
 
 interface AlertModalProps {
   isOpen: boolean;
@@ -111,19 +112,21 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 
           <div className="flex gap-3 justify-end">
             {showCancel && (
-              <button
+              <Button
                 onClick={onClose}
-                className="px-4 py-2 bg-muted hover:bg-accent text-foreground font-medium rounded-lg transition-colors"
+                variant="secondary"
+                className="px-4 py-2"
               >
                 {cancelText}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               onClick={handleConfirm}
-              className={`px-4 py-2 ${styles.buttonColor} text-foreground font-medium rounded-lg transition-colors`}
+              className={`px-4 py-2 ${styles.buttonColor} text-foreground`}
+              variant={type === 'error' ? 'destructive' : 'default'}
             >
               {confirmText}
-            </button>
+            </Button>
           </div>
         </motion.div>
       </motion.div>
