@@ -32,7 +32,7 @@ export const ModalTabs: React.FC<ModalTabsProps> = ({
             >
                 <TabsList
                     variant="wallet"
-                    className="w-full gap-1 sm:gap-2 overflow-x-auto whitespace-nowrap no-scrollbar"
+                    className="w-full gap-1 sm:gap-2 overflow-x-auto whitespace-nowrap no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                 >
                     {tabs.map((tab, index) => (
                         <TabsTrigger

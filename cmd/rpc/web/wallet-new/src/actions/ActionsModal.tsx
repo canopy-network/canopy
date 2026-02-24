@@ -1,6 +1,7 @@
 // ActionsModal.tsx
 import React, { useEffect, useMemo, useState, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { ModalTabs, Tab } from './ModalTabs'
 import { Action as ManifestAction } from '@/manifest/types'
 import { XIcon, Loader2 } from 'lucide-react'
@@ -60,7 +61,7 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
     }
   }, [isOpen])
 
-  return (
+  const modalNode = (
     <AnimatePresence mode="wait">
       {isOpen && (
         <motion.div
@@ -68,8 +69,8 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-x-0 bottom-0 bg-black/45 backdrop-blur-md flex items-center justify-center z-[1200] p-2 sm:p-4"
-          style={{ top: "var(--topbar-height, 52px)" }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-start sm:items-center justify-center p-2 pt-[calc(env(safe-area-inset-top)+60px)] sm:p-4"
+          style={{ zIndex: 9999 }}
           onClick={onClose}
         >
           <motion.div
@@ -83,9 +84,9 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
             className={cx(
               'relative bg-card border border-border overflow-hidden flex flex-col min-h-0',
               'w-full max-w-[min(100vw-1rem,72rem)] rounded-lg sm:rounded-xl',
-              'h-[calc(100dvh-var(--topbar-height,52px)-1rem)]',
-              'max-h-[calc(100dvh-var(--topbar-height,52px)-1rem)]',
-              'sm:h-auto sm:max-h-[calc(100dvh-var(--topbar-height,52px)-1.5rem)]',
+              'h-[calc(100dvh-1rem)]',
+              'max-h-[calc(100dvh-1rem)]',
+              'sm:h-auto sm:max-h-[calc(100dvh-1.5rem)]',
               modalClassName,
             )}
             style={modalStyle}
@@ -128,5 +129,13 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
         </motion.div>
       )}
     </AnimatePresence>
+  )
+
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  return (
+    createPortal(modalNode, document.body)
   )
 }

@@ -715,7 +715,7 @@ export default function ActionRunner({
                 )}
 
                 {!hideSubmit && (
-                  <div className="flex flex-col-reverse sm:flex-row gap-2">
+                  <div className="sticky bottom-0 z-20 -mx-3 mt-4 flex flex-col-reverse gap-2 border-t border-border/70 bg-card/95 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-md sm:static sm:mx-0 sm:mt-0 sm:flex-row sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
                     {wizard && stepIdx > 0 && (
                       <button
                         onClick={goPrev}
@@ -774,15 +774,17 @@ export default function ActionRunner({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <button
-                    onClick={onConfirm}
-                    className="flex-1 px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg flex items-center justify-center gap-2 text-sm sm:text-base"
-                  >
-                    {confirmBtn.icon ? (
-                      <LucideIcon name={confirmBtn.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
-                    ) : null}
-                    <span>{confirmBtn.label}</span>
-                  </button>
+                  <div className="sticky bottom-0 z-20 -mx-3 mt-4 border-t border-border/70 bg-card/95 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-md sm:static sm:mx-0 sm:mt-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+                    <button
+                      onClick={onConfirm}
+                      className="flex-1 w-full px-4 py-2.5 sm:py-3 bg-primary-500 text-bg-accent-foreground font-semibold rounded-lg flex items-center justify-center gap-2 text-sm sm:text-base"
+                    >
+                      {confirmBtn.icon ? (
+                        <LucideIcon name={confirmBtn.icon} className="w-4 h-4 sm:w-5 sm:h-5" />
+                      ) : null}
+                      <span>{confirmBtn.label}</span>
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             )}

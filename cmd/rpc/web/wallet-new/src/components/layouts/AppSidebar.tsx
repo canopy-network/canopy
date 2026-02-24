@@ -49,9 +49,12 @@ export const AppSidebar = (): JSX.Element => {
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
                 <div className="h-[52px] flex-shrink-0 border-b border-border/70 px-3">
-                    <Link to="/" className="group flex h-full min-w-0 items-center gap-3">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(53,205,72,0.34)_inset,0_0_16px_rgba(53,205,72,0.28)] transition-shadow duration-200 group-hover:shadow-[0_0_0_1px_rgba(53,205,72,0.44)_inset,0_0_22px_rgba(53,205,72,0.32)]">
-                            <CnpyLogoIcon className="h-4 w-4" />
+                    <Link
+                        to="/"
+                        className={`group flex h-full w-full items-center ${collapsed ? 'justify-center' : 'justify-start gap-3'}`}
+                    >
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center text-primary">
+                            <CnpyLogoIcon className="h-5 w-5 drop-shadow-[0_0_10px_rgba(53,205,72,0.35)]" />
                         </div>
                         <AnimatePresence>
                             {!collapsed && (
@@ -140,8 +143,8 @@ export const AppSidebar = (): JSX.Element => {
                         <Menu className="h-5 w-5 text-muted-foreground" />
                     </button>
                     <Link to="/" className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(53,205,72,0.34)_inset,0_0_14px_rgba(53,205,72,0.24)]">
-                            <CnpyLogoIcon className="h-3.5 w-3.5" />
+                        <div className="flex h-7 w-7 items-center justify-center text-primary">
+                            <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
                         </div>
                         <span className="font-display text-sm font-bold text-foreground">Canopy Wallet</span>
                     </Link>
@@ -175,8 +178,8 @@ export const AppSidebar = (): JSX.Element => {
                                             onClick={() => setMobileOpen(false)}
                                             className="flex items-center gap-2.5"
                                         >
-                                            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(53,205,72,0.34)_inset,0_0_14px_rgba(53,205,72,0.24)]">
-                                                <CnpyLogoIcon className="h-3.5 w-3.5" />
+                                            <div className="flex h-7 w-7 items-center justify-center text-primary">
+                                                <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
                                             </div>
                                             <span className="font-display text-sm font-bold text-foreground">
                                                 Canopy Wallet

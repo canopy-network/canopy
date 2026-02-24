@@ -5,7 +5,7 @@ import { cx } from "@/ui/cx";
 const cardVariants = cva("relative flex flex-col border shadow-sm", {
     variants: {
         variant: {
-            default: "surface-card gap-5 text-card-foreground",
+            default: "canopy-card-soft gap-5 text-card-foreground",
             dark: "surface-card gap-5 text-white",
             glass:
                 "gap-5 border border-white/15 bg-white/[0.045] text-white backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(0,0,0,0.32)]",

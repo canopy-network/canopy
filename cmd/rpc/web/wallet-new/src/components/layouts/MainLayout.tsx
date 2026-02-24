@@ -12,8 +12,8 @@ export default function MainLayout() {
             <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
                 <TopBar />
 
-                <main className="relative z-10 flex-1 overflow-y-auto">
-                    <div className="mx-auto max-w-[1600px] px-4 py-4 pt-[68px] sm:px-5 sm:py-5 lg:pt-4">
+                <main className="relative z-10 flex-1 overflow-y-auto pt-[52px] lg:pt-0">
+                    <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-5 sm:py-5 lg:py-4">
                         <Outlet />
                     </div>
                 </main>

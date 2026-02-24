@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import dynamicIconImports from 'lucide-react/dynamicIconImports';
+import { CircleHelp } from 'lucide-react';
 
 type Props = { name?: string; className?: string };
 type Importer = () => Promise<{ default: React.ComponentType<any> }>;
@@ -14,12 +15,18 @@ const normalize = (n?: string) => {
         .trim();
 };
 
-const FALLBACKS = ['HelpCircle', 'Zap', 'Circle', 'Square']; // keys que existen en casi todas las versiones
+const FALLBACKS = ['circle-help', 'help-circle', 'zap', 'circle', 'square'];
+const FALLBACK_ICON: React.ComponentType<any> = CircleHelp;
+const ICON_ALIASES: Record<string, string> = {
+    'check-square': 'check',
+    'square-check-big': 'check',
+};
 
 const cache = new Map<string, React.LazyExoticComponent<React.ComponentType<any>>>();
 
 export function LucideIcon({ name = 'HelpCircle', className }: Props) {
-    const key = normalize(name);
+    const normalizedName = normalize(name);
+    const key = ICON_ALIASES[normalizedName] || normalizedName;
 
     const resolvedName =
         (LIB[key] && key) ||
@@ -30,12 +37,20 @@ export function LucideIcon({ name = 'HelpCircle', className }: Props) {
     const importer = resolvedName ? LIB[resolvedName] : undefined;
 
     if (!importer || typeof importer !== 'function') {
-        return <span className={className} />;
+        return <FALLBACK_ICON className={className} />;
     }
 
     let Icon = cache.get(resolvedName);
     if (!Icon) {
-        Icon = React.lazy(importer);
+        const safeImporter: Importer = () =>
+            importer().catch((error) => {
+                if (typeof console !== 'undefined') {
+                    console.warn(`[LucideIcon] Failed to load icon "${resolvedName}"`, error);
+                }
+                return Promise.resolve({ default: FALLBACK_ICON });
+            });
+
+        Icon = React.lazy(safeImporter);
         cache.set(resolvedName, Icon);
     }
 
