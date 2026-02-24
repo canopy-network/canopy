@@ -167,7 +167,9 @@ const OverviewCards: React.FC = () => {
                                         )}
                                     </p>
                                 </Link>,
-                                <span className="text-gray-400">{truncate(String(hash))}</span>,
+                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">
+                                    {truncate(String(hash))}
+                                </Link>,
                                 <span className="text-gray-200">
                                     {typeof txCount === 'number' ? (
                                         <AnimatedNumber

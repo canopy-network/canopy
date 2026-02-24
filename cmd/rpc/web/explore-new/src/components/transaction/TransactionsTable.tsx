@@ -16,6 +16,7 @@ interface Transaction {
     status: 'success' | 'failed' | 'pending'
     age: string
     blockHeight?: number
+    date?: number
 }
 
 interface TransactionsTableProps {
@@ -48,6 +49,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     onExportButtonClick
 }) => {
     const navigate = useNavigate()
+    const [sortField, setSortField] = React.useState<'amount' | 'fee' | 'age' | null>(null)
+    const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc')
 
     // Get params to access fee information
     const { data: paramsData } = useParamsHook(0)
@@ -200,7 +203,57 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         return 'N/A'
     }
 
-    const rows = transactions.map((transaction) => [
+    const toggleSort = (field: 'amount' | 'fee' | 'age') => {
+        if (sortField === field) {
+            setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
+            return
+        }
+        setSortField(field)
+        setSortDirection('desc')
+    }
+
+    const getSortIconClass = (field: 'amount' | 'fee' | 'age') => {
+        if (sortField !== field) return 'fa-solid fa-sort text-gray-500'
+        return sortDirection === 'asc'
+            ? 'fa-solid fa-sort-up text-primary'
+            : 'fa-solid fa-sort-down text-primary'
+    }
+
+    const sortedTransactions = React.useMemo(() => {
+        if (!sortField) return transactions
+
+        const sorted = [...transactions]
+        sorted.sort((a, b) => {
+            const direction = sortDirection === 'asc' ? 1 : -1
+
+            if (sortField === 'amount') {
+                return (a.amount - b.amount) * direction
+            }
+
+            if (sortField === 'fee') {
+                return (a.fee - b.fee) * direction
+            }
+
+            const aDate = a.date ?? 0
+            const bDate = b.date ?? 0
+            return (aDate - bDate) * direction
+        })
+
+        return sorted
+    }, [transactions, sortField, sortDirection])
+
+    const renderSortableHeader = (label: string, field: 'amount' | 'fee' | 'age') => (
+        <button
+            type="button"
+            onClick={() => toggleSort(field)}
+            className="inline-flex items-center gap-1 hover:text-white transition-colors"
+        >
+            <span>{label}</span>
+            <i className={getSortIconClass(field)} aria-hidden="true"></i>
+        </button>
+    )
+
+    const rows = sortedTransactions.map((transaction) => [
         // Hash
         <span className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
             onClick={() => navigate(`/transaction/${transaction.hash}`)}>
@@ -272,10 +325,10 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         { label: transactionsTexts.table.headers.type, width: 'w-[12%]' },
         { label: transactionsTexts.table.headers.from, width: 'w-[13%]' },
         { label: transactionsTexts.table.headers.to, width: 'w-[13%]' },
-        { label: transactionsTexts.table.headers.amount, width: 'w-[8%]' },
-        { label: transactionsTexts.table.headers.fee, width: 'w-[8%]' },
+        { label: renderSortableHeader(transactionsTexts.table.headers.amount, 'amount'), width: 'w-[8%]' },
+        { label: renderSortableHeader(transactionsTexts.table.headers.fee, 'fee'), width: 'w-[8%]' },
         { label: transactionsTexts.table.headers.status, width: 'w-[11%]' },
-        { label: transactionsTexts.table.headers.age, width: 'w-[10%]' }
+        { label: renderSortableHeader(transactionsTexts.table.headers.age, 'age'), width: 'w-[10%]' }
     ]
 
     return (

@@ -190,6 +190,18 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
         setMinStakePercent(Number(event.target.value))
     }
 
+    const handleMinStakeInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const rawValue = event.target.value.replace(/,/g, '')
+        const parsedValue = Number(rawValue)
+        const maxStake = getMaxStake()
+
+        if (Number.isNaN(parsedValue)) return
+
+        const clampedValue = Math.min(Math.max(parsedValue, 0), maxStake)
+        const nextPercent = maxStake > 0 ? (clampedValue / maxStake) * 100 : 0
+        setMinStakePercent(nextPercent)
+    }
+
     const getMaxStake = () => {
         return validators.length > 0 ? Math.max(...validators.map(v => v.stakedAmount)) : 0
     }
@@ -208,11 +220,11 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         {pageTitle || validatorsTexts.page.title}
                     </h1>
                     <p className="text-gray-400">
-                        {pageTitle === 'Delegators' 
+                        {pageTitle === 'Delegators'
                             ? 'Complete list of Canopy network delegators'
                             : pageTitle === 'Staking'
-                            ? 'Complete list of Canopy network validators and delegators'
-                            : validatorsTexts.page.description}
+                                ? 'Complete list of Canopy network validators and delegators'
+                                : validatorsTexts.page.description}
                     </p>
                 </div>
 
@@ -278,8 +290,18 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             onChange={handleMinStakeChange}
                         />
                         <span className="text-gray-400 text-sm whitespace-nowrap">
-                            Min Stake: {getMinStakeValue().toLocaleString()}
+                            Min Stake:
                         </span>
+                        <input
+                            type="number"
+                            min="0"
+                            max={getMaxStake()}
+                            value={getMinStakeValue()}
+                            onChange={handleMinStakeInputChange}
+                            className="w-36 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                            placeholder="Enter amount"
+                            aria-label="Minimum stake amount"
+                        />
                     </div>
                 </div>
 

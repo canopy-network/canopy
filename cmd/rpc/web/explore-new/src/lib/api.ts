@@ -4,6 +4,16 @@ const getEnvVar = (key: keyof ImportMetaEnv, fallback: string): string => {
     return import.meta.env[key] || fallback;
 };
 
+const normalizeBaseURL = (url: string): string => {
+    return url.replace(/\/+$/, '');
+};
+
+const buildURL = (baseURL: string, endpointPath: string): string => {
+    const normalizedBase = normalizeBaseURL(baseURL);
+    const normalizedPath = endpointPath.replace(/^\/+/, '');
+    return `${normalizedBase}/${normalizedPath}`;
+};
+
 // Default values
 let rpcURL = getEnvVar('VITE_RPC_URL', "http://localhost:50002");
 let adminRPCURL = getEnvVar('VITE_ADMIN_RPC_URL', "http://localhost:50003");
@@ -25,8 +35,8 @@ if (typeof window !== 'undefined' && window.__CONFIG__) {
 
 // Function to update API configuration
 const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: number) => {
-    rpcURL = newRpcURL;
-    adminRPCURL = newAdminRPCURL;
+    rpcURL = normalizeBaseURL(newRpcURL);
+    adminRPCURL = normalizeBaseURL(newAdminRPCURL);
     chainId = newChainId;
     console.log('API Config Updated:', { rpcURL, adminRPCURL, chainId });
 
@@ -41,8 +51,8 @@ const updateApiConfig = (newRpcURL: string, newAdminRPCURL: string, newChainId: 
 // Legacy support for window.__CONFIG__ (for backward compatibility)
 if (typeof window !== "undefined") {
     if (window.__CONFIG__) {
-        rpcURL = window.__CONFIG__.rpcURL;
-        adminRPCURL = window.__CONFIG__.adminRPCURL;
+        rpcURL = normalizeBaseURL(window.__CONFIG__.rpcURL);
+        adminRPCURL = normalizeBaseURL(window.__CONFIG__.adminRPCURL);
         chainId = Number(window.__CONFIG__.chainId);
     }
 
@@ -90,7 +100,7 @@ const configPath = "/v1/admin/config";
 
 // HTTP Methods
 export async function POST(url: string, request: string, path: string) {
-    return fetch(url + path, {
+    return fetch(buildURL(url, path), {
         method: "POST",
         headers: {
             'Content-Type': 'application/json',
@@ -110,7 +120,7 @@ export async function POST(url: string, request: string, path: string) {
 }
 
 export async function GET(url: string, path: string) {
-    return fetch(url + path, {
+    return fetch(buildURL(url, path), {
         method: "GET",
     })
         .then(async (response) => {

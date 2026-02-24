@@ -247,7 +247,9 @@ const TransactionsPage: React.FC = () => {
     }, [])
 
     const isLoadingData = isHashSearch ? isHashLoading : isLoading
-    const displayTotalTransactions = isHashSearch ? (hashSearchData ? 1 : 0) : totalTransactions
+    const displayTotalTransactions = isHashSearch
+        ? (hashSearchData ? 1 : 0)
+        : (transactionsData?.totalCount ?? transactions.length)
 
     // Helper function to format fee - shows in CNPY (converted from micro denomination)
     const formatFeeDisplay = (micro: number): string => {

@@ -352,23 +352,13 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 
 	// Create a new ServeMux to handle incoming HTTP requests
 	mux := http.NewServeMux()
+	fileServer := http.FileServer(http.FS(distFS))
 
 	// Define a handler function for the root path
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// serve `index.html` with dynamic config injection
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-
+		serveIndex := func() {
 			// Construct the file path for `index.html`
 			filePath := path.Join(dir, "index.html")
-
-			// Open the file and defer closing until the function exits
-			data, e := fileSys.Open(filePath)
-			if e != nil {
-				http.NotFound(w, r)
-				return
-			}
-			defer data.Close()
-
 			// Read the content of `index.html` into a byte slice
 			htmlBytes, e := fs.ReadFile(fileSys, filePath)
 			if e != nil {
@@ -382,12 +372,26 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 			// Set the response header as HTML and write the injected content to the response
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(injectedHTML))
+			_, _ = w.Write([]byte(injectedHTML))
+		}
+
+		// Serve `index.html` with dynamic config injection
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			serveIndex()
 			return
 		}
 
-		// For all other requests, serve the files directly from the file system
-		http.FileServer(http.FS(distFS)).ServeHTTP(w, r)
+		// Serve real static assets if they exist.
+		requestPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if requestPath != "" {
+			if _, e := fs.Stat(distFS, requestPath); e == nil {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		// SPA fallback: unknown client-side routes resolve to index.html.
+		serveIndex()
 	})
 
 	// Start the HTTP server in a new goroutine and listen on the specified port

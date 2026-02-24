@@ -182,6 +182,7 @@ const Navbar = () => {
                                                             <Link
                                                                 to={child.path}
                                                                 className={`block px-3 py-2 text-base font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-gray-700/70'}`}
+                                                                onClick={handleClose}
                                                             >
                                                                 {child.label}
                                                             </Link>

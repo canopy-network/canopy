@@ -41,6 +41,8 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     type
 }) => {
     const navigate = useNavigate()
+    const [sortField, setSortField] = React.useState<'age' | 'block' | null>(null)
+    const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc')
     const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
 
@@ -170,7 +172,51 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         return type
     }
 
-    const rows = (Array.isArray(transactions) ? transactions : []).map((transaction) => {
+    const toggleSort = (field: 'age' | 'block') => {
+        if (sortField === field) {
+            setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'))
+            return
+        }
+        setSortField(field)
+        setSortDirection('desc')
+    }
+
+    const getSortIconClass = (field: 'age' | 'block') => {
+        if (sortField !== field) return 'fa-solid fa-sort text-gray-500'
+        return sortDirection === 'asc'
+            ? 'fa-solid fa-sort-up text-primary'
+            : 'fa-solid fa-sort-down text-primary'
+    }
+
+    const sortedTransactions = React.useMemo(() => {
+        const list = Array.isArray(transactions) ? [...transactions] : []
+        if (!sortField) return list
+
+        list.sort((a, b) => {
+            const direction = sortDirection === 'asc' ? 1 : -1
+
+            if (sortField === 'block') {
+                return ((a.height || 0) - (b.height || 0)) * direction
+            }
+
+            return ((a.transaction?.time || 0) - (b.transaction?.time || 0)) * direction
+        })
+
+        return list
+    }, [transactions, sortField, sortDirection])
+
+    const renderSortableHeader = (label: string, field: 'age' | 'block') => (
+        <button
+            type="button"
+            onClick={() => toggleSort(field)}
+            className="inline-flex items-center gap-1 hover:text-white transition-colors"
+        >
+            <span>{label}</span>
+            <i className={getSortIconClass(field)} aria-hidden="true"></i>
+        </button>
+    )
+
+    const rows = sortedTransactions.map((transaction) => {
         const rawTxType = transaction.messageType || transaction.transaction?.type || 'send'
         const txType = normalizeType(rawTxType)
         const fromAddress = transaction.sender || transaction.transaction?.msg?.fromAddress || 'N/A'
@@ -255,6 +301,11 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                 <span>Success</span>
             </div>,
 
+            // Block
+            <span key="block" className="text-gray-300 text-sm font-medium">
+                {transaction.height || 0}
+            </span>,
+
             // Age
             <span key="age" className="text-gray-400 text-sm">
                 {formatTime(transaction.transaction.time)}
@@ -270,7 +321,8 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         { label: transactionsTexts.table.headers.amount, width: 'min-w-[90px]' },
         { label: transactionsTexts.table.headers.fee, width: 'min-w-[80px]' },
         { label: transactionsTexts.table.headers.status, width: 'min-w-[90px]' },
-        { label: transactionsTexts.table.headers.age, width: 'min-w-[100px]' }
+        { label: renderSortableHeader('Block', 'block'), width: 'min-w-[90px]' },
+        { label: renderSortableHeader(transactionsTexts.table.headers.age, 'age'), width: 'min-w-[100px]' }
     ]
 
     // Show message when no data
@@ -307,7 +359,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         const pageSize = 10
         const startIdx = (currentPage - 1) * pageSize
         const endIdx = startIdx + pageSize
-        const pageTransactions = Array.isArray(transactions) ? transactions.slice(startIdx, endIdx) : []
+        const pageTransactions = sortedTransactions.slice(startIdx, endIdx)
 
         return (
             <div className="space-y-3">
@@ -384,6 +436,10 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">Fee:</span>
                                     <span className="text-gray-300">{formatFee(feeMicro)}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">Block:</span>
+                                    <span className="text-gray-300">{transaction.height || 0}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-400">Age:</span>
@@ -469,7 +525,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                     title={type === 'sent' ? accountDetailTexts.table.sentTitle : accountDetailTexts.table.receivedTitle}
                     columns={columns}
                     rows={rows}
-                    totalCount={Array.isArray(transactions) ? transactions.length : 0}
+                    totalCount={sortedTransactions.length}
                     currentPage={currentPage}
                     onPageChange={onPageChange}
                     loading={loading}

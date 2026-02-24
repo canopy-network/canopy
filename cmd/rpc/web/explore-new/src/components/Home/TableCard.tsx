@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 
 export interface TableColumn {
-    label: string
+    label: React.ReactNode
     width?: string //  width optional for the column (ej: "w-16", "w-32", "min-w-[120px]")
 }
 
@@ -175,8 +175,8 @@ const TableCard: React.FC<TableCardProps> = ({
                 <table className={`w-full divide-y divide-gray-400/20 ${tableClassName}`} style={{ tableLayout: 'fixed' }}>
                     <thead className={theadClassName}>
                         <tr>
-                            {columns.map((c) => (
-                                <th key={c.label} className={`px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider ${c.width || ''}`}>
+                            {columns.map((c, index) => (
+                                <th key={index} className={`px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-400 capitalize tracking-wider ${c.width || ''}`}>
                                     {c.label}
                                 </th>
                             ))}

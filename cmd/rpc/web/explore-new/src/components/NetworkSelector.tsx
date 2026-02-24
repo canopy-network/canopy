@@ -14,16 +14,16 @@ const networks: Network[] = [
     {
         id: 'mainnet',
         name: 'Canopy Mainnet',
-        rpcUrl: 'https://node1.canopy.us.nodefleet.net/rpc/',
-        adminRpcUrl: 'https://node1.canopy.us.nodefleet.net/admin/',
+        rpcUrl: 'https://node1.canopy.us.nodefleet.net/rpc',
+        adminRpcUrl: 'https://node1.canopy.us.nodefleet.net/admin',
         chainId: 1,
         isTestnet: false
     },
     {
         id: 'canary',
         name: 'Canary Mainnet',
-        rpcUrl: 'https://node2.canopy.us.nodefleet.net/rpc/',
-        adminRpcUrl: 'https://node2.canopy.us.nodefleet.net/admin/',
+        rpcUrl: 'https://node2.canopy.us.nodefleet.net/rpc',
+        adminRpcUrl: 'https://node2.canopy.us.nodefleet.net/admin',
         chainId: 1,
         isTestnet: true
     }
