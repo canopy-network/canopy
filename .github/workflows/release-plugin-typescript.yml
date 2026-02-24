@@ -1,0 +1,67 @@
+name: Release TypeScript Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-typescript-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release TypeScript Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: plugin/typescript
+        run: npm ci
+
+      - name: Build plugin
+        working-directory: plugin/typescript
+        run: npm run build:all
+
+      - name: Install production dependencies only
+        working-directory: plugin/typescript
+        run: |
+          rm -rf node_modules
+          npm ci --production
+
+      - name: Create distribution tarball
+        working-directory: plugin/typescript
+        run: |
+          mkdir -p release
+          # Create tarball with dist/, node_modules, package.json (for "type": "module")
+          # Note: pluginctl.sh is NOT included - it's copied separately by Dockerfile
+          # and we don't want old releases to overwrite newer pluginctl.sh versions
+          tar -czf release/typescript-plugin.tar.gz dist/ node_modules/ package.json
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "TypeScript Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            TypeScript Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Installation
+            1. Extract `typescript-plugin.tar.gz` to `plugin/typescript/`
+            2. The plugin is ready to run (node_modules included)
+            
+            ## Assets
+            - `typescript-plugin.tar.gz` - Compiled plugin with dependencies
+          files: |
+            plugin/typescript/release/typescript-plugin.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

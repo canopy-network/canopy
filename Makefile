@@ -1,6 +1,7 @@
 # Variables
 GO_BIN_DIR := ~/go/bin
 CLI_DIR := ./cmd/main/...
+AUTO_UPDATE_DIR := ./cmd/auto-update/...
 WALLET_DIR := ./cmd/rpc/web/wallet
 EXPLORER_DIR := ./cmd/rpc/web/explorer
 DOCKER_DIR := ./.docker/compose.yaml
@@ -16,7 +17,7 @@ help:
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 # Targets, this is a list of all available commands which can be executed using the make command.
-.PHONY: build/canopy build/canopy-full build/wallet build/explorer test/all dev/deps docker/up \
+.PHONY: build/canopy build/canopy-full build/wallet build/explorer build/auto-update build/auto-update-local run/auto-update run/auto-update-build run/auto-update-test test/all dev/deps docker/up \
 	docker/down docker/build docker/up-fast docker/down docker/logs \
 	build/plugin build/kotlin-plugin build/go-plugin build/all-plugins docker/plugin \
 	docker/run docker/run-kotlin docker/run-go docker/run-typescript docker/run-python docker/run-csharp
@@ -39,6 +40,23 @@ build/wallet:
 ## build/explorer: build the canopy's explorer project
 build/explorer:
 	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
+
+## build/auto-update: build the canopy auto-update binary into the GO_BIN_DIR
+build/auto-update:
+	go build -o $(GO_BIN_DIR)/canopy-auto-update $(AUTO_UPDATE_DIR)
+
+## build/auto-update-local: build canopy CLI to ./cli and auto-update binary for local development
+build/auto-update-local:
+	go build -o ./cli $(CLI_DIR)
+	go build -o $(GO_BIN_DIR)/canopy-auto-update $(AUTO_UPDATE_DIR)
+
+## run/auto-update: run the canopy auto-update binary with 'start' command (requires ./cli to exist)
+run/auto-update:
+	BIN_PATH=./cli go run $(AUTO_UPDATE_DIR) start
+
+## run/auto-update-build: build canopy CLI to ./cli and then run auto-update
+run/auto-update-build: build/auto-update-local
+	BIN_PATH=./cli go run $(AUTO_UPDATE_DIR) start
 
 # ==================================================================================== #
 # TESTING
@@ -105,13 +123,13 @@ build/plugin:
 ifeq ($(PLUGIN),kotlin)
 	cd plugin/kotlin && ./gradlew fatJar --no-daemon
 else ifeq ($(PLUGIN),go)
-	$(MAKE) -C plugin/go build
+	cd plugin/go && go build -o go-plugin .
 else ifeq ($(PLUGIN),typescript)
-	cd plugin/typescript && npm ci && npm run build
+	cd plugin/typescript && npm ci && npm run build:all
 else ifeq ($(PLUGIN),python)
-	cd plugin/python && pip install -e ".[dev]" 2>/dev/null || true
+	cd plugin/python && make dev
 else ifeq ($(PLUGIN),csharp)
-	cd plugin/csharp && dotnet publish -c Release -o out
+	cd plugin/csharp && rm -rf bin && dotnet publish -c Release -r linux-x64 --self-contained true -o bin
 else ifeq ($(PLUGIN),all)
 	$(MAKE) build/plugin PLUGIN=go
 	$(MAKE) build/plugin PLUGIN=kotlin

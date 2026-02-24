@@ -8,8 +8,33 @@ NODE_CMD="node"
 PID_FILE="/tmp/plugin/typescript-plugin.pid"
 LOG_FILE="/tmp/plugin/typescript-plugin.log"
 PLUGIN_DIR="/tmp/plugin"
+TARBALL="$SCRIPT_DIR/typescript-plugin.tar.gz"
 # Timeout in seconds for graceful shutdown
 STOP_TIMEOUT=10
+
+# Extract tarball if dist doesn't exist
+extract_if_needed() {
+    # If dist/main.js already exists, nothing to do
+    if [ -f "$NODE_SCRIPT" ]; then
+        return 0
+    fi
+    
+    # Check for tarball
+    if [ -f "$TARBALL" ]; then
+        echo "Extracting $TARBALL..."
+        tar -xzf "$TARBALL" -C "$SCRIPT_DIR"
+        if [ $? -eq 0 ] && [ -f "$NODE_SCRIPT" ]; then
+            echo "Extraction complete"
+            return 0
+        else
+            echo "Error: Failed to extract from $TARBALL"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -48,10 +73,12 @@ start() {
     fi
     # Clean up any stale PID file
     cleanup_pid
+    # Try to extract from tarball if dist doesn't exist
+    extract_if_needed
     # Check if Node.js script exists
     if [ ! -f "$NODE_SCRIPT" ]; then
         echo "Error: Node.js script not found at $NODE_SCRIPT"
-        echo "Run 'npm run build' to compile TypeScript before starting"
+        echo "Run 'npm run build' to compile TypeScript or download typescript-plugin.tar.gz"
         return 1
     fi
     # Ensure plugin directory exists

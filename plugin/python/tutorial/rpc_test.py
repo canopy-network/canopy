@@ -503,6 +503,13 @@ def test_plugin_transactions() -> None:
     print(f"Final balances - Account 1: {bal1_final}, Account 2: {bal2_final}")
     
     print("\n=== All transactions confirmed successfully! ===")
+    
+    # Print tip about verifying balances via RPC
+    print("\n--- Verify Account Balances ---")
+    print("You can manually check account balances at any time using the /v1/query/account RPC endpoint:")
+    print(f'  curl -X POST {QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d \'{{"address": "{account1_addr}"}}\'')
+    print(f'  curl -X POST {QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d \'{{"address": "{account2_addr}"}}\'')
+    print("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account")
 
 
 if __name__ == "__main__":

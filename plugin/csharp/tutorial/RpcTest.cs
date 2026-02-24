@@ -189,6 +189,13 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine($"  Final balances - Account 1: {bal1Final}, Account 2: {bal2Final}");
 
             Console.WriteLine("\n=== All transactions confirmed successfully! ===");
+            
+            // Print tip about verifying balances via RPC
+            Console.WriteLine("\n--- Verify Account Balances ---");
+            Console.WriteLine("You can manually check account balances at any time using the /v1/query/account RPC endpoint:");
+            Console.WriteLine($"  curl -X POST {QueryRpcUrl}/v1/query/account -H \"Content-Type: application/json\" -d '{{\"address\": \"{account1Addr}\"}}'");
+            Console.WriteLine($"  curl -X POST {QueryRpcUrl}/v1/query/account -H \"Content-Type: application/json\" -d '{{\"address\": \"{account2Addr}\"}}'");
+            Console.WriteLine("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account");
         }
 
         #region Helper Methods

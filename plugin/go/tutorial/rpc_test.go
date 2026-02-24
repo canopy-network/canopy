@@ -182,6 +182,14 @@ func TestPluginTransactions(t *testing.T) {
 	t.Logf("Final balances - Account 1: %d, Account 2: %d", bal1, bal2)
 
 	t.Log("All transactions confirmed successfully!")
+
+	// Print tip about verifying balances via RPC
+	t.Log("")
+	t.Log("--- Verify Account Balances ---")
+	t.Log("You can manually check account balances at any time using the /v1/query/account RPC endpoint:")
+	t.Logf(`  curl -X POST %s/v1/query/account -H "Content-Type: application/json" -d '{"address": "%s"}'`, queryRPCURL, account1Addr)
+	t.Logf(`  curl -X POST %s/v1/query/account -H "Content-Type: application/json" -d '{"address": "%s"}'`, queryRPCURL, account2Addr)
+	t.Log("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account")
 }
 
 // randomSuffix generates a random hex suffix for unique nicknames
