@@ -208,6 +208,45 @@ body::after {
   box-shadow: var(--glow-primary), 0 20px 34px hsl(0 0% 0% / 0.28);
 }
 
+.canopy-card-soft {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid hsl(var(--border) / 0.82);
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.08) 0%,
+    hsl(0 0% 100% / 0.05) 55%,
+    hsl(0 0% 100% / 0.035) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.08),
+    0 14px 30px hsl(0 0% 0% / 0.3);
+  backdrop-filter: blur(12px);
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+.canopy-card-soft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(165deg, hsl(var(--primary) / 0.11), transparent 38%);
+  opacity: 0.52;
+}
+
+.canopy-card-soft:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.38);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.12),
+    0 16px 34px hsl(0 0% 0% / 0.34),
+    0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
 .btn-glow {
   box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
   transition: box-shadow 220ms ease, background-color 220ms ease;
@@ -296,4 +335,23 @@ body::after {
 
 .animate-accordion-up {
   animation: accordion-up 0.2s ease-out;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
