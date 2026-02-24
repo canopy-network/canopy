@@ -1,0 +1,256 @@
+{
+  "page": {
+    "title": "Staking",
+    "description": "Explore governance parameters and supply information",
+    "visible": true
+  },
+  "tabs": {
+    "governance": "Governance",
+    "supply": "Supply"
+  },
+  "endpoints": {
+    "dao": {
+      "url": "/api/dao",
+      "method": "GET",
+      "params": {
+        "id": 0
+      },
+      "visible": true
+    },
+    "governance": {
+      "url": "/api/governance",
+      "method": "GET",
+      "visible": true
+    },
+    "supply": {
+      "url": "/api/supply",
+      "method": "GET",
+      "visible": true
+    }
+  },
+  "governance": {
+    "title": "Governance",
+    "description": "Active and past governance parameters",
+    "visible": true,
+    "daoDataText": "Live data from network",
+    "daoDataTextFallback": "Using fallback data - API not available",
+    "table": {
+      "visible": true,
+      "title": "Governance Parameters",
+      "headers": {
+        "paramName": "ParamName",
+        "paramValue": "ParamValue",
+        "paramSpace": "ParamSpace"
+      },
+      "height": "400px",
+      "spacing": 4,
+      "pagination": {
+        "visible": true,
+        "itemsPerPage": 10
+      },
+      "loading": {
+        "visible": true,
+        "spinner": "fa-spinner",
+        "text": "Loading governance data..."
+      },
+      "error": {
+        "visible": true,
+        "icon": "fa-exclamation-triangle",
+        "text": "Error loading governance data"
+      },
+      "styling": {
+        "paramName": "text-white font-mono text-sm",
+        "paramValue": "text-primary font-medium",
+        "paramSpace": "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+        "paramType": "text-yellow-400 font-semibold text-sm"
+      },
+      "animations": {
+        "enabled": true,
+        "duration": 0.3,
+        "stagger": 0.05
+      }
+    },
+    "stats": {
+      "visible": true,
+      "cards": [
+        {
+          "title": "Consensus Parameters",
+          "icon": "fa-cogs",
+          "color": "blue",
+          "description": "Block & protocol settings",
+          "visible": true
+        },
+        {
+          "title": "Validator Parameters",
+          "icon": "fa-shield-halved",
+          "color": "primary",
+          "description": "Staking & slashing rules",
+          "visible": true
+        },
+        {
+          "title": "Total Parameters",
+          "icon": "fa-sliders",
+          "color": "purple",
+          "description": "All governance settings",
+          "visible": true
+        }
+      ]
+    },
+    "parameters": [
+      {
+        "paramName": "blockSize",
+        "paramValue": "1,000,000",
+        "paramSpace": "consensus",
+        "paramType": "Numeric",
+        "visible": true
+      },
+      {
+        "paramName": "protocolVersion",
+        "paramValue": "1/0",
+        "paramSpace": "consensus",
+        "paramType": "String",
+        "visible": true
+      },
+      {
+        "paramName": "rootChainID",
+        "paramValue": "1",
+        "paramSpace": "consensus",
+        "paramType": "Numeric",
+        "visible": true
+      },
+      {
+        "paramName": "unstakingBlocks",
+        "paramValue": "30,240",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "maxPauseBlocks",
+        "paramValue": "30,240",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "doubleSignSlashPercentage",
+        "paramValue": "10",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "nonSignSlashPercentage",
+        "paramValue": "1",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "maxNonSign",
+        "paramValue": "60",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "nonSignWindow",
+        "paramValue": "100",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "maxCommittees",
+        "paramValue": "16",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "maxCommitteeSize",
+        "paramValue": "100",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "earlyWithdrawalPenalty",
+        "paramValue": "0",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "delegateUnstakingBlocks",
+        "paramValue": "12,960",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "minimumOrderSize",
+        "paramValue": "1,000",
+        "paramSpace": "validator",
+        "visible": true
+      },
+      {
+        "paramName": "stakePercentForSubsidizedCommittee",
+        "paramValue": "33",
+        "paramSpace": "validator",
+        "visible": true
+      }
+    ]
+  },
+  "supply": {
+    "title": "Network Supply",
+    "description": "Total supply and staking information",
+    "visible": true,
+    "metrics": {
+      "totalSupply": "Total Supply",
+      "stakedSupply": "Staked Supply",
+      "liquidSupply": "Liquid Supply",
+      "stakingRatio": "Staking Ratio"
+    },
+    "table": {
+      "visible": true,
+      "title": "Supply Metrics",
+      "height": "300px",
+      "spacing": 4,
+      "pagination": {
+        "visible": true,
+        "itemsPerPage": 5
+      },
+      "loading": {
+        "visible": true,
+        "spinner": "fa-spinner",
+        "text": "Loading supply data..."
+      },
+      "error": {
+        "visible": true,
+        "icon": "fa-exclamation-triangle",
+        "text": "Error loading supply data"
+      },
+      "styling": {
+        "metricName": "text-white font-mono text-sm",
+        "metricValue": "text-primary font-medium",
+        "metricType": "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+      },
+      "animations": {
+        "enabled": true,
+        "duration": 0.3,
+        "stagger": 0.05
+      }
+    }
+  },
+  "ui": {
+    "animations": {
+      "enabled": true,
+      "duration": 0.3,
+      "stagger": 0.05
+    },
+    "colors": {
+      "consensus": "bg-blue-500/20 text-blue-400",
+      "validator": "bg-green-300/20 text-primary",
+      "governance": "bg-purple-500/20 text-purple-400",
+      "fee": "bg-yellow-500/20 text-yellow-400",
+      "default": "bg-gray-500/20 text-gray-400"
+    },
+    "icons": {
+      "consensus": "fa-cogs",
+      "validator": "fa-shield-halved",
+      "governance": "fa-vote-yea",
+      "default": "fa-sliders"
+    }
+  }
+}

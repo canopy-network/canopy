@@ -1,0 +1,11 @@
+[
+  { "title": "Staking %", "metric": "stakingPercent", "icon": "fa-solid fa-chart-pie", "progress": true },
+  { "title": "CNPY Staking", "metric": "cnpyStakingDelta", "icon": "fa-solid fa-coins", "subtitle": "delta" },
+  { "title": "Total Supply", "metric": "totalSupply", "icon": "fa-solid fa-wallet", "subtitle": "cnpy" },
+  { "title": "Liquid Supply", "metric": "liquidSupply", "icon": "fa-solid fa-droplet", "subtitle": "cnpy" },
+  { "title": "Blocks", "metric": "blocks", "icon": "fa-solid fa-cube", "subtitle": "live" },
+  { "title": "Total Stake", "metric": "totalStake", "icon": "fa-solid fa-lock", "subtitle": "cnpy" },
+  { "title": "Total Accounts", "metric": "accounts", "icon": "fa-solid fa-users", "subtitle": "last24h" },
+  { "title": "Total Txs", "metric": "txs", "icon": "fa-solid fa-arrow-right-arrow-left", "subtitle": "last24h" }
+]
+
