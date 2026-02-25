@@ -259,9 +259,27 @@ func (c *Client) Order(height uint64, orderId string, chainId uint64) (p *lib.Se
 }
 
 func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.ErrorI) {
-	p = new(lib.OrderBooks)
-	err = c.heightAndIdRequest(OrdersRouteName, height, chainId, p)
-	return
+	// send ordersRequest matching the paginated server handler
+	bz, err := lib.MarshalJSON(ordersRequest{
+		Committee:     chainId,
+		heightRequest: heightRequest{height},
+		PageParams:    lib.PageParams{PageNumber: 1, PerPage: 10000},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// unmarshal into a Page (server returns paginated results)
+	page := new(lib.Page)
+	if err = c.post(OrdersRouteName, bz, page); err != nil {
+		return nil, err
+	}
+	// extract SellOrders from the page results
+	orders, ok := page.Results.(*lib.SellOrders)
+	if !ok || orders == nil {
+		return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: nil}}}, nil
+	}
+	// convert to OrderBooks for backward compatibility
+	return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: []*lib.SellOrder(*orders)}}}, nil
 }
 
 func (c *Client) DexPrice(height, chainId uint64) (p *lib.DexPrice, err lib.ErrorI) {
