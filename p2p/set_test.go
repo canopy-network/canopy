@@ -108,6 +108,50 @@ func TestGetAllInfosAndBookPeers(t *testing.T) {
 	require.Equal(t, bp[0].Address.PublicKey, n2.pub)
 }
 
+func TestPeerSetAddForceBypassesDirectionalLimits(t *testing.T) {
+	n1, n2 := newTestP2PNode(t), newTestP2PNode(t)
+
+	makePeer := func(isOutbound bool, uuid uint64, conn net.Conn) *Peer {
+		mc := newTestMultiConnMock(t, n2.pub, conn, n1.P2P)
+		mc.uuid = uuid
+		return &Peer{
+			conn: mc,
+			PeerInfo: &lib.PeerInfo{
+				Address: &lib.PeerAddress{
+					PublicKey:  n2.pub,
+					NetAddress: "pipe",
+				},
+				IsOutbound: isOutbound,
+			},
+		}
+	}
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	existing := makePeer(true, 1, c1)
+	require.NoError(t, n1.PeerSet.Add(existing))
+	require.Equal(t, 1, n1.PeerSet.outbound)
+	require.Equal(t, 0, n1.PeerSet.inbound)
+
+	// Direction-flip replacement would violate this limit via regular Add().
+	n1.PeerSet.config.MaxInbound = 0
+	require.NoError(t, n1.PeerSet.Remove(n2.pub, existing.conn.uuid))
+
+	incoming := makePeer(false, 2, c2)
+	err := n1.PeerSet.Add(incoming)
+	require.Error(t, err)
+	require.Equal(t, lib.CodeMaxInbound, err.Code())
+
+	require.NoError(t, n1.PeerSet.AddForce(incoming))
+	require.Equal(t, 0, n1.PeerSet.outbound)
+	require.Equal(t, 1, n1.PeerSet.inbound)
+	info, getErr := n1.PeerSet.GetPeerInfo(n2.pub)
+	require.NoError(t, getErr)
+	require.False(t, info.IsOutbound)
+}
+
 func newTestMultiConnMock(_ *testing.T, peerPubKey []byte, conn net.Conn, p *P2P) *MultiConn {
 	return &MultiConn{
 		conn: conn,
