@@ -39,7 +39,7 @@ export function normalizeFormForAction(
     const n = f?.name;
     if (n == null || !(n in out)) continue;
 
-    // por tipo
+    // by type
     if (f.type === "amount" || NUMERIC_HINTS.has(n)) out[n] = asNum(out[n]);
     if (f.type === "switch" || f.type === "option" || f.type === "optionCard") {
       const raw = out[n];
@@ -58,7 +58,7 @@ export function normalizeFormForAction(
         out[n] = asBool(raw);
       }
     }
-    // por “hint” de nombre (p.ej. select true/false)
+    // by name "hint" (e.g. select true/false)
     if (BOOL_HINTS.has(n)) out[n] = asBool(out[n]);
   }
   return out;
@@ -88,7 +88,7 @@ export function buildPayloadFromAction(action: Action, ctx: any) {
   for (const [key, val] of Object.entries(action.payload || {})) {
     if (key === "__raw") continue;
 
-    // caso 1: simple string => resolver plantilla
+    // case 1: simple string => resolve template
     if (typeof val === "string") {
       result[key] = templateAny(val, ctx);
       continue;

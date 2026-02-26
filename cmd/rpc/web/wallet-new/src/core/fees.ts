@@ -11,11 +11,11 @@ export type FeeProviderQuery = {
   encoding?: "json" | "text";
   headers?: Record<string, string>;
   body?: any;
-  selector?: string; // ej: "fee" para tomar sólo el bloque fee del /params
+  selector?: string; // e.g.: "fee" to only take the fee block from /params
 };
 export type FeeProviderStatic = {
   type: "static";
-  data: any; // objeto fee literal
+  data: any; // literal fee object
 };
 export type FeeProviderExternal = {
   type: "external";
@@ -27,7 +27,7 @@ export type FeeProviderExternal = {
 };
 
 export type FeesConfig = {
-  denom: string; // ej: "{{chain.denom.base}}"
+  denom: string; // e.g.: "{{chain.denom.base}}"
   refreshMs?: number;
   providers: Array<FeeProviderQuery | FeeProviderStatic | FeeProviderExternal>;
   buckets?: FeeBuckets;
@@ -41,16 +41,16 @@ export type ResolvedFees = {
   /** denom (ex: ucnpy) */
   denom: string;
 };
-// Decide qué clave de fee usar según la acción
+// Decide which fee key to use based on the action
 const feeKeyForAction = (actionId?: string) => {
-  // mapea lo que tengas en manifest: 'send'|'stake'|'unstake'...
+  // maps to what you have in manifest: 'send'|'stake'|'unstake'...
   if (actionId === "send") return "sendFee";
   if (actionId === "stake") return "stakeFee";
   if (actionId === "unstake") return "unstakeFee";
-  return "sendFee"; // fallback sensato
+  return "sendFee"; // sensible fallback
 };
 
-// Aplica bucket (multiplier) si está definido
+// Apply bucket (multiplier) if defined
 const applyBucket = (base: number, bucket?: { multiplier?: number }) =>
   typeof base === "number" && bucket?.multiplier
     ? base * bucket.multiplier

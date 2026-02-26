@@ -8,7 +8,7 @@ const maybeTpl = (v: any, data: any) =>
 export type NotificationNode = Partial<ToastTemplateOptions> & {
     actions?: Array<
         | { type: "link"; label: string; href: string; newTab?: boolean }
-        | { type: "button"; label: string; onClickId?: string } // opcional: callback id
+        | { type: "button"; label: string; onClickId?: string } // optional: callback id
     >;
 };
 

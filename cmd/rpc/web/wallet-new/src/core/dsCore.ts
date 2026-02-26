@@ -205,6 +205,6 @@ export function computeNextParam(
     const explicitNext = respCfg.nextPage ? getAt(raw, respCfg.nextPage) : undefined
     if (typeof explicitNext === 'number') return { page: explicitNext }
     if (typeof totalPages === 'number' && nowPage < totalPages) return { page: nowPage + 1 }
-    if (itemsLen >= perPage) return { page: nowPage + 1 }  // heurística
+    if (itemsLen >= perPage) return { page: nowPage + 1 }  // heuristic
     return undefined
 }

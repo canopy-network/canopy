@@ -1,5 +1,5 @@
-// ComboSelect.tsx — asigna un valor libre y lo muestra como “opción extra” seleccionada
-// (MISMO DISEÑO: mismas clases y tokens que tu versión)
+// ComboSelect.tsx — assigns a free value and shows it as a selected "extra option"
+// (SAME DESIGN: same classes and tokens as your version)
 "use client";
 
 import * as React from "react";
@@ -20,12 +20,12 @@ export type ComboSelectProps = {
     emptyText?: string;
     disabled?: boolean;
 
-    /** Permite asignar el texto escrito como valor del select (sin crearlo en la lista). */
+    /** Allows assigning the typed text as the select value (without adding it to the list). */
     allowAssign?: boolean;
-    /** Enter confirma el texto aunque no esté en options (atajo de teclado). */
+    /** Enter confirms the text even if not in options (keyboard shortcut). */
     allowFreeInput?: boolean;
 
-    // Estilo
+    // Style
     className?: string;        // Popover.Content
     buttonClassName?: string;  // Trigger
     listHeight?: number;       // px
@@ -50,10 +50,10 @@ export default function ComboSelect({
     const inputRef = React.useRef<HTMLInputElement>(null);
     const isClosingRef = React.useRef(false);
 
-    // 🔹 Opción temporal “extra” cuando se asigna un valor libre
+    // Temporary "extra" option when a free value is assigned
     const [tempOption, setTempOption] = React.useState<ComboOption | null>(null);
 
-    // Si `value` viene de fuera y no existe en options, crea/actualiza tempOption para que se vea seleccionada
+    // If `value` comes from outside and doesn't exist in options, create/update tempOption so it shows as selected
     React.useEffect(() => {
         if (!value) {
             if (tempOption) setTempOption(null);
@@ -68,7 +68,7 @@ export default function ComboSelect({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value, options]);
 
-    // Lista a renderizar = options + tempOption (si aplica). No mutamos la original.
+    // List to render = options + tempOption (if applicable). We don't mutate the original.
     const mergedOptions = React.useMemo(() => {
         if (tempOption && !options.some((o) => o.value === tempOption.value)) {
             return [...options, tempOption];
@@ -97,10 +97,10 @@ export default function ComboSelect({
     const assignValue = (text: string) => {
         const v = text.trim();
         if (!v) return;
-        // Creamos/actualizamos la opción temporal y la seleccionamos
+        // Create/update the temporary option and select it
         const opt = {value: v, label: v};
         setTempOption(opt);
-        onChange(v, {assigned: true}); // <- solo asigna; no persiste en options global
+        onChange(v, {assigned: true}); // <- only assigns; doesn't persist in global options
         closePopover();
     };
 

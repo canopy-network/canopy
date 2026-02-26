@@ -49,7 +49,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                 heights.push(height)
             }
 
-            // Obtener datos para cada altura
+            // Get data for each height
             const dataPoints: ChartDataPoint[] = []
 
             for (let i = 0; i < heights.length; i++) {
@@ -60,7 +60,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                     let totalValue = 0
 
                     if (type === 'balance') {
-                        // Obtener balances de todas las addresses en esta altura
+                        // Get balances of all addresses at this height
                         const balances = await Promise.all(
                             addresses.map(address =>
                                 dsFetch<number>('accountByHeight', { address, height })
@@ -70,7 +70,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                         )
                         totalValue = balances.reduce((sum, v) => sum + v, 0)
                     } else if (type === 'staked') {
-                        // Obtener staked amounts de todas las addresses en esta altura
+                        // Get staked amounts of all addresses at this height
                         const stakes = await Promise.all(
                             addresses.map(address =>
                                 dsFetch<any>('validatorByHeight', { address, height })
@@ -81,7 +81,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                         totalValue = stakes.reduce((sum, v) => sum + v, 0)
                     }
 
-                    // Crear label apropiado para horas
+                    // Create appropriate label for hours
                     let label = ''
                     if (hoursAgo === 0) {
                         label = 'Now'
@@ -100,7 +100,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                     })
                 } catch (error) {
                     console.warn(`Error fetching data for height ${height}:`, error)
-                    // Agregar punto con valor 0 en caso de error
+                    // Add point with value 0 in case of error
                     const errorLabel = hoursAgo === 0 ? 'Now' : hoursAgo === 24 ? '24h ago' : `${hoursAgo}h ago`
                     dataPoints.push({
                         timestamp: height,

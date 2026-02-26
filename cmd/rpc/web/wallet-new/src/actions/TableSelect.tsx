@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { templateBool } from '@/core/templater' // ajusta la ruta si aplica
+import { templateBool } from '@/core/templater' // adjust path if needed
 
-/** Tipos básicos del manifest */
+/** Basic manifest types */
 type ColAlign = 'left' | 'center' | 'right'
 type ColumnType = 'text' | 'image' | 'html' | 'committee'
 
@@ -16,24 +16,24 @@ export type TableSelectColumn = {
     expr?: string
 
     /** IMAGE */
-    src?: string                   // expr o key -> URL de imagen (si no hay, cae a avatar)
-    alt?: string                   // expr opcional para alt
-    initialsFrom?: string          // expr/llave para derivar iniciales y color si no hay 'src'
-    size?: number                  // tamaño del avatar/imagen en px (default 28)
+    src?: string                   // expr or key -> image URL (if none, falls back to avatar)
+    alt?: string                   // optional expr for alt
+    initialsFrom?: string          // expr/key to derive initials and color if no 'src'
+    size?: number                  // avatar/image size in px (default 28)
 
     /** HTML */
-    html?: string                  // HTML templated (se renderiza con dangerouslySetInnerHTML)
+    html?: string                  // HTML templated (rendered with dangerouslySetInnerHTML)
 }
 
 export type TableRowAction = {
-    title?: string                 // título de cabecera para la columna de acción
-    label?: string                 // template del label del botón
-    icon?: string                  // (reservado) por si luego usas un icon set central
-    showIf?: string                // template condicional
-    disabledIf?: string            // template condicional para deshabilitar el botón
+    title?: string                 // header title for the action column
+    label?: string                 // button label template
+    icon?: string                  // (reserved) for later use with a central icon set
+    showIf?: string                // conditional template
+    disabledIf?: string            // conditional template to disable the button
     emit?: {
-        op: 'set' | 'copy' | 'select'        // select: marcar selección; set: setear otro field; copy: al portapapeles
-        field?: string                        // requerido para 'set'
+        op: 'set' | 'copy' | 'select'        // select: mark selection; set: set another field; copy: to clipboard
+        field?: string                        // required for 'set'
         value?: string                        // template
     }
 }
@@ -50,11 +50,11 @@ export type TableSelectField = {
     multiple?: boolean
     rowKey?: string
     columns: TableSelectColumn[]
-    rows?: any[]                             // data estática
-    source?: { uses: string; selector?: string } // data dinámica: p.ej. {uses:'ds', selector:'committees'}
+    rows?: any[]                             // static data
+    source?: { uses: string; selector?: string } // dynamic data: e.g. {uses:'ds', selector:'committees'}
     rowAction?: TableRowAction
-    /** cómo se selecciona */
-    selectMode?: 'row' | 'action' | 'none'   // 'row' (default): click en fila; 'action': sólo botón; 'none': deshabilitado
+    /** how selection works */
+    selectMode?: 'row' | 'action' | 'none'   // 'row' (default): click on row; 'action': button only; 'none': disabled
 }
 
 /** Props del componente */
@@ -74,7 +74,7 @@ const asArray = (x: any) => Array.isArray(x) ? x : (x == null ? [] : [x])
 const pick = (obj: any, path?: string) => !path ? obj : path.split('.').reduce((acc, k) => acc?.[k], obj)
 const safe = (v: any) => v == null ? '' : String(v)
 
-/** Mobile-first: span según cantidad de columnas totales (12 = full) */
+/** Mobile-first: span based on total column count (12 = full) */
 function spanResponsiveByCount(colCount: number): string {
     if (colCount <= 1) return 'col-span-12'
     if (colCount === 2) return 'col-span-12 sm:col-span-6 md:col-span-6'

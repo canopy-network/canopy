@@ -4,7 +4,7 @@ const banned =
   /(constructor|prototype|__proto__|globalThis|window|document|import|Function|eval)\b/;
 
 function splitArgs(src: string): string[] {
-  // divide por comas ignorando comillas y anidación <...>, (...), {{...}}
+  // split by commas ignoring quotes and nesting <...>, (...), {{...}}
   const out: string[] = [];
   let cur = "";
   let depthAngle = 0,
@@ -55,7 +55,7 @@ function splitArgs(src: string): string[] {
   return out;
 }
 
-// evalúa una expresión JS segura usando contexto como argumentos
+// evaluates a safe JS expression using context as arguments
 function evalJsExpression(expr: string, ctx: any): any {
   if (banned.test(expr)) throw new Error("templater: forbidden token");
   const argNames = Object.keys(ctx);
@@ -78,10 +78,10 @@ function replaceBalanced(
       out += input.slice(i);
       break;
     }
-    // texto antes del bloque
+    // text before the block
     out += input.slice(i, start);
 
-    // buscar cierre balanceado
+    // find balanced closing
     let j = start + 2;
     let depth = 1;
     while (j < input.length && depth > 0) {
@@ -99,7 +99,7 @@ function replaceBalanced(
       j += 1;
     }
 
-    // si no se cerró, copia resto y corta
+    // if not closed, copy the rest and exit
     if (depth !== 0) {
       out += input.slice(start);
       break;
@@ -114,7 +114,7 @@ function replaceBalanced(
   return out;
 }
 
-/** Evalúa una expresión: función tipo fn<...> o ruta a datos a.b.c */
+/** Evaluates an expression: function like fn<...> or data path a.b.c */
 function evalExpr(expr: string, ctx: any): any {
   if (banned.test(expr)) throw new Error("templater: forbidden token");
 
@@ -123,7 +123,7 @@ function evalExpr(expr: string, ctx: any): any {
   if (angleCall) {
     const [, fnName, rawArgs] = angleCall;
     const argStrs = splitArgs(rawArgs);
-    const args = argStrs.map((a) => template(a, ctx)); // cada arg puede tener {{...}} anidado
+    const args = argStrs.map((a) => template(a, ctx)); // each arg can have nested {{...}}
     const fn = (templateFns as Record<string, any>)[fnName];
     if (typeof fn !== "function") return "";
     try {
@@ -139,7 +139,7 @@ function evalExpr(expr: string, ctx: any): any {
     const [, fnName, rawArgs] = parenCall;
     const argStrs = splitArgs(rawArgs);
     const args = argStrs.map((a) => {
-      // si el arg es una expresión/plantilla, resuélvela; si es literal, evalúala
+      // if the arg is an expression/template, resolve it; if literal, evaluate it
       if (/{{.*}}/.test(a)) return template(a, ctx);
       try {
         return evalJsExpression(a, ctx);
@@ -156,11 +156,11 @@ function evalExpr(expr: string, ctx: any): any {
     }
   }
 
-  // 3) expresión JS libre (p. ej. form.amount * 0.05, Object.keys(ds)...)
+  // 3) free JS expression (e.g. form.amount * 0.05, Object.keys(ds)...)
   try {
     return evalJsExpression(expr, ctx);
   } catch {
-    // 4) ruta normal: a.b.c
+    // 4) normal path: a.b.c
     const path = expr
       .split(".")
       .map((s) => s.trim())

@@ -256,7 +256,7 @@ export default function ActionRunner({
         typeof item.label === "string"
           ? template(item.label, templatingCtx)
           : item.label,
-      icon: item.icon, // opcional
+      icon: item.icon, // optional
       value:
         typeof item.value === "string"
           ? template(item.value, templatingCtx)
@@ -434,7 +434,7 @@ export default function ActionRunner({
 
   const onContinue = React.useCallback(() => {
     if (formHasErrors) {
-      // opcional: mostrar toast o vibrar el botón
+      // optional: show toast or shake the button
       return;
     }
     if (hasSummary) {
@@ -446,7 +446,7 @@ export default function ActionRunner({
 
   const onConfirm = React.useCallback(() => {
     if (formHasErrors) {
-      // opcional: toast
+      // optional: toast
       return;
     }
     void doExecute();

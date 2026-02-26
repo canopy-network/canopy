@@ -9,8 +9,8 @@ const LIB = dynamicIconImports as Record<string, Importer>;
 const normalize = (n?: string) => {
     if (!n) return 'help-circle';
     return n
-        .replace(/([a-z0-9])([A-Z])/g, '$1-$2') // separa mayúsculas con "-"
-        .replace(/[_\s]+/g, '-') // convierte espacios o guiones bajos en "-"
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2') // separate uppercase letters with "-"
+        .replace(/[_\s]+/g, '-') // convert spaces or underscores to "-"
         .toLowerCase()
         .trim();
 };

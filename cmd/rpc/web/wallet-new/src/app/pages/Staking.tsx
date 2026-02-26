@@ -170,7 +170,7 @@ export default function Staking(): JSX.Element {
     [validators],
   );
 
-  // Handler para agregar stake - abre el action "stake" del manifest
+  // Handler to add stake - opens the "stake" action from manifest
   const handleAddStake = useCallback(() => {
     openAction("stake");
   }, [openAction]);

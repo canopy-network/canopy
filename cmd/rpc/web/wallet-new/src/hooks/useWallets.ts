@@ -6,11 +6,11 @@ import { QK } from '@/core/queryKeys';
 export type Wallet = { id: string; name: string; address: string; isActive?: boolean };
 
 async function fetchWallets(): Promise<Wallet[]> {
-    // A: desde contexto
+    // A: from context
     const { wallets } = (window as any).__configCtx ?? {};
     return (wallets ?? []) as Wallet[];
 
-    // B: desde Admin RPC
+    // B: from Admin RPC
     // const rpc = makeRpc('admin');
     // const res = await rpc.get<{ wallets: Wallet[] }>('/admin/wallets');
     // return res.wallets;

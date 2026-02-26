@@ -26,7 +26,7 @@ export type PayloadValue =
 
 export type Action = {
   id: string;
-  title?: string; // opcional si usas label
+  title?: string; // optional if using label
   icon?: string;
   kind: "tx" | "view" | "utility";
   tags?: string[];
@@ -89,7 +89,7 @@ export type Action = {
     payload?: any;
   };
 
-  // Paso de confirmación (opcional y simple)
+  // Confirmation step (optional and simple)
   confirm?: {
     title?: string;
     summary?: Array<{ label: string; value: string }>;
@@ -97,7 +97,7 @@ export type Action = {
     danger?: boolean;
     showPayload?: boolean;
     payloadSource?: "rpc.payload" | "custom";
-    payloadTemplate?: any; // si usas plantilla custom de confirmación
+    payloadTemplate?: any; // if using custom confirmation template
   };
 
   // Success configuration
@@ -111,7 +111,7 @@ export type Action = {
 
   auth?: { type: "sessionPassword" | "none" };
 
-  // Envío (tx o llamada)
+  // Submit (tx or call)
   submit?: Submit;
 };
 
@@ -213,7 +213,7 @@ export type TableSelectField = FieldBase & {
   rowKey?: string;
   columns: TableSelectColumn[];
   rows?: any[];
-  source?: { uses: string; selector?: string }; // p.ej. {uses:'ds', selector:'committees'}
+  source?: { uses: string; selector?: string }; // e.g. {uses:'ds', selector:'committees'}
   rowAction?: TableRowAction;
 };
 
@@ -249,17 +249,17 @@ export type Field =
  * =========================== */
 
 export type FieldOp =
-  | { id: string; op: "copy"; from: string } // copia al clipboard el valor resuelto
-  | { id: string; op: "paste" } // pega desde clipboard al field
-  | { id: string; op: "set"; field: string; value: string }; // setea un valor (p.ej. Max)
+  | { id: string; op: "copy"; from: string } // copies the resolved value to clipboard
+  | { id: string; op: "paste" } // pastes from clipboard to field
+  | { id: string; op: "set"; field: string; value: string }; // sets a value (e.g. Max)
 
 /* ===========================
  * UI Ops / Events
  * =========================== */
 
 export type UIOp =
-  | { op: "fetch"; source: SourceKey } // dispara un refetch/carga de DS al abrir
-  | { op: "notify"; message: string }; // opcional: mostrar toast/notificación
+  | { op: "fetch"; source: SourceKey } // triggers a refetch/load of DS on open
+  | { op: "notify"; message: string }; // optional: show toast/notification
 
 /* ===========================
  * Submit (HTTP)
@@ -267,25 +267,25 @@ export type UIOp =
 
 export type Submit = {
   base: "rpc" | "admin";
-  path: string; // p.ej. '/v1/admin/tx-send'
+  path: string; // e.g. '/v1/admin/tx-send'
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   encoding?: "json" | "text";
-  body?: any; // plantilla a resolver o valor literal
+  body?: any; // template to resolve or literal value
 };
 
 /* ===========================
- * Sources y Selectors
+ * Sources and Selectors
  * =========================== */
 
 export type SourceRef = {
-  // de dónde sale el dato que vas a interpolar
+  // where the data to interpolate comes from
   uses: string;
-  // ruta dentro de la fuente (p.ej. 'fee.sendFee', 'amount', 'address')
+  // path within the source (e.g. 'fee.sendFee', 'amount', 'address')
   selector?: string;
 };
 
-// claves comunes de tu DS actual; permite string libre para crecer sin tocar tipos
+// common keys of your current DS; allows free string to grow without touching types
 export type SourceKey =
   | "account"
   | "params"
@@ -299,7 +299,7 @@ export type SourceKey =
   | string;
 
 /* ===========================
- * Fees (opcional, lo mínimo)
+ * Fees (optional, the minimum)
  * =========================== */
 
 export type FeeBuckets = {
@@ -313,7 +313,7 @@ export type FeeProviderQuery = {
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   encoding?: "json" | "text";
-  selector?: string; // p.ej. 'fee' dentro del response
+  selector?: string; // e.g. 'fee' within the response
   cache?: { staleTimeMs?: number; refetchIntervalMs?: number };
 };
 
@@ -348,6 +348,6 @@ export type FeeProvider = FeeProviderQuery | FeeProviderSimulate;
  *   session: { password?: string; ... },
  *   fees: { effective?: string|number; amount?: string|number },
  *   account: { address: string; nickname?: string },
- *   ds: Record<string, any> // p.ej. ds.account.amount
+ *   ds: Record<string, any> // e.g. ds.account.amount
  * }
  */
