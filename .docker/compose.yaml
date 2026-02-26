@@ -1,16 +1,14 @@
 services:
   node-1:
     container_name: node-1
-    env_file:
-      - .env
     build:
       context: ..
       dockerfile: .docker/Dockerfile
       args:
-        VITE_WALLET_BASE_PATH: ${VITE_WALLET_BASE_PATH:-/}
-        VITE_EXPLORER_BASE_PATH: ${VITE_EXPLORER_BASE_PATH:-/}
-        VITE_WALLET_RPC_PROXY_TARGET: ${VITE_WALLET_RPC_PROXY_TARGET:-http://localhost:50002}
-        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: ${VITE_WALLET_ADMIN_RPC_PROXY_TARGET:-http://localhost:50003}
+        VITE_WALLET_BASE_PATH: /
+        VITE_EXPLORER_BASE_PATH: /
+        VITE_WALLET_RPC_PROXY_TARGET: http://localhost:50002
+        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:50003
     ports:
       - 50000:50000 # Wallet
       - 50001:50001 # Explorer
@@ -32,16 +30,14 @@ services:
 
   node-2:
     container_name: node-2
-    env_file:
-      - .env
     build:
       context: ..
       dockerfile: .docker/Dockerfile
       args:
-        VITE_WALLET_BASE_PATH: ${VITE_WALLET_BASE_PATH:-/}
-        VITE_EXPLORER_BASE_PATH: ${VITE_EXPLORER_BASE_PATH:-/}
-        VITE_WALLET_RPC_PROXY_TARGET: ${VITE_WALLET_RPC_PROXY_TARGET:-http://localhost:40002}
-        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: ${VITE_WALLET_ADMIN_RPC_PROXY_TARGET:-http://localhost:40003}
+        VITE_WALLET_BASE_PATH: /
+        VITE_EXPLORER_BASE_PATH: /
+        VITE_WALLET_RPC_PROXY_TARGET: http://localhost:40002
+        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:40003
     ports:
       - 40000:40000 # Wallet
       - 40001:40001 # Explorer
