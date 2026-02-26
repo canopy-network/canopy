@@ -22,15 +22,15 @@ module.exports = {
           950: '#0e200e',
         },
         bg: {
-          primary:   '#0f0f0f',
-          secondary: '#1a1a1a',
-          tertiary:  '#2a2a2a',
-          accent:    '#1c1c1c',
+          primary:   '#171717',
+          secondary: '#1f1f1f',
+          tertiary:  '#2f2f2f',
+          accent:    '#242424',
         },
         text: {
           primary:   '#ffffff',
-          secondary: '#e4e4e7',
-          muted:     '#9ca3af',
+          secondary: '#ebebeb',
+          muted:     '#b3b3b3',
           accent:    '#35cd48',
         },
         status: {
@@ -59,10 +59,10 @@ module.exports = {
           800: '#0c7f24',
           900: '#0c5f1e',
         },
-        navbar:    '#0f0f0f',
+        navbar:    '#171717',
         back:      '#6B7280',
         secondary: {
-          DEFAULT:   '#1a1a1a',
+          DEFAULT:   '#1f1f1f',
           foreground:'#ffffff',
         },
         destructive: {
@@ -70,20 +70,20 @@ module.exports = {
           foreground:'#ffffff',
         },
         muted: {
-          DEFAULT:   '#1c1c1c',
-          foreground:'#9ca3af',
+          DEFAULT:   '#242424',
+          foreground:'#b3b3b3',
         },
-        'input-surface': '#1c1c1c',
+        'input-surface': '#242424',
         accent: {
           DEFAULT:   '#35cd48',
           foreground:'#0f0f0f',
         },
         popover: {
-          DEFAULT:   '#1a1a1a',
+          DEFAULT:   '#1f1f1f',
           foreground:'#ffffff',
         },
         card: {
-          DEFAULT:   '#212121',
+          DEFAULT:   '#262626',
           foreground:'#ffffff',
         },
       },

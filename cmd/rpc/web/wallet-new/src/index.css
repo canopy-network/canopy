@@ -5,26 +5,26 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 6%;
-  --foreground: 0 0% 96%;
-  --card: 0 0% 13%;
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 13%;
-  --popover-foreground: 0 0% 98%;
+  --background: 0 0% 9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 99%;
+  --popover: 0 0% 15%;
+  --popover-foreground: 0 0% 99%;
   --primary: 128 60% 51%;
   --primary-foreground: 0 0% 8%;
-  --secondary: 0 0% 16%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 16%;
-  --muted-foreground: 0 0% 66%;
-  --accent: 0 0% 18%;
-  --accent-foreground: 0 0% 98%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 78%;
+  --accent: 0 0% 20%;
+  --accent-foreground: 0 0% 99%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --border: 132 10% 28%;
-  --input: 132 10% 32%;
-  --border-accent: 128 34% 46%;
-  --border-subtle: 132 8% 22%;
+  --border: 132 10% 34%;
+  --input: 132 10% 38%;
+  --border-accent: 128 34% 52%;
+  --border-subtle: 132 8% 28%;
   --ring: 128 60% 51%;
   --radius: 0.625rem;
   --sidebar-width: 220px;
@@ -32,34 +32,34 @@
   --font-display: 'Syne', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --font-body: 'Plus Jakarta Sans', sans-serif;
-  --surface-base: linear-gradient(145deg, hsl(0 0% 14% / 0.88), hsl(0 0% 10% / 0.92));
-  --surface-elevated: linear-gradient(145deg, hsl(0 0% 16% / 0.88), hsl(0 0% 11% / 0.94));
-  --surface-sheen: linear-gradient(180deg, hsl(0 0% 100% / 0.09), hsl(0 0% 100% / 0) 42%);
-  --glow-primary: 0 0 0 1px hsl(var(--primary) / 0.18), 0 0 26px hsl(var(--primary) / 0.2);
-  --glow-soft: 0 0 12px hsl(var(--primary) / 0.2);
+  --surface-base: linear-gradient(145deg, hsl(0 0% 17% / 0.92), hsl(0 0% 13% / 0.95));
+  --surface-elevated: linear-gradient(145deg, hsl(0 0% 19% / 0.92), hsl(0 0% 14% / 0.96));
+  --surface-sheen: linear-gradient(180deg, hsl(0 0% 100% / 0.12), hsl(0 0% 100% / 0) 42%);
+  --glow-primary: 0 0 0 1px hsl(var(--primary) / 0.22), 0 0 26px hsl(var(--primary) / 0.25);
+  --glow-soft: 0 0 12px hsl(var(--primary) / 0.25);
 }
 
 .dark {
-  --background: 0 0% 6%;
-  --foreground: 0 0% 96%;
-  --card: 0 0% 13%;
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 13%;
-  --popover-foreground: 0 0% 98%;
+  --background: 0 0% 9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 99%;
+  --popover: 0 0% 15%;
+  --popover-foreground: 0 0% 99%;
   --primary: 128 60% 51%;
   --primary-foreground: 0 0% 8%;
-  --secondary: 0 0% 16%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 16%;
-  --muted-foreground: 0 0% 66%;
-  --accent: 0 0% 18%;
-  --accent-foreground: 0 0% 98%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 78%;
+  --accent: 0 0% 20%;
+  --accent-foreground: 0 0% 99%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --border: 132 10% 28%;
-  --input: 132 10% 32%;
-  --border-accent: 128 34% 46%;
-  --border-subtle: 132 8% 22%;
+  --border: 132 10% 34%;
+  --input: 132 10% 38%;
+  --border-accent: 128 34% 52%;
+  --border-subtle: 132 8% 28%;
   --ring: 128 60% 51%;
 }
 
@@ -116,7 +116,7 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(100% 90% at 50% 100%, transparent 35%, hsl(0 0% 0% / 0.4) 100%);
+  background: radial-gradient(100% 90% at 50% 100%, transparent 45%, hsl(0 0% 0% / 0.2) 100%);
 }
 
 ::-webkit-scrollbar {
