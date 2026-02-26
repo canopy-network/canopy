@@ -26,62 +26,85 @@ type GithubRelease struct {
 	} `json:"assets"`
 }
 
-// Release represents a release of the current binary with metadata on what to update
+// Release represents a release with metadata on what to update
 type Release struct {
 	Version       string // version of the release
 	DownloadURL   string // url to download the release
 	ShouldUpdate  bool   // whether the release should be updated
-	ApplySnapshot bool   // whether the release should apply a snapshot
+	ApplySnapshot bool   // whether the release should apply a snapshot (CLI only)
 }
 
-// UpdaterConfig contains configuration for the updater
-type UpdaterConfig struct {
-	RepoName       string // name of the repository
-	RepoOwner      string // owner of the repository
-	BinPath        string // path to the binary to be updated
-	SnapshotKey    string // version metadata key to know if a snapshot should be applied
-	GithubApiToken string // github api token for authenticated requests
+// ReleaseType indicates whether this is a CLI or plugin release
+type ReleaseType int
+
+const (
+	ReleaseTypeCLI ReleaseType = iota
+	ReleaseTypePlugin
+)
+
+// PluginReleaseConfig contains all plugin-specific configuration for releases
+type PluginReleaseConfig struct {
+	// Asset configuration
+	AssetName     string // asset filename (e.g., "go-plugin-%s-%s.tar.gz" or "typescript-plugin.tar.gz")
+	ArchSpecific  bool   // whether to format AssetName with OS/arch (uses fmt.Sprintf with GOOS, GOARCH)
+	UseX64Arch    bool   // use "x64" instead of "amd64" for architecture (e.g., C#)
+	MuslAssetName string // alternative asset name for musl/Alpine systems (optional)
+	// Extraction trigger
+	OldBinaryPath string // relative path to binary to remove to trigger extraction (e.g., "go-plugin")
+	// Process management
+	ProcessPattern string // process pattern for pkill (e.g., "go-plugin")
+	PIDFile        string // path to PID file (e.g., "/tmp/plugin/go-plugin.pid")
 }
 
-// UpdateManager manages the update process for the current binary
-type UpdateManager struct {
-	// updater config
-	config *UpdaterConfig
-	// http client to download the release
+// ReleaseManagerConfig contains configuration for the release manager
+type ReleaseManagerConfig struct {
+	Type           ReleaseType // type of release (CLI or plugin)
+	RepoName       string      // name of the repository
+	RepoOwner      string      // owner of the repository
+	GithubApiToken string      // github api token for authenticated requests
+	// CLI-specific fields
+	BinPath     string // path to the binary to be updated (CLI only)
+	SnapshotKey string // version metadata key for snapshot (CLI only)
+	// Plugin-specific fields
+	PluginDir    string               // path to the plugin directory
+	PluginConfig *PluginReleaseConfig // plugin-specific release configuration
+}
+
+// ReleaseManager manages the update process for CLI or plugins
+type ReleaseManager struct {
+	config     *ReleaseManagerConfig
 	httpClient *http.Client
-	// current version of the binary
-	Version string
+	Version    string // current version
 }
 
-// NewUpdateManager creates a new UpdateManager instance
-func NewUpdateManager(config *UpdaterConfig, version string) *UpdateManager {
-	return &UpdateManager{
+// NewReleaseManager creates a new ReleaseManager instance
+func NewReleaseManager(config *ReleaseManagerConfig, version string) *ReleaseManager {
+	return &ReleaseManager{
 		config:     config,
 		httpClient: &http.Client{Timeout: httpReleaseClientTimeout},
 		Version:    version,
 	}
 }
 
-// Check checks for updates of the current binary
-func (um *UpdateManager) Check() (*Release, error) {
-	// Get the latest release
-	release, err := um.GetLatestRelease()
+// Check checks for updates and returns a release if one is available
+func (rm *ReleaseManager) Check() (*Release, error) {
+	release, err := rm.GetLatestRelease()
 	if err != nil {
 		return nil, err
 	}
 	// Check if the release is valid to update
-	if err := um.ShouldUpdate(release); err != nil {
+	if err := rm.ShouldUpdate(release); err != nil {
 		return nil, err
 	}
 	// exit
 	return release, nil
 }
 
-// GetLatestRelease returns the latest valid release for the system from the GitHub API
-func (um *UpdateManager) GetLatestRelease() (release *Release, err error) {
+// GetLatestRelease returns the latest release from the GitHub API
+func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 	// build the URL: https://api.github.com/repos/<owner>/<repo>/releases/latest
 	apiURL, err := url.JoinPath("https://api.github.com", "repos",
-		um.config.RepoOwner, um.config.RepoName, "releases", "latest")
+		rm.config.RepoOwner, rm.config.RepoName, "releases", "latest")
 	if err != nil {
 		return nil, err
 	}
@@ -91,11 +114,11 @@ func (um *UpdateManager) GetLatestRelease() (release *Release, err error) {
 	}
 	// github recommends to add an user agent to any API request
 	req.Header.Set("User-Agent", "canopy-updater/1.0")
-	if token := um.config.GithubApiToken; token != "" {
+	if token := rm.config.GithubApiToken; token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	// make the request
-	resp, err := um.httpClient.Do(req)
+	resp, err := rm.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -109,65 +132,111 @@ func (um *UpdateManager) GetLatestRelease() (release *Release, err error) {
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return nil, err
 	}
-	// find asset matching OS and ARCH
-	targetName := fmt.Sprintf("cli-%s-%s", runtime.GOOS, runtime.GOARCH)
+	// find matching asset
+	targetName := rm.getAssetName()
 	for _, asset := range rel.Assets {
 		if asset.Name == targetName {
-			// match found, stop
-			release = &Release{
+			return &Release{
 				Version:     rel.TagName,
 				DownloadURL: asset.BrowserDownloadURL,
-			}
-			break
+			}, nil
 		}
 	}
 	// return based on tagName
-	if release == nil {
+	if rm.config.Type == ReleaseTypeCLI {
 		return nil, fmt.Errorf("unsupported architecture: %s-%s", runtime.GOOS, runtime.GOARCH)
 	}
-	return release, nil
+	return nil, fmt.Errorf("no matching asset found for plugin (looking for %s)", targetName)
+}
+
+// isMuslLibc detects if the system uses musl libc (Alpine Linux)
+func isMuslLibc() bool {
+	// Check for musl dynamic linker
+	matches, _ := filepath.Glob("/lib/ld-musl-*.so.1")
+	return len(matches) > 0
+}
+
+// getAssetName returns the expected asset name based on release type
+func (rm *ReleaseManager) getAssetName() string {
+	if rm.config.Type == ReleaseTypeCLI {
+		return fmt.Sprintf("cli-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+	// Plugin asset name from config
+	cfg := rm.config.PluginConfig
+	if cfg == nil {
+		return ""
+	}
+	// Use musl-specific asset name if available and running on musl
+	assetName := cfg.AssetName
+	if cfg.MuslAssetName != "" && isMuslLibc() {
+		assetName = cfg.MuslAssetName
+	}
+	if !cfg.ArchSpecific {
+		return assetName
+	}
+	// Format with OS and arch
+	arch := runtime.GOARCH
+	if cfg.UseX64Arch && arch == "amd64" {
+		arch = "x64"
+	}
+	return fmt.Sprintf(assetName, runtime.GOOS, arch)
 }
 
 // ShouldUpdate determines whether the given release should be applied
-func (um *UpdateManager) ShouldUpdate(release *Release) error {
+func (rm *ReleaseManager) ShouldUpdate(release *Release) error {
 	if release == nil {
 		return fmt.Errorf("release is nil")
 	}
-	// convert the versions to their canonical form
-	candidate := semver.Canonical(release.Version)
-	current := semver.Canonical(um.Version)
+	candidateTag := release.Version
+	// for plugins, extract version from prefixed tags like "plugin-go-v1.0.0"
+	if rm.config.Type == ReleaseTypePlugin && strings.Contains(candidateTag, "-v") {
+		parts := strings.Split(candidateTag, "-v")
+		if len(parts) >= 2 {
+			candidateTag = "v" + parts[len(parts)-1]
+		}
+	}
 	// check if the versions are valid
+	candidate := semver.Canonical(candidateTag)
+	current := semver.Canonical(rm.Version)
+	// for plugins, if current version is invalid (first run), always update
+	if rm.config.Type == ReleaseTypePlugin && (current == "" || !semver.IsValid(current)) {
+		release.ShouldUpdate = true
+		release.Version = candidate
+		return nil
+	}
+	// validate versions
 	if candidate == "" || !semver.IsValid(candidate) {
 		return fmt.Errorf("invalid release version: %s", release.Version)
 	}
 	if current == "" || !semver.IsValid(current) {
-		return fmt.Errorf("invalid local version: %s", um.Version)
+		return fmt.Errorf("invalid local version: %s", rm.Version)
 	}
 	// should update if the candidate version is greater than the current version
 	release.ShouldUpdate = semver.Compare(candidate, current) > 0
 	if !release.ShouldUpdate {
 		return nil
 	}
-	// should apply snapshot if the candidate's build metadata contains the snapshot key
-	release.ApplySnapshot = strings.Contains(semver.Build(release.Version),
-		um.config.SnapshotKey)
 	release.Version = candidate
+	// for CLI, check if snapshot should be applied
+	if rm.config.Type == ReleaseTypeCLI {
+		// should apply snapshot if the candidate's build metadata contains the snapshot key
+		release.ApplySnapshot = strings.Contains(semver.Build(release.Version), rm.config.SnapshotKey)
+	}
 	return nil
 }
 
-// Download downloads the release assets into the config bin directory
-func (um *UpdateManager) Download(ctx context.Context, release *Release) error {
-	// download the release binary
+// Download downloads the release asset
+func (rm *ReleaseManager) Download(ctx context.Context, release *Release) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, release.DownloadURL, nil)
 	if err != nil {
 		return err
 	}
 	// github recommends to add an user agent to any API request
 	req.Header.Set("User-Agent", "canopy-updater/1.0")
-	if token := um.config.GithubApiToken; token != "" {
+	if token := rm.config.GithubApiToken; token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := um.httpClient.Do(req)
+	resp, err := rm.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -175,12 +244,48 @@ func (um *UpdateManager) Download(ctx context.Context, release *Release) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-	// save the response as an executable
-	bin, err := SaveToFile(um.config.BinPath, resp.Body, 0755)
+	// download the release binary
+	if rm.config.Type == ReleaseTypeCLI {
+		return rm.downloadCLI(resp.Body)
+	}
+	return rm.downloadPlugin(resp.Body)
+}
+
+// downloadCLI saves the CLI binary
+func (rm *ReleaseManager) downloadCLI(body io.Reader) error {
+	bin, err := SaveToFile(rm.config.BinPath, body, 0755)
 	if err != nil {
 		return err
 	}
 	return bin.Close()
+}
+
+// downloadPlugin saves the plugin tarball and removes old binary
+func (rm *ReleaseManager) downloadPlugin(body io.Reader) error {
+	tarballPath := filepath.Join(rm.config.PluginDir, rm.getAssetName())
+	file, err := SaveToFile(tarballPath, body, 0644)
+	if err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	// remove old binary so pluginctl.sh will extract the new tarball
+	if oldPath := rm.getOldBinaryPath(); oldPath != "" {
+		_ = os.Remove(oldPath)
+	}
+	return nil
+}
+
+// getOldBinaryPath returns the path to the old plugin binary to trigger extraction
+func (rm *ReleaseManager) getOldBinaryPath() string {
+	if rm.config.Type == ReleaseTypeCLI || rm.config.PluginConfig == nil {
+		return ""
+	}
+	if rm.config.PluginConfig.OldBinaryPath == "" {
+		return ""
+	}
+	return filepath.Join(rm.config.PluginDir, rm.config.PluginConfig.OldBinaryPath)
 }
 
 // SnapshotManager code below

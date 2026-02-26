@@ -1,12 +1,12 @@
 /**
  * RPC Test for TypeScript Plugin
- * 
+ *
  * Tests the full flow of plugin transactions via RPC:
  * 1. Adds two accounts to the keystore
  * 2. Uses faucet to add balance to one account
  * 3. Does a send transaction from the fauceted account to the other account
  * 4. Sends a reward from that account back to the original account
- * 
+ *
  * Run with: npx tsx src/rpc_test.ts
  */
 
@@ -59,7 +59,7 @@ async function postRawJSON(url: string, jsonBody: string): Promise<string> {
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: jsonBody,
+        body: jsonBody
     });
 
     const respBody = await response.text();
@@ -79,7 +79,11 @@ async function keystoreNewKey(rpcURL: string, nickname: string, password: string
 }
 
 // Get key info from the keystore
-async function keystoreGetKey(rpcURL: string, address: string, password: string): Promise<KeyGroup> {
+async function keystoreGetKey(
+    rpcURL: string,
+    address: string,
+    password: string
+): Promise<KeyGroup> {
     const reqJSON = JSON.stringify({ address, password });
     const respBody = await postRawJSON(`${rpcURL}/v1/admin/keystore-get`, reqJSON);
     const parsed = JSON.parse(respBody);
@@ -87,7 +91,7 @@ async function keystoreGetKey(rpcURL: string, address: string, password: string)
     return {
         address: parsed.address || parsed.Address || address,
         publicKey: parsed.publicKey || parsed.PublicKey || parsed.public_key,
-        privateKey: parsed.privateKey || parsed.PrivateKey || parsed.private_key,
+        privateKey: parsed.privateKey || parsed.PrivateKey || parsed.private_key
     };
 }
 
@@ -134,7 +138,7 @@ async function waitForTxInclusion(
             // Ignore errors and retry
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     return false;
@@ -164,7 +168,7 @@ function getSignBytes(
     // Note: google.protobuf.Any uses snake_case field names (type_url, not typeUrl)
     const anyMsg = google.protobuf.Any.create({
         type_url: msgTypeUrl,
-        value: msgBytes,
+        value: msgBytes
     });
 
     // Create the transaction without signature for signing
@@ -180,7 +184,7 @@ function getSignBytes(
         time: Number(time),
         fee: Number(fee),
         networkId: Number(networkId),
-        chainId: Number(chainId),
+        chainId: Number(chainId)
     };
     if (memo) {
         txData.memo = memo;
@@ -243,7 +247,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageSend.create({
                 fromAddress: fromAddr,
                 toAddress: toAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageSend.encode(msg).finish();
             break;
@@ -254,7 +258,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageReward.create({
                 adminAddress: adminAddr,
                 recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageReward.encode(msg).finish();
             break;
@@ -265,7 +269,7 @@ async function buildSignAndSendTx(
             const msg = types.MessageFaucet.create({
                 signerAddress: signerAddr,
                 recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number,
+                amount: msgJSON['amount'] as number
             });
             msgProto = types.MessageFaucet.encode(msg).finish();
             break;
@@ -303,14 +307,14 @@ async function buildSignAndSendTx(
             msg: msgJSON,
             signature: {
                 publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature),
+                signature: bytesToHex(signature)
             },
             time: Number(txTime),
             createdHeight: Number(height),
             fee: Number(fee),
             memo: '',
             networkID: Number(networkId),
-            chainID: Number(chainId),
+            chainID: Number(chainId)
         };
     } else {
         tx = {
@@ -319,14 +323,14 @@ async function buildSignAndSendTx(
             msgBytes: bytesToHex(msgProto),
             signature: {
                 publicKey: bytesToHex(pubKeyBytes),
-                signature: bytesToHex(signature),
+                signature: bytesToHex(signature)
             },
             time: Number(txTime),
             createdHeight: Number(height),
             fee: Number(fee),
             memo: '',
             networkID: Number(networkId),
-            chainID: Number(chainId),
+            chainID: Number(chainId)
         };
     }
 
@@ -349,10 +353,19 @@ async function sendFaucetTx(
     const faucetMsg = {
         signerAddress: hexToBase64(signerKey.address),
         recipientAddress: hexToBase64(recipientAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
-    return buildSignAndSendTx(rpcURL, signerKey, 'faucet', faucetMsg, fee, networkId, chainId, height);
+    return buildSignAndSendTx(
+        rpcURL,
+        signerKey,
+        'faucet',
+        faucetMsg,
+        fee,
+        networkId,
+        chainId,
+        height
+    );
 }
 
 // Send a send transaction
@@ -370,7 +383,7 @@ async function sendSendTx(
     const sendMsg = {
         fromAddress: hexToBase64(fromAddr),
         toAddress: hexToBase64(toAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
     return buildSignAndSendTx(rpcURL, senderKey, 'send', sendMsg, fee, networkId, chainId, height);
@@ -391,10 +404,19 @@ async function sendRewardTx(
     const rewardMsg = {
         adminAddress: hexToBase64(adminAddr),
         recipientAddress: hexToBase64(recipientAddr),
-        amount: Number(amount),
+        amount: Number(amount)
     };
 
-    return buildSignAndSendTx(rpcURL, adminKey, 'reward', rewardMsg, fee, networkId, chainId, height);
+    return buildSignAndSendTx(
+        rpcURL,
+        adminKey,
+        'reward',
+        rewardMsg,
+        fee,
+        networkId,
+        chainId,
+        height
+    );
 }
 
 // Main test function
@@ -405,10 +427,18 @@ async function testPluginTransactions(): Promise<void> {
     console.log('Step 1: Creating two accounts in keystore...');
 
     const suffix = randomSuffix();
-    const account1Addr = await keystoreNewKey(ADMIN_RPC_URL, `test_faucet_1_${suffix}`, TEST_PASSWORD);
+    const account1Addr = await keystoreNewKey(
+        ADMIN_RPC_URL,
+        `test_faucet_1_${suffix}`,
+        TEST_PASSWORD
+    );
     console.log(`Created account 1: ${account1Addr}`);
 
-    const account2Addr = await keystoreNewKey(ADMIN_RPC_URL, `test_faucet_2_${suffix}`, TEST_PASSWORD);
+    const account2Addr = await keystoreNewKey(
+        ADMIN_RPC_URL,
+        `test_faucet_2_${suffix}`,
+        TEST_PASSWORD
+    );
     console.log(`Created account 2: ${account2Addr}`);
 
     // Get current height for transaction
@@ -438,7 +468,12 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for faucet transaction to be included in a block
     console.log('Waiting for faucet transaction to be confirmed...');
-    const faucetIncluded = await waitForTxInclusion(QUERY_RPC_URL, account1Addr, faucetTxHash, 30000);
+    const faucetIncluded = await waitForTxInclusion(
+        QUERY_RPC_URL,
+        account1Addr,
+        faucetTxHash,
+        30000
+    );
     if (!faucetIncluded) {
         throw new Error('Faucet transaction not included within timeout');
     }
@@ -453,7 +488,9 @@ async function testPluginTransactions(): Promise<void> {
     // Print balances after faucet
     const bal1AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account1Addr);
     const bal2AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account2Addr);
-    console.log(`Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`);
+    console.log(
+        `Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`
+    );
 
     // Step 3: Send tokens from account 1 to account 2
     console.log('\nStep 3: Sending tokens from account 1 to account 2...');
@@ -523,7 +560,12 @@ async function testPluginTransactions(): Promise<void> {
 
     // Wait for reward transaction to be included
     console.log('Waiting for reward transaction to be confirmed...');
-    const rewardIncluded = await waitForTxInclusion(QUERY_RPC_URL, account2Addr, rewardTxHash, 30000);
+    const rewardIncluded = await waitForTxInclusion(
+        QUERY_RPC_URL,
+        account2Addr,
+        rewardTxHash,
+        30000
+    );
     if (!rewardIncluded) {
         throw new Error('Reward transaction not included within timeout');
     }
@@ -541,6 +583,21 @@ async function testPluginTransactions(): Promise<void> {
     console.log(`Final balances - Account 1: ${bal1Final}, Account 2: ${bal2Final}`);
 
     console.log('\n=== All transactions confirmed successfully! ===');
+
+    // Print tip about verifying balances via RPC
+    console.log('\n--- Verify Account Balances ---');
+    console.log(
+        'You can manually check account balances at any time using the /v1/query/account RPC endpoint:'
+    );
+    console.log(
+        `  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account1Addr}"}'`
+    );
+    console.log(
+        `  curl -X POST ${QUERY_RPC_URL}/v1/query/account -H "Content-Type: application/json" -d '{"address": "${account2Addr}"}'`
+    );
+    console.log(
+        'See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account'
+    );
 }
 
 // Run the test

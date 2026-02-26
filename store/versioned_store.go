@@ -117,34 +117,50 @@ func (vs *VersionedStore) Get(key []byte) ([]byte, lib.ErrorI) {
 
 // get() performs SeekGE to ^version and return the first entry.
 func (vs *VersionedStore) get(userKey []byte) (value []byte, tombstone byte, err lib.ErrorI) {
+	value, tombstone, found, err := vs.getRaw(userKey)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !found || tombstone == DeadTombstone {
+		return nil, 0, nil
+	}
+	return value, tombstone, nil
+}
+
+// getRaw() performs SeekGE to ^version and returns raw key visibility metadata.
+func (vs *VersionedStore) getRaw(userKey []byte) (value []byte, tombstone byte, found bool, err lib.ErrorI) {
 	// create (and validate) key to seek: [length-prefixed-key][^version]
 	seekKey := vs.makeVersionedKey(userKey, vs.version)
 	// iterate only over the key's boundary
 	it, err := vs.newVersionedIterator(userKey, false, false)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
 	defer it.Close()
 	iter := it.iter
 	if !iter.SeekGE(seekKey) {
-		return nil, 0, nil
+		return nil, DeadTombstone, false, nil
 	}
-	// iterator is at [encKey, prefixEnd(encKey)), so no need to re-check encoded key.
+	// iterator bounds are prefix-based; ensure we landed on the exact encoded user key
+	foundKey, _, parseErr := parseVersionedKey(iter.Key(), false)
+	if parseErr != nil {
+		return nil, 0, false, parseErr
+	}
+	if !bytes.Equal(foundKey, userKey) {
+		return nil, DeadTombstone, false, nil
+	}
 	// verify version
 	v := parseVersion(iter.Key())
 	if v > vs.version {
-		return nil, 0, nil
+		return nil, DeadTombstone, false, nil
 	}
 	raw, vErr := iter.ValueAndErr()
 	if vErr != nil {
-		return nil, 0, ErrStoreGet(vErr)
+		return nil, 0, false, ErrStoreGet(vErr)
 	}
-	// verify tombstone
+	// preserve tombstone so callers can distinguish deleted from absent
 	tombstone, value = parseValueWithTombstone(raw)
-	if tombstone == DeadTombstone {
-		return nil, 0, nil
-	}
-	return bytes.Clone(value), tombstone, nil
+	return bytes.Clone(value), tombstone, true, nil
 }
 
 // Commit commits the batch to the database

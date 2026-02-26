@@ -1,21 +1,18 @@
-import * as $protobuf from "protobufjs";
-import Long = require("long");
+import * as $protobuf from 'protobufjs';
+import Long = require('long');
 /** Namespace types. */
 export namespace types {
-
     /** Properties of an Account. */
     interface IAccount {
-
         /** Account address */
-        address?: (Uint8Array|null);
+        address?: Uint8Array | null;
 
         /** Account amount */
-        amount?: (number|Long|null);
+        amount?: number | Long | null;
     }
 
     /** Represents an Account. */
     class Account implements IAccount {
-
         /**
          * Constructs a new Account.
          * @param [properties] Properties to set
@@ -26,7 +23,7 @@ export namespace types {
         public address: Uint8Array;
 
         /** Account amount. */
-        public amount: (number|Long);
+        public amount: number | Long;
 
         /**
          * Creates a new Account instance using the specified properties.
@@ -49,7 +46,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IAccount, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IAccount,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes an Account message from the specified reader or buffer.
@@ -59,7 +59,7 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Account;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): types.Account;
 
         /**
          * Decodes an Account message from the specified reader or buffer, length delimited.
@@ -68,14 +68,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Account;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.Account;
 
         /**
          * Verifies an Account message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates an Account message from a plain object. Also converts values to their respective internal types.
@@ -90,7 +90,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.Account, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.Account,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Account to JSON.
@@ -108,17 +111,15 @@ export namespace types {
 
     /** Properties of a Pool. */
     interface IPool {
-
         /** Pool id */
-        id?: (number|Long|null);
+        id?: number | Long | null;
 
         /** Pool amount */
-        amount?: (number|Long|null);
+        amount?: number | Long | null;
     }
 
     /** Represents a Pool. */
     class Pool implements IPool {
-
         /**
          * Constructs a new Pool.
          * @param [properties] Properties to set
@@ -126,10 +127,10 @@ export namespace types {
         constructor(properties?: types.IPool);
 
         /** Pool id. */
-        public id: (number|Long);
+        public id: number | Long;
 
         /** Pool amount. */
-        public amount: (number|Long);
+        public amount: number | Long;
 
         /**
          * Creates a new Pool instance using the specified properties.
@@ -152,7 +153,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPool, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPool,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a Pool message from the specified reader or buffer.
@@ -162,7 +166,7 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Pool;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): types.Pool;
 
         /**
          * Decodes a Pool message from the specified reader or buffer, length delimited.
@@ -171,14 +175,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Pool;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.Pool;
 
         /**
          * Verifies a Pool message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Pool message from a plain object. Also converts values to their respective internal types.
@@ -193,7 +197,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.Pool, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.Pool,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Pool to JSON.
@@ -211,35 +218,33 @@ export namespace types {
 
     /** Properties of an Event. */
     interface IEvent {
-
         /** Event eventType */
-        eventType?: (string|null);
+        eventType?: string | null;
 
         /** Event custom */
-        custom?: (types.IEventCustom|null);
+        custom?: types.IEventCustom | null;
 
         /** Event height */
-        height?: (number|Long|null);
+        height?: number | Long | null;
 
         /** Event reference */
-        reference?: (string|null);
+        reference?: string | null;
 
         /** Event chainId */
-        chainId?: (number|Long|null);
+        chainId?: number | Long | null;
 
         /** Event blockHeight */
-        blockHeight?: (number|Long|null);
+        blockHeight?: number | Long | null;
 
         /** Event blockHash */
-        blockHash?: (Uint8Array|null);
+        blockHash?: Uint8Array | null;
 
         /** Event address */
-        address?: (Uint8Array|null);
+        address?: Uint8Array | null;
     }
 
     /** Represents an Event. */
     class Event implements IEvent {
-
         /**
          * Constructs a new Event.
          * @param [properties] Properties to set
@@ -250,19 +255,19 @@ export namespace types {
         public eventType: string;
 
         /** Event custom. */
-        public custom?: (types.IEventCustom|null);
+        public custom?: types.IEventCustom | null;
 
         /** Event height. */
-        public height: (number|Long);
+        public height: number | Long;
 
         /** Event reference. */
         public reference: string;
 
         /** Event chainId. */
-        public chainId: (number|Long);
+        public chainId: number | Long;
 
         /** Event blockHeight. */
-        public blockHeight: (number|Long);
+        public blockHeight: number | Long;
 
         /** Event blockHash. */
         public blockHash: Uint8Array;
@@ -271,7 +276,7 @@ export namespace types {
         public address: Uint8Array;
 
         /** Event msg. */
-        public msg?: "custom";
+        public msg?: 'custom';
 
         /**
          * Creates a new Event instance using the specified properties.
@@ -294,7 +299,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IEvent,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes an Event message from the specified reader or buffer.
@@ -304,7 +312,7 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Event;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): types.Event;
 
         /**
          * Decodes an Event message from the specified reader or buffer, length delimited.
@@ -313,14 +321,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Event;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.Event;
 
         /**
          * Verifies an Event message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates an Event message from a plain object. Also converts values to their respective internal types.
@@ -335,7 +343,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.Event,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Event to JSON.
@@ -353,14 +364,12 @@ export namespace types {
 
     /** Properties of an EventCustom. */
     interface IEventCustom {
-
         /** EventCustom msg */
-        msg?: (google.protobuf.IAny|null);
+        msg?: google.protobuf.IAny | null;
     }
 
     /** Represents an EventCustom. */
     class EventCustom implements IEventCustom {
-
         /**
          * Constructs a new EventCustom.
          * @param [properties] Properties to set
@@ -368,7 +377,7 @@ export namespace types {
         constructor(properties?: types.IEventCustom);
 
         /** EventCustom msg. */
-        public msg?: (google.protobuf.IAny|null);
+        public msg?: google.protobuf.IAny | null;
 
         /**
          * Creates a new EventCustom instance using the specified properties.
@@ -383,7 +392,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IEventCustom, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IEventCustom,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified EventCustom message, length delimited. Does not implicitly {@link types.EventCustom.verify|verify} messages.
@@ -391,7 +403,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IEventCustom, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IEventCustom,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes an EventCustom message from the specified reader or buffer.
@@ -401,7 +416,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.EventCustom;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.EventCustom;
 
         /**
          * Decodes an EventCustom message from the specified reader or buffer, length delimited.
@@ -410,14 +428,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.EventCustom;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.EventCustom;
 
         /**
          * Verifies an EventCustom message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates an EventCustom message from a plain object. Also converts values to their respective internal types.
@@ -432,7 +450,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.EventCustom, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.EventCustom,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this EventCustom to JSON.
@@ -450,41 +471,39 @@ export namespace types {
 
     /** Properties of a FSMToPlugin. */
     interface IFSMToPlugin {
-
         /** FSMToPlugin id */
-        id?: (number|Long|null);
+        id?: number | Long | null;
 
         /** FSMToPlugin config */
-        config?: (types.IPluginFSMConfig|null);
+        config?: types.IPluginFSMConfig | null;
 
         /** FSMToPlugin genesis */
-        genesis?: (types.IPluginGenesisRequest|null);
+        genesis?: types.IPluginGenesisRequest | null;
 
         /** FSMToPlugin begin */
-        begin?: (types.IPluginBeginRequest|null);
+        begin?: types.IPluginBeginRequest | null;
 
         /** FSMToPlugin check */
-        check?: (types.IPluginCheckRequest|null);
+        check?: types.IPluginCheckRequest | null;
 
         /** FSMToPlugin deliver */
-        deliver?: (types.IPluginDeliverRequest|null);
+        deliver?: types.IPluginDeliverRequest | null;
 
         /** FSMToPlugin end */
-        end?: (types.IPluginEndRequest|null);
+        end?: types.IPluginEndRequest | null;
 
         /** FSMToPlugin stateRead */
-        stateRead?: (types.IPluginStateReadResponse|null);
+        stateRead?: types.IPluginStateReadResponse | null;
 
         /** FSMToPlugin stateWrite */
-        stateWrite?: (types.IPluginStateWriteResponse|null);
+        stateWrite?: types.IPluginStateWriteResponse | null;
 
         /** FSMToPlugin error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a FSMToPlugin. */
     class FSMToPlugin implements IFSMToPlugin {
-
         /**
          * Constructs a new FSMToPlugin.
          * @param [properties] Properties to set
@@ -492,37 +511,46 @@ export namespace types {
         constructor(properties?: types.IFSMToPlugin);
 
         /** FSMToPlugin id. */
-        public id: (number|Long);
+        public id: number | Long;
 
         /** FSMToPlugin config. */
-        public config?: (types.IPluginFSMConfig|null);
+        public config?: types.IPluginFSMConfig | null;
 
         /** FSMToPlugin genesis. */
-        public genesis?: (types.IPluginGenesisRequest|null);
+        public genesis?: types.IPluginGenesisRequest | null;
 
         /** FSMToPlugin begin. */
-        public begin?: (types.IPluginBeginRequest|null);
+        public begin?: types.IPluginBeginRequest | null;
 
         /** FSMToPlugin check. */
-        public check?: (types.IPluginCheckRequest|null);
+        public check?: types.IPluginCheckRequest | null;
 
         /** FSMToPlugin deliver. */
-        public deliver?: (types.IPluginDeliverRequest|null);
+        public deliver?: types.IPluginDeliverRequest | null;
 
         /** FSMToPlugin end. */
-        public end?: (types.IPluginEndRequest|null);
+        public end?: types.IPluginEndRequest | null;
 
         /** FSMToPlugin stateRead. */
-        public stateRead?: (types.IPluginStateReadResponse|null);
+        public stateRead?: types.IPluginStateReadResponse | null;
 
         /** FSMToPlugin stateWrite. */
-        public stateWrite?: (types.IPluginStateWriteResponse|null);
+        public stateWrite?: types.IPluginStateWriteResponse | null;
 
         /** FSMToPlugin error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /** FSMToPlugin payload. */
-        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite"|"error");
+        public payload?:
+            | 'config'
+            | 'genesis'
+            | 'begin'
+            | 'check'
+            | 'deliver'
+            | 'end'
+            | 'stateRead'
+            | 'stateWrite'
+            | 'error';
 
         /**
          * Creates a new FSMToPlugin instance using the specified properties.
@@ -537,7 +565,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IFSMToPlugin, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IFSMToPlugin,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified FSMToPlugin message, length delimited. Does not implicitly {@link types.FSMToPlugin.verify|verify} messages.
@@ -545,7 +576,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IFSMToPlugin, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IFSMToPlugin,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a FSMToPlugin message from the specified reader or buffer.
@@ -555,7 +589,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.FSMToPlugin;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.FSMToPlugin;
 
         /**
          * Decodes a FSMToPlugin message from the specified reader or buffer, length delimited.
@@ -564,14 +601,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.FSMToPlugin;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.FSMToPlugin;
 
         /**
          * Verifies a FSMToPlugin message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a FSMToPlugin message from a plain object. Also converts values to their respective internal types.
@@ -586,7 +623,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.FSMToPlugin, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.FSMToPlugin,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this FSMToPlugin to JSON.
@@ -604,38 +644,36 @@ export namespace types {
 
     /** Properties of a PluginToFSM. */
     interface IPluginToFSM {
-
         /** PluginToFSM id */
-        id?: (number|Long|null);
+        id?: number | Long | null;
 
         /** PluginToFSM config */
-        config?: (types.IPluginConfig|null);
+        config?: types.IPluginConfig | null;
 
         /** PluginToFSM genesis */
-        genesis?: (types.IPluginGenesisResponse|null);
+        genesis?: types.IPluginGenesisResponse | null;
 
         /** PluginToFSM begin */
-        begin?: (types.IPluginBeginResponse|null);
+        begin?: types.IPluginBeginResponse | null;
 
         /** PluginToFSM check */
-        check?: (types.IPluginCheckResponse|null);
+        check?: types.IPluginCheckResponse | null;
 
         /** PluginToFSM deliver */
-        deliver?: (types.IPluginDeliverResponse|null);
+        deliver?: types.IPluginDeliverResponse | null;
 
         /** PluginToFSM end */
-        end?: (types.IPluginEndResponse|null);
+        end?: types.IPluginEndResponse | null;
 
         /** PluginToFSM stateRead */
-        stateRead?: (types.IPluginStateReadRequest|null);
+        stateRead?: types.IPluginStateReadRequest | null;
 
         /** PluginToFSM stateWrite */
-        stateWrite?: (types.IPluginStateWriteRequest|null);
+        stateWrite?: types.IPluginStateWriteRequest | null;
     }
 
     /** Represents a PluginToFSM. */
     class PluginToFSM implements IPluginToFSM {
-
         /**
          * Constructs a new PluginToFSM.
          * @param [properties] Properties to set
@@ -643,34 +681,42 @@ export namespace types {
         constructor(properties?: types.IPluginToFSM);
 
         /** PluginToFSM id. */
-        public id: (number|Long);
+        public id: number | Long;
 
         /** PluginToFSM config. */
-        public config?: (types.IPluginConfig|null);
+        public config?: types.IPluginConfig | null;
 
         /** PluginToFSM genesis. */
-        public genesis?: (types.IPluginGenesisResponse|null);
+        public genesis?: types.IPluginGenesisResponse | null;
 
         /** PluginToFSM begin. */
-        public begin?: (types.IPluginBeginResponse|null);
+        public begin?: types.IPluginBeginResponse | null;
 
         /** PluginToFSM check. */
-        public check?: (types.IPluginCheckResponse|null);
+        public check?: types.IPluginCheckResponse | null;
 
         /** PluginToFSM deliver. */
-        public deliver?: (types.IPluginDeliverResponse|null);
+        public deliver?: types.IPluginDeliverResponse | null;
 
         /** PluginToFSM end. */
-        public end?: (types.IPluginEndResponse|null);
+        public end?: types.IPluginEndResponse | null;
 
         /** PluginToFSM stateRead. */
-        public stateRead?: (types.IPluginStateReadRequest|null);
+        public stateRead?: types.IPluginStateReadRequest | null;
 
         /** PluginToFSM stateWrite. */
-        public stateWrite?: (types.IPluginStateWriteRequest|null);
+        public stateWrite?: types.IPluginStateWriteRequest | null;
 
         /** PluginToFSM payload. */
-        public payload?: ("config"|"genesis"|"begin"|"check"|"deliver"|"end"|"stateRead"|"stateWrite");
+        public payload?:
+            | 'config'
+            | 'genesis'
+            | 'begin'
+            | 'check'
+            | 'deliver'
+            | 'end'
+            | 'stateRead'
+            | 'stateWrite';
 
         /**
          * Creates a new PluginToFSM instance using the specified properties.
@@ -685,7 +731,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginToFSM, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginToFSM,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginToFSM message, length delimited. Does not implicitly {@link types.PluginToFSM.verify|verify} messages.
@@ -693,7 +742,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginToFSM, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginToFSM,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginToFSM message from the specified reader or buffer.
@@ -703,7 +755,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginToFSM;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginToFSM;
 
         /**
          * Decodes a PluginToFSM message from the specified reader or buffer, length delimited.
@@ -712,14 +767,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginToFSM;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginToFSM;
 
         /**
          * Verifies a PluginToFSM message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginToFSM message from a plain object. Also converts values to their respective internal types.
@@ -734,7 +789,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginToFSM, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginToFSM,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginToFSM to JSON.
@@ -752,32 +810,30 @@ export namespace types {
 
     /** Properties of a PluginConfig. */
     interface IPluginConfig {
-
         /** PluginConfig name */
-        name?: (string|null);
+        name?: string | null;
 
         /** PluginConfig id */
-        id?: (number|Long|null);
+        id?: number | Long | null;
 
         /** PluginConfig version */
-        version?: (number|Long|null);
+        version?: number | Long | null;
 
         /** PluginConfig supportedTransactions */
-        supportedTransactions?: (string[]|null);
+        supportedTransactions?: string[] | null;
 
         /** PluginConfig fileDescriptorProtos */
-        fileDescriptorProtos?: (Uint8Array[]|null);
+        fileDescriptorProtos?: Uint8Array[] | null;
 
         /** PluginConfig transactionTypeUrls */
-        transactionTypeUrls?: (string[]|null);
+        transactionTypeUrls?: string[] | null;
 
         /** PluginConfig eventTypeUrls */
-        eventTypeUrls?: (string[]|null);
+        eventTypeUrls?: string[] | null;
     }
 
     /** Represents a PluginConfig. */
     class PluginConfig implements IPluginConfig {
-
         /**
          * Constructs a new PluginConfig.
          * @param [properties] Properties to set
@@ -788,10 +844,10 @@ export namespace types {
         public name: string;
 
         /** PluginConfig id. */
-        public id: (number|Long);
+        public id: number | Long;
 
         /** PluginConfig version. */
-        public version: (number|Long);
+        public version: number | Long;
 
         /** PluginConfig supportedTransactions. */
         public supportedTransactions: string[];
@@ -818,7 +874,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginConfig,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginConfig message, length delimited. Does not implicitly {@link types.PluginConfig.verify|verify} messages.
@@ -826,7 +885,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginConfig,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginConfig message from the specified reader or buffer.
@@ -836,7 +898,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginConfig;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginConfig;
 
         /**
          * Decodes a PluginConfig message from the specified reader or buffer, length delimited.
@@ -845,14 +910,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginConfig;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginConfig;
 
         /**
          * Verifies a PluginConfig message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginConfig message from a plain object. Also converts values to their respective internal types.
@@ -867,7 +932,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginConfig,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginConfig to JSON.
@@ -885,14 +953,12 @@ export namespace types {
 
     /** Properties of a PluginFSMConfig. */
     interface IPluginFSMConfig {
-
         /** PluginFSMConfig config */
-        config?: (types.IPluginConfig|null);
+        config?: types.IPluginConfig | null;
     }
 
     /** Represents a PluginFSMConfig. */
     class PluginFSMConfig implements IPluginFSMConfig {
-
         /**
          * Constructs a new PluginFSMConfig.
          * @param [properties] Properties to set
@@ -900,7 +966,7 @@ export namespace types {
         constructor(properties?: types.IPluginFSMConfig);
 
         /** PluginFSMConfig config. */
-        public config?: (types.IPluginConfig|null);
+        public config?: types.IPluginConfig | null;
 
         /**
          * Creates a new PluginFSMConfig instance using the specified properties.
@@ -915,7 +981,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginFSMConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginFSMConfig,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginFSMConfig message, length delimited. Does not implicitly {@link types.PluginFSMConfig.verify|verify} messages.
@@ -923,7 +992,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginFSMConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginFSMConfig,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginFSMConfig message from the specified reader or buffer.
@@ -933,7 +1005,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginFSMConfig;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginFSMConfig;
 
         /**
          * Decodes a PluginFSMConfig message from the specified reader or buffer, length delimited.
@@ -942,14 +1017,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginFSMConfig;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginFSMConfig;
 
         /**
          * Verifies a PluginFSMConfig message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginFSMConfig message from a plain object. Also converts values to their respective internal types.
@@ -964,7 +1039,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginFSMConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginFSMConfig,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginFSMConfig to JSON.
@@ -982,14 +1060,12 @@ export namespace types {
 
     /** Properties of a PluginGenesisRequest. */
     interface IPluginGenesisRequest {
-
         /** PluginGenesisRequest genesisJson */
-        genesisJson?: (Uint8Array|null);
+        genesisJson?: Uint8Array | null;
     }
 
     /** Represents a PluginGenesisRequest. */
     class PluginGenesisRequest implements IPluginGenesisRequest {
-
         /**
          * Constructs a new PluginGenesisRequest.
          * @param [properties] Properties to set
@@ -1012,7 +1088,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginGenesisRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginGenesisRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginGenesisRequest message, length delimited. Does not implicitly {@link types.PluginGenesisRequest.verify|verify} messages.
@@ -1020,7 +1099,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginGenesisRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginGenesisRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginGenesisRequest message from the specified reader or buffer.
@@ -1030,7 +1112,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginGenesisRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginGenesisRequest;
 
         /**
          * Decodes a PluginGenesisRequest message from the specified reader or buffer, length delimited.
@@ -1039,14 +1124,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginGenesisRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginGenesisRequest;
 
         /**
          * Verifies a PluginGenesisRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginGenesisRequest message from a plain object. Also converts values to their respective internal types.
@@ -1061,7 +1148,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginGenesisRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginGenesisRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginGenesisRequest to JSON.
@@ -1079,14 +1169,12 @@ export namespace types {
 
     /** Properties of a PluginGenesisResponse. */
     interface IPluginGenesisResponse {
-
         /** PluginGenesisResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginGenesisResponse. */
     class PluginGenesisResponse implements IPluginGenesisResponse {
-
         /**
          * Constructs a new PluginGenesisResponse.
          * @param [properties] Properties to set
@@ -1094,14 +1182,16 @@ export namespace types {
         constructor(properties?: types.IPluginGenesisResponse);
 
         /** PluginGenesisResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginGenesisResponse instance using the specified properties.
          * @param [properties] Properties to set
          * @returns PluginGenesisResponse instance
          */
-        public static create(properties?: types.IPluginGenesisResponse): types.PluginGenesisResponse;
+        public static create(
+            properties?: types.IPluginGenesisResponse
+        ): types.PluginGenesisResponse;
 
         /**
          * Encodes the specified PluginGenesisResponse message. Does not implicitly {@link types.PluginGenesisResponse.verify|verify} messages.
@@ -1109,7 +1199,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginGenesisResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginGenesisResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginGenesisResponse message, length delimited. Does not implicitly {@link types.PluginGenesisResponse.verify|verify} messages.
@@ -1117,7 +1210,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginGenesisResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginGenesisResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginGenesisResponse message from the specified reader or buffer.
@@ -1127,7 +1223,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginGenesisResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginGenesisResponse;
 
         /**
          * Decodes a PluginGenesisResponse message from the specified reader or buffer, length delimited.
@@ -1136,14 +1235,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginGenesisResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginGenesisResponse;
 
         /**
          * Verifies a PluginGenesisResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginGenesisResponse message from a plain object. Also converts values to their respective internal types.
@@ -1158,7 +1259,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginGenesisResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginGenesisResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginGenesisResponse to JSON.
@@ -1176,14 +1280,12 @@ export namespace types {
 
     /** Properties of a PluginBeginRequest. */
     interface IPluginBeginRequest {
-
         /** PluginBeginRequest height */
-        height?: (number|Long|null);
+        height?: number | Long | null;
     }
 
     /** Represents a PluginBeginRequest. */
     class PluginBeginRequest implements IPluginBeginRequest {
-
         /**
          * Constructs a new PluginBeginRequest.
          * @param [properties] Properties to set
@@ -1191,7 +1293,7 @@ export namespace types {
         constructor(properties?: types.IPluginBeginRequest);
 
         /** PluginBeginRequest height. */
-        public height: (number|Long);
+        public height: number | Long;
 
         /**
          * Creates a new PluginBeginRequest instance using the specified properties.
@@ -1206,7 +1308,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginBeginRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginBeginRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginBeginRequest message, length delimited. Does not implicitly {@link types.PluginBeginRequest.verify|verify} messages.
@@ -1214,7 +1319,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginBeginRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginBeginRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginBeginRequest message from the specified reader or buffer.
@@ -1224,7 +1332,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginBeginRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginBeginRequest;
 
         /**
          * Decodes a PluginBeginRequest message from the specified reader or buffer, length delimited.
@@ -1233,14 +1344,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginBeginRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginBeginRequest;
 
         /**
          * Verifies a PluginBeginRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginBeginRequest message from a plain object. Also converts values to their respective internal types.
@@ -1255,7 +1368,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginBeginRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginBeginRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginBeginRequest to JSON.
@@ -1273,17 +1389,15 @@ export namespace types {
 
     /** Properties of a PluginBeginResponse. */
     interface IPluginBeginResponse {
-
         /** PluginBeginResponse events */
-        events?: (types.IEvent[]|null);
+        events?: types.IEvent[] | null;
 
         /** PluginBeginResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginBeginResponse. */
     class PluginBeginResponse implements IPluginBeginResponse {
-
         /**
          * Constructs a new PluginBeginResponse.
          * @param [properties] Properties to set
@@ -1294,7 +1408,7 @@ export namespace types {
         public events: types.IEvent[];
 
         /** PluginBeginResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginBeginResponse instance using the specified properties.
@@ -1309,7 +1423,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginBeginResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginBeginResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginBeginResponse message, length delimited. Does not implicitly {@link types.PluginBeginResponse.verify|verify} messages.
@@ -1317,7 +1434,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginBeginResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginBeginResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginBeginResponse message from the specified reader or buffer.
@@ -1327,7 +1447,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginBeginResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginBeginResponse;
 
         /**
          * Decodes a PluginBeginResponse message from the specified reader or buffer, length delimited.
@@ -1336,14 +1459,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginBeginResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginBeginResponse;
 
         /**
          * Verifies a PluginBeginResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginBeginResponse message from a plain object. Also converts values to their respective internal types.
@@ -1358,7 +1483,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginBeginResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginBeginResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginBeginResponse to JSON.
@@ -1376,14 +1504,12 @@ export namespace types {
 
     /** Properties of a PluginCheckRequest. */
     interface IPluginCheckRequest {
-
         /** PluginCheckRequest tx */
-        tx?: (types.ITransaction|null);
+        tx?: types.ITransaction | null;
     }
 
     /** Represents a PluginCheckRequest. */
     class PluginCheckRequest implements IPluginCheckRequest {
-
         /**
          * Constructs a new PluginCheckRequest.
          * @param [properties] Properties to set
@@ -1391,7 +1517,7 @@ export namespace types {
         constructor(properties?: types.IPluginCheckRequest);
 
         /** PluginCheckRequest tx. */
-        public tx?: (types.ITransaction|null);
+        public tx?: types.ITransaction | null;
 
         /**
          * Creates a new PluginCheckRequest instance using the specified properties.
@@ -1406,7 +1532,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginCheckRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginCheckRequest message, length delimited. Does not implicitly {@link types.PluginCheckRequest.verify|verify} messages.
@@ -1414,7 +1543,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginCheckRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginCheckRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginCheckRequest message from the specified reader or buffer.
@@ -1424,7 +1556,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginCheckRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginCheckRequest;
 
         /**
          * Decodes a PluginCheckRequest message from the specified reader or buffer, length delimited.
@@ -1433,14 +1568,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginCheckRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginCheckRequest;
 
         /**
          * Verifies a PluginCheckRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginCheckRequest message from a plain object. Also converts values to their respective internal types.
@@ -1455,7 +1592,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginCheckRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginCheckRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginCheckRequest to JSON.
@@ -1473,20 +1613,18 @@ export namespace types {
 
     /** Properties of a PluginCheckResponse. */
     interface IPluginCheckResponse {
-
         /** PluginCheckResponse authorizedSigners */
-        authorizedSigners?: (Uint8Array[]|null);
+        authorizedSigners?: Uint8Array[] | null;
 
         /** PluginCheckResponse recipient */
-        recipient?: (Uint8Array|null);
+        recipient?: Uint8Array | null;
 
         /** PluginCheckResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginCheckResponse. */
     class PluginCheckResponse implements IPluginCheckResponse {
-
         /**
          * Constructs a new PluginCheckResponse.
          * @param [properties] Properties to set
@@ -1500,7 +1638,7 @@ export namespace types {
         public recipient: Uint8Array;
 
         /** PluginCheckResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginCheckResponse instance using the specified properties.
@@ -1515,7 +1653,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginCheckResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginCheckResponse message, length delimited. Does not implicitly {@link types.PluginCheckResponse.verify|verify} messages.
@@ -1523,7 +1664,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginCheckResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginCheckResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginCheckResponse message from the specified reader or buffer.
@@ -1533,7 +1677,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginCheckResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginCheckResponse;
 
         /**
          * Decodes a PluginCheckResponse message from the specified reader or buffer, length delimited.
@@ -1542,14 +1689,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginCheckResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginCheckResponse;
 
         /**
          * Verifies a PluginCheckResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginCheckResponse message from a plain object. Also converts values to their respective internal types.
@@ -1564,7 +1713,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginCheckResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginCheckResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginCheckResponse to JSON.
@@ -1582,14 +1734,12 @@ export namespace types {
 
     /** Properties of a PluginDeliverRequest. */
     interface IPluginDeliverRequest {
-
         /** PluginDeliverRequest tx */
-        tx?: (types.ITransaction|null);
+        tx?: types.ITransaction | null;
     }
 
     /** Represents a PluginDeliverRequest. */
     class PluginDeliverRequest implements IPluginDeliverRequest {
-
         /**
          * Constructs a new PluginDeliverRequest.
          * @param [properties] Properties to set
@@ -1597,7 +1747,7 @@ export namespace types {
         constructor(properties?: types.IPluginDeliverRequest);
 
         /** PluginDeliverRequest tx. */
-        public tx?: (types.ITransaction|null);
+        public tx?: types.ITransaction | null;
 
         /**
          * Creates a new PluginDeliverRequest instance using the specified properties.
@@ -1612,7 +1762,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginDeliverRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginDeliverRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginDeliverRequest message, length delimited. Does not implicitly {@link types.PluginDeliverRequest.verify|verify} messages.
@@ -1620,7 +1773,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginDeliverRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginDeliverRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginDeliverRequest message from the specified reader or buffer.
@@ -1630,7 +1786,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginDeliverRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginDeliverRequest;
 
         /**
          * Decodes a PluginDeliverRequest message from the specified reader or buffer, length delimited.
@@ -1639,14 +1798,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginDeliverRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginDeliverRequest;
 
         /**
          * Verifies a PluginDeliverRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginDeliverRequest message from a plain object. Also converts values to their respective internal types.
@@ -1661,7 +1822,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginDeliverRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginDeliverRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginDeliverRequest to JSON.
@@ -1679,17 +1843,15 @@ export namespace types {
 
     /** Properties of a PluginDeliverResponse. */
     interface IPluginDeliverResponse {
-
         /** PluginDeliverResponse events */
-        events?: (types.IEvent[]|null);
+        events?: types.IEvent[] | null;
 
         /** PluginDeliverResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginDeliverResponse. */
     class PluginDeliverResponse implements IPluginDeliverResponse {
-
         /**
          * Constructs a new PluginDeliverResponse.
          * @param [properties] Properties to set
@@ -1700,14 +1862,16 @@ export namespace types {
         public events: types.IEvent[];
 
         /** PluginDeliverResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginDeliverResponse instance using the specified properties.
          * @param [properties] Properties to set
          * @returns PluginDeliverResponse instance
          */
-        public static create(properties?: types.IPluginDeliverResponse): types.PluginDeliverResponse;
+        public static create(
+            properties?: types.IPluginDeliverResponse
+        ): types.PluginDeliverResponse;
 
         /**
          * Encodes the specified PluginDeliverResponse message. Does not implicitly {@link types.PluginDeliverResponse.verify|verify} messages.
@@ -1715,7 +1879,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginDeliverResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginDeliverResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginDeliverResponse message, length delimited. Does not implicitly {@link types.PluginDeliverResponse.verify|verify} messages.
@@ -1723,7 +1890,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginDeliverResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginDeliverResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginDeliverResponse message from the specified reader or buffer.
@@ -1733,7 +1903,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginDeliverResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginDeliverResponse;
 
         /**
          * Decodes a PluginDeliverResponse message from the specified reader or buffer, length delimited.
@@ -1742,14 +1915,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginDeliverResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginDeliverResponse;
 
         /**
          * Verifies a PluginDeliverResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginDeliverResponse message from a plain object. Also converts values to their respective internal types.
@@ -1764,7 +1939,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginDeliverResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginDeliverResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginDeliverResponse to JSON.
@@ -1782,17 +1960,15 @@ export namespace types {
 
     /** Properties of a PluginEndRequest. */
     interface IPluginEndRequest {
-
         /** PluginEndRequest height */
-        height?: (number|Long|null);
+        height?: number | Long | null;
 
         /** PluginEndRequest proposerAddress */
-        proposerAddress?: (Uint8Array|null);
+        proposerAddress?: Uint8Array | null;
     }
 
     /** Represents a PluginEndRequest. */
     class PluginEndRequest implements IPluginEndRequest {
-
         /**
          * Constructs a new PluginEndRequest.
          * @param [properties] Properties to set
@@ -1800,7 +1976,7 @@ export namespace types {
         constructor(properties?: types.IPluginEndRequest);
 
         /** PluginEndRequest height. */
-        public height: (number|Long);
+        public height: number | Long;
 
         /** PluginEndRequest proposerAddress. */
         public proposerAddress: Uint8Array;
@@ -1818,7 +1994,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginEndRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginEndRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginEndRequest message, length delimited. Does not implicitly {@link types.PluginEndRequest.verify|verify} messages.
@@ -1826,7 +2005,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginEndRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginEndRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginEndRequest message from the specified reader or buffer.
@@ -1836,7 +2018,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginEndRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginEndRequest;
 
         /**
          * Decodes a PluginEndRequest message from the specified reader or buffer, length delimited.
@@ -1845,14 +2030,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginEndRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginEndRequest;
 
         /**
          * Verifies a PluginEndRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginEndRequest message from a plain object. Also converts values to their respective internal types.
@@ -1867,7 +2054,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginEndRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginEndRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginEndRequest to JSON.
@@ -1885,17 +2075,15 @@ export namespace types {
 
     /** Properties of a PluginEndResponse. */
     interface IPluginEndResponse {
-
         /** PluginEndResponse events */
-        events?: (types.IEvent[]|null);
+        events?: types.IEvent[] | null;
 
         /** PluginEndResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginEndResponse. */
     class PluginEndResponse implements IPluginEndResponse {
-
         /**
          * Constructs a new PluginEndResponse.
          * @param [properties] Properties to set
@@ -1906,7 +2094,7 @@ export namespace types {
         public events: types.IEvent[];
 
         /** PluginEndResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginEndResponse instance using the specified properties.
@@ -1921,7 +2109,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginEndResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginEndResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginEndResponse message, length delimited. Does not implicitly {@link types.PluginEndResponse.verify|verify} messages.
@@ -1929,7 +2120,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginEndResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginEndResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginEndResponse message from the specified reader or buffer.
@@ -1939,7 +2133,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginEndResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginEndResponse;
 
         /**
          * Decodes a PluginEndResponse message from the specified reader or buffer, length delimited.
@@ -1948,14 +2145,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginEndResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginEndResponse;
 
         /**
          * Verifies a PluginEndResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginEndResponse message from a plain object. Also converts values to their respective internal types.
@@ -1970,7 +2169,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginEndResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginEndResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginEndResponse to JSON.
@@ -1988,20 +2190,18 @@ export namespace types {
 
     /** Properties of a PluginError. */
     interface IPluginError {
-
         /** PluginError code */
-        code?: (number|Long|null);
+        code?: number | Long | null;
 
         /** PluginError module */
-        module?: (string|null);
+        module?: string | null;
 
         /** PluginError msg */
-        msg?: (string|null);
+        msg?: string | null;
     }
 
     /** Represents a PluginError. */
     class PluginError implements IPluginError {
-
         /**
          * Constructs a new PluginError.
          * @param [properties] Properties to set
@@ -2009,7 +2209,7 @@ export namespace types {
         constructor(properties?: types.IPluginError);
 
         /** PluginError code. */
-        public code: (number|Long);
+        public code: number | Long;
 
         /** PluginError module. */
         public module: string;
@@ -2030,7 +2230,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginError, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginError,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginError message, length delimited. Does not implicitly {@link types.PluginError.verify|verify} messages.
@@ -2038,7 +2241,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginError, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginError,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginError message from the specified reader or buffer.
@@ -2048,7 +2254,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginError;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginError;
 
         /**
          * Decodes a PluginError message from the specified reader or buffer, length delimited.
@@ -2057,14 +2266,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginError;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginError;
 
         /**
          * Verifies a PluginError message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginError message from a plain object. Also converts values to their respective internal types.
@@ -2079,7 +2288,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginError,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginError to JSON.
@@ -2097,17 +2309,15 @@ export namespace types {
 
     /** Properties of a PluginStateReadRequest. */
     interface IPluginStateReadRequest {
-
         /** PluginStateReadRequest keys */
-        keys?: (types.IPluginKeyRead[]|null);
+        keys?: types.IPluginKeyRead[] | null;
 
         /** PluginStateReadRequest ranges */
-        ranges?: (types.IPluginRangeRead[]|null);
+        ranges?: types.IPluginRangeRead[] | null;
     }
 
     /** Represents a PluginStateReadRequest. */
     class PluginStateReadRequest implements IPluginStateReadRequest {
-
         /**
          * Constructs a new PluginStateReadRequest.
          * @param [properties] Properties to set
@@ -2125,7 +2335,9 @@ export namespace types {
          * @param [properties] Properties to set
          * @returns PluginStateReadRequest instance
          */
-        public static create(properties?: types.IPluginStateReadRequest): types.PluginStateReadRequest;
+        public static create(
+            properties?: types.IPluginStateReadRequest
+        ): types.PluginStateReadRequest;
 
         /**
          * Encodes the specified PluginStateReadRequest message. Does not implicitly {@link types.PluginStateReadRequest.verify|verify} messages.
@@ -2133,7 +2345,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginStateReadRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginStateReadRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginStateReadRequest message, length delimited. Does not implicitly {@link types.PluginStateReadRequest.verify|verify} messages.
@@ -2141,7 +2356,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginStateReadRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginStateReadRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginStateReadRequest message from the specified reader or buffer.
@@ -2151,7 +2369,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginStateReadRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginStateReadRequest;
 
         /**
          * Decodes a PluginStateReadRequest message from the specified reader or buffer, length delimited.
@@ -2160,14 +2381,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginStateReadRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginStateReadRequest;
 
         /**
          * Verifies a PluginStateReadRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginStateReadRequest message from a plain object. Also converts values to their respective internal types.
@@ -2182,7 +2405,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginStateReadRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginStateReadRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginStateReadRequest to JSON.
@@ -2200,17 +2426,15 @@ export namespace types {
 
     /** Properties of a PluginKeyRead. */
     interface IPluginKeyRead {
-
         /** PluginKeyRead queryId */
-        queryId?: (number|Long|null);
+        queryId?: number | Long | null;
 
         /** PluginKeyRead key */
-        key?: (Uint8Array|null);
+        key?: Uint8Array | null;
     }
 
     /** Represents a PluginKeyRead. */
     class PluginKeyRead implements IPluginKeyRead {
-
         /**
          * Constructs a new PluginKeyRead.
          * @param [properties] Properties to set
@@ -2218,7 +2442,7 @@ export namespace types {
         constructor(properties?: types.IPluginKeyRead);
 
         /** PluginKeyRead queryId. */
-        public queryId: (number|Long);
+        public queryId: number | Long;
 
         /** PluginKeyRead key. */
         public key: Uint8Array;
@@ -2236,7 +2460,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginKeyRead, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginKeyRead,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginKeyRead message, length delimited. Does not implicitly {@link types.PluginKeyRead.verify|verify} messages.
@@ -2244,7 +2471,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginKeyRead, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginKeyRead,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginKeyRead message from the specified reader or buffer.
@@ -2254,7 +2484,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginKeyRead;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginKeyRead;
 
         /**
          * Decodes a PluginKeyRead message from the specified reader or buffer, length delimited.
@@ -2263,14 +2496,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginKeyRead;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginKeyRead;
 
         /**
          * Verifies a PluginKeyRead message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginKeyRead message from a plain object. Also converts values to their respective internal types.
@@ -2285,7 +2518,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginKeyRead, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginKeyRead,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginKeyRead to JSON.
@@ -2303,23 +2539,21 @@ export namespace types {
 
     /** Properties of a PluginRangeRead. */
     interface IPluginRangeRead {
-
         /** PluginRangeRead queryId */
-        queryId?: (number|Long|null);
+        queryId?: number | Long | null;
 
         /** PluginRangeRead prefix */
-        prefix?: (Uint8Array|null);
+        prefix?: Uint8Array | null;
 
         /** PluginRangeRead limit */
-        limit?: (number|Long|null);
+        limit?: number | Long | null;
 
         /** PluginRangeRead reverse */
-        reverse?: (boolean|null);
+        reverse?: boolean | null;
     }
 
     /** Represents a PluginRangeRead. */
     class PluginRangeRead implements IPluginRangeRead {
-
         /**
          * Constructs a new PluginRangeRead.
          * @param [properties] Properties to set
@@ -2327,13 +2561,13 @@ export namespace types {
         constructor(properties?: types.IPluginRangeRead);
 
         /** PluginRangeRead queryId. */
-        public queryId: (number|Long);
+        public queryId: number | Long;
 
         /** PluginRangeRead prefix. */
         public prefix: Uint8Array;
 
         /** PluginRangeRead limit. */
-        public limit: (number|Long);
+        public limit: number | Long;
 
         /** PluginRangeRead reverse. */
         public reverse: boolean;
@@ -2351,7 +2585,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginRangeRead, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginRangeRead,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginRangeRead message, length delimited. Does not implicitly {@link types.PluginRangeRead.verify|verify} messages.
@@ -2359,7 +2596,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginRangeRead, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginRangeRead,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginRangeRead message from the specified reader or buffer.
@@ -2369,7 +2609,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginRangeRead;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginRangeRead;
 
         /**
          * Decodes a PluginRangeRead message from the specified reader or buffer, length delimited.
@@ -2378,14 +2621,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginRangeRead;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginRangeRead;
 
         /**
          * Verifies a PluginRangeRead message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginRangeRead message from a plain object. Also converts values to their respective internal types.
@@ -2400,7 +2643,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginRangeRead, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginRangeRead,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginRangeRead to JSON.
@@ -2418,17 +2664,15 @@ export namespace types {
 
     /** Properties of a PluginStateReadResponse. */
     interface IPluginStateReadResponse {
-
         /** PluginStateReadResponse results */
-        results?: (types.IPluginReadResult[]|null);
+        results?: types.IPluginReadResult[] | null;
 
         /** PluginStateReadResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginStateReadResponse. */
     class PluginStateReadResponse implements IPluginStateReadResponse {
-
         /**
          * Constructs a new PluginStateReadResponse.
          * @param [properties] Properties to set
@@ -2439,14 +2683,16 @@ export namespace types {
         public results: types.IPluginReadResult[];
 
         /** PluginStateReadResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginStateReadResponse instance using the specified properties.
          * @param [properties] Properties to set
          * @returns PluginStateReadResponse instance
          */
-        public static create(properties?: types.IPluginStateReadResponse): types.PluginStateReadResponse;
+        public static create(
+            properties?: types.IPluginStateReadResponse
+        ): types.PluginStateReadResponse;
 
         /**
          * Encodes the specified PluginStateReadResponse message. Does not implicitly {@link types.PluginStateReadResponse.verify|verify} messages.
@@ -2454,7 +2700,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginStateReadResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginStateReadResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginStateReadResponse message, length delimited. Does not implicitly {@link types.PluginStateReadResponse.verify|verify} messages.
@@ -2462,7 +2711,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginStateReadResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginStateReadResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginStateReadResponse message from the specified reader or buffer.
@@ -2472,7 +2724,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginStateReadResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginStateReadResponse;
 
         /**
          * Decodes a PluginStateReadResponse message from the specified reader or buffer, length delimited.
@@ -2481,14 +2736,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginStateReadResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginStateReadResponse;
 
         /**
          * Verifies a PluginStateReadResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginStateReadResponse message from a plain object. Also converts values to their respective internal types.
@@ -2503,7 +2760,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginStateReadResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginStateReadResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginStateReadResponse to JSON.
@@ -2521,17 +2781,15 @@ export namespace types {
 
     /** Properties of a PluginReadResult. */
     interface IPluginReadResult {
-
         /** PluginReadResult queryId */
-        queryId?: (number|Long|null);
+        queryId?: number | Long | null;
 
         /** PluginReadResult entries */
-        entries?: (types.IPluginStateEntry[]|null);
+        entries?: types.IPluginStateEntry[] | null;
     }
 
     /** Represents a PluginReadResult. */
     class PluginReadResult implements IPluginReadResult {
-
         /**
          * Constructs a new PluginReadResult.
          * @param [properties] Properties to set
@@ -2539,7 +2797,7 @@ export namespace types {
         constructor(properties?: types.IPluginReadResult);
 
         /** PluginReadResult queryId. */
-        public queryId: (number|Long);
+        public queryId: number | Long;
 
         /** PluginReadResult entries. */
         public entries: types.IPluginStateEntry[];
@@ -2557,7 +2815,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginReadResult, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginReadResult,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginReadResult message, length delimited. Does not implicitly {@link types.PluginReadResult.verify|verify} messages.
@@ -2565,7 +2826,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginReadResult, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginReadResult,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginReadResult message from the specified reader or buffer.
@@ -2575,7 +2839,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginReadResult;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginReadResult;
 
         /**
          * Decodes a PluginReadResult message from the specified reader or buffer, length delimited.
@@ -2584,14 +2851,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginReadResult;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginReadResult;
 
         /**
          * Verifies a PluginReadResult message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginReadResult message from a plain object. Also converts values to their respective internal types.
@@ -2606,7 +2875,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginReadResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginReadResult,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginReadResult to JSON.
@@ -2624,17 +2896,15 @@ export namespace types {
 
     /** Properties of a PluginStateWriteRequest. */
     interface IPluginStateWriteRequest {
-
         /** PluginStateWriteRequest sets */
-        sets?: (types.IPluginSetOp[]|null);
+        sets?: types.IPluginSetOp[] | null;
 
         /** PluginStateWriteRequest deletes */
-        deletes?: (types.IPluginDeleteOp[]|null);
+        deletes?: types.IPluginDeleteOp[] | null;
     }
 
     /** Represents a PluginStateWriteRequest. */
     class PluginStateWriteRequest implements IPluginStateWriteRequest {
-
         /**
          * Constructs a new PluginStateWriteRequest.
          * @param [properties] Properties to set
@@ -2652,7 +2922,9 @@ export namespace types {
          * @param [properties] Properties to set
          * @returns PluginStateWriteRequest instance
          */
-        public static create(properties?: types.IPluginStateWriteRequest): types.PluginStateWriteRequest;
+        public static create(
+            properties?: types.IPluginStateWriteRequest
+        ): types.PluginStateWriteRequest;
 
         /**
          * Encodes the specified PluginStateWriteRequest message. Does not implicitly {@link types.PluginStateWriteRequest.verify|verify} messages.
@@ -2660,7 +2932,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginStateWriteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginStateWriteRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginStateWriteRequest message, length delimited. Does not implicitly {@link types.PluginStateWriteRequest.verify|verify} messages.
@@ -2668,7 +2943,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginStateWriteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginStateWriteRequest,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginStateWriteRequest message from the specified reader or buffer.
@@ -2678,7 +2956,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginStateWriteRequest;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginStateWriteRequest;
 
         /**
          * Decodes a PluginStateWriteRequest message from the specified reader or buffer, length delimited.
@@ -2687,14 +2968,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginStateWriteRequest;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginStateWriteRequest;
 
         /**
          * Verifies a PluginStateWriteRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginStateWriteRequest message from a plain object. Also converts values to their respective internal types.
@@ -2709,7 +2992,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginStateWriteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginStateWriteRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginStateWriteRequest to JSON.
@@ -2727,14 +3013,12 @@ export namespace types {
 
     /** Properties of a PluginStateWriteResponse. */
     interface IPluginStateWriteResponse {
-
         /** PluginStateWriteResponse error */
-        error?: (types.IPluginError|null);
+        error?: types.IPluginError | null;
     }
 
     /** Represents a PluginStateWriteResponse. */
     class PluginStateWriteResponse implements IPluginStateWriteResponse {
-
         /**
          * Constructs a new PluginStateWriteResponse.
          * @param [properties] Properties to set
@@ -2742,14 +3026,16 @@ export namespace types {
         constructor(properties?: types.IPluginStateWriteResponse);
 
         /** PluginStateWriteResponse error. */
-        public error?: (types.IPluginError|null);
+        public error?: types.IPluginError | null;
 
         /**
          * Creates a new PluginStateWriteResponse instance using the specified properties.
          * @param [properties] Properties to set
          * @returns PluginStateWriteResponse instance
          */
-        public static create(properties?: types.IPluginStateWriteResponse): types.PluginStateWriteResponse;
+        public static create(
+            properties?: types.IPluginStateWriteResponse
+        ): types.PluginStateWriteResponse;
 
         /**
          * Encodes the specified PluginStateWriteResponse message. Does not implicitly {@link types.PluginStateWriteResponse.verify|verify} messages.
@@ -2757,7 +3043,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginStateWriteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginStateWriteResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginStateWriteResponse message, length delimited. Does not implicitly {@link types.PluginStateWriteResponse.verify|verify} messages.
@@ -2765,7 +3054,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginStateWriteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginStateWriteResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginStateWriteResponse message from the specified reader or buffer.
@@ -2775,7 +3067,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginStateWriteResponse;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginStateWriteResponse;
 
         /**
          * Decodes a PluginStateWriteResponse message from the specified reader or buffer, length delimited.
@@ -2784,14 +3079,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginStateWriteResponse;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginStateWriteResponse;
 
         /**
          * Verifies a PluginStateWriteResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginStateWriteResponse message from a plain object. Also converts values to their respective internal types.
@@ -2806,7 +3103,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginStateWriteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginStateWriteResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginStateWriteResponse to JSON.
@@ -2824,17 +3124,15 @@ export namespace types {
 
     /** Properties of a PluginSetOp. */
     interface IPluginSetOp {
-
         /** PluginSetOp key */
-        key?: (Uint8Array|null);
+        key?: Uint8Array | null;
 
         /** PluginSetOp value */
-        value?: (Uint8Array|null);
+        value?: Uint8Array | null;
     }
 
     /** Represents a PluginSetOp. */
     class PluginSetOp implements IPluginSetOp {
-
         /**
          * Constructs a new PluginSetOp.
          * @param [properties] Properties to set
@@ -2860,7 +3158,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginSetOp, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginSetOp,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginSetOp message, length delimited. Does not implicitly {@link types.PluginSetOp.verify|verify} messages.
@@ -2868,7 +3169,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginSetOp, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginSetOp,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginSetOp message from the specified reader or buffer.
@@ -2878,7 +3182,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginSetOp;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginSetOp;
 
         /**
          * Decodes a PluginSetOp message from the specified reader or buffer, length delimited.
@@ -2887,14 +3194,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginSetOp;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginSetOp;
 
         /**
          * Verifies a PluginSetOp message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginSetOp message from a plain object. Also converts values to their respective internal types.
@@ -2909,7 +3216,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginSetOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginSetOp,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginSetOp to JSON.
@@ -2927,14 +3237,12 @@ export namespace types {
 
     /** Properties of a PluginDeleteOp. */
     interface IPluginDeleteOp {
-
         /** PluginDeleteOp key */
-        key?: (Uint8Array|null);
+        key?: Uint8Array | null;
     }
 
     /** Represents a PluginDeleteOp. */
     class PluginDeleteOp implements IPluginDeleteOp {
-
         /**
          * Constructs a new PluginDeleteOp.
          * @param [properties] Properties to set
@@ -2957,7 +3265,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginDeleteOp, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginDeleteOp,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginDeleteOp message, length delimited. Does not implicitly {@link types.PluginDeleteOp.verify|verify} messages.
@@ -2965,7 +3276,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginDeleteOp, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginDeleteOp,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginDeleteOp message from the specified reader or buffer.
@@ -2975,7 +3289,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginDeleteOp;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginDeleteOp;
 
         /**
          * Decodes a PluginDeleteOp message from the specified reader or buffer, length delimited.
@@ -2984,14 +3301,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginDeleteOp;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.PluginDeleteOp;
 
         /**
          * Verifies a PluginDeleteOp message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginDeleteOp message from a plain object. Also converts values to their respective internal types.
@@ -3006,7 +3323,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginDeleteOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginDeleteOp,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginDeleteOp to JSON.
@@ -3024,17 +3344,15 @@ export namespace types {
 
     /** Properties of a PluginStateEntry. */
     interface IPluginStateEntry {
-
         /** PluginStateEntry key */
-        key?: (Uint8Array|null);
+        key?: Uint8Array | null;
 
         /** PluginStateEntry value */
-        value?: (Uint8Array|null);
+        value?: Uint8Array | null;
     }
 
     /** Represents a PluginStateEntry. */
     class PluginStateEntry implements IPluginStateEntry {
-
         /**
          * Constructs a new PluginStateEntry.
          * @param [properties] Properties to set
@@ -3060,7 +3378,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IPluginStateEntry, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IPluginStateEntry,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified PluginStateEntry message, length delimited. Does not implicitly {@link types.PluginStateEntry.verify|verify} messages.
@@ -3068,7 +3389,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IPluginStateEntry, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IPluginStateEntry,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a PluginStateEntry message from the specified reader or buffer.
@@ -3078,7 +3402,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.PluginStateEntry;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.PluginStateEntry;
 
         /**
          * Decodes a PluginStateEntry message from the specified reader or buffer, length delimited.
@@ -3087,14 +3414,16 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.PluginStateEntry;
+        public static decodeDelimited(
+            reader: $protobuf.Reader | Uint8Array
+        ): types.PluginStateEntry;
 
         /**
          * Verifies a PluginStateEntry message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a PluginStateEntry message from a plain object. Also converts values to their respective internal types.
@@ -3109,7 +3438,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.PluginStateEntry, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.PluginStateEntry,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this PluginStateEntry to JSON.
@@ -3127,38 +3459,36 @@ export namespace types {
 
     /** Properties of a Transaction. */
     interface ITransaction {
-
         /** Transaction messageType */
-        messageType?: (string|null);
+        messageType?: string | null;
 
         /** Transaction msg */
-        msg?: (google.protobuf.IAny|null);
+        msg?: google.protobuf.IAny | null;
 
         /** Transaction signature */
-        signature?: (types.ISignature|null);
+        signature?: types.ISignature | null;
 
         /** Transaction createdHeight */
-        createdHeight?: (number|Long|null);
+        createdHeight?: number | Long | null;
 
         /** Transaction time */
-        time?: (number|Long|null);
+        time?: number | Long | null;
 
         /** Transaction fee */
-        fee?: (number|Long|null);
+        fee?: number | Long | null;
 
         /** Transaction memo */
-        memo?: (string|null);
+        memo?: string | null;
 
         /** Transaction networkId */
-        networkId?: (number|Long|null);
+        networkId?: number | Long | null;
 
         /** Transaction chainId */
-        chainId?: (number|Long|null);
+        chainId?: number | Long | null;
     }
 
     /** Represents a Transaction. */
     class Transaction implements ITransaction {
-
         /**
          * Constructs a new Transaction.
          * @param [properties] Properties to set
@@ -3169,28 +3499,28 @@ export namespace types {
         public messageType: string;
 
         /** Transaction msg. */
-        public msg?: (google.protobuf.IAny|null);
+        public msg?: google.protobuf.IAny | null;
 
         /** Transaction signature. */
-        public signature?: (types.ISignature|null);
+        public signature?: types.ISignature | null;
 
         /** Transaction createdHeight. */
-        public createdHeight: (number|Long);
+        public createdHeight: number | Long;
 
         /** Transaction time. */
-        public time: (number|Long);
+        public time: number | Long;
 
         /** Transaction fee. */
-        public fee: (number|Long);
+        public fee: number | Long;
 
         /** Transaction memo. */
         public memo: string;
 
         /** Transaction networkId. */
-        public networkId: (number|Long);
+        public networkId: number | Long;
 
         /** Transaction chainId. */
-        public chainId: (number|Long);
+        public chainId: number | Long;
 
         /**
          * Creates a new Transaction instance using the specified properties.
@@ -3205,7 +3535,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.ITransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.ITransaction,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified Transaction message, length delimited. Does not implicitly {@link types.Transaction.verify|verify} messages.
@@ -3213,7 +3546,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.ITransaction, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.ITransaction,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a Transaction message from the specified reader or buffer.
@@ -3223,7 +3559,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Transaction;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.Transaction;
 
         /**
          * Decodes a Transaction message from the specified reader or buffer, length delimited.
@@ -3232,14 +3571,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Transaction;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.Transaction;
 
         /**
          * Verifies a Transaction message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Transaction message from a plain object. Also converts values to their respective internal types.
@@ -3254,7 +3593,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.Transaction, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.Transaction,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Transaction to JSON.
@@ -3272,20 +3614,18 @@ export namespace types {
 
     /** Properties of a MessageSend. */
     interface IMessageSend {
-
         /** MessageSend fromAddress */
-        fromAddress?: (Uint8Array|null);
+        fromAddress?: Uint8Array | null;
 
         /** MessageSend toAddress */
-        toAddress?: (Uint8Array|null);
+        toAddress?: Uint8Array | null;
 
         /** MessageSend amount */
-        amount?: (number|Long|null);
+        amount?: number | Long | null;
     }
 
     /** Represents a MessageSend. */
     class MessageSend implements IMessageSend {
-
         /**
          * Constructs a new MessageSend.
          * @param [properties] Properties to set
@@ -3299,7 +3639,7 @@ export namespace types {
         public toAddress: Uint8Array;
 
         /** MessageSend amount. */
-        public amount: (number|Long);
+        public amount: number | Long;
 
         /**
          * Creates a new MessageSend instance using the specified properties.
@@ -3314,7 +3654,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IMessageSend, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IMessageSend,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified MessageSend message, length delimited. Does not implicitly {@link types.MessageSend.verify|verify} messages.
@@ -3322,7 +3665,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IMessageSend, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IMessageSend,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a MessageSend message from the specified reader or buffer.
@@ -3332,7 +3678,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.MessageSend;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.MessageSend;
 
         /**
          * Decodes a MessageSend message from the specified reader or buffer, length delimited.
@@ -3341,14 +3690,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.MessageSend;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.MessageSend;
 
         /**
          * Verifies a MessageSend message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a MessageSend message from a plain object. Also converts values to their respective internal types.
@@ -3363,7 +3712,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.MessageSend, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.MessageSend,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this MessageSend to JSON.
@@ -3381,14 +3733,12 @@ export namespace types {
 
     /** Properties of a FeeParams. */
     interface IFeeParams {
-
         /** FeeParams sendFee */
-        sendFee?: (number|Long|null);
+        sendFee?: number | Long | null;
     }
 
     /** Represents a FeeParams. */
     class FeeParams implements IFeeParams {
-
         /**
          * Constructs a new FeeParams.
          * @param [properties] Properties to set
@@ -3396,7 +3746,7 @@ export namespace types {
         constructor(properties?: types.IFeeParams);
 
         /** FeeParams sendFee. */
-        public sendFee: (number|Long);
+        public sendFee: number | Long;
 
         /**
          * Creates a new FeeParams instance using the specified properties.
@@ -3411,7 +3761,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IFeeParams, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IFeeParams,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified FeeParams message, length delimited. Does not implicitly {@link types.FeeParams.verify|verify} messages.
@@ -3419,7 +3772,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IFeeParams, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IFeeParams,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a FeeParams message from the specified reader or buffer.
@@ -3429,7 +3785,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.FeeParams;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.FeeParams;
 
         /**
          * Decodes a FeeParams message from the specified reader or buffer, length delimited.
@@ -3438,14 +3797,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.FeeParams;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.FeeParams;
 
         /**
          * Verifies a FeeParams message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a FeeParams message from a plain object. Also converts values to their respective internal types.
@@ -3460,7 +3819,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.FeeParams, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.FeeParams,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this FeeParams to JSON.
@@ -3478,17 +3840,15 @@ export namespace types {
 
     /** Properties of a Signature. */
     interface ISignature {
-
         /** Signature publicKey */
-        publicKey?: (Uint8Array|null);
+        publicKey?: Uint8Array | null;
 
         /** Signature signature */
-        signature?: (Uint8Array|null);
+        signature?: Uint8Array | null;
     }
 
     /** Represents a Signature. */
     class Signature implements ISignature {
-
         /**
          * Constructs a new Signature.
          * @param [properties] Properties to set
@@ -3514,7 +3874,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.ISignature, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.ISignature,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified Signature message, length delimited. Does not implicitly {@link types.Signature.verify|verify} messages.
@@ -3522,7 +3885,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.ISignature, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.ISignature,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a Signature message from the specified reader or buffer.
@@ -3532,7 +3898,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.Signature;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.Signature;
 
         /**
          * Decodes a Signature message from the specified reader or buffer, length delimited.
@@ -3541,14 +3910,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.Signature;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.Signature;
 
         /**
          * Verifies a Signature message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Signature message from a plain object. Also converts values to their respective internal types.
@@ -3563,7 +3932,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.Signature, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.Signature,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Signature to JSON.
@@ -3581,20 +3953,18 @@ export namespace types {
 
     /** Properties of a MessageReward. */
     interface IMessageReward {
-
         /** MessageReward adminAddress */
-        adminAddress?: (Uint8Array|null);
+        adminAddress?: Uint8Array | null;
 
         /** MessageReward recipientAddress */
-        recipientAddress?: (Uint8Array|null);
+        recipientAddress?: Uint8Array | null;
 
         /** MessageReward amount */
-        amount?: (number|Long|null);
+        amount?: number | Long | null;
     }
 
     /** Represents a MessageReward. */
     class MessageReward implements IMessageReward {
-
         /**
          * Constructs a new MessageReward.
          * @param [properties] Properties to set
@@ -3608,7 +3978,7 @@ export namespace types {
         public recipientAddress: Uint8Array;
 
         /** MessageReward amount. */
-        public amount: (number|Long);
+        public amount: number | Long;
 
         /**
          * Creates a new MessageReward instance using the specified properties.
@@ -3623,7 +3993,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IMessageReward, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IMessageReward,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified MessageReward message, length delimited. Does not implicitly {@link types.MessageReward.verify|verify} messages.
@@ -3631,7 +4004,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IMessageReward, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IMessageReward,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a MessageReward message from the specified reader or buffer.
@@ -3641,7 +4017,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.MessageReward;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.MessageReward;
 
         /**
          * Decodes a MessageReward message from the specified reader or buffer, length delimited.
@@ -3650,14 +4029,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.MessageReward;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.MessageReward;
 
         /**
          * Verifies a MessageReward message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a MessageReward message from a plain object. Also converts values to their respective internal types.
@@ -3672,7 +4051,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.MessageReward, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.MessageReward,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this MessageReward to JSON.
@@ -3690,20 +4072,18 @@ export namespace types {
 
     /** Properties of a MessageFaucet. */
     interface IMessageFaucet {
-
         /** MessageFaucet signerAddress */
-        signerAddress?: (Uint8Array|null);
+        signerAddress?: Uint8Array | null;
 
         /** MessageFaucet recipientAddress */
-        recipientAddress?: (Uint8Array|null);
+        recipientAddress?: Uint8Array | null;
 
         /** MessageFaucet amount */
-        amount?: (number|Long|null);
+        amount?: number | Long | null;
     }
 
     /** Represents a MessageFaucet. */
     class MessageFaucet implements IMessageFaucet {
-
         /**
          * Constructs a new MessageFaucet.
          * @param [properties] Properties to set
@@ -3717,7 +4097,7 @@ export namespace types {
         public recipientAddress: Uint8Array;
 
         /** MessageFaucet amount. */
-        public amount: (number|Long);
+        public amount: number | Long;
 
         /**
          * Creates a new MessageFaucet instance using the specified properties.
@@ -3732,7 +4112,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: types.IMessageFaucet, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(
+            message: types.IMessageFaucet,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Encodes the specified MessageFaucet message, length delimited. Does not implicitly {@link types.MessageFaucet.verify|verify} messages.
@@ -3740,7 +4123,10 @@ export namespace types {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: types.IMessageFaucet, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: types.IMessageFaucet,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a MessageFaucet message from the specified reader or buffer.
@@ -3750,7 +4136,10 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): types.MessageFaucet;
+        public static decode(
+            reader: $protobuf.Reader | Uint8Array,
+            length?: number
+        ): types.MessageFaucet;
 
         /**
          * Decodes a MessageFaucet message from the specified reader or buffer, length delimited.
@@ -3759,14 +4148,14 @@ export namespace types {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): types.MessageFaucet;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): types.MessageFaucet;
 
         /**
          * Verifies a MessageFaucet message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a MessageFaucet message from a plain object. Also converts values to their respective internal types.
@@ -3781,7 +4170,10 @@ export namespace types {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: types.MessageFaucet, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: types.MessageFaucet,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this MessageFaucet to JSON.
@@ -3800,23 +4192,19 @@ export namespace types {
 
 /** Namespace google. */
 export namespace google {
-
     /** Namespace protobuf. */
     namespace protobuf {
-
         /** Properties of an Any. */
         interface IAny {
-
             /** Any type_url */
-            type_url?: (string|null);
+            type_url?: string | null;
 
             /** Any value */
-            value?: (Uint8Array|null);
+            value?: Uint8Array | null;
         }
 
         /** Represents an Any. */
         class Any implements IAny {
-
             /**
              * Constructs a new Any.
              * @param [properties] Properties to set
@@ -3842,7 +4230,10 @@ export namespace google {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: google.protobuf.IAny, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(
+                message: google.protobuf.IAny,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Encodes the specified Any message, length delimited. Does not implicitly {@link google.protobuf.Any.verify|verify} messages.
@@ -3850,7 +4241,10 @@ export namespace google {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: google.protobuf.IAny, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: google.protobuf.IAny,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes an Any message from the specified reader or buffer.
@@ -3860,7 +4254,10 @@ export namespace google {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): google.protobuf.Any;
+            public static decode(
+                reader: $protobuf.Reader | Uint8Array,
+                length?: number
+            ): google.protobuf.Any;
 
             /**
              * Decodes an Any message from the specified reader or buffer, length delimited.
@@ -3869,14 +4266,16 @@ export namespace google {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): google.protobuf.Any;
+            public static decodeDelimited(
+                reader: $protobuf.Reader | Uint8Array
+            ): google.protobuf.Any;
 
             /**
              * Verifies an Any message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates an Any message from a plain object. Also converts values to their respective internal types.
@@ -3891,7 +4290,10 @@ export namespace google {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: google.protobuf.Any, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: google.protobuf.Any,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this Any to JSON.

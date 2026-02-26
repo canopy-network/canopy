@@ -273,6 +273,148 @@ func (s *Store) Commit() (root []byte, err lib.ErrorI) {
 	return
 }
 
+// Rollback rewinds the store to a previous version (height).
+//
+// It removes all versioned entries above targetVersion, rebuilds the latest state
+// view from historical state at targetVersion, and resets the latest commit pointer.
+// NOTE: Rollback is an offline maintenance operation and must only run while the node is stopped.
+func (s *Store) Rollback(targetVersion uint64) lib.ErrorI {
+	if s.isTxn {
+		return ErrCommitDB(fmt.Errorf("rollback is not supported for nested transactions"))
+	}
+	if targetVersion == 0 {
+		return ErrCommitDB(fmt.Errorf("rollback target height must be >= 1"))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	currentVersion := s.version
+	if targetVersion > currentVersion {
+		return ErrCommitDB(fmt.Errorf("rollback target height %d exceeds current height %d", targetVersion, currentVersion))
+	}
+	if targetVersion == currentVersion {
+		return nil
+	}
+
+	snapshot := s.db.NewSnapshot()
+	defer snapshot.Close()
+
+	// Ensure the target commit exists so we can repoint the latest commit id.
+	targetReader := NewVersionedStore(snapshot, nil, targetVersion)
+	targetTx := NewTxn(targetReader, nil, nil, false, false, true)
+	targetCommitID, err := targetTx.Get(s.commitIDKey(targetVersion))
+	if err != nil {
+		return err
+	}
+	if len(targetCommitID) == 0 {
+		return ErrStoreGet(fmt.Errorf("missing commit id at height %d", targetVersion))
+	}
+
+	batch := s.db.NewBatch()
+	defer batch.Close()
+
+	minVersion := targetVersion + 1
+	affectedStateKeys := make(map[string][]byte)
+	for _, prefix := range [][]byte{
+		historicStatePrefix,
+		indexerPrefix,
+		stateCommitmentPrefix,
+		stateCommitIDPrefix,
+	} {
+		if err = s.pruneVersionWindow(
+			snapshot,
+			batch,
+			prefix,
+			minVersion,
+			currentVersion,
+			bytes.Equal(prefix, historicStatePrefix),
+			affectedStateKeys,
+		); err != nil {
+			return err
+		}
+	}
+
+	// Patch only the affected latest-state keys from the target historical view.
+	hssReader := NewVersionedStore(snapshot, nil, targetVersion)
+	lssWriter := NewVersionedStore(nil, batch, lssVersion)
+	for _, stateKey := range affectedStateKeys {
+		hssKey := lib.Append(historicStatePrefix, stateKey)
+		value, tombstone, found, getErr := hssReader.getRaw(hssKey)
+		if getErr != nil {
+			return getErr
+		}
+		lssKey := lib.Append(latestStatePrefix, stateKey)
+		if !found || tombstone == DeadTombstone {
+			versionedLSSKey := lssWriter.makeVersionedKey(lssKey, lssVersion)
+			if e := batch.Delete(versionedLSSKey, nil); e != nil {
+				return ErrCommitDB(e)
+			}
+			continue
+		}
+		if err = lssWriter.SetAt(lssKey, value, lssVersion); err != nil {
+			return err
+		}
+	}
+
+	// Update latest commit id pointer.
+	if err = lssWriter.SetAt(lastCommitIDPrefix, targetCommitID, lssVersion); err != nil {
+		return err
+	}
+	if applyErr := s.db.Apply(batch, pebble.Sync); applyErr != nil {
+		return ErrCommitDB(applyErr)
+	}
+
+	// Rebuild writer/snapshots to the rolled-back height.
+	s.version = targetVersion
+	s.Reset()
+	blockCache.Purge()
+	s.log.Infof("Rolled back store from height %d to %d", currentVersion, targetVersion)
+	return nil
+}
+
+func (s *Store) pruneVersionWindow(
+	snapshot *pebble.Snapshot,
+	batch *pebble.Batch,
+	prefix []byte,
+	minVersion, maxVersion uint64,
+	collectStateKeys bool,
+	stateKeys map[string][]byte,
+) lib.ErrorI {
+	it, err := snapshot.NewIter(&pebble.IterOptions{
+		LowerBound:      prefix,
+		UpperBound:      prefixEnd(prefix),
+		KeyTypes:        pebble.IterKeyTypePointsOnly,
+		PointKeyFilters: []pebble.BlockPropertyFilter{newTargetWindowFilter(minVersion, maxVersion)},
+		UseL6Filters:    false,
+	})
+	if err != nil {
+		return ErrStoreGet(err)
+	}
+	for valid := it.First(); valid; valid = it.Next() {
+		versionedKey := it.Key()
+		version := parseVersion(versionedKey)
+		if version < minVersion || version > maxVersion {
+			continue
+		}
+		keyCopy := bytes.Clone(versionedKey)
+		if collectStateKeys {
+			userKey, _, parseErr := parseVersionedKey(keyCopy, false)
+			if parseErr == nil && bytes.HasPrefix(userKey, historicStatePrefix) {
+				stateKey := bytes.Clone(removePrefix(userKey, historicStatePrefix))
+				stateKeys[string(stateKey)] = stateKey
+			}
+		}
+		if err = batch.Delete(keyCopy, nil); err != nil {
+			_ = it.Close()
+			return ErrCommitDB(err)
+		}
+	}
+	if err = it.Close(); err != nil {
+		return ErrCloseDB(err)
+	}
+	return nil
+}
+
 // Flush() writes the current state to the batch writer without actually committing it
 func (s *Store) Flush() lib.ErrorI {
 	if s.sc != nil {

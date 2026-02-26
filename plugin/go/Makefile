@@ -1,2 +1,2 @@
 build:
-	go build -o ~/go/bin/go-plugin .
+	go build -o go-plugin .
