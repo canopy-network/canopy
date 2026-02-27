@@ -9,7 +9,8 @@
   },
   "rpc": {
     "base": "http://localhost:50002",
-    "admin": "http://localhost:50003"
+    "admin": "http://localhost:50003",
+    "root": "http://localhost:50002"
   },
   "explorer": "/explorer",
   "address": {

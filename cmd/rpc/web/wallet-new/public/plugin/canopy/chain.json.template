@@ -9,7 +9,8 @@
   },
   "rpc": {
     "base": "/rpc",
-    "admin": "/adminrpc"
+    "admin": "/adminrpc",
+    "root": "/rootrpc"
   },
   "explorer": "/explorer",
   "address": {
