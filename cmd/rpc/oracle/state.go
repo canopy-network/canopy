@@ -124,6 +124,8 @@ func (m *OracleState) ValidateSequence(block types.BlockI) lib.ErrorI {
 	lastState, err := m.readBlockState()
 	if err != nil {
 		m.log.Debugf("[ORACLE-STATE] No previous state found, assuming first block")
+		// first accepted block initializes source chain height for shouldSubmit checks
+		m.sourceChainHeight = block.Number()
 		// first block, no validation needed
 		return nil
 	}

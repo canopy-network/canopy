@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func createERC20TransferData(recipient string, amount *big.Int, extra []byte) []byte {
@@ -228,5 +230,31 @@ func TestParseERC20Transfer_USDT(t *testing.T) {
 			// Log success - USDT parsing works identically to standard ERC20
 			t.Logf("✓ USDT transfer parsed successfully (contract: %s, amount: %s)", usdtContract, parsedAmount.String())
 		})
+	}
+}
+
+func TestNewTransaction_AllowsContractCreationTx(t *testing.T) {
+	unsigned := ethtypes.NewContractCreation(
+		0,
+		big.NewInt(0),
+		21000,
+		big.NewInt(1_000_000_000),
+		[]byte{0x60, 0x00},
+	)
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	signed, err := ethtypes.SignTx(unsigned, ethtypes.LatestSignerForChainID(big.NewInt(1)), privateKey)
+	if err != nil {
+		t.Fatalf("SignTx() error = %v", err)
+	}
+
+	tx, err := NewTransaction(signed, 1)
+	if err != nil {
+		t.Fatalf("NewTransaction() unexpected error for contract creation tx: %v", err)
+	}
+	if tx.To() != "" {
+		t.Fatalf("expected empty recipient for contract creation tx, got %q", tx.To())
 	}
 }

@@ -722,6 +722,47 @@ func TestOracleDiskStorage_GetAllOrderIds(t *testing.T) {
 	}
 }
 
+func TestOracleDiskStorage_GetAllOrderIds_UsesAbsolutePathAfterCwdChange(t *testing.T) {
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	root := t.TempDir()
+	baseDir := filepath.Join(root, "base")
+	otherDir := filepath.Join(root, "other")
+	require.NoError(t, os.MkdirAll(baseDir, 0o755))
+	require.NoError(t, os.MkdirAll(otherDir, 0o755))
+	require.NoError(t, os.Chdir(baseDir))
+
+	storage, err := NewOracleDiskStorage("relative-orders", lib.NewDefaultLogger())
+	require.NoError(t, err)
+
+	orderID, err := hex.DecodeString(testId)
+	require.NoError(t, err)
+	order := &types.WitnessedOrder{
+		OrderId:         orderID,
+		WitnessedHeight: 1,
+		LockOrder:       &lib.LockOrder{OrderId: orderID},
+	}
+	require.NoError(t, storage.WriteOrder(order, types.LockOrderType))
+
+	ids, getErr := storage.GetAllOrderIds(types.LockOrderType)
+	require.NoError(t, getErr)
+	require.Len(t, ids, 1)
+
+	require.NoError(t, os.Chdir(otherDir))
+
+	ids, getErr = storage.GetAllOrderIds(types.LockOrderType)
+	require.NoError(t, getErr)
+	require.Len(t, ids, 1)
+
+	readOrder, readErr := storage.ReadOrder(orderID, types.LockOrderType)
+	require.NoError(t, readErr)
+	require.NotNil(t, readOrder)
+}
+
 func TestOracleDiskStorage_ArchiveOrder(t *testing.T) {
 	tempDir := t.TempDir()
 	logger := lib.NewDefaultLogger()

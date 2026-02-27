@@ -403,7 +403,17 @@ func (p *EthBlockProvider) processBlocks(ctx context.Context, start, end *big.In
 		}
 		txProcessTime := time.Since(txProcessStart)
 		// send block through channel
-		p.blockChan <- block
+		select {
+		case p.blockChan <- block:
+		case <-timeoutCtx.Done():
+			p.logger.Warn("[ETH-BLOCK] context canceled while sending block to consumer")
+			// record batch size before returning
+			batchSize := int(next.Int64() - batchStart.Int64())
+			if batchSize > 0 {
+				p.metrics.RecordEthProcessBlocksBatchSize(batchSize)
+			}
+			return next
+		}
 		// log successful block processing
 		// p.logger.Infof("eth block provider sent safe block at height %d through channel", next)
 		// update counters
@@ -511,6 +521,8 @@ func (p *EthBlockProvider) processTransaction(ctx context.Context, block *Block,
 		return err
 	}
 	if !success {
+		// Receipt status indicates the tx failed on-chain, so discard any parsed order.
+		tx.clearOrder()
 		// process next transaction
 		return nil
 	}

@@ -200,6 +200,10 @@ func (c *Controller) Stop() {
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	c.log.Debugf("Updating root chain info")
+	if info == nil {
+		c.log.Warn("Ignoring nil root chain info update")
+		return
+	}
 	// ensure this root chain is active
 	activeRootChainId, _ := c.FSM.GetRootChainId()
 	// if inactive

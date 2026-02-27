@@ -85,16 +85,22 @@ func (o *Oracle) reorgRollback() {
 		o.log.Warnf("[ORACLE-REORG] Reorg detected but no last known good height")
 		return
 	}
+	// cap rollback depth to avoid uint64 underflow when chain height is smaller than
+	// configured rollback blocks.
+	rollbackDepth := o.config.ReorgRollbackBlocks
+	if rollbackDepth > height {
+		rollbackDepth = height
+	}
 	// calculate the rollback height - orders witnessed above this height will be removed
-	rollbackHeight := height - o.config.ReorgRollbackBlocks
-	o.log.Infof("[ORACLE-REORG] Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, o.config.ReorgRollbackBlocks)
+	rollbackHeight := height - rollbackDepth
+	o.log.Infof("[ORACLE-REORG] Rolling back orders witnessed above height %d (last height %d - delta %d)", rollbackHeight, height, rollbackDepth)
 	// process lock orders first
 	o.rollbackOrderType(types.LockOrderType, rollbackHeight)
 	// process close orders second
 	o.rollbackOrderType(types.CloseOrderType, rollbackHeight)
 	// update reorg metrics
 	o.metrics.UpdateOracleErrorMetrics(1, 0, 0)
-	o.metrics.RecordOracleReorgDepth(o.config.ReorgRollbackBlocks)
+	o.metrics.RecordOracleReorgDepth(rollbackDepth)
 	o.log.Infof("[ORACLE-REORG] Reorg rollback completed")
 }
 
@@ -151,11 +157,32 @@ func (o *Oracle) Start(ctx context.Context, syncCh chan<- bool) {
 	go func() {
 		firstRun := true
 		for {
+			select {
+			case <-ctx.Done():
+				o.log.Info("[ORACLE-LIFECYCLE] Oracle context cancelled before run loop")
+				return
+			default:
+			}
 			// an order book must be present to validate incoming orders
 			// wait for the controller to set it
-			for o.orderBook == nil {
+			for {
+				o.orderBookMu.RLock()
+				ready := o.orderBook != nil
+				o.orderBookMu.RUnlock()
+				if ready {
+					break
+				}
 				o.log.Warnf("[ORACLE-LIFECYCLE] Oracle waiting for order book")
-				time.Sleep(1 * time.Second)
+				select {
+				case <-ctx.Done():
+					o.log.Info("[ORACLE-LIFECYCLE] Oracle context cancelled while waiting for order book")
+					return
+				case <-time.After(1 * time.Second):
+				}
+			}
+			if ctx.Err() != nil {
+				o.log.Info("[ORACLE-LIFECYCLE] Oracle context cancelled before provider start")
+				return
 			}
 			// listen for blocks
 			// only pass syncCh on the first run to avoid closing it multiple times
@@ -252,15 +279,6 @@ func (o *Oracle) run(ctx context.Context, syncCh chan<- bool) lib.ErrorI {
 		case <-ctx.Done():
 			// context cancelled, stop the goroutine
 			o.log.Info("[ORACLE-LIFECYCLE] Oracle context cancelled, stopping block processing")
-			// notify that oracle is no longer synced when shutting down
-			if syncCh != nil {
-				select {
-				case syncCh <- false:
-					o.log.Info("[ORACLE-LIFECYCLE] Oracle sync status set to false on shutdown")
-				default:
-					// channel full or closed, continue shutdown
-				}
-			}
 			return nil
 		}
 	}
@@ -327,7 +345,9 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 
 	sellOrderDataHex := common.BytesToAddress(sellOrder.Data).String()
 	if sellOrderDataHex != tx.To() {
-		fmt.Println(sellOrderDataHex, tx.To())
+		if o.log != nil {
+			o.log.Debugf("[ORACLE-VALIDATE] close order recipient mismatch: sellOrderData=%s txTo=%s", sellOrderDataHex, tx.To())
+		}
 		o.metrics.IncrementValidationFailure("close_data_mismatch")
 		return ErrOrderValidation("sell order data field does not match transaction recipient")
 	}
@@ -359,11 +379,16 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 		o.metrics.IncrementValidationFailure("amount_nil")
 		return ErrOrderValidation("token transfer amount cannot be nil")
 	}
+	// ensure transfer amount is non-negative
+	if tokenTransfer.TokenBaseAmount.Sign() < 0 {
+		o.metrics.IncrementValidationFailure("amount_negative")
+		return ErrOrderValidation("token transfer amount cannot be negative")
+	}
 	// ensure the correct amount was transferred
-	if tokenTransfer.TokenBaseAmount.Uint64() != sellOrder.RequestedAmount {
+	if !tokenTransfer.TokenBaseAmount.IsUint64() || tokenTransfer.TokenBaseAmount.Uint64() != sellOrder.RequestedAmount {
 		o.metrics.IncrementValidationFailure("amount_mismatch")
-		return ErrOrderValidation(fmt.Sprintf("transfer amount %d does not match requested amount %d",
-			tokenTransfer.TokenBaseAmount.Uint64(), sellOrder.RequestedAmount))
+		return ErrOrderValidation(fmt.Sprintf("transfer amount %s does not match requested amount %d",
+			tokenTransfer.TokenBaseAmount.String(), sellOrder.RequestedAmount))
 	}
 	return nil
 }
@@ -645,6 +670,11 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if o == nil {
 		return
 	}
+	// ignore nil root chain updates to avoid nil dereference panics
+	if info == nil {
+		o.log.Warn("[ORACLE-ORDERBOOK] Root chain info was nil")
+		return
+	}
 	// track timing for metrics
 	startTime := time.Now()
 	// track pruned orders and store errors for metrics
@@ -699,7 +729,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		switch {
 		case order == nil:
 			o.log.Infof("[ORACLE-ORDERBOOK] Order %x no longer in order book, removing lock order from store", id)
-		case order.BuyerSendAddress != nil:
+		case order.IsLocked():
 			o.log.Infof("[ORACLE-ORDERBOOK] Order %x is locked in order book, removing lock order from store", order.Id)
 		default:
 			// neither condition was met, do not remove this order
@@ -829,15 +859,6 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			if !o.state.shouldSubmit(wOrder, rootHeight, o.config) {
 				// shouldSubmit logs the specific reason internally
 				stats.closeHeldDelay++
-				continue
-			}
-			// update the last height this order was submitted
-			wOrder.LastSubmitHeight = rootHeight
-			// update the witnessed order in the store
-			err = o.orderStore.WriteOrder(wOrder, types.CloseOrderType)
-			if err != nil {
-				o.log.Errorf("[ORACLE-SUBMIT] Failed to write close order %s: %v", orderId, err)
-				o.metrics.UpdateOracleStoreErrorMetrics(1, 0, 0)
 				continue
 			}
 			o.log.Infof("[ORACLE-SUBMIT] Submitting close order %s (witnessed=%d)", orderId, wOrder.WitnessedHeight)

@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -55,11 +56,57 @@ type WitnessedOrder struct {
 	// Witnessed height on the source block chain (ethereum, solana, etc)
 	WitnessedHeight uint64 `json:"witnessedHeight"`
 	// last canopy root chain height this order was submitted
-	LastSubmitHeight uint64 `json:"lastSubmightHeight"`
+	LastSubmitHeight uint64 `json:"lastSubmitHeight"`
 	// Witnessed lock order
 	LockOrder *lib.LockOrder `json:"lockOrder,omitempty"`
 	// Witnessed close order
 	CloseOrder *lib.CloseOrder `json:"closeOrder,omitempty"`
+}
+
+// MarshalJSON emits the canonical json key `lastSubmitHeight`.
+func (w WitnessedOrder) MarshalJSON() ([]byte, error) {
+	type witnessedOrderJSON struct {
+		OrderID          lib.HexBytes    `json:"orderId"`
+		WitnessedHeight  uint64          `json:"witnessedHeight"`
+		LastSubmitHeight uint64          `json:"lastSubmitHeight"`
+		LockOrder        *lib.LockOrder  `json:"lockOrder,omitempty"`
+		CloseOrder       *lib.CloseOrder `json:"closeOrder,omitempty"`
+	}
+	return json.Marshal(witnessedOrderJSON{
+		OrderID:          w.OrderId,
+		WitnessedHeight:  w.WitnessedHeight,
+		LastSubmitHeight: w.LastSubmitHeight,
+		LockOrder:        w.LockOrder,
+		CloseOrder:       w.CloseOrder,
+	})
+}
+
+// UnmarshalJSON accepts both `lastSubmitHeight` (canonical) and the legacy typo
+// `lastSubmightHeight` for backward compatibility with existing stored orders.
+func (w *WitnessedOrder) UnmarshalJSON(data []byte) error {
+	type witnessedOrderJSON struct {
+		OrderID              lib.HexBytes    `json:"orderId"`
+		WitnessedHeight      uint64          `json:"witnessedHeight"`
+		LastSubmitHeight     *uint64         `json:"lastSubmitHeight,omitempty"`
+		LegacySubmightHeight *uint64         `json:"lastSubmightHeight,omitempty"`
+		LockOrder            *lib.LockOrder  `json:"lockOrder,omitempty"`
+		CloseOrder           *lib.CloseOrder `json:"closeOrder,omitempty"`
+	}
+	var dec witnessedOrderJSON
+	if err := json.Unmarshal(data, &dec); err != nil {
+		return err
+	}
+	w.OrderId = dec.OrderID
+	w.WitnessedHeight = dec.WitnessedHeight
+	w.LockOrder = dec.LockOrder
+	w.CloseOrder = dec.CloseOrder
+	w.LastSubmitHeight = 0
+	if dec.LastSubmitHeight != nil {
+		w.LastSubmitHeight = *dec.LastSubmitHeight
+	} else if dec.LegacySubmightHeight != nil {
+		w.LastSubmitHeight = *dec.LegacySubmightHeight
+	}
+	return nil
 }
 
 // String returns a formatted string representation of WitnessedOrder

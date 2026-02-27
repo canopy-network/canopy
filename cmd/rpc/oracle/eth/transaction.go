@@ -59,10 +59,10 @@ func NewTransaction(ethTx *ethtypes.Transaction, chainId uint64) (*Transaction, 
 	if ethTx.To() != nil {
 		// set to address
 		tx.to = ethTx.To().Hex()
-	}
-	// validate address format
-	if !common.IsHexAddress(tx.to) {
-		return nil, &InvalidAddressError{Address: tx.to}
+		// validate address format
+		if !common.IsHexAddress(tx.to) {
+			return nil, &InvalidAddressError{Address: tx.to}
+		}
 	}
 	// extract sender address using latest signer
 	from, err := ethtypes.Sender(ethtypes.LatestSignerForChainID(big.NewInt(int64(chainId))), ethTx)
@@ -118,8 +118,6 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 		// not an erc20 transfer - normal condition
 		return nil
 	}
-	// fmt.Println("checking", t.from, recipient, amount, string(data), err)
-	// fmt.Println("checking", t.from == recipient, amount.Cmp(big.NewInt(0)))
 	// all Canopy swap ERC20 transfers have aux data
 	if len(data) == 0 {
 		// no data to process - not a canopy swap ERC20 transfer
@@ -138,7 +136,6 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 			// erc20 transaction did not contain canopy lock order json - normal condition
 			return err
 		}
-		fmt.Println("validated lock order", t.from, recipient, amount, string(data), err)
 		order := &lib.LockOrder{}
 		// unmarshal the validated json data
 		err = order.UnmarshalJSON(data)

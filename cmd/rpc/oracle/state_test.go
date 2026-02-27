@@ -190,6 +190,14 @@ func TestOracleState_ValidateSequence(t *testing.T) {
 	}
 }
 
+func TestOracleState_ValidateSequence_FirstBlockInitializesSourceHeight(t *testing.T) {
+	state := NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger())
+	block := createTestBlock(42, "0xblock42", "0xblock41")
+
+	require.NoError(t, state.ValidateSequence(block))
+	require.Equal(t, uint64(42), state.sourceChainHeight)
+}
+
 func TestOracleState_shouldSubmit(t *testing.T) {
 	tests := []struct {
 		name                     string

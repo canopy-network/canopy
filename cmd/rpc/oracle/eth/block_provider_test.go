@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -96,6 +97,37 @@ func setupTokenCache(address common.Address, token types.TokenInfo) *ERC20TokenC
 	cache := NewERC20TokenCache(&mockEthClient{}, nil)
 	cache.cache.Put(address.Hex(), token)
 	return cache
+}
+
+func TestEthBlockProvider_processTransaction_ClearsOrderOnFailedReceipt(t *testing.T) {
+	tx := createTestTransaction(transactionConfig{
+		contractAddress: common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		isERC20:         false,
+	})
+	tx.order = &types.WitnessedOrder{
+		OrderId: []byte("order1"),
+		LockOrder: &lib.LockOrder{
+			OrderId:             []byte("order1"),
+			BuyerReceiveAddress: []byte("buyer-receive"),
+		},
+	}
+
+	provider := &EthBlockProvider{
+		rpcClient: &mockEthClient{
+			receipts: map[common.Hash]*ethtypes.Receipt{
+				tx.tx.Hash(): {Status: 0},
+			},
+		},
+		logger: lib.NewDefaultLogger(),
+	}
+
+	err := provider.processTransaction(context.Background(), &Block{number: 100}, tx)
+	if err != nil {
+		t.Fatalf("processTransaction() returned unexpected error: %v", err)
+	}
+	if tx.order != nil {
+		t.Fatalf("expected tx.order to be cleared after failed receipt, got %+v", tx.order)
+	}
 }
 
 func TestEthBlockProvider_fetchBlock(t *testing.T) {
@@ -335,6 +367,41 @@ func TestEthBlockProvider_processBlocks(t *testing.T) {
 				t.Errorf("expected return value %s, got %s", tt.expectedNext.String(), resultNext.String())
 			}
 		})
+	}
+}
+
+func TestEthBlockProvider_processBlocks_CanceledContextUnblocksChannelSend(t *testing.T) {
+	blocks := map[uint64]*ethtypes.Block{
+		1: createEthereumBlock(1, []*ethtypes.Transaction{}),
+	}
+	provider := &EthBlockProvider{
+		rpcClient: &mockEthClient{
+			blocks: blocks,
+		},
+		logger:    lib.NewDefaultLogger(),
+		chainId:   1,
+		config:    lib.EthBlockProviderConfig{},
+		blockChan: make(chan types.BlockI),
+		heightMu:  &sync.Mutex{},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan *big.Int, 1)
+	go func() {
+		done <- provider.processBlocks(ctx, big.NewInt(1), big.NewInt(1))
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case next := <-done:
+		if next.Cmp(big.NewInt(1)) != 0 {
+			t.Fatalf("expected next height 1 after canceled send, got %s", next.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("processBlocks did not return after context cancellation")
 	}
 }
 

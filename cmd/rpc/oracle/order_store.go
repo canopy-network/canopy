@@ -245,7 +245,7 @@ func (e *OracleDiskStorage) GetAllOrderIds(orderType types.OrderType) ([][]byte,
 		return nil, ErrVerifyOrder(fmt.Errorf("invalid order type: %s", orderType))
 	}
 	// read directory contents
-	entries, err := os.ReadDir(e.storagePath)
+	entries, err := os.ReadDir(e.absStoragePath)
 	if err != nil {
 		return nil, ErrReadOrder(err)
 	}

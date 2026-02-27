@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -8,7 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -203,6 +206,29 @@ type mockBlock struct {
 	hash         string
 	parentHash   string
 	transactions []types.TransactionI
+}
+
+type mockBlockProvider struct {
+	blockCh     chan types.BlockI
+	synced      bool
+	startCalls  atomic.Int32
+	startSignal chan struct{}
+	startOnce   sync.Once
+}
+
+func (m *mockBlockProvider) Start(context.Context, uint64) {
+	m.startCalls.Add(1)
+	if m.startSignal != nil {
+		m.startOnce.Do(func() { close(m.startSignal) })
+	}
+}
+
+func (m *mockBlockProvider) BlockCh() chan types.BlockI {
+	return m.blockCh
+}
+
+func (m *mockBlockProvider) IsSynced() bool {
+	return m.synced
 }
 
 func (m *mockBlock) Number() uint64 {
@@ -752,6 +778,38 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 	}
 }
 
+func TestOracle_WitnessedOrders_DoesNotPersistCloseSubmitHeightPreCommit(t *testing.T) {
+	const orderID = "close-precommit"
+	const lastSubmitHeight = uint64(7)
+
+	store := createOrderStore(&types.WitnessedOrder{
+		OrderId:          []byte(orderID),
+		WitnessedHeight:  1,
+		LastSubmitHeight: lastSubmitHeight,
+		CloseOrder: &lib.CloseOrder{
+			OrderId:    []byte(orderID),
+			ChainId:    1,
+			CloseOrder: true,
+		},
+	})
+	orderBook := createOrderBook(createSellOrder(orderID, "0x1234567890123456789012345678901234567890", "buyer-receive"))
+	logger := lib.NewDefaultLogger()
+	oracle := &Oracle{
+		orderStore: store,
+		state:      NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), logger),
+		log:        logger,
+	}
+	oracle.state.safeHeight = 10
+	oracle.state.sourceChainHeight = 10
+
+	_, closeOrders, _ := oracle.WitnessedOrders(orderBook, 100)
+	require.Len(t, closeOrders, 1)
+
+	stored, err := store.ReadOrder([]byte(orderID), types.CloseOrderType)
+	require.NoError(t, err)
+	require.Equal(t, lastSubmitHeight, stored.LastSubmitHeight)
+}
+
 func TestOracle_UpdateRootChainInfo(t *testing.T) {
 	// Test data builders
 	newSellOrder := func(id string) *lib.SellOrder {
@@ -861,6 +919,144 @@ func TestOracle_UpdateRootChainInfo(t *testing.T) {
 			assertOrderIds(t, "close", ids, tt.expectedClose)
 		})
 	}
+}
+
+func TestOracle_UpdateRootChainInfo_NilInfo(t *testing.T) {
+	oracle := &Oracle{
+		orderStore: NewMockOrderStore(),
+		state:      NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger()),
+		log:        lib.NewDefaultLogger(),
+	}
+	require.NotPanics(t, func() {
+		oracle.UpdateRootChainInfo(nil)
+	})
+}
+
+func TestOracle_UpdateRootChainInfo_LockPruneUsesIsLocked(t *testing.T) {
+	mockStore := NewMockOrderStore()
+	require.NoError(t, mockStore.WriteOrder(createWitnessedLockOrder("lock1"), types.LockOrderType))
+
+	oracle := &Oracle{
+		orderStore: mockStore,
+		state:      NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger()),
+		log:        lib.NewDefaultLogger(),
+	}
+
+	// BuyerSendAddress alone should not mark the order as locked.
+	oracle.UpdateRootChainInfo(&lib.RootChainInfo{
+		Orders: &lib.OrderBook{
+			Orders: []*lib.SellOrder{
+				{
+					Id:               []byte("lock1"),
+					BuyerSendAddress: []byte("buyer-send-only"),
+				},
+			},
+		},
+	})
+	ids, err := mockStore.GetAllOrderIds(types.LockOrderType)
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+
+	// BuyerReceiveAddress indicates a locked order and should trigger prune.
+	oracle.UpdateRootChainInfo(&lib.RootChainInfo{
+		Orders: &lib.OrderBook{
+			Orders: []*lib.SellOrder{
+				{
+					Id:                  []byte("lock1"),
+					BuyerReceiveAddress: []byte("buyer-receive"),
+				},
+			},
+		},
+	})
+	ids, err = mockStore.GetAllOrderIds(types.LockOrderType)
+	require.NoError(t, err)
+	require.Empty(t, ids)
+}
+
+func TestOracle_Run_CanceledContextWithClosedSyncCh_NoPanic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	syncCh := make(chan bool)
+	close(syncCh)
+
+	oracle := &Oracle{
+		blockProvider: &mockBlockProvider{blockCh: make(chan types.BlockI)},
+		orderStore:    NewMockOrderStore(),
+		state:         NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger()),
+		log:           lib.NewDefaultLogger(),
+	}
+
+	require.NotPanics(t, func() {
+		err := oracle.run(ctx, syncCh)
+		require.Nil(t, err)
+	})
+}
+
+func TestOracle_Start_CanceledWhileWaitingForOrderBook_DoesNotStartProvider(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := &mockBlockProvider{
+		blockCh:     make(chan types.BlockI),
+		startSignal: make(chan struct{}),
+	}
+
+	oracle := &Oracle{
+		blockProvider: provider,
+		orderStore:    NewMockOrderStore(),
+		state:         NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger()),
+		log:           lib.NewDefaultLogger(),
+	}
+
+	oracle.Start(ctx, nil)
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	// Simulate delayed order book availability after cancellation.
+	oracle.orderBookMu.Lock()
+	oracle.orderBook = &lib.OrderBook{}
+	oracle.orderBookMu.Unlock()
+
+	select {
+	case <-provider.startSignal:
+		t.Fatal("block provider started despite canceled context")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	require.Equal(t, int32(0), provider.startCalls.Load())
+}
+
+func TestOracle_reorgRollback_UnderflowProtection(t *testing.T) {
+	store := NewMockOrderStore()
+	lockOrder := createWitnessedLockOrder("lock-underflow")
+	lockOrder.WitnessedHeight = 5
+	closeOrder := createWitnessedCloseOrder("close-underflow", 1)
+	closeOrder.WitnessedHeight = 7
+	require.NoError(t, store.WriteOrder(lockOrder, types.LockOrderType))
+	require.NoError(t, store.WriteOrder(closeOrder, types.CloseOrderType))
+
+	oracle := &Oracle{
+		orderStore: store,
+		state:      NewOracleState(filepath.Join(t.TempDir(), "oracle.state"), lib.NewDefaultLogger()),
+		log:        lib.NewDefaultLogger(),
+		config: lib.OracleConfig{
+			ReorgRollbackBlocks: 60,
+		},
+	}
+	// persist a last processed height below rollback delta to reproduce the underflow path.
+	require.NoError(t, oracle.state.saveState(&mockBlock{
+		number:     10,
+		hash:       "10",
+		parentHash: "9",
+	}))
+
+	oracle.reorgRollback()
+
+	lockIds, err := store.GetAllOrderIds(types.LockOrderType)
+	require.NoError(t, err)
+	require.Empty(t, lockIds)
+	closeIds, err := store.GetAllOrderIds(types.CloseOrderType)
+	require.NoError(t, err)
+	require.Empty(t, closeIds)
 }
 
 func assertOrderIds(t *testing.T, orderType string, actual [][]byte, expected []string) {
@@ -1398,6 +1594,29 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name:       "overflow-wrapped amount must fail",
+			closeOrder: baseCloseOrder,
+			sellOrder: &lib.SellOrder{
+				Id:                   baseOrderId,
+				Committee:            baseChainId,
+				RequestedAmount:      1,
+				Data:                 baseTo.Bytes(),
+				SellerReceiveAddress: baseSellerReceiveAddress,
+			},
+			tx: &mockTransaction{
+				to: baseTo.String(),
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount: new(big.Int).Add(
+						new(big.Int).SetUint64(1),
+						new(big.Int).Lsh(big.NewInt(1), 64),
+					),
+					RecipientAddress: baseSellerReceiveAddressHex,
+				},
+			},
+			expectError: true,
+			errorMsg:    "transfer amount 18446744073709551617 does not match requested amount 1",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1522,7 +1741,11 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			name: "USDT close order validation with exact amount match",
 			orderBook: createOrderBook(
 				// USDT with 6 decimals: 100 USDT = 100,000,000 base units
-				createSellOrderWithSellerAddr(usdtOrderId, buyerReceiveAddress, sellerReceiveAddress),
+				func() *lib.SellOrder {
+					order := createSellOrder(usdtOrderId, usdtContract, buyerReceiveAddress)
+					order.SellerReceiveAddress = []byte(sellerReceiveAddress)
+					return order
+				}(),
 			),
 			witnessedOrders: []*types.WitnessedOrder{
 				createWitnessedCloseOrder(usdtOrderId, 1),
@@ -1558,6 +1781,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				log:        lib.NewDefaultLogger(),
 				metrics:    nil, // Metrics methods are nil-safe
 			}
+			closeRecipientHex := fmt.Sprintf("%x", []byte(sellerReceiveAddress))
 
 			// Process block with transactions
 			if len(tt.transactions) > 0 {
@@ -1565,6 +1789,31 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 				// Update sell orders with requested amounts for close order validation
 				for _, order := range tt.orderBook.Orders {
 					order.RequestedAmount = 100000000 // 100 tokens with 6 decimals
+					order.Committee = oracle.committee
+					if len(order.SellerReceiveAddress) == 0 {
+						order.SellerReceiveAddress = []byte(sellerReceiveAddress)
+					}
+				}
+				// Normalize test fixtures for committee and close-order transfer checks.
+				for _, tx := range tt.transactions {
+					mt, ok := tx.(*mockTransaction)
+					if !ok || mt.order == nil {
+						continue
+					}
+					if mt.order.LockOrder != nil && mt.order.LockOrder.ChainId == 0 {
+						mt.order.LockOrder.ChainId = oracle.committee
+					}
+					if mt.order.CloseOrder != nil {
+						if mt.order.CloseOrder.ChainId == 0 {
+							mt.order.CloseOrder.ChainId = oracle.committee
+						}
+						if mt.tokenTransfer.TokenBaseAmount == nil {
+							mt.tokenTransfer.TokenBaseAmount = big.NewInt(100000000)
+						}
+						if mt.tokenTransfer.RecipientAddress == "" {
+							mt.tokenTransfer.RecipientAddress = closeRecipientHex
+						}
+					}
 				}
 				err := oracle.processBlock(block)
 				if err != nil {
