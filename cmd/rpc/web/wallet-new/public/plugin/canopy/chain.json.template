@@ -1,0 +1,325 @@
+{
+  "version": "1",
+  "chainId": "1",
+  "displayName": "Canopy",
+  "denom": {
+    "base": "ucnpy",
+    "symbol": "CNPY",
+    "decimals": 6
+  },
+  "rpc": {
+    "base": "/rpc",
+    "admin": "/adminrpc",
+    "root": "/rootrpc"
+  },
+  "explorer": "/explorer",
+  "address": {
+    "format": "evm"
+  },
+  "ds": {
+    "height": {
+      "source": { "base": "rpc", "path": "/v1/query/height", "method": "POST" },
+      "selector": "",
+      "coerce": { "response": { "": "int" } }
+
+    },
+    "account": {
+      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST" },
+      "body": { "height": 0, "address": "{{account.address}}" },
+      "coerce": { "body": { "height": "number" }, "response": { "amount": "number" } },
+      "selector": ""
+    },
+    "accountByHeight": {
+      "source": { "base": "rpc", "path": "/v1/query/account", "method": "POST",
+        "encoding": "text"
+      },
+      "body": { "height": "{{height}}", "address": "{{address}}" },
+      "coerce": { "ctx": { "height": "number" }, "body": { "height": "number" }, "response": { "amount": "number" }},
+      "selector": "amount"
+    },
+    "keystore": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore", "method": "GET" },
+      "selector": ""
+    },
+    "keystoreNewKey": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-new-key", "method": "POST" },
+      "body": { "nickname": "{{nickname}}", "password": "{{password}}" }
+    },
+    "keystoreGet": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-get", "method": "POST" },
+      "body": { "address": "{{address}}", "password": "{{password}}", "nickname": "{{nickname}}", "submit": true }
+    },
+    "keystoreDelete": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-delete", "method": "POST" },
+      "body": { "nickname": "{{nickname}}" }
+    },
+    "validator": {
+      "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },
+      "body": { "height": "0", "address": "{{account.address}}" },
+      "coerce": { "body": { "height": "int" } },
+      "selector": ""
+    },
+    "validatorByHeight": {
+      "source": { "base": "rpc", "path": "/v1/query/validator", "method": "POST" },
+      "body": { "height": "{{height}}", "address": "{{address}}" },
+      "coerce": { "ctx": { "height": "number" }, "body": { "height": "int" } },
+      "selector": ""
+    },
+    "validators": {
+      "source": { "base": "rpc", "path": "/v1/query/validators", "method": "POST" },
+      "body": { "height": 0, "pageNumber": 1, "perPage": 1000 },
+      "coerce": { "body": { "height": "int" } },
+      "selector": "results"
+    },
+    "validatorSet": {
+      "source": { "base": "rpc", "path": "/v1/query/validator-set", "method": "POST" },
+      "body": { "height": "{{height}}", "id": "{{committeeId}}" },
+      "coerce": { "body": { "height": "int", "id": "int" } },
+      "selector": ""
+    },
+    "txs": {
+      "sent": {
+        "source": { "base": "rpc", "path": "/v1/query/txs-by-sender", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": {
+            "items": "results",
+            "totalPages": "paging.totalPages"
+          },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      },
+
+      "received": {
+        "source": { "base": "rpc", "path": "/v1/query/txs-by-rec", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      },
+      "failed": {
+        "source": { "base": "rpc", "path": "/v1/query/failed-txs", "method": "POST" },
+        "body": { "pageNumber": "{{page}}", "perPage": "{{perPage}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 20, "startPage": 1 }
+        }
+      }
+    },
+    "orders": {
+      "bySeller": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "sellersSendAddress": "{{account.address}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "body": {
+            "height": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "byCommittee": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "committee": "{{committee}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "byBuyer": {
+        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "body": {
+          "height": 0,
+          "buyerSendAddress": "{{account.address}}",
+          "committee": "{{committee}}",
+          "pageNumber": "{{page}}",
+          "perPage": "{{perPage}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int",
+            "pageNumber": "int",
+            "perPage": "int"
+          }
+        },
+        "selector": ""
+      },
+      "single": {
+        "source": { "base": "rpc", "path": "/v1/query/order", "method": "POST" },
+        "body": {
+          "height": 0,
+          "orderId": "{{orderId}}",
+          "committee": "{{committee}}"
+        },
+        "coerce": {
+          "ctx": { "committee": "int" },
+          "body": {
+            "height": "int",
+            "committee": "int"
+          }
+        },
+        "selector": ""
+      }
+    },
+
+    "activity": {
+      "all": {
+        "source": { "base": "rpc", "path": "/v1/query/activity", "method": "POST" },
+        "body": { "cursor": "{{cursor}}", "limit": "{{limit}}", "address": "{{account.address}}" },
+        "selector": "",
+        "page": {
+          "strategy": "cursor",
+          "param": { "cursor": "cursor", "limit": "limit" },
+          "response": { "items": "items", "nextCursor": "next" },
+          "defaults": { "limit": 50 }
+        }
+      }
+    },
+    "params": {
+      "source": { "base": "rpc", "path": "/v1/query/params", "method": "POST", "encoding": "text" },
+      "body": "{\"height\":0,\"address\":\"\"}"
+    },
+    "gov": {
+      "poll": {
+        "source": { "base": "rpc", "path": "/v1/gov/poll", "method": "GET" },
+        "selector": ""
+      },
+      "proposals": {
+        "source": { "base": "rpc", "path": "/v1/gov/proposals", "method": "GET" },
+        "selector": ""
+      }
+    },
+    "events": {
+      "byAddress": {
+        "source": { "base": "rpc", "path": "/v1/query/events-by-address", "method": "POST" },
+        "body": { "height": "{{height}}", "address": "{{address}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
+        "coerce": { "ctx": { "height": "number" }, "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
+        "selector": "results",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results", "totalPages": "paging.totalPages" },
+          "defaults": { "perPage": 100, "startPage": 1, "height": 0 }
+        }
+      },
+      "byHeight": {
+        "source": { "base": "rpc", "path": "/v1/query/events-by-height", "method": "POST" },
+        "body": { "height": "{{height}}", "pageNumber": "{{page}}", "perPage": "{{perPage}}" },
+        "coerce": { "ctx": { "height": "int" }, "body": { "height": "int", "pageNumber": "int", "perPage": "int" } },
+        "selector": "results",
+        "page": {
+          "strategy": "page",
+          "param": { "page": "pageNumber", "perPage": "perPage" },
+          "response": { "items": "results" },
+          "defaults": { "perPage": 100, "startPage": 1 }
+        }
+      }
+    },
+    "lastProposers": {
+      "source": { "base": "rpc", "path": "/v1/query/last-proposers", "method": "POST" },
+      "body": { "height": 0, "count": "{{count}}" },
+      "coerce": { "body": { "height": "int", "count": "int" } },
+      "selector": ""
+    },
+    "admin": {
+      "consensusInfo": {
+        "source": { "base": "admin", "path": "/v1/admin/consensus-info", "method": "GET" },
+        "selector": ""
+      },
+      "peerInfo": {
+        "source": { "base": "admin", "path": "/v1/admin/peer-info", "method": "GET" },
+        "selector": ""
+      },
+      "resourceUsage": {
+        "source": { "base": "admin", "path": "/v1/admin/resource-usage", "method": "GET" },
+        "selector": ""
+      },
+      "log": {
+        "source": { "base": "admin", "path": "/v1/admin/log", "method": "GET", "encoding": "text" },
+        "selector": ""
+      },
+      "config": {
+        "source": { "base": "admin", "path": "/v1/admin/config", "method": "GET" },
+        "selector": ""
+      },
+      "peerBook": {
+        "source": { "base": "admin", "path": "/v1/admin/peer-book", "method": "GET" },
+        "selector": ""
+      }
+    }
+  },
+  "params": {
+    "sources": [
+      {
+        "id": "networkParams",
+        "base": "rpc",
+        "path": "/v1/query/params",
+        "method": "POST",
+        "encoding": "text",
+        "body": "{\"height\":0,\"address\":\"\"}"
+      }
+    ],
+    "avgBlockTimeSec": 50,
+    "refresh": {
+      "staleTimeMs": 3000,
+      "refetchIntervalMs": 3000
+    }
+  },
+  "fees": {
+    "denom": "{{chain.denom.base}}",
+    "refreshMs": 500000,
+    "providers": [
+      {
+        "type": "query",
+        "base": "rpc",
+        "path": "/v1/query/params",
+        "method": "POST",
+        "encoding": "text",
+        "body": "{\"height\":0,\"address\":\"\"}",
+        "selector": "fee"
+      }
+    ],
+    "buckets": {
+      "avg": {
+        "multiplier": 1.0,
+        "default": true
+      }
+    }
+  },
+  "features": ["staking", "gov"],
+  "session": {
+    "unlockTimeoutSec": 900,
+    "rePromptSensitive": false,
+    "persistAcrossTabs": false
+  }
+}

@@ -1,0 +1,5489 @@
+{
+  "ui": {
+    "tx": {
+      "typeMap": {
+        "send": "Send",
+        "editStake": "Edit Stake",
+        "stake": "Stake",
+        "unstake": "Unstake",
+        "receive": "Receive",
+        "vote": "Vote",
+        "certificateResults": "Certificate Results",
+        "unpause": "Unpause",
+        "pause": "Pause",
+        "createProposal": "Create Proposal",
+        "changeParam": "Change Parameter",
+        "daoTransfer": "DAO Transfer",
+        "deleteVote": "Remove Vote",
+        "votePoll": "Vote Poll",
+        "createPoll": "Create Poll",
+        "createOrder": "Create Order",
+        "editOrder": "Reprice Order",
+        "deleteOrder": "Void Order",
+        "lockOrder": "Lock Order",
+        "closeOrder": "Close Order",
+        "dexLimitOrder": "DEX Limit Order",
+        "dexLiquidityDeposit": "DEX Liquidity Deposit",
+        "dexLiquidityWithdraw": "DEX Liquidity Withdraw"
+      },
+      "typeIconMap": {
+        "editStake": "Lock",
+        "send": "Send",
+        "stake": "Lock",
+        "certificateResults": "ShieldCheck",
+        "unstake": "Unlock",
+        "unpause": "Play",
+        "pause": "Pause",
+        "receive": "Download",
+        "vote": "Vote",
+        "createProposal": "FileText",
+        "changeParam": "Settings",
+        "daoTransfer": "Coins",
+        "deleteVote": "XCircle",
+        "votePoll": "CheckSquare",
+        "createPoll": "BarChart3",
+        "createOrder": "PlusCircle",
+        "editOrder": "Pencil",
+        "deleteOrder": "Trash2",
+        "lockOrder": "Lock",
+        "closeOrder": "CheckCircle2",
+        "dexLimitOrder": "ArrowLeftRight",
+        "dexLiquidityDeposit": "Droplets",
+        "dexLiquidityWithdraw": "CircleDashed"
+      },
+      "fundsWay": {
+        "editStake": "out",
+        "send": "out",
+        "stake": "out",
+        "unstake": "in",
+        "receive": "in",
+        "vote": "neutral",
+        "createProposal": "out",
+        "changeParam": "neutral",
+        "daoTransfer": "neutral",
+        "deleteVote": "neutral",
+        "votePoll": "neutral",
+        "createPoll": "neutral",
+        "createOrder": "out",
+        "editOrder": "neutral",
+        "deleteOrder": "neutral",
+        "lockOrder": "neutral",
+        "closeOrder": "neutral",
+        "dexLimitOrder": "neutral",
+        "dexLiquidityDeposit": "out",
+        "dexLiquidityWithdraw": "in"
+      }
+    }
+  },
+  "actions": [
+    {
+      "id": "send",
+      "title": "Send",
+      "icon": "Send",
+      "relatedActions": [
+        "receive"
+      ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": "always",
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "From Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "output",
+            "name": "output",
+            "type": "text",
+            "label": "To Address",
+            "required": true,
+            "length.min": 1,
+            "validation": {
+              "messages": {
+                "required": "Destination address is required",
+                "length.min": "Invalid destination address"
+              }
+            },
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ],
+            "span": { "base": 12 }
+          },
+          {
+            "type": "divider",
+            "variant": "gradient",
+            "spacing": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0",
+                "max": "Insufficient balance. Maximum available: {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Available balance: {{formatToCoin<{{ds.account?.amount ?? 0}}>}} {{chain.denom.symbol}}",
+            "features": [
+              {
+                "id": "maxBtn",
+                "op": "set",
+                "field": "amount",
+                "label": "Max",
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) - fees.raw.sendFee}}> }}"
+              }
+            ],
+            "span": { "base": 12 }
+          }
+        ],
+        "info": {
+          "items": [
+            {
+              "label": "Network Fee",
+              "value": "{{formatToCoin<{{fees.raw.sendFee}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Estimation time",
+              "value": "≈ 20",
+              "icon": "Timer"
+            }
+          ]
+        },
+        "summary": {
+          "title": "Summary",
+          "items": [
+            {
+              "label": "Receiving Address",
+              "value": "{{form.address}}"
+            },
+            {
+              "label": "Asset",
+              "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})"
+            }
+          ]
+        },
+        "confirmation": {
+          "title": "Confirmations",
+          "summary": [
+            {
+              "label": "From",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            },
+            {
+              "label": "To",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{formatToCoin<{{fees.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Send"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": false,
+          "coerce": "boolean"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.sendFee}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-send",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "receive",
+      "title": "Receive",
+      "icon": "Scan",
+      "relatedActions": [
+        "send"
+      ],
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "variant": "modal",
+        "icon": "Send",
+        "hideSubmit": true,
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[20rem] md:max-w-[24rem]"
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "layout": {
+          "aside": {
+            "show": true,
+            "width": "w-[10rem]"
+          }
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Receiving Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "features": [
+              {
+                "id": "copyBtn",
+                "op": "copy",
+                "from": "{{account.address}}"
+              }
+            ]
+          },
+          {
+            "id": "asset",
+            "name": "asset",
+            "type": "text",
+            "label": "Asset",
+            "autoPopulate": "always",
+            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
+            "readOnly": true
+          }
+        ],
+        "info": {
+          "title": "Details",
+          "items": [
+            {
+              "label": "Only send {{chain.denom.symbol}} to this address.",
+              "icon": "Coins"
+            },
+            {
+              "label": "Allow 20 seconds for confirmation.",
+              "icon": "Timer"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stake",
+      "title": "Stake",
+      "icon": "Lock",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}"
+          },
+          "__options": {
+            "enabled": "{{ (form.signerResponsible === 'operator' && form.operator) || (form.signerResponsible === 'reward' && form.output) }}"
+          }
+        },
+        "validator": {
+          "account": {
+            "address": "{{form.operator}}"
+          },
+          "__options": {
+            "enabled": "{{ form.operator }}"
+          }
+        },
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "watch": [
+            "form.operator",
+            "form.output",
+            "form.signerResponsible"
+          ],
+          "critical": ["keystore"]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": ""
+          }
+        }
+      },
+      "tags": [
+        "quick"
+      ],
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "setup",
+              "title": "Setup"
+            },
+            {
+              "id": "committees",
+              "title": "Committees"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "type": "heading",
+            "text": "Addresses",
+            "level": 3,
+            "color": "secondary",
+            "span": { "base": 12 },
+            "step": "setup"
+          },
+          {
+            "id": "operator",
+            "span": {
+              "base": 12
+            },
+            "name": "operator",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Staking (Operator) Address",
+            "placeholder": "Select Staking Address",
+            "required": true,
+            "value": "{{ params.operator || '' }}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Operator address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "step": "setup"
+          },
+          {
+            "type": "section",
+            "title": "Validator Information",
+            "description": "Staked: {{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}} • Committees: {{ds.validator.committees ?? 'N/A'}} • Type: {{ ds.validator.delegate ? 'Delegation' : 'Validation' }}",
+            "icon": "Info",
+            "variant": "default",
+            "showIf": "{{ form.operator && ds.validator }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 },
+            "step": "setup"
+          },
+          {
+            "id": "output",
+            "span": {
+              "base": 12
+            },
+            "name": "output",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Rewards Address",
+            "placeholder": "Select Rewards Address",
+            "required": true,
+            "validation": {
+              "messages": {
+                "required": "Rewards address is required"
+              }
+            },
+            "value": "{{ ds.validator ? ds.validator.output : '' }}",
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "step": "setup"
+          },
+          {
+            "id": "signerResponsible",
+            "name": "signerResponsible",
+            "type": "option",
+            "label": "Signer Address",
+            "required": true,
+            "value": "operator",
+            "autoPopulate": "once",
+            "inLine": true,
+            "borders": false,
+            "options": [
+              {
+                "label": "Operator",
+                "value": "operator",
+                "help": "Staked Address"
+              },
+              {
+                "label": "Reward",
+                "value": "reward",
+                "help": "Output Address"
+              }
+            ],
+            "step": "setup"
+          },
+          {
+            "type": "section",
+            "title": "Signer Account Balance: {{formatToCoin<{{ds.account.amount ?? 0}}>}} {{chain.denom.symbol}}",
+            "description": "Available balance for transaction fees and additional stake",
+            "icon": "Wallet",
+            "variant": "info",
+            "showIf": "{{ form.signerResponsible && form.operator && form.output }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "divider",
+            "label": "Stake Amount",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 },
+            "step": "setup"
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "placeholder": "0.00",
+            "label": "{{ ds.validator ? 'New Stake Amount (optional)' : 'Amount' }}",
+            "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
+            "autoPopulate": "once",
+            "required": "{{ !ds.validator }}",
+            "min": 0,
+            "max": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}> }}",
+            "help": "{{ ds.validator ? 'For edit stake: if you enter an amount lower/equal to current stake, blockchain keeps current stake and only updates settings (committees/output/compound).' : 'Amount to lock for a new validator/delegation. Blockchain enforces minimum stake.' }}",
+            "validation": {
+              "min": 0,
+              "messages": {
+                "required": "Amount is required for new stakes",
+                "min": "Amount must be greater than or equal to {{min}} {{chain.denom.symbol}}",
+                "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "features": [
+              {
+                "id": "max",
+                "op": "set",
+                "field": "amount",
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0) - fees.raw.stakeFee}}> }}"
+              }
+            ],
+            "span": {
+              "base": 12
+            },
+            "step": "setup"
+          },
+          {
+            "type": "section",
+            "title": "Current Stake: {{numberToLocaleString<{{fromMicroDenom<{{ds.validator.stakedAmount}}>}}>}} CNPY",
+            "description": "Edit stake follows blockchain behavior: amount <= current stake will not decrease locked stake; it only applies configuration updates.",
+            "icon": "TrendingUp",
+            "variant": "success",
+            "showIf": "{{ ds.validator }}",
+            "step": "setup",
+            "span": {
+              "base": 12
+            }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 },
+            "step": "setup",
+            "showIf": "{{ ds.validator }}"
+          },
+          {
+            "id": "isDelegate",
+            "name": "isDelegate",
+            "type": "optionCard",
+            "label": "Stake Type",
+            "required": true,
+            "value": "{{ ds.validator ? ds.validator.delegate : false }}",
+            "autoPopulate": "once",
+            "options": [
+              {
+                "label": "Validation",
+                "value": false,
+                "help": "Run your own validator",
+                "toolTip": "This will run your own validator on the network."
+              },
+              {
+                "label": "Delegation",
+                "value": true,
+                "help": "Delegate to committee",
+                "toolTip": "This will delegate your tokens to a committee."
+              }
+            ],
+            "step": "setup"
+          },
+          {
+            "id": "isAutocompound",
+            "name": "isAutocompound",
+            "type": "switch",
+            "help": "Automatically restake rewards",
+            "label": "Autocompound",
+            "value": "{{ ds.validator ? ds.validator.compound === true : false }}",
+            "autoPopulate": "once",
+            "step": "setup"
+          },
+          {
+            "type": "section",
+            "title": "About Committees",
+            "description": "Select the committees you want to delegate to. You can select up to 15 committees per validator. Your stake will be distributed across all selected committees.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 },
+            "step": "committees"
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 },
+            "step": "committees"
+          },
+          {
+            "id": "selectCommittees",
+            "name": "selectCommittees",
+            "type": "tableSelect",
+            "label": "Select Committees",
+            "required": true,
+            "help": "Maximum 15 committees per validator.",
+            "validation": {
+              "max": 15,
+              "messages": {
+                "required": "Please select at least one committee",
+                "max": "Maximum 15 committees allowed per validator"
+              }
+            },
+            "multiple": true,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.selectCommittees || ds.validator?.committees || [] }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Staked Amount",
+                "type": "html",
+                "html": "{{ (() => { const isStaked = ds.validator?.committees?.includes(row.id); const isSelected = Array.isArray(form.selectCommittees) && (form.selectCommittees.includes(row.id) || form.selectCommittees.includes(String(row.id))); const amt = Number(form.amount) || 0; if (isStaked) { const current = ds.validator.stakedAmount / 1000000; const diff = amt - current; return '<span class=\"text-white font-medium\">' + current.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY <span class=\"text-emerald-400 text-xs font-semibold\">+ ' + (diff > 0 ? diff : 0).toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span></span>'; } else if (isSelected) { return '<span class=\"text-emerald-400 font-medium\">' + amt.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span>'; } else { return '<span class=\"text-neutral-400\">0 CNPY</span>'; } })() }}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ ds.validator?.committees?.includes(row.id) ? 'Staked' : 'Stake' }}",
+              "disabledIf": "{{ ds.validator?.committees?.includes(row.id) }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "step": "committees"
+          },
+          {
+            "id": "showAdvancedCommittees",
+            "name": "showAdvancedCommittees",
+            "type": "collapsibleGroup",
+            "title": "Advanced Options",
+            "description": "Manual committee configuration",
+            "icon": "Settings",
+            "variant": "default",
+            "defaultExpanded": false,
+            "step": "committees",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "manualCommittees",
+            "name": "manualCommittees",
+            "type": "text",
+            "label": "Committees IDs (manual override)",
+            "placeholder": "1,2,3",
+            "help": "Enter comma separated committee IDs to manually override selection",
+            "value": "{{ Array.isArray(form.selectCommittees) ? form.selectCommittees.join(',') : (ds.validator?.committees ? (Array.isArray(ds.validator.committees) ? ds.validator.committees.join(',') : ds.validator.committees) : '') }}",
+            "readOnly": false,
+            "showIf": "{{ form.showAdvancedCommittees }}",
+            "step": "committees"
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "showIf": "{{ form.isDelegate === false || form.isDelegate === 'false' }}",
+            "value": "{{ ds.validator?.netAddress ?? '' }}",
+            "autoPopulate": "once",
+            "placeholder": "tcp://127.0.0.1:xxxx",
+            "help": "Put the url of the validator you want to delegate to.",
+            "step": "committees"
+          },
+          {
+            "type": "divider",
+            "label": "Transaction Fee",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 },
+            "step": "committees"
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}",
+            "step": "committees"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirmations",
+          "summary": [
+            {
+              "label": "Staking (Operator) Address",
+              "value": "{{shortAddress<{{form.operator}}>}}"
+            },
+            {
+              "label": "Rewards Address",
+              "value": "{{shortAddress<{{form.output}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{form.signerResponsible == 'operator' ? 'Operator Address' : 'Rewards Address'}} | {{shortAddress<{{form.signerResponsible == 'operator' ? form.operator : form.output}}>}}"
+            },
+            {
+              "label": "{{ ds.validator ? 'Edit Stake' : 'New Stake' }}",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Transaction Type",
+              "value": "{{ds.validator ? 'Edit Stake' : 'New Stake'}}"
+            },
+            {
+              "label": "Committees IDs",
+              "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}"
+            },
+            {
+              "label": "Net Address",
+              "value": "{{(form?.isDelegate === false || form?.isDelegate === 'false') ? form.validatorAddress : ''}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btns": {
+            "submit": {
+              "icon": "Lock",
+              "label": "Stake"
+            }
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.operator}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "{{ ds.validator ? '' : account.pubKey }}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "{{(form?.isDelegate === false || form?.isDelegate === 'false') ? form.validatorAddress : ''}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{(() => { const entered = Number(form.amount ?? 0); const current = Number(fromMicroDenom(ds.validator?.stakedAmount ?? 0)); const effective = ds.validator ? Math.max(entered, current) : entered; return toMicroDenom(effective); })()}}",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "{{ ds.validator ? false : form.isDelegate }}",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "{{!form.isAutocompound}}",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "{{form.output}}",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerResponsible === 'operator' ? form.operator : form.output}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{ toMicroDenom<{{form.txFee}}> }}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "{{ ds.validator ? '/v1/admin/tx-edit-stake' : '/v1/admin/tx-stake' }}",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Send!",
+          "description": "{{result}}",
+          "actions": [
+            {
+              "type": "link",
+              "label": "Explorer",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "vote",
+      "title": "Vote on Proposal",
+      "icon": "Vote",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Voting Information",
+            "description": "Your vote will be recorded on-chain and cannot be changed after submission. Ensure you review the proposal details before voting.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "text",
+            "label": "Proposal ID",
+            "required": true,
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Proposal ID is required"
+              }
+            }
+          },
+          {
+            "type": "divider",
+            "label": "Your Decision",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "vote",
+            "name": "vote",
+            "type": "option",
+            "label": "Your Vote",
+            "required": true,
+            "span": { "base": 12 },
+            "options": [
+              {
+                "label": "Yes",
+                "value": "yes",
+                "help": "Vote in favor of the proposal"
+              },
+              {
+                "label": "No",
+                "value": "no",
+                "help": "Vote against the proposal"
+              },
+              {
+                "label": "Abstain",
+                "value": "abstain",
+                "help": "Abstain from voting"
+              }
+            ]
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "voterAddress",
+            "name": "voterAddress",
+            "type": "text",
+            "label": "Voter Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Vote",
+          "summary": [
+            {
+              "label": "Proposal ID",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Your Vote",
+              "value": "{{form.vote}}"
+            },
+            {
+              "label": "Voter Address",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckCircle",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "proposalId": {
+          "value": "{{form.proposalId}}",
+          "coerce": "number"
+        },
+        "vote": {
+          "value": "{{form.vote}}",
+          "coerce": "string"
+        },
+        "voterAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Vote Submitted!",
+          "description": "Your vote has been recorded",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "createProposal",
+      "title": "Create Proposal",
+      "icon": "FileText",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Proposal Requirements",
+            "description": "Proposals require a minimum deposit and will be open for community voting. Deposits are returned if the proposal passes or is rejected normally.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "heading",
+            "text": "Proposal Details",
+            "level": 3,
+            "color": "secondary",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "title",
+            "name": "title",
+            "type": "text",
+            "label": "Proposal Title",
+            "required": true,
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Title is required"
+              }
+            }
+          },
+          {
+            "id": "description",
+            "name": "description",
+            "type": "textarea",
+            "label": "Description",
+            "required": true,
+            "rows": 5,
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Description is required"
+              }
+            }
+          },
+          {
+            "type": "divider",
+            "label": "Submission Details",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposerAddress",
+            "name": "proposerAddress",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "deposit",
+            "name": "deposit",
+            "type": "amount",
+            "label": "Deposit Amount",
+            "required": true,
+            "min": 0,
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Deposit is required",
+                "min": "Deposit must be greater than 0"
+              }
+            },
+            "help": "Minimum deposit required to submit proposal"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Proposal",
+          "summary": [
+            {
+              "label": "Title",
+              "value": "{{form.title}}"
+            },
+            {
+              "label": "Description",
+              "value": "{{form.description}}"
+            },
+            {
+              "label": "Deposit",
+              "value": "{{numberToLocaleString<{{form.deposit}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Proposer",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Submit Proposal"
+          }
+        }
+      },
+      "payload": {
+        "title": {
+          "value": "{{form.title}}",
+          "coerce": "string"
+        },
+        "description": {
+          "value": "{{form.description}}",
+          "coerce": "string"
+        },
+        "proposerAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "deposit": {
+          "value": "{{toMicroDenom<{{form.deposit}}>}}",
+          "coerce": "number"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-create-proposal",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Created!",
+          "description": "Your proposal has been submitted",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "pauseValidator",
+      "title": "Pause Validator",
+      "icon": "Pause",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Pause Duration Limit",
+            "description": "Maximum pause duration: 4,380 blocks (~24.3 hours). If not unpaused within this period, the validator will be automatically unstaked.",
+            "icon": "AlertTriangle",
+            "variant": "warning",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to pause",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "divider",
+            "spacing": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this pause action",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.pauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Pause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Pause",
+            "label": "Pause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-pause",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "unpauseValidator",
+      "title": "Unpause Validator",
+      "icon": "Play",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "fees": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Resume Validator Operations",
+            "description": "This action will resume your validator's participation in consensus and block production. Make sure your node is fully synced before unpausing.",
+            "icon": "Info",
+            "variant": "success",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unpause",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "divider",
+            "spacing": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unpause action",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unpauseFee}}> }} {{chain.denom.symbol}}"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unpause Validator",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Play",
+            "label": "Unpause Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unpause",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "createPoll",
+      "title": "Create Poll",
+      "icon": "BarChart3",
+      "ds": {
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "About Polls",
+            "description": "Community polls allow validators and delegators to gauge sentiment on non-binding proposals. Results are publicly visible but do not execute on-chain actions.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "heading",
+            "text": "Poll Question",
+            "level": 3,
+            "color": "secondary",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "question",
+            "name": "question",
+            "type": "text",
+            "label": "Poll Question",
+            "required": true,
+            "placeholder": "What would you like to ask?",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Question is required"
+              }
+            }
+          },
+          {
+            "id": "description",
+            "name": "description",
+            "type": "textarea",
+            "label": "Description (Optional)",
+            "rows": 3,
+            "placeholder": "Provide additional context for the poll...",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "divider",
+            "label": "Configuration",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "duration",
+            "name": "duration",
+            "type": "option",
+            "label": "Poll Duration",
+            "required": true,
+            "value": "24",
+            "span": { "base": 12 },
+            "options": [
+              {
+                "label": "24 Hours",
+                "value": "24",
+                "help": "Poll ends in 1 day"
+              },
+              {
+                "label": "48 Hours",
+                "value": "48",
+                "help": "Poll ends in 2 days"
+              },
+              {
+                "label": "72 Hours",
+                "value": "72",
+                "help": "Poll ends in 3 days"
+              },
+              {
+                "label": "1 Week",
+                "value": "168",
+                "help": "Poll ends in 7 days"
+              }
+            ]
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "creatorAddress",
+            "name": "creatorAddress",
+            "type": "text",
+            "label": "Creator Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Poll Creation",
+          "summary": [
+            {
+              "label": "Question",
+              "value": "{{form.question}}"
+            },
+            {
+              "label": "Description",
+              "value": "{{form.description || 'No description'}}"
+            },
+            {
+              "label": "Duration",
+              "value": "{{form.duration}} hours"
+            },
+            {
+              "label": "Creator",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "BarChart3",
+            "label": "Create Poll"
+          }
+        }
+      },
+      "payload": {
+        "question": {
+          "value": "{{form.question}}",
+          "coerce": "string"
+        },
+        "description": {
+          "value": "{{form.description || ''}}",
+          "coerce": "string"
+        },
+        "duration": {
+          "value": "{{form.duration}}",
+          "coerce": "number"
+        },
+        "creatorAddress": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/gov-create-poll",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Poll Created!",
+          "description": "Your poll has been created successfully",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "unstake",
+      "title": "Unstake",
+      "icon": "Unlock",
+      "ds": {
+        "validator": {
+          "account": {
+            "address": "{{form.validatorAddress}}"
+          },
+          "__options": {
+            "enabled": "{{ form.validatorAddress }}"
+          }
+        },
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 0,
+          "refetchOnMount": true
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "validatorAddress",
+            "name": "validatorAddress",
+            "type": "text",
+            "label": "Validator Address",
+            "required": true,
+            "readOnly": true,
+            "help": "The address of the validator to unstake",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "section",
+            "title": "Validator Information",
+            "description": "Current Stake: {{formatToCoin<{{ds.validator.stakedAmount ?? 0}}>}} {{chain.denom.symbol}} • Committees: {{ds.validator.committees ?? 'N/A'}} • Type: {{ ds.validator.delegate ? 'Delegation' : 'Validation' }}",
+            "icon": "Info",
+            "variant": "default",
+            "showIf": "{{ form.validatorAddress && ds.validator }}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Signer Address",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "The address that will sign this transaction",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (Optional)",
+            "required": false,
+            "placeholder": "Add a note about this unstake action",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "txFee",
+            "name": "txFee",
+            "type": "amount",
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee}}> }} {{chain.denom.symbol}}",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Unstake",
+          "summary": [
+            {
+              "label": "Validator Address",
+              "value": "{{shortAddress<{{form.validatorAddress}}>}}"
+            },
+            {
+              "label": "Current Stake",
+              "value": "{{formatToCoin<{{ds.validator.stakedAmount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Withdrawal Type",
+              "value": "{{ form.earlyWithdrawal ? 'Early Withdrawal (with penalty)' : 'Normal Unstake' }}"
+            },
+            {
+              "label": "Signer Address",
+              "value": "{{shortAddress<{{form.signerAddress}}>}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Transaction Fee",
+              "value": "{{numberToLocaleString<{{form.txFee}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Unlock",
+            "label": "Unstake Validator"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.validatorAddress}}",
+          "coerce": "string"
+        },
+        "pubKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "netAddress": {
+          "value": "",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "0",
+          "coerce": "number"
+        },
+        "delegate": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "earlyWithdrawal": {
+          "value": "false",
+          "coerce": "boolean"
+        },
+        "output": {
+          "value": "",
+          "coerce": "string"
+        },
+        "signer": {
+          "value": "{{form.signerAddress}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.txFee}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": "true",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-unstake",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Unstake Successful!",
+          "description": "Your validator has been unstaked. Funds will be available after the unstaking period",
+          "actions": [
+            {
+              "type": "link",
+              "label": "View Transaction",
+              "href": "{{chain.explorer.tx}}/{{result}}",
+              "newTab": true
+            }
+          ]
+        },
+        "onError": {
+          "variant": "error",
+          "title": "Unstake Failed",
+          "description": "{{result.error || 'An error occurred while processing your unstake request.'}}",
+          "sticky": true
+        }
+      }
+    },
+    {
+      "id": "changeParam",
+      "title": "Change Parameter Proposal",
+      "icon": "Settings",
+      "ds": {
+        "height": {},
+        "params": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Proposal Requirements",
+            "description": "Parameter change proposals require +2/3 validator approval to pass. Ensure start/end heights allow sufficient voting time.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "parameterSpace",
+            "name": "parameterSpace",
+            "type": "option",
+            "label": "Parameter Space",
+            "required": true,
+            "value": "fee",
+            "options": [
+              {
+                "label": "Fee Parameters",
+                "value": "fee",
+                "help": "Transaction fee settings"
+              },
+              {
+                "label": "Consensus Parameters",
+                "value": "cons",
+                "help": "Consensus mechanism settings"
+              },
+              {
+                "label": "Validator Parameters",
+                "value": "val",
+                "help": "Validator-related settings"
+              },
+              {
+                "label": "Governance Parameters",
+                "value": "gov",
+                "help": "Governance mechanism settings"
+              },
+              {
+                "label": "Economics Parameters",
+                "value": "eco",
+                "help": "Economic model settings"
+              }
+            ],
+            "validation": {
+              "messages": {
+                "required": "Parameter space is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "parameterKey",
+            "name": "parameterKey",
+            "type": "text",
+            "label": "Parameter Key",
+            "required": true,
+            "placeholder": "Enter parameter key (e.g., sendFee, maxValidators)",
+            "help": "Available parameters will depend on the selected space",
+            "validation": {
+              "messages": {
+                "required": "Parameter key is required"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "parameterValue",
+            "name": "parameterValue",
+            "type": "text",
+            "label": "New Parameter Value",
+            "required": true,
+            "placeholder": "Enter new value",
+            "help": "The new value for this parameter",
+            "validation": {
+              "messages": {
+                "required": "Parameter value is required"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "type": "divider",
+            "label": "Voting Period",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "startHeight",
+            "name": "startHeight",
+            "type": "number",
+            "label": "Start Height",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "placeholder": "Block height to start voting",
+            "help": "Block height when voting begins",
+            "validation": {
+              "messages": {
+                "required": "Start height is required"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "endHeight",
+            "name": "endHeight",
+            "type": "number",
+            "label": "End Height",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
+            "placeholder": "Block height to end voting",
+            "help": "Block height when voting ends. Must be > start height and within 10,000 blocks.",
+            "validation": {
+              "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "required": "End height is required",
+                "min": "End height must be at least {{min}} (start height + 1).",
+                "max": "End height must be at most {{max}} (start height + 10,000)."
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Proposer (Validator Address)",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "Must be a validator address to create proposals",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Parameter Change Proposal",
+          "summary": [
+            {
+              "label": "Parameter Space",
+              "value": "{{form.parameterSpace}}"
+            },
+            {
+              "label": "Parameter Key",
+              "value": "{{form.parameterKey}}"
+            },
+            {
+              "label": "New Value",
+              "value": "{{form.parameterValue}}"
+            },
+            {
+              "label": "Voting Period",
+              "value": "Block {{form.startHeight}} to {{form.endHeight}}"
+            },
+            {
+              "label": "Proposer (Validator)",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Settings",
+            "label": "Submit Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "parameterSpace": {
+          "value": "{{form.parameterSpace}}",
+          "coerce": "string"
+        },
+        "parameterKey": {
+          "value": "{{form.parameterKey}}",
+          "coerce": "string"
+        },
+        "parameterValue": {
+          "value": "{{form.parameterValue}}",
+          "coerce": "string"
+        },
+        "startHeight": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endHeight": {
+          "value": "{{(() => { const s = Number(form.startHeight || resolveHeight(ds.height)); const eRaw = Number(form.endHeight); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "signer": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.changeParamFee ?? 0}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-change-param",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Parameter Change Proposal Submitted!",
+          "description": "Your proposal has been submitted for validator voting",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "daoTransfer",
+      "title": "DAO Treasury Transfer Proposal",
+      "icon": "Coins",
+      "ds": {
+        "height": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[45rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Treasury Proposal Requirements",
+            "description": "DAO treasury transfers require +2/3 validator approval to pass. Funds will be automatically transferred if proposal is approved.",
+            "icon": "Info",
+            "variant": "primary",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "heading",
+            "text": "Transfer Details",
+            "level": 3,
+            "color": "secondary",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Treasury Amount",
+            "required": true,
+            "min": 0.000001,
+            "placeholder": "Amount to transfer from DAO treasury",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "help": "Amount of {{chain.denom.symbol}} to request from DAO treasury"
+          },
+          {
+            "id": "recipientAddress",
+            "name": "recipientAddress",
+            "type": "text",
+            "label": "Recipient Address",
+            "required": true,
+            "placeholder": "Address to receive treasury funds",
+            "help": "The address that will receive the funds if proposal passes",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Recipient address is required"
+              }
+            },
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ]
+          },
+          {
+            "type": "divider",
+            "label": "Voting Period",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "startHeight",
+            "name": "startHeight",
+            "type": "number",
+            "label": "Start Height",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "placeholder": "Block height to start voting",
+            "help": "Block height when voting begins",
+            "span": { "base": 12, "md": 6 },
+            "validation": {
+              "messages": {
+                "required": "Start height is required"
+              }
+            }
+          },
+          {
+            "id": "endHeight",
+            "name": "endHeight",
+            "type": "number",
+            "label": "End Height",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
+            "placeholder": "Block height to end voting",
+            "help": "Block height when voting ends. Must be > start height and within 10,000 blocks.",
+            "span": { "base": 12, "md": 6 },
+            "validation": {
+              "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "required": "End height is required",
+                "min": "End height must be at least {{min}} (start height + 1).",
+                "max": "End height must be at most {{max}} (start height + 10,000)."
+              }
+            }
+          },
+          {
+            "type": "divider",
+            "spacing": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo / Justification",
+            "required": false,
+            "rows": 3,
+            "placeholder": "Provide justification for this treasury request...",
+            "help": "Explanation of why this transfer is needed",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "signerAddress",
+            "name": "signerAddress",
+            "type": "text",
+            "label": "Proposer Address (Validator)",
+            "value": "{{account.address}}",
+            "required": true,
+            "readOnly": true,
+            "help": "Must be a validator address to create proposals",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DAO Treasury Proposal",
+          "summary": [
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Recipient",
+              "value": "{{shortAddress<{{form.recipientAddress}}>}}"
+            },
+            {
+              "label": "Voting Period",
+              "value": "Block {{form.startHeight}} to {{form.endHeight}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            },
+            {
+              "label": "Proposer (Validator)",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Coins",
+            "label": "Submit Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.recipientAddress}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "startHeight": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endHeight": {
+          "value": "{{(() => { const s = Number(form.startHeight || resolveHeight(ds.height)); const eRaw = Number(form.endHeight); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "signer": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{fees.raw.daoTransferFee ?? 0}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dao-transfer",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DAO Transfer Proposal Submitted!",
+          "description": "Your treasury request has been submitted for validator voting",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "deleteVote",
+      "title": "Remove Vote from Proposal",
+      "icon": "XCircle",
+      "ds": {
+        "proposals": {
+          "id": "gov.proposals"
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "Vote Removal Notice",
+            "description": "This will permanently remove your vote from the specified proposal. You can vote again later if the voting period is still active.",
+            "icon": "AlertTriangle",
+            "variant": "warning",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalHash",
+            "name": "proposalHash",
+            "type": "text",
+            "label": "Proposal Hash",
+            "required": true,
+            "placeholder": "Enter proposal hash",
+            "help": "The hash of the proposal to remove your vote from",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Proposal hash is required"
+              }
+            },
+            "features": [
+              {
+                "id": "pasteBtn",
+                "op": "paste"
+              }
+            ]
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "voterAddress",
+            "name": "voterAddress",
+            "type": "text",
+            "label": "Voter Address (Validator)",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "help": "Your validator address",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Vote Removal",
+          "summary": [
+            {
+              "label": "Proposal Hash",
+              "value": "{{form.proposalHash}}"
+            },
+            {
+              "label": "Voter Address",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "XCircle",
+            "label": "Remove Vote"
+          }
+        }
+      },
+      "payload": {
+        "proposal": {
+          "value": "{{form.proposalHash}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "rpc",
+        "path": "/v1/gov/del-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Vote Removed!",
+          "description": "Your vote has been successfully removed from the proposal",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "votePoll",
+      "title": "Vote on Community Poll",
+      "icon": "CheckSquare",
+      "ds": {
+        "height": {},
+        "polls": {
+          "id": "gov.poll"
+        },
+        "__options": {
+          "staleTimeMs": 30000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[40rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "type": "section",
+            "title": "About Community Polls",
+            "description": "Community polls are non-binding votes to gauge community sentiment. Your vote will be publicly recorded but will not trigger any on-chain actions.",
+            "icon": "Info",
+            "variant": "info",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "spacer",
+            "height": "md",
+            "span": { "base": 12 }
+          },
+          {
+            "type": "heading",
+            "text": "Poll Identification",
+            "level": 3,
+            "color": "secondary",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "pollQuestion",
+            "name": "pollQuestion",
+            "type": "text",
+            "label": "Poll Question",
+            "required": true,
+            "placeholder": "Enter the poll question",
+            "help": "The exact question from the poll you want to vote on",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Poll question is required"
+              }
+            }
+          },
+          {
+            "id": "pollEndBlock",
+            "name": "pollEndBlock",
+            "type": "number",
+            "label": "Poll End Block",
+            "required": true,
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "placeholder": "Block height when poll ends",
+            "help": "The end block height of the poll",
+            "span": { "base": 12, "md": 6 },
+            "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
+              "messages": {
+                "required": "Poll end block is required",
+                "min": "Poll end block must be at least {{min}} (current height + 1)."
+              }
+            }
+          },
+          {
+            "id": "pollURL",
+            "name": "pollURL",
+            "type": "text",
+            "label": "Poll URL (Optional)",
+            "required": false,
+            "placeholder": "https://discord.com/...",
+            "help": "Optional URL for poll discussion",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "type": "divider",
+            "label": "Your Vote",
+            "variant": "gradient",
+            "spacing": "lg",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "voteApprove",
+            "name": "voteApprove",
+            "type": "optionCard",
+            "label": "Your Vote",
+            "required": true,
+            "value": true,
+            "span": { "base": 12 },
+            "options": [
+              {
+                "label": "Approve",
+                "value": true,
+                "help": "Vote in favor",
+                "toolTip": "Vote YES on this poll"
+              },
+              {
+                "label": "Reject",
+                "value": false,
+                "help": "Vote against",
+                "toolTip": "Vote NO on this poll"
+              }
+            ]
+          },
+          {
+            "type": "spacer",
+            "height": "sm",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "voterAddress",
+            "name": "voterAddress",
+            "type": "text",
+            "label": "Voter Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Poll Vote",
+          "summary": [
+            {
+              "label": "Poll Question",
+              "value": "{{form.pollQuestion}}"
+            },
+            {
+              "label": "Your Vote",
+              "value": "{{ form.voteApprove ? 'Approve' : 'Reject' }}"
+            },
+            {
+              "label": "End Block",
+              "value": "{{form.pollEndBlock}}"
+            },
+            {
+              "label": "Voter Address",
+              "value": "{{shortAddress<{{account.address}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckSquare",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "pollJSON": {
+          "value": "{{JSON.stringify({ proposal: form.pollQuestion, endBlock: Math.max(parseInt(form.pollEndBlock || '0', 10), resolveHeight(ds.height) + 1), URL: form.pollURL || '' })}}",
+          "coerce": "string"
+        },
+        "pollApprove": {
+          "value": "{{form.voteApprove}}",
+          "coerce": "boolean"
+        },
+        "fee": {
+          "value": "{{fees.raw.votePollFee ?? 0}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-vote-poll",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Poll Vote Submitted!",
+          "description": "Your vote on the community poll has been recorded",
+          "actions": []
+        }
+      }
+    },
+    {
+      "id": "govStartPoll",
+      "title": "Start New Poll",
+      "icon": "BarChart3",
+      "ds": {
+        "height": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposal",
+            "name": "proposal",
+            "type": "text",
+            "label": "Proposal",
+            "required": true,
+            "placeholder": "Poll proposal or question",
+            "help": "Clearly describe the question or decision being voted on.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (current height + 1)."
+              }
+            },
+            "placeholder": "Block height when poll ends",
+            "help": "Use a valid future block height to allow participation.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "URL",
+            "name": "URL",
+            "type": "text",
+            "label": "Discussion URL",
+            "required": false,
+            "placeholder": "https://...",
+            "help": "Optional link to Discord, forum, or proposal context.",
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm New Poll",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposal}}"
+            },
+            {
+              "label": "End Block",
+              "value": "{{form.endBlock}}"
+            },
+            {
+              "label": "URL",
+              "value": "{{form.URL || 'No URL'}}"
+            }
+          ],
+          "btn": {
+            "icon": "BarChart3",
+            "label": "Start Poll"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "pollJSON": {
+          "proposal": "{{form.proposal}}",
+          "endBlock": "{{Math.max(Number(form.endBlock || 0), resolveHeight(ds.height) + 1)}}",
+          "URL": "{{form.URL || ''}}"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-start-poll",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Poll Submitted",
+          "description": "The new governance poll transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govVotePoll",
+      "title": "Vote Poll",
+      "icon": "CheckSquare",
+      "ds": {
+        "height": {},
+        "gov.poll": {},
+        "gov.proposals": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalHash",
+            "name": "proposalHash",
+            "type": "select",
+            "label": "Proposal Hash",
+            "required": true,
+            "map": "{{Object.entries(ds['gov.poll'] || {}).map(([k, v]) => { const h = v?.proposalHash || k; return { label: String(h).slice(0, 12) + '...', value: h }; })}}",
+            "help": "Select the poll hash to auto-fill proposal details.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposal",
+            "name": "proposal",
+            "type": "text",
+            "label": "Proposal",
+            "required": true,
+            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg; if (direct) return selected; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) return byMsgHashKey; return selected; })()}}",
+            "autoPopulate": "always",
+            "placeholder": "Poll proposal",
+            "help": "Must match the existing poll proposal text.",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg?.endHeight; if (direct != null && direct !== '') return direct; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) { const fallback = proposals[byMsgHashKey]?.proposal?.msg?.endHeight; if (fallback != null && fallback !== '') return fallback; } return form.endBlock ?? ''; })()}}",
+            "autoPopulate": "always",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "validation": {
+              "min": "{{resolveHeight(ds.height) + 1}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (current height + 1)."
+              }
+            },
+            "placeholder": "Block height",
+            "help": "Must match the poll endBlock value.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "URL",
+            "name": "URL",
+            "type": "text",
+            "label": "Discussion URL",
+            "required": false,
+            "value": "{{(() => { const selected = form.proposalHash || ''; const polls = ds['gov.poll'] || {}; const byKey = polls[selected]?.proposalURL; if (byKey) return byKey; const byProposalHashKey = Object.keys(polls).find(k => polls[k]?.proposalHash === selected); if (byProposalHashKey) return polls[byProposalHashKey]?.proposalURL || ''; return form.URL ?? ''; })()}}",
+            "autoPopulate": "always",
+            "placeholder": "https://...",
+            "help": "Should match the poll URL when one exists.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "voteApprove",
+            "name": "voteApprove",
+            "type": "optionCard",
+            "label": "Vote",
+            "required": true,
+            "value": true,
+            "options": [
+              {
+                "label": "Approve",
+                "value": true,
+                "help": "Vote in favor"
+              },
+              {
+                "label": "Reject",
+                "value": false,
+                "help": "Vote against"
+              }
+            ],
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Poll Vote",
+          "summary": [
+            {
+              "label": "Proposal Hash",
+              "value": "{{form.proposalHash}}"
+            },
+            {
+              "label": "Proposal",
+              "value": "{{form.proposal}}"
+            },
+            {
+              "label": "End Block",
+              "value": "{{form.endBlock}}"
+            },
+            {
+              "label": "Vote",
+              "value": "{{form.voteApprove ? 'Approve' : 'Reject'}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckSquare",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "pollJSON": {
+          "proposal": "{{form.proposal}}",
+          "endBlock": "{{Math.max(Number(form.endBlock || 0), resolveHeight(ds.height) + 1)}}",
+          "URL": "{{form.URL || ''}}"
+        },
+        "pollApprove": {
+          "value": "{{form.voteApprove}}",
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-vote-poll",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "govGenerateParamChange",
+      "title": "Create Parameter Change Proposal",
+      "icon": "Settings",
+      "ds": {
+        "height": {},
+        "params": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[44rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "paramSpace",
+            "name": "paramSpace",
+            "type": "select",
+            "label": "Parameter Space",
+            "required": true,
+            "map": "{{Object.keys(ds.params || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "paramKey",
+            "name": "paramKey",
+            "type": "select",
+            "label": "Parameter Key",
+            "required": true,
+            "map": "{{Object.keys(ds.params?.[form.paramSpace] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "paramValue",
+            "name": "paramValue",
+            "type": "text",
+            "label": "New Value",
+            "required": true,
+            "value": "{{ds.params?.[form.paramSpace]?.[form.paramKey] ?? ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "startBlock",
+            "name": "startBlock",
+            "type": "number",
+            "label": "Start Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "help": "Always uses current chain height.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+            "validation": {
+              "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (start block + 1).",
+                "max": "End block must be at most {{max}} (start block + 10,000)."
+              }
+            },
+            "help": "Must be greater than start block and within 10,000 blocks.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo",
+            "placeholder": "Description/reason for change",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "required": true,
+            "value": "{{fromMicroDenom<{{fees.raw.changeParameterFee ?? 0}}>}}",
+            "autoPopulate": "once",
+            "span": { "base": 12, "md": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Parameter Change Proposal",
+          "summary": [
+            {
+              "label": "Parameter",
+              "value": "{{form.paramSpace}} / {{form.paramKey}}"
+            },
+            {
+              "label": "Value",
+              "value": "{{form.paramValue}}"
+            },
+            {
+              "label": "Voting Window",
+              "value": "{{form.startBlock}} -> {{form.endBlock}}"
+            }
+          ],
+          "btn": {
+            "icon": "Settings",
+            "label": "Create Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": 0,
+          "coerce": "number"
+        },
+        "paramSpace": {
+          "value": "{{form.paramSpace}}",
+          "coerce": "string"
+        },
+        "paramKey": {
+          "value": "{{form.paramKey}}",
+          "coerce": "string"
+        },
+        "paramValue": {
+          "value": "{{form.paramValue}}",
+          "coerce": "string"
+        },
+        "startBlock": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endBlock": {
+          "value": "{{(() => { const s = Number(form.startBlock || resolveHeight(ds.height)); const eRaw = Number(form.endBlock); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-change-param",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Parameter Change Proposal Submitted",
+          "description": "Your proposal transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govGenerateDaoTransfer",
+      "title": "Create Treasury Subsidy Proposal",
+      "icon": "Coins",
+      "ds": {
+        "height": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[44rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Proposer Address",
+            "value": "{{account.address}}",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount (CNPY)",
+            "required": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "required": true,
+            "value": "{{fromMicroDenom<{{fees.raw.sendFee ?? 0}}>}}",
+            "min": "{{ fromMicroDenom<{{fees.raw.sendFee}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "autoPopulate": "once",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "startBlock",
+            "name": "startBlock",
+            "type": "number",
+            "label": "Start Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "help": "Always uses current chain height.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "endBlock",
+            "name": "endBlock",
+            "type": "number",
+            "label": "End Block",
+            "required": true,
+            "value": "{{resolveHeight(ds.height) + 1}}",
+            "autoPopulate": "once",
+            "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+            "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+            "validation": {
+              "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
+              "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
+              "messages": {
+                "min": "End block must be at least {{min}} (start block + 1).",
+                "max": "End block must be at most {{max}} (start block + 10,000)."
+              }
+            },
+            "help": "Must be greater than start block and within 10,000 blocks.",
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo",
+            "placeholder": "Description/reason for transfer",
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Treasury Subsidy Proposal",
+          "summary": [
+            {
+              "label": "Amount",
+              "value": "{{form.amount}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Voting Window",
+              "value": "{{form.startBlock}} -> {{form.endBlock}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || 'No memo'}}"
+            }
+          ],
+          "btn": {
+            "icon": "Coins",
+            "label": "Create Proposal"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "paramSpace": {
+          "value": "",
+          "coerce": "string"
+        },
+        "paramKey": {
+          "value": "",
+          "coerce": "string"
+        },
+        "paramValue": {
+          "value": "",
+          "coerce": "string"
+        },
+        "startBlock": {
+          "value": "{{resolveHeight(ds.height)}}",
+          "coerce": "number"
+        },
+        "endBlock": {
+          "value": "{{(() => { const s = Number(form.startBlock || resolveHeight(ds.height)); const eRaw = Number(form.endBlock); const e = eRaw > 0 ? eRaw : s + 1; return Math.min(Math.max(e, s + 1), s + 10000); })()}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dao-transfer",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Treasury Subsidy Proposal Submitted",
+          "description": "Your treasury proposal transaction was broadcast successfully."
+        }
+      }
+    },
+    {
+      "id": "govSubmitProposalTx",
+      "title": "Manual Raw TX Broadcast",
+      "icon": "Send",
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalTx",
+            "name": "proposalTx",
+            "type": "textarea",
+            "label": "Raw Proposal JSON",
+            "required": true,
+            "placeholder": "{\"type\":\"...\"}",
+            "help": "Advanced mode: paste a fully signed raw transaction JSON to broadcast via /v1/tx.",
+            "rows": 12,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Manual Broadcast",
+          "summary": [
+            {
+              "label": "Payload",
+              "value": "Raw JSON transaction will be sent to /v1/tx"
+            }
+          ],
+          "btn": {
+            "icon": "Send",
+            "label": "Submit"
+          }
+        }
+      },
+      "payload": {
+        "__raw": {
+          "value": "{{JSON.parse(form.proposalTx)}}"
+        }
+      },
+      "submit": {
+        "base": "rpc",
+        "path": "/v1/tx",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Raw Transaction Broadcast",
+          "description": "The raw transaction was sent to the network endpoint."
+        }
+      }
+    },
+    {
+      "id": "govAddProposalVote",
+      "title": "Vote Proposal",
+      "icon": "Vote",
+      "ds": {
+        "gov.proposals": {},
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "select",
+            "label": "Proposal",
+            "required": true,
+            "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "approve",
+            "name": "approve",
+            "type": "optionCard",
+            "label": "Vote",
+            "required": true,
+            "value": true,
+            "options": [
+              {
+                "label": "Approve",
+                "value": true
+              },
+              {
+                "label": "Reject",
+                "value": false
+              }
+            ],
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalMsg",
+            "name": "proposalMsg",
+            "type": "textarea",
+            "label": "Proposal JSON (Auto-filled)",
+            "value": "{{JSON.stringify(ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}, null, 2)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 10,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalType",
+            "name": "proposalType",
+            "type": "text",
+            "label": "Proposal Type",
+            "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "currentVoteStatus",
+            "name": "currentVoteStatus",
+            "type": "text",
+            "label": "Current Vote Status",
+            "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "changeSummary",
+            "name": "changeSummary",
+            "type": "textarea",
+            "label": "Proposed Change (Explicit)",
+            "value": "{{(() => { const p = ds['gov.proposals']?.[form.proposalId]?.proposal || {}; const m = p.msg || {}; if (m.parameterSpace && m.parameterKey) return `Parameter change: ${m.parameterSpace}.${m.parameterKey} -> ${m.parameterValue}`; if (p.type === 'daoTransfer') return `Treasury subsidy: amount=${m.amount ?? p.amount ?? 'N/A'}; memo=${p.memo ?? ''}`; return `Type=${p.type || 'unknown'}; memo=${p.memo || 'N/A'}`; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 3,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Proposal Vote",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Vote",
+              "value": "{{form.approve ? 'Approve' : 'Reject'}}"
+            },
+            {
+              "label": "Change",
+              "value": "{{form.changeSummary}}"
+            }
+          ],
+          "btn": {
+            "icon": "Vote",
+            "label": "Submit Vote"
+          }
+        }
+      },
+      "payload": {
+        "approve": {
+          "value": "{{form.approve}}",
+          "coerce": "boolean"
+        },
+        "proposal": {
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/gov/add-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Vote Saved",
+          "description": "Your proposal vote preference has been updated."
+        }
+      }
+    },
+    {
+      "id": "govDeleteProposalVote",
+      "title": "Delete Proposal Vote",
+      "icon": "XCircle",
+      "ds": {
+        "gov.proposals": {},
+        "__options": {
+          "staleTimeMs": 4000,
+          "refetchIntervalMs": 4000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "fields": [
+          {
+            "id": "proposalId",
+            "name": "proposalId",
+            "type": "select",
+            "label": "Proposal",
+            "required": true,
+            "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalMsg",
+            "name": "proposalMsg",
+            "type": "textarea",
+            "label": "Proposal JSON (Auto-filled)",
+            "value": "{{JSON.stringify(ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}, null, 2)}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 10,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "proposalType",
+            "name": "proposalType",
+            "type": "text",
+            "label": "Proposal Type",
+            "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "currentVoteStatus",
+            "name": "currentVoteStatus",
+            "type": "text",
+            "label": "Current Vote Status",
+            "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "changeSummary",
+            "name": "changeSummary",
+            "type": "textarea",
+            "label": "Proposed Change (Explicit)",
+            "value": "{{(() => { const p = ds['gov.proposals']?.[form.proposalId]?.proposal || {}; const m = p.msg || {}; if (m.parameterSpace && m.parameterKey) return `Parameter change: ${m.parameterSpace}.${m.parameterKey} -> ${m.parameterValue}`; if (p.type === 'daoTransfer') return `Treasury subsidy: amount=${m.amount ?? p.amount ?? 'N/A'}; memo=${p.memo ?? ''}`; return `Type=${p.type || 'unknown'}; memo=${p.memo || 'N/A'}`; })()}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "rows": 3,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Delete Vote",
+          "summary": [
+            {
+              "label": "Proposal",
+              "value": "{{form.proposalId}}"
+            },
+            {
+              "label": "Change",
+              "value": "{{form.changeSummary}}"
+            }
+          ],
+          "btn": {
+            "icon": "XCircle",
+            "label": "Delete Vote"
+          }
+        }
+      },
+      "payload": {
+        "approve": {
+          "value": null
+        },
+        "proposal": {
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/gov/del-vote",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Proposal Vote Removed",
+          "description": "Your proposal vote preference was removed."
+        }
+      }
+    },
+    {
+      "id": "orderCreate",
+      "title": "Create Order",
+      "icon": "PlusCircle",
+      "ds": {
+        "admin.config": {},
+        "account": {
+          "account": {
+            "address": "{{account.address}}"
+          }
+        },
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config",
+            "account",
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[36rem] md:max-w-[56rem]"
+          }
+        }
+      },
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "context",
+              "title": "Order Context"
+            },
+            {
+              "id": "pricing",
+              "title": "Pricing & Submit"
+            }
+          ]
+        },
+        "info": {
+          "title": "Create Order Guide",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Create runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            },
+            {
+              "label": "Rule",
+              "value": "Only unlocked orders can be repriced or voided",
+              "icon": "AlertTriangle"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Counter-Asset)",
+            "required": true,
+            "value": "{{params.receiveAddress || account.address || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount For Sale",
+            "required": true,
+            "min": 0.000001,
+            "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Amount for sale is required",
+                "min": "Amount must be greater than 0",
+                "max": "Insufficient balance. Max available: {{max}} {{chain.denom.symbol}}"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Requested Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Requested amount is required",
+                "min": "Requested amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "data",
+            "name": "data",
+            "type": "text",
+            "label": "Data (optional)",
+            "placeholder": "Sub-asset contract address (hex)",
+            "value": "{{params.data || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "pricing"
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Create Order",
+          "summary": [
+            {
+              "label": "Seller",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "PlusCircle",
+            "label": "Create Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "data": {
+          "value": "{{form.data || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-create-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Created",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderReprice",
+      "title": "Reprice Order",
+      "icon": "Pencil",
+      "ds": {
+        "admin.config": {},
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config",
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[36rem] md:max-w-[56rem]"
+          }
+        }
+      },
+      "form": {
+        "wizard": {
+          "steps": [
+            {
+              "id": "context",
+              "title": "Order Context"
+            },
+            {
+              "id": "pricing",
+              "title": "New Pricing"
+            }
+          ]
+        },
+        "info": {
+          "title": "Reprice Rules",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Reprice runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Editable",
+              "value": "Only unlocked orders can be edited",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Counter-Asset)",
+            "required": true,
+            "value": "{{params.receiveAddress || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount For Sale",
+            "required": true,
+            "min": 0.000001,
+            "value": "{{params.amount ?? ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Amount for sale is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Requested Amount",
+            "required": true,
+            "value": "{{params.receiveAmount ?? ''}}",
+            "autoPopulate": "once",
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Requested amount is required",
+                "min": "Requested amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          },
+          {
+            "id": "data",
+            "name": "data",
+            "type": "text",
+            "label": "Data (optional)",
+            "placeholder": "Sub-asset contract address (hex)",
+            "value": "{{params.data || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "context"
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 },
+            "step": "pricing"
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 },
+            "step": "pricing"
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Reprice Order",
+          "summary": [
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "For Sale",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Requested",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Pencil",
+            "label": "Reprice Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "data": {
+          "value": "{{form.data || ''}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-edit-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Repriced",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderVoid",
+      "title": "Void Order",
+      "icon": "Trash2",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Void Order Rules",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Void runs on root chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Restriction",
+              "value": "Locked orders cannot be voided",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "Trash2"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Seller Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the committee used for this order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Void Order",
+          "summary": [
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            }
+          ],
+          "btn": {
+            "icon": "Trash2",
+            "label": "Void Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-delete-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Voided",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderLock",
+      "title": "Lock Order",
+      "icon": "Lock",
+      "ds": {
+        "keystore": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "keystore"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[28rem] md:max-w-[38rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Lock Order Notes",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Lock runs on nested chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Receive Address",
+              "value": "Set root-chain address to receive CNPY",
+              "icon": "Lock"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "ShoppingCart"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Buyer Address (Nested Chain)",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "receiveAddress",
+            "name": "receiveAddress",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
+            "label": "Receive Address (Root Chain)",
+            "required": true,
+            "value": "{{params.receiveAddress || account.address || ''}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Receive address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Lock Order",
+          "summary": [
+            {
+              "label": "Buyer",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            },
+            {
+              "label": "Receive Address",
+              "value": "{{shortAddress<{{form.receiveAddress}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "Lock",
+            "label": "Lock Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "receiveAddress": {
+          "value": "{{form.receiveAddress}}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-lock-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Locked",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "orderClose",
+      "title": "Close Order",
+      "icon": "CheckCircle2",
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[30rem] md:max-w-[42rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "Close Order Preconditions",
+          "items": [
+            {
+              "label": "Execution",
+              "value": "Close runs on nested chain",
+              "icon": "Info"
+            },
+            {
+              "label": "Restriction",
+              "value": "Address must match order buyer and be before deadline",
+              "icon": "AlertTriangle"
+            },
+            {
+              "label": "Order",
+              "value": "{{shortAddress<{{form.orderId}}>}}",
+              "icon": "CheckCircle2"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Buyer Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "orderId",
+            "name": "orderId",
+            "type": "text",
+            "label": "Order ID",
+            "required": true,
+            "value": "{{params.orderId || ''}}",
+            "autoPopulate": "once",
+            "readOnly": true,
+            "validation": {
+              "messages": {
+                "required": "Order ID is required"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm Close Order",
+          "summary": [
+            {
+              "label": "Buyer",
+              "value": "{{shortAddress<{{form.address}}>}}"
+            },
+            {
+              "label": "Order ID",
+              "value": "{{shortAddress<{{form.orderId}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "CheckCircle2",
+            "label": "Close Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "orderId": {
+          "value": "{{form.orderId}}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-close-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "Order Closed",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLimitOrder",
+      "title": "DEX Limit Order",
+      "icon": "ArrowLeftRight",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Limit Order Notes",
+          "items": [
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Minimum Receive",
+              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
+              "icon": "ArrowLeftRight"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the limit order.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "receiveAmount",
+            "name": "receiveAmount",
+            "type": "amount",
+            "label": "Minimum Receive Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Minimum receive amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Limit Order",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Min Receive",
+              "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            }
+          ],
+          "btn": {
+            "icon": "ArrowLeftRight",
+            "label": "Create DEX Order"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "receiveAmount": {
+          "value": "{{toMicroDenom<{{form.receiveAmount}}>}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-limit-order",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Limit Order Submitted",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLiquidityDeposit",
+      "title": "DEX Liquidity Deposit",
+      "icon": "Droplets",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Deposit Notes",
+          "items": [
+            {
+              "label": "Operation",
+              "value": "Deposit adds liquidity to the selected pool",
+              "icon": "Droplets"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
+              "icon": "Coins"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the liquidity deposit.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "amount",
+            "name": "amount",
+            "type": "amount",
+            "label": "Amount",
+            "required": true,
+            "min": 0.000001,
+            "validation": {
+              "messages": {
+                "required": "Amount is required",
+                "min": "Amount must be greater than 0"
+              }
+            },
+            "span": { "base": 12, "md": 6 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 6 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Deposit",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Amount",
+              "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            }
+          ],
+          "btn": {
+            "icon": "Droplets",
+            "label": "Deposit Liquidity"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "amount": {
+          "value": "{{toMicroDenom<{{form.amount}}>}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-liquidity-deposit",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Deposit Submitted",
+          "description": "{{result}}"
+        }
+      }
+    },
+    {
+      "id": "dexLiquidityWithdraw",
+      "title": "DEX Liquidity Withdraw",
+      "icon": "CircleDashed",
+      "ds": {
+        "admin.config": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "admin.config"
+          ]
+        }
+      },
+      "ui": {
+        "slots": {
+          "modal": {
+            "className": "sm:max-w-[32rem] md:max-w-[46rem]"
+          }
+        }
+      },
+      "form": {
+        "info": {
+          "title": "DEX Withdraw Notes",
+          "items": [
+            {
+              "label": "Operation",
+              "value": "Withdraw removes liquidity by percent (1-100)",
+              "icon": "CircleDashed"
+            },
+            {
+              "label": "Percent",
+              "value": "{{form.percent || 0}}%",
+              "icon": "BarChart3"
+            },
+            {
+              "label": "Committee",
+              "value": "{{form.committees || ds['admin.config']?.chainId || '-'}}",
+              "icon": "Info"
+            }
+          ]
+        },
+        "fields": [
+          {
+            "id": "address",
+            "name": "address",
+            "type": "text",
+            "label": "Address",
+            "value": "{{params.address || account.address}}",
+            "autoPopulate": "always",
+            "readOnly": true,
+            "span": { "base": 12 }
+          },
+          {
+            "id": "committees",
+            "name": "committees",
+            "type": "tableSelect",
+            "label": "Committee",
+            "required": true,
+            "help": "Select the target committee for the liquidity withdraw.",
+            "multiple": false,
+            "rowKey": "id",
+            "selectMode": "action",
+            "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
+            "autoPopulate": "once",
+            "rows": [
+              {
+                "id": 1,
+                "name": "Canopy",
+                "minStake": "1 CNPY"
+              },
+              {
+                "id": 2,
+                "name": "Canary",
+                "minStake": "1 CNPY"
+              }
+            ],
+            "columns": [
+              {
+                "title": "Committee",
+                "type": "committee",
+                "align": "left"
+              },
+              {
+                "title": "Committee ID",
+                "expr": "{{row.id}}",
+                "align": "left"
+              }
+            ],
+            "rowAction": {
+              "title": "Action",
+              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
+              "emit": {
+                "op": "select"
+              }
+            },
+            "span": { "base": 12 }
+          },
+          {
+            "id": "percent",
+            "name": "percent",
+            "type": "range",
+            "label": "Withdraw Percentage",
+            "required": true,
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "suffix": "%",
+            "showInput": true,
+            "marks": [1, 25, 50, 75, 100],
+            "presets": [
+              { "label": "25%", "value": 25 },
+              { "label": "50%", "value": 50 },
+              { "label": "75%", "value": 75 },
+              { "label": "100%", "value": 100 }
+            ],
+            "help": "Use the slider or direct input. Allowed range: 1% to 100%.",
+            "value": "{{params.percent ?? 50}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Percent is required",
+                "min": "Percent must be at least {{min}}",
+                "max": "Percent cannot exceed {{max}}"
+              }
+            },
+            "span": { "base": 12, "md": 12 }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "textarea",
+            "label": "Memo (optional)",
+            "placeholder": "Optional message",
+            "value": "{{params.memo || ''}}",
+            "autoPopulate": "once",
+            "span": { "base": 12 }
+          },
+          {
+            "id": "fee",
+            "name": "fee",
+            "type": "amount",
+            "label": "Fee",
+            "value": "{{params.fee ?? 0}}",
+            "autoPopulate": "once",
+            "min": 0,
+            "span": { "base": 12, "md": 12 }
+          }
+        ],
+        "confirmation": {
+          "title": "Confirm DEX Withdraw",
+          "summary": [
+            {
+              "label": "Committee",
+              "value": "{{form.committees}}"
+            },
+            {
+              "label": "Percent",
+              "value": "{{form.percent}}%"
+            }
+          ],
+          "btn": {
+            "icon": "CircleDashed",
+            "label": "Withdraw Liquidity"
+          }
+        }
+      },
+      "payload": {
+        "address": {
+          "value": "{{form.address || account.address}}",
+          "coerce": "string"
+        },
+        "percent": {
+          "value": "{{form.percent}}",
+          "coerce": "number"
+        },
+        "committees": {
+          "value": "{{ form.committees ?? ds['admin.config']?.chainId ?? '' }}",
+          "coerce": "string"
+        },
+        "fee": {
+          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "coerce": "number"
+        },
+        "memo": {
+          "value": "{{form.memo || ''}}",
+          "coerce": "string"
+        },
+        "submit": {
+          "value": true,
+          "coerce": "boolean"
+        },
+        "password": {
+          "value": "{{session.password}}",
+          "coerce": "string"
+        }
+      },
+      "submit": {
+        "base": "admin",
+        "path": "/v1/admin/tx-dex-liquidity-withdraw",
+        "method": "POST"
+      },
+      "notifications": {
+        "onSuccess": {
+          "variant": "success",
+          "title": "DEX Withdraw Submitted",
+          "description": "{{result}}"
+        }
+      }
+    }
+  ]
+}

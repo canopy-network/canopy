@@ -1,0 +1,357 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 99%;
+  --popover: 0 0% 15%;
+  --popover-foreground: 0 0% 99%;
+  --primary: 128 60% 51%;
+  --primary-foreground: 0 0% 8%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 78%;
+  --accent: 0 0% 20%;
+  --accent-foreground: 0 0% 99%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 132 10% 34%;
+  --input: 132 10% 38%;
+  --border-accent: 128 34% 52%;
+  --border-subtle: 132 8% 28%;
+  --ring: 128 60% 51%;
+  --radius: 0.625rem;
+  --sidebar-width: 220px;
+  --topbar-height: 52px;
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+  --surface-base: linear-gradient(145deg, hsl(0 0% 17% / 0.92), hsl(0 0% 13% / 0.95));
+  --surface-elevated: linear-gradient(145deg, hsl(0 0% 19% / 0.92), hsl(0 0% 14% / 0.96));
+  --surface-sheen: linear-gradient(180deg, hsl(0 0% 100% / 0.12), hsl(0 0% 100% / 0) 42%);
+  --glow-primary: 0 0 0 1px hsl(var(--primary) / 0.22), 0 0 26px hsl(var(--primary) / 0.25);
+  --glow-soft: 0 0 12px hsl(var(--primary) / 0.25);
+}
+
+.dark {
+  --background: 0 0% 9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 99%;
+  --popover: 0 0% 15%;
+  --popover-foreground: 0 0% 99%;
+  --primary: 128 60% 51%;
+  --primary-foreground: 0 0% 8%;
+  --secondary: 0 0% 18%;
+  --secondary-foreground: 0 0% 99%;
+  --muted: 0 0% 18%;
+  --muted-foreground: 0 0% 78%;
+  --accent: 0 0% 20%;
+  --accent-foreground: 0 0% 99%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 132 10% 34%;
+  --input: 132 10% 38%;
+  --border-accent: 128 34% 52%;
+  --border-subtle: 132 8% 28%;
+  --ring: 128 60% 51%;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+body {
+  color: hsl(var(--foreground));
+  background:
+    radial-gradient(120% 85% at 84% -8%, hsl(var(--primary) / 0.17), transparent 58%),
+    radial-gradient(100% 70% at 8% 0%, hsl(var(--primary) / 0.08), transparent 55%),
+    hsl(var(--background));
+  position: relative;
+}
+
+html {
+  box-sizing: border-box;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  outline-color: hsl(var(--ring) / 0.4);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.2) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 78%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(100% 90% at 50% 100%, transparent 45%, hsl(0 0% 0% / 0.2) 100%);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: hsl(var(--border) / 0.8);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+.surface-panel {
+  background: var(--surface-base);
+  border: 1px solid hsl(var(--border) / 0.78);
+  backdrop-filter: blur(14px);
+}
+
+.surface-card,
+.canopy-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid hsl(var(--border) / 0.75);
+  background: var(--surface-elevated);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.05),
+    0 18px 30px hsl(0 0% 0% / 0.26);
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+.surface-card::before,
+.canopy-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--surface-sheen);
+  opacity: 0.75;
+}
+
+.surface-card::after,
+.canopy-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.2), transparent 25%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.surface-card:hover,
+.canopy-card:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--border-accent) / 0.52);
+  box-shadow: var(--glow-primary), 0 20px 34px hsl(0 0% 0% / 0.28);
+}
+
+.canopy-card-soft {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid hsl(var(--border) / 0.82);
+  background: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.08) 0%,
+    hsl(0 0% 100% / 0.05) 55%,
+    hsl(0 0% 100% / 0.035) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.08),
+    0 14px 30px hsl(0 0% 0% / 0.3);
+  backdrop-filter: blur(12px);
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+.canopy-card-soft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(165deg, hsl(var(--primary) / 0.11), transparent 38%);
+  opacity: 0.52;
+}
+
+.canopy-card-soft:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.38);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.12),
+    0 16px 34px hsl(0 0% 0% / 0.34),
+    0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
+.btn-glow {
+  box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  transition: box-shadow 220ms ease, background-color 220ms ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18), var(--glow-soft);
+}
+
+.nav-item-active {
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--primary));
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.24);
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.78;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--accent)) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.text-glow {
+  text-shadow: 0 0 18px hsl(var(--primary) / 0.46);
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.animate-accordion-down {
+  animation: accordion-down 0.2s ease-out;
+}
+
+.animate-accordion-up {
+  animation: accordion-up 0.2s ease-out;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

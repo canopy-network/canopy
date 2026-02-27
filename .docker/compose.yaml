@@ -4,38 +4,48 @@ services:
     build:
       context: ..
       dockerfile: .docker/Dockerfile
+      args:
+        VITE_WALLET_BASE_PATH: /
+        VITE_EXPLORER_BASE_PATH: /
+        VITE_WALLET_RPC_PROXY_TARGET: http://localhost:50002
+        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:50003
     ports:
       - 50000:50000 # Wallet
       - 50001:50001 # Explorer
       - 50002:50002 # RPC
       - 50003:50003 # Admin RPC
-      - 9001:9001   # TCP P2P
-      - 6060:6060   # Debug
-      - 9090:9090   # Metrics
+      - 9001:9001 # TCP P2P
+      - 6060:6060 # Debug
+      - 9090:9090 # Metrics
     networks:
       - canopy
     command: ["start"]
     volumes:
       - ./volumes/node_1:/root/.canopy
-#    deploy:
-#      resources:
-#        limits:
-#          memory: 2G
-#          cpus: "1.0"
+  #    deploy:
+  #      resources:
+  #        limits:
+  #          memory: 2G
+  #          cpus: "1.0"
 
   node-2:
     container_name: node-2
     build:
       context: ..
       dockerfile: .docker/Dockerfile
+      args:
+        VITE_WALLET_BASE_PATH: /
+        VITE_EXPLORER_BASE_PATH: /
+        VITE_WALLET_RPC_PROXY_TARGET: http://localhost:40002
+        VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:40003
     ports:
       - 40000:40000 # Wallet
       - 40001:40001 # Explorer
       - 40002:40002 # RPC
       - 40003:40003 # Admin RPC
-      - 9002:9002   # TCP P2P
-      - 6061:6060   # Debug
-      - 9091:9091   # Metrics
+      - 9002:9002 # TCP P2P
+      - 6061:6060 # Debug
+      - 9091:9091 # Metrics
     networks:
       - canopy
     command: ["start"]
