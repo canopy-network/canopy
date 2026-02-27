@@ -706,13 +706,19 @@ func (s *StateMachine) getPrice(batch *lib.DexBatch) (p *lib.DexPrice, err lib.E
 	if batch.PoolSize == 0 || batch.CounterPoolSize == 0 {
 		return nil, ErrInvalidLiquidityPool()
 	}
+	priceNumerator := new(big.Int).Mul(new(big.Int).SetUint64(batch.PoolSize), big.NewInt(1_000_000))
+	price := priceNumerator.Div(priceNumerator, new(big.Int).SetUint64(batch.CounterPoolSize))
+	// DexPrice stores e6-scaled price as uint64; reject unrepresentable values instead of wrapping.
+	if !price.IsUint64() {
+		return nil, ErrInvalidLiquidityPool()
+	}
 	// exit with the dex price
 	return &lib.DexPrice{
 		LocalChainId:  s.Config.ChainId,
 		RemoteChainId: batch.Committee,
 		LocalPool:     batch.PoolSize,
 		RemotePool:    batch.CounterPoolSize,
-		E6ScaledPrice: batch.PoolSize * 1_000_000 / batch.CounterPoolSize,
+		E6ScaledPrice: price.Uint64(),
 	}, nil
 }
 
