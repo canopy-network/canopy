@@ -299,3 +299,15 @@ func (m *OracleState) PruneHistory(orderBook *lib.OrderBook) {
 		}
 	}
 }
+
+// ClearOrderHistory removes submission history for a specific order ID.
+func (m *OracleState) ClearOrderHistory(orderID []byte) {
+	if len(orderID) == 0 {
+		return
+	}
+	orderIDStr := lib.BytesToString(orderID)
+	m.rwLock.Lock()
+	defer m.rwLock.Unlock()
+	delete(m.lockOrderSubmissions, orderIDStr)
+	delete(m.closeOrderSubmissions, orderIDStr)
+}
