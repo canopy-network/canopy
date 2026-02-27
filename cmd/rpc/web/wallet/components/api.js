@@ -8,8 +8,8 @@ if (typeof window !== "undefined") {
     adminRPCURL = window.__CONFIG__.adminRPCURL;
     chainId = Number(window.__CONFIG__.chainId);
   }
-  rpcURL = rpcURL.replace("localhost", window.location.hostname);
-  adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
+  // rpcURL = rpcURL.replace("localhost", window.location.hostname);
+  // adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
 } else {
   console.log("config undefined");
 }

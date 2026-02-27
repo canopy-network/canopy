@@ -40,6 +40,7 @@ func init() {
 	queryCmd.AddCommand(retiredCommitteeCmd)
 	queryCmd.AddCommand(orderCmd)
 	queryCmd.AddCommand(ordersCmd)
+	queryCmd.AddCommand(oracleOrdersCmd)
 	queryCmd.AddCommand(nonSignersCmd)
 	queryCmd.AddCommand(paramsCmd)
 	queryCmd.AddCommand(supplyCmd)
@@ -189,6 +190,15 @@ var (
 		Short: "query all sell orders for a committee",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Orders(height, committee))
+		},
+	}
+
+	oracleOrdersCmd = &cobra.Command{
+		Use:   "oracle-orders --height=1 --per-page=10 --page-number=1",
+		Short: "query oracle orders stored in the oracle order store",
+		Run: func(cmd *cobra.Command, args []string) {
+			h, p := getPaginatedArgs()
+			writeToConsole(client.OracleOrders(h, p))
 		},
 	}
 

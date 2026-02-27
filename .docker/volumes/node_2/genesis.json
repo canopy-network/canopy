@@ -1,84 +1,123 @@
 {
-  "time": "2024-12-14 20:10:52",
+  "time": "2025-07-23 01:47:59",
   "accounts": [
     {
-      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-      "amount": 1000000
+      "address": "26ee9f7c00343389a61e3a7d7bb46be1dc025968",
+      "amount": 1000000000
     },
     {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "amount": 1000000
+      "address": "45281f3e49287fb12a6721bffab01fb60ee02df9",
+      "amount": 1000000000
     },
     {
-      "address": "6f94783856d5ce46d24dd5946215086211d70776",
-      "amount": 1000000
+      "address": "652d4ac1d5340ae9d55e464ae36f12824d6ec4fd",
+      "amount": 1000000000
+    },
+    {
+      "address": "2664360a95b274e37f3704a07d050df2c283de01",
+      "amount": 1000000000
+    },
+    {
+      "address": "4487360b0f75713180d3e7fc8a0abf7c49b4eb78",
+      "amount": 1000000000
+    },
+    {
+      "address": "ea80225e40d40bce7cc08953f2618615af8d998d",
+      "amount": 1000000000
+    },
+    {
+      "address": "ed02514375777fe172874a34890b9ef407e8ff63",
+      "amount": 1000000000
+    },
+    {
+      "address": "b5ca2d2b88cb91d21c235958d50d33d8fa176ad9",
+      "amount": 1000000000
+    },
+    {
+      "address": "f68e28dca6f7aa0a8fc2e2eb9e16a428e6e421c8",
+      "amount": 1000000000
+    },
+    {
+      "address": "2b5265ee258fb73ba8d186e9585190e1daa93c05",
+      "amount": 1000000000
+    },
+    {
+      "address": "5132ff6e85b30bd11dc80c9d74f4375c43440bed",
+      "amount": 1000000000
+    },
+    {
+      "address": "ef525b1faa2e9b670b38c1b6f2d011275f6be6a1",
+      "amount": 1000000000
     }
   ],
   "nonSigners": null,
   "validators": [
     {
-      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-      "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+      "address": "26ee9f7c00343389a61e3a7d7bb46be1dc025968",
+      "publicKey": "97a7432a31f9a2de939cd9ec1f252650ccaec3a46be90570483ac6ed9d9697c0e72fcb4adbd6065c5234c32c19c0addd",
       "committees": [
-        1
+        1,
+        2
       ],
       "netAddress": "tcp://node-1",
       "stakedAmount": 1000000000,
-      "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+      "output": "26ee9f7c00343389a61e3a7d7bb46be1dc025968",
+      "compound": true
     },
     {
-      "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
-      "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+      "address": "26ee9f7c00343389a61e3a7d7bb46be1dc025968",
+      "publicKey": "97a7432a31f9a2de939cd9ec1f252650ccaec3a46be90570483ac6ed9d9697c0e72fcb4adbd6065c5234c32c19c0addd",
       "committees": [
-        1
+        2
       ],
       "netAddress": "tcp://node-2",
       "stakedAmount": 1000000000,
-      "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+      "output": "26ee9f7c00343389a61e3a7d7bb46be1dc025968",
+      "compound": true
     }
   ],
   "params": {
     "consensus": {
       "blockSize": 1000000,
       "protocolVersion": "1/0",
-      "rootChainID": 1,
-      "retired": 0
-    },
-    "validator": {
-      "unstakingBlocks": 2,
-      "maxPauseBlocks": 4380,
-      "doubleSignSlashPercentage": 10,
-      "nonSignSlashPercentage": 1,
-      "maxNonSign": 4,
-      "nonSignWindow": 10,
-      "maxCommittees": 15,
-      "maxCommitteeSize": 100,
-      "earlyWithdrawalPenalty": 20,
-      "delegateUnstakingBlocks": 2,
-      "minimumOrderSize": 1000,
-      "stakePercentForSubsidizedCommittee": 33,
-      "maxSlashPerCommittee": 15,
-      "delegateRewardPercentage": 10,
-      "buyDeadlineBlocks": 15,
-      "lockOrderFeeMultiplier": 2
+      "retired": 0,
+      "rootChainID": 1
     },
     "fee": {
+      "certificateResultsFee": 0,
+      "changeParameterFee": 10000,
+      "createOrderFee": 10000,
+      "daoTransferFee": 10000,
+      "deleteOrderFee": 10000,
+      "editOrderFee": 10000,
+      "editStakeFee": 10000,
+      "pauseFee": 10000,
       "sendFee": 10000,
       "stakeFee": 10000,
-      "editStakeFee": 10000,
-      "unstakeFee": 10000,
-      "pauseFee": 10000,
-      "unpauseFee": 10000,
-      "changeParameterFee": 10000,
-      "daoTransferFee": 10000,
       "subsidyFee": 10000,
-      "createOrderFee": 10000,
-      "editOrderFee": 10000,
-      "deleteOrderFee": 10000
+      "unpauseFee": 10000,
+      "unstakeFee": 10000
     },
     "governance": {
-      "daoRewardPercentage": 10
+      "daoRewardPercentage": 5
+    },
+    "validator": {
+      "buyDeadlineBlocks": 60,
+      "delegateRewardPercentage": 10,
+      "delegateUnstakingBlocks": 12960,
+      "doubleSignSlashPercentage": 10,
+      "earlyWithdrawalPenalty": 0,
+      "lockOrderFeeMultiplier": 2,
+      "maxCommitteeSize": 100,
+      "maxCommittees": 16,
+      "maxNonSign": 60,
+      "maxPauseBlocks": 4380,
+      "maxSlashPerCommittee": 15,
+      "minimumOrderSize": 1000,
+      "nonSignSlashPercentage": 1,
+      "nonSignWindow": 100,
+      "stakePercentForSubsidizedCommittee": 33,
+      "unstakingBlocks": 2
     }
-  },
-  "supply": null
+  }
 }

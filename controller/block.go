@@ -148,21 +148,31 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	}
 	// get the proposal cached in the mempool
 	p := c.GetProposalBlockFromMempool()
+	// set the certificate results variable and rcBuildHeight
+	results, rcBuildHeight = p.CertResults, p.rcBuildHeight
 	// load the last block from the indexer
 	lastBlock, err := c.FSM.LoadBlock(c.FSM.Height() - 1)
+	if err != nil {
+		return
+	}
+	// TODO change 1 to c.config.ChainId
+	orderBook, err := c.LoadRootChainOrderBook(1, rcBuildHeight)
 	if err != nil {
 		return
 	}
 	// replace the VDF and last certificate in the header
 	p.Block.BlockHeader.LastQuorumCertificate, p.Block.BlockHeader.Vdf = lastCertificate, vdf
 	p.Block.BlockHeader.TotalVdfIterations = vdf.GetIterations() + lastBlock.BlockHeader.TotalVdfIterations
-	// set the certificate results variable and rcBuildHeight
-	results, rcBuildHeight = p.CertResults, p.rcBuildHeight
 	// execute the hash
 	if _, err = p.Block.BlockHeader.SetHash(); err != nil {
 		// exit with error
 		return
 	}
+	// append any witnessed orders to the on chain orders
+	lockOrders, closeOrders, resetOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	results.Orders.LockOrders = lockOrders
+	results.Orders.CloseOrders = closeOrders
+	results.Orders.ResetOrders = resetOrders
 	// convert the block reference to bytes
 	blockBytes, err = lib.Marshal(p.Block)
 	if err != nil {
@@ -210,6 +220,28 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
+
+	// Validate proposed oracle orders only when oracle is configured.
+	// This preserves existing behavior for oracle-disabled nodes and avoids introducing
+	// extra root-chain RPC dependencies in that mode.
+	if c.oracle != nil {
+		// Only load root-chain snapshot when reset orders are present; lock/close validation
+		// remains local-store based and should not depend on root RPC liveness.
+		var rootOrderBook *lib.OrderBook
+		if qc.Results != nil && qc.Results.Orders != nil && len(qc.Results.Orders.ResetOrders) > 0 {
+			// load root-chain order book at the proposal build height to validate reset orders deterministically
+			rootOrderBook, err = c.LoadRootChainOrderBook(1, rcBuildHeight)
+			if err != nil {
+				return
+			}
+		}
+		// validate the proposed orders were witnessed by the oracle
+		err = c.oracle.ValidateProposedOrders(qc.Results.Orders, rootOrderBook)
+		if err != nil {
+			return
+		}
+	}
+	compareResults.Orders = qc.Results.Orders
 	// ensure generated the same results
 	if !qc.Results.Equals(compareResults) {
 		// exit with error
@@ -227,6 +259,7 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 // - atomically writes all to the underlying db
 // - sets up the controller for the next height
 func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, blockResult *lib.BlockResult, ts uint64) (err lib.ErrorI) {
+	c.log.Warnf("CommitCertificate block: %d qc %d chain %d", block.BlockHeader.Height, qc.Header.Height, qc.Header.ChainId)
 	start := time.Now()
 	// cancel any running mempool check
 	c.Mempool.stop()
@@ -282,6 +315,12 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	}
 	// log to signal finishing the commit
 	c.log.Infof("Committed block %s at H:%d 🔒", lib.BytesToTruncatedString(qc.BlockHash), block.BlockHeader.Height)
+	// execute Oracle CommitCertificate
+	err = c.oracle.CommitCertificate(qc, block, blockResult, ts)
+	if err != nil {
+		// exit with error
+		return err
+	}
 	// set up the finite state machine for the next height
 	c.FSM, err = fsm.New(c.Config, storeI, c.Plugin, c.Metrics, c.log)
 	if err != nil {
