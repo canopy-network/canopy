@@ -469,7 +469,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 // ValidateProposedOrders verifies that the passed orders are all present in the local order store.
 // This is called when the BFT module validates a block proposal to ensure that each order
 // in the proposed block is an exact match for an order in the witnessed order store.
-func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
+func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.OrderBook) lib.ErrorI {
 	// oracle is disabled
 	if o == nil {
 		return nil
@@ -480,14 +480,14 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		return nil
 	}
 	// skip validation and logging when no orders are present
-	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 {
+	if len(orders.LockOrders) == 0 && len(orders.CloseOrders) == 0 && len(orders.ResetOrders) == 0 {
 		return nil
 	}
 	// get current safe height for validation
 	safeHeight := o.state.GetSafeHeight()
 	// entry log with context
-	o.log.Debugf("[ORACLE-VALIDATE] Validating proposal: %d lock orders, %d close orders, safeHeight=%d",
-		len(orders.LockOrders), len(orders.CloseOrders), safeHeight)
+	o.log.Debugf("[ORACLE-VALIDATE] Validating proposal: %d lock orders, %d close orders, %d reset orders, safeHeight=%d",
+		len(orders.LockOrders), len(orders.CloseOrders), len(orders.ResetOrders), safeHeight)
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
 		orderId := lib.BytesToString(lock.OrderId)
@@ -538,8 +538,36 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders) lib.ErrorI {
 		}
 		o.log.Infof("[ORACLE-VALIDATE] Close order %s valid (witnessed=%d)", orderIdStr, witnessedOrder.WitnessedHeight)
 	}
+	// validate each reset order against the current order book and source-chain safe height
+	for _, orderId := range orders.ResetOrders {
+		if rootOrderBook == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: root order book snapshot is nil", lib.BytesToString(orderId))
+			return ErrNilOrderBook()
+		}
+		orderIDStr := lib.BytesToString(orderId)
+		order, err := rootOrderBook.GetOrder(orderId)
+		if err != nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: error loading order from order book: %v", orderIDStr, err)
+			return ErrOrderNotVerified(orderIDStr, err)
+		}
+		if order == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: order missing from order book", orderIDStr)
+			return ErrOrderNotVerified(orderIDStr, errors.New("order not found in order book"))
+		}
+		if !order.IsLocked() {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: order is not locked", orderIDStr)
+			return ErrOrderNotVerified(orderIDStr, errors.New("order is not locked"))
+		}
+		if safeHeight <= order.BuyerChainDeadline {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: deadline not yet passed (deadline=%d, safe=%d)",
+				orderIDStr, order.BuyerChainDeadline, safeHeight)
+			return ErrOrderNotVerified(orderIDStr, errors.New("order deadline not passed"))
+		}
+		o.log.Infof("[ORACLE-VALIDATE] Reset order %s valid (deadline=%d, safe=%d)", orderIDStr, order.BuyerChainDeadline, safeHeight)
+	}
 	// summary log
-	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders and %d close orders", len(orders.LockOrders), len(orders.CloseOrders))
+	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders, %d close orders, and %d reset orders",
+		len(orders.LockOrders), len(orders.CloseOrders), len(orders.ResetOrders))
 	return nil
 }
 
@@ -588,6 +616,18 @@ func (o *Oracle) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Block, 
 			continue
 		}
 		o.log.Infof("[ORACLE-COMMIT] Updated last submit height for close order %s: %d", lib.BytesToString(orderId), qc.Header.RootHeight)
+	}
+	// Reset orders are deterministic (deadline-based), so clear stale local close-order witness state.
+	for _, orderId := range qc.Results.Orders.ResetOrders {
+		orderIDStr := lib.BytesToString(orderId)
+		if _, err := o.orderStore.ReadOrder(orderId, types.CloseOrderType); err == nil {
+			if e := o.orderStore.RemoveOrder(orderId, types.CloseOrderType); e != nil {
+				o.log.Warnf("[ORACLE-COMMIT] Failed removing stale close order %s after reset: %v", orderIDStr, e)
+			} else {
+				o.log.Infof("[ORACLE-COMMIT] Removed stale close order %s after reset", orderIDStr)
+			}
+		}
+		o.state.ClearOrderHistory(orderId)
 	}
 
 	// update lifecycle metrics for committed orders
@@ -707,12 +747,13 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
 // TODO watch for conflicts while syncing ethereum block, prooducer might resubmit order
-func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte) {
+func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte, [][]byte) {
 	lockOrders := []*lib.LockOrder{}
 	closeOrders := [][]byte{}
+	resetOrders := [][]byte{}
 	// oracle is disabled
 	if o == nil {
-		return lockOrders, closeOrders
+		return lockOrders, closeOrders, resetOrders
 	}
 	// get current heights for context
 	safeHeight := o.state.GetSafeHeight()
@@ -720,6 +761,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	var stats struct {
 		lockChecked, lockSubmitting, lockHeldSafe, lockHeldDelay     int
 		closeChecked, closeSubmitting, closeHeldSafe, closeHeldDelay int
+		resetChecked, resetSubmitting                                int
 	}
 	// entry log with key context
 	// o.log.Debugf("[ORACLE-SUBMIT] Checking orders: orderBook=%d orders, rootHeight=%d, safeHeight=%d",
@@ -757,6 +799,14 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 			// submit this witnessed lock order by returning it in the lockOrders slice
 			lockOrders = append(lockOrders, wOrder.LockOrder)
 		} else {
+			stats.resetChecked++
+			if order.BuyerChainDeadline > 0 && safeHeight > order.BuyerChainDeadline {
+				stats.resetSubmitting++
+				o.log.Infof("[ORACLE-SUBMIT] Submitting reset order %s (deadline=%d, safe=%d)",
+					orderId, order.BuyerChainDeadline, safeHeight)
+				resetOrders = append(resetOrders, order.Id)
+				continue
+			}
 			stats.closeChecked++
 			// process locked orders - look for witnessed close orders
 			wOrder, err := o.orderStore.ReadOrder(order.Id, types.CloseOrderType)
@@ -797,12 +847,13 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 		}
 	}
 	// summary log with full picture
-	o.log.Infof("[ORACLE-SUBMIT] rootHeight=%d: lock[checked=%d submitting=%d heldSafe=%d heldDelay=%d] close[checked=%d submitting=%d heldSafe=%d heldDelay=%d]",
+	o.log.Infof("[ORACLE-SUBMIT] rootHeight=%d: lock[checked=%d submitting=%d heldSafe=%d heldDelay=%d] close[checked=%d submitting=%d heldSafe=%d heldDelay=%d] reset[checked=%d submitting=%d]",
 		rootHeight,
 		stats.lockChecked, stats.lockSubmitting, stats.lockHeldSafe, stats.lockHeldDelay,
-		stats.closeChecked, stats.closeSubmitting, stats.closeHeldSafe, stats.closeHeldDelay)
+		stats.closeChecked, stats.closeSubmitting, stats.closeHeldSafe, stats.closeHeldDelay,
+		stats.resetChecked, stats.resetSubmitting)
 	// update submitted orders metrics
-	totalSubmitted := stats.lockSubmitting + stats.closeSubmitting
+	totalSubmitted := stats.lockSubmitting + stats.closeSubmitting + stats.resetSubmitting
 	o.metrics.UpdateOracleOrderMetrics(0, 0, totalSubmitted, 0, 0)
 	// update submission tracking metrics
 	totalHeldSafe := stats.lockHeldSafe + stats.closeHeldSafe
@@ -811,7 +862,7 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 	if o.metrics != nil && o.metrics.OrdersAwaitingConfirmation != nil {
 		o.metrics.OrdersAwaitingConfirmation.Set(float64(totalHeldSafe))
 	}
-	return lockOrders, closeOrders
+	return lockOrders, closeOrders, resetOrders
 }
 
 // updateMetrics updates various oracle metrics with current state information

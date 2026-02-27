@@ -148,6 +148,8 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	}
 	// get the proposal cached in the mempool
 	p := c.GetProposalBlockFromMempool()
+	// set the certificate results variable and rcBuildHeight
+	results, rcBuildHeight = p.CertResults, p.rcBuildHeight
 	// load the last block from the indexer
 	lastBlock, err := c.FSM.LoadBlock(c.FSM.Height() - 1)
 	if err != nil {
@@ -161,17 +163,16 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 	// replace the VDF and last certificate in the header
 	p.Block.BlockHeader.LastQuorumCertificate, p.Block.BlockHeader.Vdf = lastCertificate, vdf
 	p.Block.BlockHeader.TotalVdfIterations = vdf.GetIterations() + lastBlock.BlockHeader.TotalVdfIterations
-	// set the certificate results variable and rcBuildHeight
-	results, rcBuildHeight = p.CertResults, p.rcBuildHeight
 	// execute the hash
 	if _, err = p.Block.BlockHeader.SetHash(); err != nil {
 		// exit with error
 		return
 	}
 	// append any witnessed orders to the on chain orders
-	lockOrders, closeOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	lockOrders, closeOrders, resetOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
 	results.Orders.LockOrders = lockOrders
 	results.Orders.CloseOrders = closeOrders
+	results.Orders.ResetOrders = resetOrders
 	// convert the block reference to bytes
 	blockBytes, err = lib.Marshal(p.Block)
 	if err != nil {
@@ -220,15 +221,25 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
 
-	// // get the root chain order book at latest height
-	// orderBook, err := c.GetOrderBook()
-	// if err != nil {
-	// 	c.log.Errorf("Error getting order book: %v", err)
-	// }
-	// validate the proposed orders were witnessed by the oracle
-	err = c.oracle.ValidateProposedOrders(qc.Results.Orders)
-	if err != nil {
-		return
+	// Validate proposed oracle orders only when oracle is configured.
+	// This preserves existing behavior for oracle-disabled nodes and avoids introducing
+	// extra root-chain RPC dependencies in that mode.
+	if c.oracle != nil {
+		// Only load root-chain snapshot when reset orders are present; lock/close validation
+		// remains local-store based and should not depend on root RPC liveness.
+		var rootOrderBook *lib.OrderBook
+		if qc.Results != nil && qc.Results.Orders != nil && len(qc.Results.Orders.ResetOrders) > 0 {
+			// load root-chain order book at the proposal build height to validate reset orders deterministically
+			rootOrderBook, err = c.LoadRootChainOrderBook(1, rcBuildHeight)
+			if err != nil {
+				return
+			}
+		}
+		// validate the proposed orders were witnessed by the oracle
+		err = c.oracle.ValidateProposedOrders(qc.Results.Orders, rootOrderBook)
+		if err != nil {
+			return
+		}
 	}
 	compareResults.Orders = qc.Results.Orders
 	// ensure generated the same results

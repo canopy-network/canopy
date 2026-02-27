@@ -357,7 +357,7 @@ func createOrderBook(orders ...*lib.SellOrder) *lib.OrderBook {
 }
 
 func TestOracle_ValidateProposedOrders(t *testing.T) {
-	orders := func(lockOrderIDs []string, closeOrderIDs []string) *lib.Orders {
+	orders := func(lockOrderIDs []string, closeOrderIDs []string, resetOrderIDs []string) *lib.Orders {
 		lockOrders := make([]*lib.LockOrder, len(lockOrderIDs))
 		for i, id := range lockOrderIDs {
 			lockOrders[i] = &lib.LockOrder{
@@ -368,9 +368,14 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		for i, id := range closeOrderIDs {
 			closeOrders[i] = []byte(id)
 		}
+		resetOrders := make([][]byte, len(resetOrderIDs))
+		for i, id := range resetOrderIDs {
+			resetOrders[i] = []byte(id)
+		}
 		return &lib.Orders{
 			LockOrders:  lockOrders,
 			CloseOrders: closeOrders,
+			ResetOrders: resetOrders,
 		}
 	}
 
@@ -378,6 +383,8 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		name          string
 		orders        *lib.Orders
 		orderStore    types.OrderStore
+		orderBook     *lib.OrderBook
+		safeHeight    uint64
 		expectedError bool
 		errorContains string
 	}{
@@ -389,13 +396,13 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		},
 		{
 			name:          "no orders should return no error",
-			orders:        orders(nil, nil),
+			orders:        orders(nil, nil, nil),
 			orderStore:    createOrderStore(createWitnessedLockOrder("lock1")),
 			expectedError: false,
 		},
 		{
 			name:   "valid lock orders should pass validation",
-			orders: orders([]string{"lock1", "lock2"}, nil),
+			orders: orders([]string{"lock1", "lock2"}, nil, nil),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1"),
 				createWitnessedLockOrder("lock2"),
@@ -404,7 +411,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		},
 		{
 			name:   "valid close orders should pass validation",
-			orders: orders(nil, []string{"close1", "close2"}),
+			orders: orders(nil, []string{"close1", "close2"}, nil),
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder("close1", 1),
 				createWitnessedCloseOrder("close2", 1),
@@ -413,7 +420,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		},
 		{
 			name:   "valid mixed orders should pass validation",
-			orders: orders([]string{"lock1"}, []string{"close1"}),
+			orders: orders([]string{"lock1"}, []string{"close1"}, nil),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1"),
 				createWitnessedCloseOrder("close1", 1),
@@ -421,8 +428,20 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:       "valid reset order should pass validation",
+			orders:     orders(nil, nil, []string{"reset1"}),
+			orderStore: createOrderStore(),
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder("reset1", "", "buyer")
+				order.BuyerChainDeadline = 10
+				return order
+			}()),
+			safeHeight:    20,
+			expectedError: false,
+		},
+		{
 			name:   "lock order verification failure should return error",
-			orders: orders([]string{"lock1"}, nil),
+			orders: orders([]string{"lock1"}, nil, nil),
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1", "address"),
 			),
@@ -431,10 +450,23 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 		},
 		{
 			name:   "close order verification failure should return error",
-			orders: orders(nil, []string{"close1"}),
+			orders: orders(nil, []string{"close1"}, nil),
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder("close1"), // missing chain id
 			),
+			expectedError: true,
+			errorContains: "order not verified",
+		},
+		{
+			name:       "reset order should fail when deadline has not passed",
+			orders:     orders(nil, nil, []string{"reset1"}),
+			orderStore: createOrderStore(),
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder("reset1", "", "buyer")
+				order.BuyerChainDeadline = 25
+				return order
+			}()),
+			safeHeight:    20,
 			expectedError: true,
 			errorContains: "order not verified",
 		},
@@ -447,13 +479,15 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			defer os.RemoveAll(tempDir)
 			oracle := &Oracle{
 				orderStore: tt.orderStore,
+				orderBook:  tt.orderBook,
 				state:      NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger()),
 				committee:  1,
 				log:        lib.NewDefaultLogger(),
 			}
+			oracle.state.safeHeight = tt.safeHeight
 
 			// Execute test
-			err := oracle.ValidateProposedOrders(tt.orders)
+			err := oracle.ValidateProposedOrders(tt.orders, tt.orderBook)
 
 			// Verify results
 			if tt.expectedError {
@@ -466,6 +500,56 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOracle_CommitCertificate_ResetOrderCleanup(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "oracle_commit_test")
+	defer os.RemoveAll(tempDir)
+
+	orderID := "order1"
+	otherID := "other-order"
+	orderIDKey := lib.BytesToString([]byte(orderID))
+	otherIDKey := lib.BytesToString([]byte(otherID))
+	store := createOrderStore(createWitnessedCloseOrder(orderID))
+	state := NewOracleState(filepath.Join(tempDir, "test_state"), lib.NewDefaultLogger())
+	state.lockOrderSubmissions[orderIDKey] = 10
+	state.closeOrderSubmissions[orderIDKey] = 11
+	state.lockOrderSubmissions[otherIDKey] = 20
+	state.closeOrderSubmissions[otherIDKey] = 21
+
+	oracle := &Oracle{
+		orderStore: store,
+		state:      state,
+		committee:  1,
+		log:        lib.NewDefaultLogger(),
+	}
+
+	qc := &lib.QuorumCertificate{
+		Header: &lib.View{
+			RootHeight: 500,
+		},
+		Results: &lib.CertificateResult{
+			Orders: &lib.Orders{
+				ResetOrders: [][]byte{[]byte(orderID)},
+			},
+		},
+	}
+
+	err := oracle.CommitCertificate(qc, nil, nil, 0)
+	require.NoError(t, err)
+
+	_, readErr := store.ReadOrder([]byte(orderID), types.CloseOrderType)
+	require.Error(t, readErr, "expected close order to be removed after reset commit")
+
+	_, hasLockHistory := state.lockOrderSubmissions[orderIDKey]
+	_, hasCloseHistory := state.closeOrderSubmissions[orderIDKey]
+	assert.False(t, hasLockHistory, "expected lock history to be cleared for reset order")
+	assert.False(t, hasCloseHistory, "expected close history to be cleared for reset order")
+
+	_, hasOtherLockHistory := state.lockOrderSubmissions[otherIDKey]
+	_, hasOtherCloseHistory := state.closeOrderSubmissions[otherIDKey]
+	assert.True(t, hasOtherLockHistory, "expected other lock history to remain")
+	assert.True(t, hasOtherCloseHistory, "expected other close history to remain")
 }
 
 func TestOracle_WitnessedOrders(t *testing.T) {
@@ -482,10 +566,13 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 		orderBookOrders        []*lib.SellOrder
 		storeLockOrders        map[string]*lib.LockOrder
 		storeCloseOrders       map[string]*lib.CloseOrder
+		safeHeight             uint64
 		expectedLockOrdersLen  int
 		expectedCloseOrdersLen int
+		expectedResetOrdersLen int
 		expectedLockOrderIds   []string
 		expectedCloseOrderIds  []string
+		expectedResetOrderIds  []string
 	}{
 		{
 			name:            "orders exist in store but not in order book. both lock and close orders should not be included in proposed block",
@@ -497,8 +584,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  0,
 			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{},
 			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "orders exist in order book but not in store.",
@@ -509,8 +598,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			orderStore:             NewMockOrderStore(),
 			expectedLockOrdersLen:  0,
 			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{},
 			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "matching stored lock order, should be included",
@@ -523,8 +614,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  1,
 			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{orderIdOne},
 			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "matching close order exists in store and order book. should be included",
@@ -537,8 +630,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  0,
 			expectedCloseOrdersLen: 1,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{},
 			expectedCloseOrderIds:  []string{orderIdOne},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "unlocked order exists in order book and matching lock order exists in store. should be included",
@@ -550,8 +645,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  1,
 			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{orderIdOne},
 			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{},
 		},
 		{
 			name: "locked order exists in order book and matching close order exists in store. should be included",
@@ -563,8 +660,28 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  0,
 			expectedCloseOrdersLen: 1,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{},
 			expectedCloseOrderIds:  []string{orderIdOne},
+			expectedResetOrderIds:  []string{},
+		},
+		{
+			name: "expired locked order should be submitted as reset",
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder(orderIdOne, contractAddress, buyerReceiveAddress)
+				order.BuyerChainDeadline = 10
+				return order
+			}()),
+			orderStore: createOrderStore(
+				createWitnessedCloseOrder(orderIdOne),
+			),
+			safeHeight:             20,
+			expectedLockOrdersLen:  0,
+			expectedCloseOrdersLen: 0,
+			expectedResetOrdersLen: 1,
+			expectedLockOrderIds:   []string{},
+			expectedCloseOrderIds:  []string{},
+			expectedResetOrderIds:  []string{orderIdOne},
 		},
 		{
 			name: "mixed scenario with multiple orders",
@@ -578,8 +695,10 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			),
 			expectedLockOrdersLen:  1,
 			expectedCloseOrdersLen: 1,
+			expectedResetOrdersLen: 0,
 			expectedLockOrderIds:   []string{orderIdOne},
 			expectedCloseOrderIds:  []string{orderIdTwo},
+			expectedResetOrderIds:  []string{},
 		},
 	}
 	for _, tt := range tests {
@@ -590,13 +709,17 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 				state:      NewOracleState("file", log),
 				log:        log,
 			}
+			oracle.state.safeHeight = tt.safeHeight
 			// 100 to specify a high enough root height that shouldSubmit always passes
-			witnessedLockOrders, witnessedCloseOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			witnessedLockOrders, witnessedCloseOrders, witnessedResetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
 			if len(witnessedLockOrders) != tt.expectedLockOrdersLen {
 				t.Errorf("expected %d lock orders, got %d", tt.expectedLockOrdersLen, len(witnessedLockOrders))
 			}
 			if len(witnessedCloseOrders) != tt.expectedCloseOrdersLen {
 				t.Errorf("expected %d close orders, got %d", tt.expectedCloseOrdersLen, len(witnessedCloseOrders))
+			}
+			if len(witnessedResetOrders) != tt.expectedResetOrdersLen {
+				t.Errorf("expected %d reset orders, got %d", tt.expectedResetOrdersLen, len(witnessedResetOrders))
 			}
 			for i, expectedId := range tt.expectedLockOrderIds {
 				if i < len(witnessedLockOrders) {
@@ -613,6 +736,15 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 					expectedIdHex := fmt.Sprintf("%x", []byte(expectedId))
 					if actualId != expectedIdHex {
 						t.Errorf("expected close order id %s, got %s", expectedIdHex, actualId)
+					}
+				}
+			}
+			for i, expectedId := range tt.expectedResetOrderIds {
+				if i < len(witnessedResetOrders) {
+					actualId := fmt.Sprintf("%x", witnessedResetOrders[i])
+					expectedIdHex := fmt.Sprintf("%x", []byte(expectedId))
+					if actualId != expectedIdHex {
+						t.Errorf("expected reset order id %s, got %s", expectedIdHex, actualId)
 					}
 				}
 			}
@@ -1441,7 +1573,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			}
 
 			// Get witnessed orders from oracle
-			lockOrders, closeOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			lockOrders, closeOrders, resetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
 
 			// Verify lock order count
 			if len(lockOrders) != tt.expectedLockOrders {
@@ -1451,6 +1583,9 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			// Verify close order count
 			if len(closeOrders) != tt.expectedCloseOrders {
 				t.Errorf("expected %d close orders, got %d", tt.expectedCloseOrders, len(closeOrders))
+			}
+			if len(resetOrders) != 0 {
+				t.Errorf("expected 0 reset orders, got %d", len(resetOrders))
 			}
 
 			// Verify orders are in store
@@ -1476,7 +1611,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			}
 
 			t.Logf("✓ Successfully processed %d USDC/USDT orders on committee %d",
-				len(lockOrders)+len(closeOrders), oracle.committee)
+				len(lockOrders)+len(closeOrders)+len(resetOrders), oracle.committee)
 		})
 	}
 }
