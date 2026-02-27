@@ -37,11 +37,18 @@ type StateMachine struct {
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 }
 
+// rootdexBatchCache is a cache for root DEX batches, to streamline DEX processing on nested chains
+type rootdexBatchCache struct {
+	batch         *lib.DexBatch // current latest root DEX batch
+	rcBuildHeight uint64        // height the root DEX batch was fetched
+}
+
 // cache is the set of items to be cached used by the state machine
 type cache struct {
-	accounts  map[uint64]*Account // cache of accounts accessed
-	feeParams *FeeParams          // fee params for the current block
-	valParams *ValidatorParams    // validator params for the current block
+	accounts     map[uint64]*Account // cache of accounts accessed
+	feeParams    *FeeParams          // fee params for the current block
+	valParams    *ValidatorParams    // validator params for the current block
+	rootDexBatch *rootdexBatchCache  // root dex batch
 }
 
 // New() creates a new instance of a StateMachine
@@ -503,7 +510,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		return nil, err
 	}
 	// return the clone state machine object reference
-	return &StateMachine{
+	smCopy := &StateMachine{
 		store:              storeCopy,
 		ProtocolVersion:    s.ProtocolVersion,
 		NetworkID:          s.NetworkID,
@@ -519,7 +526,15 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 			accounts: make(map[uint64]*Account),
 		},
 		LastValidatorSet: s.LastValidatorSet,
-	}, nil
+	}
+	// copy the root dex batch cache if it exists
+	if s.cache.rootDexBatch != nil {
+		smCopy.cache.rootDexBatch = &rootdexBatchCache{
+			batch:         s.cache.rootDexBatch.batch.Copy(),
+			rcBuildHeight: s.cache.rootDexBatch.rcBuildHeight,
+		}
+	}
+	return smCopy, nil
 }
 
 // Set() upserts a key-value pair under a key
@@ -610,11 +625,20 @@ func (s *StateMachine) TxnWrap() (lib.StoreI, lib.ErrorI) {
 	return txn, nil
 }
 
-// catchPanic() acts as a failsafe, recovering from a panic and logging the error with the stack trace
-func (s *StateMachine) catchPanic() {
-	if r := recover(); r != nil {
-		s.log.Error(string(debug.Stack()))
+// SetRooDexCache sets the root dex batch cache for the state machine
+func (s *StateMachine) SetRootDexCache(batch *lib.DexBatch, height uint64) {
+	s.cache.rootDexBatch = &rootdexBatchCache{
+		batch:         batch,
+		rcBuildHeight: height,
 	}
+}
+
+// GetCachedRootDex gets the root dex batch cache for the state machine
+func (s *StateMachine) GetCachedRootDex() (*lib.DexBatch, uint64) {
+	if s.cache.rootDexBatch == nil {
+		return nil, 0
+	}
+	return s.cache.rootDexBatch.batch, s.cache.rootDexBatch.rcBuildHeight
 }
 
 // Reset() resets the state store and the slash tracker
@@ -634,6 +658,7 @@ func (s *StateMachine) ResetCaches() {
 	// can leave the FSM reading stale values that disagree with the underlying store.
 	s.cache.valParams = nil
 	s.cache.feeParams = nil
+	s.cache.rootDexBatch = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty
@@ -725,4 +750,11 @@ func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (respons
 		}
 	}
 	return
+}
+
+// catchPanic() acts as a failsafe, recovering from a panic and logging the error with the stack trace
+func (s *StateMachine) catchPanic() {
+	if r := recover(); r != nil {
+		s.log.Error(string(debug.Stack()))
+	}
 }

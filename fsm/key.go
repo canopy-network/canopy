@@ -2,9 +2,10 @@ package fsm
 
 import (
 	"encoding/binary"
+	"math"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"math"
 )
 
 // ReservedIds ensures Validators can't stake for 'reserved ids'
@@ -46,8 +47,9 @@ var (
 	orderBySellerPrefix    = []byte{16} // store key prefix for 'sell orders' indexed by seller address
 	orderByBuyerPrefix     = []byte{17} // store key prefix for 'sell orders' indexed by buyer address
 
-	lockedBatchSegment = []byte{1}
-	nextBatchSement    = []byte{2}
+	lockedBatchSegment         = []byte{1}
+	nextBatchSement            = []byte{2}
+	lastProcessedRootDexSement = []byte{3}
 )
 
 /*
@@ -131,6 +133,10 @@ func KeyForLockedBatch(chainId uint64) []byte {
 
 func KeyForNextBatch(chainId uint64) []byte {
 	return lib.JoinLenPrefix(dexPrefix, nextBatchSement, formatUint64(chainId))
+}
+
+func KeyForProcessedRootDexHeight(chainId uint64) []byte {
+	return lib.JoinLenPrefix(dexPrefix, lastProcessedRootDexSement, formatUint64(chainId))
 }
 
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {

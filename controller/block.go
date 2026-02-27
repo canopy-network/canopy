@@ -202,6 +202,10 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		// exit with error
 		return
 	}
+	// cache the root dex batch from the proposal results for same-block execution
+	if qc.Results != nil && qc.Results.RootDexBatch != nil {
+		c.FSM.SetRootDexCache(qc.Results.RootDexBatch, rcBuildHeight)
+	}
 	// play the block against the state machine to generate a block result
 	blockResult, err = c.ApplyAndValidateBlock(block, false)
 	if err != nil {
