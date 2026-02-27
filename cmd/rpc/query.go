@@ -284,10 +284,19 @@ func (s *Server) Order(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 // Orders retrieves the order book for a committee with optional filters and pagination
 func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.ordersParams(w, r, func(s *fsm.StateMachine, req *ordersRequest) (any, lib.ErrorI) {
+	s.ordersParams(w, r, func(sm *fsm.StateMachine, req *ordersRequest) (any, lib.ErrorI) {
 		// validate mutual exclusion: cannot filter by both seller and buyer address
 		if req.SellersSendAddress != "" && req.BuyerSendAddress != "" {
 			return nil, lib.NewError(lib.CodeInvalidArgument, lib.RPCModule, "cannot filter by both sellersSendAddress and buyerSendAddress")
+		}
+		// validate that address-based queries are only allowed when indexing is enabled
+		if !sm.Config.StateMachineConfig.IndexOrdersByAddresses {
+			if req.SellersSendAddress != "" {
+				return nil, lib.NewError(lib.CodeInvalidArgument, lib.RPCModule, "sellersSendAddress filtering is disabled; set indexOrdersByAddresses=true in config")
+			}
+			if req.BuyerSendAddress != "" {
+				return nil, lib.NewError(lib.CodeInvalidArgument, lib.RPCModule, "buyerSendAddress filtering is disabled; set indexOrdersByAddresses=true in config")
+			}
 		}
 		// convert seller address if provided
 		var sellerAddr []byte
@@ -308,7 +317,7 @@ func (s *Server) Orders(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 			}
 		}
 		// use paginated query
-		return s.GetOrdersPaginated(sellerAddr, buyerAddr, req.Committee, req.PageParams)
+		return sm.GetOrdersPaginated(sellerAddr, buyerAddr, req.Committee, req.PageParams)
 	})
 }
 
