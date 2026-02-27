@@ -15,7 +15,9 @@ import (
 // - 'reset' is a 'claimed' order whose 'buyer' did not send the tokens to the seller before the deadline, thus the order is re-opened for sale
 // - 'close' is a 'claimed' order whose 'buyer' sent the tokens to the seller before the deadline, thus the order is 'closed' and the tokens are moved from escrow to the buyer
 func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) {
-	if orders != nil && (s.Config.ChainId != 1 && s.Config.ChainId != chainId) { // allow root chain to 'swap to self'
+	// root chain processes all committee swap results (including self);
+	// nested chains only process swaps for external committees.
+	if orders != nil && (s.Config.ChainId == 1 || s.Config.ChainId != chainId) {
 		// lock orders are a result of the committee witnessing a 'reserve transaction' for the order on the 'buyer chain'
 		// think of 'lock orders' like reserving the 'sell order'
 		for _, lockOrder := range orders.LockOrders {
