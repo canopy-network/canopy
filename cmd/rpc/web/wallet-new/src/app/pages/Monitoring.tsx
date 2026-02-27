@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { useAvailableNodes, useNodeData, useNodeLogs } from "@/hooks/useNodes";
+import { useAvailableNodes, useNodeData, useNodeLogs, useChainCommitteeId } from "@/hooks/useNodes";
 import NodeStatus from "@/components/monitoring/NodeStatus";
 import NetworkPeers from "@/components/monitoring/NetworkPeers";
 import NodeLogs from "@/components/monitoring/NodeLogs";
@@ -15,18 +15,21 @@ export default function Monitoring(): JSX.Element {
   >("quorum");
   const [isPaused, setIsPaused] = useState(false);
 
+  // Get the chain's committeeId first
+  const { committeeId, isLoading: committeeLoading, error: committeeError } = useChainCommitteeId();
+
   // Get current node (single node only)
-  const { data: availableNodes = [], isLoading: nodesLoading } =
+  const { data: availableNodes = [], isLoading: nodesLoading, error: nodesError } =
     useAvailableNodes();
   const currentNode = availableNodes[0]; // Always use the first (and only) node
 
   // Get data for current node
-  const { data: nodeData, isLoading: nodeDataLoading } = useNodeData(
+  const { data: nodeData, isLoading: nodeDataLoading, error: nodeDataError } = useNodeData(
     currentNode?.id || "",
   );
 
   // Logs are fetched independently so a large log payload never delays metrics
-  const { data: rawLogs } = useNodeLogs(currentNode?.id || "");
+  const { data: rawLogs } = useNodeLogs(currentNode?.id || "", isPaused);
 
   // Process node data from React Query
   const nodeStatus = {
@@ -54,17 +57,14 @@ export default function Monitoring(): JSX.Element {
       out: nodeData?.peers?.numOutbound || 0,
     },
     peerId: nodeData?.peers?.id?.publicKey || "",
-    networkAddress:
-      nodeData?.validatorSet?.validatorSet?.find(
-        (v: any) => v.publicKey === nodeData?.consensus?.publicKey,
-      )?.netAddress || "",
+    networkAddress: nodeData?.peers?.id?.netAddress || "",
     publicKey: nodeData?.consensus?.publicKey || "",
     peers: nodeData?.peers?.peers || [],
   };
 
   const logs =
     typeof rawLogs === "string"
-      ? rawLogs.split("\n").filter(Boolean)
+      ? rawLogs.split("\n").filter(Boolean).reverse()
       : [];
 
   const metrics = {
@@ -124,9 +124,24 @@ export default function Monitoring(): JSX.Element {
     // since we only monitor the current node
   };
 
-  // Loading state
-  if (nodesLoading || nodeDataLoading) {
+  // Loading state - include committeeLoading since data depends on it
+  if (committeeLoading || nodesLoading || nodeDataLoading) {
     return <MonitoringSkeleton />;
+  }
+
+  // Error state - show error message instead of empty page
+  const error = committeeError || nodesError || nodeDataError;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6 text-center max-w-md">
+          <h2 className="text-lg font-semibold text-red-300 mb-2">Monitoring Error</h2>
+          <p className="text-sm text-red-300/80">
+            {error instanceof Error ? error.message : "Failed to load monitoring data. Please try again."}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

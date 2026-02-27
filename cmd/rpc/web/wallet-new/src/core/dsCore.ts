@@ -117,7 +117,7 @@ export function buildRequest(chain: ChainLike, leaf: DsLeaf, ctx?: Record<string
     }
 
     const url = makeUrl(chain, leaf)
-    return { url, init: { method, headers, body }, debug: { tplCtx, rendered, coerced } }
+    return { url, init: { method, headers, body, cache: 'no-store' as RequestCache }, debug: { tplCtx, rendered, coerced } }
 }
 
 const looksLikeJson = (s: string) => typeof s === 'string' && /^\s*[{\[]/.test(s)

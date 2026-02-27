@@ -1,6 +1,18 @@
+import React from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useDSFetcher } from "@/core/dsFetch";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { useDS } from "@/core/useDs";
+
+type AdminConfigResponse = {
+  chainId?: number | string;
+};
+
+const toSafeInt = (value: unknown): number | undefined => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.trunc(n);
+};
 
 export interface NodeInfo {
   id: string;
@@ -20,46 +32,60 @@ export interface NodeData {
 }
 
 /**
+ * Hook to fetch the current chain's committeeId from admin.config
+ */
+export const useChainCommitteeId = () => {
+  const configQ = useDS<AdminConfigResponse>(
+    "admin.config",
+    {},
+    {
+      staleTimeMs: 5000,
+      refetchIntervalMs: 10000,
+      refetchOnWindowFocus: false,
+    },
+  );
+
+  const committeeId = React.useMemo(
+    () => toSafeInt(configQ.data?.chainId),
+    [configQ.data],
+  );
+
+  return {
+    committeeId,
+    isLoading: configQ.isLoading,
+    error: configQ.error,
+  };
+};
+
+/**
  * Hook to get the current node info using DS pattern
  * Uses the frontend's base URL configuration instead of discovering multiple nodes
  */
 export const useAvailableNodes = () => {
   const config = useConfig();
   const dsFetch = useDSFetcher();
+  const { committeeId, isLoading: committeeLoading } = useChainCommitteeId();
 
   return useQuery({
-    queryKey: ["availableNodes"],
+    queryKey: ["availableNodes", committeeId],
+    enabled: typeof committeeId === "number" && committeeId > 0,
     queryFn: async (): Promise<NodeInfo[]> => {
       try {
-        // Fetch consensus info and validator set using DS pattern
-        const [consensusData, validatorSetData] = await Promise.all([
+        const [consensusData, peerData] = await Promise.all([
           dsFetch("admin.consensusInfo"),
-          dsFetch("validatorSet", { height: 0, committeeId: 1 }),
+          dsFetch("admin.peerInfo"),
         ]);
 
-        // Try to find the validator by matching publicKey, or use the first validator if not found
-        let validator = validatorSetData?.validatorSet?.find(
-          (v: any) => v.publicKey === consensusData?.publicKey,
-        );
+        const netAddress: string = peerData?.id?.netAddress || "tcp://localhost";
 
-        // If no matching validator found by publicKey, use the first available validator
-        if (!validator && validatorSetData?.validatorSet?.length > 0) {
-          validator = validatorSetData.validatorSet[0];
-        }
-
-        const netAddress = validator?.netAddress || "tcp://localhost";
-
-        // Extract the node name from netAddress (e.g., "tcp://localhost" -> "localhost")
         let nodeName = netAddress.replace("tcp://", "");
 
-        // Only apply transformations if it's not a simple hostname like "localhost"
         if (nodeName !== "localhost" && nodeName.includes("-")) {
           nodeName = nodeName
             .replace(/-/g, " ")
             .replace(/\b\w/g, (l: string) => l.toUpperCase());
         }
 
-        // Fallback name if extraction fails
         if (!nodeName || nodeName === "current-node") {
           nodeName = "Current Node";
         }
@@ -76,7 +102,6 @@ export const useAvailableNodes = () => {
       } catch (error) {
         console.log("Current node not available:", error);
 
-        // Return a default node info even if there's an error
         return [
           {
             id: "current_node",
@@ -103,12 +128,15 @@ export const useAvailableNodes = () => {
 export const useNodeData = (nodeId: string) => {
   const dsFetch = useDSFetcher();
   const { data: availableNodes = [] } = useAvailableNodes();
+  const { committeeId } = useChainCommitteeId();
   const selectedNode =
     availableNodes.find((n) => n.id === nodeId) || availableNodes[0];
 
+  const hasCommittee = typeof committeeId === "number" && committeeId > 0;
+
   return useQuery({
-    queryKey: ["nodeData", nodeId],
-    enabled: !!nodeId && !!selectedNode,
+    queryKey: ["nodeData", nodeId, committeeId],
+    enabled: !!nodeId && !!selectedNode && hasCommittee,
     queryFn: async (): Promise<NodeData> => {
       if (!selectedNode) throw new Error("Node not found");
 
@@ -124,7 +152,7 @@ export const useNodeData = (nodeId: string) => {
           dsFetch("admin.consensusInfo"),
           dsFetch("admin.peerInfo"),
           dsFetch("admin.resourceUsage"),
-          dsFetch("validatorSet", { height: 0, committeeId: 1 }),
+          dsFetch("validatorSet", { height: 0, committeeId: committeeId! }),
         ]);
 
         return {
@@ -151,27 +179,28 @@ export const useNodeData = (nodeId: string) => {
  * Hook to stream node logs independently of the fast metrics cycle.
  * Logs can be a large text payload; keeping them in a separate query
  * prevents them from blocking consensus/resource updates.
+ *
+ * Fetches the admin log endpoint directly (plain text GET) instead of
+ * going through the DS pipeline so the raw text is never altered by
+ * JSON normalisation.
  */
-export const useNodeLogs = (nodeId: string) => {
-  const dsFetch = useDSFetcher();
-  const { data: availableNodes = [] } = useAvailableNodes();
-  const selectedNode =
-    availableNodes.find((n) => n.id === nodeId) || availableNodes[0];
+export const useNodeLogs = (nodeId: string, isPaused: boolean = false) => {
+  const { chain } = useConfig();
+  const adminBase: string = (chain as Record<string, Record<string, string>>)?.rpc?.admin ?? "";
 
   return useQuery({
     queryKey: ["nodeLogs", nodeId],
-    enabled: !!nodeId && !!selectedNode,
+    enabled: !!nodeId && !isPaused && !!adminBase,
     queryFn: async (): Promise<string> => {
-      if (!selectedNode) throw new Error("Node not found");
-      try {
-        return await dsFetch("admin.log");
-      } catch (error) {
-        console.error(`Error fetching logs for ${nodeId}:`, error);
-        return "";
-      }
+      const res = await fetch(`${adminBase}/v1/admin/log`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`Log fetch failed: ${res.status}`);
+      return res.text();
     },
-    refetchInterval: 1000,
-    staleTime: 500,
-    placeholderData: keepPreviousData,
+    refetchInterval: isPaused ? false : 1000,
+    staleTime: 0,
+    gcTime: 0,
   });
 };
