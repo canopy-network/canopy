@@ -1,6 +1,8 @@
 import React from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useDS } from "@/core/useDs";
+import { useConfig } from "@/app/providers/ConfigProvider";
 
 const DEFAULT_PER_PAGE = 20;
 const DEFAULT_POLL_INTERVAL_MS = 6000;
@@ -43,6 +45,22 @@ const asList = (payload: OrdersResponse | undefined): RpcOrder[] =>
 export const isOrderLocked = (order: RpcOrder): boolean =>
   !!String(order?.buyerSendAddress ?? "").trim();
 
+async function fetchOrdersFromRoot(
+  rootRpcBase: string,
+  body: Record<string, unknown>
+): Promise<OrdersResponse> {
+  const res = await fetch(`${rootRpcBase}/v1/query/orders`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`RPC ${res.status}`);
+  return res.json();
+}
+
 export function useOrdersData(options?: {
   perPage?: number;
   pollIntervalMs?: number;
@@ -51,6 +69,11 @@ export function useOrdersData(options?: {
   const pollIntervalMs = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
 
   const { selectedAddress, isReady: accountsReady } = useAccounts();
+  const { chain } = useConfig();
+
+  const rootRpcBase = React.useMemo(() => {
+    return chain?.rpc?.root ?? chain?.rpc?.base ?? "";
+  }, [chain?.rpc?.root, chain?.rpc?.base]);
 
   const configQ = useDS<AdminConfigResponse>(
     "admin.config",
@@ -86,36 +109,45 @@ export function useOrdersData(options?: {
     },
   );
 
-  const availableOrdersQ = useDS<OrdersResponse>(
-    "orders.byCommittee",
-    {
-      committee: committeeId,
-      page: 1,
-      perPage,
-    },
-    {
-      enabled: hasCommittee,
-      staleTimeMs: pollIntervalMs,
-      refetchIntervalMs: pollIntervalMs,
-      refetchOnWindowFocus: false,
-    },
-  );
+  const availableOrdersQ = useQuery<OrdersResponse>({
+    queryKey: ["rootrpc", "orders.byCommittee", rootRpcBase, committeeId, perPage],
+    enabled: hasCommittee && !!rootRpcBase,
+    staleTime: pollIntervalMs,
+    refetchInterval: pollIntervalMs,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      fetchOrdersFromRoot(rootRpcBase, {
+        height: 0,
+        committee: committeeId,
+        pageNumber: 1,
+        perPage,
+      }),
+  });
 
-  const fulfillOrdersQ = useDS<OrdersResponse>(
-    "orders.byBuyer",
-    {
-      account: { address: selectedAddress },
-      committee: committeeId,
-      page: 1,
+  const fulfillOrdersQ = useQuery<OrdersResponse>({
+    queryKey: [
+      "rootrpc",
+      "orders.byBuyer",
+      rootRpcBase,
+      selectedAddress,
+      committeeId,
       perPage,
-    },
-    {
-      enabled: hasSelectedAddress && hasCommittee,
-      staleTimeMs: pollIntervalMs,
-      refetchIntervalMs: pollIntervalMs,
-      refetchOnWindowFocus: false,
-    },
-  );
+    ],
+    enabled: hasSelectedAddress && hasCommittee && !!rootRpcBase,
+    staleTime: pollIntervalMs,
+    refetchInterval: pollIntervalMs,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      fetchOrdersFromRoot(rootRpcBase, {
+        height: 0,
+        buyerSendAddress: selectedAddress,
+        committee: committeeId,
+        pageNumber: 1,
+        perPage,
+      }),
+  });
 
   const myOrders = React.useMemo(() => asList(myOrdersQ.data), [myOrdersQ.data]);
 
