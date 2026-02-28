@@ -198,6 +198,29 @@ func TestRLPToSendTxDynamic(t *testing.T) {
 	}
 }
 
+func TestRLPToCanopyTransaction_RejectsChainIDAboveUint64(t *testing.T) {
+	privKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	low64ChainID := CanopyIdsToEVMChainId(1, 1)
+	hugeChainID := new(big.Int).Add(
+		new(big.Int).Lsh(big.NewInt(1), 80),
+		new(big.Int).SetUint64(low64ChainID),
+	)
+
+	to := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+	tx := types.NewTransaction(3, to, UpscaleTo18Decimals(1), 21_000, UpscaleTo18Decimals(10), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(hugeChainID), privKey)
+	require.NoError(t, err)
+
+	rlpBytes, err := signedTx.MarshalBinary()
+	require.NoError(t, err)
+
+	_, errI := RLPToCanopyTransaction(rlpBytes)
+	require.Error(t, errI)
+	require.ErrorContains(t, errI, "chain id exceeds uint64")
+}
+
 func TestRLPToSendTxERC20(t *testing.T) {
 	// create the identity / chain fields
 	privKey, err := crypto.GenerateKey()

@@ -2529,6 +2529,47 @@ func TestHandleMessageEditOrder(t *testing.T) {
 	}
 }
 
+func TestHandleMessageEditOrder_LargeReductionRefundsSeller(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.MinimumOrderSize = 1
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	chainID := uint64(lib.CanopyChainId)
+	orderID := newTestOrderId(t, 9)
+	seller := newTestAddressBytes(t)
+	oldAmount := uint64(1<<63 + 2)
+	newAmount := uint64(1)
+
+	require.NoError(t, sm.SetOrder(&lib.SellOrder{
+		Id:                   orderID,
+		Committee:            chainID,
+		AmountForSale:        oldAmount,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 1),
+		SellersSendAddress:   seller,
+	}, chainID))
+	require.NoError(t, sm.PoolAdd(chainID+EscrowPoolAddend, oldAmount))
+
+	err = sm.HandleMessageEditOrder(&MessageEditOrder{
+		OrderId:              orderID,
+		ChainId:              chainID,
+		AmountForSale:        newAmount,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 2),
+	})
+	require.NoError(t, err)
+
+	gotAccount, err := sm.GetAccountBalance(crypto.NewAddress(seller))
+	require.NoError(t, err)
+	require.Equal(t, oldAmount-newAmount, gotAccount)
+
+	gotEscrow, err := sm.GetPoolBalance(chainID + EscrowPoolAddend)
+	require.NoError(t, err)
+	require.Equal(t, newAmount, gotEscrow)
+}
+
 func TestHandleMessageDelete(t *testing.T) {
 	tests := []struct {
 		name          string

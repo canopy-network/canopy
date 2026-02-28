@@ -56,6 +56,10 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 	if err != nil {
 		return nil, ErrInvalidPublicKey(err)
 	}
+	// ensure the EVM chain id fits into Canopy's uint64 translation.
+	if tx.ChainId() == nil || !tx.ChainId().IsUint64() {
+		return nil, ErrInvalidRLPTx(fmt.Errorf("chain id exceeds uint64"))
+	}
 	// extract chain id and network id from the evm chain id
 	chainId, networkId := EvmChainIdToCanopyIds(tx.ChainId().Uint64())
 	// generate the transaction object

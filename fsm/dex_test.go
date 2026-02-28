@@ -2471,6 +2471,31 @@ func TestWithdrawThenRedeploy_NoPointGain(t *testing.T) {
 	require.LessOrEqual(t, finalPoints, initialPoints, "round-trip should not increase LP points")
 }
 
+func TestHandleBatchDeposit_RejectsReserveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + LiquidityPoolAddend,
+		Amount: 1,
+	}))
+
+	x := ^uint64(0) - 5
+	y := uint64(1)
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: newTestAddressBytes(t, 1),
+			Amount:  10,
+			OrderId: []byte{0x01},
+		}},
+	}
+
+	err := sm.HandleBatchDeposit(batch, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
 type dexSim struct {
 	chainX, chainY     *dexChain
 	counterId          uint64

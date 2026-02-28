@@ -5,6 +5,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
+	"math/bits"
 	"sort"
 	"strings"
 )
@@ -470,7 +471,11 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	L := p.TotalPoolPoints
 	// sum all deposits
 	for _, deposit := range batch.Deposits {
-		totalDeposit += deposit.Amount
+		var carry uint64
+		totalDeposit, carry = bits.Add64(totalDeposit, deposit.Amount, 0)
+		if carry != 0 {
+			return ErrInvalidLiquidityPool()
+		}
 	}
 	// nothing to add or failed invariant check
 	if totalDeposit == 0 || *x == 0 || *y == 0 {
@@ -490,7 +495,14 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
-	newK := lib.SqrtProductUint64(*x+totalDeposit, *y)
+	xAfterTotalDeposit, carry := bits.Add64(*x, totalDeposit, 0)
+	if carry != 0 {
+		return ErrInvalidLiquidityPool()
+	}
+	newK := lib.SqrtProductUint64(xAfterTotalDeposit, *y)
+	if newK < oldK {
+		return ErrInvalidLiquidityPool()
+	}
 	// totalDL is calculated as if all deposits is just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// distribute the points
@@ -506,10 +518,16 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 			if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
 				return err
 			}
-			p.Amount += deposit.Amount
+			p.Amount, carry = bits.Add64(p.Amount, deposit.Amount, 0)
+			if carry != 0 {
+				return ErrInvalidLiquidityPool()
+			}
 		}
 		// update the reserve
-		*x += deposit.Amount
+		*x, carry = bits.Add64(*x, deposit.Amount, 0)
+		if carry != 0 {
+			return ErrInvalidLiquidityPool()
+		}
 		// emit a deposit event
 		if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, share, chainId, local); err != nil {
 			return err
