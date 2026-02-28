@@ -145,6 +145,52 @@ func TestBeginBlock(t *testing.T) {
 	}
 }
 
+func TestHandleCertificateResultsNilGuards(t *testing.T) {
+	tests := []struct {
+		name     string
+		qc       *lib.QuorumCertificate
+		expected lib.ErrorI
+	}{
+		{
+			name: "nil header",
+			qc: &lib.QuorumCertificate{
+				Results: &lib.CertificateResult{
+					RewardRecipients: &lib.RewardRecipients{
+						PaymentPercents: []*lib.PaymentPercents{{
+							Address: newTestAddressBytes(t),
+							ChainId: lib.CanopyChainId,
+							Percent: 100,
+						}},
+					},
+				},
+			},
+			expected: lib.ErrEmptyView(),
+		},
+		{
+			name: "nil reward recipients",
+			qc: &lib.QuorumCertificate{
+				Header: &lib.View{
+					ChainId:    lib.CanopyChainId,
+					Height:     1,
+					RootHeight: 1,
+				},
+				Results: &lib.CertificateResult{},
+			},
+			expected: lib.ErrNilRewardRecipients(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newSingleAccountStateMachine(t)
+			var err lib.ErrorI
+			require.NotPanics(t, func() {
+				err = sm.HandleCertificateResults(test.qc, nil)
+			})
+			require.Equal(t, test.expected, err)
+		})
+	}
+}
+
 func TestEndBlock(t *testing.T) {
 	// generate committee data for testing
 	committeeData := []*lib.CommitteeData{

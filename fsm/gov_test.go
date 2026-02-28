@@ -334,6 +334,36 @@ func TestConformStateToParamUpdate(t *testing.T) {
 	}
 }
 
+func TestConformStateToParamUpdate_MaxCommitteesShrinkGuard(t *testing.T) {
+	sm := newTestStateMachine(t)
+
+	previous := DefaultParams()
+	previous.Validator.MaxCommittees = 4
+	previous.Validator.MaxCommitteeSize = 1
+
+	updated := DefaultParams()
+	updated.Validator.MaxCommittees = 3
+	updated.Validator.MaxCommitteeSize = 1
+	require.NoError(t, sm.SetParams(updated))
+
+	supply := &Supply{}
+	v := &Validator{
+		Address:      newTestAddressBytes(t),
+		PublicKey:    newTestPublicKeyBytes(t),
+		Output:       newTestAddressBytes(t, 1),
+		StakedAmount: 100,
+		Committees:   []uint64{0, 1, 2, 3},
+	}
+	require.NoError(t, sm.SetValidators([]*Validator{v}, supply))
+	require.NoError(t, sm.SetSupply(supply))
+
+	require.NoError(t, sm.ConformStateToParamUpdate(previous))
+
+	got, err := sm.GetValidator(newTestAddress(t))
+	require.NoError(t, err)
+	require.Len(t, got.Committees, 3)
+}
+
 func TestSetGetParams(t *testing.T) {
 	tests := []struct {
 		name     string

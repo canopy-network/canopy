@@ -172,12 +172,12 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 			return err
 		}
 	}
-	// check for a change in MaxCommitteeSize
-	if previousParams.Validator.MaxCommitteeSize <= params.Validator.MaxCommittees {
+	// check for a change in MaxCommittees
+	if previousParams.Validator.MaxCommittees <= params.Validator.MaxCommittees {
 		return nil
 	}
-	// shrinking MaxCommitteeSize must be immediately enforced to ensure no 'grandfathered' in violators
-	maxCommitteeSize := int(params.Validator.MaxCommittees)
+	// shrinking MaxCommittees must be immediately enforced to ensure no 'grandfathered' in violators
+	maxCommittees := int(params.Validator.MaxCommittees)
 	// maintain a counter for pseudorandom removal of the 'chain ids'
 	var idx int
 	// for each validator, remove the excess ids in a pseudorandom fashion
@@ -189,13 +189,13 @@ func (s *StateMachine) ConformStateToParamUpdate(previousParams *Params) lib.Err
 		}
 		// check the number of committees for this validator and see if it's above the maximum
 		numCommittees := len(v.Committees)
-		if numCommittees <= maxCommitteeSize {
+		if numCommittees <= maxCommittees {
 			return nil
 		}
 		// create a variable to hold a copy of the new committees
-		newCommittees := make([]uint64, maxCommitteeSize)
-		// iterate 'maxCommitteeSize' number of times
-		for i := 0; i < maxCommitteeSize; i++ {
+		newCommittees := make([]uint64, maxCommittees)
+		// iterate 'maxCommittees' number of times
+		for i := 0; i < maxCommittees; i++ {
 			// calculate a pseudorandom index
 			startIndex := idx % numCommittees
 			// add each element in a circular queue fashion starting at random position determined by idx

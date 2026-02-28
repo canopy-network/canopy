@@ -35,6 +35,9 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 
 // GetBlockMintStats() gets the latest minting information for the blockchain
 func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []uint64, daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
+	if s.Config.BlocksPerHalvening == 0 {
+		return nil, 0, 0, 0, lib.ErrInvalidArgument()
+	}
 	// get governance params that are needed to complete this operation
 	govParams, err := s.GetParamsGov()
 	if err != nil {

@@ -301,6 +301,15 @@ func TestFundCommitteeRewardPools(t *testing.T) {
 	}
 }
 
+func TestGetBlockMintStatsZeroBlocksPerHalveningReturnsError(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.BlocksPerHalvening = 0
+
+	_, _, _, _, err := sm.GetBlockMintStats(lib.CanopyChainId)
+	require.Error(t, err)
+	require.Equal(t, lib.ErrInvalidArgument().Code(), err.Code())
+}
+
 func TestGetPaidCommittees(t *testing.T) {
 	tests := []struct {
 		name                       string

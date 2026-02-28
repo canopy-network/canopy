@@ -132,6 +132,14 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc == nil || qc.Results == nil {
 		return lib.ErrNilCertResults()
 	}
+	// ensure the certificate header is not nil
+	if qc.Header == nil {
+		return lib.ErrEmptyView()
+	}
+	// ensure reward recipients are present before dereferencing
+	if qc.Results.RewardRecipients == nil {
+		return lib.ErrNilRewardRecipients()
+	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
 	if err != nil {
