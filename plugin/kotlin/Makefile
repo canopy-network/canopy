@@ -58,10 +58,10 @@ jar:
 	@echo "Building JAR..."
 	./gradlew jar
 
-# Build fat JAR with all dependencies
+# Build fat JAR with all dependencies (same as root Makefile)
 fatjar:
 	@echo "Building fat JAR..."
-	./gradlew shadowJar
+	./gradlew fatJar --no-daemon
 
 # Run with debugging enabled
 debug:
