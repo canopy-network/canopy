@@ -834,6 +834,21 @@ func TestAddToStakedSupply(t *testing.T) {
 	}
 }
 
+func TestAddToStakedSupplyOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = math.MaxUint64
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToStakedSupply(1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Equal(t, uint64(math.MaxUint64), after.Staked)
+}
+
 func TestAddToTotalSupply(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -920,6 +935,24 @@ func TestAddToCommitteeStakedSupply(t *testing.T) {
 			require.Equal(t, supply.CommitteeStaked[0].Amount, test.preAmount+test.amount)
 		})
 	}
+}
+
+func TestAddToCommitteeSupplyForChainOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	const chainID = uint64(1)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.CommitteeStaked = []*Pool{{Id: chainID, Amount: math.MaxUint64}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToCommitteeSupplyForChain(chainID, 1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Len(t, after.CommitteeStaked, 1)
+	require.Equal(t, chainID, after.CommitteeStaked[0].Id)
+	require.Equal(t, uint64(math.MaxUint64), after.CommitteeStaked[0].Amount)
 }
 
 func TestAddToDelegationStakedSupply(t *testing.T) {

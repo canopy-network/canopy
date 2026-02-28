@@ -431,6 +431,10 @@ func (s *StateMachine) AddToStakedSupply(amount uint64) lib.ErrorI {
 	if err != nil {
 		return err
 	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.Staked > math.MaxUint64-amount {
+		return ErrInvalidAmount()
+	}
 	// add to the staked amount in the supply tracker
 	supply.Staked += amount
 	// set the supply tracker back in state
@@ -576,6 +580,10 @@ func (s *StateMachine) marshalSupply(supply *Supply) ([]byte, lib.ErrorI) {
 func (s *StateMachine) addToSupplyPool(chainId, amount uint64, targetType SupplyPoolType) lib.ErrorI {
 	// execute the callback on the supply pool that has a certain chainID and type
 	return s.executeOnSupplyPool(chainId, targetType, func(s *Supply, p *Pool) (err lib.ErrorI) {
+		// ensure add operation is safe from uint64 overflow
+		if p.Amount > math.MaxUint64-amount {
+			return ErrInvalidAmount()
+		}
 		// add to the supply pool amount
 		p.Amount += amount
 		return

@@ -873,6 +873,12 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 	if len(x.Withdrawals) > MaxWithdrawsPerDexBatch {
 		return ErrTooManyDexWithdraws()
 	}
+	// ensure each withdrawal percent is valid
+	for _, withdrawal := range x.Withdrawals {
+		if withdrawal == nil || withdrawal.Percent == 0 || withdrawal.Percent > 100 {
+			return ErrInvalidPercentAllocation()
+		}
+	}
 	// ensure there's not too many orders
 	if len(x.Orders) > MaxOrdersPerDexBatch {
 		return ErrTooManyDexOrders()

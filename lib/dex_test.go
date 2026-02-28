@@ -184,6 +184,34 @@ func TestDexBatch_MarshalJSON(t *testing.T) {
 	}
 }
 
+func TestDexBatch_CheckBasic_InvalidWithdrawPercent(t *testing.T) {
+	tests := []struct {
+		name    string
+		percent uint64
+	}{
+		{name: "zero", percent: 0},
+		{name: "over_100", percent: 101},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			batch := &DexBatch{
+				Withdrawals: []*DexLiquidityWithdraw{{
+					Percent: tt.percent,
+				}},
+			}
+
+			err := batch.CheckBasic()
+			if err == nil {
+				t.Fatalf("expected error for percent=%d", tt.percent)
+			}
+			if err.Error() != ErrInvalidPercentAllocation().Error() {
+				t.Fatalf("expected %q, got %q", ErrInvalidPercentAllocation().Error(), err.Error())
+			}
+		})
+	}
+}
+
 func TestPoolPoints_MarshalJSON(t *testing.T) {
 	points := PoolPoints{
 		Address: []byte("test"),
