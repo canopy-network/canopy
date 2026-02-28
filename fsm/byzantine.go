@@ -59,6 +59,9 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 }
 
 // SlashAndResetNonSigners() resets non-signer tracking and applies protocol-versioned settlement semantics.
+// Protocol v2 intentionally performs a single settlement per non-sign window:
+// the first chain processed during reset settles against its chain-scoped counters, then
+// all non-signer keys are erased for the next window.
 func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *ValidatorParams) (err lib.ErrorI) {
 	committeeScoped := s.IsFeatureEnabled(2)
 	var keys, slashList [][]byte
@@ -102,7 +105,8 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 	if err = s.SlashNonSigners(chainId, params, slashList); err != nil {
 		return
 	}
-	// delete all keys under 'non-signer' prefix as part of the reset
+	// reset window state after settlement.
+	// this intentionally drops pending evidence for other chains in the same window.
 	_ = s.DeleteAll(keys)
 	return
 }

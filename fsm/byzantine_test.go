@@ -1076,6 +1076,57 @@ func TestSlashAndResetNonSignersV2_ChainScopedAndEjectsSpecificCommittee(t *test
 	require.Contains(t, afterSlash.Committees, uint64(1))
 }
 
+func TestSlashAndResetNonSignersV2_FirstSettlementClearsWindowEvidence(t *testing.T) {
+	const stakeAmount = uint64(100)
+	sm := newTestStateMachine(t)
+
+	consParams, err := sm.GetParamsCons()
+	require.NoError(t, err)
+	consParams.ProtocolVersion = NewProtocolVersion(0, 2)
+	require.NoError(t, sm.SetParamsCons(consParams))
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.MaxNonSign = 0
+	valParams.NonSignSlashPercentage = 10
+	valParams.MaxSlashPerCommittee = 100
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	keyGroup := newTestKeyGroup(t)
+	validator := &Validator{
+		Address:      keyGroup.Address.Bytes(),
+		PublicKey:    keyGroup.PublicKey.Bytes(),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{1, 2},
+	}
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(1, stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(2, stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(keyGroup.Address, stakeAmount, validator.Committees))
+
+	// Record misses for both chains in the same window.
+	require.NoError(t, sm.IncrementNonSigners(1, [][]byte{keyGroup.PublicKey.Bytes()}))
+	require.NoError(t, sm.IncrementNonSigners(2, [][]byte{keyGroup.PublicKey.Bytes()}))
+
+	// First chain settlement slashes once and clears the full non-signer window state.
+	require.NoError(t, sm.SlashAndResetNonSigners(1, valParams))
+	afterFirst, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Less(t, afterFirst.StakedAmount, stakeAmount)
+
+	nonSignerBz, err := sm.Get(KeyForNonSigner(keyGroup.Address.Bytes()))
+	require.NoError(t, err)
+	require.Nil(t, nonSignerBz)
+
+	// Later chain settlements in the same window should not apply additional slash from erased evidence.
+	require.NoError(t, sm.SlashAndResetNonSigners(2, valParams))
+	afterSecond, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Equal(t, afterFirst.StakedAmount, afterSecond.StakedAmount)
+}
+
 func TestLoadMinimumEvidenceHeight(t *testing.T) {
 	tests := []struct {
 		name            string
