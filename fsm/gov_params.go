@@ -158,8 +158,8 @@ func (x *ConsensusParams) SetString(paramName string, value string) lib.ErrorI {
 		if err != nil {
 			return err
 		}
-		// ensure new version isn't less than old version
-		if newVersion.Version <= oldVersion.Version || newVersion.Height <= oldVersion.Height {
+		// enforce sequential upgrades and strictly increasing activation heights.
+		if newVersion.Version != oldVersion.Version+1 || newVersion.Height <= oldVersion.Height {
 			return ErrInvalidProtocolVersion()
 		}
 		x.ProtocolVersion = value

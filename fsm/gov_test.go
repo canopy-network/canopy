@@ -590,6 +590,14 @@ func TestIsFeatureEnabled(t *testing.T) {
 			expected:        false,
 		},
 		{
+			name:            "future upgrade does not enable early",
+			detail:          "before a far-future upgrade height, the scheduled version is not yet active",
+			height:          10,
+			protocolVersion: "2/1000",
+			version:         2,
+			expected:        false,
+		},
+		{
 			name:            "on version / height",
 			detail:          "exactly on the version and height",
 			height:          2,
@@ -626,4 +634,34 @@ func TestIsFeatureEnabled(t *testing.T) {
 			require.Equal(t, test.expected, sm.IsFeatureEnabled(test.version))
 		})
 	}
+}
+
+func TestUpdateParamProtocolVersionGuards(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 10
+
+	// disallow version jumps.
+	err := sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(1000, 3),
+	})
+	require.ErrorContains(t, err, "invalid protocol version")
+
+	// allow scheduling the next version.
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(1000, 2),
+	})
+	require.NoError(t, err)
+
+	// disallow scheduling another version before the current scheduled version activates.
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(2000, 3),
+	})
+	require.ErrorContains(t, err, "invalid protocol version")
+
+	// once active, scheduling the next version is allowed.
+	sm.height = 1000
+	err = sm.UpdateParam(ParamSpaceCons, ParamProtocolVersion, &lib.StringWrapper{
+		Value: NewProtocolVersion(2000, 3),
+	})
+	require.NoError(t, err)
 }

@@ -78,6 +78,20 @@ func (s *StateMachine) UpdateParam(paramSpace, paramName string, value proto.Mes
 	case *lib.UInt64Wrapper:
 		err = sp.SetUint64(paramName, v.Value)
 	case *lib.StringWrapper:
+		if paramSpace == ParamSpaceCons && paramName == ParamProtocolVersion {
+			consensusParams, ok := sp.(*ConsensusParams)
+			if !ok {
+				return ErrInvalidProtocolVersion()
+			}
+			currentProtocol, e := consensusParams.ParseProtocolVersion()
+			if e != nil {
+				return e
+			}
+			// prevent queuing another protocol version before the scheduled one activates.
+			if s.Height() < currentProtocol.Height {
+				return ErrInvalidProtocolVersion()
+			}
+		}
 		err = sp.SetString(paramName, v.Value)
 	default:
 		return ErrUnknownParamType(value)
@@ -515,14 +529,15 @@ func (s *StateMachine) IsFeatureEnabled(requiredVersion uint64) bool {
 		// return 'feature not enabled'
 		return false
 	}
-	// check if the current protocol version is beyond the required activation version
-	if currentProtocol.Version > requiredVersion {
-		// return 'feature is enabled'
-		return true
+	// determine active protocol version at this height.
+	activeVersion := currentProtocol.Version
+	if s.Height() < currentProtocol.Height {
+		if activeVersion == 0 {
+			return false
+		}
+		activeVersion--
 	}
-	// if the current protocol version matches the required version,
-	// enable the feature only if the state height is at or beyond the activation height
-	return currentProtocol.Version == requiredVersion && s.Height() >= currentProtocol.Height
+	return activeVersion >= requiredVersion
 }
 
 // ROOT CHAIN CODE BELOW
