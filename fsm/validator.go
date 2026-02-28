@@ -358,8 +358,8 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 			// move on to the next iteration
 			continue
 		}
-		// ensure no unauthorized auto-pauses
-		if !slices.Contains(val.Committees, chainId) {
+		// protocol v2+ requires committee membership for chain-scoped auto-pause.
+		if s.IsFeatureEnabled(2) && !slices.Contains(val.Committees, chainId) {
 			// NOTE: expected - this can happen during a race between edit-stake and pause
 			s.log.Warnf("unauthorized pause from %d, this can happen occasionally", chainId)
 			// exit
