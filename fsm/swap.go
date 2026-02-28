@@ -48,11 +48,13 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 // BUYER SIDE LOGIC
 
 // ParseLockOrder() parses a transaction for an embedded lock order messages in the memo field
-func (s *StateMachine) ParseLockOrder(tx *lib.Transaction, deadlineBlocks uint64) (bo *lib.LockOrder, ok bool) {
+func (s *StateMachine) ParseLockOrder(tx *lib.Transaction, buyerSendAddress []byte, deadlineBlocks uint64) (bo *lib.LockOrder, ok bool) {
 	// create a new reference to a 'lock order' object in order to ensure a non-nil result
 	bo = new(lib.LockOrder)
 	// attempt to unmarshal the transaction memo into a 'lock order'
 	if err := lib.UnmarshalJSON([]byte(tx.Memo), bo); err == nil {
+		// bind to the authenticated sender from MessageSend instead of trusting memo JSON
+		bo.BuyerSendAddress = buyerSendAddress
 		// sanity check some critical fields of the 'lock order' to ensure the unmarshal was successful
 		if len(bo.BuyerSendAddress) != 0 && len(bo.BuyerReceiveAddress) != 0 && bo.ChainId == s.Config.ChainId {
 			ok = true
@@ -127,10 +129,24 @@ func (s *StateMachine) ProcessRootChainOrderBook(book *lib.OrderBook, proposalBl
 				continue
 			}
 			// get the co send to verify the amount
-			send := coSends[string(order.Id)]
+			send, found := coSends[string(order.Id)]
+			if !found || send == nil {
+				s.log.Errorf("close order error: missing send transaction, id: %s", lib.BytesToString(closeOrder.OrderId))
+				continue
+			}
 			// check that sent amount == request amount
 			if send.Amount != order.RequestedAmount {
 				s.log.Errorf("close order error: sent amount does not equal requested amount, id: %s", lib.BytesToString(closeOrder.OrderId))
+				continue
+			}
+			// check that payment sender == locked buyer
+			if !bytes.Equal(send.FromAddress, order.BuyerSendAddress) {
+				s.log.Errorf("close order error: sender does not match locked buyer, id: %s", lib.BytesToString(closeOrder.OrderId))
+				continue
+			}
+			// check that payment recipient == seller requested recipient
+			if !bytes.Equal(send.ToAddress, order.SellerReceiveAddress) {
+				s.log.Errorf("close order error: recipient does not match seller receive address, id: %s", lib.BytesToString(closeOrder.OrderId))
 				continue
 			}
 			// add to closed orders
@@ -163,8 +179,20 @@ func (s *StateMachine) ParseBlockForLockAndCloseOrders(blocks ...*lib.BlockResul
 			if tx.MessageType != MessageSendName || tx.Transaction.Memo == "" || tx.Transaction.Fee < minFee || !json.Valid([]byte(tx.Transaction.Memo)) {
 				continue
 			}
+			// extract the message from the transaction object
+			msg, e := lib.FromAny(tx.Transaction.Msg)
+			if e != nil {
+				s.log.Error(e.Error())
+				continue
+			}
+			// cast the message to send
+			send, ok := msg.(*MessageSend)
+			if !ok {
+				s.log.Error("Non-send message with a send message name (should not happen)")
+				continue
+			}
 			// parse the transaction for embedded 'lock orders'
-			if lockOrder, ok := s.ParseLockOrder(tx.Transaction, params.Validator.BuyDeadlineBlocks); ok {
+			if lockOrder, ok := s.ParseLockOrder(tx.Transaction, send.FromAddress, params.Validator.BuyDeadlineBlocks); ok {
 				// add to the 'lock orders' list
 				lockOrders[string(lockOrder.OrderId)] = lockOrder
 				// continue
@@ -172,18 +200,6 @@ func (s *StateMachine) ParseBlockForLockAndCloseOrders(blocks ...*lib.BlockResul
 			}
 			// try parse close orders
 			if closeOrder, ok := s.ParseCloseOrder(tx.Transaction); ok {
-				// extract the message from the transaction object
-				msg, e := lib.FromAny(tx.Transaction.Msg)
-				if e != nil {
-					s.log.Error(e.Error())
-					continue
-				}
-				// cast the message to send
-				send, ok := msg.(*MessageSend)
-				if !ok {
-					s.log.Error("Non-send message with a send message name (should not happen)")
-					continue
-				}
 				// add to the 'close orders' list
 				closeOrders[string(closeOrder.OrderId)] = closeOrder
 				coSends[string(closeOrder.OrderId)] = send

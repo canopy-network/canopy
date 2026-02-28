@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -311,6 +312,7 @@ func TestAccountAdd(t *testing.T) {
 		detail  string
 		account *Account
 		amount  uint64
+		error   bool
 	}{
 		{
 			name:   "empty account",
@@ -326,6 +328,16 @@ func TestAccountAdd(t *testing.T) {
 			},
 			amount: 100,
 		},
+		{
+			name:   "overflow",
+			detail: "reject adding to an account when uint64 would overflow",
+			account: &Account{
+				Address: newTestAddress(t).Bytes(),
+				Amount:  math.MaxUint64,
+			},
+			amount: 1,
+			error:  true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -340,8 +352,15 @@ func TestAccountAdd(t *testing.T) {
 			// retrieve the account to be added to
 			origBalance, err := sm.GetAccountBalance(testAddr)
 			require.NoError(t, err)
-			// ensure no error on function call
-			require.NoError(t, sm.AccountAdd(testAddr, test.amount))
+			// ensure expected behavior on function call
+			err = sm.AccountAdd(testAddr, test.amount)
+			require.Equal(t, test.error, err != nil)
+			if err != nil {
+				balanceAfterErr, e := sm.GetAccountBalance(testAddr)
+				require.NoError(t, e)
+				require.Equal(t, origBalance, balanceAfterErr)
+				return
+			}
 			// retrieve the account after being minted to
 			accAfter, err := sm.GetAccount(testAddr)
 			require.NoError(t, err)

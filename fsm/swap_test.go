@@ -710,6 +710,141 @@ func TestGetSetOrderBooks(t *testing.T) {
 	}
 }
 
+func TestProcessRootChainOrderBookLockBindsBuyerSender(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 99)
+	sender := newTestAddressBytes(t, 1)
+	spoofedBuyer := newTestAddressBytes(t, 2)
+	buyerReceive := newTestAddressBytes(t, 3)
+
+	lockMemo, err := lib.MarshalJSON(&lib.LockOrder{
+		OrderId:             orderID,
+		ChainId:             sm.Config.ChainId,
+		BuyerSendAddress:    spoofedBuyer,
+		BuyerReceiveAddress: buyerReceive,
+	})
+	require.NoError(t, err)
+
+	book := &lib.OrderBook{
+		ChainId: sm.Config.ChainId,
+		Orders: []*lib.SellOrder{{
+			Id:                 orderID,
+			Committee:          sm.Config.ChainId,
+			AmountForSale:      100,
+			RequestedAmount:    50,
+			SellersSendAddress: newTestAddressBytes(t, 7),
+		}},
+	}
+	proposal := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: sm.Height()},
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, sender, sender, 1, 1_000_000, string(lockMemo), sm.Config.ChainId),
+		},
+	}
+
+	lockOrders, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, proposal)
+	require.Len(t, lockOrders, 1)
+	require.Empty(t, closedOrders)
+	require.Empty(t, resetOrders)
+	require.Equal(t, sender, lockOrders[0].BuyerSendAddress)
+	require.NotEqual(t, spoofedBuyer, lockOrders[0].BuyerSendAddress)
+}
+
+func TestProcessRootChainOrderBookCloseRequiresSenderAndRecipientBinding(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 100)
+	lockedBuyer := newTestAddressBytes(t, 1)
+	validRecipient := newTestAddressBytes(t, 2)
+
+	closeMemo, err := lib.MarshalJSON(&lib.CloseOrder{
+		OrderId:    orderID,
+		ChainId:    sm.Config.ChainId,
+		CloseOrder: true,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		sendFrom     []byte
+		sendTo       []byte
+		expectClosed bool
+	}{
+		{
+			name:         "valid sender and recipient",
+			sendFrom:     lockedBuyer,
+			sendTo:       validRecipient,
+			expectClosed: true,
+		},
+		{
+			name:         "invalid sender",
+			sendFrom:     newTestAddressBytes(t, 3),
+			sendTo:       validRecipient,
+			expectClosed: false,
+		},
+		{
+			name:         "invalid recipient",
+			sendFrom:     lockedBuyer,
+			sendTo:       newTestAddressBytes(t, 4),
+			expectClosed: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			book := &lib.OrderBook{
+				ChainId: sm.Config.ChainId,
+				Orders: []*lib.SellOrder{{
+					Id:                   orderID,
+					Committee:            sm.Config.ChainId,
+					AmountForSale:        100,
+					RequestedAmount:      50,
+					SellerReceiveAddress: validRecipient,
+					SellersSendAddress:   newTestAddressBytes(t, 6),
+					BuyerSendAddress:     lockedBuyer,
+					BuyerReceiveAddress:  newTestAddressBytes(t, 5),
+					BuyerChainDeadline:   sm.Height() + 100,
+				}},
+			}
+			proposal := &lib.BlockResult{
+				BlockHeader: &lib.BlockHeader{Height: sm.Height()},
+				Transactions: []*lib.TxResult{
+					newTestSendTxResult(t, test.sendFrom, test.sendTo, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+				},
+			}
+
+			_, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, proposal)
+			require.Empty(t, resetOrders)
+			if test.expectClosed {
+				require.Len(t, closedOrders, 1)
+				require.Equal(t, orderID, closedOrders[0])
+			} else {
+				require.Empty(t, closedOrders)
+			}
+		})
+	}
+}
+
+func newTestSendTxResult(t *testing.T, from, to []byte, amount, fee uint64, memo string, chainID uint64) *lib.TxResult {
+	anyMsg, err := lib.NewAny(&MessageSend{
+		FromAddress: from,
+		ToAddress:   to,
+		Amount:      amount,
+	})
+	require.NoError(t, err)
+	return &lib.TxResult{
+		Sender:      from,
+		Recipient:   to,
+		MessageType: MessageSendName,
+		Transaction: &lib.Transaction{
+			MessageType: MessageSendName,
+			Msg:         anyMsg,
+			Fee:         fee,
+			Memo:        memo,
+			ChainId:     chainID,
+		},
+	}
+}
+
 func newTestOrderId(_ *testing.T, variant int) []byte {
 	return []byte(fmt.Sprintf("%d", variant))
 }

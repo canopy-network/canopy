@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 
 	"github.com/canopy-network/canopy/lib"
@@ -136,6 +137,10 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	account, err := s.GetAccount(address)
 	if err != nil {
 		return err
+	}
+	// ensure add operation is safe from uint64 overflow
+	if account.Amount > math.MaxUint64-amountToAdd {
+		return ErrInvalidAmount()
 	}
 	// add the tokens to the account structure
 	account.Amount += amountToAdd
