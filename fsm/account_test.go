@@ -820,6 +820,31 @@ func TestPoolSub(t *testing.T) {
 	}
 }
 
+func TestPoolAddPointsOverflow(t *testing.T) {
+	t.Run("total points overflow", func(t *testing.T) {
+		pool := &Pool{
+			TotalPoolPoints: math.MaxUint64,
+		}
+		err := pool.AddPoints(newTestAddressBytes(t), 1)
+		require.Error(t, err)
+		require.Equal(t, ErrInvalidAmount().Code(), err.Code())
+		require.Equal(t, uint64(math.MaxUint64), pool.TotalPoolPoints)
+	})
+
+	t.Run("holder points overflow", func(t *testing.T) {
+		addr := newTestAddressBytes(t)
+		pool := &Pool{
+			Points:          []*lib.PoolPoints{{Address: addr, Points: math.MaxUint64}},
+			TotalPoolPoints: math.MaxUint64 - 1,
+		}
+		err := pool.AddPoints(addr, 1)
+		require.Error(t, err)
+		require.Equal(t, ErrInvalidAmount().Code(), err.Code())
+		require.Equal(t, uint64(math.MaxUint64-1), pool.TotalPoolPoints)
+		require.Equal(t, uint64(math.MaxUint64), pool.Points[0].Points)
+	})
+}
+
 func TestAddToStakedSupply(t *testing.T) {
 	tests := []struct {
 		name      string

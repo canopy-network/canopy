@@ -212,6 +212,34 @@ func TestDexBatch_CheckBasic_InvalidWithdrawPercent(t *testing.T) {
 	}
 }
 
+func TestDexBatch_CheckBasic_NilDeposit(t *testing.T) {
+	batch := &DexBatch{
+		Deposits: []*DexLiquidityDeposit{nil},
+	}
+
+	err := batch.CheckBasic()
+	if err == nil {
+		t.Fatal("expected error for nil deposit")
+	}
+	if err.Error() != ErrInvalidArgument().Error() {
+		t.Fatalf("expected %q, got %q", ErrInvalidArgument().Error(), err.Error())
+	}
+}
+
+func TestDexBatch_CheckBasic_NilOrder(t *testing.T) {
+	batch := &DexBatch{
+		Orders: []*DexLimitOrder{nil},
+	}
+
+	err := batch.CheckBasic()
+	if err == nil {
+		t.Fatal("expected error for nil order")
+	}
+	if err.Error() != ErrInvalidArgument().Error() {
+		t.Fatalf("expected %q, got %q", ErrInvalidArgument().Error(), err.Error())
+	}
+}
+
 func TestPoolPoints_MarshalJSON(t *testing.T) {
 	points := PoolPoints{
 		Address: []byte("test"),

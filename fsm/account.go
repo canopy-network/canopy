@@ -788,23 +788,29 @@ func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
 
 // AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
 // Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
-func (x *Pool) AddPoints(address []byte, points uint64) {
+func (x *Pool) AddPoints(address []byte, points uint64) lib.ErrorI {
 	// add to total points
+	if x.TotalPoolPoints > math.MaxUint64-points {
+		return ErrInvalidAmount()
+	}
 	x.TotalPoolPoints += points
 	// add to existing if found
 	for _, lp := range x.Points {
 		// if the address is found
 		if bytes.Equal(lp.Address, address) {
 			// add points
+			if lp.Points > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
 			lp.Points += points
 			// exit
-			return
+			return nil
 		}
 	}
 	// add to the points
 	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
 	// exit
-	return
+	return nil
 }
 
 // RemovePoints() removes liquidity points for a certain provider in the pool

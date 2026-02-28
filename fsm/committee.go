@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"math"
 	"math/big"
 	"slices"
 
@@ -161,6 +162,9 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 				// add an event for a reward amount
 				if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
 					return err
+				}
+				if totalDistributed > math.MaxUint64-distributed {
+					return ErrInvalidAmount()
 				}
 				totalDistributed += distributed
 			}

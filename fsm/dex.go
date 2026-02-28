@@ -336,13 +336,21 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 		}
 		// capture result in map to save receipts later
 		result[order.Key] = dY
+		var xAfter uint64
+		if dY != 0 {
+			var carry uint64
+			xAfter, carry = bits.Add64(*x, dX, 0)
+			if carry != 0 {
+				return nil, ErrInvalidLiquidityPool()
+			}
+		}
 		// emit swap event
 		if err = s.EventDexSwap(order.Address, order.OrderId, dX, dY, chainId, false, dY != 0); err != nil {
 			return
 		}
 		// if succeeded: update pool ledgers like uniswap would
 		if dY != 0 {
-			*x, *y = *x+dX, *y-dY
+			*x, *y = xAfter, *y-dY
 		}
 	}
 	// set success in the receipt
@@ -486,7 +494,9 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		// calculate the initial pool points using L = √( x * y )
 		L = lib.SqrtProductUint64(*x, *y)
 		// add points to the dead address
-		p.AddPoints(deadAddr.Bytes(), L)
+		if err = p.AddPoints(deadAddr.Bytes(), L); err != nil {
+			return err
+		}
 	}
 	// using integer math and geometric mean of reserves:
 	// deltaPoolPoints = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y) or simplified as:
@@ -512,7 +522,9 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		// update the distributed counter
 		distributed += share
 		// add points to pool
-		p.AddPoints(deposit.Address, share)
+		if err = p.AddPoints(deposit.Address, share); err != nil {
+			return err
+		}
 		// if 'local' request - (actually move from holding pool to liquidity pool, don't *just* update the ledger)
 		if local {
 			if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
@@ -534,7 +546,9 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		}
 	}
 	// sink dust to the dead account
-	p.AddPoints(deadAddr.Bytes(), totalDL-distributed)
+	if err = p.AddPoints(deadAddr.Bytes(), totalDL-distributed); err != nil {
+		return err
+	}
 	// update the pool
 	return s.SetPool(p)
 }

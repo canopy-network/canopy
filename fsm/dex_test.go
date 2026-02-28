@@ -2412,6 +2412,31 @@ func TestHandleDexBatchOrdersRespectsRequestedAmount(t *testing.T) {
 	require.Zero(t, receipts[1], "second order should fail slippage gate")
 }
 
+func TestHandleDexBatchOrdersRejectsReserveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	addr := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{Id: chainId + LiquidityPoolAddend, Amount: math.MaxUint64}))
+
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Orders: []*lib.DexLimitOrder{
+			{AmountForSale: 2, RequestedAmount: 1, Address: addr.Bytes(), OrderId: []byte{0x11}},
+		},
+	}
+
+	x, y := uint64(math.MaxUint64-1), uint64(math.MaxUint64)
+	x0, y0 := x, y
+
+	receipts, err := sm.HandleDexBatchOrders(batch, &x, &y, chainId)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+	require.Nil(t, receipts)
+	require.Equal(t, x0, x)
+	require.Equal(t, y0, y)
+}
+
 // Proves withdraw->redeposit cannot increase LP points (no gain loop), allowing only rounding loss.
 func TestWithdrawThenRedeploy_NoPointGain(t *testing.T) {
 	sm := newTestStateMachine(t)
@@ -2494,6 +2519,34 @@ func TestHandleBatchDeposit_RejectsReserveOverflow(t *testing.T) {
 	err := sm.HandleBatchDeposit(batch, chainId, &x, &y, false)
 	require.Error(t, err)
 	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
+func TestHandleBatchDepositRejectsPoolPointsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	account := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          1,
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: math.MaxUint64}},
+		TotalPoolPoints: math.MaxUint64,
+	}))
+
+	x := uint64(4)
+	y := uint64(4)
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: account.Bytes(),
+			Amount:  5,
+			OrderId: []byte{0x12},
+		}},
+	}
+
+	err := sm.HandleBatchDeposit(batch, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidAmount().Code(), err.Code())
 }
 
 type dexSim struct {
