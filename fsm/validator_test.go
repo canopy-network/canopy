@@ -927,6 +927,39 @@ func TestSetValidatorsPaused(t *testing.T) {
 	}
 }
 
+func TestSetValidatorsPausedV2SkipsUnauthorizedAndContinues(t *testing.T) {
+	sm := newTestStateMachine(t)
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Consensus.ProtocolVersion = NewProtocolVersion(0, 2)
+	require.NoError(t, sm.SetParams(params))
+
+	authorized := newTestAddressBytes(t, 1)
+	unauthorized := newTestAddressBytes(t, 2)
+	supply := &Supply{}
+	require.NoError(t, sm.SetValidators([]*Validator{
+		{Address: authorized, Committees: []uint64{1}},
+		{Address: unauthorized, Committees: []uint64{2}},
+	}, supply))
+	require.NoError(t, sm.SetSupply(supply))
+
+	// Unauthorized entry comes first to ensure loop doesn't early-return.
+	sm.SetValidatorsPaused(1, [][]byte{unauthorized, authorized})
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	maxPauseHeight := valParams.MaxPauseBlocks + sm.Height()
+
+	authorizedVal, err := sm.GetValidator(crypto.NewAddress(authorized))
+	require.NoError(t, err)
+	require.Equal(t, maxPauseHeight, authorizedVal.MaxPausedHeight)
+
+	unauthorizedVal, err := sm.GetValidator(crypto.NewAddress(unauthorized))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, unauthorizedVal.MaxPausedHeight)
+}
+
 func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 	tests := []struct {
 		name           string

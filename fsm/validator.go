@@ -362,8 +362,8 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 		if s.IsFeatureEnabled(2) && !slices.Contains(val.Committees, chainId) {
 			// NOTE: expected - this can happen during a race between edit-stake and pause
 			s.log.Warnf("unauthorized pause from %d, this can happen occasionally", chainId)
-			// exit
-			return
+			// skip this validator and keep processing the remaining list
+			continue
 		}
 		// handle pausing the validator
 		if err = s.HandleMessagePause(&MessagePause{Address: addr}); err != nil {

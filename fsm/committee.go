@@ -14,7 +14,7 @@ import (
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	subsidizedChainIds, daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
-		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
+		if err.Code() == lib.CodeNoSubsidizedCommittees {
 			return nil
 		}
 		return err

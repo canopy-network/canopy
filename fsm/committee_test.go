@@ -310,6 +310,24 @@ func TestGetBlockMintStatsZeroBlocksPerHalveningReturnsError(t *testing.T) {
 	require.Equal(t, lib.ErrInvalidArgument().Code(), err.Code())
 }
 
+func TestFundCommitteeRewardPoolsNoMintReturnsNil(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.InitialTokensPerBlock = 0
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Validator.StakePercentForSubsidizedCommittee = 1
+	require.NoError(t, sm.SetParams(params))
+
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = 100
+	supply.CommitteeStaked = []*Pool{{Id: lib.CanopyChainId, Amount: 100}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	require.NoError(t, sm.FundCommitteeRewardPools())
+}
+
 func TestGetPaidCommittees(t *testing.T) {
 	tests := []struct {
 		name                       string
