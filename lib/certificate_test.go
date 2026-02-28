@@ -226,6 +226,59 @@ func TestCertificateSignBytes(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestCheckProposalBasicNilResultsReturnsError(t *testing.T) {
+	const (
+		networkID = uint64(1)
+		chainID   = uint64(1)
+		height    = uint64(1)
+	)
+	block := &Block{BlockHeader: &BlockHeader{
+		Height:             height,
+		NetworkId:          uint32(networkID),
+		Time:               1,
+		LastBlockHash:      crypto.Hash([]byte("last")),
+		StateRoot:          crypto.Hash([]byte("state")),
+		TransactionRoot:    crypto.Hash([]byte("txroot")),
+		ValidatorRoot:      crypto.Hash([]byte("vroot")),
+		NextValidatorRoot:  crypto.Hash([]byte("nextvroot")),
+		ProposerAddress:    newTestAddressBytes(t),
+		TotalVdfIterations: 0,
+	}}
+	blockHash, err := block.Hash()
+	require.NoError(t, err)
+	blockBz, err := Marshal(block)
+	require.NoError(t, err)
+	qc := &QuorumCertificate{
+		Header: &View{
+			Height:    height,
+			NetworkId: networkID,
+			ChainId:   chainID,
+		},
+		Block:     blockBz,
+		BlockHash: blockHash,
+		Results:   nil,
+	}
+	var gotErr ErrorI
+	require.NotPanics(t, func() {
+		_, gotErr = qc.CheckProposalBasic(height, networkID, chainID)
+	})
+	require.Equal(t, ErrNilCertResults(), gotErr)
+}
+
+func TestCertificateCheckBasicAllowsNilResults(t *testing.T) {
+	qc := &QuorumCertificate{
+		Header:      &View{},
+		BlockHash:   crypto.Hash([]byte("block")),
+		ResultsHash: crypto.Hash([]byte("results")),
+		Results:     nil,
+		Signature: &AggregateSignature{
+			Signature: bytes.Repeat([]byte("F"), 96),
+			Bitmap:    []byte("bm"),
+		},
+	}
+	require.NoError(t, qc.CheckBasic())
+}
+
 func TestCertificateResultsCheckBasic(t *testing.T) {
 	tests := []struct {
 		name   string

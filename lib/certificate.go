@@ -180,7 +180,7 @@ func (x *QuorumCertificate) CheckProposalBasic(height, networkId, chainId uint64
 		return nil, ErrMismatchHeaderBlockHash()
 	}
 	// ensure the results aren't empty
-	if x.Results == nil && x.Results.RewardRecipients != nil {
+	if x.Results == nil {
 		return nil, ErrNilCertResults()
 	}
 	// exit
