@@ -73,6 +73,18 @@ func TestUpdateParam(t *testing.T) {
 			},
 		},
 		{
+			name:   "consensus param negative protocol version rejected",
+			detail: "a negative protocol version string must be rejected",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamProtocolVersion,
+				value: &lib.StringWrapper{
+					Value: "-1/-1",
+				},
+			},
+			error: "invalid protocol version",
+		},
+		{
 			name:   "governance param updated",
 			detail: "an update to dao reward percentage under the governance param space",
 			update: paramUpdate{

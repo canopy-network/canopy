@@ -181,15 +181,15 @@ func checkProtocolVersion(v string) (*ProtocolVersion, lib.ErrorI) {
 	if len(arr) != 2 {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	version, err := strconv.Atoi(arr[0])
+	version, err := strconv.ParseUint(arr[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	height, err := strconv.Atoi(arr[1])
+	height, err := strconv.ParseUint(arr[1], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidProtocolVersion()
 	}
-	ptr.Height, ptr.Version = uint64(height), uint64(version)
+	ptr.Height, ptr.Version = height, version
 	return ptr, nil
 }
 
