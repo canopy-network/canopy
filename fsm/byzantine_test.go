@@ -1028,6 +1028,31 @@ func TestSlashAndResetNonSignersV1_NoCommitteeEjection(t *testing.T) {
 	require.NotZero(t, after.MaxPausedHeight)
 }
 
+func TestSlashValidatorLargeStakePercentMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+
+	stakeAmount := ^uint64(0)
+	validator := &Validator{
+		Address:      newTestAddressBytes(t),
+		PublicKey:    newTestPublicKeyBytes(t),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{lib.CanopyChainId},
+	}
+
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(crypto.NewAddressFromBytes(validator.Address), stakeAmount, validator.Committees))
+
+	require.NoError(t, sm.SlashValidator(validator, lib.CanopyChainId, 1, valParams))
+
+	after, e := sm.GetValidator(crypto.NewAddressFromBytes(validator.Address))
+	require.NoError(t, e)
+	require.Equal(t, lib.SafeMulDiv(stakeAmount, 99, 100), after.StakedAmount)
+}
+
 func TestSlashAndResetNonSignersV2_ChainScopedAndEjectsSpecificCommittee(t *testing.T) {
 	const stakeAmount = uint64(100)
 	sm := newTestStateMachine(t)

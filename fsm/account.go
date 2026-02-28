@@ -107,6 +107,10 @@ func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
 func (s *StateMachine) SetAccounts(accounts []*Account, supply *Supply) (err lib.ErrorI) {
 	// for each account
 	for _, acc := range accounts {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-acc.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the account amount to the supply object
 		supply.Total += acc.Amount
 		// set the account in state
@@ -311,6 +315,10 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 func (s *StateMachine) SetPools(pools []*Pool, supply *Supply) (err lib.ErrorI) {
 	// for each pool
 	for _, pool := range pools {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-pool.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the pool amount to the total supply
 		supply.Total += pool.Amount
 		// set the pool in state
@@ -447,6 +455,10 @@ func (s *StateMachine) AddToDelegateSupply(amount uint64) lib.ErrorI {
 	supply, err := s.GetSupply()
 	if err != nil {
 		return err
+	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.DelegatedOnly > math.MaxUint64-amount {
+		return ErrInvalidAmount()
 	}
 	// add to the delegation only amount in the supply tracker
 	supply.DelegatedOnly += amount

@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"bytes"
+	"math/big"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -60,7 +61,15 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []u
 		return
 	}
 	// calculate the amount left for the committees after the parameterized DAO cut
-	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
+	var mintAmountAfterDAOCut uint64
+	switch {
+	case govParams.DaoRewardPercentage >= 100 || totalMintAmount == 0:
+		mintAmountAfterDAOCut = 0
+	case govParams.DaoRewardPercentage == 0:
+		mintAmountAfterDAOCut = totalMintAmount
+	default:
+		mintAmountAfterDAOCut = lib.SafeMulDiv(totalMintAmount, 100-govParams.DaoRewardPercentage, 100)
+	}
 	// calculate the DAO cut
 	daoCut = totalMintAmount - mintAmountAfterDAOCut
 	// calculate the amount given to each qualifying committee
@@ -181,9 +190,22 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples, chainId uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
 	address := crypto.NewAddress(stub.Address)
 	// full_reward = truncate ( percentage / number_of_samples * available_reward )
-	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
+	var fullReward uint64
+	if numberOfSamples != 0 {
+		numerator := new(big.Int).Mul(new(big.Int).SetUint64(stub.Percent), new(big.Int).SetUint64(rewardPoolAmount))
+		denominator := new(big.Int).Mul(new(big.Int).SetUint64(numberOfSamples), big.NewInt(100))
+		fullReward = new(big.Int).Div(numerator, denominator).Uint64()
+	}
 	// if not compounding, use the early withdrawal reward
-	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
+	var earlyWithdrawalReward uint64
+	switch {
+	case valParams.EarlyWithdrawalPenalty >= 100 || fullReward == 0:
+		earlyWithdrawalReward = 0
+	case valParams.EarlyWithdrawalPenalty == 0:
+		earlyWithdrawalReward = fullReward
+	default:
+		earlyWithdrawalReward = lib.SafeMulDiv(fullReward, 100-valParams.EarlyWithdrawalPenalty, 100)
+	}
 	//s.log.Debugf("Distributed committee %d reward: to %s percent: %d%%, rewardPoolAmount: %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
 	//	chainId, address.String(), stub.Percent, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator

@@ -338,7 +338,16 @@ func (s *StateMachine) SlashValidator(validator *Validator, chainId, percent uin
 		s.slashTracker.AddSlash(validator.Address, chainId, percent)
 	}
 	// initialize address and new stake variable
-	addr, stakeAfterSlash := crypto.NewAddressFromBytes(validator.Address), lib.Uint64ReducePercentage(validator.StakedAmount, percent)
+	addr := crypto.NewAddressFromBytes(validator.Address)
+	var stakeAfterSlash uint64
+	switch {
+	case percent >= 100 || validator.StakedAmount == 0:
+		stakeAfterSlash = 0
+	case percent == 0:
+		stakeAfterSlash = validator.StakedAmount
+	default:
+		stakeAfterSlash = lib.SafeMulDiv(validator.StakedAmount, 100-percent, 100)
+	}
 	// calculate the slash amount
 	slashAmount := validator.StakedAmount - stakeAfterSlash
 	// subtract from total supply

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"math"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -131,6 +132,13 @@ func (s *StateMachine) GetValidatorsPaginated(p lib.PageParams, f lib.ValidatorF
 func (s *StateMachine) SetValidators(validators []*Validator, supply *Supply) lib.ErrorI {
 	// for each validator in the list
 	for _, val := range validators {
+		// ensure add operations are safe from uint64 overflow
+		if supply.Total > math.MaxUint64-val.StakedAmount || supply.Staked > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
+		if val.Delegate && supply.DelegatedOnly > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
 		// if the unstaking height or the max paused height is set
 		if val.UnstakingHeight != 0 {
 			// if the validator is unstaking - update it accordingly in state

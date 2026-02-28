@@ -310,6 +310,30 @@ func TestGetBlockMintStatsZeroBlocksPerHalveningReturnsError(t *testing.T) {
 	require.Equal(t, lib.ErrInvalidArgument().Code(), err.Code())
 }
 
+func TestGetBlockMintStatsLargeMintDaoSplitMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.InitialTokensPerBlock = ^uint64(0)
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Validator.StakePercentForSubsidizedCommittee = 1
+	params.Governance.DaoRewardPercentage = 1
+	require.NoError(t, sm.SetParams(params))
+
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = 100
+	supply.CommitteeStaked = []*Pool{{Id: lib.CanopyChainId, Amount: 100}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	_, daoCut, totalMint, perCommitteeMint, err := sm.GetBlockMintStats(lib.CanopyChainId)
+	require.NoError(t, err)
+
+	expectedAfterCut := lib.SafeMulDiv(totalMint, 99, 100)
+	require.Equal(t, totalMint-expectedAfterCut, daoCut)
+	require.Equal(t, expectedAfterCut, perCommitteeMint)
+}
+
 func TestFundCommitteeRewardPoolsNoMintReturnsNil(t *testing.T) {
 	sm := newTestStateMachine(t)
 	sm.Config.StateMachineConfig.InitialTokensPerBlock = 0
@@ -326,6 +350,48 @@ func TestFundCommitteeRewardPoolsNoMintReturnsNil(t *testing.T) {
 	require.NoError(t, sm.SetSupply(supply))
 
 	require.NoError(t, sm.FundCommitteeRewardPools())
+}
+
+func TestDistributeCommitteeRewardLargePoolMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	params, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	params.EarlyWithdrawalPenalty = 0
+
+	stub := &lib.PaymentPercents{
+		Address: newTestAddressBytes(t),
+		Percent: 100,
+		ChainId: lib.CanopyChainId,
+	}
+	rewardPoolAmount := ^uint64(0)
+	distributed, err := sm.DistributeCommitteeReward(stub, rewardPoolAmount, 1, lib.CanopyChainId, params)
+	require.NoError(t, err)
+	require.Equal(t, rewardPoolAmount, distributed)
+
+	balance, e := sm.GetAccountBalance(crypto.NewAddressFromBytes(stub.Address))
+	require.NoError(t, e)
+	require.Equal(t, rewardPoolAmount, balance)
+}
+
+func TestDistributeCommitteeRewardSamplesTimes100OverflowStillPays(t *testing.T) {
+	sm := newTestStateMachine(t)
+	params, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	params.EarlyWithdrawalPenalty = 0
+
+	stub := &lib.PaymentPercents{
+		Address: newTestAddressBytes(t),
+		Percent: 100,
+		ChainId: lib.CanopyChainId,
+	}
+
+	distributed, err := sm.DistributeCommitteeReward(stub, math.MaxUint64, math.MaxUint64, lib.CanopyChainId, params)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), distributed)
+
+	balance, e := sm.GetAccountBalance(crypto.NewAddressFromBytes(stub.Address))
+	require.NoError(t, e)
+	require.Equal(t, uint64(1), balance)
 }
 
 func TestGetPaidCommittees(t *testing.T) {

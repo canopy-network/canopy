@@ -1017,6 +1017,58 @@ func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 	}
 }
 
+func TestSetValidatorsOverflow(t *testing.T) {
+	tests := []struct {
+		name   string
+		supply *Supply
+		val    *Validator
+	}{
+		{
+			name:   "total overflow",
+			supply: &Supply{Total: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+		{
+			name:   "staked overflow",
+			supply: &Supply{Staked: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t, 1),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+		{
+			name:   "delegated overflow",
+			supply: &Supply{DelegatedOnly: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t, 2),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Delegate:     true,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newTestStateMachine(t)
+			err := sm.SetValidators([]*Validator{test.val}, test.supply)
+			require.Error(t, err)
+
+			exists, e := sm.GetValidatorExists(crypto.NewAddressFromBytes(test.val.Address))
+			require.NoError(t, e)
+			require.False(t, exists)
+		})
+	}
+}
+
 func TestGetAuthorizedSignersForValidator(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -154,6 +154,20 @@ func TestGetSetAccounts(t *testing.T) {
 	}
 }
 
+func TestSetAccountsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply := &Supply{Total: math.MaxUint64}
+	addr := newTestAddress(t)
+
+	err := sm.SetAccounts([]*Account{{Address: addr.Bytes(), Amount: 1}}, supply)
+	require.Error(t, err)
+
+	balance, e := sm.GetAccountBalance(addr)
+	require.NoError(t, e)
+	require.Zero(t, balance)
+	require.Equal(t, uint64(math.MaxUint64), supply.Total)
+}
+
 func TestGetAccountsPaginated(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -557,6 +571,20 @@ func TestGetSetPools(t *testing.T) {
 	}
 }
 
+func TestSetPoolsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply := &Supply{Total: math.MaxUint64}
+	const poolID = uint64(12345)
+
+	err := sm.SetPools([]*Pool{{Id: poolID, Amount: 1}}, supply)
+	require.Error(t, err)
+
+	balance, e := sm.GetPoolBalance(poolID)
+	require.NoError(t, e)
+	require.Zero(t, balance)
+	require.Equal(t, uint64(math.MaxUint64), supply.Total)
+}
+
 func TestGetPoolsPaginated(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -953,6 +981,21 @@ func TestAddToCommitteeSupplyForChainOverflow(t *testing.T) {
 	require.Len(t, after.CommitteeStaked, 1)
 	require.Equal(t, chainID, after.CommitteeStaked[0].Id)
 	require.Equal(t, uint64(math.MaxUint64), after.CommitteeStaked[0].Amount)
+}
+
+func TestAddToDelegateSupplyOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.DelegatedOnly = math.MaxUint64
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToDelegateSupply(1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Equal(t, uint64(math.MaxUint64), after.DelegatedOnly)
 }
 
 func TestAddToDelegationStakedSupply(t *testing.T) {
