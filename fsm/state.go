@@ -213,15 +213,25 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// keep a map to track transactions that failed 'check'
 	failedCheckTxs := map[int]error{}
+	// map signature batch indices back to original tx indices
+	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
 	for i, tx := range txs {
+		preCount := batchVerifier.Count()
 		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
 			failedCheckTxs[i] = checkErr
+		}
+		postCount := batchVerifier.Count()
+		for j := preCount; j < postCount; j++ {
+			batchToTxIdx = append(batchToTxIdx, i)
 		}
 	}
 	// execute batch verification of the signatures in the block
 	for _, failedIdx := range batchVerifier.Verify() {
-		failedCheckTxs[failedIdx] = ErrInvalidSignature()
+		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
+			return ErrInvalidSignature()
+		}
+		failedCheckTxs[batchToTxIdx[failedIdx]] = ErrInvalidSignature()
 	}
 	// set the store back to the original at the end of processing
 	originalStore := s.Store().(lib.StoreI)
