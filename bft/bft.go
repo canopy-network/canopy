@@ -689,7 +689,7 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 		return ErrNoSafeNodeJustification()
 	}
 	// ensure the messages' HighQC justifies its proposal (should have the same hashes)
-	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) && !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
+	if !bytes.Equal(b.BlockToHash(msg.Qc.Block), msg.HighQc.BlockHash) || !bytes.Equal(msg.Qc.Results.Hash(), msg.HighQc.ResultsHash) {
 		return ErrMismatchedProposals()
 	}
 	// if the hashes of the Locked proposal is the same as the Leader's message
