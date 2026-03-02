@@ -66,13 +66,9 @@ const (
 
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool, rootDexBatch ...*lib.DexBatch) (err lib.ErrorI) {
-	// 1. Identify which batch to process.
-	// Default: use the DexBatch from the sender (direct remote orders/receipts).
 	remoteBatch := results.DexBatch
-
-	// 2. Handle the "Syncing" scenario where we process a QC from our own chain.
-	// In this case, the remote batch we processed is mirrored in RootDexBatch.
-	if chainId == s.Config.ChainId {
+	// if nested, replace chainId with root chainId
+	if isNested {
 		if len(rootDexBatch) == 1 && rootDexBatch != nil {
 			remoteBatch = rootDexBatch[0]
 		} else {
