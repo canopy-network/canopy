@@ -1,22 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSession } from '../state/session'
-import { Shield, Eye, EyeOff, X, Unlock, Clock, AlertCircle } from 'lucide-react'
+import { Shield, Eye, EyeOff, X, Unlock, AlertCircle } from 'lucide-react'
 
 interface UnlockModalProps {
-    address: string
-    ttlSec: number
     open: boolean
     onClose: () => void
+    onUnlock: (password: string) => void
 }
 
-export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockModalProps) {
+export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProps) {
     const [pwd, setPwd] = useState('')
     const [err, setErr] = useState<string>('')
     const [showPassword, setShowPassword] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
-    const unlock = useSession(s => s.unlock)
 
     // Focus input when modal opens
     useEffect(() => {
@@ -54,11 +51,9 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
         // Simulate brief delay for UX
         await new Promise(resolve => setTimeout(resolve, 200))
 
-        unlock(address, pwd, ttlSec)
+        onUnlock(pwd)
         onClose()
     }
-
-    const minutes = Math.round(ttlSec / 60)
 
     return (
         <AnimatePresence>
@@ -118,16 +113,6 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                             <p className="text-sm text-muted-foreground text-center mb-6">
                                 Enter your password to authorize transactions
                             </p>
-
-                            {/* Session info badge */}
-                            <div className="flex justify-center mb-6">
-                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                                    <Clock className="w-3.5 h-3.5 text-primary" />
-                                    <span className="text-xs text-primary font-medium">
-                                        Session valid for {minutes} minutes
-                                    </span>
-                                </div>
-                            </div>
 
                             {/* Password input */}
                             <div className="space-y-2">
@@ -220,13 +205,6 @@ export default function UnlockModal({ address, ttlSec, open, onClose }: UnlockMo
                                     )}
                                 </button>
                             </div>
-                        </div>
-
-                        {/* Footer hint */}
-                        <div className="px-4 py-3 sm:px-6 sm:py-4 bg-card/50 border-t border-border/50 shrink-0">
-                            <p className="text-xs text-muted-foreground text-center">
-                                Your session will automatically extend while you're active
-                            </p>
                         </div>
                     </motion.div>
                 </motion.div>

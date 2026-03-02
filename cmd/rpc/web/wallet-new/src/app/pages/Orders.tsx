@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import type { ActionFinishResult } from "@/app/providers/ActionModalProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { isOrderLocked, RpcOrder, useOrdersData } from "@/hooks/useOrdersData";
 import { cx } from "@/ui/cx";
@@ -184,6 +185,7 @@ const OrderTypeMetric: React.FC<OrderTypeMetricProps> = ({
 export default function Orders(): JSX.Element {
   const { chain } = useConfig();
   const { openAction } = useActionModal();
+  const [optimisticallyLockedOrderIds, setOptimisticallyLockedOrderIds] = React.useState<Set<string>>(new Set());
 
   const {
     selectedAddress,
@@ -202,11 +204,22 @@ export default function Orders(): JSX.Element {
   const decimals = asNumber(chain?.denom?.decimals) || 6;
 
   const runAction = React.useCallback(
-    (actionId: string, prefilledData?: Record<string, unknown>) => {
+    (
+      actionId: string,
+      prefilledData?: Record<string, unknown>,
+      options?: {
+        onSuccess?: (result: ActionFinishResult) => void;
+        onAfterRefetch?: () => void;
+      },
+    ) => {
       openAction(actionId, {
         prefilledData,
-        onFinish: () => {
-          void refetchAll();
+        onFinish: (result) => {
+          if (!result?.success) return;
+          options?.onSuccess?.(result);
+          void refetchAll().finally(() => {
+            options?.onAfterRefetch?.();
+          });
         },
       });
     },
@@ -222,7 +235,6 @@ export default function Orders(): JSX.Element {
       amount: microToDisplay(order.amountForSale, decimals),
       receiveAmount: microToDisplay(order.requestedAmount, decimals),
       data: order.data || "",
-      fee: 0,
       memo: "",
     }),
     [selectedAddress, committeeId, decimals],
@@ -232,7 +244,6 @@ export default function Orders(): JSX.Element {
     () => ({
       address: selectedAddress || "",
       committees: String(committeeId ?? ""),
-      fee: 0,
       memo: "",
     }),
     [selectedAddress, committeeId],
@@ -241,6 +252,12 @@ export default function Orders(): JSX.Element {
   const myLockedCount = React.useMemo(
     () => myOrders.filter((order) => isOrderLocked(order)).length,
     [myOrders],
+  );
+
+  const visibleAvailableOrders = React.useMemo(
+    () =>
+      availableOrders.filter((order) => !optimisticallyLockedOrderIds.has(order.id)),
+    [availableOrders, optimisticallyLockedOrderIds],
   );
 
   const myOpenCount = myOrders.length - myLockedCount;
@@ -309,7 +326,7 @@ export default function Orders(): JSX.Element {
             <OrderTypeMetric
               title="Buy Opportunities"
               hint="Orders available to lock."
-              count={availableOrders.length}
+              count={visibleAvailableOrders.length}
               status="info"
               icon={<ShoppingCart className="w-4 h-4" />}
             />
@@ -351,7 +368,6 @@ export default function Orders(): JSX.Element {
                   address: selectedAddress || "",
                   receiveAddress: selectedAddress || "",
                   committees: String(committeeId ?? ""),
-                  fee: 0,
                 })
               }
               disabled={!selectedAddress}
@@ -445,7 +461,6 @@ export default function Orders(): JSX.Element {
                                     address: selectedAddress || order.sellersSendAddress || "",
                                     committees: String(order.committee ?? committeeId ?? ""),
                                     orderId: order.id,
-                                    fee: 0,
                                   })
                                 }
                               >
@@ -474,12 +489,12 @@ export default function Orders(): JSX.Element {
             title="Buy Opportunity Orders"
             description="Only unlocked orders from other sellers are listed here. Lock reserves the order using your selected nested-chain buyer account."
             tone="info"
-            meta={<StatusBadge label={`${availableOrders.length} lockable`} status="info" size="sm" />}
+            meta={<StatusBadge label={`${visibleAvailableOrders.length} lockable`} status="info" size="sm" />}
           />
           <TableShell
             isLoading={queries.availableOrders.isLoading}
             error={queries.availableOrders.error}
-            isEmpty={!availableOrders.length}
+            isEmpty={!visibleAvailableOrders.length}
             emptyText="No available orders on this committee."
           >
             <div className="overflow-x-auto">
@@ -496,7 +511,7 @@ export default function Orders(): JSX.Element {
                   </tr>
                 </thead>
                 <tbody>
-                  {availableOrders.map((order) => (
+                  {visibleAvailableOrders.map((order) => (
                     <tr key={order.id} className="border-b border-border/40 last:border-b-0 bg-blue-500/[0.03]">
                       <td className="py-3 pr-3 font-mono text-sm text-foreground">
                         {shortHex(order.id, 8, 6)}
@@ -520,14 +535,34 @@ export default function Orders(): JSX.Element {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            runAction(ACTION_IDS.lockOrder, {
-                              address: selectedAddress || "",
-                              receiveAddress: selectedAddress || "",
-                              orderId: order.id,
-                              fee: 0,
-                            })
-                          }
+                          onClick={() => {
+                            const orderId = order.id;
+                            runAction(
+                              ACTION_IDS.lockOrder,
+                              {
+                                address: selectedAddress || "",
+                                receiveAddress: selectedAddress || "",
+                                orderId,
+                              },
+                              {
+                                onSuccess: () => {
+                                  setOptimisticallyLockedOrderIds((prev) => {
+                                    const next = new Set(prev);
+                                    next.add(orderId);
+                                    return next;
+                                  });
+                                },
+                                onAfterRefetch: () => {
+                                  setOptimisticallyLockedOrderIds((prev) => {
+                                    if (!prev.has(orderId)) return prev;
+                                    const next = new Set(prev);
+                                    next.delete(orderId);
+                                    return next;
+                                  });
+                                },
+                              },
+                            );
+                          }}
                           disabled={!selectedAddress}
                         >
                           <Lock className="w-3.5 h-3.5" />
@@ -615,7 +650,6 @@ export default function Orders(): JSX.Element {
                             runAction(ACTION_IDS.closeOrder, {
                               address: selectedAddress || "",
                               orderId: order.id,
-                              fee: 0,
                             })
                           }
                           disabled={!selectedAddress}
@@ -641,10 +675,7 @@ export default function Orders(): JSX.Element {
                 <p className="text-xs text-muted-foreground">
                   Separate from cross-chain orderbook. Use this lane for pool liquidity and limit-price swaps.
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge label="Pool operations" status="active" size="sm" />
-                  <StatusBadge label="Same action modal UX" status="info" size="sm" />
-                </div>
+
               </div>
             </section>
 

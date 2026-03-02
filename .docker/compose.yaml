@@ -9,6 +9,7 @@ services:
         VITE_EXPLORER_BASE_PATH: /
         VITE_WALLET_RPC_PROXY_TARGET: http://localhost:50002
         VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:50003
+        VITE_ROOT_WALLET_RPC_PROXY_TARGET: http://localhost:50002
     ports:
       - 50000:50000 # Wallet
       - 50001:50001 # Explorer
@@ -38,6 +39,8 @@ services:
         VITE_EXPLORER_BASE_PATH: /
         VITE_WALLET_RPC_PROXY_TARGET: http://localhost:40002
         VITE_WALLET_ADMIN_RPC_PROXY_TARGET: http://localhost:40003
+        VITE_ROOT_WALLET_RPC_PROXY_TARGET: http://localhost:50002
+
     ports:
       - 40000:40000 # Wallet
       - 40001:40001 # Explorer

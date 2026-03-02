@@ -2,7 +2,6 @@ import React from "react";
 import type { Field, FieldOp } from "@/manifest/types";
 import { cx } from "@/ui/cx";
 import { validateField } from "./validators";
-import { useSession } from "@/state/session";
 import { FieldControl } from "@/actions/FieldControl";
 import { motion } from "framer-motion";
 import { templateBool } from "@/core/templater";
@@ -31,7 +30,6 @@ export default function FormRenderer({
 }: Props) {
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
-  const session = useSession();
 
 
   // When localDs changes, notify parent (ActionRunner)
@@ -59,7 +57,7 @@ export default function FormRenderer({
       fees: ctx?.fees,
       params: ctx?.params,
       layout: ctx?.layout,
-      session: { password: session?.password },
+      session: ctx?.session ?? { password: undefined },
     }),
     [
       value,
@@ -69,7 +67,7 @@ export default function FormRenderer({
       ctx?.fees,
       ctx?.params,
       ctx?.layout,
-      session?.password,
+      ctx?.session,
       localDs,
     ],
   );

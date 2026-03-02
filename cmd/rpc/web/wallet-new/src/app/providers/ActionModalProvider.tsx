@@ -23,8 +23,14 @@ interface ActionModalContextType {
   currentActionId: string | null;
 }
 
+export interface ActionFinishResult {
+  actionId: string;
+  success: boolean;
+  result?: any;
+}
+
 interface ActionModalOptions {
-  onFinish?: () => void;
+  onFinish?: (result: ActionFinishResult) => void;
   onClose?: () => void;
   prefilledData?: Record<string, any>;
   relatedActions?: string[];
@@ -65,9 +71,9 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, 300);
   }, [options]);
 
-  const handleFinish = useCallback(() => {
+  const handleFinish = useCallback((result: ActionFinishResult) => {
     if (options.onFinish) {
-      options.onFinish();
+      options.onFinish(result);
     }
     closeAction();
   }, [options, closeAction]);

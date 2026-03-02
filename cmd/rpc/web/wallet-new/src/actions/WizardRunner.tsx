@@ -5,7 +5,6 @@ import Confirm from "./Confirm";
 import Result from "./Result";
 import { template } from "@/core/templater";
 import { useResolvedFees } from "@/core/fees";
-import { useSession, attachIdleRenew } from "@/state/session";
 import UnlockModal from "../components/UnlockModal";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { resolveRpcHost } from "@/core/rpcHost";
@@ -19,12 +18,8 @@ export default function WizardRunner({ action }: { action: Action }) {
   const step = action.steps?.[stepIndex];
   const [form, setForm] = React.useState<Record<string, any>>({});
   const [txRes, setTxRes] = React.useState<any>(null);
-
-  const session = useSession();
-  const ttlSec = chain?.session?.unlockTimeoutSec ?? 900;
-  React.useEffect(() => {
-    attachIdleRenew(ttlSec);
-  }, [ttlSec]);
+  const [txPassword, setTxPassword] = React.useState<string>("");
+  const [pendingExecutionAfterUnlock, setPendingExecutionAfterUnlock] = React.useState(false);
 
   const requiresAuth =
     (action?.auth?.type ??
@@ -49,9 +44,9 @@ export default function WizardRunner({ action }: { action: Action }) {
       template(action.rpc?.payload ?? {}, {
         form,
         chain,
-        session: { password: session.password },
+        session: { password: txPassword },
       }),
-    [action.rpc?.payload, form, chain, session.password],
+    [action.rpc?.payload, form, chain, txPassword],
   );
 
   const confirmSummary = React.useMemo(
@@ -82,7 +77,8 @@ export default function WizardRunner({ action }: { action: Action }) {
   }, []);
 
   const doExecute = React.useCallback(async () => {
-    if (requiresAuth && !session.isUnlocked()) {
+    if (requiresAuth && !txPassword) {
+      setPendingExecutionAfterUnlock(true);
       setUnlockOpen(true);
       return;
     }
@@ -94,11 +90,12 @@ export default function WizardRunner({ action }: { action: Action }) {
     })
       .then((r) => r.json())
       .catch(() => ({ hash: "0xDEMO" }));
+    setTxPassword("");
     setTxRes(res);
     setStage("result");
   }, [
     requiresAuth,
-    session,
+    txPassword,
     host,
     action.rpc?.method,
     action.rpc?.path,
@@ -106,11 +103,10 @@ export default function WizardRunner({ action }: { action: Action }) {
   ]);
 
   React.useEffect(() => {
-    if (unlockOpen && session.isUnlocked()) {
-      setUnlockOpen(false);
-      void doExecute();
-    }
-  }, [unlockOpen, session, doExecute]);
+    if (!pendingExecutionAfterUnlock || !txPassword) return;
+    setPendingExecutionAfterUnlock(false);
+    void doExecute();
+  }, [pendingExecutionAfterUnlock, txPassword, doExecute]);
 
   if (!step) return <div>Invalid wizard</div>;
 
@@ -184,10 +180,16 @@ export default function WizardRunner({ action }: { action: Action }) {
         )}
 
         <UnlockModal
-          address={form.address || ""}
-          ttlSec={ttlSec}
           open={unlockOpen}
-          onClose={() => setUnlockOpen(false)}
+          onClose={() => {
+            setUnlockOpen(false);
+            setPendingExecutionAfterUnlock(false);
+            setTxPassword("");
+          }}
+          onUnlock={(password) => {
+            setTxPassword(password);
+            setUnlockOpen(false);
+          }}
         />
 
         {stage === "result" && (

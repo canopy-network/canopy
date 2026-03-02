@@ -271,6 +271,90 @@
             "startPage": 1
           }
         }
+      },
+      "root": {
+        "sent": {
+          "source": {
+            "base": "root",
+            "path": "/v1/query/txs-by-sender",
+            "method": "POST"
+          },
+          "body": {
+            "pageNumber": "{{page}}",
+            "perPage": "{{perPage}}",
+            "address": "{{account.address}}"
+          },
+          "selector": "",
+          "page": {
+            "strategy": "page",
+            "param": {
+              "page": "pageNumber",
+              "perPage": "perPage"
+            },
+            "response": {
+              "items": "results",
+              "totalPages": "paging.totalPages"
+            },
+            "defaults": {
+              "perPage": 20,
+              "startPage": 1
+            }
+          }
+        },
+        "received": {
+          "source": {
+            "base": "root",
+            "path": "/v1/query/txs-by-rec",
+            "method": "POST"
+          },
+          "body": {
+            "pageNumber": "{{page}}",
+            "perPage": "{{perPage}}",
+            "address": "{{account.address}}"
+          },
+          "selector": "",
+          "page": {
+            "strategy": "page",
+            "param": {
+              "page": "pageNumber",
+              "perPage": "perPage"
+            },
+            "response": {
+              "items": "results"
+            },
+            "defaults": {
+              "perPage": 20,
+              "startPage": 1
+            }
+          }
+        },
+        "failed": {
+          "source": {
+            "base": "root",
+            "path": "/v1/query/failed-txs",
+            "method": "POST"
+          },
+          "body": {
+            "pageNumber": "{{page}}",
+            "perPage": "{{perPage}}",
+            "address": "{{account.address}}"
+          },
+          "selector": "",
+          "page": {
+            "strategy": "page",
+            "param": {
+              "page": "pageNumber",
+              "perPage": "perPage"
+            },
+            "response": {
+              "items": "results"
+            },
+            "defaults": {
+              "perPage": 20,
+              "startPage": 1
+            }
+          }
+        }
       }
     },
     "orders": {

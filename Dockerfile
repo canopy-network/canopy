@@ -11,6 +11,7 @@ ARG VITE_WALLET_BASE_PATH=/wallet/
 # For monitoring-stack, these should be Traefik URLs
 ARG VITE_WALLET_RPC_PROXY_TARGET=/wallet/rpc
 ARG VITE_WALLET_ADMIN_RPC_PROXY_TARGET=/wallet/adminrpc
+ARG VITE_ROOT_WALLET_RPC_PROXY_TARGET=/wallet/rootrpc
 
 WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
@@ -20,6 +21,7 @@ COPY . /go/src/github.com/canopy-network/canopy
 ENV VITE_WALLET_BASE_PATH=${VITE_WALLET_BASE_PATH}
 ENV VITE_WALLET_RPC_PROXY_TARGET=${VITE_WALLET_RPC_PROXY_TARGET}
 ENV VITE_WALLET_ADMIN_RPC_PROXY_TARGET=${VITE_WALLET_ADMIN_RPC_PROXY_TARGET}
+ENV VITE_ROOT_WALLET_RPC_PROXY_TARGET=${VITE_ROOT_WALLET_RPC_PROXY_TARGET}
 
 RUN make build/wallet
 RUN make build/explorer

@@ -582,7 +582,7 @@
                 "id": "max",
                 "op": "set",
                 "field": "amount",
-                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0) - fees.raw.stakeFee}}> }}"
+                "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0) - (ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0))}}> }}"
               }
             ],
             "span": {
@@ -762,10 +762,10 @@
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "value": "{{ fromMicroDenom<{{ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)}}> }}",
             "autoPopulate": "always",
             "required": true,
-            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "min": "{{ fromMicroDenom<{{ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)}}> }}",
             "span": { "base": 12 },
             "validation": {
               "messages": {
@@ -773,7 +773,7 @@
                 "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
               }
             },
-            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}",
+            "help": "Network minimum fee: {{ fromMicroDenom<{{ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)}}> }} {{chain.denom.symbol}}",
             "step": "committees"
           }
         ],
@@ -839,7 +839,7 @@
           "coerce": "string"
         },
         "amount": {
-          "value": "{{(() => { const entered = Number(form.amount ?? 0); const current = Number(fromMicroDenom(ds.validator?.stakedAmount ?? 0)); const effective = ds.validator ? Math.max(entered, current) : entered; return toMicroDenom(effective); })()}}",
+          "value": "{{ toMicroDenom<{{ ds.validator ? ((form.amount === '' || form.amount == null) ? (Number(ds.validator?.stakedAmount ?? 0) / 1000000) : (Number.isFinite(Number(form.amount)) ? Number(form.amount) : (Number(ds.validator?.stakedAmount ?? 0) / 1000000))) : (Number.isFinite(Number(form.amount)) ? Number(form.amount) : 0) }}> }}",
           "coerce": "number"
         },
         "delegate": {
@@ -2198,7 +2198,7 @@
           "coerce": "string"
         },
         "fee": {
-          "value": "{{fees.raw.changeParamFee ?? 0}}",
+          "value": "{{fees.raw.changeParameterFee ?? 0}}",
           "coerce": "number"
         },
         "submit": {
@@ -3326,8 +3326,8 @@
             "type": "amount",
             "label": "Fee",
             "required": true,
-            "value": "{{fromMicroDenom<{{fees.raw.sendFee ?? 0}}>}}",
-            "min": "{{ fromMicroDenom<{{fees.raw.sendFee}}> }}",
+            "value": "{{fromMicroDenom<{{fees.raw.subsidyFee ?? 0}}>}}",
+            "min": "{{ fromMicroDenom<{{fees.raw.subsidyFee ?? 0}}> }}",
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
@@ -3882,13 +3882,11 @@
             "rows": [
               {
                 "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
+                "name": "Canopy"
               },
               {
                 "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
+                "name": "Canary"
               }
             ],
             "columns": [
@@ -3948,17 +3946,6 @@
             "step": "pricing"
           },
           {
-            "id": "data",
-            "name": "data",
-            "type": "text",
-            "label": "Data (optional)",
-            "placeholder": "Sub-asset contract address (hex)",
-            "value": "{{params.data || ''}}",
-            "autoPopulate": "once",
-            "span": { "base": 12 },
-            "step": "context"
-          },
-          {
             "id": "memo",
             "name": "memo",
             "type": "textarea",
@@ -3974,10 +3961,10 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.createOrderFee ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
-            "span": { "base": 12, "md": 6 },
+            "min": "{{ fromMicroDenom<{{fees.raw.createOrderFee ?? 0}}> }}",
+            "span": { "base": 12 },
             "step": "pricing"
           }
         ],
@@ -4282,9 +4269,9 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.editOrderFee ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
+            "min": "{{ fromMicroDenom<{{fees.raw.editOrderFee ?? 0}}> }}",
             "span": { "base": 12, "md": 6 },
             "step": "pricing"
           }
@@ -4505,9 +4492,9 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.deleteOrderFee ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
+            "min": "{{ fromMicroDenom<{{fees.raw.deleteOrderFee ?? 0}}> }}",
             "span": { "base": 12, "md": 6 }
           }
         ],
@@ -4578,13 +4565,15 @@
       "icon": "Lock",
       "ds": {
         "keystore": {},
+        "params": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "keystore"
+            "keystore",
+            "params"
           ]
         }
       },
@@ -4666,10 +4655,10 @@
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "value": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
             "autoPopulate": "always",
             "required": true,
-            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "min": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
             "span": { "base": 12 },
             "validation": {
               "messages": {
@@ -4677,7 +4666,7 @@
                 "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
               }
             },
-            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}"
+            "help": "Network minimum fee: {{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }} {{chain.denom.symbol}}"
           }
         ],
         "confirmation": {
@@ -4745,6 +4734,18 @@
       "id": "orderClose",
       "title": "Close Order",
       "icon": "CheckCircle2",
+      "ds": {
+        "params": {},
+        "__options": {
+          "staleTimeMs": 6000,
+          "refetchIntervalMs": 6000,
+          "refetchOnMount": true,
+          "refetchOnWindowFocus": false,
+          "critical": [
+            "params"
+          ]
+        }
+      },
       "ui": {
         "slots": {
           "modal": {
@@ -4805,9 +4806,17 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
             "autoPopulate": "once",
-            "min": 0,
+            "required": true,
+            "min": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }} {{chain.denom.symbol}}",
             "span": { "base": 12 }
           }
         ],
@@ -5009,10 +5018,10 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.dexLimitOrderFee ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
-            "span": { "base": 12, "md": 6 }
+            "min": "{{ fromMicroDenom<{{fees.raw.dexLimitOrderFee ?? 0}}> }}",
+            "span": { "base": 12 }
           }
         ],
         "confirmation": {
@@ -5214,9 +5223,9 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.dexLiquidityDeposit ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
+            "min": "{{ fromMicroDenom<{{fees.raw.dexLiquidityDeposit ?? 0}}> }}",
             "span": { "base": 12, "md": 6 }
           }
         ],
@@ -5426,9 +5435,9 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
+            "value": "{{fromMicroDenom<{{fees.raw.dexLiquidityWithdraw ?? 0}}>}}",
             "autoPopulate": "once",
-            "min": 0,
+            "min": "{{ fromMicroDenom<{{fees.raw.dexLiquidityWithdraw ?? 0}}> }}",
             "span": { "base": 12, "md": 12 }
           }
         ],

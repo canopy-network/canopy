@@ -66,6 +66,10 @@ export function usePopulateController({
   const [populatedFields, setPopulatedFields] = React.useState<Set<string>>(
     new Set(prefilledData ? Object.keys(prefilledData) : [])
   );
+  const isEmptyValue = React.useCallback(
+    (v: any) => v === undefined || v === null || v === "",
+    [],
+  );
 
   // Track if we've completed initial population
   const hasInitializedRef = React.useRef(false);
@@ -148,7 +152,7 @@ export function usePopulateController({
       }
 
       // Skip if form already has a value (user might have typed something)
-      if (form[fieldName] !== undefined && form[fieldName] !== "" && form[fieldName] !== null) {
+      if (!isEmptyValue(form[fieldName])) {
         continue;
       }
 
@@ -156,7 +160,7 @@ export function usePopulateController({
       if (fieldValue != null) {
         try {
           const resolved = template(fieldValue, templateContext);
-          if (resolved !== undefined && resolved !== "" && resolved !== null) {
+          if (!isEmptyValue(resolved)) {
             defaults[fieldName] = resolved;
             newlyPopulated.push(fieldName);
           }
@@ -187,7 +191,58 @@ export function usePopulateController({
     requestAnimationFrame(() => {
       setPhase("ready");
     });
-  }, [criticalDsReady, fields, form, templateContext, onFormChange, prefilledData, ds]);
+  }, [criticalDsReady, fields, form, templateContext, onFormChange, prefilledData, ds, isEmptyValue]);
+
+  // Backfill "once" fields that couldn't be resolved during initial population
+  // (e.g. async fees arriving after critical DS is ready).
+  React.useEffect(() => {
+    if (phase !== "ready") return;
+
+    const updates: Record<string, any> = {};
+    const newlyPopulated: string[] = [];
+
+    for (const field of fields) {
+      const fieldName = field.name;
+      const fieldValue = field.value;
+      const autoPopulate = field.autoPopulate ?? "always";
+
+      if (!fieldName) continue;
+      if (autoPopulate !== "once") continue;
+      if (prefilledData && prefilledData[fieldName] !== undefined) continue;
+      if (populatedFields.has(fieldName)) continue;
+      if (!isEmptyValue(form[fieldName])) continue;
+
+      if (fieldValue != null) {
+        try {
+          const resolved = template(fieldValue, templateContext);
+          if (!isEmptyValue(resolved)) {
+            updates[fieldName] = resolved;
+            newlyPopulated.push(fieldName);
+          }
+        } catch {
+          // Keep waiting until dependencies are available.
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      onFormChange(updates);
+      setPopulatedFields((prev) => {
+        const next = new Set(prev);
+        newlyPopulated.forEach((f) => next.add(f));
+        return next;
+      });
+    }
+  }, [
+    phase,
+    fields,
+    form,
+    templateContext,
+    onFormChange,
+    prefilledData,
+    populatedFields,
+    isEmptyValue,
+  ]);
 
   // Handle DS changes AFTER initialization (only for autoPopulate: "always" fields)
   React.useEffect(() => {

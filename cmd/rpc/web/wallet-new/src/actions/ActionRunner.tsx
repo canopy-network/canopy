@@ -3,7 +3,6 @@ import React from "react";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import FormRenderer from "./FormRenderer";
 import { useResolvedFees } from "@/core/fees";
-import { useSession, attachIdleRenew } from "@/state/session";
 import UnlockModal from "../components/UnlockModal";
 import {
   getFieldsFromAction,
@@ -26,6 +25,7 @@ import { ToastTemplateOptions } from "@/toast/types";
 import { useActionDs } from "./useActionDs";
 import { usePopulateController } from "./usePopulateController";
 import { resolveRpcHost } from "@/core/rpcHost";
+import type { ActionFinishResult } from "@/app/providers/ActionModalProvider";
 
 type Stage = "form" | "confirm" | "executing" | "result";
 
@@ -36,7 +36,7 @@ export default function ActionRunner({
   prefilledData,
 }: {
   actionId: string;
-  onFinish?: () => void;
+  onFinish?: (result: ActionFinishResult) => void;
   className?: string;
   prefilledData?: Record<string, any>;
 }) {
@@ -48,6 +48,8 @@ export default function ActionRunner({
     prefilledData || {},
   );
   const [txRes, setTxRes] = React.useState<any>(null);
+  const [txPassword, setTxPassword] = React.useState<string>("");
+  const [pendingExecutionAfterUnlock, setPendingExecutionAfterUnlock] = React.useState(false);
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
   // Track which fields were programmatically prefilled (from prefilledData or modules)
   // These fields should hide paste button even when they have values
@@ -57,7 +59,6 @@ export default function ActionRunner({
 
   const { manifest, chain, params: globalParams, isLoading } = useConfig();
   const { selectedAccount } = useAccounts?.() ?? { selectedAccount: undefined };
-  const session = useSession();
 
   // Merge global params with prefilledData so templates can access both via {{ params.fieldName }}
   const params = React.useMemo(() => ({
@@ -133,11 +134,6 @@ export default function ActionRunner({
     ctx: { chain },
   });
 
-  const ttlSec = chain?.session?.unlockTimeoutSec ?? 900;
-  React.useEffect(() => {
-    attachIdleRenew(ttlSec);
-  }, [ttlSec]);
-
   const requiresAuth =
     (action?.auth?.type ??
       (action?.submit?.base === "admin" ? "sessionPassword" : "none")) ===
@@ -201,7 +197,7 @@ export default function ActionRunner({
         ...params,
       },
       ds: mergedDs, // Use merged DS (action-level + field-level)
-      session: { password: session?.password },
+      session: { password: txPassword },
       // Unique scope for this action instance to prevent cache collisions
       __scope: `action:${actionId}:${selectedAccount?.address || "no-account"}`,
       // Track programmatically prefilled fields (hide paste button for these)
@@ -215,7 +211,7 @@ export default function ActionRunner({
       chain,
       selectedAccount,
       feesResolved,
-      session?.password,
+      txPassword,
       params,
       mergedDs,
       actionId,
@@ -302,7 +298,7 @@ export default function ActionRunner({
       buildPayloadFromAction(action as any, {
         form: normForm,
         chain,
-        session: { password: session.password },
+        session: { password: txPassword },
         account: selectedAccount
           ? {
               address: selectedAccount.address,
@@ -319,7 +315,7 @@ export default function ActionRunner({
       action,
       normForm,
       chain,
-      session.password,
+      txPassword,
       feesResolved,
       selectedAccount,
       mergedDs,
@@ -333,7 +329,8 @@ export default function ActionRunner({
 
   const doExecute = React.useCallback(async () => {
     if (!isReady) return;
-    if (requiresAuth && !session.isUnlocked()) {
+    if (requiresAuth && !txPassword) {
+      setPendingExecutionAfterUnlock(true);
       setUnlockOpen(true);
       return;
     }
@@ -385,6 +382,12 @@ export default function ActionRunner({
       (typeof res === "string" ||
         res == null ||
         (typeof res === "object" && !hasExplicitError));
+    const executionResult: ActionFinishResult = {
+      actionId,
+      success: isSuccess,
+      result: res,
+    };
+
     const key = isSuccess ? "onSuccess" : "onError";
     const t = resolveToastFromManifest(action, key as any, templatingCtx, res);
 
@@ -417,19 +420,24 @@ export default function ActionRunner({
       res,
     );
     if (fin) toast.info(fin);
+    setTxPassword("");
 
-    // Close modal/finish action after execution with a small delay
-    // to allow toast to be visible before modal closes
+    if (!isSuccess) {
+      // Keep modal open on failure so the user can inspect/edit and retry.
+      setStage("form");
+      return;
+    }
+
+    // Close modal/finish action only on success, with a small delay so toast is visible.
     setTimeout(() => {
       if (onFinish) {
-        onFinish();
+        onFinish(executionResult);
       } else {
-        // If no onFinish callback, reset to form stage
         setStage("form");
         setStepIdx(0);
       }
     }, 500);
-  }, [isReady, requiresAuth, session, host, action, payload]);
+  }, [isReady, requiresAuth, txPassword, host, action, payload, actionId, onFinish, templatingCtx, toast]);
 
   const onContinue = React.useCallback(() => {
     if (formHasErrors) {
@@ -456,11 +464,10 @@ export default function ActionRunner({
   }, []);
 
   React.useEffect(() => {
-    if (unlockOpen && session.isUnlocked()) {
-      setUnlockOpen(false);
-      void doExecute();
-    }
-  }, [unlockOpen, session]);
+    if (!pendingExecutionAfterUnlock || !txPassword) return;
+    setPendingExecutionAfterUnlock(false);
+    void doExecute();
+  }, [pendingExecutionAfterUnlock, txPassword, doExecute]);
 
   const onFormChange = React.useCallback((patch: Record<string, any>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -809,10 +816,16 @@ export default function ActionRunner({
             )}
 
             <UnlockModal
-              address={form.address || ""}
-              ttlSec={ttlSec}
               open={unlockOpen}
-              onClose={() => setUnlockOpen(false)}
+              onClose={() => {
+                setUnlockOpen(false);
+                setPendingExecutionAfterUnlock(false);
+                setTxPassword("");
+              }}
+              onUnlock={(password) => {
+                setTxPassword(password);
+                setUnlockOpen(false);
+              }}
             />
           </>
         )}

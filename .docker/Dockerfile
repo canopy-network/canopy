@@ -8,6 +8,8 @@ ARG VITE_WALLET_BASE_PATH=/
 # RPC proxy targets for chain.json generation
 ARG VITE_WALLET_RPC_PROXY_TARGET=http://localhost:50002
 ARG VITE_WALLET_ADMIN_RPC_PROXY_TARGET=http://localhost:50003
+ARG VITE_ROOT_WALLET_RPC_PROXY_TARGET=http://localhost:50002
+
 
 WORKDIR /go/src/github.com/canopy-network/canopy
 COPY . /go/src/github.com/canopy-network/canopy
@@ -16,6 +18,8 @@ COPY . /go/src/github.com/canopy-network/canopy
 ENV VITE_WALLET_BASE_PATH=${VITE_WALLET_BASE_PATH}
 ENV VITE_WALLET_RPC_PROXY_TARGET=${VITE_WALLET_RPC_PROXY_TARGET}
 ENV VITE_WALLET_ADMIN_RPC_PROXY_TARGET=${VITE_WALLET_ADMIN_RPC_PROXY_TARGET}
+ENV VITE_ROOT_WALLET_RPC_PROXY_TARGET=${VITE_ROOT_WALLET_RPC_PROXY_TARGET}
+
 
 RUN make build/wallet
 RUN make build/explorer
