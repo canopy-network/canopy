@@ -160,7 +160,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
 		cachedRootDexBatch, _ := s.GetCachedRootDex()
 		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested, cachedRootDexBatch); err != nil {
-			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
+			return err
 		}
 	}
 	// handle the token swaps ordered by the quorum

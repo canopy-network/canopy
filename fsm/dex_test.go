@@ -3453,6 +3453,24 @@ func clearLocks(t *testing.T, chain1, chain2 StateMachine, chain1Id, chain2Id ui
 	require.NoError(t, chain2.Delete(KeyForNextBatch(chain1Id)))
 }
 
+func TestGetPriceUsesBigIntForE6ScaledPrice(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.ChainId = 10
+
+	price, err := sm.getPrice(&lib.DexBatch{
+		Committee:       1,
+		PoolSize:        24515572443456,
+		CounterPoolSize: 50998020079,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, price)
+	require.Equal(t, uint64(24515572443456), price.LocalPool)
+	require.Equal(t, uint64(50998020079), price.RemotePool)
+	require.Equal(t, uint64(480716161), price.E6ScaledPrice)
+	// Previous uint64 multiplication overflow produced this incorrect wrapped value.
+	require.NotEqual(t, uint64(119001254), price.E6ScaledPrice)
+}
+
 var _ lib.RCManagerI = new(MockRCManager)
 
 // MockRCManager is a minimal mock implementation of lib.RCManagerI for testing

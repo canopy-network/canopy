@@ -151,8 +151,6 @@ func (p *Plugin) ListenForInbound() {
 					log.Println("Received deliver request from FSM")
 					response = &PluginToFSM_Deliver{c.DeliverTx(msg.GetDeliver())}
 				case *FSMToPlugin_End:
-					log.Println("PABLITO WAS HERE")
-					log.Println("EL AYUWOKI WAS HERE")
 					log.Println("Received end request from FSM")
 					response = &PluginToFSM_End{c.EndBlock(msg.GetEnd())}
 				default:
