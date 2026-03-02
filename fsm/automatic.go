@@ -158,8 +158,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	results, chainId, isNested := qc.Results, qc.Header.ChainId, committee == nil
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
-		cachedRootDexBatch, _ := s.GetCachedRootDex()
-		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested, cachedRootDexBatch); err != nil {
+		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
 			return err
 		}
 	}

@@ -65,13 +65,14 @@ const (
 )
 
 // HandleDexBatch() initiates the 'dex' lifecycle
-func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool, rootDexBatch ...*lib.DexBatch) (err lib.ErrorI) {
+func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool) (err lib.ErrorI) {
 	remoteBatch := results.DexBatch
 	// if nested, replace chainId with root chainId
 	if isNested {
-		if len(rootDexBatch) == 1 && rootDexBatch != nil {
-			remoteBatch = rootDexBatch[0]
-		} else {
+		// prefer the cached root dex batch to get the most up-to-date batch from the root chain
+		remoteBatch, _ = s.GetCachedRootDex()
+		// otherwise, fallback to the batch from the certificate result which may be delayed by one block
+		if remoteBatch == nil {
 			remoteBatch = results.RootDexBatch
 		}
 		// The counterparty we are syncing receipts for is the root chain.
