@@ -1,14 +1,15 @@
 import { useQueries } from '@tanstack/react-query'
 import { template } from '@/core/templater'
+import { resolveRpcHost, type RpcBase } from '@/core/rpcHost'
 
 export function useNodeParams(chain?: any) {
   const sources = chain?.params?.sources ?? []
   const queries = useQueries({
-    queries: sources.map((s: { id: any; base: string; path: any; method: string; headers: any; encoding: string; body: any }) => ({
+    queries: sources.map((s: { id: any; base?: RpcBase; path: any; method: string; headers: any; encoding: string; body: any }) => ({
       queryKey: ['params', s.id, chain?.rpc],
       enabled: !!chain,
       queryFn: async () => {
-        const host = s.base === 'admin' ? chain!.rpc.admin! : chain!.rpc.base
+        const host = resolveRpcHost(chain, s.base ?? 'rpc')
         const url  = `${host}${s.path}`
         const method = s.method ?? 'GET'
         const headers = { ...(s.headers ?? {}) }

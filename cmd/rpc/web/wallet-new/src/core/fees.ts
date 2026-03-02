@@ -1,3 +1,5 @@
+import { resolveRpcHost } from "@/core/rpcHost";
+
 // fees.ts (arriba)
 export type FeeBuckets = Record<
   string,
@@ -5,7 +7,7 @@ export type FeeBuckets = Record<
 >;
 export type FeeProviderQuery = {
   type: "query";
-  base: "rpc" | "admin";
+  base: "rpc" | "admin" | "root";
   path: string;
   method?: "GET" | "POST";
   encoding?: "json" | "text";
@@ -63,7 +65,7 @@ async function runProvider(
   if (p.type === "static") return p.data;
 
   if (p.type === "query") {
-    const base = p.base === "admin" ? ctx.chain.rpc.admin : ctx.chain.rpc.base;
+    const base = resolveRpcHost(ctx.chain, p.base);
     const url = `${base}${p.path}`;
     const init: RequestInit = {
       method: p.method || "POST",

@@ -8,6 +8,7 @@ import { useResolvedFees } from "@/core/fees";
 import { useSession, attachIdleRenew } from "@/state/session";
 import UnlockModal from "../components/UnlockModal";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { resolveRpcHost } from "@/core/rpcHost";
 
 type Stage = "form" | "confirm" | "executing" | "result";
 
@@ -39,11 +40,8 @@ export default function WizardRunner({ action }: { action: Action }) {
   const fee = feesResolved.amount;
 
   const host = React.useMemo(
-    () =>
-      action.rpc?.base === "admin"
-        ? (chain?.rpc.admin ?? chain?.rpc.base ?? "")
-        : (chain?.rpc.base ?? ""),
-    [action.rpc?.base, chain?.rpc.admin, chain?.rpc.base],
+    () => resolveRpcHost(chain, action.rpc?.base ?? "rpc"),
+    [action.rpc?.base, chain],
   );
 
   const payload = React.useMemo(

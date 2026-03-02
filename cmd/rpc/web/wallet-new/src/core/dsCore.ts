@@ -1,5 +1,7 @@
+import { resolveRpcHost, type RpcBase } from "./rpcHost"
+
 export type Source = {
-    base: 'rpc' | 'admin'
+    base: RpcBase
     path: string
     method?: 'GET' | 'POST'
     headers?: Record<string, string>
@@ -84,7 +86,7 @@ export function resolveLeaf(chain: ChainLike, key: string): DsLeaf | null {
 }
 
 export function makeUrl(chain: ChainLike, leaf: DsLeaf): string {
-    const base = leaf.source.base === 'admin' ? chain?.rpc?.admin : chain?.rpc?.base
+    const base = resolveRpcHost(chain, leaf.source.base)
     return base && leaf.source.path ? `${base}${leaf.source.path}` : ''
 }
 

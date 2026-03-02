@@ -25,6 +25,7 @@ import { motion } from "framer-motion";
 import { ToastTemplateOptions } from "@/toast/types";
 import { useActionDs } from "./useActionDs";
 import { usePopulateController } from "./usePopulateController";
+import { resolveRpcHost } from "@/core/rpcHost";
 
 type Stage = "form" | "confirm" | "executing" | "result";
 
@@ -327,10 +328,8 @@ export default function ActionRunner({
 
   const host = React.useMemo(() => {
     if (!action || !chain) return "";
-    return action?.submit?.base === "admin"
-      ? (chain.rpc.admin ?? chain.rpc.base ?? "")
-      : (chain.rpc.base ?? "");
-  }, [action, chain]);
+    return resolveRpcHost(chain, action?.submit?.base ?? "rpc");
+  }, [action?.submit?.base, chain]);
 
   const doExecute = React.useCallback(async () => {
     if (!isReady) return;

@@ -136,7 +136,7 @@
         "selector": ""
       },
       "byCommittee": {
-        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "source": { "base": "root", "path": "/v1/query/orders", "method": "POST" },
         "body": {
           "height": 0,
           "committee": "{{committee}}",
@@ -155,7 +155,7 @@
         "selector": ""
       },
       "byBuyer": {
-        "source": { "base": "rpc", "path": "/v1/query/orders", "method": "POST" },
+        "source": { "base": "root", "path": "/v1/query/orders", "method": "POST" },
         "body": {
           "height": 0,
           "buyerSendAddress": "{{account.address}}",
@@ -175,7 +175,7 @@
         "selector": ""
       },
       "single": {
-        "source": { "base": "rpc", "path": "/v1/query/order", "method": "POST" },
+        "source": { "base": "root", "path": "/v1/query/order", "method": "POST" },
         "body": {
           "height": 0,
           "orderId": "{{orderId}}",

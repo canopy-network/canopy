@@ -1,12 +1,9 @@
 // src/core/rpc.ts
-type Base = 'rpc' | 'admin';
+import { resolveRpcHost, type RpcBase } from "./rpcHost";
 
-export function makeRpc(base: Base = 'rpc', opts?: { headers?: Record<string,string> }) {
+export function makeRpc(base: RpcBase = "rpc", opts?: { headers?: Record<string,string> }) {
     const { chain } = (window as any).__configCtx ?? {};
-    const host =
-        base === 'admin'
-            ? (chain?.rpc?.admin ?? chain?.rpc?.base ?? '')
-            : (chain?.rpc?.base ?? '');
+    const host = resolveRpcHost(chain, base);
 
     async function request<T>(path: string, init: RequestInit): Promise<T> {
         const res = await fetch(host + path, init);

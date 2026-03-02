@@ -8,8 +8,8 @@
     "decimals": 6
   },
   "rpc": {
-    "base": "http://localhost:50002",
-    "admin": "http://localhost:50003",
+    "base": "http://localhost:40002",
+    "admin": "http://localhost:40003",
     "root": "http://localhost:50002"
   },
   "explorer": "/explorer",
@@ -297,7 +297,7 @@
       },
       "byCommittee": {
         "source": {
-          "base": "rpc",
+          "base": "root",
           "path": "/v1/query/orders",
           "method": "POST"
         },
@@ -322,7 +322,7 @@
       },
       "byBuyer": {
         "source": {
-          "base": "rpc",
+          "base": "root",
           "path": "/v1/query/orders",
           "method": "POST"
         },
@@ -348,7 +348,7 @@
       },
       "single": {
         "source": {
-          "base": "rpc",
+          "base": "root",
           "path": "/v1/query/order",
           "method": "POST"
         },

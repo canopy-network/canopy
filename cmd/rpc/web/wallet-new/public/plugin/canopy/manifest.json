@@ -4662,14 +4662,22 @@
             "span": { "base": 12 }
           },
           {
-            "id": "fee",
-            "name": "fee",
+            "id": "txFee",
+            "name": "txFee",
             "type": "amount",
-            "label": "Fee",
-            "value": "{{params.fee ?? 0}}",
-            "autoPopulate": "once",
-            "min": 0,
-            "span": { "base": 12 }
+            "label": "Transaction Fee",
+            "value": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "autoPopulate": "always",
+            "required": true,
+            "min": "{{ fromMicroDenom<{{fees.raw.stakeFee}}> }}",
+            "span": { "base": 12 },
+            "validation": {
+              "messages": {
+                "required": "Transaction fee is required",
+                "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
+              }
+            },
+            "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.stakeFee}}> }} {{chain.denom.symbol}}"
           }
         ],
         "confirmation": {
@@ -4708,7 +4716,7 @@
           "coerce": "string"
         },
         "fee": {
-          "value": "{{toMicroDenom<{{form.fee || 0}}>}}",
+          "value": "{{toMicroDenom<{{form.txFee || 0}}>}}",
           "coerce": "number"
         },
         "submit": {

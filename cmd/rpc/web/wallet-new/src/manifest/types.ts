@@ -83,7 +83,7 @@ export type Action = {
 
   // RPC configuration
   rpc?: {
-    base: "rpc" | "admin";
+    base: "rpc" | "admin" | "root";
     path: string;
     method: string;
     payload?: any;
@@ -266,7 +266,7 @@ export type UIOp =
  * =========================== */
 
 export type Submit = {
-  base: "rpc" | "admin";
+  base: "rpc" | "admin" | "root";
   path: string; // e.g. '/v1/admin/tx-send'
   method?: "GET" | "POST";
   headers?: Record<string, string>;
@@ -308,7 +308,7 @@ export type FeeBuckets = {
 
 export type FeeProviderQuery = {
   type: "query";
-  base: "rpc" | "admin";
+  base: "rpc" | "admin" | "root";
   path: string;
   method?: "GET" | "POST";
   headers?: Record<string, string>;
@@ -319,7 +319,7 @@ export type FeeProviderQuery = {
 
 export type FeeProviderSimulate = {
   type: "simulate";
-  base: "rpc" | "admin";
+  base: "rpc" | "admin" | "root";
   path: string;
   method?: "GET" | "POST";
   headers?: Record<string, string>;
@@ -330,7 +330,7 @@ export type FeeProviderSimulate = {
     | { type: "static"; value: string }
     | {
         type: "query";
-        base: "rpc" | "admin";
+        base: "rpc" | "admin" | "root";
         path: string;
         selector?: string;
       };

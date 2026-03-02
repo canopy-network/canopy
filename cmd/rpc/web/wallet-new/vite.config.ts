@@ -58,7 +58,7 @@ export default defineConfig(({ mode }) => {
         },
         // Proxy /rootrpc to Root Chain RPC server (for cross-chain order queries)
         '/rootrpc': {
-          target: env.VITE_ROOT_WALLET_RPC_PROXY_TARGET || 'http://localhost:50002',
+          target: env.VITE_ROOT_WALLET_RPC_PROXY_TARGET || env.VITE_WALLET_RPC_PROXY_TARGET || 'http://localhost:50002',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/rootrpc/, ''),
         },
