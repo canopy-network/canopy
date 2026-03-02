@@ -19,9 +19,18 @@ import (
 // - 'close' is a 'claimed' order whose 'buyer' sent the tokens to the seller before the deadline, thus the order is 'closed' and the tokens are moved from escrow to the buyer
 func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) {
 	if orders != nil {
+		// close and reset are mutually exclusive for the same order in one instruction set
+		closeSet := make(map[string]struct{}, len(orders.CloseOrders))
+		for _, closeOrderId := range orders.CloseOrders {
+			closeSet[string(closeOrderId)] = struct{}{}
+		}
 		// lock orders are a result of the committee witnessing a 'reserve transaction' for the order on the 'buyer chain'
 		// think of 'lock orders' like reserving the 'sell order'
 		for _, lockOrder := range orders.LockOrders {
+			if lockOrder == nil {
+				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", ErrInvalidLockOrder().Error())
+				continue
+			}
 			if err := s.LockOrder(lockOrder, chainId); err != nil {
 				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", err.Error())
 			}
@@ -30,6 +39,10 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// corresponding assets before the 'deadline height' of the 'buyer chain'. The buyer address and deadline height are reset and the
 		// sell order is listed as 'available' to the rest of the market
 		for _, resetOrderId := range orders.ResetOrders {
+			if _, hasClose := closeSet[string(resetOrderId)]; hasClose {
+				s.log.Warnf("ResetOrder skipped due to conflicting close instruction, id: %s", lib.BytesToString(resetOrderId))
+				continue
+			}
 			if err := s.ResetOrder(resetOrderId, chainId); err != nil {
 				s.log.Warnf("ResetOrder failed (can happen due to asynchronicity): %s", err.Error())
 			}

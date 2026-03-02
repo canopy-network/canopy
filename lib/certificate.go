@@ -655,6 +655,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		// exit with no error
 		return
 	}
+	// enforce caps for all certificate order lists
+	if len(x.LockOrders) > MaxOrdersPerDexBatch || len(x.ResetOrders) > MaxOrdersPerDexBatch || len(x.CloseOrders) > MaxOrdersPerDexBatch {
+		return ErrTooManyDexOrders()
+	}
 	// for each lock order
 	for _, lock := range x.LockOrders {
 		// if the lock order is empty
@@ -671,6 +675,10 @@ func (x *Orders) CheckBasic() (err ErrorI) {
 		if len(lock.BuyerReceiveAddress) != crypto.AddressSize {
 			// exit with address error
 			return ErrInvalidBuyerReceiveAddress()
+		}
+		// ensure deadline is non-zero
+		if lock.BuyerChainDeadline == 0 {
+			return ErrInvalidBuyerDeadline()
 		}
 	}
 	// ensure no duplicates in the resets
@@ -905,6 +913,15 @@ func (x *DexBatch) CheckBasic() (err ErrorI) {
 	// ensure there's not too many receipts
 	if len(x.PoolPoints) > MaxLiquidityProviders {
 		return ErrTooManyDexReceipts()
+	}
+	// ensure each pool point is valid
+	for _, point := range x.PoolPoints {
+		if point == nil {
+			return ErrInvalidArgument()
+		}
+		if len(point.Address) != crypto.AddressSize {
+			return ErrInvalidAddress()
+		}
 	}
 	// if the block hash size is larger than 100
 	if len(x.ReceiptHash) > 100 {

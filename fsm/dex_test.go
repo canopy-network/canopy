@@ -2549,6 +2549,110 @@ func TestHandleBatchDepositRejectsPoolPointsOverflow(t *testing.T) {
 	require.Equal(t, ErrInvalidAmount().Code(), err.Code())
 }
 
+func TestHandleBatchDepositZeroShareDoesNotCreateGhostProvider(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	user := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		TotalPoolPoints: 100,
+	}))
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + HoldingPoolAddend,
+		Amount: 1,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchDeposit(&lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: user.Bytes(),
+			Amount:  1, // rounds to zero LP share at this pool size
+			OrderId: []byte{0x21},
+		}},
+	}, chainId, &x, &y, true)
+	require.NoError(t, err)
+
+	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
+	require.NoError(t, err)
+	_, pointErr := pool.GetPointsFor(user.Bytes())
+	require.Error(t, pointErr)
+	require.Equal(t, lib.CodePointHolderNotFound, pointErr.Code())
+}
+
+func TestHandleBatchDepositRemoteEnforcesMaxLiquidityProviders(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	newProvider := newTestAddress(t, 2)
+
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	for i := range points {
+		points[i] = &lib.PoolPoints{Address: deadAddr.Bytes(), Points: 1}
+	}
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          points,
+		TotalPoolPoints: lib.MaxLiquidityProviders,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchDeposit(&lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: newProvider.Bytes(),
+			Amount:  100,
+			OrderId: []byte{0x22},
+		}},
+	}, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
+func TestHandleBatchWithdrawNilWithdrawalEntryDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	var err lib.ErrorI
+	require.NotPanics(t, func() {
+		err = sm.HandleBatchWithdraw(&lib.DexBatch{
+			Withdrawals: []*lib.DexLiquidityWithdraw{nil},
+		}, chainId, &x, &y, false)
+	})
+	require.NoError(t, err)
+}
+
+func TestHandleBatchWithdrawRejectsTotalPointsToRemoveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	addr := newTestAddress(t, 3)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          []*lib.PoolPoints{{Address: addr.Bytes(), Points: math.MaxUint64}},
+		TotalPoolPoints: math.MaxUint64,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchWithdraw(&lib.DexBatch{
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: addr.Bytes(), Percent: 100, OrderId: []byte{0x31}},
+			{Address: addr.Bytes(), Percent: 100, OrderId: []byte{0x32}},
+		},
+	}, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
 type dexSim struct {
 	chainX, chainY     *dexChain
 	counterId          uint64

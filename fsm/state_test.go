@@ -358,6 +358,20 @@ func TestApplyTransactions_BatchSignatureIndexMapping(t *testing.T) {
 	require.ErrorContains(t, results.Failed[1].Error, "invalid signature")
 }
 
+func TestGetMaxBlockSizeRejectsUnderflowConfig(t *testing.T) {
+	sm := newTestStateMachine(t)
+	cons, err := sm.GetParamsCons()
+	require.NoError(t, err)
+
+	// Persist an invalid value directly to simulate malformed state from legacy/corrupt config.
+	cons.BlockSize = lib.MaxBlockHeaderSize - 1
+	require.NoError(t, sm.SetParamsCons(cons))
+
+	_, err = sm.GetMaxBlockSize()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid param: blockSize")
+}
+
 func newSingleAccountStateMachine(t *testing.T) StateMachine {
 	sm := newTestStateMachine(t)
 	keyGroup := newTestKeyGroup(t)

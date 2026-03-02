@@ -789,24 +789,36 @@ func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
 // AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
 // Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
 func (x *Pool) AddPoints(address []byte, points uint64) lib.ErrorI {
-	// add to total points
-	if x.TotalPoolPoints > math.MaxUint64-points {
-		return ErrInvalidAmount()
+	// zero-point updates are no-ops; do not create ghost LP entries
+	if points == 0 {
+		return nil
 	}
-	x.TotalPoolPoints += points
 	// add to existing if found
 	for _, lp := range x.Points {
 		// if the address is found
 		if bytes.Equal(lp.Address, address) {
+			// preflight both adds before mutating to preserve atomicity
+			if x.TotalPoolPoints > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
 			// add points
 			if lp.Points > math.MaxUint64-points {
 				return ErrInvalidAmount()
 			}
+			x.TotalPoolPoints += points
 			lp.Points += points
 			// exit
 			return nil
 		}
 	}
+	// add to total points
+	if x.TotalPoolPoints > math.MaxUint64-points {
+		return ErrInvalidAmount()
+	}
+	if len(x.Points) >= lib.MaxLiquidityProviders {
+		return ErrInvalidLiquidityPool()
+	}
+	x.TotalPoolPoints += points
 	// add to the points
 	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
 	// exit

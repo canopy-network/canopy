@@ -218,9 +218,16 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	// first batch validate signatures over the entire set
 	for i, tx := range txs {
 		preCount := batchVerifier.Count()
+		checkStore := s.Store().(lib.StoreI)
+		checkTxn, e := s.TxnWrap()
+		if e != nil {
+			return e
+		}
 		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
 			failedCheckTxs[i] = checkErr
 		}
+		checkTxn.Discard()
+		s.SetStore(checkStore)
 		postCount := batchVerifier.Count()
 		for j := preCount; j < postCount; j++ {
 			batchToTxIdx = append(batchToTxIdx, i)
@@ -437,6 +444,10 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 	consParams, err := s.GetParamsCons()
 	if err != nil {
 		return 0, err
+	}
+	// fail closed on malformed persisted config to avoid uint64 underflow.
+	if consParams.BlockSize < lib.MaxBlockHeaderSize {
+		return 0, ErrInvalidParam(ParamBlockSize)
 	}
 	// return the max block size
 	return consParams.BlockSize - lib.MaxBlockHeaderSize, nil

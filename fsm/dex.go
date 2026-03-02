@@ -394,13 +394,22 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 	}
 	// collect withdrawals
 	for _, w := range batch.Withdrawals {
+		if w == nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
+			continue // defensive
+		}
 		initialPoints, e := p.GetPointsFor(w.Address)
 		if e != nil {
 			s.log.Errorf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
 			continue // defensive
 		}
 		// update the total points to remove
-		totalPointsToRemove += lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		var carry uint64
+		totalPointsToRemove, carry = bits.Add64(totalPointsToRemove, pointsToRemove, 0)
+		if carry != 0 {
+			return ErrInvalidLiquidityPool()
+		}
 	}
 	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
 		return nil
@@ -417,6 +426,10 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 	var paidY, paidX uint64
 	// distribute tokens
 	for _, w := range batch.Withdrawals {
+		if w == nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
+			continue // defensive
+		}
 		initialPoints, e := p.GetPointsFor(w.Address)
 		if e != nil {
 			s.log.Warnf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
@@ -521,6 +534,12 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		share := lib.SafeMulDiv(totalDL, deposit.Amount, totalDeposit)
 		// update the distributed counter
 		distributed += share
+		// enforce LP holder cap at execution time too (remote batches bypass local enqueue checks)
+		if share > 0 {
+			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound && len(p.Points) >= lib.MaxLiquidityProviders {
+				return ErrInvalidLiquidityPool()
+			}
+		}
 		// add points to pool
 		if err = p.AddPoints(deposit.Address, share); err != nil {
 			return err

@@ -191,6 +191,39 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 	}
 }
 
+func TestHandleCommitteeSwapsConflictingResetAndClosePrefersClose(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 106)
+	buyer := newTestAddress(t, 1)
+	amount := uint64(100)
+
+	require.NoError(t, sm.SetOrder(&lib.SellOrder{
+		Id:                  orderID,
+		Committee:           lib.CanopyChainId,
+		AmountForSale:       amount,
+		RequestedAmount:     amount,
+		BuyerReceiveAddress: buyer.Bytes(),
+		SellersSendAddress:  newTestAddressBytes(t, 2),
+	}, lib.CanopyChainId))
+	require.NoError(t, sm.PoolAdd(lib.CanopyChainId+EscrowPoolAddend, amount))
+
+	sm.HandleCommitteeSwaps(&lib.Orders{
+		ResetOrders: [][]byte{orderID},
+		CloseOrders: [][]byte{orderID},
+	}, lib.CanopyChainId)
+
+	_, err := sm.GetOrder(orderID, lib.CanopyChainId)
+	require.ErrorContains(t, err, "not found")
+
+	buyerBalance, err := sm.GetAccountBalance(buyer)
+	require.NoError(t, err)
+	require.Equal(t, amount, buyerBalance)
+
+	escrowBalance, err := sm.GetPoolBalance(lib.CanopyChainId + EscrowPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, escrowBalance)
+}
+
 func TestHandleCommitteeSwapsCloseOverflowKeepsEscrowAndOrder(t *testing.T) {
 	sm := newTestStateMachine(t)
 	orderID := newTestOrderId(t, 105)
@@ -226,6 +259,15 @@ func TestHandleCommitteeSwapsCloseOverflowKeepsEscrowAndOrder(t *testing.T) {
 	buyerAfter, err := sm.GetAccountBalance(buyer)
 	require.NoError(t, err)
 	require.Equal(t, uint64(math.MaxUint64), buyerAfter)
+}
+
+func TestHandleCommitteeSwapsNilLockOrderDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NotPanics(t, func() {
+		sm.HandleCommitteeSwaps(&lib.Orders{
+			LockOrders: []*lib.LockOrder{nil},
+		}, lib.CanopyChainId)
+	})
 }
 
 func TestSetOrder(t *testing.T) {

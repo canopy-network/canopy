@@ -178,6 +178,24 @@ func TestHandleCertificateResultsNilGuards(t *testing.T) {
 			},
 			expected: lib.ErrNilRewardRecipients(),
 		},
+		{
+			name: "nil payment percent entry",
+			qc: &lib.QuorumCertificate{
+				Header: &lib.View{
+					ChainId:    lib.CanopyChainId,
+					Height:     1,
+					RootHeight: 1,
+				},
+				Results: &lib.CertificateResult{
+					RewardRecipients: &lib.RewardRecipients{
+						PaymentPercents: []*lib.PaymentPercents{
+							nil,
+						},
+					},
+				},
+			},
+			expected: lib.ErrInvalidPercentAllocation(),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

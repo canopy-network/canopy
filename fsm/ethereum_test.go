@@ -221,6 +221,54 @@ func TestRLPToCanopyTransaction_RejectsChainIDAboveUint64(t *testing.T) {
 	require.ErrorContains(t, errI, "chain id exceeds uint64")
 }
 
+func TestRLPToCanopyTransaction_RejectsDownscaledValueOverflow(t *testing.T) {
+	privKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	chainID := big.NewInt(int64(CanopyIdsToEVMChainId(1, 1)))
+	to := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+	gas := uint64(21_000)
+	gasPrice := UpscaleTo18Decimals(1)
+
+	overflowValue := new(big.Int).Mul(new(big.Int).SetUint64(^uint64(0)), scaleFactor)
+	overflowValue.Add(overflowValue, scaleFactor) // downscaled value = MaxUint64 + 1
+
+	tx := types.NewTransaction(1, to, overflowValue, gas, gasPrice, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privKey)
+	require.NoError(t, err)
+
+	rlpBytes, err := signedTx.MarshalBinary()
+	require.NoError(t, err)
+
+	_, errI := RLPToCanopyTransaction(rlpBytes)
+	require.Error(t, errI)
+	require.Equal(t, ErrInvalidAmount().Code(), errI.Code())
+}
+
+func TestRLPToCanopyTransaction_HighGasUsesUnsignedFeeMath(t *testing.T) {
+	privKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	chainID := big.NewInt(int64(CanopyIdsToEVMChainId(1, 1)))
+	to := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
+	gas := uint64(1<<63 + 16) // above MaxInt64; must not be narrowed through int64
+	gasPrice := big.NewInt(1_000_000_000_001)
+	value := UpscaleTo18Decimals(1)
+
+	tx := types.NewTransaction(1, to, value, gas, gasPrice, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privKey)
+	require.NoError(t, err)
+
+	rlpBytes, err := signedTx.MarshalBinary()
+	require.NoError(t, err)
+
+	got, errI := RLPToCanopyTransaction(rlpBytes)
+	require.NoError(t, errI)
+
+	expectedFee := DownscaleTo6Decimals(new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice))
+	require.Equal(t, expectedFee, got.Fee)
+}
+
 func TestRLPToSendTxERC20(t *testing.T) {
 	// create the identity / chain fields
 	privKey, err := crypto.GenerateKey()

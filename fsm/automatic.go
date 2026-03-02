@@ -183,6 +183,9 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	// reduce all payment percents proportional to the non-signer percent
 	for i, p := range results.RewardRecipients.PaymentPercents {
+		if p == nil {
+			return lib.ErrInvalidPercentAllocation()
+		}
 		results.RewardRecipients.PaymentPercents[i].Percent = lib.Uint64ReducePercentage(p.Percent, uint64(nonSignerPercent))
 	}
 	// if the quorum is signalling 'retire' for a 'nestedChain'

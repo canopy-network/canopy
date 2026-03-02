@@ -73,6 +73,18 @@ func TestUpdateParam(t *testing.T) {
 			},
 		},
 		{
+			name:   "consensus param block size below header rejected",
+			detail: "block size must be at least header size to avoid max-size underflow",
+			update: paramUpdate{
+				space: "cons",
+				name:  ParamBlockSize,
+				value: &lib.UInt64Wrapper{
+					Value: lib.MaxBlockHeaderSize - 1,
+				},
+			},
+			error: "invalid param: blockSize",
+		},
+		{
 			name:   "consensus param negative protocol version rejected",
 			detail: "a negative protocol version string must be rejected",
 			update: paramUpdate{
