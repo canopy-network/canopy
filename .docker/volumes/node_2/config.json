@@ -1,6 +1,6 @@
 {
   "logLevel": "debug",
-  "chainId": 2,
+  "chainId": 1,
   "sleepUntil": 0,
   "rootChain": [
     {
@@ -25,7 +25,7 @@
   "dbName": "canopy",
   "inMemory": false,
   "networkID": 1,
-  "listenAddress": "0.0.0.0:9002",
+  "listenAddress": "0.0.0.0:9001",
   "externalAddress": "node-2",
   "maxInbound": 21,
   "maxOutbound": 7,
