@@ -306,24 +306,18 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 			results.DexBatch = batch.Copy()
 		}
 	}
-	// if nested, populate the root dex batch structure with the root
-	cachedRootDexBatch, _ := sm.GetCachedRootDex()
 	if rcId != c.Config.ChainId {
-		// determine if we should activate liveness fallback
-		livenessFallback := isTriggerBlock && !batch.IsEmpty() && (sm.Height()-batch.LockedHeight) >= lib.LivenessFallbackBlocks
-		// only fetch/set the root dex batch from the root chain if we are not in liveness fallback or
-		// there's no cache available otherwise rely on the cached batch which may be stale by one block
-		// but will ensure liveness to work
-		if cachedRootDexBatch != nil && !livenessFallback {
+		// populate the root dex batch structure with the root
+		cachedRootDexBatch, _ := sm.GetCachedRootDex()
+		// only fetch/set the root dex batch from the root chain if there's no cache available
+		if cachedRootDexBatch != nil {
 			results.RootDexBatch = cachedRootDexBatch
-			results.RootDexBatch.LivenessFallback = livenessFallback
 			return
 		}
-		results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback)
+		results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, false)
 		if err != nil {
 			c.log.Error(err.Error())
 			return
 		}
-		results.RootDexBatch.LivenessFallback = livenessFallback
 	}
 }
