@@ -51,8 +51,9 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
         // Simulate brief delay for UX
         await new Promise(resolve => setTimeout(resolve, 200))
 
+        // Success path is handled by onUnlock callback.
+        // onClose should represent cancel/dismiss only.
         onUnlock(pwd)
-        onClose()
     }
 
     return (

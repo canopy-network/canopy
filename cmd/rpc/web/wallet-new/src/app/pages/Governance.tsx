@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Poll, Proposal, useGovernanceData } from "@/hooks/useGovernance";
 import { ProposalTable } from "@/components/governance/ProposalTable";
-import { PollCard } from "@/components/governance/PollCard";
+import { PollTable } from "@/components/governance/PollTable";
 import { ProposalDetailsModal } from "@/components/governance/ProposalDetailsModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ActionsModal } from "@/actions/ActionsModal";
@@ -40,13 +40,14 @@ const GOVERNANCE_ACTION_IDS = {
 } as const;
 
 export const Governance = () => {
-  const { proposals, polls } = useGovernanceData();
+  const { proposals, polls, refetchAll, isRefetching } = useGovernanceData();
   const { manifest } = useManifest();
 
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedActions, setSelectedActions] = useState<any[]>([]);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [activeQueueTab, setActiveQueueTab] = useState<"proposals" | "polls">("proposals");
 
   const openAction = useCallback(
     (actionId: string, prefilledData?: Record<string, any>) => {
@@ -71,6 +72,25 @@ export const Governance = () => {
     const active = proposals.filter((p) => p.status === "active" || p.status === "pending").length;
     return { allProposals: ordered, activeCount: active };
   }, [proposals]);
+
+  const pollCounts = useMemo(
+    () => ({
+      total: polls.length,
+      active: polls.filter((poll) => poll.status === "active").length,
+      passed: polls.filter((poll) => poll.status === "passed").length,
+      rejected: polls.filter((poll) => poll.status === "rejected").length,
+    }),
+    [polls],
+  );
+
+  const proposalCounts = useMemo(
+    () => ({
+      total: proposals.length,
+      passed: proposals.filter((proposal) => proposal.status === "passed").length,
+      rejected: proposals.filter((proposal) => proposal.status === "rejected").length,
+    }),
+    [proposals],
+  );
 
   const handleVoteProposal = useCallback(
     (proposalHash: string, vote: "approve" | "reject") => {
@@ -108,6 +128,18 @@ export const Governance = () => {
   const handleViewDetails = useCallback(
     (hash: string) => {
       const proposal = proposals.find((p) => p.hash === hash);
+      if (!proposal) return;
+      setSelectedProposal(proposal);
+      setIsDetailsModalOpen(true);
+    },
+    [proposals],
+  );
+
+  const handleViewPollDetails = useCallback(
+    (pollHash: string) => {
+      const proposal = proposals.find(
+        (item) => item.hash === pollHash || item.id === pollHash,
+      );
       if (!proposal) return;
       setSelectedProposal(proposal);
       setIsDetailsModalOpen(true);
@@ -158,19 +190,39 @@ export const Governance = () => {
         variants={containerVariants}
       >
         <div className="px-6 py-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Governance</h1>
-              <p className="text-sm text-muted-foreground mt-1">
+          <div className="relative mb-6 overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 via-background to-card p-5 md:p-6">
+            <div className="absolute -top-16 -right-16 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
+            <div className="absolute -bottom-20 -left-10 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
+            <div className="relative z-10">
+              <div className="text-[11px] uppercase tracking-[0.2em] text-primary/90 mb-2">Governance Control Deck</div>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Governance</h1>
+              <p className="text-sm text-muted-foreground mt-2 max-w-3xl">
                 Manage polls and proposals with guided, one-step submissions and explicit review details.
               </p>
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-emerald-300">Active Proposals</div>
+                  <div className="text-base font-semibold text-foreground">{activeCount}</div>
+                </div>
+                <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-sky-300">Active Polls</div>
+                  <div className="text-base font-semibold text-foreground">{pollCounts.active}</div>
+                </div>
+                <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-cyan-300">Passed Proposals</div>
+                  <div className="text-base font-semibold text-foreground">{proposalCounts.passed}</div>
+                </div>
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-rose-300">Rejected Proposals</div>
+                  <div className="text-base font-semibold text-foreground">{proposalCounts.rejected}</div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-4 md:p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold text-foreground">Primary Governance Actions</div>
-
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               {criticalActions.map((item) => {
@@ -249,61 +301,93 @@ export const Governance = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-foreground mb-1">Active Proposals</h2>
+          <div className="mb-8 rounded-2xl border border-border/70 bg-gradient-to-br from-background via-card to-card p-4 md:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground mb-1">Governance Queue</h2>
                 <p className="text-sm text-muted-foreground">
-                  All proposals are listed here. Vote actions are enabled only for active/pending items.
+                  Built for high volume: split streams, filter quickly, and act without losing context.
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Active now: {activeCount} | Total loaded: {allProposals.length}
-                </p>
-                <div className="mt-2 inline-flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5" />
-                  <span className="text-xs text-muted-foreground">
-                    Tip: open <strong>View Details</strong> to review the technical <code>msg</code> before voting.
-                  </span>
-                </div>
               </div>
+              <button
+                onClick={() => refetchAll()}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/50 transition-colors"
+              >
+                <RefreshCcw className={`w-3.5 h-3.5 ${isRefetching ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-emerald-300">Proposals Active/Pending</div>
+                <div className="text-base font-semibold text-foreground">{activeCount}</div>
+              </div>
+              <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-sky-300">Polls Active</div>
+                <div className="text-base font-semibold text-foreground">{pollCounts.active}</div>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Loaded Records</div>
+                <div className="text-base font-semibold text-foreground">{allProposals.length + pollCounts.total}</div>
+              </div>
+            </div>
+
+            <div className="mb-4 inline-flex rounded-lg border border-border/80 bg-background/70 p-1">
+              <button
+                onClick={() => setActiveQueueTab("proposals")}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                  activeQueueTab === "proposals"
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Proposals ({allProposals.length})
+              </button>
+              <button
+                onClick={() => setActiveQueueTab("polls")}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                  activeQueueTab === "polls"
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Polls ({pollCounts.total})
+              </button>
+            </div>
+
+            <div className="mt-2 inline-flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 mb-4">
+              <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5" />
+              <span className="text-xs text-muted-foreground">
+                Tip: use <strong>Details</strong> to inspect technical data before voting. Filters stay in-place so you keep decision context.
+              </span>
+            </div>
+
+            {activeQueueTab === "proposals" ? (
               <ErrorBoundary>
                 <ProposalTable
                   proposals={allProposals}
-                  title="All Proposals"
+                  title="Proposal Stream"
                   onVote={handleVoteProposal}
                   onDeleteVote={handleDeleteProposalVote}
                   onViewDetails={handleViewDetails}
                 />
               </ErrorBoundary>
-            </div>
-
-            <div>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-foreground mb-1">Active Polls</h2>
-                <p className="text-sm text-muted-foreground">
-                  When you click Approve/Reject, the voting form opens with poll fields prefilled.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {polls.length === 0 ? (
-                  <div className="bg-card rounded-xl p-12 border border-border text-center">
-                    <BarChart3 className="w-16 h-16 text-muted-foreground mb-4 mx-auto" />
-                    <p className="text-muted-foreground">No active polls</p>
-                  </div>
-                ) : (
-                  polls.map((poll) => (
-                    <ErrorBoundary key={poll.hash}>
-                      <PollCard
-                        poll={poll}
-                        onVote={(hash, vote) => handleVotePoll(hash, vote, poll)}
-                        onViewDetails={undefined}
-                      />
-                    </ErrorBoundary>
-                  ))
-                )}
-              </div>
-            </div>
+            ) : (
+              <ErrorBoundary>
+                <PollTable
+                  polls={polls}
+                  title="Poll Stream"
+                  onVote={(hash, vote) => {
+                    const poll = polls.find(
+                      (item) => (item.proposalHash || item.hash) === hash || item.hash === hash,
+                    );
+                    handleVotePoll(hash, vote, poll);
+                  }}
+                  onViewDetails={handleViewPollDetails}
+                />
+              </ErrorBoundary>
+            )}
           </div>
 
         </div>
