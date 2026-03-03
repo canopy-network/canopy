@@ -58,9 +58,9 @@ function splitArgs(src: string): string[] {
 // evaluates a safe JS expression using context as arguments
 function evalJsExpression(expr: string, ctx: any): any {
   if (banned.test(expr)) throw new Error("templater: forbidden token");
-  const argNames = Object.keys(ctx);
-  const argVals = Object.values(ctx);
-  // return ( ...expr... );
+  const combined = { ...ctx, ...templateFns };
+  const argNames = Object.keys(combined);
+  const argVals = Object.values(combined);
   // eslint-disable-next-line no-new-func
   const fn = new Function(...argNames, `return (${expr});`);
   return fn(...argVals);
