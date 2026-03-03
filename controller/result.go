@@ -320,10 +320,10 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 			return
 		}
 		results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback)
-		results.RootDexBatch.LivenessFallback = livenessFallback
 		if err != nil {
 			c.log.Error(err.Error())
 			return
 		}
+		results.RootDexBatch.LivenessFallback = livenessFallback
 	}
 }
