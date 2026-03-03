@@ -356,12 +356,7 @@ export const Governance = () => {
               </button>
             </div>
 
-            <div className="mt-2 inline-flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 mb-4">
-              <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5" />
-              <span className="text-xs text-muted-foreground">
-                Tip: use <strong>Details</strong> to inspect technical data before voting. Filters stay in-place so you keep decision context.
-              </span>
-            </div>
+
 
             {activeQueueTab === "proposals" ? (
               <ErrorBoundary>

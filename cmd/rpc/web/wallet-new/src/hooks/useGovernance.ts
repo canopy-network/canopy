@@ -4,6 +4,7 @@ import { useDS } from "@/core/useDs";
 type RpcProposalRecord = Record<string, any>;
 type RpcPollRecord = Record<string, any>;
 type RpcParamsRecord = Record<string, Record<string, string>>;
+type RpcHeightRecord = number | { height?: number };
 
 export interface Proposal {
   id: string;
@@ -32,6 +33,8 @@ export interface Proposal {
   fee?: number;
   memo?: string;
   time?: number;
+  isVotingOpen?: boolean;
+  hasLocalVote?: boolean;
 }
 
 export interface Poll {
@@ -82,26 +85,44 @@ const categoryFromType = (type?: string): string => {
   return map[type ?? ""] ?? "Other";
 };
 
-const buildProposalList = (rpcProposals: RpcProposalRecord | undefined): Proposal[] => {
+const readHeight = (raw: RpcHeightRecord | undefined): number => {
+  if (typeof raw === "number") return asNumber(raw, 0);
+  return asNumber(raw?.height, 0);
+};
+
+const buildProposalList = (
+  rpcProposals: RpcProposalRecord | undefined,
+  currentHeight: number,
+): Proposal[] => {
   if (!rpcProposals || typeof rpcProposals !== "object") return [];
 
   return Object.entries(rpcProposals).map(([hash, value]) => {
     const proposalData = value?.proposal ?? {};
     const msg = proposalData?.msg ?? {};
-    const approve = value?.approve;
+    const hasLocalVote = Object.prototype.hasOwnProperty.call(value ?? {}, "approve");
+    const approve = hasLocalVote ? Boolean(value?.approve) : null;
+    const startHeight = asNumber(msg?.startHeight, 0);
+    const endHeight = asNumber(msg?.endHeight, 0);
+    const hasResolvedHeight = currentHeight > 0;
+    const isPendingWindow = hasResolvedHeight && startHeight > 0 && currentHeight < startHeight;
+    const isClosedWindow = hasResolvedHeight && endHeight > 0 && currentHeight > endHeight;
+    const isVotingOpen = !isClosedWindow;
 
-    let status: Proposal["status"] = "pending";
-    let result: Proposal["result"] = "Pending";
-    if (approve === true) {
+    let status: Proposal["status"];
+    if (isPendingWindow) {
+      status = "pending";
+    } else if (!isClosedWindow) {
+      status = "active";
+    } else if (approve === true) {
       status = "passed";
-      result = "Pass";
     } else if (approve === false) {
       status = "rejected";
-      result = "Fail";
-    } else if (approve == null) {
-      status = "active";
-      result = "Pending";
+    } else {
+      status = "pending";
     }
+
+    const result: Proposal["result"] =
+      status === "passed" ? "Pass" : status === "rejected" ? "Fail" : "Pending";
 
     const yesPercent = approve === true ? 100 : approve === false ? 0 : 50;
     const noPercent = 100 - yesPercent;
@@ -125,8 +146,8 @@ const buildProposalList = (rpcProposals: RpcProposalRecord | undefined): Proposa
       result,
       proposer,
       submitTime: normalizeDate(proposalData?.time),
-      endHeight: asNumber(msg?.endHeight, 0),
-      startHeight: asNumber(msg?.startHeight, 0),
+      endHeight,
+      startHeight,
       yesPercent,
       noPercent,
       yesVotes: approve === true ? 1 : 0,
@@ -142,6 +163,8 @@ const buildProposalList = (rpcProposals: RpcProposalRecord | undefined): Proposa
       fee: asNumber(proposalData?.fee, 0),
       memo: proposalData?.memo,
       time: asNumber(proposalData?.time, 0),
+      isVotingOpen,
+      hasLocalVote,
     };
   });
 };
@@ -188,6 +211,13 @@ const buildPollList = (
 };
 
 export const useGovernanceData = () => {
+  const heightQuery = useDS<RpcHeightRecord>("height", {}, {
+    staleTimeMs: POLL_INTERVAL_MS,
+    refetchIntervalMs: POLL_INTERVAL_MS,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  });
+
   const pollsQuery = useDS<RpcPollRecord>("gov.poll", {}, {
     staleTimeMs: POLL_INTERVAL_MS,
     refetchIntervalMs: POLL_INTERVAL_MS,
@@ -209,9 +239,11 @@ export const useGovernanceData = () => {
     refetchOnWindowFocus: false,
   });
 
+  const currentHeight = useMemo(() => readHeight(heightQuery.data), [heightQuery.data]);
+
   const proposals = useMemo(
-    () => buildProposalList(proposalsQuery.data),
-    [proposalsQuery.data],
+    () => buildProposalList(proposalsQuery.data, currentHeight),
+    [proposalsQuery.data, currentHeight],
   );
 
   const polls = useMemo(
@@ -223,14 +255,16 @@ export const useGovernanceData = () => {
     proposals,
     polls,
     params: paramsQuery.data ?? {},
-    isLoading: pollsQuery.isLoading || proposalsQuery.isLoading || paramsQuery.isLoading,
-    isRefetching: pollsQuery.isFetching || proposalsQuery.isFetching || paramsQuery.isFetching,
+    isLoading: heightQuery.isLoading || pollsQuery.isLoading || proposalsQuery.isLoading || paramsQuery.isLoading,
+    isRefetching: heightQuery.isFetching || pollsQuery.isFetching || proposalsQuery.isFetching || paramsQuery.isFetching,
     errors: {
+      height: heightQuery.error,
       polls: pollsQuery.error,
       proposals: proposalsQuery.error,
       params: paramsQuery.error,
     },
     refetchAll: () => {
+      void heightQuery.refetch();
       void pollsQuery.refetch();
       void proposalsQuery.refetch();
       void paramsQuery.refetch();

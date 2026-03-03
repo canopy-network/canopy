@@ -21,6 +21,7 @@ import {
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { cx } from "@/ui/cx";
 import { motion } from "framer-motion";
+import { AlertTriangle } from "lucide-react";
 import { ToastTemplateOptions } from "@/toast/types";
 import { useActionDs } from "./useActionDs";
 import { usePopulateController } from "./usePopulateController";
@@ -28,6 +29,59 @@ import { resolveRpcHost } from "@/core/rpcHost";
 import type { ActionFinishResult } from "@/app/providers/ActionModalProvider";
 
 type Stage = "form" | "confirm" | "executing" | "result";
+
+type InlineServiceError = {
+  status: number;
+  statusText: string;
+  message: string;
+  requestMethod: string;
+  requestPath: string;
+  response: any;
+  rawResponse: string;
+  occurredAt: string;
+};
+
+const parseServiceResponse = (raw: string): any => {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return raw;
+  }
+};
+
+const extractServiceErrorMessage = (response: any, statusText?: string): string => {
+  if (typeof response === "string" && response.trim()) return response.trim();
+  if (response && typeof response === "object") {
+    const candidates = [
+      response?.error?.message,
+      response?.error?.reason,
+      response?.error?.details,
+      response?.message,
+      response?.reason,
+      response?.detail,
+      response?.description,
+      typeof response?.data === "object" ? response?.data?.message : undefined,
+      typeof response?.data === "string" ? response?.data : undefined,
+    ];
+    for (const value of candidates) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  if (typeof statusText === "string" && statusText.trim()) return statusText.trim();
+  return "Unknown service error";
+};
+
+const formatServiceResponse = (response: any, rawResponse: string): string => {
+  if (response == null) return rawResponse || "(empty response)";
+  if (typeof response === "string") return response;
+  try {
+    return JSON.stringify(response, null, 2);
+  } catch {
+    return rawResponse || String(response);
+  }
+};
 
 export default function ActionRunner({
   actionId,
@@ -48,6 +102,7 @@ export default function ActionRunner({
     prefilledData || {},
   );
   const [txRes, setTxRes] = React.useState<any>(null);
+  const [inlineError, setInlineError] = React.useState<InlineServiceError | null>(null);
   const [txPassword, setTxPassword] = React.useState<string>("");
   const [pendingExecutionAfterUnlock, setPendingExecutionAfterUnlock] = React.useState(false);
   const [localDs, setLocalDs] = React.useState<Record<string, any>>({});
@@ -277,6 +332,29 @@ export default function ActionRunner({
     };
   }, [action, templatingCtx]);
 
+  const errorPanelConfig = React.useMemo(
+    () => (action as any)?.ui?.errorPanel ?? {},
+    [action],
+  );
+
+  const errorPanelCopy = React.useMemo(() => {
+    const data = { ...templatingCtx, error: inlineError, result: txRes };
+    const render = (value: any, fallback: string) =>
+      typeof value === "string" ? template(value, data) : fallback;
+    return {
+      title: render(errorPanelConfig.title, "Request failed"),
+      description: render(
+        errorPanelConfig.description,
+        "The request could not be completed. Review the service response below and retry.",
+      ),
+      advancedLabel: render(errorPanelConfig.advancedLabel, "Advanced details"),
+      statusLabel: render(errorPanelConfig.statusLabel, "Status"),
+      requestLabel: render(errorPanelConfig.requestLabel, "Request"),
+      responseLabel: render(errorPanelConfig.responseLabel, "Service response"),
+      defaultOpen: Boolean(errorPanelConfig.defaultOpen),
+    };
+  }, [errorPanelConfig, templatingCtx, inlineError, txRes]);
+
   const isReady = React.useMemo(() => !!action && !!chain, [action, chain]);
 
   const didInitToastRef = React.useRef(false);
@@ -341,31 +419,47 @@ export default function ActionRunner({
     );
     if (before) toast.neutral(before);
     setStage("executing");
+    setInlineError(null);
     const submitPath =
       typeof action!.submit?.path === "string"
         ? template(action!.submit.path, templatingCtx)
         : action!.submit?.path;
-    const httpRes = await fetch(host + submitPath, {
-      method: action!.submit?.method,
-      headers: action!.submit?.headers ?? {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const requestMethod = action!.submit?.method ?? "POST";
+    const requestPath =
+      typeof submitPath === "string"
+        ? submitPath
+        : String(submitPath ?? "");
 
+    let responseOk = false;
+    let responseStatus = 0;
+    let responseStatusText = "";
+    let rawResponse = "";
     let res: any = null;
-    try {
-      res = await httpRes.json();
-    } catch {
-      // Some endpoints may return plain text (e.g., tx hash) or empty body.
-      try {
-        const txt = await httpRes.text();
-        res = txt || null;
-      } catch {
-        res = null;
-      }
-    }
 
+    try {
+      const httpRes = await fetch(host + requestPath, {
+        method: requestMethod,
+        headers: action!.submit?.headers ?? {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      responseOk = httpRes.ok;
+      responseStatus = httpRes.status;
+      responseStatusText = httpRes.statusText;
+      rawResponse = await httpRes.text();
+      res = parseServiceResponse(rawResponse);
+    } catch (error: any) {
+      responseOk = false;
+      responseStatus = 0;
+      responseStatusText = "Network Error";
+      rawResponse = error?.message ? String(error.message) : "";
+      res = {
+        error: {
+          message: rawResponse || "Network request failed",
+        },
+      };
+    }
 
     setTxRes(res);
 
@@ -375,10 +469,11 @@ export default function ActionRunner({
       !!res?.error ||
       res?.ok === false ||
       res?.success === false ||
-      (typeof res?.status === "number" && res.status >= 400);
+      (typeof res?.status === "number" && res.status >= 400) ||
+      responseStatus >= 400;
 
     const isSuccess =
-      httpRes.ok &&
+      responseOk &&
       (typeof res === "string" ||
         res == null ||
         (typeof res === "object" && !hasExplicitError));
@@ -423,6 +518,16 @@ export default function ActionRunner({
     setTxPassword("");
 
     if (!isSuccess) {
+      setInlineError({
+        status: responseStatus,
+        statusText: responseStatusText,
+        message: extractServiceErrorMessage(res, responseStatusText),
+        requestMethod,
+        requestPath,
+        response: res,
+        rawResponse,
+        occurredAt: new Date().toISOString(),
+      });
       // Keep modal open on failure so the user can inspect/edit and retry.
       setStage("form");
       return;
@@ -635,6 +740,73 @@ export default function ActionRunner({
                       })}
                     </div>
                   </div>
+                )}
+                {inlineError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-rose-500/40 bg-[linear-gradient(135deg,rgba(159,18,57,0.24),rgba(39,39,42,0.35))] p-3 sm:p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/45 bg-rose-500/20 text-rose-200">
+                        <AlertTriangle className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-rose-100">
+                            {errorPanelCopy.title}
+                          </h4>
+                          <p className="mt-1 text-xs text-rose-100/85 leading-relaxed">
+                            {errorPanelCopy.description}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-rose-500/30 bg-black/20 px-2.5 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-rose-200/80">
+                            Cause
+                          </div>
+                          <div className="mt-1 text-sm text-rose-50 break-words">
+                            {inlineError.message}
+                          </div>
+                        </div>
+                        <details
+                          className="rounded-lg border border-rose-500/25 bg-black/15 p-2.5"
+                          {...(errorPanelCopy.defaultOpen ? { open: true } : {})}
+                        >
+                          <summary className="cursor-pointer select-none text-xs font-semibold text-rose-100/90">
+                            {errorPanelCopy.advancedLabel}
+                          </summary>
+                          <div className="mt-2 space-y-2 text-xs">
+                            <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
+                              <div className="rounded-md border border-rose-500/20 bg-black/20 px-2 py-1.5">
+                                <span className="text-rose-200/75">
+                                  {errorPanelCopy.statusLabel}:
+                                </span>{" "}
+                                <span className="font-mono text-rose-50">
+                                  {inlineError.status || "N/A"} {inlineError.statusText}
+                                </span>
+                              </div>
+                              <div className="rounded-md border border-rose-500/20 bg-black/20 px-2 py-1.5">
+                                <span className="text-rose-200/75">
+                                  {errorPanelCopy.requestLabel}:
+                                </span>{" "}
+                                <span className="font-mono text-rose-50 break-all">
+                                  {inlineError.requestMethod} {inlineError.requestPath}
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="mb-1 text-[11px] uppercase tracking-wide text-rose-200/75">
+                                {errorPanelCopy.responseLabel}
+                              </div>
+                              <pre className="max-h-56 overflow-auto rounded-md border border-rose-500/20 bg-black/30 p-2 text-[11px] text-rose-50 whitespace-pre-wrap break-words">
+                                {formatServiceResponse(inlineError.response, inlineError.rawResponse)}
+                              </pre>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
                 {/* Show skeleton loading while waiting for critical DS */}
                 {showPopulateLoading && (

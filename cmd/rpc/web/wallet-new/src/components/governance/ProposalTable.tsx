@@ -138,6 +138,12 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     { key: "rejected", label: "Rejected", count: statusCounts.rejected },
   ];
 
+  const canManageProposal = (proposal: Proposal): boolean => {
+    if (isPast) return false;
+    if (typeof proposal.isVotingOpen === "boolean") return proposal.isVotingOpen;
+    return proposal.status === "active" || proposal.status === "pending";
+  };
+
   return (
     <div className="rounded-2xl border border-border bg-card/95 p-4 md:p-5 shadow-[0_10px_50px_-35px_rgba(0,0,0,0.8)]">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -279,7 +285,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                     </td>
                     <td className="py-3 px-3 align-top">
                       <div className="flex items-center justify-end gap-1.5">
-                        {!isPast && (proposal.status === "active" || proposal.status === "pending") && onVote && (
+                        {canManageProposal(proposal) && onVote && (
                           <>
                             <button
                               onClick={() => onVote(proposal.hash, "approve")}
@@ -293,15 +299,15 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                             >
                               Reject
                             </button>
-                            {onDeleteVote && (
-                              <button
-                                onClick={() => onDeleteVote(proposal.hash)}
-                                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[11px] font-semibold border border-amber-500/40"
-                              >
-                                Delete
-                              </button>
-                            )}
                           </>
+                        )}
+                        {canManageProposal(proposal) && onDeleteVote && (
+                          <button
+                            onClick={() => onDeleteVote(proposal.hash)}
+                            className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[11px] font-semibold border border-amber-500/40"
+                          >
+                            Delete
+                          </button>
                         )}
                         <button
                           onClick={() => onViewDetails?.(proposal.hash)}

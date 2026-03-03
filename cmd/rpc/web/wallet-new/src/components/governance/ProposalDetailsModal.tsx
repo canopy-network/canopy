@@ -16,6 +16,8 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     onVote
 }) => {
     if (!proposal) return null;
+    const canManageProposal =
+        proposal.isVotingOpen ?? (proposal.status === 'active' || proposal.status === 'pending');
 
     const getCategoryColor = (category: string) => {
         const colors: Record<string, string> = {
@@ -251,7 +253,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                     >
                                         Close
                                     </button>
-                                    {proposal.status === 'active' && onVote && (
+                                    {canManageProposal && onVote && (
                                         <>
                                             <button
                                                 onClick={() => {

@@ -40,6 +40,15 @@ export type Action = {
     variant?: "modal" | "page";
     icon?: string;
     slots?: { modal?: { style: React.CSSProperties; className?: string } };
+    errorPanel?: {
+      title?: string;
+      description?: string;
+      advancedLabel?: string;
+      statusLabel?: string;
+      requestLabel?: string;
+      responseLabel?: string;
+      defaultOpen?: boolean;
+    };
   };
 
   // Wizard steps support
