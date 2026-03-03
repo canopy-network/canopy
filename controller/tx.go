@@ -241,14 +241,8 @@ func (m *Mempool) CheckMempool() {
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	} else {
-		rcID, err := m.FSM.GetRootChainId()
-		if err != nil {
-			m.log.Warnf("Check Mempool error: %s", err.Error())
-			return
-		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
-		rootDexBatch, err := m.controller.RCManager.GetDexBatch(rcID, rcBuildHeight,
-			m.controller.Config.ChainId, false)
+		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
 		if err != nil {
 			m.log.Warnf("Check Mempool error: %s", err.Error())
 			return
