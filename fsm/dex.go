@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math/big"
 	"sort"
 	"strings"
@@ -60,24 +59,20 @@ import (
 //   used in AMM execution; the executable pool for the next batch is `nextBatch.PoolSize`, set
 //   from the mid-point snapshot.
 
-const (
-	pruneWindow = 100 // window to delete previous keys of processed batches
-)
-
 // HandleDexBatch() initiates the 'dex' lifecycle
 func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateResult, isNested bool) (err lib.ErrorI) {
 	remoteBatch := results.DexBatch
 	// if nested, replace chainId with root chainId
 	if isNested {
+		// set 'chain id' as the root chain
+		if chainId, err = s.GetRootChainId(); err != nil {
+			return
+		}
 		// prefer the cached root dex batch to get the most up-to-date batch from the root chain
 		remoteBatch, _ = s.GetCachedRootDex()
 		// otherwise, fallback to the batch from the certificate result which may be delayed by one block
 		if remoteBatch == nil {
 			remoteBatch = results.RootDexBatch
-		}
-		// The counterparty we are syncing receipts for is the root chain.
-		if chainId, err = s.GetRootChainId(); err != nil {
-			return
 		}
 	}
 	// retrieve the pool amount for the chain id
@@ -88,12 +83,6 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 	// exit without handling as the 'rootHeight' explicitly not set
 	if remoteBatch == nil || liqPoolSize == 0 {
 		return
-	}
-	// check if this specific remote batch (by height) was already processed
-	// (happens when same-block optimization triggers, and then BeginBlock attempts to re-process)
-	lastProcessedHeight, _ := s.GetLastProcessedRootDexHeight(chainId)
-	if lastProcessedHeight > 0 && remoteBatch.LockedHeight <= lastProcessedHeight {
-		return nil
 	}
 	// get the local locked dex batch for the counter chain
 	localBatch, err := s.GetDexBatch(chainId, true)
@@ -108,11 +97,7 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		}
 	}
 	// handle the remote dex batch
-	if err = s.HandleRemoteDexBatch(remoteBatch, chainId); err != nil {
-		return
-	}
-	// update the last processed height
-	return s.SetLastProcessedRootDexHeight(chainId, remoteBatch.LockedHeight)
+	return s.HandleRemoteDexBatch(remoteBatch, chainId)
 }
 
 // HandleRemoteDexBatch is the core function driving the DEX batch lifecycle.
@@ -611,20 +596,6 @@ func (s *StateMachine) HandleLivenessFallback(rcId uint64, localBatch, remoteBat
 		return
 	}
 	return
-}
-
-// GetLastProcessedRootDexHeight() retrieves the height of the last processed remote dex batch
-func (s *StateMachine) GetLastProcessedRootDexHeight(chainId uint64) (uint64, lib.ErrorI) {
-	bz, err := s.Get(KeyForProcessedRootDexHeight(chainId))
-	if err != nil || len(bz) == 0 {
-		return 0, err
-	}
-	return binary.BigEndian.Uint64(bz), nil
-}
-
-// SetLastProcessedRootDexHeight() sets the height of the last processed remote dex batch
-func (s *StateMachine) SetLastProcessedRootDexHeight(chainId, remoteLockedHeight uint64) lib.ErrorI {
-	return s.Set(KeyForProcessedRootDexHeight(chainId), formatUint64(remoteLockedHeight))
 }
 
 // HELPERS BELOW
