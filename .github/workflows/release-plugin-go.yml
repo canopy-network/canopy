@@ -1,0 +1,55 @@
+name: Release Go Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-go-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release Go Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build binaries
+        working-directory: plugin/go
+        run: |
+          mkdir -p dist
+          # Linux AMD64
+          GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/go-plugin .
+          tar -czf dist/go-plugin-linux-amd64.tar.gz -C dist go-plugin
+          rm dist/go-plugin
+          # Linux ARM64
+          GOARCH=arm64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/go-plugin .
+          tar -czf dist/go-plugin-linux-arm64.tar.gz -C dist go-plugin
+          rm dist/go-plugin
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "Go Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            Go Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Assets
+            - `go-plugin-linux-amd64.tar.gz` - Linux x86_64
+            - `go-plugin-linux-arm64.tar.gz` - Linux ARM64
+          files: |
+            plugin/go/dist/go-plugin-linux-amd64.tar.gz
+            plugin/go/dist/go-plugin-linux-arm64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
