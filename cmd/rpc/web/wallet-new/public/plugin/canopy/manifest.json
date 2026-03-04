@@ -3642,7 +3642,7 @@
           "coerce": "boolean"
         },
         "proposal": {
-          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal || {}}}"
         }
       },
       "submit": {
@@ -3755,7 +3755,7 @@
           "value": null
         },
         "proposal": {
-          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}}}"
+          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal || {}}}"
         }
       },
       "submit": {
