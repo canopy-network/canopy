@@ -294,6 +294,22 @@ func TestSlashAndResetNonSigners(t *testing.T) {
 	}
 }
 
+func TestSlashAndResetNonSignersSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+
+	// malformed length-prefixed segment under non-signer prefix
+	badKey := append(NonSignerPrefix(), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.SlashAndResetNonSigners(lib.CanopyChainId, valParams))
+
+	got, e := sm.Get(badKey)
+	require.NoError(t, e)
+	require.Nil(t, got)
+}
+
 func TestIncrementNonSigners(t *testing.T) {
 	tests := []struct {
 		name       string

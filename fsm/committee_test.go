@@ -2017,6 +2017,18 @@ func TestRetireCommittee(t *testing.T) {
 	}
 }
 
+func TestGetRetiredCommitteesMalformedKeyDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	// short-but-well-formed chain id segment (1 byte instead of required 8 bytes)
+	badKey := lib.JoinLenPrefix(retiredCommitteePrefix, []byte{0x01})
+	require.NoError(t, sm.Set(badKey, RetiredCommitteesPrefix()))
+
+	require.NotPanics(t, func() {
+		_, err := sm.GetRetiredCommittees()
+		require.ErrorContains(t, err, "invalid key")
+	})
+}
+
 func TestGetTopDelegates(t *testing.T) {
 	chainId := uint64(1)
 	tests := []struct {

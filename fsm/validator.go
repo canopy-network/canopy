@@ -326,7 +326,8 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 		// get the address from the key
 		addr, err := AddressFromKey(unstakingKey)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed unstaking key: %x", unstakingKey)
+			return nil
 		}
 		// get the validator associated with that address
 		validator, err := s.GetValidator(addr)

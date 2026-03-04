@@ -74,7 +74,8 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 		// if so - add them to the bad list
 		addr, err := AddressFromKey(k)
 		if err != nil {
-			return
+			s.log.Warnf("skipping malformed non-signer key: %x", k)
+			return nil
 		}
 		// ensure no nil NonSigner
 		ptr := new(NonSigner)

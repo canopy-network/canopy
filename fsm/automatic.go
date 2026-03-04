@@ -240,7 +240,8 @@ func (s *StateMachine) ForceUnstakeMaxPaused() lib.ErrorI {
 		// extract the address from the key
 		addr, err := AddressFromKey(key)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed paused key: %x", key)
+			return nil
 		}
 		// force unstake the validator
 		return s.ForceUnstakeValidator(addr)

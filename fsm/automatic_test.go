@@ -605,6 +605,36 @@ func TestForceUnstakeMaxPaused(t *testing.T) {
 	}
 }
 
+func TestForceUnstakeMaxPausedSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 2
+
+	require.NoError(t, sm.UpdateParam(ParamSpaceVal, ParamUnstakingBlocks, &lib.UInt64Wrapper{Value: 1}))
+
+	addr := newTestAddress(t)
+	val := &Validator{
+		Address:         addr.Bytes(),
+		MaxPausedHeight: sm.Height(),
+	}
+	require.NoError(t, sm.SetValidatorPaused(addr, val, sm.Height()))
+
+	// malformed length-prefixed segment under paused prefix (triggers decode panic without guard)
+	badKey := append(PausedPrefix(sm.Height()), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.ForceUnstakeMaxPaused())
+
+	// malformed key should be deleted instead of halting end-block logic
+	gotBad, err := sm.Get(badKey)
+	require.NoError(t, err)
+	require.Nil(t, gotBad)
+
+	updated, err := sm.GetValidator(addr)
+	require.NoError(t, err)
+	require.Zero(t, updated.MaxPausedHeight)
+	require.Equal(t, uint64(3), updated.UnstakingHeight)
+}
+
 func TestLastProposers(t *testing.T) {
 	tests := []struct {
 		name              string

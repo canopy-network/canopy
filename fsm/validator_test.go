@@ -839,6 +839,21 @@ func TestDeleteFinishedUnstaking(t *testing.T) {
 	}
 }
 
+func TestDeleteFinishedUnstakingSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 2
+
+	// malformed length-prefixed segment under unstaking prefix
+	badKey := append(UnstakingPrefix(sm.Height()), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.DeleteFinishedUnstaking())
+
+	got, err := sm.Get(badKey)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
+
 func TestSetValidatorsPaused(t *testing.T) {
 	tests := []struct {
 		name    string
