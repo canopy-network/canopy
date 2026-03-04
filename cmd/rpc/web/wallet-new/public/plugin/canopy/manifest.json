@@ -2001,10 +2001,11 @@
           {
             "id": "parameterSpace",
             "name": "parameterSpace",
-            "type": "option",
+            "type": "select",
             "label": "Parameter Space",
             "required": true,
             "value": "fee",
+            "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const toValue = { consensus: 'cons', validator: 'val', fee: 'fee', governance: 'gov', economics: 'eco' }; const toLabel = { consensus: 'Consensus Parameters', validator: 'Validator Parameters', fee: 'Fee Parameters', governance: 'Governance Parameters', economics: 'Economics Parameters' }; const keys = Object.keys(root || {}); if (!keys.length) return null; return keys.map(k => { const value = toValue[k] || k; return { label: toLabel[k] || k, value }; }); })()}}",
             "options": [
               {
                 "label": "Fee Parameters",
@@ -2042,11 +2043,12 @@
           {
             "id": "parameterKey",
             "name": "parameterKey",
-            "type": "text",
+            "type": "select",
             "label": "Parameter Key",
             "required": true,
-            "placeholder": "Enter parameter key (e.g., sendFee, maxValidators)",
+            "placeholder": "Select parameter key",
             "help": "Available parameters will depend on the selected space",
+            "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.parameterSpace || ''; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); const space = root?.[resolved] || {}; return Object.keys(space).map(k => ({ label: k, value: k })); })()}}",
             "validation": {
               "messages": {
                 "required": "Parameter key is required"
@@ -2060,6 +2062,8 @@
             "type": "text",
             "label": "New Parameter Value",
             "required": true,
+            "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.parameterSpace || ''; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.parameterKey] ?? ''; })()}}",
+            "autoPopulate": "once",
             "placeholder": "Enter new value",
             "help": "The new value for this parameter",
             "validation": {
