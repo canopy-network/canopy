@@ -237,8 +237,15 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
+	// Get root-chain height from the mempool FSM snapshot instead of controller FSM.
+	// This avoids racing with controller FSM resets that can close underlying Pebble snapshots.
+	rcBuildHeight := uint64(0)
+	rootChainID, rootErr := m.FSM.GetRootChainId()
+	if rootErr != nil {
+		m.log.Error(rootErr.Error())
+	} else {
+		rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
+	}
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
