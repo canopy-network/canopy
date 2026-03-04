@@ -69,6 +69,11 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		}
 		// use the root chainId as the remote batch
 		remoteBatch = results.RootDexBatch
+		// retrieve the cached root dex batch
+		if remoteBatch != nil && !remoteBatch.LivenessFallback {
+			// use cache
+			remoteBatch = s.cache.rootDexBatch
+		}
 	}
 	// retrieve the pool amount for the chain id
 	liqPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)

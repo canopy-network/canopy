@@ -202,6 +202,15 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		// exit with error
 		return
 	}
+	// cache the root dex batch from the root chain for same-block execution
+	if qc.Results != nil && qc.Results.RootDexBatch != nil {
+		var rootDexBatch *lib.DexBatch
+		rootDexBatch, err = c.getDexRootBatch(rcBuildHeight)
+		if err != nil {
+			return
+		}
+		c.FSM.SetRootDexCache(rootDexBatch)
+	}
 	// play the block against the state machine to generate a block result
 	blockResult, err = c.ApplyAndValidateBlock(block, false)
 	if err != nil {
@@ -243,6 +252,10 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	if blockResult == nil {
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
+		// restore root dex cache from the embedded certificate result for deterministic replay
+		if qc.Results != nil && qc.Results.RootDexBatch != nil {
+			c.FSM.SetRootDexCache(qc.Results.RootDexBatch)
+		}
 		// apply the block against the state machine
 		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
@@ -340,6 +353,10 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	if blockResult == nil {
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
+		// restore root dex cache from the embedded certificate result for deterministic replay
+		if qc.Results != nil && qc.Results.RootDexBatch != nil {
+			c.FSM.SetRootDexCache(qc.Results.RootDexBatch)
+		}
 		// apply the block against the state machine
 		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
