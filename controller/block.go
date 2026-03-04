@@ -250,8 +250,12 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 	defer c.FSM.Reset()
 	// if the block result isn't 'pre-calculated'
 	if blockResult == nil {
+		// retrieve the root dex cache from the FSM before resetting it to avoid block hash mismatch during replay
+		cachedRootDexBatch, rootDexBatchHeight := c.FSM.GetCachedRootDex()
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
+		// restore the cache after resetting the FSM to ensure the same block hash is produced during replay
+		c.FSM.SetRootDexCache(cachedRootDexBatch, rootDexBatchHeight)
 		// apply the block against the state machine
 		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
@@ -347,8 +351,12 @@ func (c *Controller) CommitCertificateParallel(qc *lib.QuorumCertificate, block 
 	defer c.FSM.Reset()
 	// if the block result isn't 'pre-calculated'
 	if blockResult == nil {
+		// retrieve the root dex cache from the FSM before resetting it to avoid block hash mismatch during replay
+		cachedRootDexBatch, rootDexBatchHeight := c.FSM.GetCachedRootDex()
 		// reset the FSM to ensure stale proposal validations don't come into play
 		c.FSM.Reset()
+		// restore the cache after resetting the FSM to ensure the same block hash is produced during replay
+		c.FSM.SetRootDexCache(cachedRootDexBatch, rootDexBatchHeight)
 		// apply the block against the state machine
 		blockResult, err = c.ApplyAndValidateBlock(block, true)
 		if err != nil {
