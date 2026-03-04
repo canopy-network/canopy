@@ -90,14 +90,10 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		return
 	}
 	// if nested chain: check for liveness fallback
-	if isNested && !localBatch.IsEmpty() {
-		blksSince := s.Height() - localBatch.LockedHeight
-		isTriggerBlock := blksSince%lib.TriggerModuloBlocks == 0
-		if isTriggerBlock && blksSince >= lib.LivenessFallbackBlocks {
-			// handle the liveness fallback
-			if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
-				return
-			}
+	if remoteBatch.LivenessFallback {
+		// handle the liveness fallback
+		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {
+			return
 		}
 	}
 	// handle the remote dex batch
