@@ -245,9 +245,8 @@ func (m *Mempool) CheckMempool() {
 		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
 		if err != nil {
 			m.log.Warnf("Check Mempool error: %s", err.Error())
-			return
 		}
-		m.FSM.SetRootDexCache(rootDexBatch, rcBuildHeight)
+		m.FSM.SetRootDexCache(rootDexBatch)
 	}
 	// apply the block to the mempool FSM to get the result and validate the transactions
 	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)

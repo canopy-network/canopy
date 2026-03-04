@@ -2,12 +2,11 @@ package fsm
 
 import (
 	"bytes"
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
 	"sort"
 	"strings"
-
-	"github.com/canopy-network/canopy/lib"
-	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* Dex.go implements logic to handle AMM style atomic exchanges between root & nested chains
@@ -68,11 +67,12 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		if chainId, err = s.GetRootChainId(); err != nil {
 			return
 		}
-		// prefer the cached root dex batch to get the most up-to-date batch from the root chain
-		remoteBatch, _ = s.GetCachedRootDex()
-		// otherwise, fallback to the batch from the certificate result which may be delayed by one block
-		if remoteBatch == nil {
-			remoteBatch = results.RootDexBatch
+		// use the root chainId as the remote batch
+		remoteBatch = results.RootDexBatch
+		// retrieve the cached root dex batch
+		if remoteBatch != nil && !remoteBatch.LivenessFallback {
+			// use cache
+			remoteBatch = s.cache.rootDexBatch
 		}
 	}
 	// retrieve the pool amount for the chain id
@@ -89,7 +89,7 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 	if err != nil {
 		return
 	}
-	// if nested chain: check for liveness fallback
+	// if executing the liveness fallback (nested chain only)
 	if remoteBatch.LivenessFallback {
 		// handle the liveness fallback
 		if err = s.HandleLivenessFallback(chainId, localBatch, remoteBatch); err != nil {

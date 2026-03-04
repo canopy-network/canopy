@@ -2,10 +2,9 @@ package fsm
 
 import (
 	"encoding/binary"
-	"math"
-
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"math"
 )
 
 // ReservedIds ensures Validators can't stake for 'reserved ids'

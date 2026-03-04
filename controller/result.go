@@ -2,10 +2,9 @@ package controller
 
 import (
 	"bytes"
+	"github.com/canopy-network/canopy/fsm"
 	"slices"
 	"time"
-
-	"github.com/canopy-network/canopy/fsm"
 
 	"github.com/canopy-network/canopy/bft"
 	"github.com/canopy-network/canopy/lib"
@@ -306,24 +305,16 @@ func (c *Controller) HandleDex(sm *fsm.StateMachine, results *lib.CertificateRes
 			results.DexBatch = batch.Copy()
 		}
 	}
+	// if nested, populate the root dex batch structure with the
 	if rcId != c.Config.ChainId {
 		// determine if we should activate liveness fallback
 		livenessFallback := isTriggerBlock && !batch.IsEmpty() && (sm.Height()-batch.LockedHeight) >= lib.LivenessFallbackBlocks
-		// populate the root dex batch structure with the root
-		cachedRootDexBatch, _ := sm.GetCachedRootDex()
-		// only fetch/set the root dex batch from the root chain if there's no cache available or if the liveness
-		// fallback is required
-		if !livenessFallback && cachedRootDexBatch != nil {
-			results.RootDexBatch = cachedRootDexBatch
-			return
-		}
-		// fetch the root dex batch directly from the root chain
-		results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback)
-		if err != nil {
+		// set the root chain dex batch
+		if results.RootDexBatch, err = c.RCManager.GetDexBatch(rcId, rcBuildHeight, c.Config.ChainId, livenessFallback); err != nil {
 			c.log.Error(err.Error())
 			return
 		}
-		// cache it for future use during the block's lifetime
-		c.FSM.SetRootDexCache(results.RootDexBatch, rcBuildHeight)
+		// set the liveness fallback flag
+		results.RootDexBatch.LivenessFallback = livenessFallback
 	}
 }
