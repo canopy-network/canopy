@@ -3,10 +3,27 @@ import React from "react";
 import { ToastTemplateOptions } from "./types";
 import { Pause, Play } from "lucide-react";
 
-export const genericResultMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any }>(
+export const genericResultMap = <R extends { ok?: boolean; status?: number; error?: any; data?: any } | string>(
     r: R,
     ctx: any
 ): ToastTemplateOptions => {
+    // Many RPC/admin endpoints return a tx hash string on success.
+    if (typeof r === "string") {
+        const txHash = r.trim();
+        const shortHash =
+            txHash.length > 18
+                ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}`
+                : txHash;
+        return {
+            variant: "success",
+            title: "Done",
+            description: txHash
+                ? `Transaction broadcast successfully (${shortHash}).`
+                : "The operation completed successfully.",
+            ctx,
+        };
+    }
+
     if (r.ok) {
         return {
             variant: "success",

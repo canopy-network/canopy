@@ -14,6 +14,7 @@ import { Poll, Proposal, useGovernanceData } from "@/hooks/useGovernance";
 import { ProposalTable } from "@/components/governance/ProposalTable";
 import { PollTable } from "@/components/governance/PollTable";
 import { ProposalDetailsModal } from "@/components/governance/ProposalDetailsModal";
+import { PollDetailsModal } from "@/components/governance/PollDetailsModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ActionsModal } from "@/actions/ActionsModal";
 import { useManifest } from "@/hooks/useManifest";
@@ -46,7 +47,9 @@ export const Governance = () => {
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [selectedActions, setSelectedActions] = useState<any[]>([]);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
+  const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [isPollDetailsModalOpen, setIsPollDetailsModalOpen] = useState(false);
   const [activeQueueTab, setActiveQueueTab] = useState<"proposals" | "polls">("proposals");
 
   const openAction = useCallback(
@@ -137,14 +140,17 @@ export const Governance = () => {
 
   const handleViewPollDetails = useCallback(
     (pollHash: string) => {
-      const proposal = proposals.find(
-        (item) => item.hash === pollHash || item.id === pollHash,
+      const poll = polls.find(
+        (item) =>
+          item.hash === pollHash ||
+          item.id === pollHash ||
+          item.proposalHash === pollHash,
       );
-      if (!proposal) return;
-      setSelectedProposal(proposal);
-      setIsDetailsModalOpen(true);
+      if (!poll) return;
+      setSelectedPoll(poll);
+      setIsPollDetailsModalOpen(true);
     },
-    [proposals],
+    [polls],
   );
 
   const criticalActions = useMemo(
@@ -398,6 +404,22 @@ export const Governance = () => {
           isOpen={isDetailsModalOpen}
           onClose={() => setIsDetailsModalOpen(false)}
           onVote={handleVoteProposal}
+        />
+
+        <PollDetailsModal
+          poll={selectedPoll}
+          isOpen={isPollDetailsModalOpen}
+          onClose={() => setIsPollDetailsModalOpen(false)}
+          onVote={(hash, vote) => {
+            const poll = polls.find(
+              (item) =>
+                item.hash === hash ||
+                item.id === hash ||
+                item.proposalHash === hash,
+            );
+            if (!poll) return;
+            handleVotePoll(hash, vote, poll);
+          }}
         />
       </motion.div>
     </ErrorBoundary>

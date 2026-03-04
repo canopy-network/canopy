@@ -251,7 +251,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               ) : (
                 pageRows.map((proposal) => (
                   <tr key={proposal.hash} className="border-b border-border/60 hover:bg-background/50 transition-colors">
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="flex items-start gap-2">
                         <span className={`mt-1 h-8 w-1 rounded-full ${getStatusLine(proposal.status)}`} />
                         <div className="min-w-0">
@@ -263,27 +263,27 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${getCategoryColor(proposal.category)}`}>
                         {proposal.category}
                       </span>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadge(proposal.status)}`}>
                         {proposal.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="text-sm font-semibold text-foreground">{proposal.yesPercent.toFixed(1)}%</div>
                       <div className="w-28 h-1.5 mt-1 rounded-full bg-muted/70 overflow-hidden">
                         <div className="h-full bg-emerald-400" style={{ width: `${proposal.yesPercent}%` }} />
                       </div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="text-xs text-foreground">{formatWindow(proposal)}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">end #{proposal.endHeight || 0}</div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="flex items-center justify-end gap-1.5">
                         {canManageProposal(proposal) && onVote && (
                           <>
