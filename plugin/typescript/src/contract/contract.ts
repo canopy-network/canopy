@@ -10,7 +10,7 @@ import {
     ErrInvalidAddress,
     ErrInvalidAmount,
     ErrInvalidMessageCast,
-    ErrTxFeeBelowStateLimit,
+    ErrTxFeeBelowStateLimit
 } from './error.js';
 
 import type { Plugin, Config } from './plugin.js';
@@ -20,15 +20,13 @@ import { fileDescriptorProtos } from '../proto/descriptors.js';
 // ContractConfig: the configuration of the contract
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ContractConfig: any = {
-    name: "go_plugin_contract",
+    name: 'go_plugin_contract',
     id: 1,
     version: 1,
-    supportedTransactions: ["send"],
-    transactionTypeUrls: [
-        "type.googleapis.com/types.MessageSend",
-    ],
+    supportedTransactions: ['send'],
+    transactionTypeUrls: ['type.googleapis.com/types.MessageSend'],
     eventTypeUrls: [],
-    fileDescriptorProtos,
+    fileDescriptorProtos
 };
 
 // Contract() defines the smart contract that implements the extended logic of the nested chain
@@ -84,7 +82,7 @@ export class Contract {
         // return the authorized signers
         return {
             recipient: msg.toAddress,
-            authorizedSigners: [msg.fromAddress],
+            authorizedSigners: [msg.fromAddress]
         };
     }
 }
@@ -97,8 +95,11 @@ export class ContractAsync {
         // validate fee
         const [resp, err] = await contract.plugin.StateRead(contract, {
             keys: [
-                { queryId: Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)), key: KeyForFeeParams() },
-            ],
+                {
+                    queryId: Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)),
+                    key: KeyForFeeParams()
+                }
+            ]
         });
 
         if (err) {
@@ -167,7 +168,11 @@ export class ContractAsync {
 
     // DeliverMessageSend() handles a 'send' message
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    static async DeliverMessageSend(contract: Contract, msg: any, fee: Long | number | undefined): Promise<any> {
+    static async DeliverMessageSend(
+        contract: Contract,
+        msg: any,
+        fee: Long | number | undefined
+    ): Promise<any> {
         const fromQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
         const toQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
         const feeQueryId = Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
@@ -182,8 +187,8 @@ export class ContractAsync {
             keys: [
                 { queryId: feeQueryId, key: feePoolKey },
                 { queryId: fromQueryId, key: fromKey },
-                { queryId: toQueryId, key: toKey },
-            ],
+                { queryId: toQueryId, key: toKey }
+            ]
         });
 
         // check for internal error
@@ -234,12 +239,16 @@ export class ContractAsync {
         const feePool = feePoolRaw as any;
 
         // add fee to 'amount to deduct'
-        const msgAmount = Long.isLong(msg.amount) ? msg.amount : Long.fromNumber(msg.amount as number || 0);
-        const feeAmount = Long.isLong(fee) ? fee : Long.fromNumber(fee as number || 0);
+        const msgAmount = Long.isLong(msg.amount)
+            ? msg.amount
+            : Long.fromNumber((msg.amount as number) || 0);
+        const feeAmount = Long.isLong(fee) ? fee : Long.fromNumber((fee as number) || 0);
         const amountToDeduct = msgAmount.add(feeAmount);
 
         // get from amount
-        const fromAmount = Long.isLong(from?.amount) ? from.amount : Long.fromNumber(from?.amount as number || 0);
+        const fromAmount = Long.isLong(from?.amount)
+            ? from.amount
+            : Long.fromNumber((from?.amount as number) || 0);
 
         // if the account amount is less than the amount to subtract; return insufficient funds
         if (fromAmount.lessThan(amountToDeduct)) {
@@ -252,14 +261,21 @@ export class ContractAsync {
 
         // get amounts as Long
         const newFromAmount = fromAmount.subtract(amountToDeduct);
-        const toAmount = Long.isLong(toAccount?.amount) ? toAccount.amount : Long.fromNumber(toAccount?.amount as number || 0);
+        const toAmount = Long.isLong(toAccount?.amount)
+            ? toAccount.amount
+            : Long.fromNumber((toAccount?.amount as number) || 0);
         const newToAmount = toAmount.add(msgAmount);
-        const poolAmount = Long.isLong(feePool?.amount) ? feePool.amount : Long.fromNumber(feePool?.amount as number || 0);
+        const poolAmount = Long.isLong(feePool?.amount)
+            ? feePool.amount
+            : Long.fromNumber((feePool?.amount as number) || 0);
         const newPoolAmount = poolAmount.add(feeAmount);
 
         // Update the accounts
         const updatedFrom = types.Account.create({ address: from?.address, amount: newFromAmount });
-        const updatedTo = types.Account.create({ address: toAccount?.address, amount: newToAmount });
+        const updatedTo = types.Account.create({
+            address: toAccount?.address,
+            amount: newToAmount
+        });
         const updatedPool = types.Pool.create({ id: feePool?.id, amount: newPoolAmount });
 
         // convert the accounts to bytes
@@ -277,17 +293,17 @@ export class ContractAsync {
             [writeResp, writeErr] = await contract.plugin.StateWrite(contract, {
                 sets: [
                     { key: feePoolKey, value: newFeePoolBytes },
-                    { key: toKey, value: newToBytes },
+                    { key: toKey, value: newToBytes }
                 ],
-                deletes: [{ key: fromKey }],
+                deletes: [{ key: fromKey }]
             });
         } else {
             [writeResp, writeErr] = await contract.plugin.StateWrite(contract, {
                 sets: [
                     { key: feePoolKey, value: newFeePoolBytes },
                     { key: toKey, value: newToBytes },
-                    { key: fromKey, value: newFromBytes },
-                ],
+                    { key: fromKey, value: newFromBytes }
+                ]
             });
         }
 
@@ -303,8 +319,8 @@ export class ContractAsync {
 }
 
 const accountPrefix = Buffer.from([1]); // store key prefix for accounts
-const poolPrefix = Buffer.from([2]);    // store key prefix for pools
-const paramsPrefix = Buffer.from([7]);  // store key prefix for governance parameters
+const poolPrefix = Buffer.from([2]); // store key prefix for pools
+const paramsPrefix = Buffer.from([7]); // store key prefix for governance parameters
 
 // KeyForAccount() returns the state database key for an account
 export function KeyForAccount(addr: Uint8Array): Uint8Array {
@@ -313,7 +329,7 @@ export function KeyForAccount(addr: Uint8Array): Uint8Array {
 
 // KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'
 export function KeyForFeeParams(): Uint8Array {
-    return JoinLenPrefix(paramsPrefix, Buffer.from("/f/"));
+    return JoinLenPrefix(paramsPrefix, Buffer.from('/f/'));
 }
 
 // KeyForFeePool() returns the state database key for governance controlled 'fee parameters'
