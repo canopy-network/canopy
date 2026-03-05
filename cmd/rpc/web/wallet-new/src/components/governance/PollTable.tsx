@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Search } from "lucide-react";
+import { ExternalLink, Eye, Search, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Poll } from "@/hooks/useGovernance";
 
 interface PollTableProps {
@@ -165,7 +165,7 @@ export const PollTable: React.FC<PollTableProps> = ({
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Approve / Reject</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">End Block</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">URL</th>
-                <th className="text-right py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                <th className="w-[320px] min-w-[320px] text-center py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -178,19 +178,19 @@ export const PollTable: React.FC<PollTableProps> = ({
               ) : (
                 pageRows.map((poll) => (
                   <tr key={poll.hash} className="border-b border-border/60 hover:bg-background/50 transition-colors">
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="text-sm font-medium text-foreground mb-1">{poll.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{poll.description}</div>
                       <div className="text-[11px] font-mono text-muted-foreground">
                         {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
                       </div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pollStatusBadge(poll.status)}`}>
                         {poll.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="text-xs text-foreground mb-1">
                         {poll.yesPercent.toFixed(1)}% / {poll.noPercent.toFixed(1)}%
                       </div>
@@ -199,11 +199,11 @@ export const PollTable: React.FC<PollTableProps> = ({
                         <div className="h-full bg-rose-400" style={{ width: `${poll.noPercent}%` }} />
                       </div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="text-xs text-foreground">#{poll.endBlock || 0}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">{poll.endTime}</div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       {poll.url ? (
                         <a
                           href={poll.url}
@@ -218,32 +218,44 @@ export const PollTable: React.FC<PollTableProps> = ({
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-3 align-top">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {poll.status === "active" && onVote && (
-                          <>
+                    <td className="w-[320px] min-w-[320px] py-2 px-3 align-middle">
+                      <div className="flex min-h-[68px] items-center justify-center">
+                        <div className="flex flex-nowrap items-center justify-center gap-2 whitespace-nowrap">
+                          {poll.status === "active" && onVote ? (
+                            <div className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-background/75 p-1 self-center">
+                              <button
+                                onClick={() => onVote(normalizePollHash(poll), "approve")}
+                                className="inline-flex h-8 min-w-[92px] items-center justify-center gap-1.5 px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[11px] font-semibold border border-emerald-500/40 transition-colors"
+                              >
+                                <ThumbsUp className="h-3.5 w-3.5" />
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => onVote(normalizePollHash(poll), "reject")}
+                                className="inline-flex h-8 min-w-[92px] items-center justify-center gap-1.5 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-lg text-[11px] font-semibold border border-rose-500/40 transition-colors"
+                              >
+                                <ThumbsDown className="h-3.5 w-3.5" />
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="inline-flex h-8 items-center rounded-lg border border-border/60 bg-background/60 px-2.5 text-[11px] font-medium text-muted-foreground self-center">
+                              Closed
+                            </span>
+                          )}
+                          {poll.status === "active" && onVote && (
+                            <span className="h-7 w-px bg-border/60 self-center" />
+                          )}
+                          {onViewDetails && (
                             <button
-                              onClick={() => onVote(normalizePollHash(poll), "approve")}
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded text-[11px] font-semibold border border-emerald-500/40"
+                              onClick={() => onViewDetails(normalizePollHash(poll))}
+                              className="inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary text-[11px] font-semibold transition-colors self-center"
                             >
-                              Approve
+                              <Eye className="h-3.5 w-3.5" />
+                              Details
                             </button>
-                            <button
-                              onClick={() => onVote(normalizePollHash(poll), "reject")}
-                              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-[11px] font-semibold border border-rose-500/40"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {onViewDetails && (
-                          <button
-                            onClick={() => onViewDetails(normalizePollHash(poll))}
-                            className="px-2.5 py-1 text-primary hover:text-primary/80 text-[11px] font-semibold"
-                          >
-                            Details
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
