@@ -1322,11 +1322,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				}, {
 					Address: newTestAddressBytes(t, 3),
 					Points:  9, // 10 - 1 from withdraw
-				}, {
-					Address: newTestAddressBytes(t, 2),
-					Points:  0, // 1 token deposit creates ~0 points due to rounding
 				}},
-				TotalPoolPoints: 109, // 100 + 9 + 0
+				TotalPoolPoints: 109, // 100 + 9; zero-point LP entries are not persisted
 			},
 			expectedAccounts: []*Account{
 				{Address: newTestAddressBytes(t, 1), Amount: 0}, // Failed order

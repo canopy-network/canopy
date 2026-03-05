@@ -60,14 +60,6 @@ func getRandomAllowedPeer(peers []string, limiter *lib.SimpleLimiter) string {
 	return ""
 }
 
-func assembleSyncingPeers(peers []*lib.PeerInfo) []string {
-	syncingPeers := make([]string, 0, len(peers))
-	for _, peer := range peers {
-		syncingPeers = append(syncingPeers, lib.BytesToString(peer.Address.PublicKey))
-	}
-	return syncingPeers
-}
-
 // Sync() downloads the blockchain from peers until 'synced' to the latest 'height'
 // 1) Get the height and begin block params from the state_machine
 // 2) Get peer max_height from P2P
@@ -123,7 +115,10 @@ func (c *Controller) Sync() {
 			// Get an updated list of available peers
 			peers, _, _ := c.P2P.PeerSet.GetAllInfos()
 			// Update syncing peers list
-			syncingPeers := assembleSyncingPeers(peers)
+			syncingPeers := make([]string, 0, len(peers))
+			for _, peer := range peers {
+				syncingPeers = append(syncingPeers, lib.BytesToString(peer.Address.PublicKey))
+			}
 			// Calculate the height to stop at when updating queue
 			stopHeight := min(fsmHeight+blockSyncQueueSize, maxHeight)
 			// Send block requests for any missing heights in the queue
@@ -705,12 +700,6 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 
 // singleNodeNetwork() returns true if there are no other participants in the committee besides self
 func (c *Controller) singleNodeNetwork() (single bool, err lib.ErrorI) {
-	defer func() {
-		if r := recover(); r != nil {
-			c.log.Errorf("singleNodeNetwork() panic recovered: %v", r)
-			single, err = false, lib.ErrPanic()
-		}
-	}()
 	c.Lock()
 	defer c.Unlock()
 	// get the root chain id from state

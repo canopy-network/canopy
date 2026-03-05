@@ -230,24 +230,22 @@ func (m *Mempool) CheckMempool() {
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
 	m.stop = stop
-	// Get root-chain height from the mempool FSM snapshot instead of controller FSM.
-	// This avoids racing with controller FSM resets that can close underlying Pebble snapshots.
-	rcBuildHeight := uint64(0)
-	rootChainID, rootErr := m.FSM.GetRootChainId()
-	if rootErr != nil {
-		m.log.Error(rootErr.Error())
-	} else {
-		rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
-	}
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
 		m.log.Error(err.Error())
 	}
+	rcBuildHeight := uint64(0)
 	// if ownRoot
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	} else {
+		// Use mempool FSM snapshot to avoid races with controller FSM resets.
+		if rootChainID, e := m.FSM.GetRootChainId(); e != nil {
+			m.log.Error(e.Error())
+		} else {
+			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
+		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
 		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
 		if err != nil {

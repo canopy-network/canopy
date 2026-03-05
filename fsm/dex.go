@@ -5,7 +5,6 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"math/big"
-	"math/bits"
 	"sort"
 	"strings"
 )
@@ -341,11 +340,12 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 		}
 		// capture result in map to save receipts later
 		result[order.Key] = dY
+		// update dx with overflow protection
 		var xAfter uint64
 		if dY != 0 {
-			var carry uint64
-			xAfter, carry = bits.Add64(*x, dX, 0)
-			if carry != 0 {
+			var overflow bool
+			xAfter, overflow = lib.AddUint64(*x, dX)
+			if overflow {
 				return nil, ErrInvalidLiquidityPool()
 			}
 		}
@@ -410,9 +410,9 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 		}
 		// update the total points to remove
 		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
-		var carry uint64
-		totalPointsToRemove, carry = bits.Add64(totalPointsToRemove, pointsToRemove, 0)
-		if carry != 0 {
+		var overflow bool
+		totalPointsToRemove, overflow = lib.AddUint64(totalPointsToRemove, pointsToRemove)
+		if overflow {
 			return ErrInvalidLiquidityPool()
 		}
 	}
@@ -497,9 +497,9 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	L := p.TotalPoolPoints
 	// sum all deposits
 	for _, deposit := range batch.Deposits {
-		var carry uint64
-		totalDeposit, carry = bits.Add64(totalDeposit, deposit.Amount, 0)
-		if carry != 0 {
+		var overflow bool
+		totalDeposit, overflow = lib.AddUint64(totalDeposit, deposit.Amount)
+		if overflow {
 			return ErrInvalidLiquidityPool()
 		}
 	}
@@ -523,8 +523,8 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
-	xAfterTotalDeposit, carry := bits.Add64(*x, totalDeposit, 0)
-	if carry != 0 {
+	xAfterTotalDeposit, overflow := lib.AddUint64(*x, totalDeposit)
+	if overflow {
 		return ErrInvalidLiquidityPool()
 	}
 	newK := lib.SqrtProductUint64(xAfterTotalDeposit, *y)
@@ -554,14 +554,14 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 			if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
 				return err
 			}
-			p.Amount, carry = bits.Add64(p.Amount, deposit.Amount, 0)
-			if carry != 0 {
+			p.Amount, overflow = lib.AddUint64(p.Amount, deposit.Amount)
+			if overflow {
 				return ErrInvalidLiquidityPool()
 			}
 		}
 		// update the reserve
-		*x, carry = bits.Add64(*x, deposit.Amount, 0)
-		if carry != 0 {
+		*x, overflow = lib.AddUint64(*x, deposit.Amount)
+		if overflow {
 			return ErrInvalidLiquidityPool()
 		}
 		// emit a deposit event

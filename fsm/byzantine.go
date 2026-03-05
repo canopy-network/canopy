@@ -25,8 +25,7 @@ func (s *StateMachine) HandleByzantine(qc *lib.QuorumCertificate, vs *lib.Valida
 	// if current block marks the ending of the NonSignWindow
 	if s.Height()%params.NonSignWindow == 0 {
 		// protocol v1/v2 settlement semantics are handled inside SlashAndResetNonSigners.
-		err = s.SlashAndResetNonSigners(qc.Header.ChainId, params)
-		if err != nil {
+		if err = s.SlashAndResetNonSigners(qc.Header.ChainId, params); err != nil {
 			return 0, err
 		}
 	}
@@ -85,7 +84,6 @@ func (s *StateMachine) SlashAndResetNonSigners(chainId uint64, params *Validator
 		}
 		// protocol v1 uses global counters.
 		// protocol v2 uses per-chain counters when available.
-		// fallback to global counter allows seamless activation in the first mixed window after upgrade.
 		count := ptr.Counter
 		if committeeScoped && len(ptr.ChainCounters) != 0 {
 			count = nonSignerCounterForChain(ptr, chainId)
@@ -149,7 +147,7 @@ func (s *StateMachine) GetDoubleSigners() (results []*lib.DoubleSigner, e lib.Er
 	return s.Store().(lib.StoreI).GetDoubleSigners()
 }
 
-// IncrementNonSigners() upserts non-(QC)-signers by incrementing the non-signer count for the list.
+// IncrementNonSigners() upserts non-(QC)-signers by incrementing the non-signer count for the list
 func (s *StateMachine) IncrementNonSigners(chainId uint64, nonSignerPubKeys [][]byte) lib.ErrorI {
 	trackByChain := s.IsFeatureEnabled(2)
 	// for each non-signer in the list
@@ -469,6 +467,7 @@ func (s *SlashTracker) toKey(address []byte) string {
 	return addr
 }
 
+// incrementNonSignerChainCounter() increases the non signer count (chain specific)
 func incrementNonSignerChainCounter(nonSigner *NonSigner, chainId uint64) {
 	for _, c := range nonSigner.ChainCounters {
 		if c.ChainId == chainId {
@@ -482,6 +481,7 @@ func incrementNonSignerChainCounter(nonSigner *NonSigner, chainId uint64) {
 	})
 }
 
+// nonSignerCounterForChain() returns the chain specific non-signer count
 func nonSignerCounterForChain(nonSigner *NonSigner, chainId uint64) uint64 {
 	for _, c := range nonSigner.ChainCounters {
 		if c.ChainId == chainId {
