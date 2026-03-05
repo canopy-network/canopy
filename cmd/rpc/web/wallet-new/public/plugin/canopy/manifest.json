@@ -2104,7 +2104,7 @@
             "type": "number",
             "label": "End Height",
             "required": true,
-            "value": "{{resolveHeight(ds.height) + 1}}",
+            "value": "{{resolveHeight(ds.height) + 1000}}",
             "autoPopulate": "once",
             "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
             "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
@@ -2164,7 +2164,7 @@
           ],
           "btn": {
             "icon": "Settings",
-            "label": "Submit Proposal"
+            "label": "Generate Proposal"
           }
         }
       },
@@ -2206,7 +2206,7 @@
           "coerce": "number"
         },
         "submit": {
-          "value": true,
+          "value": false,
           "coerce": "boolean"
         },
         "password": {
@@ -2222,9 +2222,8 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Parameter Change Proposal Submitted!",
-          "description": "Your proposal has been submitted for validator voting",
-          "actions": []
+          "title": "Proposal Generated",
+          "description": "Copy the JSON, then Approve it (step 2) and Submit via Raw TX Broadcast (step 3)."
         }
       }
     },
@@ -2343,7 +2342,7 @@
             "type": "number",
             "label": "End Height",
             "required": true,
-            "value": "{{resolveHeight(ds.height) + 1}}",
+            "value": "{{resolveHeight(ds.height) + 1000}}",
             "autoPopulate": "once",
             "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
             "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
@@ -2419,7 +2418,7 @@
           ],
           "btn": {
             "icon": "Coins",
-            "label": "Submit Proposal"
+            "label": "Generate Proposal"
           }
         }
       },
@@ -2453,7 +2452,7 @@
           "coerce": "number"
         },
         "submit": {
-          "value": true,
+          "value": false,
           "coerce": "boolean"
         },
         "password": {
@@ -2469,9 +2468,8 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "DAO Transfer Proposal Submitted!",
-          "description": "Your treasury request has been submitted for validator voting",
-          "actions": []
+          "title": "Proposal Generated",
+          "description": "Copy the JSON, then Approve it (step 2) and Submit via Raw TX Broadcast (step 3)."
         }
       }
     },
@@ -3173,7 +3171,7 @@
             "type": "number",
             "label": "End Block",
             "required": true,
-            "value": "{{resolveHeight(ds.height) + 1}}",
+            "value": "{{resolveHeight(ds.height) + 1000}}",
             "autoPopulate": "once",
             "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
             "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
@@ -3225,7 +3223,7 @@
           ],
           "btn": {
             "icon": "Settings",
-            "label": "Create Proposal"
+            "label": "Generate Proposal"
           }
         }
       },
@@ -3267,7 +3265,7 @@
           "coerce": "number"
         },
         "submit": {
-          "value": true,
+          "value": false,
           "coerce": "boolean"
         },
         "password": {
@@ -3283,8 +3281,8 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Parameter Change Proposal Submitted",
-          "description": "Your proposal transaction was broadcast successfully."
+          "title": "Proposal Generated",
+          "description": "Copy the JSON, then Approve it (step 2) and Submit via Raw TX Broadcast (step 3)."
         }
       }
     },
@@ -3367,7 +3365,7 @@
             "type": "number",
             "label": "End Block",
             "required": true,
-            "value": "{{resolveHeight(ds.height) + 1}}",
+            "value": "{{resolveHeight(ds.height) + 1000}}",
             "autoPopulate": "once",
             "min": "{{Number(form.startBlock || resolveHeight(ds.height)) + 1}}",
             "max": "{{Number(form.startBlock || resolveHeight(ds.height)) + 10000}}",
@@ -3409,7 +3407,7 @@
           ],
           "btn": {
             "icon": "Coins",
-            "label": "Create Proposal"
+            "label": "Generate Proposal"
           }
         }
       },
@@ -3451,7 +3449,7 @@
           "coerce": "number"
         },
         "submit": {
-          "value": true,
+          "value": false,
           "coerce": "boolean"
         },
         "password": {
@@ -3467,8 +3465,8 @@
       "notifications": {
         "onSuccess": {
           "variant": "success",
-          "title": "Treasury Subsidy Proposal Submitted",
-          "description": "Your treasury proposal transaction was broadcast successfully."
+          "title": "Proposal Generated",
+          "description": "Copy the JSON, then Approve it (step 2) and Submit via Raw TX Broadcast (step 3)."
         }
       }
     },
@@ -3513,7 +3511,7 @@
       },
       "payload": {
         "__raw": {
-          "value": "{{JSON.parse(form.proposalTx)}}"
+          "value": "{{form.proposalTx}}"
         }
       },
       "submit": {
@@ -3531,17 +3529,8 @@
     },
     {
       "id": "govAddProposalVote",
-      "title": "Vote Proposal",
+      "title": "Approve / Reject Proposal",
       "icon": "Vote",
-      "ds": {
-        "gov.proposals": {},
-        "__options": {
-          "staleTimeMs": 4000,
-          "refetchIntervalMs": 4000,
-          "refetchOnMount": true,
-          "refetchOnWindowFocus": false
-        }
-      },
       "ui": {
         "slots": {
           "modal": {
@@ -3552,12 +3541,14 @@
       "form": {
         "fields": [
           {
-            "id": "proposalId",
-            "name": "proposalId",
-            "type": "select",
-            "label": "Proposal",
+            "id": "proposalJson",
+            "name": "proposalJson",
+            "type": "textarea",
+            "label": "Proposal Transaction JSON",
             "required": true,
-            "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
+            "placeholder": "Paste the generated proposal JSON here",
+            "help": "Paste the raw transaction JSON from step 1 (Generate Proposal). This adds the proposal to the node's local approve list.",
+            "rows": 12,
             "span": { "base": 12 }
           },
           {
@@ -3578,64 +3569,14 @@
               }
             ],
             "span": { "base": 12 }
-          },
-          {
-            "id": "proposalMsg",
-            "name": "proposalMsg",
-            "type": "textarea",
-            "label": "Proposal JSON (Auto-filled)",
-            "value": "{{JSON.stringify(ds['gov.proposals']?.[form.proposalId]?.proposal?.msg || {}, null, 2)}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "rows": 10,
-            "span": { "base": 12 }
-          },
-          {
-            "id": "proposalType",
-            "name": "proposalType",
-            "type": "text",
-            "label": "Proposal Type",
-            "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12, "md": 6 }
-          },
-          {
-            "id": "currentVoteStatus",
-            "name": "currentVoteStatus",
-            "type": "text",
-            "label": "Current Vote Status",
-            "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12, "md": 6 }
-          },
-          {
-            "id": "changeSummary",
-            "name": "changeSummary",
-            "type": "textarea",
-            "label": "Proposed Change (Explicit)",
-            "value": "{{(() => { const p = ds['gov.proposals']?.[form.proposalId]?.proposal || {}; const m = p.msg || {}; if (m.parameterSpace && m.parameterKey) return `Parameter change: ${m.parameterSpace}.${m.parameterKey} -> ${m.parameterValue}`; if (p.type === 'daoTransfer') return `Treasury subsidy: amount=${m.amount ?? p.amount ?? 'N/A'}; memo=${p.memo ?? ''}`; return `Type=${p.type || 'unknown'}; memo=${p.memo || 'N/A'}`; })()}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "rows": 3,
-            "span": { "base": 12 }
           }
         ],
         "confirmation": {
           "title": "Confirm Proposal Vote",
           "summary": [
             {
-              "label": "Proposal",
-              "value": "{{form.proposalId}}"
-            },
-            {
               "label": "Vote",
               "value": "{{form.approve ? 'Approve' : 'Reject'}}"
-            },
-            {
-              "label": "Change",
-              "value": "{{form.changeSummary}}"
             }
           ],
           "btn": {
@@ -3650,7 +3591,7 @@
           "coerce": "boolean"
         },
         "proposal": {
-          "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal || {}}}"
+          "value": "{{JSON.parse(form.proposalJson)}}"
         }
       },
       "submit": {
@@ -3662,7 +3603,7 @@
         "onSuccess": {
           "variant": "success",
           "title": "Proposal Vote Saved",
-          "description": "Your proposal vote preference has been updated."
+          "description": "Added to the node's approve list. Now submit the JSON via Raw TX Broadcast (step 3)."
         }
       }
     },

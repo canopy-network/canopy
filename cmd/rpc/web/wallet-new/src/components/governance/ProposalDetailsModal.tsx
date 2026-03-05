@@ -6,18 +6,14 @@ interface ProposalDetailsModalProps {
     proposal: Proposal | null;
     isOpen: boolean;
     onClose: () => void;
-    onVote?: (proposalHash: string, vote: 'approve' | 'reject') => void;
 }
 
 export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     proposal,
     isOpen,
     onClose,
-    onVote
 }) => {
     if (!proposal) return null;
-    const canManageProposal =
-        proposal.isVotingOpen ?? (proposal.status === 'active' || proposal.status === 'pending');
 
     const getCategoryColor = (category: string) => {
         const colors: Record<string, string> = {
@@ -117,49 +113,43 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         </p>
                                     </div>
 
-                                    {/* Voting Results */}
+                                    {/* Node Vote Status */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-foreground mb-4">
-                                            Voting Results
+                                            Node Vote Status
                                         </h3>
 
-                                        <div className="bg-background rounded-xl p-4 mb-4">
-                                            <div className="flex justify-between text-sm mb-2">
-                                                <span className="text-green-400 font-medium">For: {proposal.yesPercent.toFixed(1)}%</span>
-                                                <span className="text-red-400 font-medium">Against: {proposal.noPercent.toFixed(1)}%</span>
-                                            </div>
-                                            <div className="h-4 bg-accent rounded-full overflow-hidden flex">
-                                                <div
-                                                    className="bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
-                                                    style={{ width: `${proposal.yesPercent}%` }}
-                                                />
-                                                <div
-                                                    className="bg-gradient-to-r from-red-400 to-red-500 transition-all duration-500"
-                                                    style={{ width: `${proposal.noPercent}%` }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <i className="fa-solid fa-check-circle text-green-400"></i>
-                                                    <span className="text-sm text-muted-foreground">Votes For</span>
+                                        {proposal.approve === true ? (
+                                            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20">
+                                                    <i className="fa-solid fa-check text-emerald-400 text-lg"></i>
                                                 </div>
-                                                <div className="text-2xl font-bold text-green-400">
-                                                    {proposal.yesPercent.toFixed(1)}%
+                                                <div>
+                                                    <div className="text-base font-semibold text-emerald-300">Approved</div>
+                                                    <div className="text-xs text-emerald-300/70 mt-0.5">This node has approved this proposal.</div>
                                                 </div>
                                             </div>
-                                            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <i className="fa-solid fa-times-circle text-red-400"></i>
-                                                    <span className="text-sm text-muted-foreground">Votes Against</span>
+                                        ) : proposal.approve === false ? (
+                                            <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/20">
+                                                    <i className="fa-solid fa-times text-rose-400 text-lg"></i>
                                                 </div>
-                                                <div className="text-2xl font-bold text-red-400">
-                                                    {proposal.noPercent.toFixed(1)}%
+                                                <div>
+                                                    <div className="text-base font-semibold text-rose-300">Rejected</div>
+                                                    <div className="text-xs text-rose-300/70 mt-0.5">This node has rejected this proposal.</div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div className="bg-zinc-500/10 border border-zinc-500/25 rounded-xl p-5 flex items-center gap-4">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-500/20">
+                                                    <i className="fa-solid fa-minus text-zinc-400 text-lg"></i>
+                                                </div>
+                                                <div>
+                                                    <div className="text-base font-semibold text-zinc-300">No Vote</div>
+                                                    <div className="text-xs text-zinc-400 mt-0.5">This node has not voted on this proposal.</div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Proposal Information */}
@@ -253,30 +243,6 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                     >
                                         Close
                                     </button>
-                                    {canManageProposal && onVote && (
-                                        <>
-                                            <button
-                                                onClick={() => {
-                                                    onVote(proposal.hash, 'reject');
-                                                    onClose();
-                                                }}
-                                                className="px-4 sm:px-6 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg font-medium transition-all duration-200 border border-red-500/40"
-                                            >
-                                                <i className="fa-solid fa-times mr-2"></i>
-                                                Vote Against
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    onVote(proposal.hash, 'approve');
-                                                    onClose();
-                                                }}
-                                                className="px-4 sm:px-6 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg font-medium transition-all duration-200 border border-green-500/40"
-                                            >
-                                                <i className="fa-solid fa-check mr-2"></i>
-                                                Vote For
-                                            </button>
-                                        </>
-                                    )}
                                 </div>
                             </div>
                         </motion.div>

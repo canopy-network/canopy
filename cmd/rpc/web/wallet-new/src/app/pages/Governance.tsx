@@ -92,25 +92,6 @@ export const Governance = () => {
     [proposals],
   );
 
-  const handleVoteProposal = useCallback(
-    (proposalHash: string, vote: "approve" | "reject") => {
-      openAction(GOVERNANCE_ACTION_IDS.addProposalVote, {
-        proposalId: proposalHash,
-        approve: vote === "approve",
-      });
-    },
-    [openAction],
-  );
-
-  const handleDeleteProposalVote = useCallback(
-    (proposalHash: string) => {
-      openAction(GOVERNANCE_ACTION_IDS.deleteProposalVote, {
-        proposalId: proposalHash,
-      });
-    },
-    [openAction],
-  );
-
   const handleVotePoll = useCallback(
     (_pollHash: string, vote: "approve" | "reject", poll?: Poll) => {
       if (!poll) return;
@@ -120,6 +101,15 @@ export const Governance = () => {
         endBlock: poll.endBlock,
         URL: poll.url,
         voteApprove: vote === "approve",
+      });
+    },
+    [openAction],
+  );
+
+  const handleDeleteVote = useCallback(
+    (proposalHash: string) => {
+      openAction(GOVERNANCE_ACTION_IDS.deleteProposalVote, {
+        proposalId: proposalHash,
       });
     },
     [openAction],
@@ -158,16 +148,16 @@ export const Governance = () => {
       },
       {
         id: GOVERNANCE_ACTION_IDS.generateParamChange,
-        title: "Create Protocol Change",
-        description: "Create and submit a parameter-change proposal in one flow.",
-        help: "Submits a governance proposal that changes a protocol parameter (space/key/value) with a voting window.",
+        title: "Generate Protocol Change",
+        description: "Step 1: Generate a signed parameter-change proposal JSON.",
+        help: "Generates a signed governance proposal. Copy the JSON, then Approve it (step 2) and Submit it (step 3).",
         icon: Settings,
       },
       {
         id: GOVERNANCE_ACTION_IDS.generateDaoTransfer,
-        title: "Create Treasury Subsidy",
-        description: "Create and submit a treasury transfer proposal in one flow.",
-        help: "Submits a governance proposal to transfer funds from DAO treasury. It still requires governance approval on-chain.",
+        title: "Generate Treasury Subsidy",
+        description: "Step 1: Generate a signed treasury transfer proposal JSON.",
+        help: "Generates a signed treasury proposal. Copy the JSON, then Approve it (step 2) and Submit it (step 3).",
         icon: Coins,
       },
       {
@@ -269,34 +259,40 @@ export const Governance = () => {
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
                 <Info className="w-4 h-4 text-primary" />
-                Create and Submit
+                Step 1 — Generate
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Protocol and treasury proposals are submitted directly after confirmation. No manual JSON paste is required.
+                Use a Generate action to create a signed proposal JSON. Copy the result for the next steps.
               </p>
             </div>
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
                 <Vote className="w-4 h-4 text-primary" />
-                Review and Vote
+                Step 2 — Approve
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Proposal and poll vote forms are prefilled from selected records to reduce mistakes.
+                Paste the proposal JSON into the Approve / Reject Proposal action to add it to the node's approve list.
               </p>
+              <button
+                onClick={() => openAction(GOVERNANCE_ACTION_IDS.addProposalVote)}
+                className="mt-3 text-[11px] font-semibold tracking-wide text-primary hover:text-foreground transition-colors"
+              >
+                Open Approve / Reject Proposal
+              </button>
             </div>
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
                 <RefreshCcw className="w-4 h-4 text-primary" />
-                Advanced Broadcast
+                Step 3 — Submit
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Need full control? Use manual raw transaction broadcast from the advanced action.
+                Paste the same proposal JSON into the Raw TX Broadcast action to broadcast it to the network.
               </p>
               <button
                 onClick={() => openAction(GOVERNANCE_ACTION_IDS.submitProposalTx)}
                 className="mt-3 text-[11px] font-semibold tracking-wide text-primary hover:text-foreground transition-colors"
               >
-                Open Manual Raw TX
+                Open Raw TX Broadcast
               </button>
             </div>
           </div>
@@ -363,9 +359,8 @@ export const Governance = () => {
                 <ProposalTable
                   proposals={allProposals}
                   title="Proposal Stream"
-                  onVote={handleVoteProposal}
-                  onDeleteVote={handleDeleteProposalVote}
                   onViewDetails={handleViewDetails}
+                  onDeleteVote={handleDeleteVote}
                 />
               </ErrorBoundary>
             ) : (
@@ -397,7 +392,6 @@ export const Governance = () => {
           proposal={selectedProposal}
           isOpen={isDetailsModalOpen}
           onClose={() => setIsDetailsModalOpen(false)}
-          onVote={handleVoteProposal}
         />
       </motion.div>
     </ErrorBoundary>

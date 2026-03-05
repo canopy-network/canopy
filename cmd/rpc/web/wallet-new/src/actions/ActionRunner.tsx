@@ -21,7 +21,7 @@ import {
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { cx } from "@/ui/cx";
 import { motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Copy, CheckCircle2 } from "lucide-react";
 import { ToastTemplateOptions } from "@/toast/types";
 import { useActionDs } from "./useActionDs";
 import { usePopulateController } from "./usePopulateController";
@@ -102,6 +102,7 @@ export default function ActionRunner({
     prefilledData || {},
   );
   const [txRes, setTxRes] = React.useState<any>(null);
+  const [rawTxRes, setRawTxRes] = React.useState<string>("");
   const [inlineError, setInlineError] = React.useState<InlineServiceError | null>(null);
   const [txPassword, setTxPassword] = React.useState<string>("");
   const [pendingExecutionAfterUnlock, setPendingExecutionAfterUnlock] = React.useState(false);
@@ -442,7 +443,7 @@ export default function ActionRunner({
         headers: action!.submit?.headers ?? {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: typeof payload === "string" ? payload : JSON.stringify(payload),
       });
       responseOk = httpRes.ok;
       responseStatus = httpRes.status;
@@ -462,6 +463,7 @@ export default function ActionRunner({
     }
 
     setTxRes(res);
+    setRawTxRes(rawResponse);
 
     // Success detection prioritizes HTTP status to avoid false negatives on valid payloads
     // like {"approve": false, ...} or {"address":"..."}.
@@ -530,6 +532,19 @@ export default function ActionRunner({
       });
       // Keep modal open on failure so the user can inspect/edit and retry.
       setStage("form");
+      return;
+    }
+
+    // If the response is a generated transaction (submit=false), show it
+    // so the user can copy it for the next steps (approve → submit).
+    const isGeneratedTx =
+      res &&
+      typeof res === "object" &&
+      typeof res.type === "string" &&
+      res.signature != null;
+
+    if (isGeneratedTx) {
+      setStage("result");
       return;
     }
 
@@ -987,6 +1002,21 @@ export default function ActionRunner({
               </motion.div>
             )}
 
+            {stage === "result" && txRes && (
+              <GeneratedTxResult
+                txRes={txRes}
+                rawJson={rawTxRes}
+                onDone={() => {
+                  if (onFinish) {
+                    onFinish({ actionId, success: true, result: txRes });
+                  } else {
+                    setStage("form");
+                    setStepIdx(0);
+                  }
+                }}
+              />
+            )}
+
             <UnlockModal
               open={unlockOpen}
               onClose={() => {
@@ -1003,6 +1033,87 @@ export default function ActionRunner({
         )}
       </div>
     </div>
+  );
+}
+
+function GeneratedTxResult({
+  txRes,
+  rawJson,
+  onDone,
+}: {
+  txRes: Record<string, unknown>;
+  rawJson?: string;
+  onDone: () => void;
+}) {
+  const [copied, setCopied] = React.useState(false);
+  const jsonStr = React.useMemo(
+    () => rawJson?.trim() || JSON.stringify(txRes, null, 2),
+    [txRes, rawJson],
+  );
+
+  const handleCopy = React.useCallback(() => {
+    navigator.clipboard.writeText(jsonStr).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [jsonStr]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <h4 className="text-sm font-semibold text-emerald-100">
+            Step 1 Complete — Proposal Generated
+          </h4>
+        </div>
+        <p className="text-xs text-emerald-100/80 leading-relaxed mb-3">
+          Copy the JSON below, then complete the remaining steps:
+        </p>
+        <ol className="text-xs text-emerald-100/80 leading-relaxed space-y-1 list-decimal list-inside">
+          <li><strong>Approve</strong> — Paste this JSON into the <strong>Approve / Reject Proposal</strong> action and vote Approve. This adds it to the node's approve list.</li>
+          <li><strong>Submit</strong> — Paste this JSON into the <strong>Manual Raw TX Broadcast</strong> action to broadcast it to the network.</li>
+        </ol>
+      </div>
+
+      <div className="relative rounded-xl border border-border/70 bg-background/60">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+            Signed Transaction JSON
+          </span>
+          <button
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-border/80 bg-background hover:bg-muted/50 text-foreground transition-colors"
+          >
+            {copied ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                Copy JSON
+              </>
+            )}
+          </button>
+        </div>
+        <pre className="max-h-72 overflow-auto p-3 text-[11px] text-foreground/90 whitespace-pre-wrap break-words font-mono">
+          {jsonStr}
+        </pre>
+      </div>
+
+      <button
+        onClick={onDone}
+        className="w-full px-4 py-2.5 rounded-lg border border-border/80 text-foreground text-sm font-medium hover:bg-muted/40 transition-colors"
+      >
+        Done
+      </button>
+    </motion.div>
   );
 }
 

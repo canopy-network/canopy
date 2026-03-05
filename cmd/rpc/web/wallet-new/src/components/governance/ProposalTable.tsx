@@ -6,9 +6,8 @@ interface ProposalTableProps {
   proposals: Proposal[];
   title: string;
   isPast?: boolean;
-  onVote?: (proposalHash: string, vote: "approve" | "reject") => void;
-  onDeleteVote?: (proposalHash: string) => void;
   onViewDetails?: (proposalHash: string) => void;
+  onDeleteVote?: (proposalHash: string) => void;
 }
 
 const PAGE_SIZE = 12;
@@ -31,9 +30,8 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
   proposals,
   title,
   isPast = false,
-  onVote,
-  onDeleteVote,
   onViewDetails,
+  onDeleteVote,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -69,7 +67,10 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
         if (byStatus !== 0) return byStatus;
         return (a.endHeight || Number.MAX_SAFE_INTEGER) - (b.endHeight || Number.MAX_SAFE_INTEGER);
       }
-      if (sortBy === "support") return b.yesPercent - a.yesPercent;
+      if (sortBy === "support") {
+        const rank = (p: typeof a) => p.approve === true ? 0 : p.approve === false ? 1 : 2;
+        return rank(a) - rank(b);
+      }
       if (sortBy === "latest") return new Date(b.submitTime).getTime() - new Date(a.submitTime).getTime();
       if (sortBy === "oldest") return new Date(a.submitTime).getTime() - new Date(b.submitTime).getTime();
       return 0;
@@ -137,12 +138,6 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     { key: "passed", label: "Passed", count: statusCounts.passed },
     { key: "rejected", label: "Rejected", count: statusCounts.rejected },
   ];
-
-  const canManageProposal = (proposal: Proposal): boolean => {
-    if (isPast) return false;
-    if (typeof proposal.isVotingOpen === "boolean") return proposal.isVotingOpen;
-    return proposal.status === "active" || proposal.status === "pending";
-  };
 
   return (
     <div className="rounded-2xl border border-border bg-card/95 p-4 md:p-5 shadow-[0_10px_50px_-35px_rgba(0,0,0,0.8)]">
@@ -214,7 +209,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
           <option value="urgency">Sort: Urgency</option>
           <option value="latest">Sort: Latest First</option>
           <option value="oldest">Sort: Oldest First</option>
-          <option value="support">Sort: Highest Support</option>
+          <option value="support">Sort: Node Vote</option>
         </select>
         <select
           value={String(pageSize)}
@@ -236,7 +231,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Proposal</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Category</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Support</th>
+                <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Node Vote</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Window</th>
                 <th className="text-right py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
               </tr>
@@ -274,39 +269,32 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       </span>
                     </td>
                     <td className="py-3 px-3 align-top">
-                      <div className="text-sm font-semibold text-foreground">{proposal.yesPercent.toFixed(1)}%</div>
-                      <div className="w-28 h-1.5 mt-1 rounded-full bg-muted/70 overflow-hidden">
-                        <div className="h-full bg-emerald-400" style={{ width: `${proposal.yesPercent}%` }} />
-                      </div>
+                      {proposal.approve === true ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/35">
+                          Approved
+                        </span>
+                      ) : proposal.approve === false ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-rose-500/15 text-rose-300 border-rose-500/35">
+                          Rejected
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-zinc-500/15 text-zinc-400 border-zinc-500/35">
+                          No vote
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-3 align-top">
                       <div className="text-xs text-foreground">{formatWindow(proposal)}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">end #{proposal.endHeight || 0}</div>
                     </td>
                     <td className="py-3 px-3 align-top">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {canManageProposal(proposal) && onVote && (
-                          <>
-                            <button
-                              onClick={() => onVote(proposal.hash, "approve")}
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded text-[11px] font-semibold border border-emerald-500/40"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => onVote(proposal.hash, "reject")}
-                              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-[11px] font-semibold border border-rose-500/40"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {canManageProposal(proposal) && onDeleteVote && (
+                      <div className="flex items-center justify-end gap-1">
+                        {proposal.hasLocalVote && onDeleteVote && (
                           <button
                             onClick={() => onDeleteVote(proposal.hash)}
-                            className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[11px] font-semibold border border-amber-500/40"
+                            className="px-2.5 py-1 text-rose-400 hover:text-rose-300 text-[11px] font-semibold transition-colors"
                           >
-                            Delete
+                            Delete Vote
                           </button>
                         )}
                         <button
