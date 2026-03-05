@@ -195,7 +195,14 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 		}
 	}
 	// 3) ROTATE BATCHES
-	return s.RotateDexBatches(remoteBatch.Hash(), midPointPoolSize, counterPoolSizeMirror, chainId, receipts)
+	// LivenessFallback is a local execution signal and must not alter receipt-hash linkage.
+	receiptsHash := remoteBatch.Hash()
+	if remoteBatch.LivenessFallback {
+		canonicalRemote := remoteBatch.Copy()
+		canonicalRemote.LivenessFallback = false
+		receiptsHash = canonicalRemote.Hash()
+	}
+	return s.RotateDexBatches(receiptsHash, midPointPoolSize, counterPoolSizeMirror, chainId, receipts)
 }
 
 // HandleReceiptsForOurLockedBatch() 1. processes receipts for our locked batch
