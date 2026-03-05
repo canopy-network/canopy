@@ -3,7 +3,6 @@ package fsm
 import (
 	"bytes"
 	"fmt"
-	"github.com/canopy-network/canopy/lib/crypto"
 	"math"
 	"math/rand"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/stretchr/testify/require"
@@ -2664,8 +2665,10 @@ func newDexChain(t *testing.T, chainId, counterId uint64, rng *rand.Rand) *dexCh
 }
 
 func (s *dexSim) advanceHeight() {
+	s.chainX.sm.cache.Reset()
 	s.chainX.sm.height++
 	s.chainY.sm.height++
+	s.chainY.sm.cache.Reset()
 }
 
 func genOps(sim *dexSim, rng *rand.Rand) {

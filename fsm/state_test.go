@@ -10,7 +10,6 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/canopy/store"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -336,7 +335,6 @@ func newTestStateMachine(t *testing.T) StateMachine {
 	log := lib.NewDefaultLogger()
 	db, err := store.NewStoreInMemory(log)
 	require.NoError(t, err)
-	publicKeyCache, _ := lru.New[string, crypto.PublicKeyI](10_000)
 	sm := StateMachine{
 		store:              db,
 		ProtocolVersion:    0,
@@ -351,10 +349,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		},
 		events: new(lib.EventsTracker),
 		log:    log,
-		cache: &cache{
-			accounts:  make(map[uint64]*Account),
-			publicKey: publicKeyCache,
-		},
+		cache:  newFSMCache(),
 	}
 	require.NoError(t, sm.SetParams(DefaultParams()))
 	db.Commit()
