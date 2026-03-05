@@ -2954,22 +2954,20 @@
             "id": "proposalHash",
             "name": "proposalHash",
             "type": "select",
-            "label": "Proposal Hash",
+            "label": "Poll",
             "required": true,
             "map": "{{Object.entries(ds['gov.poll'] || {}).map(([k, v]) => { const h = v?.proposalHash || k; return { label: String(h).slice(0, 12) + '...', value: h }; })}}",
-            "help": "Select the poll hash to auto-fill proposal details.",
+            "help": "Select the poll you want to vote on.",
             "span": { "base": 12 }
           },
           {
             "id": "proposal",
             "name": "proposal",
             "type": "text",
-            "label": "Proposal",
+            "label": "Proposal Text",
             "required": true,
-            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg; if (direct) return selected; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) return byMsgHashKey; return selected; })()}}",
-            "autoPopulate": "always",
-            "placeholder": "Poll proposal",
-            "help": "Must match the existing poll proposal text.",
+            "placeholder": "Enter the exact proposal text used to start the poll",
+            "help": "Must exactly match the proposal text that was used when this poll was created.",
             "span": { "base": 12 }
           },
           {
@@ -2978,17 +2976,8 @@
             "type": "number",
             "label": "End Block",
             "required": true,
-            "value": "{{(() => { const selected = form.proposalHash || form.proposal || ''; const proposals = ds['gov.proposals'] || {}; const direct = proposals[selected]?.proposal?.msg?.endHeight; if (direct != null && direct !== '') return direct; const byMsgHashKey = Object.keys(proposals).find(k => proposals[k]?.proposal?.msg?.proposalHash === selected); if (byMsgHashKey) { const fallback = proposals[byMsgHashKey]?.proposal?.msg?.endHeight; if (fallback != null && fallback !== '') return fallback; } return form.endBlock ?? ''; })()}}",
-            "autoPopulate": "always",
-            "min": "{{resolveHeight(ds.height) + 1}}",
-            "validation": {
-              "min": "{{resolveHeight(ds.height) + 1}}",
-              "messages": {
-                "min": "End block must be at least {{min}} (current height + 1)."
-              }
-            },
-            "placeholder": "Block height",
-            "help": "Must match the poll endBlock value.",
+            "placeholder": "Enter the end block used to start the poll",
+            "help": "Must exactly match the endBlock value that was used when this poll was created.",
             "span": { "base": 12, "md": 6 }
           },
           {
@@ -3000,7 +2989,7 @@
             "value": "{{(() => { const selected = form.proposalHash || ''; const polls = ds['gov.poll'] || {}; const byKey = polls[selected]?.proposalURL; if (byKey) return byKey; const byProposalHashKey = Object.keys(polls).find(k => polls[k]?.proposalHash === selected); if (byProposalHashKey) return polls[byProposalHashKey]?.proposalURL || ''; return form.URL ?? ''; })()}}",
             "autoPopulate": "always",
             "placeholder": "https://...",
-            "help": "Should match the poll URL when one exists.",
+            "help": "Auto-filled from the poll data.",
             "span": { "base": 12, "md": 6 }
           },
           {
@@ -3029,11 +3018,11 @@
           "title": "Confirm Poll Vote",
           "summary": [
             {
-              "label": "Proposal Hash",
+              "label": "Poll",
               "value": "{{form.proposalHash}}"
             },
             {
-              "label": "Proposal",
+              "label": "Proposal Text",
               "value": "{{form.proposal}}"
             },
             {
@@ -3058,7 +3047,7 @@
         },
         "pollJSON": {
           "proposal": "{{form.proposal}}",
-          "endBlock": "{{Math.max(Number(form.endBlock || 0), resolveHeight(ds.height) + 1)}}",
+          "endBlock": "{{(Number(form.endBlock || 0))}}",
           "URL": "{{form.URL || ''}}"
         },
         "pollApprove": {
