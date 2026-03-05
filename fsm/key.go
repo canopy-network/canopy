@@ -43,6 +43,8 @@ var (
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
 	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
+	orderBySellerPrefix    = []byte{16} // store key prefix for 'sell orders' indexed by seller address
+	orderByBuyerPrefix     = []byte{17} // store key prefix for 'sell orders' indexed by buyer address
 
 	lockedBatchSegment = []byte{1}
 	nextBatchSement    = []byte{2}
@@ -77,6 +79,26 @@ func KeyForNonSigner(a []byte) []byte   { return lib.JoinLenPrefix(nonSignerPref
 func OrderBookPrefix(cId uint64) []byte { return lib.JoinLenPrefix(orderBookPrefix, formatUint64(cId)) }
 func KeyForOrder(chainId uint64, orderId []byte) []byte {
 	return append(OrderBookPrefix(chainId), lib.JoinLenPrefix(orderId)...)
+}
+
+func OrderBySellerPrefix(seller []byte) []byte {
+	return lib.JoinLenPrefix(orderBySellerPrefix, seller)
+}
+func OrderBySellerAndChainPrefix(seller []byte, chainId uint64) []byte {
+	return append(OrderBySellerPrefix(seller), lib.JoinLenPrefix(formatUint64(chainId))...)
+}
+func KeyForOrderBySeller(seller []byte, chainId uint64, orderId []byte) []byte {
+	return append(OrderBySellerAndChainPrefix(seller, chainId), lib.JoinLenPrefix(orderId)...)
+}
+
+func OrderByBuyerPrefix(buyer []byte) []byte {
+	return lib.JoinLenPrefix(orderByBuyerPrefix, buyer)
+}
+func OrderByBuyerAndChainPrefix(buyer []byte, chainId uint64) []byte {
+	return append(OrderByBuyerPrefix(buyer), lib.JoinLenPrefix(formatUint64(chainId))...)
+}
+func KeyForOrderByBuyer(buyer []byte, chainId uint64, orderId []byte) []byte {
+	return append(OrderByBuyerAndChainPrefix(buyer, chainId), lib.JoinLenPrefix(orderId)...)
 }
 func KeyForUnstaking(height uint64, address crypto.AddressI) []byte {
 	return append(UnstakingPrefix(height), lib.JoinLenPrefix(address.Bytes())...)

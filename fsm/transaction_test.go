@@ -97,6 +97,64 @@ func TestApplyTransaction(t *testing.T) {
 	}
 }
 
+func TestApplyTransaction_FaucetSendNeverFails(t *testing.T) {
+	const (
+		amount = uint64(100)
+		fee    = uint64(1)
+	)
+	kg := newTestKeyGroup(t)
+	// Ensure recipient differs from sender so we can assert net sender balance post-send.
+	to := newTestAddress(t, 1)
+	sendTx, err := NewSendTransaction(kg.PrivateKey, to, amount-1, 1, 1, fee, 1, "")
+	require.NoError(t, err)
+
+	sm := newTestStateMachine(t)
+	s := sm.store.(lib.StoreI)
+
+	// Enable faucet mode for the sender.
+	sm.Config.StateMachineConfig.FaucetAddress = kg.Address.String()
+
+	// Preset state fee (consistent with other tests).
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: fee}))
+
+	// Preset last block for timestamp verification.
+	require.NoError(t, s.IndexBlock(&lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{
+			Height: 1,
+			Hash:   crypto.Hash([]byte("block_hash")),
+			Time:   uint64(time.Now().UnixMicro()),
+		},
+	}))
+
+	txBytes, err := lib.Marshal(sendTx)
+	require.NoError(t, err)
+	txHash := crypto.HashString(txBytes)
+
+	// No preset sender funds. Without faucet mode this would fail (fee + amount).
+	_, _, applyErr := sm.ApplyTransaction(0, txBytes, txHash, nil)
+	require.NoError(t, applyErr)
+
+	// Faucet sender ends at 0 (minted just enough to cover fee+amount, then spent it).
+	balSender, err := sm.GetAccountBalance(kg.Address)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), balSender)
+
+	// Recipient received the transfer.
+	balRecipient, err := sm.GetAccountBalance(to)
+	require.NoError(t, err)
+	require.Equal(t, amount-1, balRecipient)
+
+	// Fee went to the chain's reward pool.
+	rewardPoolBal, err := sm.GetPoolBalance(sm.Config.ChainId)
+	require.NoError(t, err)
+	require.Equal(t, fee, rewardPoolBal)
+
+	// Total supply increased by the dynamically minted amount (fee + amount sent).
+	sup, err := sm.GetSupply()
+	require.NoError(t, err)
+	require.Equal(t, fee+(amount-1), sup.Total)
+}
+
 func TestCheckTx(t *testing.T) {
 	const amount = uint64(100)
 	// predefine a keygroup for signing the transaction
@@ -320,15 +378,15 @@ func TestCheckSignature(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-			t.Run(test.name, func(t *testing.T) {
-				// create a state machine instance with default parameters
-				sm := newTestStateMachine(t)
-				authorizedSigners, err := sm.GetAuthorizedSignersFor(test.msg)
-				require.NoError(t, err)
-				// execute the function call
-				signer, err := sm.CheckSignature(test.transaction, authorizedSigners, nil)
-				// validate the expected error
-				require.Equal(t, test.error != "", err != nil, err)
+		t.Run(test.name, func(t *testing.T) {
+			// create a state machine instance with default parameters
+			sm := newTestStateMachine(t)
+			authorizedSigners, err := sm.GetAuthorizedSignersFor(test.msg)
+			require.NoError(t, err)
+			// execute the function call
+			signer, err := sm.CheckSignature(test.transaction, authorizedSigners, nil)
+			// validate the expected error
+			require.Equal(t, test.error != "", err != nil, err)
 			if err != nil {
 				require.ErrorContains(t, err, test.error)
 				return

@@ -40,10 +40,11 @@ type StateMachine struct {
 
 // cache is the set of items to be cached used by the state machine
 type cache struct {
-	accounts  map[uint64]*Account                   // cache of accounts accessed
-	feeParams *FeeParams                            // fee params for the current block
-	valParams *ValidatorParams                      // validator params for the current block
-	publicKey *lru.Cache[string, crypto.PublicKeyI] // public keys for block processing
+	accounts     map[uint64]*Account                   // cache of accounts accessed
+	feeParams    *FeeParams                            // fee params for the current block
+	valParams    *ValidatorParams                      // validator params for the current block
+	publicKey    *lru.Cache[string, crypto.PublicKeyI] // public keys for block processing
+	rootDexBatch *lib.DexBatch                         // root dex batch
 }
 
 // New() creates a new instance of a StateMachine
@@ -456,10 +457,6 @@ func (s *StateMachine) LoadRootChainInfo(id, height uint64) (*lib.RootChainInfo,
 		return nil, err
 	}
 	defer sm.Discard()
-	// if height is equal to latest height, provide the validator cache to the FSM
-	if height == s.height {
-		sm.cache = s.cache
-	}
 	// get the previous state machine height
 	lastSM, err := s.TimeMachine(lastHeight)
 	if err != nil {
@@ -524,8 +521,9 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		Plugin:             s.Plugin,
 		log:                s.log,
 		cache: &cache{
-			accounts:  make(map[uint64]*Account),
-			publicKey: s.cache.publicKey,
+			accounts:     make(map[uint64]*Account),
+			publicKey:    s.cache.publicKey,
+			rootDexBatch: s.cache.rootDexBatch,
 		},
 		LastValidatorSet: s.LastValidatorSet,
 	}, nil
@@ -619,12 +617,8 @@ func (s *StateMachine) TxnWrap() (lib.StoreI, lib.ErrorI) {
 	return txn, nil
 }
 
-// catchPanic() acts as a failsafe, recovering from a panic and logging the error with the stack trace
-func (s *StateMachine) catchPanic() {
-	if r := recover(); r != nil {
-		s.log.Error(string(debug.Stack()))
-	}
-}
+// SetRooDexCache sets the root dex batch cache for the state machine
+func (s *StateMachine) SetRootDexCache(batch *lib.DexBatch) { s.cache.rootDexBatch = batch }
 
 // Reset() resets the state store and the slash tracker
 func (s *StateMachine) Reset() {
@@ -639,6 +633,11 @@ func (s *StateMachine) Reset() {
 // ResetCaches() dumps the state machine caches
 func (s *StateMachine) ResetCaches() {
 	s.cache.accounts = make(map[uint64]*Account)
+	// Params caches must not outlive the current store view, otherwise Reset()/rollback
+	// can leave the FSM reading stale values that disagree with the underlying store.
+	s.cache.valParams = nil
+	s.cache.feeParams = nil
+	s.cache.rootDexBatch = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty

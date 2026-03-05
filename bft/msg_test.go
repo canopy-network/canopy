@@ -146,3 +146,88 @@ func TestSignBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestProposerMessageQCRejectsWrongRootHeightForJustification(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+
+	// local view root height is 1 (from newTestConsensus); craft a QC for a different root height.
+	const otherRootHeight = uint64(2)
+
+	blk, blkHash, results, resHash := c.proposal(t)
+	qc := &QC{
+		Header: &lib.View{
+			NetworkId:  lib.CanopyMainnetNetworkId,
+			ChainId:    lib.CanopyChainId,
+			Height:     1,
+			Round:      0,
+			RootHeight: otherRootHeight,
+			Phase:      ElectionVote, // Propose justification QC
+		},
+		Block:       blk,
+		BlockHash:   blkHash,
+		Results:     results,
+		ResultsHash: resHash,
+		ProposerKey: c.valKeys[0].PublicKey().Bytes(),
+	}
+
+	// Build a +2/3 majority aggregate signature for the QC.
+	sb := qc.SignBytes()
+	mk := c.valSet.MultiKey.Copy()
+	for idx := 0; idx < len(c.valKeys)-1; idx++ { // omit last signer (still +2/3 for this test valset)
+		require.NoError(t, mk.AddSigner(c.valKeys[idx].Sign(sb), idx))
+	}
+	aggSig, err := mk.AggregateSignatures()
+	require.NoError(t, err)
+	qc.Signature = &lib.AggregateSignature{Signature: aggSig, Bitmap: mk.Bitmap()}
+
+	msg := &Message{
+		Header: c.view(Propose, 0), // local root height (1)
+		Qc:     qc,
+	}
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	errI := c.bft.HandleMessage(msg)
+	require.Error(t, errI)
+	require.ErrorContains(t, errI, "wrong root height")
+}
+
+func TestProposerMessageQCAllowsWrongRootHeightOnlyWhenPartialQC(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+
+	// local view root height is 1 (from newTestConsensus); craft a QC for a different root height.
+	const otherRootHeight = uint64(2)
+
+	blk, blkHash, results, resHash := c.proposal(t)
+	qc := &QC{
+		Header: &lib.View{
+			NetworkId:  lib.CanopyMainnetNetworkId,
+			ChainId:    lib.CanopyChainId,
+			Height:     1,
+			Round:      0,
+			RootHeight: otherRootHeight,
+			Phase:      ElectionVote,
+		},
+		Block:       blk,
+		BlockHash:   blkHash,
+		Results:     results,
+		ResultsHash: resHash,
+		ProposerKey: c.valKeys[0].PublicKey().Bytes(),
+	}
+
+	// Build a partial (non +2/3) aggregate signature for the QC.
+	sb := qc.SignBytes()
+	mk := c.valSet.MultiKey.Copy()
+	require.NoError(t, mk.AddSigner(c.valKeys[0].Sign(sb), 0)) // one signer only => partial QC
+	aggSig, err := mk.AggregateSignatures()
+	require.NoError(t, err)
+	qc.Signature = &lib.AggregateSignature{Signature: aggSig, Bitmap: mk.Bitmap()}
+
+	msg := &Message{
+		Header: c.view(Propose, 0),
+		Qc:     qc,
+	}
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	require.NoError(t, c.bft.HandleMessage(msg))
+	require.Len(t, c.bft.PartialQCs, 1)
+}

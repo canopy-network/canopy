@@ -85,7 +85,9 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	if x.Qc.Header.RootHeight != p.rootHeight {
 		// load the proper committee
 		b.Controller.Lock()
-		vals, err = b.LoadCommittee(b.LoadRootChainId(x.Qc.Header.Height), x.Qc.Header.RootHeight) // REPLICAS: CAPTURE PARTIAL QCs FROM ANY HEIGHT
+		// NOTE: replicas may still want to validate/store partial QCs from other root heights as byzantine evidence,
+		// but a mismatched-rootHeight QC must never justify a live proposer message for the local view.
+		vals, err = b.LoadCommittee(b.LoadRootChainId(x.Qc.Header.Height), x.Qc.Header.RootHeight)
 		b.Controller.Unlock()
 		if err != nil {
 			return false, err
@@ -95,6 +97,14 @@ func (b *BFT) CheckProposerMessage(x *Message, p *validateMessageParams) (isPart
 	isPartialQC, err = x.Qc.Check(vals, b.LoadMaxBlockSize(), p.view, false)
 	if err != nil {
 		return
+	}
+	// A QC from a different root height must not justify a proposer message for the local view.
+	// Still allow storing it as partial-QC evidence (see AddPartialQC) if it's not +2/3 majority.
+	if x.Qc.Header.RootHeight != p.rootHeight {
+		if isPartialQC {
+			return true, nil
+		}
+		return false, lib.ErrWrongRootHeight()
 	}
 	// if it doesn't have +2/3 majority
 	if isPartialQC {

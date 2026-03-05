@@ -85,6 +85,10 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
+	// optimization to include any last minute dex ops in the batch
+	if err = s.IncludeSameBlockDex(); err != nil {
+		return
+	}
 	// execute plugin end block if enabled
 	if s.Plugin != nil {
 		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{
@@ -159,7 +163,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
 		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
-			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
+			return err
 		}
 	}
 	// handle the token swaps ordered by the quorum

@@ -1,0 +1,81 @@
+name: Release C# Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag for the plugin release (e.g. plugin-csharp-v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release C# Plugin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        working-directory: plugin/csharp
+        run: dotnet restore
+
+      - name: Build and publish
+        working-directory: plugin/csharp
+        run: |
+          mkdir -p release
+          # Linux glibc x64 (Ubuntu, Debian, etc.)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-x64 --self-contained true -o release/linux-glibc-x64
+          # Linux glibc ARM64
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-arm64 --self-contained true -o release/linux-glibc-arm64
+          # Linux musl x64 (Alpine Docker)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o release/linux-musl-x64
+          # Linux musl ARM64 (Alpine Docker)
+          dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-arm64 --self-contained true -o release/linux-musl-arm64
+
+      - name: Create tarballs
+        working-directory: plugin/csharp
+        run: |
+          cd release
+          # glibc versions (standard Linux)
+          tar -czf csharp-plugin-linux-x64.tar.gz -C linux-glibc-x64 .
+          tar -czf csharp-plugin-linux-arm64.tar.gz -C linux-glibc-arm64 .
+          # musl versions (Alpine Docker)
+          tar -czf csharp-plugin-linux-musl-x64.tar.gz -C linux-musl-x64 .
+          tar -czf csharp-plugin-linux-musl-arm64.tar.gz -C linux-musl-arm64 .
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: "C# Plugin ${{ github.event.inputs.tag }}"
+          body: |
+            C# Plugin Release ${{ github.event.inputs.tag }}
+            
+            ## Installation
+            1. Extract the appropriate tarball to `plugin/csharp/bin/`
+            2. The plugin is self-contained (no .NET runtime required)
+            
+            ## Assets
+            ### Standard Linux (glibc) - Ubuntu, Debian, RHEL, etc.
+            - `csharp-plugin-linux-x64.tar.gz` - Linux x86_64
+            - `csharp-plugin-linux-arm64.tar.gz` - Linux ARM64
+            
+            ### Alpine Linux (musl) - Docker containers
+            - `csharp-plugin-linux-musl-x64.tar.gz` - Alpine x86_64
+            - `csharp-plugin-linux-musl-arm64.tar.gz` - Alpine ARM64
+          files: |
+            plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-arm64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

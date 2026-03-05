@@ -212,6 +212,13 @@ class RpcTest {
         println("  Final balances - Account 1: $bal1Final, Account 2: $bal2Final")
         
         println("\n=== All transactions confirmed successfully! ===")
+        
+        // Print tip about verifying balances via RPC
+        println("\n--- Verify Account Balances ---")
+        println("You can manually check account balances at any time using the /v1/query/account RPC endpoint:")
+        println("""  curl -X POST $QUERY_RPC_URL/v1/query/account -H "Content-Type: application/json" -d '{"address": "$account1Addr"}'""")
+        println("""  curl -X POST $QUERY_RPC_URL/v1/query/account -H "Content-Type: application/json" -d '{"address": "$account2Addr"}'""")
+        println("See documentation: https://github.com/canopy-network/canopy/blob/main/cmd/rpc/README.md#account")
     }
     
     // ============ Helper Functions ============
