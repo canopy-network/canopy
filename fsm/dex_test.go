@@ -2263,6 +2263,129 @@ func TestSetGetDexBatch(t *testing.T) {
 	}
 }
 
+func TestIncludeSameBlockDex_MergesAndResetsNext(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 10
+	chainID := uint64(7)
+
+	locked := &lib.DexBatch{
+		Committee:    chainID,
+		LockedHeight: sm.Height(),
+		Orders: []*lib.DexLimitOrder{
+			{Address: newTestAddressBytes(t, 1), AmountForSale: 10, RequestedAmount: 5, OrderId: []byte{0x01}},
+		},
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Address: newTestAddressBytes(t, 2), Amount: 11, OrderId: []byte{0x02}},
+		},
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: newTestAddressBytes(t, 3), Percent: 10, OrderId: []byte{0x03}},
+		},
+	}
+	next := &lib.DexBatch{
+		Committee: chainID,
+		Orders: []*lib.DexLimitOrder{
+			{Address: newTestAddressBytes(t, 4), AmountForSale: 20, RequestedAmount: 6, OrderId: []byte{0x11}},
+		},
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Address: newTestAddressBytes(t, 5), Amount: 21, OrderId: []byte{0x12}},
+		},
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: newTestAddressBytes(t, 6), Percent: 20, OrderId: []byte{0x13}},
+		},
+	}
+	require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(chainID), locked))
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), next))
+
+	require.NoError(t, sm.IncludeSameBlockDex())
+
+	gotLocked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Len(t, gotLocked.Orders, 2)
+	require.Len(t, gotLocked.Deposits, 2)
+	require.Len(t, gotLocked.Withdrawals, 2)
+	// Existing locked ops should remain first, and same-block ops should be appended in order.
+	require.Equal(t, []byte{0x01}, gotLocked.Orders[0].OrderId)
+	require.Equal(t, []byte{0x11}, gotLocked.Orders[1].OrderId)
+	require.Equal(t, []byte{0x02}, gotLocked.Deposits[0].OrderId)
+	require.Equal(t, []byte{0x12}, gotLocked.Deposits[1].OrderId)
+	require.Equal(t, []byte{0x03}, gotLocked.Withdrawals[0].OrderId)
+	require.Equal(t, []byte{0x13}, gotLocked.Withdrawals[1].OrderId)
+
+	gotNext, err := sm.GetDexBatch(chainID, false)
+	require.NoError(t, err)
+	require.True(t, gotNext.IsEmpty(), "next batch should be cleared after all ops are consumed")
+}
+
+func TestIncludeSameBlockDex_RespectsBatchCaps(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 15
+	chainID := uint64(6)
+	addr := newTestAddressBytes(t, 1)
+
+	makeOrders := func(count int) []*lib.DexLimitOrder {
+		out := make([]*lib.DexLimitOrder, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLimitOrder{
+				Address:         addr,
+				AmountForSale:   uint64(i + 1),
+				RequestedAmount: 1,
+				OrderId:         []byte{0x20, byte(i)},
+			}
+		}
+		return out
+	}
+	makeDeposits := func(count int) []*lib.DexLiquidityDeposit {
+		out := make([]*lib.DexLiquidityDeposit, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLiquidityDeposit{
+				Address: addr,
+				Amount:  uint64(i + 1),
+				OrderId: []byte{0x21, byte(i)},
+			}
+		}
+		return out
+	}
+	makeWithdrawals := func(count int) []*lib.DexLiquidityWithdraw {
+		out := make([]*lib.DexLiquidityWithdraw, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLiquidityWithdraw{
+				Address: addr,
+				Percent: 1,
+				OrderId: []byte{0x22, byte(i)},
+			}
+		}
+		return out
+	}
+
+	require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(chainID), &lib.DexBatch{
+		Committee:    chainID,
+		LockedHeight: sm.Height(),
+		Orders:       makeOrders(lib.MaxOrdersPerDexBatch - 1),
+		Deposits:     makeDeposits(lib.MaxDepositsPerDexBatch - 1),
+		Withdrawals:  makeWithdrawals(lib.MaxWithdrawsPerDexBatch - 1),
+	}))
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), &lib.DexBatch{
+		Committee:   chainID,
+		Orders:      makeOrders(3),
+		Deposits:    makeDeposits(3),
+		Withdrawals: makeWithdrawals(3),
+	}))
+
+	require.NoError(t, sm.IncludeSameBlockDex())
+
+	gotLocked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Len(t, gotLocked.Orders, lib.MaxOrdersPerDexBatch)
+	require.Len(t, gotLocked.Deposits, lib.MaxDepositsPerDexBatch)
+	require.Len(t, gotLocked.Withdrawals, lib.MaxWithdrawsPerDexBatch)
+
+	gotNext, err := sm.GetDexBatch(chainID, false)
+	require.NoError(t, err)
+	require.Len(t, gotNext.Orders, 2)
+	require.Len(t, gotNext.Deposits, 2)
+	require.Len(t, gotNext.Withdrawals, 2)
+}
+
 func TestGetDexBatches(t *testing.T) {
 	tests := []struct {
 		name        string

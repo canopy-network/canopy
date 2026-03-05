@@ -318,7 +318,7 @@ func DefaultMempoolConfig() MempoolConfig {
 		MaxTransactionCount:        5000,                       // 5000 max transactions
 		IndividualMaxTxSize:        uint32(4 * units.Kilobyte), // 4 KB max individual tx size
 		DropPercentage:             35,                         // drop 35% if limits are reached
-		LazyMempoolCheckFrequencyS: 1,                          // check every 1 second
+		LazyMempoolCheckFrequencyS: 2,                          // check every 2 seconds
 	}
 }
 
