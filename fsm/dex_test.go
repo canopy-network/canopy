@@ -1668,6 +1668,46 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 	}
 }
 
+func TestHandleRemoteDexBatchIgnoresLivenessFlagInReceiptHash(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID := uint64(1)
+
+	// Ensure liquidity pool is enabled.
+	liqPool, err := sm.GetPool(chainID + LiquidityPoolAddend)
+	require.NoError(t, err)
+	liqPool.Amount = 100
+	require.NoError(t, sm.SetPool(liqPool))
+
+	// Ensure we have something to rotate into the locked batch.
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), &lib.DexBatch{
+		Committee: chainID,
+		Orders: []*lib.DexLimitOrder{{
+			AmountForSale:   10,
+			RequestedAmount: 1,
+			Address:         newTestAddressBytes(t, 1),
+		}},
+		PoolSize: 100,
+	}))
+
+	remote := &lib.DexBatch{
+		Committee:        chainID,
+		ReceiptHash:      []byte{0xAA},
+		Orders:           []*lib.DexLimitOrder{},
+		Deposits:         []*lib.DexLiquidityDeposit{},
+		Withdrawals:      []*lib.DexLiquidityWithdraw{},
+		Receipts:         []uint64{},
+		PoolSize:         100,
+		LivenessFallback: true,
+	}
+	canonical := remote.Copy()
+	canonical.LivenessFallback = false
+
+	require.NoError(t, sm.HandleRemoteDexBatch(remote, chainID))
+	locked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Equal(t, canonical.Hash(), locked.ReceiptHash, "receipt hash must be stable regardless of liveness fallback flag")
+}
+
 func TestDexDeposit(t *testing.T) {
 	const (
 		depositAmount, initPoolSize = uint64(100), uint64(100)
