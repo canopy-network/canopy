@@ -31,6 +31,8 @@ import {
     rpcURL
 } from '../lib/api';
 
+const REFRESH_INTERVAL_MS = 20000; // 20 seconds
+
 // Query Keys
 export const queryKeys = {
     blocks: (page: number, perPage?: number, filter?: string) => ['blocks', page, perPage, filter],
@@ -70,7 +72,7 @@ export const useBlocks = (page: number, perPage: number = 10, filter: string = '
         queryKey: queryKeys.blocks(page, blockCount, filter),
         queryFn: () => Blocks(page, blockCount),
         staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchInterval: REFRESH_INTERVAL_MS,
         refetchOnWindowFocus: false, // Don't refetch when window regains focus
         gcTime: 600000 // Keep in cache for 10 minutes
     });
@@ -82,7 +84,7 @@ export const useTransactions = (page: number, height: number = 0) => {
         queryKey: queryKeys.transactions(page, height),
         queryFn: () => Transactions(page, height),
         staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchInterval: REFRESH_INTERVAL_MS,
         refetchOnWindowFocus: false, // Don't refetch when window regains focus
         gcTime: 600000 // Keep in cache for 10 minutes
     });
@@ -175,7 +177,7 @@ export const useAllValidators = () => {
             }
         },
         staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchInterval: REFRESH_INTERVAL_MS,
         refetchOnWindowFocus: false, // Don't refetch when window regains focus
         gcTime: 600000 // Keep in cache for 10 minutes
     });
@@ -214,7 +216,7 @@ export const useAllDelegators = () => {
             }
         },
         staleTime: 300000, // Cache for 5 minutes
-        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchInterval: REFRESH_INTERVAL_MS,
         refetchOnWindowFocus: false, // Don't refetch when window regains focus
         gcTime: 600000 // Keep in cache for 10 minutes
     });
@@ -454,7 +456,7 @@ export const useAllBlocksCache = () => {
             }
         },
         staleTime: 300000, // Cache for 5 minutes
-        refetchInterval: 600000, // Refetch every 10 minutes
+        refetchInterval: REFRESH_INTERVAL_MS,
         gcTime: 600000, // Keep in cache for 10 minutes
     });
 };
@@ -590,7 +592,7 @@ export const useOrders = (chainId: number = 1) => {
         // Orders() already returns parsed JSON via POST(), not a Response object.
         queryFn: () => Orders(chainId),
         staleTime: 30000, // Cache for 30 seconds
-        refetchInterval: 60000, // Refetch every minute
+        refetchInterval: REFRESH_INTERVAL_MS,
     });
 };
 
