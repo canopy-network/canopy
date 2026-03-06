@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (
@@ -37,14 +38,6 @@ type StateMachine struct {
 	Plugin             *lib.Plugin                             // extensible plugin for the FSM
 }
 
-// cache is the set of items to be cached used by the state machine
-type cache struct {
-	accounts     map[uint64]*Account // cache of accounts accessed
-	feeParams    *FeeParams          // fee params for the current block
-	valParams    *ValidatorParams    // validator params for the current block
-	rootDexBatch *lib.DexBatch       // root dex batch
-}
-
 // New() creates a new instance of a StateMachine
 func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metrics, log lib.LoggerI) (*StateMachine, lib.ErrorI) {
 	// create the state machine object reference
@@ -59,9 +52,7 @@ func New(c lib.Config, store lib.StoreI, plugin *lib.Plugin, metrics *lib.Metric
 		Plugin:            plugin,
 		log:               log,
 		events:            new(lib.EventsTracker),
-		cache: &cache{
-			accounts: make(map[uint64]*Account),
-		},
+		cache:             newFSMCache(),
 	}
 	// initialize the state machine
 	genesis, err := sm.Initialize(store)
@@ -276,7 +267,7 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 			// add to the failed list
 			r.AddFailed(lib.NewFailedTx(tx, e))
 			// discard the FSM cache
-			s.ResetCaches()
+			s.cache.Reset()
 			// clear any events accumulated for the failed transaction to avoid leaking them to subsequent txs
 			s.events.Reset()
 			// restore slash tracker to its pre-transaction state
@@ -518,6 +509,7 @@ func (s *StateMachine) Copy() (*StateMachine, lib.ErrorI) {
 		log:                s.log,
 		cache: &cache{
 			accounts:     make(map[uint64]*Account),
+			publicKey:    s.cache.publicKey,
 			rootDexBatch: s.cache.rootDexBatch,
 		},
 		LastValidatorSet: s.LastValidatorSet,
@@ -620,19 +612,9 @@ func (s *StateMachine) Reset() {
 	// reset the slash tracker
 	s.slashTracker = NewSlashTracker()
 	// reset caches
-	s.ResetCaches()
+	s.cache.Reset()
 	// reset the state store
 	s.store.(lib.StoreI).Reset()
-}
-
-// ResetCaches() dumps the state machine caches
-func (s *StateMachine) ResetCaches() {
-	s.cache.accounts = make(map[uint64]*Account)
-	// Params caches must not outlive the current store view, otherwise Reset()/rollback
-	// can leave the FSM reading stale values that disagree with the underlying store.
-	s.cache.valParams = nil
-	s.cache.feeParams = nil
-	s.cache.rootDexBatch = nil
 }
 
 // nonEmptyHash() ensures the hash isn't empty
@@ -724,4 +706,31 @@ func (s *StateMachine) StateWrite(request *lib.PluginStateWriteRequest) (respons
 		}
 	}
 	return
+}
+
+// cache is the set of items to be cached used by the state machine
+type cache struct {
+	accounts      map[uint64]*Account                   // cache of accounts accessed
+	feeParams     *FeeParams                            // fee params for the current block
+	valParams     *ValidatorParams                      // validator params for the current block
+	publicKey     *lru.Cache[string, crypto.PublicKeyI] // public keys for block processing
+	rootDexBatch  *lib.DexBatch                         // root dex batch
+	chainDexBatch map[string]*lib.DexBatch              // dex local batches keyed by chain id
+}
+
+// newFSMCache() creates a new instance of the state machine cache with required initialized values
+func newFSMCache() *cache {
+	publicKeyCache, _ := lru.New[string, crypto.PublicKeyI](10_000)
+	return &cache{
+		accounts:      make(map[uint64]*Account),
+		publicKey:     publicKeyCache,
+		chainDexBatch: make(map[string]*lib.DexBatch),
+	}
+}
+
+// Reset() resets the cache by reinitializing it
+func (c *cache) Reset() {
+	// Params caches must not outlive the current store view, otherwise Reset()/rollback
+	// can leave the FSM reading stale values that disagree with the underlying store.
+	*c = *newFSMCache()
 }

@@ -349,9 +349,7 @@ func newTestStateMachine(t *testing.T) StateMachine {
 		},
 		events: new(lib.EventsTracker),
 		log:    log,
-		cache: &cache{
-			accounts: make(map[uint64]*Account),
-		},
+		cache:  newFSMCache(),
 	}
 	require.NoError(t, sm.SetParams(DefaultParams()))
 	db.Commit()

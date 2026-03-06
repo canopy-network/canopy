@@ -382,10 +382,16 @@ func (s *StateMachine) ParsePollTransactions(b *lib.BlockResult) {
 	}
 	// for each transaction in the block
 	for _, tx := range b.Transactions {
-		// get the public key object
-		pub, e := crypto.NewPublicKeyFromBytes(tx.Transaction.Signature.PublicKey)
-		if e != nil {
-			return
+		// get the public key object from the cache
+		pub, ok := s.cache.publicKey.Get(string(tx.Transaction.Signature.PublicKey))
+		if !ok {
+			var e error
+			pub, e = crypto.NewPublicKeyFromBytes(tx.Transaction.Signature.PublicKey)
+			if e != nil {
+				return
+			}
+			// add the public key to the cache
+			s.cache.publicKey.Add(string(tx.Transaction.Signature.PublicKey), pub)
 		}
 		// check for a poll transaction
 		if err := ap.CheckForPollTransaction(pub.Address(), tx.Transaction.Memo, s.Height()); err != nil {
