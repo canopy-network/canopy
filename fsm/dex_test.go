@@ -3577,6 +3577,8 @@ func clearLocks(t *testing.T, chain1, chain2 StateMachine, chain1Id, chain2Id ui
 	require.NoError(t, chain1.Delete(KeyForNextBatch(chain2Id)))
 	require.NoError(t, chain2.Delete(KeyForLockedBatch(chain1Id)))
 	require.NoError(t, chain2.Delete(KeyForNextBatch(chain1Id)))
+	chain1.cache.Reset()
+	chain2.cache.Reset()
 }
 
 func TestGetPriceUsesBigIntForE6ScaledPrice(t *testing.T) {

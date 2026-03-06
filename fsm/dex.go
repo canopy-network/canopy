@@ -559,6 +559,8 @@ func (s *StateMachine) RotateDexBatches(receiptsHash []byte, lPoolSize, counterP
 	if err = s.Delete(KeyForNextBatch(chainId)); err != nil {
 		return
 	}
+	// delete it from the cache too
+	delete(s.cache.chainDexBatch, lib.BytesToString(KeyForNextBatch(chainId)))
 	// set the upcoming sell batch as 'last'
 	return s.SetDexBatch(KeyForLockedBatch(chainId), nextSellBatch)
 }
