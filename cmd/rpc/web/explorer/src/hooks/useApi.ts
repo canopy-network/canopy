@@ -456,7 +456,7 @@ export const useAllBlocksCache = () => {
             }
         },
         staleTime: 300000, // Cache for 5 minutes
-        refetchInterval: REFRESH_INTERVAL_MS,
+        refetchInterval: 600000, // Keep block cache refresh slower for performance
         gcTime: 600000, // Keep in cache for 10 minutes
     });
 };
