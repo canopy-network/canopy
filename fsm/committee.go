@@ -347,11 +347,19 @@ func (s *StateMachine) DeleteCommittees(address crypto.AddressI, totalStake uint
 
 // SetCommitteeMember() sets the address as a 'member' of the committee in the state
 func (s *StateMachine) SetCommitteeMember(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ derives committees from validator records; skip legacy committee index writes.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Set(KeyForCommittee(chainId, address, stakeForCommittee), nil)
 }
 
 // DeleteCommitteeMember() removes the address from being a 'member' of the committee in the state
 func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ stops mutating legacy committee index keys.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Delete(KeyForCommittee(chainId, address, stakeForCommittee))
 }
 
@@ -440,11 +448,19 @@ func (s *StateMachine) DeleteDelegations(address crypto.AddressI, totalStake uin
 
 // SetDelegate() sets a delegate in state using the delegate prefix
 func (s *StateMachine) SetDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ derives delegates from validator records; skip legacy delegate index writes.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Set(KeyForDelegate(chainId, address, stakeForCommittee), nil)
 }
 
 // DeleteDelegate() removes a delegate from the state using the delegate prefix
 func (s *StateMachine) DeleteDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ stops mutating legacy delegate index keys.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Delete(KeyForDelegate(chainId, address, stakeForCommittee))
 }
 
