@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
@@ -250,19 +249,18 @@ func TestSetGetValidators(t *testing.T) {
 			for i, v := range got {
 				require.EqualExportedValues(t, test.preset[i], v)
 			}
-			// get the committees from state
-			set, err := sm.GetCommitteePaginated(lib.PageParams{}, lib.CanopyChainId)
-			require.NoError(t, err)
-			// check committees got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
+			var set lib.ValidatorSet
+			if test.preset[0].Delegate {
+				// get delegates from state
+				set, err = sm.GetDelegates(lib.CanopyChainId)
+			} else {
+				// get committee from state
+				set, err = sm.GetCommitteeMembers(lib.CanopyChainId)
 			}
-			// get delegates from state
-			set, err = sm.GetDelegatesPaginated(lib.PageParams{}, lib.CanopyChainId)
 			require.NoError(t, err)
-			// check delegates got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
+			for i, member := range set.ValidatorSet.ValidatorSet {
+				require.Equal(t, test.preset[i].PublicKey, member.PublicKey)
+				require.Equal(t, test.preset[i].StakedAmount, member.VotingPower)
 			}
 			gotSupply, err := sm.GetSupply()
 			require.NoError(t, err)
@@ -569,26 +567,9 @@ func TestUpdateValidatorStake(t *testing.T) {
 			require.NoError(t, err)
 			// check got vs expected
 			require.EqualExportedValues(t, test.update, got)
-			// validate committee membership
+			// validate committee/delegate membership
 			for _, cId := range test.update.Committees {
-				var page *lib.Page
-				if test.update.Delegate {
-					// get the delegates
-					page, err = sm.GetDelegatesPaginated(lib.PageParams{}, cId)
-				} else {
-					// get the committee
-					page, err = sm.GetCommitteePaginated(lib.PageParams{}, cId)
-				}
-				require.NoError(t, err)
-				// ensure the slice contains the expected
-				var contains bool
-				for _, member := range *page.Results.(*ValidatorPage) {
-					if bytes.Equal(member.PublicKey, test.update.PublicKey) {
-						contains = true
-						break
-					}
-				}
-				require.True(t, contains)
+				require.True(t, validatorInCommitteeIndex(t, sm, cId, test.update.Delegate, test.update.Address))
 			}
 			// get the supply
 			supply, err := sm.GetSupply()
@@ -674,26 +655,9 @@ func TestDeleteValidator(t *testing.T) {
 			// get the validator
 			_, err := sm.GetValidator(crypto.NewAddress(test.preset.Address))
 			require.ErrorContains(t, err, "validator does not exist")
-			// validate committee non-membership
+			// validate committee/delegate non-membership
 			for _, cId := range test.preset.Committees {
-				var page *lib.Page
-				if test.preset.Delegate {
-					// get the delegates
-					page, err = sm.GetDelegatesPaginated(lib.PageParams{}, cId)
-				} else {
-					// get the committee
-					page, err = sm.GetCommitteePaginated(lib.PageParams{}, cId)
-				}
-				require.NoError(t, err)
-				// ensure the slice contains the expected
-				var contains bool
-				for _, member := range *page.Results.(*ValidatorPage) {
-					if bytes.Equal(member.PublicKey, test.preset.PublicKey) {
-						contains = true
-						break
-					}
-				}
-				require.False(t, contains)
+				require.False(t, validatorInCommitteeIndex(t, sm, cId, test.preset.Delegate, test.preset.Address))
 			}
 			// get the supply
 			supply, err := sm.GetSupply()

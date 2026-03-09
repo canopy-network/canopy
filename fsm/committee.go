@@ -276,33 +276,6 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 	return s.getValidatorSet(chainId, false)
 }
 
-// GetCommitteePaginated() returns a 'page' of committee members ordered from the highest stake to lowest
-func (s *StateMachine) GetCommitteePaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
-	// define a page and result variables
-	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using an iterator over the 'committee prefix' ordered by stake (high to low)
-	err = page.Load(CommitteePrefix(chainId), true, &res, s.store, func(key, value []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
-		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
-		}
-		// skip if validator is not paused and not unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
-		}
-		// append the validator to the page
-		res = append(res, validator)
-		return
-	})
-	return
-}
-
 // UpdateCommittees() updates the committee information in state for a specific validator
 func (s *StateMachine) UpdateCommittees(address crypto.AddressI, oldValidator *Validator, newStakedAmount uint64, newCommittees []uint64) lib.ErrorI {
 	// delete the committee information based on the 'previous state' of the validator
@@ -369,33 +342,6 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // If MaximumDelegatesPerCommittee (from governance params) is 0, it will return all delegates; otherwise it returns only the top N.
 func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
 	return s.getValidatorSet(chainId, true)
-}
-
-// GetDelegatesPaginated() returns a page of delegates
-func (s *StateMachine) GetDelegatesPaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
-	// create a page of validator objects
-	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using the 'delegates' prefix sorted by stake (high to low)
-	err = page.Load(DelegatePrefix(chainId), true, &res, s.store, func(key, _ []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
-		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
-		}
-		// skip if validator is paused or unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
-		}
-		// append the validator to the page
-		res = append(res, validator)
-		return
-	})
-	return
 }
 
 // UpdateDelegations() updates the delegate information for an address, first removing the outdated delegation information and then setting the new info
