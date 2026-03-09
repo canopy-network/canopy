@@ -2,12 +2,12 @@ package p2p
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"math/rand"
 	"net"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,13 +32,15 @@ import (
 */
 
 const (
-	transport               = "tcp"
-	dialTimeout             = time.Second
-	minPeerTick             = 100 * time.Millisecond
-	inboxMonitorInterval    = 5 * time.Second
-	defaultMinIOTimeout     = 500 * time.Millisecond
-	defaultMaxWriteTimeout  = 2 * time.Second
-	defaultMaxReadTimeout   = 4 * time.Second
+	transport            = "tcp"
+	dialTimeout          = time.Second
+	minPeerTick          = 100 * time.Millisecond
+	inboxMonitorInterval = 5 * time.Second
+	defaultMinIOTimeout  = 500 * time.Millisecond
+	// Keep IO deadlines bounded, but not so tight that normal WAN jitter/GC pauses cause churn.
+	// These values are further shaped by block-time-derived defaults in New().
+	defaultMaxWriteTimeout  = 5 * time.Second
+	defaultMaxReadTimeout   = 10 * time.Second
 	dialFailedPeersInterval = 2 * time.Second
 )
 
@@ -57,6 +59,7 @@ type P2P struct {
 	log                    lib.LoggerI
 	gossip                 bool     // whether gossip mode is active
 	failedPeers            sync.Map // peers that have connection errors
+	mustConnectIndex       sync.Map // pubKey string -> netAddress (for reconnect/dial correctness)
 }
 
 // New() creates an initialized pointer instance of a P2P object
@@ -264,7 +267,7 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 		p.failedPeers.Range(func(key, rawPeer any) bool {
 			peer, ok := rawPeer.(*lib.PeerAddress)
 			// invalid peer, remove
-			if !ok {
+			if !ok || peer == nil {
 				p.failedPeers.Delete(key)
 				return true
 			}
@@ -278,14 +281,28 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 				p.failedPeers.Delete(key)
 				return true
 			}
-			// attempt to reconnect to the peer, clear after attempt
-			go func(k any, pa *lib.PeerAddress) {
-				p.DialWithBackoff(pa, false)
-				// only remove from failed list if successfully reconnected
-				if p.PeerSet.Has(pa.PublicKey) {
-					p.failedPeers.Delete(k)
+
+			// Prefer the configured must-connect net address over any stored/observed remote endpoint.
+			// Inbound peers may be recorded with an ephemeral source port which is not dialable.
+			reconnect := peer
+			if v, ok := p.mustConnectIndex.Load(string(peer.PublicKey)); ok {
+				if netAddr, ok2 := v.(string); ok2 && netAddr != "" {
+					reconnect = &lib.PeerAddress{
+						PublicKey:  peer.PublicKey,
+						NetAddress: netAddr,
+						PeerMeta:   peer.PeerMeta,
+					}
 				}
-			}(key, peer)
+			}
+
+			// Attempt a single dial per tick; keep it in the failed set if it doesn't succeed.
+			go func(mapKey any, a *lib.PeerAddress) {
+				if err := p.Dial(a, false, true); err != nil {
+					return
+				}
+				p.failedPeers.Delete(mapKey)
+			}(key, reconnect)
+
 			count++
 			return true
 		})
@@ -300,6 +317,9 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 	if p.IsSelf(address) || p.PeerSet.Has(address.PublicKey) {
 		return nil
 	}
+	if p.metrics != nil && p.metrics.DialAttempt != nil {
+		p.metrics.DialAttempt.WithLabelValues(expectedPortLabel(address.NetAddress, p.meta.ChainId)).Inc()
+	}
 	// only log if not immediate disconnect
 	if !disconnect {
 		p.log.Debugf("Dialing %s@%s", lib.BytesToString(address.PublicKey), address.NetAddress)
@@ -307,10 +327,19 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 	// try to establish the basic tcp connection
 	conn, er := net.DialTimeout(transport, address.NetAddress, dialTimeout)
 	if er != nil {
+		if p.metrics != nil && p.metrics.DialTimeout != nil {
+			if ne, ok := er.(net.Error); ok && ne.Timeout() {
+				p.metrics.DialTimeout.WithLabelValues(expectedPortLabel(address.NetAddress, p.meta.ChainId)).Inc()
+			}
+		}
 		return ErrFailedDial(er)
 	}
 	// try to use the basic tcp connection to establish a peer
-	return p.AddPeer(conn, &lib.PeerInfo{Address: address, IsOutbound: true}, disconnect, strictPublicKey)
+	err := p.AddPeer(conn, &lib.PeerInfo{Address: address, IsOutbound: true}, disconnect, strictPublicKey)
+	if err == nil && p.metrics != nil && p.metrics.DialSuccess != nil {
+		p.metrics.DialSuccess.WithLabelValues(expectedPortLabel(address.NetAddress, p.meta.ChainId)).Inc()
+	}
+	return err
 }
 
 // AddPeer() takes an ephemeral tcp connection and an incomplete peerInfo and attempts to
@@ -328,13 +357,6 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		if err != nil {
 			p.log.Warn(err.Error())
 			connection.Stop()
-			pk := connection.p2p.publicKey
-			peer, peerErr := p.get(pk)
-			// peer was not added, nothing to do
-			if peerErr != nil {
-				return
-			}
-			p.PeerSet.Remove(pk, peer.conn.uuid)
 		}
 	}()
 	// log the peer add attempt
@@ -372,6 +394,15 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 			break
 		}
 	}
+	// Ensure must-connect peers retain their configured net address (DNS/name + expected port).
+	// Inbound connections may be observed with an IP-based address; we want reconnect/dial to use the stable must-connect endpoint.
+	if info.IsMustConnect {
+		if v, ok := p.mustConnectIndex.Load(string(info.Address.PublicKey)); ok {
+			if mcAddr, ok2 := v.(string); ok2 && mcAddr != "" {
+				info.Address.NetAddress = mcAddr
+			}
+		}
+	}
 	// check if is trusted
 	if slices.Contains(p.config.TrustedPeerIDs, lib.BytesToString(info.Address.PublicKey)) {
 		info.IsTrusted = true
@@ -385,18 +416,68 @@ func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPubli
 		}
 	}
 	bookPeer := &BookPeer{Address: info.Address}
-	if err = p.PeerSet.Add(&Peer{
+	newPeer := &Peer{
 		conn:     connection,
 		PeerInfo: info,
-	}); err != nil {
-		unlock()
-		return err
+	}
+	var replacedPeer *Peer
+	if err = p.PeerSet.Add(newPeer); err != nil {
+		// Simultaneous dialing can establish one inbound and one outbound connection for the
+		// same peer. If both sides blindly keep whichever arrived first, both TCP sessions can
+		// be dropped. Resolve duplicates deterministically based on pubkey ordering.
+		if err.Code() != lib.CodePeerAlreadyExists {
+			unlock()
+			return err
+		}
+		existingPeer, getErr := p.get(info.Address.PublicKey)
+		if getErr != nil || existingPeer == nil || existingPeer.conn == nil || !p.shouldReplaceDuplicatePeer(existingPeer, info) {
+			unlock()
+			return err
+		}
+		if removeErr := p.PeerSet.Remove(info.Address.PublicKey, existingPeer.conn.uuid); removeErr != nil {
+			unlock()
+			return removeErr
+		}
+		// Force replacement after exact-uuid eviction so deterministic duplicate resolution
+		// cannot be blocked by transient directional max-in/max-out limits.
+		if err = p.PeerSet.AddForce(newPeer); err != nil {
+			unlock()
+			return err
+		}
+		replacedPeer = existingPeer
 	}
 	unlock()
+	if replacedPeer != nil && replacedPeer.conn != nil {
+		replacedPeer.conn.Stop()
+	}
 	p.book.Add(bookPeer)
+	if p.metrics != nil && p.metrics.PeerBookAdd != nil {
+		p.metrics.PeerBookAdd.WithLabelValues(expectedPortLabel(info.Address.NetAddress, p.meta.ChainId)).Inc()
+	}
 	// add peer to peer set and peer book
 	p.log.Infof("Added peer: %s@%s", lib.BytesToString(info.Address.PublicKey), info.Address.NetAddress)
 	return
+}
+
+// shouldReplaceDuplicatePeer picks which duplicate session to keep when both inbound and
+// outbound connections exist for the same remote peer.
+//
+// Rule: lower public key keeps outbound, higher public key keeps inbound.
+// This makes both sides converge on the same physical TCP session under simultaneous dial.
+func (p *P2P) shouldReplaceDuplicatePeer(existing *Peer, incoming *lib.PeerInfo) bool {
+	if existing == nil || incoming == nil || incoming.Address == nil {
+		return false
+	}
+	if existing.conn != nil && existing.conn.hasError.Load() {
+		return true
+	}
+	if existing.IsOutbound == incoming.IsOutbound {
+		// For same-direction inbound duplicates, prefer the freshest authenticated session.
+		// This allows quick recovery when the remote has dropped state and reconnects.
+		return !incoming.IsOutbound
+	}
+	keepOutbound := bytes.Compare(p.publicKey, incoming.Address.PublicKey) < 0
+	return incoming.IsOutbound == keepOutbound
 }
 
 // DialWithBackoff() dials the peer with exponential backoff retry
@@ -426,15 +507,14 @@ func (p *P2P) OnPeerError(err error, publicKey []byte, remoteAddr string, uuid u
 	if err = p.PeerSet.Remove(publicKey, uuid); err != nil {
 		p.log.Errorf("Remove error: %s", err.Error())
 	}
-	// add to failed peers using the configured address from mustConnects
-	// (remoteAddr may be an ephemeral port for inbound connections)
-	// NOTE: caller already holds PeerSet.mux, so access mustConnect directly
+
+	// Add to failed peers using the configured address from must-connects when possible.
+	// remoteAddr may be an ephemeral source port for inbound connections.
 	netAddr := remoteAddr
-	idx := slices.IndexFunc(p.mustConnect, func(peer *lib.PeerAddress) bool {
-		return bytes.Equal(peer.PublicKey, publicKey)
-	})
-	if idx >= 0 {
-		netAddr = p.mustConnect[idx].NetAddress
+	if v, ok := p.mustConnectIndex.Load(string(publicKey)); ok {
+		if mcAddr, ok2 := v.(string); ok2 && mcAddr != "" {
+			netAddr = mcAddr
+		}
 	}
 	p.failedPeers.Store(string(publicKey), &lib.PeerAddress{
 		PublicKey:  publicKey,
@@ -535,6 +615,15 @@ func (p *P2P) Inbox(topic lib.Topic) chan *lib.MessageAndMetadata { return p.cha
 // ListenForMustConnects() is an internal listener that receives 'must connect peers' updates from the controller
 func (p *P2P) ListenForMustConnects() {
 	for mustConnect := range p.MustConnectsReceiver {
+		// Keep a stable pubkey -> netAddress index for reconnects; clearing is fine since this is
+		// called whenever the committee/must-connect set changes.
+		p.mustConnectIndex.Clear()
+		for _, mc := range mustConnect {
+			if mc == nil || len(mc.PublicKey) == 0 || mc.NetAddress == "" {
+				continue
+			}
+			p.mustConnectIndex.Store(string(mc.PublicKey), mc.NetAddress)
+		}
 		// UpdateMustConnects() removes connections that are already established
 		for _, val := range p.UpdateMustConnects(mustConnect) {
 			go p.DialWithBackoff(val, false)
@@ -577,6 +666,30 @@ func clampDuration(d, min, max time.Duration) time.Duration {
 	return d
 }
 
+func expectedP2PPort(chainId uint64) (string, bool) {
+	p, err := lib.ResolvePort("", chainId)
+	if err != nil {
+		return "", false
+	}
+	return p, true
+}
+
+func expectedPortLabel(netAddr string, chainId uint64) string {
+	expected, ok := expectedP2PPort(chainId)
+	if !ok || expected == "" {
+		return "unknown"
+	}
+	addr := strings.TrimPrefix(netAddr, "tcp://")
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "false"
+	}
+	if port == expected {
+		return "true"
+	}
+	return "false"
+}
+
 var blockedCountries = []string{
 	"AF", // Afghanistan
 	"BY", // Belarus
@@ -604,23 +717,30 @@ func (p *P2P) filterBadIPs(conn net.Conn) (netAddress string, e lib.ErrorI) {
 	if !ok {
 		return "", ErrNonTCPAddress()
 	}
-	host := tcpAddr.IP.String()
-	ips, err := net.DefaultResolver.LookupIPAddr(context.Background(), host)
-	if err != nil {
-		return "", ErrIPLookup(err)
+	ip := tcpAddr.IP
+	if ip == nil {
+		return "", ErrNonTCPAddress()
 	}
-	for _, ip := range ips {
-		for _, bannedIP := range p.bannedIPs {
-			if ip.IP.Equal(bannedIP.IP) {
-				return "", ErrBannedIP(ip.String())
-			}
-		}
-		originCountry := iploc.Country(ip.IP)
-		if slices.Contains(blockedCountries, originCountry) {
-			return "", ErrBannedCountry(originCountry)
+	for _, bannedIP := range p.bannedIPs {
+		if ip.Equal(bannedIP.IP) {
+			return "", ErrBannedIP(ip.String())
 		}
 	}
-	return net.JoinHostPort(host, fmt.Sprintf("%d", tcpAddr.Port)), nil
+	originCountry := iploc.Country(ip)
+	if slices.Contains(blockedCountries, originCountry) {
+		return "", ErrBannedCountry(originCountry)
+	}
+	// For inbound connections, conn.RemoteAddr().Port is an ephemeral source port and is not dialable.
+	// Derive the expected P2P port from chainId (e.g. 9001 for chain 1) instead.
+	netAddress = ip.String()
+	// ResolveAndReplacePort() expects IPv6 literals to be bracketed when adding a port.
+	if ip.To4() == nil && strings.Contains(netAddress, ":") {
+		netAddress = "[" + netAddress + "]"
+	}
+	if err := lib.ResolveAndReplacePort(&netAddress, p.meta.ChainId); err != nil {
+		return "", err
+	}
+	return netAddress, nil
 }
 
 // catchPanic() is a programmatic safeguard against panics within the caller
