@@ -431,22 +431,40 @@ export const useAllBlocksCache = () => {
             }
 
             try {
-                // Hacer todos los requests en paralelo
-                const responses = await Promise.all(requests);
+                // Keep updates resilient: one failed page should not freeze navbar/dashboard.
+                const settled = await Promise.allSettled(requests);
 
-                // Procesar todas las respuestas
-                for (let i = 0; i < responses.length; i++) {
-                    const response = responses[i];
+                for (let i = 0; i < settled.length; i++) {
+                    const result = settled[i];
+                    if (result.status !== 'fulfilled') {
+                        console.error(`Failed to fetch blocks page ${i + 1}: request rejected`);
+                        continue;
+                    }
+
+                    const response = result.value;
                     if (!response.ok) {
-                        console.error(`Failed to fetch blocks page ${i + 1}`);
-                        throw new Error(`Failed to fetch blocks page ${i + 1}`);
+                        console.error(`Failed to fetch blocks page ${i + 1}: status ${response.status}`);
+                        continue;
                     }
 
                     const data = await response.json();
                     if (data.results && Array.isArray(data.results)) {
-                        allBlocks.push(...data.results)
+                        allBlocks.push(...data.results);
                     }
-                    (allBlocks as any).totalCount = data.totalCount || 0;
+                    if (typeof data.totalCount === 'number') {
+                        (allBlocks as any).totalCount = data.totalCount;
+                    }
+                }
+
+                // Always keep newest block first for Navbar and Home blocks table.
+                allBlocks.sort((a: any, b: any) => {
+                    const ah = Number((a?.blockHeader?.height ?? a?.height) || 0);
+                    const bh = Number((b?.blockHeader?.height ?? b?.height) || 0);
+                    return bh - ah;
+                });
+
+                if (allBlocks.length === 0) {
+                    throw new Error('No blocks fetched from RPC');
                 }
 
                 return allBlocks;
@@ -456,7 +474,8 @@ export const useAllBlocksCache = () => {
             }
         },
         staleTime: 300000, // Cache for 5 minutes
-        refetchInterval: 600000, // Keep block cache refresh slower for performance
+        // Keep this in sync with live widgets (Navbar + Home Blocks table)
+        refetchInterval: REFRESH_INTERVAL_MS,
         gcTime: 600000, // Keep in cache for 10 minutes
     });
 };
