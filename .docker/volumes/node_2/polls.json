@@ -1,14 +1,52 @@
 {
   "activePolls": {
+    "04729495295b8fb37cd82562d0876afc838637daf2024670bc49a8b241926661": {},
+    "0eb0add5e40662d961385e214a0e4ef1d19ea1c22b585363a9c484637c3be60d": {},
     "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c": {
       "02cd4e5eb53ea665702042a6ed6d31d616054dc5": true
-    }
+    },
+    "691740d20cb64cc85219d796898325bf38443b74deac50089529dfb02d0322ad": {
+      "851e90eaef1fa27debaee2c2591503bdeec1d123": true
+    },
+    "81e63b09670f645052e787ded1ca8dd1173f4ddaa70f299035d47880984d46c9": {},
+    "c7721600e5f20bb46c2f3f366afc367fc67df1d03e3c9882bf4c43c1ac7ab017": {},
+    "d780f333b15735c7d38f0bc28e8e649c4a4df56cd1fe3c2e5fb0ff9f4ace5067": {}
   },
   "pollMeta": {
+    "04729495295b8fb37cd82562d0876afc838637daf2024670bc49a8b241926661": {
+      "startPoll": "04729495295b8fb37cd82562d0876afc838637daf2024670bc49a8b241926661",
+      "url": "https://discord.com/link-to-thread",
+      "endHeight": 100
+    },
+    "0eb0add5e40662d961385e214a0e4ef1d19ea1c22b585363a9c484637c3be60d": {
+      "startPoll": "0eb0add5e40662d961385e214a0e4ef1d19ea1c22b585363a9c484637c3be60d",
+      "url": "https://en.wikipedia.org/wiki/Chicago_Police_Department",
+      "endHeight": 1000
+    },
     "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c": {
       "startPoll": "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
       "url": "https://forum.cnpy.network/something",
       "endHeight": 1000000000000
+    },
+    "691740d20cb64cc85219d796898325bf38443b74deac50089529dfb02d0322ad": {
+      "startPoll": "691740d20cb64cc85219d796898325bf38443b74deac50089529dfb02d0322ad",
+      "url": "https://en.wikipedia.org/wiki/Chicago_Police_Department",
+      "endHeight": 1000
+    },
+    "81e63b09670f645052e787ded1ca8dd1173f4ddaa70f299035d47880984d46c9": {
+      "startPoll": "81e63b09670f645052e787ded1ca8dd1173f4ddaa70f299035d47880984d46c9",
+      "url": "https://es.wikipedia.org/wiki/Hern%C3%A1n_Cort%C3%A9s",
+      "endHeight": 1000
+    },
+    "c7721600e5f20bb46c2f3f366afc367fc67df1d03e3c9882bf4c43c1ac7ab017": {
+      "startPoll": "c7721600e5f20bb46c2f3f366afc367fc67df1d03e3c9882bf4c43c1ac7ab017",
+      "url": "https://stormlightarchive.fandom.com/wiki/The_Way_of_Kings:_Chapter_Summaries",
+      "endHeight": 1000
+    },
+    "d780f333b15735c7d38f0bc28e8e649c4a4df56cd1fe3c2e5fb0ff9f4ace5067": {
+      "startPoll": "d780f333b15735c7d38f0bc28e8e649c4a4df56cd1fe3c2e5fb0ff9f4ace5067",
+      "url": "https://en.wikipedia.org/wiki/The_Dresden_Files",
+      "endHeight": 1000
     }
   }
 }

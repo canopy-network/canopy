@@ -1,5 +1,5 @@
 [build]
-  base = "cmd/rpc/web/wallet-new"
+  base = "cmd/rpc/web/wallet"
   publish = "dist"
   command = "npm run build"
 
