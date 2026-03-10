@@ -12,7 +12,9 @@
     "admin": "http://localhost:50003",
     "root": "http://localhost:50002"
   },
-  "explorer": "/explorer",
+  "explorer": {
+    "tx": "http://localhost:50001/transaction"
+  },
   "address": {
     "format": "evm"
   },

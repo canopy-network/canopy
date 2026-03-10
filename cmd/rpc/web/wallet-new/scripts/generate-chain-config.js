@@ -16,6 +16,7 @@ const __dirname = path.dirname(__filename);
 const rpcTarget = process.env.VITE_WALLET_RPC_PROXY_TARGET || 'http://localhost:50002';
 const adminRpcTarget = process.env.VITE_WALLET_ADMIN_RPC_PROXY_TARGET || 'http://localhost:50003';
 const rootRpcTarget = process.env.VITE_ROOT_WALLET_RPC_PROXY_TARGET || rpcTarget;
+const explorerBasePath = process.env.VITE_EXPLORER_BASE_PATH || 'http://localhost:50001';
 
 // Path to chain.json template and output
 const templatePath = path.join(__dirname, '../public/plugin/canopy/chain.json.template');
@@ -40,6 +41,12 @@ chainConfig.rpc = {
   root: rootRpcTarget
 };
 
+// Update explorer paths (built from the base URL)
+const trimmedExplorer = explorerBasePath.replace(/\/+$/, '');
+chainConfig.explorer = {
+  tx: `${trimmedExplorer}/transaction`
+};
+
 // Write the updated config
 fs.writeFileSync(outputPath, JSON.stringify(chainConfig, null, 2));
 
@@ -47,3 +54,4 @@ console.log(`✅ Generated chain.json with RPC targets:`);
 console.log(`   - base: ${rpcTarget}`);
 console.log(`   - admin: ${adminRpcTarget}`);
 console.log(`   - root: ${rootRpcTarget}`);
+console.log(`   - explorer: ${explorerBasePath}`);

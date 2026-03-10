@@ -12,7 +12,9 @@
     "admin": "/adminrpc",
     "root": "/rootrpc"
   },
-  "explorer": "/explorer",
+  "explorer": {
+    "tx": "http://localhost:50001/transaction"
+  },
   "address": {
     "format": "evm"
   },

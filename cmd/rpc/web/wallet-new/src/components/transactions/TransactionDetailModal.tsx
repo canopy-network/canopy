@@ -135,7 +135,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const decimals = Number(chain?.denom?.decimals ?? 6);
   const toDisplay = (n: number) => n / Math.pow(10, decimals);
 
-  const explorerBase = chain?.explorer ?? "";
+  const explorerTxUrl = chain?.explorer?.tx ?? "";
 
   React.useEffect(() => {
     if (!open) return;
@@ -212,9 +212,9 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </p>
                   <div className="flex items-center justify-between gap-2 bg-background/60 rounded-lg px-3 py-2.5">
                     <CopyHash hash={tx.hash} />
-                    {explorerBase && (
+                    {explorerTxUrl && (
                       <a
-                        href={explorerBase + tx.hash}
+                        href={`${explorerTxUrl}/${tx.hash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-muted-foreground hover:text-primary transition-colors shrink-0"
@@ -326,10 +326,10 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 )}
               </div>
 
-              {explorerBase && (
+              {explorerTxUrl && (
                 <div className="px-6 py-4 border-t border-border/50 flex justify-end">
                   <a
-                    href={explorerBase + tx.hash}
+                    href={`${explorerTxUrl}/${tx.hash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
