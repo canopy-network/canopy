@@ -714,7 +714,7 @@ const TransactionDetailPage: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Log Index 1 - Solo si hay datos adicionales */}
+                                {/* Log Index 1 - only if additional data exists */}
                                 {txType === 'certificateResults' && transaction.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents && (
                                     <div className="border border-gray-600/60 rounded-lg p-4">
                                         <div className="flex items-center justify-between mb-3">
@@ -741,7 +741,7 @@ const TransactionDetailPage: React.FC = () => {
                                 )}
                             </div>
                         ) : (
-                            // Vista Raw JSON con syntax highlighting
+                            // Raw JSON view with syntax highlighting
                             <div className="border border-gray-600/60 rounded-lg p-4">
                                 <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
                                     <code className="text-gray-300">

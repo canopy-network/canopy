@@ -50,7 +50,7 @@ const Navbar = () => {
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
     const blocks = useAllBlocksCache()
 
-    // Función para verificar si la ruta actual está en las rutas hijas de un item
+    // Check whether the current route is inside an item's child routes
     const isActiveRoute = (item: MenuItem): boolean => {
         if (!item.children || item.children.length === 0) return false
         return item.children.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'))

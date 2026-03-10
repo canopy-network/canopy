@@ -33,7 +33,7 @@ export const useSearch = (searchTerm: string) => {
     // Detect if search term is a transaction hash
     const isHashSearch = searchTerm && searchTerm.length >= 32 && /^[a-fA-F0-9]+$/.test(searchTerm)
 
-    // Solo usa el hook para hash exactos
+    // Only use this hook for exact hashes
     const { data: hashSearchData } = useTxByHash(isHashSearch ? searchTerm : '')
 
     // Get all validators for partial address search
@@ -125,7 +125,7 @@ export const useSearch = (searchTerm: string) => {
                                         data: validator
                                     }
 
-                                    // Verificar duplicados
+                                    // Check duplicates
                                     if (!searchResults.validators.some(v => v.id === validator.address)) {
                                         searchResults.validators.push(validatorResult)
                                     }
@@ -144,7 +144,7 @@ export const useSearch = (searchTerm: string) => {
                                                 data: account
                                             }
 
-                                            // Verificar duplicados
+                                            // Check duplicates
                                             if (!searchResults.addresses.some(a => a.id === account.address)) {
                                                 searchResults.addresses.push(accountResult)
                                             }
@@ -165,7 +165,7 @@ export const useSearch = (searchTerm: string) => {
                                                 data: account
                                             }
 
-                                            // Verificar duplicados
+                                            // Check duplicates
                                             if (!searchResults.addresses.some(a => a.id === account.address)) {
                                                 searchResults.addresses.push(accountResult)
                                             }
@@ -180,10 +180,10 @@ export const useSearch = (searchTerm: string) => {
                         getModalData(term, 1)
                             .then(result => {
                                 if (result && result !== "no result found") {
-                                    // Si es un validador, agregarlo como validador
+                                    // If it is a validator, add it as validator
                                     if (result.validator) {
                                         const validatorId = result.validator.address
-                                        // Solo agregar si no existe ya como validador
+                                        // Only add if it does not already exist as validator
                                         if (!searchResults.validators.some(v => v.id === validatorId)) {
                                             searchResults.validators.push({
                                                 type: 'validator' as const,
@@ -195,10 +195,10 @@ export const useSearch = (searchTerm: string) => {
                                         }
                                     }
                                     
-                                    // También agregar como cuenta si existe (incluso si es validador)
+                                    // Also add as account if present (even if it is a validator)
                                     if (result.account) {
                                         const accountId = result.account.address
-                                        // Agregar como address incluso si es validador (ambos pueden existir)
+                                        // Add as address even if it is a validator (both can exist)
                                         if (!searchResults.addresses.some(a => a.id === accountId)) {
                                             searchResults.addresses.push({
                                                 type: 'address' as const,
@@ -251,7 +251,7 @@ export const useSearch = (searchTerm: string) => {
                         getModalData(paddedAddress, 1)
                             .then(result => {
                                 if (result && result !== "no result found") {
-                                    // Si es un validador, agregarlo como validador
+                                    // If it is a validator, add it as validator
                                     if (result.validator && result.validator.address && result.validator.address.toLowerCase().startsWith(termLower)) {
                                         const validatorId = result.validator.address
                                         foundValidatorAddresses.add(validatorId.toLowerCase())
@@ -266,10 +266,10 @@ export const useSearch = (searchTerm: string) => {
                                         }
                                     }
                                     
-                                    // También agregar como cuenta si existe (incluso si es validador)
+                                    // Also add as account if present (even if it is a validator)
                                     if (result.account && result.account.address && result.account.address.toLowerCase().startsWith(termLower)) {
                                         const accountId = result.account.address
-                                        // Agregar como address incluso si es validador (ambos pueden existir)
+                                        // Add as address even if it is a validator (both can exist)
                                         if (!searchResults.addresses.some(a => a.id === accountId)) {
                                             searchResults.addresses.push({
                                                 type: 'address' as const,
@@ -310,7 +310,7 @@ export const useSearch = (searchTerm: string) => {
                             .then(account => {
                                 if (account && account.address && account.address.toLowerCase().startsWith(termLower)) {
                                     const accountId = account.address
-                                    // Agregar como address incluso si es validador (ambos pueden existir)
+                                    // Add as address even if it is a validator (both can exist)
                                     if (!searchResults.addresses.some(a => a.id === accountId)) {
                                         searchResults.addresses.push({
                                             type: 'address' as const,
@@ -347,10 +347,10 @@ export const useSearch = (searchTerm: string) => {
                 )
             }
 
-            // Esperar a que todas las promesas se completen
+            // Wait for all promises to complete
             await Promise.all(searchPromises)
 
-            // Calcular total
+            // Calculate total
             const total = searchResults.blocks.length +
                 searchResults.transactions.length +
                 searchResults.addresses.length +

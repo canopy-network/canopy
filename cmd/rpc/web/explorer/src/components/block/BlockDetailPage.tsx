@@ -205,12 +205,12 @@ const BlockDetailPage: React.FC = () => {
     const handleNextBlock = () => {
         if (!block) return
         const nextHeight = block.height + 1
-        // Si aún no sabemos el último (cache no cargado), permite avanzar
+        // If the latest height is still unknown (cache not loaded), allow moving forward
         if (latestBlockHeight === 0) {
             navigate(`/block/${nextHeight}`)
             return
         }
-        // Con cache cargado, no dejar pasar del último
+        // Once cache is loaded, do not allow going past the latest block
         if (block.height < latestBlockHeight && nextHeight <= latestBlockHeight) {
             navigate(`/block/${nextHeight}`)
         }

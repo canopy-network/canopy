@@ -262,9 +262,9 @@ export async function getTransactionsWithRealPagination(page: number, perPage: n
 }
 
 // New function to get total transaction count
-// Cache para el conteo total de transacciones
+// Cache for total transaction count
 let totalTransactionCountCache: { count: number; last24h: number; tpm: number; timestamp: number } | null = null;
-const CACHE_DURATION = 30000; // 30 segundos
+const CACHE_DURATION = 30000; // 30 seconds
 
 export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ total: number, last24h: number }> {
     try {
@@ -333,7 +333,7 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
 
 export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ total: number, last24h: number, tpm: number }> {
     try {
-        // Verificar cache
+        // Check cache
         if (totalTransactionCountCache &&
             (Date.now() - totalTransactionCountCache.timestamp) < CACHE_DURATION) {
             return {
@@ -347,7 +347,7 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
         let last24hCount = 0;
         const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-        // SI TENEMOS BLOQUES CACHEADOS, USARLOS
+        // If cached blocks are available, use them
         if (cachedBlocks && Array.isArray(cachedBlocks) && cachedBlocks.length > 0) {
             for (const block of cachedBlocks) {
                 if (block.transactions && Array.isArray(block.transactions)) {
@@ -389,7 +389,7 @@ export async function getTotalTransactionCount(cachedBlocks?: any[]): Promise<{ 
             const minutesIn24h = 24 * 60;
             const tpm = last24hCount > 0 ? last24hCount / minutesIn24h : 0;
 
-            // Actualizar cache
+            // Update cache
             totalTransactionCountCache = {
                 count: totalCount,
                 last24h: last24hCount,
@@ -430,7 +430,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
     maxAmount?: number;
 }) {
     try {
-        // Obtener el conteo total de transacciones
+        // Get total transaction count
         const totalTransactionCount = await getTotalTransactionCount();
 
         // Calculate how many blocks we need to fetch to cover the pagination
@@ -441,7 +441,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
         // Fetch multiple pages of blocks to ensure enough transactions
         let allTransactions: any[] = [];
         let currentBlockPage = 1;
-        const maxBlockPages = Math.min(blocksNeeded, 20); // Limitar para rendimiento
+        const maxBlockPages = Math.min(blocksNeeded, 20); // Limit for performance
 
         while (currentBlockPage <= maxBlockPages && allTransactions.length < (page * perPage)) {
             const blocksResponse = await Blocks(currentBlockPage, 0);
@@ -469,7 +469,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
         // apply filters if provided
         if (filters) {
             allTransactions = allTransactions.filter(tx => {
-                // Filtro por tipo
+                // Filter by type
                 if (filters.type && filters.type !== 'All Types') {
                     const txType = tx.messageType || tx.type || 'send';
                     if (txType.toLowerCase() !== filters.type.toLowerCase()) {
@@ -545,7 +545,7 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
         const endIndex = startIndex + perPage;
         const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
 
-        // Usar el conteo total real si no hay filtros, sino usar el conteo filtrado
+        // Use real total count when there are no filters, otherwise use filtered count
         const finalTotalCount = filters ? allTransactions.length : totalTransactionCount.total;
 
         return {

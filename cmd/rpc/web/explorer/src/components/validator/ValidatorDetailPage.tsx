@@ -114,7 +114,7 @@ const ValidatorDetailPage: React.FC = () => {
         return 'active'
     }
 
-    // Efecto para procesar datos del validador
+    // Effect to process validator data
     useEffect(() => {
         if (validatorData && validatorAddress) {
             // Extract real validator data from endpoint
@@ -223,16 +223,16 @@ const ValidatorDetailPage: React.FC = () => {
                 </nav>
             </div>
 
-            {/* Header del Validador */}
+            {/* Validator Header */}
             <ValidatorDetailHeader validator={validator} />
 
-            {/* Métricas del Validador */}
+            {/* Validator Metrics */}
             <ValidatorMetrics validator={validator} />
 
-            {/* Stake por Cadenas Anidadas */}
+            {/* Stake by Nested Chains */}
             <ValidatorStakeChains validator={validator} />
 
-            {/* Historial de Recompensas - No hay datos reales de rewards en el endpoint */}
+            {/* Rewards History - no real rewards data in the endpoint */}
             {/* <ValidatorRewards validator={validator} /> */}
         </motion.div>
     )

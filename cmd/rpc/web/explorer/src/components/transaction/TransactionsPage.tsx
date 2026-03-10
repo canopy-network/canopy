@@ -42,7 +42,7 @@ interface StatusFilter {
 }
 
 interface AmountRangeFilter {
-    type: 'amountRangeSlider' // Cambiado a slider
+    type: 'amountRangeSlider' // Changed to slider
     label: string
     value: number // El valor seleccionado en el slider
     onChange: (value: number) => void
@@ -439,7 +439,7 @@ const TransactionsPage: React.FC = () => {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
-            {/* Header con información de transacciones */}
+            {/* Header with transaction information */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white mb-2">
                     {transactionsTexts.page.title}
@@ -473,7 +473,7 @@ const TransactionsPage: React.FC = () => {
                 ))}
             </div>
 
-            {/* Filtros de transacciones */}
+            {/* Transaction filters */}
             <div className="mb-6 p-4 bg-card rounded-lg border border-gray-800/60">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Transaction Type Filter */}

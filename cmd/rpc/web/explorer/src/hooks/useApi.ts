@@ -90,7 +90,7 @@ export const useTransactions = (page: number, height: number = 0) => {
     });
 };
 
-// Hook para todas las transacciones con filtros
+// Hook for all transactions with filters
 export const useAllTransactions = (page: number, perPage: number = 10, filters?: {
     type?: string;
     fromDate?: string;
@@ -404,7 +404,7 @@ export const useTableData = (page: number, category: number, committee?: number)
     });
 };
 
-// Hook para cargar TODOS los bloques UNA SOLA VEZ y reutilizar los datos
+// Hook to load all blocks once and reuse the data
 export const useAllBlocksCache = () => {
     return useQuery({
         queryKey: ['allBlocksCache'],
@@ -413,7 +413,7 @@ export const useAllBlocksCache = () => {
             const perPage = 10; // Max blocks per page from API
             const maxPages = 10; // Maximum 10 pages (100 blocks)
 
-            // Hacer solo los requests necesarios
+            // Make only the required requests
             const requests = [];
             for (let page = 1; page <= maxPages; page++) {
                 requests.push(
@@ -484,9 +484,9 @@ export const useAllBlocksCache = () => {
 const blocksInRangeKey = (fromBlock: number, toBlock: number, maxBlocks: number) =>
     ['blocksInRange', fromBlock, toBlock, maxBlocks];
 
-// Hook for fetching blocks within a specific range - AHORA REUTILIZA LOS DATOS
+// Hook for fetching blocks within a specific range - now reuses cached data
 export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 10) => {
-    // Usar el cache de todos los bloques
+    // Use the cache of all blocks
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
     // Process data on the client without making more requests
@@ -524,7 +524,7 @@ export const useBlocksInRange = (fromBlock: number, toBlock: number, maxBlocksTo
 
 // Hook for Analytics - Get multiple pages of blocks for transaction analysis
 export const useBlocksForAnalytics = (numPages: number = 10) => {
-    // Usar el cache global de bloques
+    // Use the global blocks cache
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
     // Process data on the client without making more requests
@@ -552,7 +552,7 @@ export const useBlocksForAnalytics = (numPages: number = 10) => {
 
 // Hook to extract transactions from blocks in a specific range
 export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBlocksToFetch: number = 50) => {
-    // Usar el cache global de bloques
+    // Use the global blocks cache
     const { data: allBlocks, isLoading, error } = useAllBlocksCache();
 
     // Process data on the client without making more requests
@@ -577,7 +577,7 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
 
         const allTransactions: any[] = [];
 
-        // Extraer transacciones de cada bloque
+        // Extract transactions from each block
         finalBlocks.forEach((block: any) => {
             if (block.transactions && Array.isArray(block.transactions)) {
                 // Add block information to each transaction

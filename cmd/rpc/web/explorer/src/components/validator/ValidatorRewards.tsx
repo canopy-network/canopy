@@ -73,10 +73,10 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
 
     return (
         <div className="bg-card rounded-lg p-6">
-            {/* Header con navegación de pestañas */}
+            {/* Header with tab navigation */}
             <div className="mb-6">
 
-                {/* Navegación de pestañas */}
+                {/* Tab navigation */}
                 <div className="flex gap-1 border-b border-gray-700">
                     {tabs.map((tab) => (
                         <button
@@ -116,11 +116,11 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                 </div>
             </div>
 
-            {/* Contenido de las pestañas */}
+            {/* Tab content */}
             {
                 activeTab === 'rewardsHistory' && (
                     <div className="space-y-8">
-                        {/* Resumen de ganancias */}
+                        {/* Earnings summary */}
                         {validator.rewards && (
                             <div className="flex items-center gap-6 text-sm text-gray-400">
                                 <span>
@@ -129,7 +129,7 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                             </div>
                         )}
 
-                        {/* Recompensas de producción de bloques */}
+                        {/* Block production rewards */}
                         {validator.rewards && validator.rewards.blockRewards && validator.rewards.blockRewards.length > 0 ? (
                             <div>
                                 <TableCard
@@ -163,7 +163,7 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                             </div>
                         )}
 
-                        {/* Recompensas de cadenas anidadas */}
+                        {/* Nested chain rewards */}
                         {validator.rewards && validator.rewards.crossChainRewards && validator.rewards.crossChainRewards.length > 0 && (
                             <div>
                                 <div className="mb-4 text-sm text-gray-400">
@@ -202,7 +202,7 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                             </div>
                         )}
 
-                        {/* Promedio diario */}
+                        {/* Daily average */}
                         {validator.rewards && validator.rewards.averageDaily && (
                             <div className="pt-6 border-t border-gray-700">
                                 <div className="text-sm text-gray-400 text-center">
@@ -214,7 +214,7 @@ const ValidatorRewards: React.FC<ValidatorRewardsProps> = ({ validator }) => {
                 )
             }
 
-            {/* Contenido para otras pestañas (placeholder) */}
+            {/* Content for other tabs (placeholder) */}
             {
                 activeTab !== 'rewardsHistory' && (
                     <div className="text-center py-12">

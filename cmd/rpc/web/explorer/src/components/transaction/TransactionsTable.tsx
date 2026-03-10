@@ -40,7 +40,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     totalCount = 0,
     currentPage = 1,
     onPageChange,
-    // Desestructurar las nuevas props
+    // Destructure new props
     showEntriesSelector = false,
     entriesPerPageOptions = [10, 25, 50, 100],
     currentEntriesPerPage = 10,
@@ -334,13 +334,13 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     return (
         <TableCard
             title={transactionsTexts.page.title}
-            columns={headers} // Cambiado de `headers` a `columns`
+            columns={headers} // Changed from `headers` to `columns`
             rows={rows}
             totalCount={totalCount}
             currentPage={currentPage}
             onPageChange={onPageChange}
             loading={loading}
-            paginate={true} // Habilitar paginación
+            paginate={true} // Enable pagination
             spacing={4} // We use spacing of 4 to match the image design.
             showEntriesSelector={showEntriesSelector}
             entriesPerPageOptions={entriesPerPageOptions}
