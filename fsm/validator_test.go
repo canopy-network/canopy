@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"bytes"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
@@ -250,19 +249,18 @@ func TestSetGetValidators(t *testing.T) {
 			for i, v := range got {
 				require.EqualExportedValues(t, test.preset[i], v)
 			}
-			// get the committees from state
-			set, err := sm.GetCommitteePaginated(lib.PageParams{}, lib.CanopyChainId)
-			require.NoError(t, err)
-			// check committees got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
+			var set lib.ValidatorSet
+			if test.preset[0].Delegate {
+				// get delegates from state
+				set, err = sm.GetDelegates(lib.CanopyChainId)
+			} else {
+				// get committee from state
+				set, err = sm.GetCommitteeMembers(lib.CanopyChainId)
 			}
-			// get delegates from state
-			set, err = sm.GetDelegatesPaginated(lib.PageParams{}, lib.CanopyChainId)
 			require.NoError(t, err)
-			// check delegates got vs expected
-			for i, member := range *set.Results.(*ValidatorPage) {
-				require.EqualExportedValues(t, test.preset[i], member)
+			for i, member := range set.ValidatorSet.ValidatorSet {
+				require.Equal(t, test.preset[i].PublicKey, member.PublicKey)
+				require.Equal(t, test.preset[i].StakedAmount, member.VotingPower)
 			}
 			gotSupply, err := sm.GetSupply()
 			require.NoError(t, err)
@@ -569,26 +567,9 @@ func TestUpdateValidatorStake(t *testing.T) {
 			require.NoError(t, err)
 			// check got vs expected
 			require.EqualExportedValues(t, test.update, got)
-			// validate committee membership
+			// validate committee/delegate membership
 			for _, cId := range test.update.Committees {
-				var page *lib.Page
-				if test.update.Delegate {
-					// get the delegates
-					page, err = sm.GetDelegatesPaginated(lib.PageParams{}, cId)
-				} else {
-					// get the committee
-					page, err = sm.GetCommitteePaginated(lib.PageParams{}, cId)
-				}
-				require.NoError(t, err)
-				// ensure the slice contains the expected
-				var contains bool
-				for _, member := range *page.Results.(*ValidatorPage) {
-					if bytes.Equal(member.PublicKey, test.update.PublicKey) {
-						contains = true
-						break
-					}
-				}
-				require.True(t, contains)
+				require.True(t, validatorInCommitteeIndex(t, sm, cId, test.update.Delegate, test.update.Address))
 			}
 			// get the supply
 			supply, err := sm.GetSupply()
@@ -674,26 +655,9 @@ func TestDeleteValidator(t *testing.T) {
 			// get the validator
 			_, err := sm.GetValidator(crypto.NewAddress(test.preset.Address))
 			require.ErrorContains(t, err, "validator does not exist")
-			// validate committee non-membership
+			// validate committee/delegate non-membership
 			for _, cId := range test.preset.Committees {
-				var page *lib.Page
-				if test.preset.Delegate {
-					// get the delegates
-					page, err = sm.GetDelegatesPaginated(lib.PageParams{}, cId)
-				} else {
-					// get the committee
-					page, err = sm.GetCommitteePaginated(lib.PageParams{}, cId)
-				}
-				require.NoError(t, err)
-				// ensure the slice contains the expected
-				var contains bool
-				for _, member := range *page.Results.(*ValidatorPage) {
-					if bytes.Equal(member.PublicKey, test.preset.PublicKey) {
-						contains = true
-						break
-					}
-				}
-				require.False(t, contains)
+				require.False(t, validatorInCommitteeIndex(t, sm, cId, test.preset.Delegate, test.preset.Address))
 			}
 			// get the supply
 			supply, err := sm.GetSupply()
@@ -839,6 +803,21 @@ func TestDeleteFinishedUnstaking(t *testing.T) {
 	}
 }
 
+func TestDeleteFinishedUnstakingSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 2
+
+	// malformed length-prefixed segment under unstaking prefix
+	badKey := append(UnstakingPrefix(sm.Height()), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.DeleteFinishedUnstaking())
+
+	got, err := sm.Get(badKey)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
+
 func TestSetValidatorsPaused(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -927,6 +906,39 @@ func TestSetValidatorsPaused(t *testing.T) {
 	}
 }
 
+func TestSetValidatorsPausedV2SkipsUnauthorizedAndContinues(t *testing.T) {
+	sm := newTestStateMachine(t)
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Consensus.ProtocolVersion = NewProtocolVersion(0, 2)
+	require.NoError(t, sm.SetParams(params))
+
+	authorized := newTestAddressBytes(t, 1)
+	unauthorized := newTestAddressBytes(t, 2)
+	supply := &Supply{}
+	require.NoError(t, sm.SetValidators([]*Validator{
+		{Address: authorized, Committees: []uint64{1}},
+		{Address: unauthorized, Committees: []uint64{2}},
+	}, supply))
+	require.NoError(t, sm.SetSupply(supply))
+
+	// Unauthorized entry comes first to ensure loop doesn't early-return.
+	sm.SetValidatorsPaused(1, [][]byte{unauthorized, authorized})
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	maxPauseHeight := valParams.MaxPauseBlocks + sm.Height()
+
+	authorizedVal, err := sm.GetValidator(crypto.NewAddress(authorized))
+	require.NoError(t, err)
+	require.Equal(t, maxPauseHeight, authorizedVal.MaxPausedHeight)
+
+	unauthorizedVal, err := sm.GetValidator(crypto.NewAddress(unauthorized))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, unauthorizedVal.MaxPausedHeight)
+}
+
 func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -980,6 +992,58 @@ func TestSetValidatorPausedAndUnpaused(t *testing.T) {
 			bz, e = sm.Get(KeyForPaused(test.maxPauseHeight, address))
 			require.NoError(t, e)
 			require.Len(t, bz, 0)
+		})
+	}
+}
+
+func TestSetValidatorsOverflow(t *testing.T) {
+	tests := []struct {
+		name   string
+		supply *Supply
+		val    *Validator
+	}{
+		{
+			name:   "total overflow",
+			supply: &Supply{Total: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+		{
+			name:   "staked overflow",
+			supply: &Supply{Staked: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t, 1),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+		{
+			name:   "delegated overflow",
+			supply: &Supply{DelegatedOnly: math.MaxUint64},
+			val: &Validator{
+				Address:      newTestAddressBytes(t, 2),
+				PublicKey:    newTestPublicKeyBytes(t),
+				StakedAmount: 1,
+				Delegate:     true,
+				Committees:   []uint64{lib.CanopyChainId},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newTestStateMachine(t)
+			err := sm.SetValidators([]*Validator{test.val}, test.supply)
+			require.Error(t, err)
+
+			exists, e := sm.GetValidatorExists(crypto.NewAddressFromBytes(test.val.Address))
+			require.NoError(t, e)
+			require.False(t, exists)
 		})
 	}
 }

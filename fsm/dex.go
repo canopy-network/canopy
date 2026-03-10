@@ -347,13 +347,22 @@ func (s *StateMachine) HandleDexBatchOrders(remoteBatch *lib.DexBatch, x, y *uin
 		}
 		// capture result in map to save receipts later
 		result[order.Key] = dY
+		// update dx with overflow protection
+		var xAfter uint64
+		if dY != 0 {
+			var overflow bool
+			xAfter, overflow = lib.AddUint64(*x, dX)
+			if overflow {
+				return nil, ErrInvalidLiquidityPool()
+			}
+		}
 		// emit swap event
 		if err = s.EventDexSwap(order.Address, order.OrderId, dX, dY, chainId, false, dY != 0); err != nil {
 			return
 		}
 		// if succeeded: update pool ledgers like uniswap would
 		if dY != 0 {
-			*x, *y = *x+dX, *y-dY
+			*x, *y = xAfter, *y-dY
 		}
 	}
 	// set success in the receipt
@@ -397,13 +406,22 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 	}
 	// collect withdrawals
 	for _, w := range batch.Withdrawals {
+		if w == nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
+			continue // defensive
+		}
 		initialPoints, e := p.GetPointsFor(w.Address)
 		if e != nil {
 			s.log.Errorf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
 			continue // defensive
 		}
 		// update the total points to remove
-		totalPointsToRemove += lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		pointsToRemove := lib.SafeMulDiv(initialPoints, w.Percent, 100)
+		var overflow bool
+		totalPointsToRemove, overflow = lib.AddUint64(totalPointsToRemove, pointsToRemove)
+		if overflow {
+			return ErrInvalidLiquidityPool()
+		}
 	}
 	if totalPointsToRemove == 0 || p.TotalPoolPoints == 0 {
 		return nil
@@ -420,6 +438,10 @@ func (s *StateMachine) HandleBatchWithdraw(batch *lib.DexBatch, counterChainId u
 	var paidY, paidX uint64
 	// distribute tokens
 	for _, w := range batch.Withdrawals {
+		if w == nil {
+			s.log.Warnf("an error occurred retrieving the pool points for: %x, nil withdrawal", []byte{})
+			continue // defensive
+		}
 		initialPoints, e := p.GetPointsFor(w.Address)
 		if e != nil {
 			s.log.Warnf("an error occurred retrieving the pool points for: %x, %s", w.Address, e.Error())
@@ -482,7 +504,11 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	L := p.TotalPoolPoints
 	// sum all deposits
 	for _, deposit := range batch.Deposits {
-		totalDeposit += deposit.Amount
+		var overflow bool
+		totalDeposit, overflow = lib.AddUint64(totalDeposit, deposit.Amount)
+		if overflow {
+			return ErrInvalidLiquidityPool()
+		}
 	}
 	// nothing to add or failed invariant check
 	if totalDeposit == 0 || *x == 0 || *y == 0 {
@@ -493,7 +519,9 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		// calculate the initial pool points using L = √( x * y )
 		L = lib.SqrtProductUint64(*x, *y)
 		// add points to the dead address
-		p.AddPoints(deadAddr.Bytes(), L)
+		if err = p.AddPoints(deadAddr.Bytes(), L); err != nil {
+			return err
+		}
 	}
 	// using integer math and geometric mean of reserves:
 	// deltaPoolPoints = L * ( √((x + totalDeposit) * y) - √(x * y) ) / √(x * y) or simplified as:
@@ -502,7 +530,14 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 	if oldK == 0 {
 		return ErrInvalidLiquidityPool()
 	}
-	newK := lib.SqrtProductUint64(*x+totalDeposit, *y)
+	xAfterTotalDeposit, overflow := lib.AddUint64(*x, totalDeposit)
+	if overflow {
+		return ErrInvalidLiquidityPool()
+	}
+	newK := lib.SqrtProductUint64(xAfterTotalDeposit, *y)
+	if newK < oldK {
+		return ErrInvalidLiquidityPool()
+	}
 	// totalDL is calculated as if all deposits is just 1 big deposit
 	totalDL := lib.SafeMulDiv(L, newK-oldK, oldK)
 	// distribute the points
@@ -511,24 +546,40 @@ func (s *StateMachine) HandleBatchDeposit(batch *lib.DexBatch, chainId uint64, x
 		share := lib.SafeMulDiv(totalDL, deposit.Amount, totalDeposit)
 		// update the distributed counter
 		distributed += share
+		// enforce LP holder cap at execution time too (remote batches bypass local enqueue checks)
+		if share > 0 {
+			if _, e := p.GetPointsFor(deposit.Address); e != nil && e.Code() == lib.CodePointHolderNotFound && len(p.Points) >= lib.MaxLiquidityProviders {
+				return ErrInvalidLiquidityPool()
+			}
+		}
 		// add points to pool
-		p.AddPoints(deposit.Address, share)
+		if err = p.AddPoints(deposit.Address, share); err != nil {
+			return err
+		}
 		// if 'local' request - (actually move from holding pool to liquidity pool, don't *just* update the ledger)
 		if local {
 			if err = s.PoolSub(chainId+HoldingPoolAddend, deposit.Amount); err != nil {
 				return err
 			}
-			p.Amount += deposit.Amount
+			p.Amount, overflow = lib.AddUint64(p.Amount, deposit.Amount)
+			if overflow {
+				return ErrInvalidLiquidityPool()
+			}
 		}
 		// update the reserve
-		*x += deposit.Amount
+		*x, overflow = lib.AddUint64(*x, deposit.Amount)
+		if overflow {
+			return ErrInvalidLiquidityPool()
+		}
 		// emit a deposit event
 		if err = s.EventDexLiquidityDeposit(deposit.Address, deposit.OrderId, deposit.Amount, share, chainId, local); err != nil {
 			return err
 		}
 	}
 	// sink dust to the dead account
-	p.AddPoints(deadAddr.Bytes(), totalDL-distributed)
+	if err = p.AddPoints(deadAddr.Bytes(), totalDL-distributed); err != nil {
+		return err
+	}
 	// update the pool
 	return s.SetPool(p)
 }

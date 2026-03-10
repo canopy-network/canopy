@@ -1,8 +1,10 @@
 package fsm
 
 import (
+	"bytes"
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/canopy-network/canopy/lib"
@@ -299,6 +301,99 @@ func TestFundCommitteeRewardPools(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetBlockMintStatsZeroBlocksPerHalveningReturnsError(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.BlocksPerHalvening = 0
+
+	_, _, _, _, err := sm.GetBlockMintStats(lib.CanopyChainId)
+	require.Error(t, err)
+	require.Equal(t, lib.ErrInvalidArgument().Code(), err.Code())
+}
+
+func TestGetBlockMintStatsLargeMintDaoSplitMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.InitialTokensPerBlock = ^uint64(0)
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Validator.StakePercentForSubsidizedCommittee = 1
+	params.Governance.DaoRewardPercentage = 1
+	require.NoError(t, sm.SetParams(params))
+
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = 100
+	supply.CommitteeStaked = []*Pool{{Id: lib.CanopyChainId, Amount: 100}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	_, daoCut, totalMint, perCommitteeMint, err := sm.GetBlockMintStats(lib.CanopyChainId)
+	require.NoError(t, err)
+
+	expectedAfterCut := lib.SafeMulDiv(totalMint, 99, 100)
+	require.Equal(t, totalMint-expectedAfterCut, daoCut)
+	require.Equal(t, expectedAfterCut, perCommitteeMint)
+}
+
+func TestFundCommitteeRewardPoolsNoMintReturnsNil(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.StateMachineConfig.InitialTokensPerBlock = 0
+
+	params, err := sm.GetParams()
+	require.NoError(t, err)
+	params.Validator.StakePercentForSubsidizedCommittee = 1
+	require.NoError(t, sm.SetParams(params))
+
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = 100
+	supply.CommitteeStaked = []*Pool{{Id: lib.CanopyChainId, Amount: 100}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	require.NoError(t, sm.FundCommitteeRewardPools())
+}
+
+func TestDistributeCommitteeRewardLargePoolMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	params, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	params.EarlyWithdrawalPenalty = 0
+
+	stub := &lib.PaymentPercents{
+		Address: newTestAddressBytes(t),
+		Percent: 100,
+		ChainId: lib.CanopyChainId,
+	}
+	rewardPoolAmount := ^uint64(0)
+	distributed, err := sm.DistributeCommitteeReward(stub, rewardPoolAmount, 1, lib.CanopyChainId, params)
+	require.NoError(t, err)
+	require.Equal(t, rewardPoolAmount, distributed)
+
+	balance, e := sm.GetAccountBalance(crypto.NewAddressFromBytes(stub.Address))
+	require.NoError(t, e)
+	require.Equal(t, rewardPoolAmount, balance)
+}
+
+func TestDistributeCommitteeRewardSamplesTimes100OverflowStillPays(t *testing.T) {
+	sm := newTestStateMachine(t)
+	params, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	params.EarlyWithdrawalPenalty = 0
+
+	stub := &lib.PaymentPercents{
+		Address: newTestAddressBytes(t),
+		Percent: 100,
+		ChainId: lib.CanopyChainId,
+	}
+
+	distributed, err := sm.DistributeCommitteeReward(stub, math.MaxUint64, math.MaxUint64, lib.CanopyChainId, params)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), distributed)
+
+	balance, e := sm.GetAccountBalance(crypto.NewAddressFromBytes(stub.Address))
+	require.NoError(t, e)
+	require.Equal(t, uint64(1), balance)
 }
 
 func TestGetPaidCommittees(t *testing.T) {
@@ -697,110 +792,6 @@ func TestGetCommitteeMembers(t *testing.T) {
 	}
 }
 
-func TestGetCommitteePaginated(t *testing.T) {
-	tests := []struct {
-		name       string
-		detail     string
-		validators []*Validator
-		pageParams lib.PageParams
-		expected   [][]byte // address
-	}{
-		{
-			name:   "page 1 all members",
-			detail: "returns the first page with both members (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 1,
-				PerPage:    2,
-			},
-			expected: [][]byte{newTestAddressBytes(t, 1), newTestAddressBytes(t)},
-		},
-		{
-			name:   "page 1, 1 member",
-			detail: "returns the first page with 1 member (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 1,
-				PerPage:    1,
-			},
-			expected: [][]byte{newTestAddressBytes(t, 1)},
-		},
-		{
-			name:   "page 2, 1 member",
-			detail: "returns the second page with 1 member (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 2,
-				PerPage:    1,
-			},
-			expected: [][]byte{newTestAddressBytes(t)},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// create a state machine instance with default parameters
-			sm := newTestStateMachine(t)
-			// for each test validator
-			for _, v := range test.validators {
-				// set the validator in state
-				require.NoError(t, sm.SetValidator(v))
-				// set the validator committees in state
-				require.NoError(t, sm.SetCommittees(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
-			}
-			// run the function call
-			page, err := sm.GetCommitteePaginated(test.pageParams, lib.CanopyChainId)
-			require.NoError(t, err)
-			// validate the page params
-			require.Equal(t, test.pageParams, page.PageParams)
-			// cast page and ensure valid
-			got, castOk := page.Results.(*ValidatorPage)
-			require.True(t, castOk)
-			for i, gotItem := range *got {
-				require.Equal(t, test.expected[i], gotItem.Address)
-			}
-		})
-	}
-}
-
 func TestSetGetCommittees(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -1158,110 +1149,6 @@ func TestDeleteCommittees(t *testing.T) {
 	}
 }
 
-func TestGetDelegatesPaginated(t *testing.T) {
-	tests := []struct {
-		name       string
-		detail     string
-		validators []*Validator
-		pageParams lib.PageParams
-		expected   [][]byte // address
-	}{
-		{
-			name:   "page 1 all members",
-			detail: "returns the first page with both members (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 1,
-				PerPage:    2,
-			},
-			expected: [][]byte{newTestAddressBytes(t, 1), newTestAddressBytes(t)},
-		},
-		{
-			name:   "page 1, 1 member",
-			detail: "returns the first page with 1 member (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 1,
-				PerPage:    1,
-			},
-			expected: [][]byte{newTestAddressBytes(t, 1)},
-		},
-		{
-			name:   "page 2, 1 member",
-			detail: "returns the second page with 1 member (ordered by stake)",
-			validators: []*Validator{
-				{
-					Address:      newTestAddressBytes(t),
-					PublicKey:    newTestPublicKeyBytes(t),
-					StakedAmount: 1,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-				{
-					Address:      newTestAddressBytes(t, 1),
-					PublicKey:    newTestPublicKeyBytes(t, 1),
-					StakedAmount: 2,
-					Committees:   []uint64{lib.CanopyChainId},
-				},
-			},
-			pageParams: lib.PageParams{
-				PageNumber: 2,
-				PerPage:    1,
-			},
-			expected: [][]byte{newTestAddressBytes(t)},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// create a state machine instance with default parameters
-			sm := newTestStateMachine(t)
-			// for each test validator
-			for _, v := range test.validators {
-				// set the validator in state
-				require.NoError(t, sm.SetValidator(v))
-				// set the validator committees in state
-				require.NoError(t, sm.SetDelegations(crypto.NewAddress(v.Address), v.StakedAmount, v.Committees))
-			}
-			// run the function call
-			page, err := sm.GetDelegatesPaginated(test.pageParams, lib.CanopyChainId)
-			require.NoError(t, err)
-			// validate the page params
-			require.Equal(t, test.pageParams, page.PageParams)
-			// cast page and ensure valid
-			got, castOk := page.Results.(*ValidatorPage)
-			require.True(t, castOk)
-			for i, gotItem := range *got {
-				require.Equal(t, test.expected[i], gotItem.Address)
-			}
-		})
-	}
-}
-
 func TestUpdateDelegates(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -1386,12 +1273,7 @@ func TestUpdateDelegates(t *testing.T) {
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
-				// execute 'get' function call
-				page, err := sm.GetDelegatesPaginated(lib.PageParams{}, id)
-				require.NoError(t, err)
-				// cast page
-				got, ok := page.Results.(*ValidatorPage)
-				require.True(t, ok)
+				got := getDelegatesFromPrefix(t, sm, id)
 				// get the committee pool from the supply object
 				committeePool, err := sm.GetCommitteeStakedSupplyForChain(id)
 				require.NoError(t, err)
@@ -1405,7 +1287,7 @@ func TestUpdateDelegates(t *testing.T) {
 					// compare got delegate supply vs total tokens
 					require.Equal(t, test.expectedTotalPower[id], delegatePool.Amount)
 					// compare got vs expected
-					require.Equal(t, expectedPublicKey, (*got)[i].PublicKey)
+					require.Equal(t, expectedPublicKey, got[i].PublicKey)
 				}
 			}
 		})
@@ -1472,12 +1354,7 @@ func TestDeleteDelegates(t *testing.T) {
 			}
 			// for each expected committee
 			for id, publicKeys := range test.expected {
-				// execute 'get' function call
-				page, err := sm.GetDelegatesPaginated(lib.PageParams{}, id)
-				require.NoError(t, err)
-				// cast page
-				got, ok := page.Results.(*ValidatorPage)
-				require.True(t, ok)
+				got := getDelegatesFromPrefix(t, sm, id)
 				// get the committee pool from the supply object
 				committeePool, err := sm.GetCommitteeStakedSupplyForChain(id)
 				// get the committee pool from the supply object
@@ -1490,11 +1367,28 @@ func TestDeleteDelegates(t *testing.T) {
 					// compare got committee supply vs total tokens
 					require.Equal(t, test.expectedTotalPower[id], committeePool.Amount)
 					// compare got vs expected
-					require.Equal(t, expectedPublicKey, (*got)[i].PublicKey)
+					require.Equal(t, expectedPublicKey, got[i].PublicKey)
 				}
 			}
 		})
 	}
+}
+
+func getDelegatesFromPrefix(t *testing.T, sm StateMachine, chainId uint64) (got ValidatorPage) {
+	it, err := sm.RevIterator(DelegatePrefix(chainId))
+	require.NoError(t, err)
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		address, e := AddressFromKey(it.Key())
+		require.NoError(t, e)
+		validator, e := sm.GetValidator(address)
+		require.NoError(t, e)
+		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
+			continue
+		}
+		got = append(got, validator)
+	}
+	return
 }
 
 func TestUpsertGetCommitteeData(t *testing.T) {
@@ -1924,6 +1818,18 @@ func TestRetireCommittee(t *testing.T) {
 	}
 }
 
+func TestGetRetiredCommitteesMalformedKeyDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	// short-but-well-formed chain id segment (1 byte instead of required 8 bytes)
+	badKey := lib.JoinLenPrefix(retiredCommitteePrefix, []byte{0x01})
+	require.NoError(t, sm.Set(badKey, RetiredCommitteesPrefix()))
+
+	require.NotPanics(t, func() {
+		_, err := sm.GetRetiredCommittees()
+		require.ErrorContains(t, err, "invalid key")
+	})
+}
+
 func TestGetTopDelegates(t *testing.T) {
 	chainId := uint64(1)
 	tests := []struct {
@@ -2147,4 +2053,37 @@ func TestGetTopDelegates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// validatorInCommitteeIndex checks committee/delegate membership in both pre-v2 (index keys)
+// and v2+ (derived from validator records) behavior.
+func validatorInCommitteeIndex(t *testing.T, sm StateMachine, chainID uint64, delegate bool, address []byte) bool {
+	t.Helper()
+
+	if sm.IsFeatureEnabled(2) {
+		val, err := sm.GetValidator(crypto.NewAddressFromBytes(address))
+		if err != nil {
+			return false
+		}
+		if val.UnstakingHeight != 0 || val.MaxPausedHeight != 0 || val.Delegate != delegate {
+			return false
+		}
+		return slices.Contains(val.Committees, chainID)
+	}
+
+	prefix := CommitteePrefix(chainID)
+	if delegate {
+		prefix = DelegatePrefix(chainID)
+	}
+	it, err := sm.RevIterator(prefix)
+	require.NoError(t, err)
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		addr, e := AddressFromKey(it.Key())
+		require.NoError(t, e)
+		if bytes.Equal(addr.Bytes(), address) {
+			return true
+		}
+	}
+	return false
 }

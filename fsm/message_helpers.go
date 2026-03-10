@@ -578,6 +578,9 @@ func (x *MessageCreateOrder) Check() lib.ErrorI {
 	if err := ensureEmpty(x.OrderId); err != nil {
 		return err
 	}
+	if err := checkAddress(x.SellersSendAddress); err != nil {
+		return err
+	}
 	return checkExternalAddress(x.SellerReceiveAddress)
 }
 
@@ -981,8 +984,11 @@ func checkChainId(i uint64) lib.ErrorI {
 
 // checkStartEndHeight() validates the start/end height of the message
 func checkStartEndHeight(proposal GovProposal) lib.ErrorI {
-	blockRange := proposal.GetEndHeight() - proposal.GetStartHeight()
-	if blockRange > 10000 || blockRange <= 0 {
+	startHeight, endHeight := proposal.GetStartHeight(), proposal.GetEndHeight()
+	if startHeight >= endHeight {
+		return ErrInvalidBlockRange()
+	}
+	if endHeight-startHeight > 10000 {
 		return ErrInvalidBlockRange()
 	}
 	return nil
