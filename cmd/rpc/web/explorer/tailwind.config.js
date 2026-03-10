@@ -11,7 +11,7 @@ export default {
             },
             colors: {
                 primary: "#4ADE80",
-                'primary-light': "#86EFAC", // Un tono más claro para el borde
+                'primary-light': "#86EFAC", // Lighter tone for border
                 card: "#22232E",
                 background: "#1A1B23",
                 red: "#EF4444",

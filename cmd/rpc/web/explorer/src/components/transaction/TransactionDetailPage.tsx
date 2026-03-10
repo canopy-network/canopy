@@ -678,7 +678,7 @@ const TransactionDetailPage: React.FC = () => {
 
                     <div className="space-y-4">
                         {activeTab === 'decoded' ? (
-                            // Información decodificada simplificada
+                            // Simplified decoded information
                             <div className="space-y-4">
                                 {/* Log Index 0 */}
                                 <div className="border border-gray-600/60 rounded-lg p-4">

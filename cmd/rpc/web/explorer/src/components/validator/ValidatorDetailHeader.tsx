@@ -144,14 +144,14 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
     return (
         <div className="bg-card rounded-lg p-4 sm:p-6 mb-6">
             <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
-                {/* Información del Validador */}
+                {/* Validator information */}
                 <div className="flex items-start gap-3 sm:gap-4 w-full lg:w-auto">
-                    {/* Icono determinístico del Validador */}
+                    {/* Deterministic validator icon */}
                     <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-green-300/20 to-green-300/10 rounded-full flex items-center justify-center flex-shrink-0">
                         <i className={`${getValidatorIcon(validator.address)} text-primary text-lg sm:text-2xl`}></i>
                     </div>
 
-                    {/* Detalles del Validador */}
+                    {/* Validator details */}
                     <div className="flex-1 min-w-0">
                         <div className="mb-3">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -169,7 +169,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                             )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                            {/* Estado */}
+                            {/* Status */}
                             <div className="flex items-center gap-2">
                                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${getStatusColor(validator.status)}`}></div>
                                 <span className="text-xs sm:text-sm font-medium text-primary">
@@ -207,10 +207,10 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                     </div>
                 </div>
 
-                {/* Estado y Acciones */}
+                {/* Status and actions */}
                 <div className="flex items-start justify-start gap-4 h-full w-full lg:w-auto">
 
-                    {/* Botones de Acción */}
+                    {/* Action buttons */}
                     {/* <div className="flex items-start gap-3">
                         <button className={`flex items-center gap-2 ${typeInfo.color} px-4 py-2 rounded-lg hover:opacity-90 transition-colors`}>
                             <i className={`${typeInfo.icon} text-sm`}></i>

@@ -63,12 +63,12 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                 {validator.nestedChains.map((chain, index) => (
                     <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-800/30 rounded-lg">
                         <div className="flex items-start gap-3 sm:gap-4 w-full sm:w-auto">
-                            {/* Icono de la cadena */}
+                            {/* Chain icon */}
                             <div className={`w-8 h-8 sm:w-10 sm:h-10 ${chain.color} rounded-md flex items-center justify-center flex-shrink-0`}>
                                 <i className={`${chain.icon} text-xs sm:text-sm`}></i>
                             </div>
 
-                            {/* Información de la cadena */}
+                            {/* Chain information */}
                             <div className="flex-1 min-w-0">
                                 <div className="text-white font-medium text-sm sm:text-base">
                                     {chain.name}
@@ -76,7 +76,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                                 <div className="text-xs sm:text-sm text-gray-400">
                                     Committee ID: {chain.committeeId}
                                 </div>
-                                {/* Barra de progreso */}
+                                {/* Progress bar */}
                                 <div className="w-full mt-2 sm:hidden">
                                     <div className="w-full bg-gray-700 rounded-full h-2">
                                         <div
@@ -88,7 +88,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                             </div>
                         </div>
 
-                        {/* Barra de progreso - Desktop */}
+                        {/* Progress bar - Desktop */}
                         <div className="hidden sm:block w-full sm:w-auto sm:flex-1 max-w-xs">
                             <div className="w-full bg-gray-700 rounded-full h-2">
                                 <div
@@ -98,7 +98,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                             </div>
                         </div>
 
-                        {/* Información del stake */}
+                        {/* Stake information */}
                         <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
                             <div className="text-left sm:text-right">
                                 <div className="text-white font-medium text-sm sm:text-base">

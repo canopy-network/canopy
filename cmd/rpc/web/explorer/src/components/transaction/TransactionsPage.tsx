@@ -44,7 +44,7 @@ interface StatusFilter {
 interface AmountRangeFilter {
     type: 'amountRangeSlider' // Changed to slider
     label: string
-    value: number // El valor seleccionado en el slider
+    value: number // Selected value on the slider
     onChange: (value: number) => void
     min: number
     max: number
