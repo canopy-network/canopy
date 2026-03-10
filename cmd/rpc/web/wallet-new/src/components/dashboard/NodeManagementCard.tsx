@@ -40,7 +40,7 @@ const ValidatorRow = React.memo<{
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
 }>(({ node, index, onPauseUnpause }) => {
-    const isDelegate = !!node.originalValidator.delegate;
+    const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
 
     return (
         <motion.tr
@@ -72,7 +72,7 @@ const ValidatorRow = React.memo<{
                 <span className={`text-xs font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
             </td>
             <td className="py-3">
-                {!isDelegate && (
+                {hasActions && (
                     <button
                         onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
                         className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground hover:text-foreground"
@@ -96,7 +96,7 @@ const ValidatorMobileCard = React.memo<{
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
 }>(({ node, index, onPauseUnpause }) => {
-    const isDelegate = !!node.originalValidator.delegate;
+    const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
 
     return (
         <motion.div
@@ -115,7 +115,7 @@ const ValidatorMobileCard = React.memo<{
                         <div className="text-xs font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</div>
                     </div>
                 </div>
-                {!isDelegate && (
+                {hasActions && (
                     <button
                         onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
                         className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground"
