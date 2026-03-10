@@ -28,6 +28,8 @@ import {
     getCardData,
     getTableData,
     Order,
+    DexBatch,
+    NextDexBatch,
     rpcURL
 } from '../lib/api';
 
@@ -623,6 +625,26 @@ export const useOrder = (chainId: number, orderId: string, height: number = 0) =
         queryFn: () => Order(chainId, orderId, height),
         enabled: !!orderId, // Only run if orderId is provided
         staleTime: 30000, // Cache for 30 seconds
+    });
+};
+
+// Hook for fetching the locked dex batch
+export const useDexBatch = (chainId: number = 1) => {
+    return useQuery({
+        queryKey: ['dexBatch', chainId],
+        queryFn: () => DexBatch(0, chainId),
+        staleTime: REFRESH_INTERVAL_MS,
+        refetchInterval: REFRESH_INTERVAL_MS,
+    });
+};
+
+// Hook for fetching the next dex batch
+export const useNextDexBatch = (chainId: number = 1) => {
+    return useQuery({
+        queryKey: ['nextDexBatch', chainId],
+        queryFn: () => NextDexBatch(0, chainId),
+        staleTime: REFRESH_INTERVAL_MS,
+        refetchInterval: REFRESH_INTERVAL_MS,
     });
 };
 

@@ -102,6 +102,8 @@ const paramsPath = "/v1/query/params";
 const supplyPath = "/v1/query/supply";
 const ordersPath = "/v1/query/orders";
 const orderPath = "/v1/query/order";
+const dexBatchPath = "/v1/query/dex-batch";
+const nextDexBatchPath = "/v1/query/next-dex-batch";
 const configPath = "/v1/admin/config";
 
 // HTTP Methods
@@ -650,6 +652,14 @@ export function Orders(chain_id: number) {
 
 export function Order(chain_id: number, order_id: string, height: number = 0) {
     return POST(rpcURL, JSON.stringify({ chainId: chain_id, orderId: order_id, height: height }), orderPath);
+}
+
+export function DexBatch(height: number, chainId: number, points: boolean = false) {
+    return POST(rpcURL, JSON.stringify({ height: height, id: chainId, points: points }), dexBatchPath);
+}
+
+export function NextDexBatch(height: number, chainId: number, points: boolean = false) {
+    return POST(rpcURL, JSON.stringify({ height: height, id: chainId, points: points }), nextDexBatchPath);
 }
 
 export function Config() {
