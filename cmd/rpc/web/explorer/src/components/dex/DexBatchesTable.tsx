@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import TableCard from "../Home/TableCard";
 
 export interface DexBatchRow {
@@ -40,9 +39,7 @@ const columns = [
 
 const DexBatchesTable: React.FC<DexBatchesTableProps> = ({ rows, loading = false }) => {
   const tableRows = rows.map((row) => [
-    <Link to={`/dex/${row.batchType.toLowerCase()}`} className="text-primary hover:underline font-medium text-sm">
-      {row.batchType}
-    </Link>,
+    <span className="text-white font-medium text-sm">{row.batchType}</span>,
     <span className="text-white font-medium">{row.committee}</span>,
     <span className="text-primary font-mono text-xs" title={row.receiptHash !== "N/A" ? row.receiptHash : undefined}>
       {row.receiptHash !== "N/A" ? truncate(row.receiptHash) : <span className="text-gray-500">N/A</span>}
