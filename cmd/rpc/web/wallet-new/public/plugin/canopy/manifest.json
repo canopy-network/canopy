@@ -847,7 +847,7 @@
           "coerce": "boolean"
         },
         "earlyWithdrawal": {
-          "value": "{{!form.isAutocompound}}",
+          "value": "{{ form.isAutocompound === true || form.isAutocompound === 'true' ? false : true }}",
           "coerce": "boolean"
         },
         "output": {

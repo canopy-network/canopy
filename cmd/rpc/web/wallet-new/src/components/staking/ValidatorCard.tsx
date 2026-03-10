@@ -15,6 +15,7 @@ interface ValidatorCardProps {
     rewards24h: number;
     committees?: string[];
     isSynced: boolean;
+    delegate?: boolean;
   };
   index: number;
 }
@@ -176,13 +177,20 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
             {validator.status !== "Unstaking" && (
               <div className="flex items-center gap-2">
                 <button
-                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors"
-                  onClick={handlePauseUnpause}
+                  className={`p-2 border border-border/60 rounded-lg transition-colors ${
+                    validator.delegate && validator.status === "Staked"
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-accent group hover:border-primary/40"
+                  }`}
+                  onClick={validator.delegate && validator.status === "Staked" ? undefined : handlePauseUnpause}
                   title={
-                    validator.status === "Staked"
-                      ? "Pause Validator"
-                      : "Unpause Validator"
+                    validator.delegate && validator.status === "Staked"
+                      ? "Delegate validators cannot be paused"
+                      : validator.status === "Staked"
+                        ? "Pause Validator"
+                        : "Unpause Validator"
                   }
+                  disabled={validator.delegate && validator.status === "Staked"}
                 >
                     {
                         validator.status === 'Paused' ?

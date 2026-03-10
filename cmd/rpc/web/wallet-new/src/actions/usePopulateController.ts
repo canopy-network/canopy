@@ -1,5 +1,5 @@
 import React from "react";
-import { template } from "@/core/templater";
+import { templateAny } from "@/core/templater";
 
 /**
  * Populate Controller - manages form initialization phases
@@ -159,7 +159,7 @@ export function usePopulateController({
       // Try to resolve the default value
       if (fieldValue != null) {
         try {
-          const resolved = template(fieldValue, templateContext);
+          const resolved = templateAny(fieldValue, templateContext);
           if (!isEmptyValue(resolved)) {
             defaults[fieldName] = resolved;
             newlyPopulated.push(fieldName);
@@ -214,7 +214,7 @@ export function usePopulateController({
 
       if (fieldValue != null) {
         try {
-          const resolved = template(fieldValue, templateContext);
+          const resolved = templateAny(fieldValue, templateContext);
           if (!isEmptyValue(resolved)) {
             updates[fieldName] = resolved;
             newlyPopulated.push(fieldName);
@@ -270,7 +270,7 @@ export function usePopulateController({
       // Resolve and update
       if (fieldValue != null) {
         try {
-          const resolved = template(fieldValue, templateContext);
+          const resolved = templateAny(fieldValue, templateContext);
           if (resolved !== undefined && resolved !== null) {
             // Only update if value changed
             if (form[fieldName] !== resolved) {

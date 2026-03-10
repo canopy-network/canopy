@@ -8,7 +8,8 @@ export const SwitchField: React.FC<BaseFieldProps> = ({
     onChange,
     resolveTemplate,
 }) => {
-    const checked = Boolean(value ?? resolveTemplate(field.value) ?? false)
+    const raw = value ?? resolveTemplate(field.value) ?? false
+    const checked = raw === true || raw === 'true' || raw === 1 || raw === '1' || raw === 'on'
 
     return (
         <div className="col-span-12 flex flex-col">

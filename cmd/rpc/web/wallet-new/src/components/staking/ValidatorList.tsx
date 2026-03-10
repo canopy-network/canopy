@@ -10,6 +10,7 @@ interface Validator {
     rewards24h: number;
     chains?: string[];
     isSynced: boolean;
+    delegate?: boolean;
 }
 
 interface ValidatorListProps {

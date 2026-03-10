@@ -39,49 +39,55 @@ const ValidatorRow = React.memo<{
     node: ProcessedNode;
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
-}>(({ node, index, onPauseUnpause }) => (
-    <motion.tr
-        className="group border-b border-border/40 last:border-0"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, delay: index * 0.04 }}
-    >
-        <td className="py-3 pr-4">
-            <div className="flex items-center gap-2.5">
-                <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
-                <div>
-                    <div className="text-sm font-body font-medium text-foreground leading-tight">
-                        {node.originalValidator.nickname || `Node ${index + 1}`}
-                    </div>
-                    <div className="text-xs font-mono text-muted-foreground/60 mt-0.5">
-                        {shortAddr(node.originalValidator.address)}
+}>(({ node, index, onPauseUnpause }) => {
+    const isDelegate = !!node.originalValidator.delegate;
+
+    return (
+        <motion.tr
+            className="group border-b border-border/40 last:border-0"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, delay: index * 0.04 }}
+        >
+            <td className="py-3 pr-4">
+                <div className="flex items-center gap-2.5">
+                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <div>
+                        <div className="text-sm font-body font-medium text-foreground leading-tight">
+                            {node.originalValidator.nickname || `Node ${index + 1}`}
+                        </div>
+                        <div className="text-xs font-mono text-muted-foreground/60 mt-0.5">
+                            {shortAddr(node.originalValidator.address)}
+                        </div>
                     </div>
                 </div>
-            </div>
-        </td>
-        <td className="py-3 pr-4">
-            <span className="text-sm font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
-        </td>
-        <td className="py-3 pr-4">
-            <StatusBadge label={node.status} size="sm" />
-        </td>
-        <td className="py-3 pr-4">
-            <span className={`text-xs font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
-        </td>
-        <td className="py-3">
-            <button
-                onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                className="p-1.5 rounded-md hover:bg-accent/60 transition-colors text-muted-foreground hover:text-foreground"
-                aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
-            >
-                {node.status === 'Staked'
-                    ? <Pause style={{ width: 14, height: 14 }} />
-                    : <Play style={{ width: 14, height: 14 }} />
-                }
-            </button>
-        </td>
-    </motion.tr>
-));
+            </td>
+            <td className="py-3 pr-4">
+                <span className="text-sm font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
+            </td>
+            <td className="py-3 pr-4">
+                <StatusBadge label={node.status} size="sm" />
+            </td>
+            <td className="py-3 pr-4">
+                <span className={`text-xs font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
+            </td>
+            <td className="py-3">
+                {!isDelegate && (
+                    <button
+                        onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                        className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground hover:text-foreground"
+                        aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                    >
+                        {node.status === 'Staked'
+                            ? <Pause style={{ width: 14, height: 14 }} />
+                            : <Play style={{ width: 14, height: 14 }} />
+                        }
+                    </button>
+                )}
+            </td>
+        </motion.tr>
+    );
+});
 
 ValidatorRow.displayName = 'ValidatorRow';
 
@@ -89,46 +95,52 @@ const ValidatorMobileCard = React.memo<{
     node: ProcessedNode;
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
-}>(({ node, index, onPauseUnpause }) => (
-    <motion.div
-        className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-background/30"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, delay: index * 0.04 }}
-    >
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-                <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
-                <div>
-                    <div className="text-sm font-body font-medium text-foreground leading-tight">
-                        {node.originalValidator.nickname || `Node ${index + 1}`}
+}>(({ node, index, onPauseUnpause }) => {
+    const isDelegate = !!node.originalValidator.delegate;
+
+    return (
+        <motion.div
+            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-background/30"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, delay: index * 0.04 }}
+        >
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <div>
+                        <div className="text-sm font-body font-medium text-foreground leading-tight">
+                            {node.originalValidator.nickname || `Node ${index + 1}`}
+                        </div>
+                        <div className="text-xs font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</div>
                     </div>
-                    <div className="text-xs font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</div>
+                </div>
+                {!isDelegate && (
+                    <button
+                        onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                        className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground"
+                    >
+                        {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
+                    </button>
+                )}
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
+                <div>
+                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
+                    <div className="text-xs font-mono text-foreground">{node.stakeAmount}</div>
+                </div>
+                <div>
+                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
+                    <StatusBadge label={node.status} size="sm" />
+                </div>
+                <div>
+                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
+                    <div className={`text-xs font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
                 </div>
             </div>
-            <button
-                onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                className="p-1.5 rounded-md hover:bg-accent/60 transition-colors text-muted-foreground"
-            >
-                {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
-            </button>
-        </div>
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
-            <div>
-                <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
-                <div className="text-xs font-mono text-foreground">{node.stakeAmount}</div>
-            </div>
-            <div>
-                <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
-                <StatusBadge label={node.status} size="sm" />
-            </div>
-            <div>
-                <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
-                <div className={`text-xs font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
-            </div>
-        </div>
-    </motion.div>
-));
+        </motion.div>
+    );
+});
 
 ValidatorMobileCard.displayName = 'ValidatorMobileCard';
 
@@ -167,6 +179,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
         if (!validator) return 'Liquid';
         if (validator.unstaking) return 'Unstaking';
         if (validator.paused) return 'Paused';
+        if (validator.delegate) return 'Delegate';
         return 'Staked';
     }, []);
 

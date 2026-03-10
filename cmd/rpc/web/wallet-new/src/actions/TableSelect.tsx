@@ -126,7 +126,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
 
     const selectedKeys: string[] = React.useMemo(() => {
         return tf.multiple
-            ? asArray(currentValue).map(String)
+            ? asArray(currentValue).map(String).filter(s => s !== '')
             : (currentValue != null && currentValue !== '' ? [String(currentValue)] : [])
     }, [currentValue, tf.multiple])
 
