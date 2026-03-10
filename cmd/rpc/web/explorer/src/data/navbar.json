@@ -21,6 +21,10 @@
           {
             "label": "Swaps",
             "path": "/token-swaps"
+          },
+          {
+            "label": "Dex",
+            "path": "/dex"
           }
         ]
       },
