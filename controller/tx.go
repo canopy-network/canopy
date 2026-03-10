@@ -230,6 +230,30 @@ func (m *Mempool) CheckMempool() {
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
 	m.stop = stop
+	// calculate rc build height
+	ownRoot, err := m.FSM.LoadIsOwnRoot()
+	if err != nil {
+		m.log.Error(err.Error())
+	}
+	rcBuildHeight := uint64(0)
+	// if ownRoot
+	if ownRoot {
+		rcBuildHeight = m.FSM.Height()
+	} else {
+		// Use mempool FSM snapshot to avoid races with controller FSM resets.
+		if rootChainID, e := m.FSM.GetRootChainId(); e != nil {
+			m.log.Error(e.Error())
+		} else {
+			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
+		}
+		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
+		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
+		if err != nil {
+			m.log.Warnf("Check Mempool error: %s", err.Error())
+		}
+		m.FSM.SetRootDexCache(rootDexBatch)
+	}
+	// apply the block to the mempool FSM to get the result and validate the transactions
 	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
 	if err != nil {
 		m.log.Warnf("Check Mempool error: %s", err.Error())
@@ -237,17 +261,6 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
-	// calculate rc build height
-	ownRoot, err := m.FSM.LoadIsOwnRoot()
-	if err != nil {
-		m.log.Error(err.Error())
-	}
-	// if ownRoot
-	if ownRoot {
-		rcBuildHeight = m.FSM.Height()
-	}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,

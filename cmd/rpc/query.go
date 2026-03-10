@@ -106,14 +106,6 @@ func (s *Server) Validators(w http.ResponseWriter, r *http.Request, _ httprouter
 	})
 }
 
-// Committee returns a page of committee members ordered from the highest stake to lowest
-func (s *Server) Committee(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Invoke helper with the HTTP request, response writer and an inline callback
-	s.heightPaginated(w, r, func(s *fsm.StateMachine, p *paginatedHeightRequest) (interface{}, lib.ErrorI) {
-		return s.GetCommitteePaginated(p.PageParams, p.ValidatorFilters.Committee)
-	})
-}
-
 // ValidatorSet retrieves the ValidatorSet that is responsible for the chainId
 func (s *Server) ValidatorSet(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Invoke helper with the HTTP request, response writer and an inline callback

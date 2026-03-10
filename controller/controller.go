@@ -417,6 +417,16 @@ func (c *Controller) emptyInbox(topic lib.Topic) {
 	}
 }
 
+// getDexRootBatch() is a helper to retrieve the dex batch directly from the root chain of the node
+// for the current committee
+func (c *Controller) getDexRootBatch(rcBuildHeight uint64) (*lib.DexBatch, lib.ErrorI) {
+	rcID, err := c.FSM.GetRootChainId()
+	if err != nil {
+		return nil, err
+	}
+	return c.RCManager.GetDexBatch(rcID, rcBuildHeight, c.Config.ChainId, false)
+}
+
 const checkpointsFileName = "checkpoints.json"
 
 // loadCheckpointsFile reads checkpoints.json (if present) into the controller cache.

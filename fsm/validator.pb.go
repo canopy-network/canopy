@@ -238,7 +238,9 @@ type NonSigner struct {
 	// address: shorter version of the operator public key of the non signer
 	Address []byte `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
 	// counter: increments when a Validator doesn't sign a block and resets every non-sign-window
-	Counter       uint64 `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
+	Counter uint64 `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
+	// chain_counters: optional per-chain non-sign counters for protocol-versioned chain-scoped slashing
+	ChainCounters []*NonSignerChainCounter `protobuf:"bytes,3,rep,name=chain_counters,json=chainCounters,proto3" json:"chain_counters,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -287,6 +289,68 @@ func (x *NonSigner) GetCounter() uint64 {
 	return 0
 }
 
+func (x *NonSigner) GetChainCounters() []*NonSignerChainCounter {
+	if x != nil {
+		return x.ChainCounters
+	}
+	return nil
+}
+
+// NonSignerChainCounter tracks a non-signer counter scoped to a specific chain id within a non-sign window
+type NonSignerChainCounter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// chain_id: the chain committee id this counter applies to
+	ChainId uint64 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	// counter: number of missed signatures for this chain during the current non-sign window
+	Counter       uint64 `protobuf:"varint,2,opt,name=counter,proto3" json:"counter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NonSignerChainCounter) Reset() {
+	*x = NonSignerChainCounter{}
+	mi := &file_validator_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NonSignerChainCounter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NonSignerChainCounter) ProtoMessage() {}
+
+func (x *NonSignerChainCounter) ProtoReflect() protoreflect.Message {
+	mi := &file_validator_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NonSignerChainCounter.ProtoReflect.Descriptor instead.
+func (*NonSignerChainCounter) Descriptor() ([]byte, []int) {
+	return file_validator_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *NonSignerChainCounter) GetChainId() uint64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *NonSignerChainCounter) GetCounter() uint64 {
+	if x != nil {
+		return x.Counter
+	}
+	return 0
+}
+
 // NonSignerList is a list of information that tracks the number of blocks not signed by the Validator within the Non-Sign-Window
 type NonSignerList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -297,7 +361,7 @@ type NonSignerList struct {
 
 func (x *NonSignerList) Reset() {
 	*x = NonSignerList{}
-	mi := &file_validator_proto_msgTypes[3]
+	mi := &file_validator_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -309,7 +373,7 @@ func (x *NonSignerList) String() string {
 func (*NonSignerList) ProtoMessage() {}
 
 func (x *NonSignerList) ProtoReflect() protoreflect.Message {
-	mi := &file_validator_proto_msgTypes[3]
+	mi := &file_validator_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -322,7 +386,7 @@ func (x *NonSignerList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NonSignerList.ProtoReflect.Descriptor instead.
 func (*NonSignerList) Descriptor() ([]byte, []int) {
-	return file_validator_proto_rawDescGZIP(), []int{3}
+	return file_validator_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NonSignerList) GetList() []*NonSigner {
@@ -354,9 +418,13 @@ const file_validator_proto_rawDesc = "" +
 	"\bcompound\x18\n" +
 	" \x01(\bR\bcompound\"6\n" +
 	"\x0eValidatorsList\x12$\n" +
-	"\x04List\x18\x01 \x03(\v2\x10.types.ValidatorR\x04List\"?\n" +
+	"\x04List\x18\x01 \x03(\v2\x10.types.ValidatorR\x04List\"\x84\x01\n" +
 	"\tNonSigner\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\fR\aaddress\x12\x18\n" +
+	"\acounter\x18\x02 \x01(\x04R\acounter\x12C\n" +
+	"\x0echain_counters\x18\x03 \x03(\v2\x1c.types.NonSignerChainCounterR\rchainCounters\"L\n" +
+	"\x15NonSignerChainCounter\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x18\n" +
 	"\acounter\x18\x02 \x01(\x04R\acounter\"5\n" +
 	"\rNonSignerList\x12$\n" +
 	"\x04List\x18\x01 \x03(\v2\x10.types.NonSignerR\x04ListB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
@@ -373,21 +441,23 @@ func file_validator_proto_rawDescGZIP() []byte {
 	return file_validator_proto_rawDescData
 }
 
-var file_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_validator_proto_goTypes = []any{
-	(*Validator)(nil),      // 0: types.Validator
-	(*ValidatorsList)(nil), // 1: types.ValidatorsList
-	(*NonSigner)(nil),      // 2: types.NonSigner
-	(*NonSignerList)(nil),  // 3: types.NonSignerList
+	(*Validator)(nil),             // 0: types.Validator
+	(*ValidatorsList)(nil),        // 1: types.ValidatorsList
+	(*NonSigner)(nil),             // 2: types.NonSigner
+	(*NonSignerChainCounter)(nil), // 3: types.NonSignerChainCounter
+	(*NonSignerList)(nil),         // 4: types.NonSignerList
 }
 var file_validator_proto_depIdxs = []int32{
 	0, // 0: types.ValidatorsList.List:type_name -> types.Validator
-	2, // 1: types.NonSignerList.List:type_name -> types.NonSigner
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 1: types.NonSigner.chain_counters:type_name -> types.NonSignerChainCounter
+	2, // 2: types.NonSignerList.List:type_name -> types.NonSigner
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_validator_proto_init() }
@@ -401,7 +471,7 @@ func file_validator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_validator_proto_rawDesc), len(file_validator_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

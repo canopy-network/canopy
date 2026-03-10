@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"math"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -131,6 +132,13 @@ func (s *StateMachine) GetValidatorsPaginated(p lib.PageParams, f lib.ValidatorF
 func (s *StateMachine) SetValidators(validators []*Validator, supply *Supply) lib.ErrorI {
 	// for each validator in the list
 	for _, val := range validators {
+		// ensure add operations are safe from uint64 overflow
+		if supply.Total > math.MaxUint64-val.StakedAmount || supply.Staked > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
+		if val.Delegate && supply.DelegatedOnly > math.MaxUint64-val.StakedAmount {
+			return ErrInvalidAmount()
+		}
 		// if the unstaking height or the max paused height is set
 		if val.UnstakingHeight != 0 {
 			// if the validator is unstaking - update it accordingly in state
@@ -318,7 +326,8 @@ func (s *StateMachine) DeleteFinishedUnstaking() lib.ErrorI {
 		// get the address from the key
 		addr, err := AddressFromKey(unstakingKey)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed unstaking key: %x", unstakingKey)
+			return nil
 		}
 		// get the validator associated with that address
 		validator, err := s.GetValidator(addr)
@@ -358,12 +367,12 @@ func (s *StateMachine) SetValidatorsPaused(chainId uint64, addresses [][]byte) {
 			// move on to the next iteration
 			continue
 		}
-		// ensure no unauthorized auto-pauses
-		if !slices.Contains(val.Committees, chainId) {
+		// protocol v2+ requires committee membership for chain-scoped auto-pause.
+		if s.IsFeatureEnabled(2) && !slices.Contains(val.Committees, chainId) {
 			// NOTE: expected - this can happen during a race between edit-stake and pause
 			s.log.Warnf("unauthorized pause from %d, this can happen occasionally", chainId)
-			// exit
-			return
+			// skip this validator and keep processing the remaining list
+			continue
 		}
 		// handle pausing the validator
 		if err = s.HandleMessagePause(&MessagePause{Address: addr}); err != nil {
