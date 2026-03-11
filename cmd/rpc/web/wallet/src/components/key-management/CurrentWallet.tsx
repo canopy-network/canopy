@@ -353,6 +353,14 @@ export const CurrentWallet = (): JSX.Element => {
               placeholder="Hidden until unlocked"
               className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10 placeholder:text-muted-foreground"
             />
+            {privateKeyVisible && (
+              <button
+                onClick={() => copyToClipboard(privateKey, "Private key")}
+                className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleRevealPrivateKeys}
               className="hover:text-primary bg-muted rounded-lg px-3 py-2 text-foreground"

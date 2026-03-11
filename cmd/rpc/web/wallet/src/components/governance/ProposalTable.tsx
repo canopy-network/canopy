@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { Proposal } from "@/hooks/useGovernance";
 
 interface ProposalTableProps {
@@ -187,40 +187,49 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
             className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="xl:col-span-3 px-3 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-        >
-          <option value="all">All Categories</option>
-          {categories
-            .filter((c) => c !== "all")
-            .map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="xl:col-span-3 px-3 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-        >
-          <option value="urgency">Sort: Urgency</option>
-          <option value="latest">Sort: Latest First</option>
-          <option value="oldest">Sort: Oldest First</option>
-          <option value="support">Sort: Node Vote</option>
-        </select>
-        <select
-          value={String(pageSize)}
-          onChange={(e) => setPageSize(Number(e.target.value))}
-          className="xl:col-span-2 px-3 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-        >
-          <option value="10">10 / page</option>
-          <option value="12">12 / page</option>
-          <option value="25">25 / page</option>
-          <option value="50">50 / page</option>
-        </select>
+        <div className="relative xl:col-span-3">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
+          >
+            <option value="all">All Categories</option>
+            {categories
+              .filter((c) => c !== "all")
+              .map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        </div>
+        <div className="relative xl:col-span-3">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
+          >
+            <option value="urgency">Sort: Urgency</option>
+            <option value="latest">Sort: Latest First</option>
+            <option value="oldest">Sort: Oldest First</option>
+            <option value="support">Sort: Node Vote</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        </div>
+        <div className="relative xl:col-span-2">
+          <select
+            value={String(pageSize)}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
+          >
+            <option value="10">10 / page</option>
+            <option value="12">12 / page</option>
+            <option value="25">25 / page</option>
+            <option value="50">50 / page</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        </div>
       </div>
 
       <div className="rounded-xl border border-border/70 overflow-hidden">
@@ -268,7 +277,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         {proposal.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       {proposal.approve === true ? (
                         <span className="inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/35">
                           Approved
@@ -287,7 +296,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       <div className="text-xs text-foreground">{formatWindow(proposal)}</div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">end #{proposal.endHeight || 0}</div>
                     </td>
-                    <td className="py-3 px-3 align-top">
+                    <td className="py-3 px-3 align-middle">
                       <div className="flex items-center justify-end gap-1">
                         {proposal.hasLocalVote && onDeleteVote && (
                           <button

@@ -60,15 +60,25 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                     let totalValue = 0
 
                     if (type === 'balance') {
-                        // Get balances of all addresses at this height
-                        const balances = await Promise.all(
-                            addresses.map(address =>
-                                dsFetch<number>('accountByHeight', { address, height })
-                                    .then(v => v || 0)
-                                    .catch(() => 0)
-                            )
-                        )
-                        totalValue = balances.reduce((sum, v) => sum + v, 0)
+                        const [balances, stakes] = await Promise.all([
+                            Promise.all(
+                                addresses.map(address =>
+                                    dsFetch<number>('accountByHeight', { address, height })
+                                        .then(v => v || 0)
+                                        .catch(() => 0)
+                                )
+                            ),
+                            Promise.all(
+                                addresses.map(address =>
+                                    dsFetch<Record<string, unknown>>('validatorByHeight', { address, height })
+                                        .then(v => (v as Record<string, unknown>)?.stakedAmount as number || 0)
+                                        .catch(() => 0)
+                                )
+                            ),
+                        ])
+                        const totalAccount = balances.reduce((sum, v) => sum + v, 0)
+                        const totalStaked = stakes.reduce((sum, v) => sum + v, 0)
+                        totalValue = Math.max(0, totalAccount - totalStaked)
                     } else if (type === 'staked') {
                         // Get staked amounts of all addresses at this height
                         const stakes = await Promise.all(

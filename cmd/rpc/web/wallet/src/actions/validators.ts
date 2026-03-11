@@ -174,6 +174,13 @@ export async function validateField(
     if (field.type === "amount" || field.type === "number" || field.type === "range") {
         const f = field as AmountField | NumberField | RangeField;
 
+        const isFieldRequired = evalRequired(field.required, ctx);
+        const rawIsEmpty = formattedValue == null || formattedValue === "" || String(formattedValue).trim() === "";
+
+        if (!isFieldRequired && rawIsEmpty) {
+            return { ok: true };
+        }
+
         const n = typeof formattedValue === "string"
             ? Number(formattedValue.trim().replace(/,/g, ""))
             : Number(formattedValue);

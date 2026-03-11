@@ -13,7 +13,7 @@ export const useCopyToClipboard = () => {
                 title: "Copied to clipboard",
                 description: label || "Text copied successfully",
                 icon: <Check className="h-5 w-5" />,
-                durationMs: 2000,
+                durationMs: 4000,
             });
 
             return true;
@@ -23,7 +23,7 @@ export const useCopyToClipboard = () => {
                 description: "Unable to copy to clipboard. Please try again.",
                 icon: <Copy className="h-5 w-5" />,
                 sticky: false,
-                durationMs: 3000,
+                durationMs: 5000,
             });
 
             return false;

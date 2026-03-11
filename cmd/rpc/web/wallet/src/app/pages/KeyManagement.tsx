@@ -45,7 +45,7 @@ export const KeyManagement = (): JSX.Element => {
 
     return (
         <div className="bg-background min-h-screen">
-            <div className="px-6 py-8 space-y-7">
+            <div className="px-6 py-8 pb-16 space-y-7">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
@@ -9,6 +10,7 @@ import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 
 export const TotalBalanceCard = React.memo(() => {
+    const navigate = useNavigate();
     const { totalBalance, loading } = useAccountData();
     const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
     const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'balance' });
@@ -47,7 +49,9 @@ export const TotalBalanceCard = React.memo(() => {
                         Total Balance
                     </span>
                 </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40" />
+                <button onClick={() => navigate('/accounts')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Accounts">
+                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
+                </button>
             </div>
 
             {/* Balance */}

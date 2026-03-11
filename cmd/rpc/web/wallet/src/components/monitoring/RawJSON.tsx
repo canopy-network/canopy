@@ -119,7 +119,7 @@ export default function RawJSON({
                         }`}
                     >
                         <i className={`fa-solid ${tab.icon}`}></i>
-                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="text-xs sm:text-sm">{tab.label}</span>
                     </button>
                 ))}
             </div>

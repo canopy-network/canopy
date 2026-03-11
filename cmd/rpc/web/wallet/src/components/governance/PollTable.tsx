@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Eye, Search, ThumbsDown, ThumbsUp } from "lucide-react";
+import { ChevronDown, ExternalLink, Eye, Search, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Poll } from "@/hooks/useGovernance";
 
 interface PollTableProps {
@@ -133,26 +133,32 @@ export const PollTable: React.FC<PollTableProps> = ({
             className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors"
           />
         </div>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="xl:col-span-4 px-3 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-        >
-          <option value="endingSoon">Sort: Ending Soon</option>
-          <option value="latest">Sort: Latest End Block</option>
-          <option value="highestSupport">Sort: Highest Approve %</option>
-          <option value="highestRejection">Sort: Highest Reject %</option>
-        </select>
-        <select
-          value={String(pageSize)}
-          onChange={(e) => setPageSize(Number(e.target.value))}
-          className="xl:col-span-3 px-3 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-        >
-          <option value="10">10 / page</option>
-          <option value="20">20 / page</option>
-          <option value="30">30 / page</option>
-          <option value="50">50 / page</option>
-        </select>
+        <div className="relative xl:col-span-4">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
+          >
+            <option value="endingSoon">Sort: Ending Soon</option>
+            <option value="latest">Sort: Latest End Block</option>
+            <option value="highestSupport">Sort: Highest Approve %</option>
+            <option value="highestRejection">Sort: Highest Reject %</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        </div>
+        <div className="relative xl:col-span-3">
+          <select
+            value={String(pageSize)}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
+          >
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="30">30 / page</option>
+            <option value="50">50 / page</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        </div>
       </div>
 
       <div className="rounded-xl border border-border/70 overflow-hidden">

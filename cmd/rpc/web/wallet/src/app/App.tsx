@@ -11,7 +11,7 @@ export default function App() {
     return (
         <ConfigProvider>
             <AccountsProvider>
-                <ToastProvider position="top-right" defaultDurationMs={3000}>
+                <ToastProvider position="top-right" defaultDurationMs={5000}>
                     <ActionModalProvider>
                         <Theme>
                             <RouterProvider router={router}/>

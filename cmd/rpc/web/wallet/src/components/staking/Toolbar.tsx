@@ -63,7 +63,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             onClick={onAddStake}
             className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 text-muted-foreground" />
+            <Plus className="w-4 h-4 text-primary-foreground" />
             <span className="hidden sm:inline">Add Stake</span>
           </button>
 
@@ -72,7 +72,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             onClick={onExportCSV}
             className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
           >
-            <Download className="w-4 h-4 text-muted-foreground" />
+            <Download className="w-4 h-4 text-primary-foreground" />
             <span className="hidden sm:inline">Export CSV</span>
           </button>
         </div>

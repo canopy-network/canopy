@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Coins, ArrowUpRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
 import { useConfig } from '@/app/providers/ConfigProvider';
@@ -8,6 +9,7 @@ import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 
 export const StakedBalanceCard = React.memo(() => {
+    const navigate = useNavigate();
     const { totalStaked, loading } = useAccountData();
     const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'staked' });
     const { chain } = useConfig();
@@ -40,7 +42,9 @@ export const StakedBalanceCard = React.memo(() => {
                         Staked Balance
                     </span>
                 </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40" />
+                <button onClick={() => navigate('/accounts')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Accounts">
+                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
+                </button>
             </div>
 
             {/* Balance */}

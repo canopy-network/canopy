@@ -566,14 +566,14 @@
             "value": "{{ ds.validator ? fromMicroDenom<{{ds.validator.stakedAmount}}> : 0 }}",
             "autoPopulate": "once",
             "required": "{{ !ds.validator }}",
-            "min": 0,
+            "min": "{{ ds.validator ? fromMicroDenom((ds.validator.stakedAmount ?? 0) + 1) : 0 }}",
             "max": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) + (ds.validator?.stakedAmount ?? 0)}}> }}",
-            "help": "{{ ds.validator ? 'For edit stake: if you enter an amount lower/equal to current stake, blockchain keeps current stake and only updates settings (committees/output/compound).' : 'Amount to lock for a new validator/delegation. Blockchain enforces minimum stake.' }}",
+            "help": "{{ ds.validator ? 'New stake must be greater than current stake. Enter a higher amount to increase your stake.' : 'Amount to lock for a new validator/delegation. Blockchain enforces minimum stake.' }}",
             "validation": {
-              "min": 0,
+              "min": "{{ ds.validator ? fromMicroDenom((ds.validator.stakedAmount ?? 0) + 1) : 0 }}",
               "messages": {
                 "required": "Amount is required for new stakes",
-                "min": "Amount must be greater than or equal to {{min}} {{chain.denom.symbol}}",
+                "min": "{{ ds.validator ? 'New stake must be greater than current stake' : 'Amount must be greater than or equal to {{min}} {{chain.denom.symbol}}' }}",
                 "max": "You cannot send more than your balance {{max}} {{chain.denom.symbol}}"
               }
             },
