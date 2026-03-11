@@ -6,6 +6,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/proto"
+	"slices"
 )
 
 const (
@@ -970,10 +971,8 @@ func checkCommittees(committees []uint64) lib.ErrorI {
 }
 
 func checkChainId(i uint64) lib.ErrorI {
-	for _, reserved := range ReservedIDs {
-		if i == reserved {
-			return ErrInvalidChainId()
-		}
+	if slices.Contains(ReservedIDs, i) {
+		return ErrInvalidChainId()
 	}
 	// ensure the chain id doesn't exceed max
 	if i > MaxChainId {

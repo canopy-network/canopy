@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -743,13 +744,7 @@ func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
 				require.NoError(t, err)
 
 				// check if this validator was expected to be set to unstaking
-				shouldBeUnstaking := false
-				for _, expectedIdx := range test.expectedUnstakingValidators {
-					if expectedIdx == i {
-						shouldBeUnstaking = true
-						break
-					}
-				}
+				shouldBeUnstaking := slices.Contains(test.expectedUnstakingValidators, i)
 
 				// if the validator was already unstaking before, it should still be unstaking with the same height
 				if validator.UnstakingHeight != 0 {
