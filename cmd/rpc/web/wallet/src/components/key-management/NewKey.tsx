@@ -81,7 +81,7 @@ export const NewKey = (): JSX.Element => {
     return (
         <motion.div
             variants={panelVariants}
-            className="bg-card rounded-2xl p-6 border border-border/80 h-full shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
+            className="bg-card rounded-2xl p-6 border border-border/80 h-full flex flex-col shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
         >
             <div className="flex items-center justify-between gap-2 mb-6">
                 <div>
@@ -94,7 +94,7 @@ export const NewKey = (): JSX.Element => {
                 </span>
             </div>
 
-            <div className="flex flex-col justify-between h-full min-h-0">
+            <div className="flex flex-col justify-between flex-1 min-h-0">
                 <div className="space-y-5">
                     <div>
                         <label className="block text-sm font-medium text-foreground/80 mb-2">

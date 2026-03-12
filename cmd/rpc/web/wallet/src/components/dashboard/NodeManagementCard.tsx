@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Pause, Workflow } from 'lucide-react';
+import { Copy, Play, Pause, Workflow } from 'lucide-react';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
 import { useMultipleValidatorSets } from '@/hooks/useValidatorSet';
@@ -41,6 +42,7 @@ const ValidatorRow = React.memo<{
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
 }>(({ node, index, onPauseUnpause }) => {
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
+    const { copyToClipboard } = useCopyToClipboard();
 
     return (
         <motion.tr
@@ -53,23 +55,32 @@ const ValidatorRow = React.memo<{
                 <div className="flex items-center gap-2.5">
                     <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
                     <div>
-                        <div className="text-sm font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-body font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
-                        <div className="text-xs font-mono text-muted-foreground/60 mt-0.5">
-                            {shortAddr(node.originalValidator.address)}
+                        <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-sm font-mono text-muted-foreground/60">
+                                {shortAddr(node.originalValidator.address)}
+                            </span>
+                            <button
+                                onClick={() => copyToClipboard(node.originalValidator.address, "Address")}
+                                className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                aria-label="Copy address"
+                            >
+                                <Copy style={{ width: 12, height: 12 }} />
+                            </button>
                         </div>
                     </div>
                 </div>
             </td>
             <td className="py-3 pr-4">
-                <span className="text-sm font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
+                <span className="text-base font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
             </td>
             <td className="py-3 pr-4">
                 <StatusBadge label={node.status} size="sm" />
             </td>
             <td className="py-3 pr-4">
-                <span className={`text-xs font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
+                <span className={`text-sm font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
             </td>
             <td className="py-3">
                 {hasActions && (
@@ -97,6 +108,7 @@ const ValidatorMobileCard = React.memo<{
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
 }>(({ node, index, onPauseUnpause }) => {
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
+    const { copyToClipboard } = useCopyToClipboard();
 
     return (
         <motion.div
@@ -109,10 +121,19 @@ const ValidatorMobileCard = React.memo<{
                 <div className="flex items-center gap-2.5">
                     <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
                     <div>
-                        <div className="text-sm font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-body font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
-                        <div className="text-xs font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</div>
+                        <div className="flex items-center gap-1">
+                            <span className="text-sm font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</span>
+                            <button
+                                onClick={() => copyToClipboard(node.originalValidator.address, "Address")}
+                                className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                aria-label="Copy address"
+                            >
+                                <Copy style={{ width: 11, height: 11 }} />
+                            </button>
+                        </div>
                     </div>
                 </div>
                 {hasActions && (
@@ -126,16 +147,16 @@ const ValidatorMobileCard = React.memo<{
             </div>
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
                 <div>
-                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
-                    <div className="text-xs font-mono text-foreground">{node.stakeAmount}</div>
+                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
+                    <div className="text-sm font-mono text-foreground">{node.stakeAmount}</div>
                 </div>
                 <div>
-                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
+                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
                     <StatusBadge label={node.status} size="sm" />
                 </div>
                 <div>
-                    <div className="text-[10px] font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
-                    <div className={`text-xs font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
+                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
+                    <div className={`text-sm font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
                 </div>
             </div>
         </motion.div>
@@ -240,11 +261,11 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                     <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                         <Workflow className="text-primary" style={{ width: 13, height: 13 }} />
                     </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="font-display text-sm font-semibold text-muted-foreground uppercase tracking-widest">
                         Node Management
                     </span>
                     {processedKeystores.length > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-[10px] font-mono font-semibold text-primary">
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-xs font-mono font-semibold text-primary">
                             {processedKeystores.length}
                         </span>
                     )}
@@ -257,7 +278,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                             <thead>
                                 <tr className="border-b border-border/50">
                                     {['Key', 'Staked', 'Status', 'Rewards Δ24h', 'Action'].map(h => (
-                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-[10px] font-display font-semibold text-muted-foreground uppercase tracking-widest">
+                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-display font-semibold text-muted-foreground uppercase tracking-widest">
                                             {h}
                                         </th>
                                     ))}

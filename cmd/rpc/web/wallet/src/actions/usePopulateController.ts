@@ -244,14 +244,18 @@ export function usePopulateController({
     isEmptyValue,
   ]);
 
-  // Handle DS changes AFTER initialization (only for autoPopulate: "always" fields)
+  // Handle DS / fees changes AFTER initialization (only for autoPopulate: "always" fields)
+  const feesRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    // Only run in "ready" phase
     if (phase !== "ready") return;
 
-    // Skip if DS hasn't actually changed
     const currentDsSnapshot = JSON.stringify(ds);
-    if (currentDsSnapshot === initialDsSnapshotRef.current) return;
+    const currentFeesSnapshot = JSON.stringify(templateContext?.fees?.raw ?? null);
+    const dsChanged = currentDsSnapshot !== initialDsSnapshotRef.current;
+    const feesChanged = currentFeesSnapshot !== feesRef.current;
+    feesRef.current = currentFeesSnapshot;
+
+    if (!dsChanged && !feesChanged) return;
 
     const updates: Record<string, any> = {};
 

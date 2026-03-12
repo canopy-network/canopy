@@ -123,7 +123,6 @@ export const Accounts = () => {
     const account = accounts.find(a => a.address === address);
     if (account && selectedAccount !== account) switchAccount(account.id);
     openAction("send", {
-      prefilledData: { output: address },
       onFinish: () => { console.log("Send completed"); },
     });
   };

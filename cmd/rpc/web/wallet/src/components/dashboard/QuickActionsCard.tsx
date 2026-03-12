@@ -30,22 +30,37 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
     }, [validators, selectedAccount?.address]);
 
     const hasStake = !!selectedAccountStake;
+    const isPaused = !!(selectedValidator as any)?.paused;
 
     const modifiedActions = React.useMemo(() => {
         const quickActions = selectQuickActions(actions, maxNumberOfItems);
-        return quickActions.map(action => {
+        let result = quickActions.map(action => {
             if (action.id === 'stake' && hasStake) {
                 return { ...action, title: 'Edit Stake', icon: 'Lock', __isEditStake: true };
             }
             return action;
         });
-    }, [actions, maxNumberOfItems, hasStake]);
+        if (isPaused) {
+            const alreadyHasUnpause = result.some(a => a.id === 'unpauseValidator');
+            if (!alreadyHasUnpause) {
+                const unpauseAction = (actions ?? []).find(a => a.id === 'unpauseValidator');
+                if (unpauseAction) {
+                    result = [...result, { ...unpauseAction, __isUnpause: true } as Action & { __isUnpause?: boolean }];
+                }
+            }
+        }
+        return result;
+    }, [actions, maxNumberOfItems, hasStake, isPaused]);
 
-    const handleRunAction = React.useCallback((action: Action & { __isEditStake?: boolean }) => {
+    const handleRunAction = React.useCallback((action: Action & { __isEditStake?: boolean; __isUnpause?: boolean }) => {
         if (action.__isEditStake && selectedAccount?.address) {
             onRunAction?.(action, {
                 operator: selectedAccount.address,
                 selectCommittees: (selectedValidator as any)?.committees || [],
+            });
+        } else if (action.__isUnpause && selectedAccount?.address) {
+            onRunAction?.(action, {
+                validatorAddress: selectedAccount.address,
             });
         } else {
             onRunAction?.(action);

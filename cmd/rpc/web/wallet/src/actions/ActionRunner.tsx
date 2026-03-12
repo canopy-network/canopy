@@ -667,7 +667,8 @@ export default function ActionRunner({
           isRequired = false;
         }
       }
-      return isRequired && (form[f.name] == null || form[f.name] === "");
+      const val = form[f.name];
+      return isRequired && (val == null || val === "" || (Array.isArray(val) && val.length === 0));
     });
     const fieldErrors = visibleFieldsForStep.some(
       (f: any) => !!errorsMap[f.name],

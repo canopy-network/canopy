@@ -143,15 +143,15 @@ export default function ComboSelect({
                     disabled={disabled}
                     className={
                         buttonClassName ??
-                        "flex items-center justify-between whitespace-nowrap border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 w-full bg-background/60 border-border/70 text-foreground h-11 sm:h-12 rounded-xl transition-colors"
+                        "flex items-center justify-between border px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:cursor-not-allowed disabled:opacity-50 w-full bg-background/60 border-border/70 text-foreground min-h-11 sm:min-h-12 rounded-xl transition-colors"
                     }
                     aria-haspopup="listbox"
                     aria-expanded={open}
                 >
-          <span className={!selected ? "text-muted-foreground truncate" : "truncate"}>
+          <span className={!selected ? "text-muted-foreground break-all text-left" : "break-all text-left"}>
             {selected ? selected.label : placeholder}
           </span>
-                    <ChevronsUpDown className="h-4 w-4 opacity-60"/>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60"/>
                 </button>
             </Popover.Trigger>
 
@@ -211,8 +211,8 @@ export default function ComboSelect({
                                                     )}
                                                 >
                                                     <Check
-                                                        className={cx("h-4 w-4", isSel ? "opacity-100" : "opacity-0")}/>
-                                                    <span className={cx("truncate")}>
+                                                        className={cx("h-4 w-4 shrink-0", isSel ? "opacity-100" : "opacity-0")}/>
+                                                    <span className="break-all">
                                                         {opt.label}
                                                     </span>
                                                 </button>

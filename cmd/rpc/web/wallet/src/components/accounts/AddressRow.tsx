@@ -1,5 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Copy } from 'lucide-react';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useManifest } from '@/hooks/useManifest';
 
 interface Address {
@@ -36,6 +38,7 @@ export const AddressRow: React.FC<AddressRowProps> = ({
                                                           onSend,
                                                           onReceive
                                                       }) => {
+    const { copyToClipboard } = useCopyToClipboard();
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -63,7 +66,16 @@ export const AddressRow: React.FC<AddressRowProps> = ({
                         <i className={`${address.icon} text-foreground text-sm`}></i>
                     </div>
                     <div>
-                        <div className="text-foreground font-medium">{formatAddress(address.address)}</div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-foreground font-medium">{formatAddress(address.address)}</span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); copyToClipboard(address.address, "Address"); }}
+                                className="p-1 rounded hover:bg-accent/60 text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Copy address"
+                            >
+                                <Copy className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                         <div className="text-muted-foreground text-xs">{address.address}</div>
                     </div>
                 </div>

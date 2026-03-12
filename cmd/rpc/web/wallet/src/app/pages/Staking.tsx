@@ -21,7 +21,7 @@ type ValidatorRow = {
   address: string;
   nickname?: string;
   stakedAmount: number;
-  status: "Staked" | "Paused" | "Unstaking";
+  status: "Staked" | "Paused" | "Unstaking" | "Delegate";
   rewards24h: number;
   chains?: string[];
   isSynced: boolean;
@@ -100,7 +100,7 @@ export default function Staking(): JSX.Element {
       address: v.address,
       nickname: v.nickname,
       stakedAmount: v.stakedAmount || 0,
-      status: v.unstaking ? "Unstaking" : v.paused ? "Paused" : "Staked",
+      status: v.unstaking ? "Unstaking" : v.paused ? "Paused" : v.delegate ? "Delegate" : "Staked",
       rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
       chains:
         v.committees?.map(

@@ -39,10 +39,10 @@ export const StakedBalanceCard = React.memo(() => {
                         <Coins className="text-primary" style={{ width: 14, height: 14 }} />
                     </div>
                     <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                        Staked Balance
+                        Total Staked Balance
                     </span>
                 </div>
-                <button onClick={() => navigate('/accounts')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Accounts">
+                <button onClick={() => navigate('/staking')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Staking">
                     <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
                 </button>
             </div>

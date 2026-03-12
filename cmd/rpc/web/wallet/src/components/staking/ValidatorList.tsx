@@ -6,7 +6,7 @@ interface Validator {
     address: string;
     nickname?: string;
     stakedAmount: number;
-    status: 'Staked' | 'Paused' | 'Unstaking';
+    status: 'Staked' | 'Paused' | 'Unstaking' | 'Delegate';
     rewards24h: number;
     chains?: string[];
     isSynced: boolean;

@@ -43,7 +43,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             placeholder="Search validators..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-card border border-border rounded-lg pl-10 pr-4 py-2 text-foreground placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="w-full bg-card border border-border rounded-lg pl-8 pr-4 py-2 text-foreground placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
           <i className="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"></i>
         </div>
