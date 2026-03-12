@@ -740,6 +740,10 @@ func ErrInvalidBuyerSendAddress() ErrorI {
 	return NewError(CodeInvalidBuyerSendAddress, MainModule, "invalid buyer send address")
 }
 
+func ErrInvalidBuyerDeadline() ErrorI {
+	return NewError(CodeInvalidBuyerDeadline, StateMachineModule, "lock order deadline height is invalid")
+}
+
 func ErrDuplicateResetOrder() ErrorI {
 	return NewError(CodeDuplicateResetOrder, MainModule, "duplicate reset order")
 }
