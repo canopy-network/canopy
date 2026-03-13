@@ -159,7 +159,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
             <div className="flex items-center gap-2">
               <span
                 className={`${
-                  validator.status === "Staked"
+                  validator.status === "Staked" || validator.status === "Delegate"
                     ? "bg-primary/20 text-primary"
                     : validator.status === "Paused"
                       ? "bg-yellow-500/20 text-yellow-400"
@@ -230,4 +230,3 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
     </motion.div>
   );
 };
-
