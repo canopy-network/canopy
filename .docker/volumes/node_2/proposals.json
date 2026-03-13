@@ -1,27 +1,4 @@
 {
-  "233d9ad9da0c50eb795de2b580f70d4eaf244bd6ee3a882a472812229aa590ed": {
-    "proposal": {
-      "type": "changeParameter",
-      "msg": {
-        "parameterSpace": "fee",
-        "parameterKey": "sendFee",
-        "parameterValue": 20000,
-        "startHeight": 373,
-        "endHeight": 1373,
-        "signer": "851e90eaef1fa27debaee2c2591503bdeec1d123"
-      },
-      "signature": {
-        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-        "signature": "98f9436dd072a8f0bde13159abd736bcd8175975189317a6f7797deb518d5fd9c237dfe129ae296bf5b80cb4ca0665fa0293b2b36c451c91bbb38e306037115fe279b7ec1ef53b9ec042686efe8073d861f79aa9fe824013310ae497b6591073"
-      },
-      "time": 1772679698553439,
-      "createdHeight": 373,
-      "fee": 10000,
-      "networkID": 1,
-      "chainID": 1
-    },
-    "approve": true
-  },
   "4a98aaf954508812e1ff607b20c4d955152e065186c92b9e6433d2f9b690ee9a": {
     "proposal": {
       "type": "changeParameter",
@@ -65,29 +42,6 @@
       "createdHeight": 1,
       "fee": 10000,
       "memo": "example",
-      "networkID": 1,
-      "chainID": 1
-    },
-    "approve": true
-  },
-  "ecb4349c615789d6946444a750690b83aad6fcc0166d0be253bce726de575ec1": {
-    "proposal": {
-      "type": "changeParameter",
-      "msg": {
-        "parameterSpace": "fee",
-        "parameterKey": "sendFee",
-        "parameterValue": 30000,
-        "startHeight": 439,
-        "endHeight": 1438,
-        "signer": "851e90eaef1fa27debaee2c2591503bdeec1d123"
-      },
-      "signature": {
-        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-        "signature": "b2f5bfac36819c4b862ee448e52aeb17d23ce1854085b54320fb38ee8acdfa4964aed58a1cdd778e2f54971e2abfd1100ff494ad84a519b7ae9456a72bdb0ec96fbc39683733ba98f5bdb60c92ba32e490a24e213a56aa994f1c74fe3a0e1577"
-      },
-      "time": 1772681259330026,
-      "createdHeight": 439,
-      "fee": 10000,
       "networkID": 1,
       "chainID": 1
     },
