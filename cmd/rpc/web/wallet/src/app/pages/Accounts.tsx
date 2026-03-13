@@ -7,6 +7,7 @@ import {
   Lock,
   Search,
   Send,
+  Scan,
   Shield,
   Wallet,
   TrendingUp,
@@ -125,6 +126,12 @@ export const Accounts = () => {
     openAction("send", {
       onFinish: () => { console.log("Send completed"); },
     });
+  };
+
+  const handleReceiveAction = (address: string) => {
+    const account = accounts.find(a => a.address === address);
+    if (account && selectedAccount !== account) switchAccount(account.id);
+    openAction("receive");
   };
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
@@ -412,13 +419,22 @@ export const Accounts = () => {
 
                     {/* Actions */}
                     <td className="px-5 py-3.5">
-                      <button
-                        className="p-2 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/8 transition-all duration-150 group"
-                        onClick={() => handleSendAction(addr.fullAddress)}
-                        title="Send"
-                      >
-                        <Send className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          className="p-2 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/8 transition-all duration-150 group"
+                          onClick={() => handleSendAction(addr.fullAddress)}
+                          title="Send"
+                        >
+                          <Send className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </button>
+                        <button
+                          className="p-2 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/8 transition-all duration-150 group"
+                          onClick={() => handleReceiveAction(addr.fullAddress)}
+                          title="Receive"
+                        >
+                          <Scan className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 ))

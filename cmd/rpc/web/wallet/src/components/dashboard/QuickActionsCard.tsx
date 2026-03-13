@@ -61,6 +61,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
         } else if (action.__isUnpause && selectedAccount?.address) {
             onRunAction?.(action, {
                 validatorAddress: selectedAccount.address,
+                signerAddress: selectedAccount.address,
             });
         } else {
             onRunAction?.(action);

@@ -167,8 +167,7 @@ export default function ActionRunner({
     const dsOptions = actionDsConfig?.__options || {};
     const critical = dsOptions.critical;
     if (Array.isArray(critical)) return critical;
-    // Default: keystore is always critical for address selects
-    return ["keystore"];
+    return [];
   }, [actionDsConfig]);
 
   // Detect if this is an edit operation (prefilledData contains operator/address)

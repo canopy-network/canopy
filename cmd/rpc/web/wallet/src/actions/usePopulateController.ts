@@ -81,10 +81,6 @@ export function usePopulateController({
   const effectiveCriticalKeys = React.useMemo(() => {
     const keys = new Set(criticalDsKeys);
 
-    // keystore is always critical for address selects
-    keys.add("keystore");
-
-    // In edit mode, validator DS is often critical
     if (isEditMode && prefilledData?.operator) {
       keys.add("validator");
     }

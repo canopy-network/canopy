@@ -80,19 +80,22 @@
       "id": "send",
       "title": "Send",
       "icon": "Send",
-      "relatedActions": [
-        "receive"
-      ],
       "ds": {
         "account": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.address || account.address}}"
+          },
+          "__options": {
+            "enabled": "{{ form.address || account.address }}"
           }
         },
+        "keystore": {},
         "__options": {
           "staleTimeMs": 0,
           "refetchOnMount": "always",
-          "refetchOnWindowFocus": false
+          "refetchOnWindowFocus": false,
+          "watch": ["form.address"],
+          "critical": ["keystore"]
         }
       },
       "ui": {
@@ -110,10 +113,14 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "From Address",
+            "placeholder": "Select From Address",
             "value": "{{account.address}}",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "span": { "base": 12 }
           },
           {
@@ -213,7 +220,7 @@
           "summary": [
             {
               "label": "From",
-              "value": "{{shortAddress<{{account.address}}>}}"
+              "value": "{{shortAddress<{{form.address || account.address}}>}}"
             },
             {
               "label": "To",
@@ -236,7 +243,7 @@
       },
       "payload": {
         "address": {
-          "value": "{{account.address}}",
+          "value": "{{form.address || account.address}}",
           "coerce": "string"
         },
         "output": {
@@ -309,9 +316,6 @@
       "id": "receive",
       "title": "Receive",
       "icon": "Scan",
-      "relatedActions": [
-        "send"
-      ],
       "ds": {
         "account": {
           "account": {
@@ -470,7 +474,7 @@
                 "required": "Operator address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "step": "setup"
           },
           {
@@ -510,7 +514,7 @@
             },
             "value": "{{ ds.validator ? ds.validator.output : '' }}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k.slice(0, 6) + \"...\" + String(k ?? \"\")?.slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "step": "setup"
           },
           {
@@ -1222,17 +1226,23 @@
       "ds": {
         "validator": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.validatorAddress || account.address}}"
+          },
+          "__options": {
+            "enabled": "{{ form.validatorAddress || account.address }}"
           }
         },
+        "keystore": {},
         "fees": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.validatorAddress || account.address}}"
           }
         },
         "__options": {
           "staleTimeMs": 0,
-          "refetchOnMount": true
+          "refetchOnMount": true,
+          "watch": ["form.validatorAddress"],
+          "critical": ["keystore"]
         }
       },
       "form": {
@@ -1253,21 +1263,30 @@
           {
             "id": "validatorAddress",
             "name": "validatorAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Validator Address",
+            "placeholder": "Select Validator Address",
             "required": true,
-            "readOnly": true,
+            "value": "{{ params.validatorAddress || '' }}",
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address of the validator to pause",
             "span": { "base": 12 }
           },
           {
             "id": "signerAddress",
             "name": "signerAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Signer Address",
-            "value": "{{account.address}}",
+            "placeholder": "Select Signer Address",
+            "value": "{{ params.validatorAddress || account.address }}",
+            "autoPopulate": "once",
             "required": true,
-            "readOnly": true,
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address that will sign this transaction",
             "span": { "base": 12 }
           },
@@ -1397,17 +1416,23 @@
       "ds": {
         "validator": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.validatorAddress || account.address}}"
+          },
+          "__options": {
+            "enabled": "{{ form.validatorAddress || account.address }}"
           }
         },
+        "keystore": {},
         "fees": {
           "account": {
-            "address": "{{account.address}}"
+            "address": "{{form.validatorAddress || account.address}}"
           }
         },
         "__options": {
           "staleTimeMs": 0,
-          "refetchOnMount": true
+          "refetchOnMount": true,
+          "watch": ["form.validatorAddress"],
+          "critical": ["keystore"]
         }
       },
       "form": {
@@ -1428,21 +1453,30 @@
           {
             "id": "validatorAddress",
             "name": "validatorAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Validator Address",
+            "placeholder": "Select Validator Address",
             "required": true,
-            "readOnly": true,
+            "value": "{{ params.validatorAddress || '' }}",
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address of the validator to unpause",
             "span": { "base": 12 }
           },
           {
             "id": "signerAddress",
             "name": "signerAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Signer Address",
-            "value": "{{account.address}}",
+            "placeholder": "Select Signer Address",
+            "value": "{{ params.validatorAddress || account.address }}",
+            "autoPopulate": "once",
             "required": true,
-            "readOnly": true,
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address that will sign this transaction",
             "span": { "base": 12 }
           },
@@ -3805,7 +3839,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": { "base": 12 },
             "step": "context"
           },
@@ -4098,7 +4132,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": { "base": 12 },
             "step": "context"
           },
@@ -4573,7 +4607,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k.slice(0, 6) + '...' + String(k).slice(-6) + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": { "base": 12 }
           },
           {

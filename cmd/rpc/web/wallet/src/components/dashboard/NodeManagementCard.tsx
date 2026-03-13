@@ -208,7 +208,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
         const actionId = action === 'pause' ? 'pauseValidator' : 'unpauseValidator';
         const actionDef = manifest?.actions?.find((a: any) => a.id === actionId);
         if (actionDef) {
-            setSelectedActions([{ ...actionDef, prefilledData: { validatorAddress: validator.address } }]);
+            setSelectedActions([{ ...actionDef, prefilledData: { validatorAddress: validator.address, signerAddress: validator.address } }]);
             setIsActionModalOpen(true);
         } else {
             alert(`${action} action not found in manifest`);

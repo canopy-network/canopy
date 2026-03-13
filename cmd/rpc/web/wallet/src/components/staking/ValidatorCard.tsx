@@ -58,6 +58,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
     openAction(actionId, {
       prefilledData: {
         validatorAddress: validator.address,
+        signerAddress: validator.address,
       },
     });
   };

@@ -116,8 +116,8 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const activeActionId = selectedTab?.value || currentActionId;
 
   const modalSlot = useMemo(() => {
-    return manifest?.actions?.find((a) => a.id === activeActionId)?.ui?.slots?.modal;
-  }, [activeActionId, manifest]);
+    return manifest?.actions?.find((a) => a.id === currentActionId)?.ui?.slots?.modal;
+  }, [currentActionId, manifest]);
 
   const modalClassName = modalSlot?.className;
   const modalStyle: React.CSSProperties | undefined = modalSlot?.style;
@@ -195,9 +195,9 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
             {selectedTab && (
               <motion.div
                 key={selectedTab.value}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
+                transition={{ duration: 0.25, delay: 0.05 }}
                 className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide hover:scrollbar-default min-h-0 px-3 pb-3 sm:px-5 sm:pb-5 md:px-6 md:pb-6"
               >
                 <Suspense fallback={<ActionRunnerFallback />}>
