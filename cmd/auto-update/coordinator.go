@@ -248,14 +248,9 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// only set up the update timer when an updater is configured
-	var timerC <-chan time.Time
-	var timer *time.Timer
-	if c.updater != nil {
-		timer = time.NewTimer(0)
-		defer timer.Stop()
-		timerC = timer.C
-	}
+	// kick off an immediate check
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	// update loop
 	for {
 		select {
@@ -280,7 +275,10 @@ func (c *Coordinator) UpdateLoop(cancelSignal chan os.Signal) error {
 			c.log.Info("completed graceful shutdown")
 			return err
 		// periodic check for updates
-		case <-timerC:
+		case <-timer.C:
+			if !c.updater.Enabled {
+				continue
+			}
 			// wrap it on a goroutine so it doesn't block the main loop
 			go func() {
 				c.log.Infof("checking for updates")
@@ -318,9 +316,6 @@ func (c *Coordinator) GracefulShutdown() error {
 
 // CheckAndApplyUpdate performs a single update check and applies if needed
 func (c *Coordinator) CheckAndApplyUpdate(ctx context.Context) error {
-	if c.updater == nil {
-		return nil
-	}
 	// check if an update is already in progress
 	if c.updateInProgress.Load() {
 		c.log.Debug("update already in progress, skipping check")

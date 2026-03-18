@@ -107,21 +107,19 @@ func main() {
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	// setup the dependencies (nil when auto-update is disabled)
-	var updater, pluginUpdater *ReleaseManager
+	// setup the dependencies
+	autoUpdateEnabled := configs.Coordinator.Canopy.AutoUpdate
+	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion, autoUpdateEnabled)
+	snapshot := NewSnapshotManager(configs.Snapshot)
+	// setup plugin updater and config if configured
+	var pluginUpdater *ReleaseManager
 	var pluginConfig *PluginReleaseConfig
-	var snapshot *SnapshotManager
-	if configs.Coordinator.Canopy.AutoUpdate {
-		updater = NewReleaseManager(configs.Updater, rpc.SoftwareVersion)
-		snapshot = NewSnapshotManager(configs.Snapshot)
-		// setup plugin updater and config if configured
-		if configs.PluginUpdater != nil {
-			pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
-			pluginConfig = configs.PluginUpdater.PluginConfig
-			logger.Infof("plugin auto-update enabled from %s/%s",
-				configs.PluginUpdater.RepoOwner,
-				configs.PluginUpdater.RepoName)
-		}
+	if configs.PluginUpdater != nil {
+		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0", true)
+		pluginConfig = configs.PluginUpdater.PluginConfig
+		logger.Infof("plugin auto-update enabled from %s/%s",
+			configs.PluginUpdater.RepoOwner,
+			configs.PluginUpdater.RepoName)
 	}
 	supervisor := NewSupervisor(logger, pluginConfig)
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
