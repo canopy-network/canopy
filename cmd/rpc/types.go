@@ -26,9 +26,17 @@ type chainRequest struct {
 }
 
 type orderRequest struct {
-	ChainId uint64 `json:"chainId"`
-	OrderId string `json:"orderId"`
+	Committee uint64 `json:"committee"`
+	OrderId   string `json:"orderId"`
 	heightRequest
+}
+
+type ordersRequest struct {
+	Committee          uint64 `json:"committee"`
+	SellersSendAddress string `json:"sellersSendAddress"`
+	BuyerSendAddress   string `json:"buyerSendAddress"`
+	heightRequest
+	lib.PageParams
 }
 
 type heightsRequest struct {

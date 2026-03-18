@@ -379,8 +379,13 @@ func (r *RCSubscription) dialWithBackoff(chainId uint64, config lib.RootChain) {
 		// fallback if url didn't have a scheme and was treated as a path
 		host = parsedUrl.Path
 	}
+	// determine websocket scheme based on original URL scheme
+	wsScheme := "ws"
+	if parsedUrl.Scheme == "https" || parsedUrl.Scheme == "wss" {
+		wsScheme = "wss"
+	}
 	// create a URL to connect to the root chain with
-	u := url.URL{Scheme: "ws", Host: host, Path: SubscribeRCInfoPath, RawQuery: fmt.Sprintf("%s=%d", chainIdParamName, chainId)}
+	u := url.URL{Scheme: wsScheme, Host: host, Path: SubscribeRCInfoPath, RawQuery: fmt.Sprintf("%s=%d", chainIdParamName, chainId)}
 	// create a new retry for backoff
 	retry := lib.NewRetry(uint64(time.Second.Milliseconds()), 25)
 	// until backoff fails or connection succeeds

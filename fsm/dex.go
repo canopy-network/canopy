@@ -69,6 +69,11 @@ func (s *StateMachine) HandleDexBatch(chainId uint64, results *lib.CertificateRe
 		}
 		// use the root chainId as the remote batch
 		remoteBatch = results.RootDexBatch
+		// retrieve the cached root dex batch
+		if remoteBatch != nil && !remoteBatch.LivenessFallback {
+			// use cache
+			remoteBatch = s.cache.rootDexBatch
+		}
 	}
 	// retrieve the pool amount for the chain id
 	liqPoolSize, err := s.GetPoolBalance(chainId + LiquidityPoolAddend)
@@ -190,7 +195,14 @@ func (s *StateMachine) HandleRemoteDexBatch(remoteBatch *lib.DexBatch, chainId u
 		}
 	}
 	// 3) ROTATE BATCHES
-	return s.RotateDexBatches(remoteBatch.Hash(), midPointPoolSize, counterPoolSizeMirror, chainId, receipts)
+	// LivenessFallback is a local execution signal and must not alter receipt-hash linkage.
+	receiptsHash := remoteBatch.Hash()
+	if remoteBatch.LivenessFallback {
+		canonicalRemote := remoteBatch.Copy()
+		canonicalRemote.LivenessFallback = false
+		receiptsHash = canonicalRemote.Hash()
+	}
+	return s.RotateDexBatches(receiptsHash, midPointPoolSize, counterPoolSizeMirror, chainId, receipts)
 }
 
 // HandleReceiptsForOurLockedBatch() 1. processes receipts for our locked batch
@@ -555,6 +567,63 @@ func (s *StateMachine) RotateDexBatches(receiptsHash []byte, lPoolSize, counterP
 	}
 	// set the upcoming sell batch as 'last'
 	return s.SetDexBatch(KeyForLockedBatch(chainId), nextSellBatch)
+}
+
+// IncludeSameBlockDex() moves same-block ops from next -> locked batch when capacity allows.
+func (s *StateMachine) IncludeSameBlockDex() lib.ErrorI {
+	canMove := func(lockedLen, nextLen, max int) int {
+		if nextLen == 0 || lockedLen >= max {
+			return 0
+		}
+		remaining := max - lockedLen
+		if nextLen < remaining {
+			return nextLen
+		}
+		return remaining
+	}
+	return s.IterateAndExecute(lib.JoinLenPrefix(dexPrefix, lockedBatchSegment), func(k, v []byte) lib.ErrorI {
+		dexBatch := new(lib.DexBatch)
+		// unmarshal bytes
+		if err := lib.Unmarshal(v, dexBatch); err != nil {
+			return err
+		}
+		// only process batches locked in the current block
+		if dexBatch.LockedHeight != s.height {
+			return nil
+		}
+		// retrieve next batch
+		nextBatch, err := s.GetDexBatch(dexBatch.Committee, false)
+		if err != nil {
+			return err
+		}
+		ordersToMove := canMove(len(dexBatch.Orders), len(nextBatch.Orders), lib.MaxOrdersPerDexBatch)
+		if ordersToMove != 0 {
+			dexBatch.Orders = append(dexBatch.Orders, nextBatch.Orders[:ordersToMove]...)
+			nextBatch.Orders = nextBatch.Orders[ordersToMove:]
+		}
+		depositsToMove := canMove(len(dexBatch.Deposits), len(nextBatch.Deposits), lib.MaxDepositsPerDexBatch)
+		if depositsToMove != 0 {
+			dexBatch.Deposits = append(dexBatch.Deposits, nextBatch.Deposits[:depositsToMove]...)
+			nextBatch.Deposits = nextBatch.Deposits[depositsToMove:]
+		}
+		withdrawalsToMove := canMove(len(dexBatch.Withdrawals), len(nextBatch.Withdrawals), lib.MaxWithdrawsPerDexBatch)
+		if withdrawalsToMove != 0 {
+			dexBatch.Withdrawals = append(dexBatch.Withdrawals, nextBatch.Withdrawals[:withdrawalsToMove]...)
+			nextBatch.Withdrawals = nextBatch.Withdrawals[withdrawalsToMove:]
+		}
+		// nothing to move for this committee
+		if ordersToMove == 0 && depositsToMove == 0 && withdrawalsToMove == 0 {
+			return nil
+		}
+		if err = s.SetDexBatch(k, dexBatch); err != nil {
+			return err
+		}
+		nextKey := KeyForNextBatch(dexBatch.Committee)
+		if len(nextBatch.Orders) == 0 && len(nextBatch.Deposits) == 0 && len(nextBatch.Withdrawals) == 0 {
+			return s.Delete(nextKey)
+		}
+		return s.SetDexBatch(nextKey, nextBatch)
+	})
 }
 
 // HandleLivenessFallback() refunds orders, liquidity deposits, and mirrors the root chain's liquidity points

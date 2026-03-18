@@ -85,6 +85,10 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
+	// optimization to include any last minute dex ops in the batch
+	if err = s.IncludeSameBlockDex(); err != nil {
+		return
+	}
 	// execute plugin end block if enabled
 	if s.Plugin != nil {
 		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{

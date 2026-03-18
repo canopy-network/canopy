@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/fsm"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -259,9 +260,27 @@ func (c *Client) Order(height uint64, orderId string, chainId uint64) (p *lib.Se
 }
 
 func (c *Client) Orders(height, chainId uint64) (p *lib.OrderBooks, err lib.ErrorI) {
-	p = new(lib.OrderBooks)
-	err = c.heightAndIdRequest(OrdersRouteName, height, chainId, p)
-	return
+	// send ordersRequest matching the paginated server handler
+	bz, err := lib.MarshalJSON(ordersRequest{
+		Committee:     chainId,
+		heightRequest: heightRequest{height},
+		PageParams:    lib.PageParams{PageNumber: 1, PerPage: 10000},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// unmarshal into a Page (server returns paginated results)
+	page := new(lib.Page)
+	if err = c.post(OrdersRouteName, bz, page); err != nil {
+		return nil, err
+	}
+	// extract SellOrders from the page results
+	orders, ok := page.Results.(*lib.SellOrders)
+	if !ok || orders == nil {
+		return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: nil}}}, nil
+	}
+	// convert to OrderBooks for backward compatibility
+	return &lib.OrderBooks{OrderBooks: []*lib.OrderBook{{ChainId: chainId, Orders: []*lib.SellOrder(*orders)}}}, nil
 }
 
 func (c *Client) DexPrice(height, chainId uint64) (p *lib.DexPrice, err lib.ErrorI) {
@@ -279,6 +298,11 @@ func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBa
 func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
 	p = new(lib.DexBatch)
 	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
+	return
+}
+
+func (c *Client) OracleOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
+	err = c.paginatedHeightRequest(OracleOrdersRouteName, height, params, &orders)
 	return
 }
 
@@ -1018,10 +1042,10 @@ func (c *Client) heightRequest(routeName string, height uint64, ptr any) (err li
 	return
 }
 
-func (c *Client) orderRequest(routeName string, height uint64, orderId string, chainId uint64, ptr any) (err lib.ErrorI) {
+func (c *Client) orderRequest(routeName string, height uint64, orderId string, committee uint64, ptr any) (err lib.ErrorI) {
 	bz, err := lib.MarshalJSON(orderRequest{
-		ChainId: chainId,
-		OrderId: orderId,
+		Committee: committee,
+		OrderId:   orderId,
 		heightRequest: heightRequest{
 			Height: height,
 		},

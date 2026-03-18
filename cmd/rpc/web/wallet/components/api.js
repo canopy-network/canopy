@@ -8,8 +8,8 @@ if (typeof window !== "undefined") {
     adminRPCURL = window.__CONFIG__.adminRPCURL;
     chainId = Number(window.__CONFIG__.chainId);
   }
-  rpcURL = rpcURL.replace("localhost", window.location.hostname);
-  adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
+  // rpcURL = rpcURL.replace("localhost", window.location.hostname);
+  // adminRPCURL = adminRPCURL.replace("localhost", window.location.hostname);
 } else {
   console.log("config undefined");
 }
@@ -624,7 +624,7 @@ export async function TxDeleteOrder(address, chainId, orderId, memo, fee, passwo
   return POST(
     adminRPCURL,
     txDeleteOrder,
-    newSellOrderTxRequest(address, chainId, orderId, 0, 0, "", memo, Number(fee), submit, password),
+    newSellOrderTxRequest(address, chainId, orderId, "", 0, 0, "", memo, Number(fee), submit, password),
   );
 }
 
