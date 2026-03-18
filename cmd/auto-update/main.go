@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -93,30 +94,36 @@ func main() {
 	}
 	// do not run the auto-update process if its disabled
 	if !configs.Coordinator.Canopy.AutoUpdate {
-		logger.Info("auto-update disabled, starting CLI directly")
-		cli.Start()
-		return
+		binPath := configs.Coordinator.BinPath
+		if !isExecutable(binPath) {
+			logger.Info("auto-update disabled, no downloaded binary found, starting CLI in-process")
+			cli.Start()
+			return
+		}
+		logger.Infof("auto-update disabled, starting downloaded binary: %s", binPath)
+	} else {
+		logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
 	}
-	logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	// setup the dependencies
-	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion)
-	snapshot := NewSnapshotManager(configs.Snapshot)
-
-	// setup plugin updater and config if configured
-	var pluginUpdater *ReleaseManager
+	// setup the dependencies (nil when auto-update is disabled)
+	var updater, pluginUpdater *ReleaseManager
 	var pluginConfig *PluginReleaseConfig
-	if configs.PluginUpdater != nil {
-		pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
-		pluginConfig = configs.PluginUpdater.PluginConfig
-		logger.Infof("plugin auto-update enabled from %s/%s",
-			configs.PluginUpdater.RepoOwner,
-			configs.PluginUpdater.RepoName)
+	var snapshot *SnapshotManager
+	if configs.Coordinator.Canopy.AutoUpdate {
+		updater = NewReleaseManager(configs.Updater, rpc.SoftwareVersion)
+		snapshot = NewSnapshotManager(configs.Snapshot)
+		// setup plugin updater and config if configured
+		if configs.PluginUpdater != nil {
+			pluginUpdater = NewReleaseManager(configs.PluginUpdater, "v0.0.0")
+			pluginConfig = configs.PluginUpdater.PluginConfig
+			logger.Infof("plugin auto-update enabled from %s/%s",
+				configs.PluginUpdater.RepoOwner,
+				configs.PluginUpdater.RepoName)
+		}
 	}
 	supervisor := NewSupervisor(logger, pluginConfig)
-
 	coordinator := NewCoordinator(configs.Coordinator, updater, pluginUpdater, supervisor, snapshot, logger)
 	// start the update loop
 	err := coordinator.UpdateLoop(sigChan)
@@ -155,10 +162,20 @@ func getConfigs() (*Configs, lib.LoggerI) {
 	binPath := envOrDefault("BIN_PATH", defaultBinPath)
 	githubToken := envOrDefault("CANOPY_GITHUB_API_TOKEN", "")
 
+	// core auto-update repo: config.json or defaults
+	repoOwner := canopyConfig.AutoUpdateRepoOwner
+	if repoOwner == "" {
+		repoOwner = defaultRepoOwner
+	}
+	repoName := canopyConfig.AutoUpdateRepoName
+	if repoName == "" {
+		repoName = defaultRepoName
+	}
+
 	updater := &ReleaseManagerConfig{
 		Type:           ReleaseTypeCLI,
-		RepoName:       envOrDefault("REPO_NAME", defaultRepoName),
-		RepoOwner:      envOrDefault("REPO_OWNER", defaultRepoOwner),
+		RepoName:       repoName,
+		RepoOwner:      repoOwner,
 		GithubApiToken: githubToken,
 		BinPath:        binPath,
 		SnapshotKey:    snapshotMetadataKey,
@@ -211,6 +228,22 @@ func getConfigs() (*Configs, lib.LoggerI) {
 		Coordinator:   coordinator,
 		LoggerI:       l,
 	}, l
+}
+
+// isExecutable returns true if path exists, is a regular file, and has execute permission.
+func isExecutable(path string) bool {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return false
+	}
+	return info.Mode()&0111 != 0
 }
 
 // envOrDefault returns the value of the environment variable with the given key,
