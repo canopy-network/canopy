@@ -230,17 +230,21 @@ func getConfigs() (*Configs, lib.LoggerI) {
 
 // isExecutable returns true if path exists, is a regular file, and has execute permission.
 func isExecutable(path string) bool {
+	// resolve to absolute path to avoid relative path ambiguity
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return false
 	}
+	// check if the file exists and is accessible
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return false
 	}
+	// directories are not executable binaries
 	if info.IsDir() {
 		return false
 	}
+	// check for any execute bit (owner, group, or other)
 	return info.Mode()&0111 != 0
 }
 
