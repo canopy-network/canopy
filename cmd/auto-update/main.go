@@ -92,17 +92,14 @@ func main() {
 			"This message appears because the program was started directly instead of using 'start'.")
 		return
 	}
-	// do not run the auto-update process if its disabled
-	if !configs.Coordinator.Canopy.AutoUpdate {
-		binPath := configs.Coordinator.BinPath
-		if !isExecutable(binPath) {
-			logger.Info("auto-update disabled, no downloaded binary found, starting CLI in-process")
-			cli.Start()
-			return
-		}
-		logger.Infof("auto-update disabled, starting downloaded binary: %s", binPath)
-	} else {
+	// ensure the binary exists before proceeding
+	if !isExecutable(configs.Coordinator.BinPath) {
+		logger.Fatalf("canopy binary not found or not executable: %s", configs.Coordinator.BinPath)
+	}
+	if configs.Coordinator.Canopy.AutoUpdate {
 		logger.Infof("auto-update enabled, starting coordinator on version %s", rpc.SoftwareVersion)
+	} else {
+		logger.Infof("auto-update disabled, starting binary: %s", configs.Coordinator.BinPath)
 	}
 	// handle external shutdown signals
 	sigChan := make(chan os.Signal, 1)
