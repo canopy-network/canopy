@@ -99,25 +99,29 @@ func (c *Controller) CheckMempool() {
 		// keep a list of transaction needing to be gossipped
 		var toGossip [][]byte
 		// if recheck is necessary
-		if c.Mempool.recheck.Load() {
-			// execute in a function call to allow defer
-			func() {
-				c.Mempool.L.Lock()
-				defer c.Mempool.L.Unlock()
-				// be mempool strict on proposals
-				resetProposalConfig := c.SetFSMInConsensusModeForProposals()
-				// once done proposing, 'reset' the proposal mode back to default to 'accept all'
-				defer func() { resetProposalConfig() }()
-				// reset the mempool
-				c.Mempool.FSM.Reset()
-				// check the mempool to cache a proposal block and validate the mempool itself
-				c.Mempool.CheckMempool()
-				// get the transactions to gossip
-				toGossip = c.Mempool.GetTransactions(math.MaxUint64)
-				// set recheck to false
-				c.Mempool.recheck.Store(false)
-			}()
-		}
+		// NOTE: recheck is temporarily disabled — on nested chains with matching block times,
+		// there's a race condition where root chain info isn't updated before the mempool cache
+		// queries it right after a block commit; the mempool runs continuously with a minimum frequency
+		// of LazyMempoolCheckFrequencyS seconds until this is resolved, or may be removed in the future
+		// if c.Mempool.recheck.Load() {
+		// execute in a function call to allow defer
+		func() {
+			c.Mempool.L.Lock()
+			defer c.Mempool.L.Unlock()
+			// be mempool strict on proposals
+			resetProposalConfig := c.SetFSMInConsensusModeForProposals()
+			// once done proposing, 'reset' the proposal mode back to default to 'accept all'
+			defer func() { resetProposalConfig() }()
+			// reset the mempool
+			c.Mempool.FSM.Reset()
+			// check the mempool to cache a proposal block and validate the mempool itself
+			c.Mempool.CheckMempool()
+			// get the transactions to gossip
+			toGossip = c.Mempool.GetTransactions(math.MaxUint64)
+			// set recheck to false
+			c.Mempool.recheck.Store(false)
+		}()
+		// } mempool recheck `if` end
 		// for each transaction to gossip
 		var dedupedTxs [][]byte
 		for _, tx := range toGossip {
@@ -226,13 +230,6 @@ func (m *Mempool) CheckMempool() {
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
 	m.stop = stop
-	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
-	if err != nil {
-		m.log.Warnf("Check Mempool error: %s", err.Error())
-		return
-	}
-	// set the block result block header
-	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
 	// get RC build height
 	rcBuildHeight := m.controller.RootChainHeight()
 	// calculate rc build height
@@ -243,7 +240,22 @@ func (m *Mempool) CheckMempool() {
 	// if ownRoot
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
+	} else {
+		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
+		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
+		if err != nil {
+			m.log.Warnf("Check Mempool error: %s", err.Error())
+		}
+		m.FSM.SetRootDexCache(rootDexBatch)
 	}
+	// apply the block to the mempool FSM to get the result and validate the transactions
+	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
+	if err != nil {
+		m.log.Warnf("Check Mempool error: %s", err.Error())
+		return
+	}
+	// set the block result block header
+	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
 		Block:         block,
