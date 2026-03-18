@@ -105,8 +105,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	// setup the dependencies
-	autoUpdateEnabled := configs.Coordinator.Canopy.AutoUpdate
-	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion, autoUpdateEnabled)
+	updater := NewReleaseManager(configs.Updater, rpc.SoftwareVersion, configs.Coordinator.Canopy.AutoUpdate)
 	snapshot := NewSnapshotManager(configs.Snapshot)
 	// setup plugin updater and config if configured
 	var pluginUpdater *ReleaseManager
