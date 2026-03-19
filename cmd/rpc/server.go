@@ -341,7 +341,7 @@ var explorerFS embed.FS
 //go:embed all:web/wallet/out
 var walletFS embed.FS
 
-// runStaticFileServer creates a web server serving static files
+// runStaticFileServer creates a web server serving static files with SPA fallback
 func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.Config) {
 	// Attempt to get a sub-filesystem rooted at the specified directory
 	distFS, err := fs.Sub(fileSys, dir)
@@ -352,13 +352,16 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 
 	// Create a new ServeMux to handle incoming HTTP requests
 	mux := http.NewServeMux()
-	fileServer := http.FileServer(http.FS(distFS))
 
 	// Define a handler function for the root path
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		serveIndex := func() {
+		requestedPath := r.URL.Path
+
+		// Helper function to serve index.html with config injection
+		serveIndexHTML := func() {
 			// Construct the file path for `index.html`
 			filePath := path.Join(dir, "index.html")
+
 			// Read the content of `index.html` into a byte slice
 			htmlBytes, e := fs.ReadFile(fileSys, filePath)
 			if e != nil {
@@ -372,26 +375,40 @@ func (s *Server) runStaticFileServer(fileSys fs.FS, dir, port string, conf lib.C
 			// Set the response header as HTML and write the injected content to the response
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(injectedHTML))
+			w.Write([]byte(injectedHTML))
 		}
 
-		// Serve `index.html` with dynamic config injection
-		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-			serveIndex()
+		// Serve index.html for root path
+		if requestedPath == "/" || requestedPath == "/index.html" {
+			serveIndexHTML()
 			return
 		}
 
-		// Serve real static assets if they exist.
-		requestPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-		if requestPath != "" {
-			if _, e := fs.Stat(distFS, requestPath); e == nil {
-				fileServer.ServeHTTP(w, r)
+		// Check if the requested path has a file extension (indicates static asset)
+		// Common static asset extensions: .js, .css, .svg, .png, .jpg, .jpeg, .gif, .ico, .woff, .woff2, .ttf, .eot, .map
+		ext := path.Ext(requestedPath)
+		isStaticAsset := ext != ""
+
+		if isStaticAsset {
+			// Try to serve the static asset from the file system
+			// Remove leading slash for fs.Open
+			assetPath := strings.TrimPrefix(requestedPath, "/")
+
+			// Check if the file exists in the embedded filesystem
+			if _, err := distFS.Open(assetPath); err == nil {
+				// File exists, serve it
+				http.FileServer(http.FS(distFS)).ServeHTTP(w, r)
 				return
 			}
+
+			// Static asset not found, return 404
+			http.NotFound(w, r)
+			return
 		}
 
-		// SPA fallback: unknown client-side routes resolve to index.html.
-		serveIndex()
+		// For all other requests (no file extension = HTML navigation),
+		// serve index.html to enable SPA client-side routing
+		serveIndexHTML()
 	})
 
 	// Start the HTTP server in a new goroutine and listen on the specified port
