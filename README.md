@@ -1,4 +1,4 @@
-<img src="https://github.com/user-attachments/assets/b8d6f342-c18b-492e-b87f-06755f775c5f" alt="Canopy Logo" width="500"/>
+VJBillionz1<img src="https://github.com/user-attachments/assets/b8d6f342-c18b-492e-b87f-06755f775c5f" alt="Canopy Logo" width="500"/>
 
 _Official golang implementation of the Canopy Network Protocol_
 
