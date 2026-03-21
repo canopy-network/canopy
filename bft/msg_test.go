@@ -231,3 +231,15 @@ func TestProposerMessageQCAllowsWrongRootHeightOnlyWhenPartialQC(t *testing.T) {
 	require.NoError(t, c.bft.HandleMessage(msg))
 	require.Len(t, c.bft.PartialQCs, 1)
 }
+
+func TestHandleMessageNilSignatureReturnsError(t *testing.T) {
+	c := newTestConsensus(t, ProposeVote, 3)
+	msg := &Message{
+		Qc: &QC{
+			Header: c.view(ProposeVote, 0),
+		},
+	}
+	errI := c.bft.HandleMessage(msg)
+	require.Error(t, errI)
+	require.Equal(t, ErrPartialSignatureEmpty().Code(), errI.Code())
+}

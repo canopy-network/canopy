@@ -282,6 +282,12 @@ func (x *Message) checkBasic(view *lib.View) lib.ErrorI {
 
 // GetValidateMessageParams() executes a blocking function to collect the params needed to validate a consensus message
 func (b *BFT) GetValidateMessageParams(msg *Message) (*validateMessageParams, lib.ErrorI) {
+	if msg == nil {
+		return nil, ErrEmptyMessage()
+	}
+	if err := checkSignatureBasic(msg.Signature); err != nil {
+		return nil, err
+	}
 	// lock the controller for thread safety
 	b.Controller.Lock()
 	defer b.Controller.Unlock()

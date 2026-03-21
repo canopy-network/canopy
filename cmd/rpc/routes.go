@@ -19,7 +19,6 @@ const (
 	PoolsRoutePath                 = "/v1/query/pools"
 	ValidatorRoutePath             = "/v1/query/validator"
 	ValidatorsRoutePath            = "/v1/query/validators"
-	CommitteeRoutePath             = "/v1/query/committee"
 	CommitteeDataRoutePath         = "/v1/query/committee-data"
 	CommitteesDataRoutePath        = "/v1/query/committees-data"
 	SubsidizedCommitteesRoutePath  = "/v1/query/subsidized-committees"
@@ -120,7 +119,6 @@ const (
 	ValidatorRouteName             = "validator"
 	ValidatorsRouteName            = "validators"
 	ValidatorSetRouteName          = "validator-set"
-	CommitteeRouteName             = "committee"
 	CommitteeDataRouteName         = "committee-data"
 	CommitteesDataRouteName        = "committees-data"
 	SubsidizedCommitteesRouteName  = "subsidized-committees"
@@ -226,7 +224,6 @@ var routePaths = routes{
 	PoolsRouteName:                 {Method: http.MethodPost, Path: PoolsRoutePath},
 	ValidatorRouteName:             {Method: http.MethodPost, Path: ValidatorRoutePath},
 	ValidatorsRouteName:            {Method: http.MethodPost, Path: ValidatorsRoutePath},
-	CommitteeRouteName:             {Method: http.MethodPost, Path: CommitteeRoutePath},
 	CommitteeDataRouteName:         {Method: http.MethodPost, Path: CommitteeDataRoutePath},
 	CommitteesDataRouteName:        {Method: http.MethodPost, Path: CommitteesDataRoutePath},
 	SubsidizedCommitteesRouteName:  {Method: http.MethodPost, Path: SubsidizedCommitteesRoutePath},
@@ -331,7 +328,6 @@ func createRouter(s *Server) *httprouter.Router {
 		PoolsRouteName:                 s.Pools,
 		ValidatorRouteName:             s.Validator,
 		ValidatorsRouteName:            s.Validators,
-		CommitteeRouteName:             s.Committee,
 		ValidatorSetRouteName:          s.ValidatorSet,
 		CommitteeDataRouteName:         s.CommitteeData,
 		CommitteesDataRouteName:        s.CommitteesData,

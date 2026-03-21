@@ -541,14 +541,12 @@ func (c *Controller) HandlePeerBlock(msg *lib.BlockMessage, syncing bool) (*lib.
 				checkpoint, err = c.RCManager.GetCheckpoint(c.LoadRootChainId(qc.Header.Height), qc.Header.Height, c.Config.ChainId)
 				// if getting the checkpoint failed
 				if err != nil {
-					// warn of the inability to get the checkpoint
-					c.log.Warnf(err.Error())
+					return nil, err
 				}
 			}
 			// if checkpoint fails
 			if len(checkpoint) != 0 && !bytes.Equal(qc.BlockHash, checkpoint) {
-				// log and kill program
-				c.log.Fatalf("Invalid checkpoint %s vs %s at height %d", lib.BytesToString(qc.BlockHash), checkpoint, qc.Header.Height)
+				return nil, fsm.ErrInvalidCheckpoint()
 			}
 		}
 	} else {

@@ -216,12 +216,6 @@ func (c *Client) Validators(height uint64, params lib.PageParams, filter lib.Val
 	return
 }
 
-func (c *Client) Committee(height uint64, id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
-	p = new(lib.Page)
-	err = c.paginatedHeightRequest(CommitteeRouteName, height, params, p, lib.ValidatorFilters{Committee: id})
-	return
-}
-
 func (c *Client) CommitteeData(height uint64, id uint64) (p *lib.CommitteeData, err lib.ErrorI) {
 	p = new(lib.CommitteeData)
 	err = c.heightAndIdRequest(CommitteeDataRouteName, height, id, p)

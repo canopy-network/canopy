@@ -94,6 +94,14 @@ func (b *BatchVerifier) Add(pk PublicKeyI, publicKey, message, signature []byte)
 	return
 }
 
+// Count() returns the number of signatures added to the batch verifier.
+func (b *BatchVerifier) Count() int {
+	if b == nil {
+		return 0
+	}
+	return b.count
+}
+
 // Verify() returns the indices of bad signatures (if any)
 func (b *BatchVerifier) Verify() (badIndices []int) {
 	// initialize sync variables
