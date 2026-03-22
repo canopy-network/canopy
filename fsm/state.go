@@ -214,15 +214,32 @@ func (s *StateMachine) ApplyTransactions(ctx context.Context, txs [][]byte, r *l
 	}
 	// keep a map to track transactions that failed 'check'
 	failedCheckTxs := map[int]error{}
+	// map signature batch indices back to original tx indices
+	batchToTxIdx := make([]int, 0, len(txs))
 	// first batch validate signatures over the entire set
 	for i, tx := range txs {
+		preCount := batchVerifier.Count()
+		checkStore := s.Store().(lib.StoreI)
+		checkTxn, e := s.TxnWrap()
+		if e != nil {
+			return e
+		}
 		if _, checkErr := s.CheckTx(tx, "", batchVerifier); checkErr != nil {
 			failedCheckTxs[i] = checkErr
+		}
+		checkTxn.Discard()
+		s.SetStore(checkStore)
+		postCount := batchVerifier.Count()
+		for j := preCount; j < postCount; j++ {
+			batchToTxIdx = append(batchToTxIdx, i)
 		}
 	}
 	// execute batch verification of the signatures in the block
 	for _, failedIdx := range batchVerifier.Verify() {
-		failedCheckTxs[failedIdx] = ErrInvalidSignature()
+		if failedIdx < 0 || failedIdx >= len(batchToTxIdx) {
+			return ErrInvalidSignature()
+		}
+		failedCheckTxs[batchToTxIdx[failedIdx]] = ErrInvalidSignature()
 	}
 	// set the store back to the original at the end of processing
 	originalStore := s.Store().(lib.StoreI)
@@ -428,6 +445,10 @@ func (s *StateMachine) GetMaxBlockSize() (uint64, lib.ErrorI) {
 	consParams, err := s.GetParamsCons()
 	if err != nil {
 		return 0, err
+	}
+	// fail closed on malformed persisted config to avoid uint64 underflow.
+	if consParams.BlockSize < lib.MaxBlockHeaderSize {
+		return 0, ErrInvalidParam(ParamBlockSize)
 	}
 	// return the max block size
 	return consParams.BlockSize - lib.MaxBlockHeaderSize, nil

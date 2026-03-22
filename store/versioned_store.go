@@ -63,7 +63,6 @@ type VersionedStore struct {
 	batch        *pebble.Batch
 	closed       bool
 	version      uint64
-	keyBuffer    []byte
 	decodeBuffer [][]byte
 }
 
@@ -74,7 +73,6 @@ func NewVersionedStore(db pebble.Reader, batch *pebble.Batch, version uint64) *V
 		batch:        batch,
 		closed:       false,
 		version:      version,
-		keyBuffer:    make([]byte, 0, 256),
 		decodeBuffer: make([][]byte, 0, 5),
 	}
 }
@@ -506,14 +504,11 @@ func (vs *VersionedStore) makeVersionedKey(userKey []byte, version uint64) []byt
 	// validate key is length-prefixed
 	_ = lib.DecodeLengthPrefixed(userKey)
 	keyLength := len(userKey) + VersionSize
-	vs.keyBuffer = ensureCapacity(vs.keyBuffer, keyLength)
-	// copy user key into buffer
-	offset := copy(vs.keyBuffer, userKey)
-	// use the inverted version (^version) so newer versions sort first
-	binary.BigEndian.PutUint64(vs.keyBuffer[offset:], ^version)
-	// return a copy to prevent buffer reuse issues
 	result := make([]byte, keyLength)
-	copy(result, vs.keyBuffer)
+	// copy user key into buffer
+	offset := copy(result, userKey)
+	// use the inverted version (^version) so newer versions sort first
+	binary.BigEndian.PutUint64(result[offset:], ^version)
 	// exit
 	return result
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -226,6 +227,59 @@ func TestCertificateSignBytes(t *testing.T) {
 	require.Equal(t, expected, got)
 }
 
+func TestCheckProposalBasicNilResultsReturnsError(t *testing.T) {
+	const (
+		networkID = uint64(1)
+		chainID   = uint64(1)
+		height    = uint64(1)
+	)
+	block := &Block{BlockHeader: &BlockHeader{
+		Height:             height,
+		NetworkId:          uint32(networkID),
+		Time:               1,
+		LastBlockHash:      crypto.Hash([]byte("last")),
+		StateRoot:          crypto.Hash([]byte("state")),
+		TransactionRoot:    crypto.Hash([]byte("txroot")),
+		ValidatorRoot:      crypto.Hash([]byte("vroot")),
+		NextValidatorRoot:  crypto.Hash([]byte("nextvroot")),
+		ProposerAddress:    newTestAddressBytes(t),
+		TotalVdfIterations: 0,
+	}}
+	blockHash, err := block.Hash()
+	require.NoError(t, err)
+	blockBz, err := Marshal(block)
+	require.NoError(t, err)
+	qc := &QuorumCertificate{
+		Header: &View{
+			Height:    height,
+			NetworkId: networkID,
+			ChainId:   chainID,
+		},
+		Block:     blockBz,
+		BlockHash: blockHash,
+		Results:   nil,
+	}
+	var gotErr ErrorI
+	require.NotPanics(t, func() {
+		_, gotErr = qc.CheckProposalBasic(height, networkID, chainID)
+	})
+	require.Equal(t, ErrNilCertResults(), gotErr)
+}
+
+func TestCertificateCheckBasicAllowsNilResults(t *testing.T) {
+	qc := &QuorumCertificate{
+		Header:      &View{},
+		BlockHash:   crypto.Hash([]byte("block")),
+		ResultsHash: crypto.Hash([]byte("results")),
+		Results:     nil,
+		Signature: &AggregateSignature{
+			Signature: bytes.Repeat([]byte("F"), 96),
+			Bitmap:    []byte("bm"),
+		},
+	}
+	require.NoError(t, qc.CheckBasic())
+}
+
 func TestCertificateResultsCheckBasic(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -358,6 +412,30 @@ func TestCertificateResultsCheckBasic(t *testing.T) {
 			error: "invalid buyer receive address",
 		},
 		{
+			name:   "invalid lock order",
+			detail: "a lock order deadline cannot be zero",
+			result: &CertificateResult{
+				RewardRecipients: &RewardRecipients{
+					PaymentPercents: []*PaymentPercents{{
+						Address: newTestAddressBytes(t),
+						ChainId: CanopyChainId,
+						Percent: 100,
+					}},
+				},
+				Orders: &Orders{
+					LockOrders: []*LockOrder{
+						{
+							OrderId:             newTestOrderId(t, 0),
+							BuyerSendAddress:    newTestAddressBytes(t),
+							BuyerReceiveAddress: newTestAddressBytes(t),
+							BuyerChainDeadline:  0,
+						},
+					},
+				},
+			},
+			error: "lock order deadline height is invalid",
+		},
+		{
 			name:   "invalid checkpoint hash",
 			detail: "a checkpoint hash is invalid",
 			result: &CertificateResult{
@@ -438,6 +516,81 @@ func TestCheckpointJSONHexEncoding(t *testing.T) {
 	require.NoError(t, json.Unmarshal(bz, &decoded))
 	require.Equal(t, original.Height, decoded.Height)
 	require.Equal(t, original.BlockHash, decoded.BlockHash)
+}
+
+func TestRewardRecipientsCheckBasicRejectsOverflowBypass(t *testing.T) {
+	recipients := &RewardRecipients{
+		PaymentPercents: []*PaymentPercents{
+			{
+				Address: newTestAddressBytes(t, 0),
+				ChainId: CanopyChainId,
+				Percent: 50,
+			},
+			{
+				Address: newTestAddressBytes(t, 1),
+				ChainId: CanopyChainId,
+				Percent: math.MaxUint64 - 25,
+			},
+		},
+	}
+	err := recipients.CheckBasic()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid percent allocation")
+}
+
+func TestCommitteeDataCombineRejectsPercentOverflow(t *testing.T) {
+	addr := newTestAddressBytes(t, 0)
+	base := &CommitteeData{
+		PaymentPercents: []*PaymentPercents{
+			{Address: addr, ChainId: CanopyChainId, Percent: math.MaxUint64},
+		},
+		NumberOfSamples: 1,
+		ChainId:         CanopyChainId,
+	}
+	incoming := &CommitteeData{
+		PaymentPercents: []*PaymentPercents{
+			{Address: addr, ChainId: CanopyChainId, Percent: 1},
+		},
+		NumberOfSamples: 1,
+		ChainId:         CanopyChainId,
+	}
+	err := base.Combine(incoming, CanopyChainId)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid percent allocation")
+}
+
+func TestOrdersCheckBasicRejectsOversizedLists(t *testing.T) {
+	tests := []struct {
+		name   string
+		orders *Orders
+	}{
+		{
+			name: "lock orders",
+			orders: &Orders{
+				LockOrders: make([]*LockOrder, MaxOrdersPerDexBatch+1),
+			},
+		},
+		{
+			name: "reset orders",
+			orders: &Orders{
+				ResetOrders: make([][]byte, MaxOrdersPerDexBatch+1),
+			},
+		},
+		{
+			name: "close orders",
+			orders: &Orders{
+				CloseOrders: make([][]byte, MaxOrdersPerDexBatch+1),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.orders.CheckBasic()
+			require.Error(t, err)
+			require.ErrorContains(t, err, "too many dex orders")
+		})
+	}
 }
 
 func newTestOrderId(_ *testing.T, variant int) []byte {

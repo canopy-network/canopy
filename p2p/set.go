@@ -52,6 +52,16 @@ type Peer struct {
 
 // Add() introduces a peer to the set
 func (ps *PeerSet) Add(p *Peer) (err lib.ErrorI) {
+	return ps.add(p, true)
+}
+
+// AddForce() introduces a peer to the set while bypassing inbound/outbound regular peer limits.
+// Intended for deterministic duplicate replacement where one existing connection is swapped for another.
+func (ps *PeerSet) AddForce(p *Peer) (err lib.ErrorI) {
+	return ps.add(p, false)
+}
+
+func (ps *PeerSet) add(p *Peer, enforceLimits bool) (err lib.ErrorI) {
 	// check if peer is already added
 	pubKey := lib.BytesToString(p.Address.PublicKey)
 	if _, found := ps.m[pubKey]; found {
@@ -62,7 +72,7 @@ func (ps *PeerSet) Add(p *Peer) (err lib.ErrorI) {
 		return nil
 	}
 	// if not trusted and not must connect, check inbound/outbound limits
-	if !p.IsTrusted && !p.IsMustConnect {
+	if enforceLimits && !p.IsTrusted && !p.IsMustConnect {
 		if err = ps.validateRegularPeerLimits(p); err != nil {
 			return
 		}

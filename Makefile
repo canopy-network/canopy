@@ -28,6 +28,7 @@ help:
 
 ## build/canopy: build the canopy binary into the GO_BIN_DIR
 build/canopy:
+	npm install --prefix $(EXPLORER_DIR) && npm run build --prefix $(EXPLORER_DIR)
 	go build -o $(GO_BIN_DIR)/canopy $(CLI_DIR)
 
 ## build/canopy-full: build the canopy binary and its wallet and explorer altogether

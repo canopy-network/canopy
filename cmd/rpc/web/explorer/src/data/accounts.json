@@ -1,0 +1,29 @@
+{
+  "page": {
+    "title": "Accounts",
+    "description": "Explore all accounts on the Canopy blockchain",
+    "totalAccounts": "Total:",
+    "accountsUnit": "accounts"
+  },
+  "table": {
+    "title": "Accounts List",
+    "headers": {
+      "address": "Address",
+      "balance": "Balance"
+    }
+  },
+  "filters": {
+    "allAccounts": "All Accounts",
+    "withBalance": "With Balance",
+    "zeroBalance": "Zero Balance",
+    "liveUpdates": "Live Updates"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "actions": {
+    "viewDetails": "View Details",
+    "export": "Export"
+  }
+}

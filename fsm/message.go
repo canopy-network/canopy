@@ -427,11 +427,10 @@ func (s *StateMachine) HandleMessageEditOrder(msg *MessageEditOrder) (err lib.Er
 	if msg.AmountForSale < valParams.MinimumOrderSize {
 		return ErrMinimumOrderSize()
 	}
-	// calculate the difference
-	difference, address := int(msg.AmountForSale-order.AmountForSale), crypto.NewAddress(order.SellersSendAddress)
+	address := crypto.NewAddress(order.SellersSendAddress)
 	// if adding to the order
-	if difference > 0 {
-		amountDifference := uint64(difference)
+	if msg.AmountForSale > order.AmountForSale {
+		amountDifference := msg.AmountForSale - order.AmountForSale
 		if err = s.AccountSub(address, amountDifference); err != nil {
 			return
 		}
@@ -440,8 +439,8 @@ func (s *StateMachine) HandleMessageEditOrder(msg *MessageEditOrder) (err lib.Er
 			return
 		}
 		// if subtracting from the order
-	} else if difference < 0 {
-		amountDifference := uint64(difference * -1)
+	} else if msg.AmountForSale < order.AmountForSale {
+		amountDifference := order.AmountForSale - msg.AmountForSale
 		// subtract from the committee escrow pool
 		if err = s.PoolSub(msg.ChainId+uint64(EscrowPoolAddend), amountDifference); err != nil {
 			return
