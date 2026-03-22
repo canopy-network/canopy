@@ -75,14 +75,16 @@ type ReleaseManager struct {
 	config     *ReleaseManagerConfig
 	httpClient *http.Client
 	Version    string // current version
+	Enabled    bool   // whether this updater should actively check for updates
 }
 
 // NewReleaseManager creates a new ReleaseManager instance
-func NewReleaseManager(config *ReleaseManagerConfig, version string) *ReleaseManager {
+func NewReleaseManager(config *ReleaseManagerConfig, version string, enabled bool) *ReleaseManager {
 	return &ReleaseManager{
 		config:     config,
 		httpClient: &http.Client{Timeout: httpReleaseClientTimeout},
 		Version:    version,
+		Enabled:    enabled,
 	}
 }
 

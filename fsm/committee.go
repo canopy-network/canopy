@@ -2,6 +2,8 @@ package fsm
 
 import (
 	"bytes"
+	"math"
+	"math/big"
 	"slices"
 
 	"github.com/canopy-network/canopy/lib"
@@ -14,7 +16,7 @@ import (
 func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 	subsidizedChainIds, daoCut, _, mintAmountPerCommittee, err := s.GetBlockMintStats(s.Config.ChainId)
 	if err != nil {
-		if err == lib.ErrNoSubsidizedCommittees(s.Config.ChainId) {
+		if err.Code() == lib.CodeNoSubsidizedCommittees {
 			return nil
 		}
 		return err
@@ -35,6 +37,9 @@ func (s *StateMachine) FundCommitteeRewardPools() lib.ErrorI {
 
 // GetBlockMintStats() gets the latest minting information for the blockchain
 func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []uint64, daoCut uint64, totalMint uint64, mintAmountPerCommittee uint64, err lib.ErrorI) {
+	if s.Config.BlocksPerHalvening == 0 {
+		return nil, 0, 0, 0, lib.ErrInvalidArgument()
+	}
 	// get governance params that are needed to complete this operation
 	govParams, err := s.GetParamsGov()
 	if err != nil {
@@ -57,7 +62,15 @@ func (s *StateMachine) GetBlockMintStats(chainId uint64) (subsidizedChainIds []u
 		return
 	}
 	// calculate the amount left for the committees after the parameterized DAO cut
-	mintAmountAfterDAOCut := lib.Uint64ReducePercentage(totalMintAmount, govParams.DaoRewardPercentage)
+	var mintAmountAfterDAOCut uint64
+	switch {
+	case govParams.DaoRewardPercentage >= 100 || totalMintAmount == 0:
+		mintAmountAfterDAOCut = 0
+	case govParams.DaoRewardPercentage == 0:
+		mintAmountAfterDAOCut = totalMintAmount
+	default:
+		mintAmountAfterDAOCut = lib.SafeMulDiv(totalMintAmount, 100-govParams.DaoRewardPercentage, 100)
+	}
 	// calculate the DAO cut
 	daoCut = totalMintAmount - mintAmountAfterDAOCut
 	// calculate the amount given to each qualifying committee
@@ -150,6 +163,9 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 				if err = s.EventReward(stub.Address, distributed, data.ChainId); err != nil {
 					return err
 				}
+				if totalDistributed > math.MaxUint64-distributed {
+					return ErrInvalidAmount()
+				}
 				totalDistributed += distributed
 			}
 		}
@@ -178,9 +194,22 @@ func (s *StateMachine) DistributeCommitteeRewards() lib.ErrorI {
 func (s *StateMachine) DistributeCommitteeReward(stub *lib.PaymentPercents, rewardPoolAmount, numberOfSamples, chainId uint64, valParams *ValidatorParams) (distributed uint64, err lib.ErrorI) {
 	address := crypto.NewAddress(stub.Address)
 	// full_reward = truncate ( percentage / number_of_samples * available_reward )
-	fullReward := (stub.Percent * rewardPoolAmount) / (numberOfSamples * 100)
+	var fullReward uint64
+	if numberOfSamples != 0 {
+		numerator := new(big.Int).Mul(new(big.Int).SetUint64(stub.Percent), new(big.Int).SetUint64(rewardPoolAmount))
+		denominator := new(big.Int).Mul(new(big.Int).SetUint64(numberOfSamples), big.NewInt(100))
+		fullReward = new(big.Int).Div(numerator, denominator).Uint64()
+	}
 	// if not compounding, use the early withdrawal reward
-	earlyWithdrawalReward := lib.Uint64ReducePercentage(fullReward, valParams.EarlyWithdrawalPenalty)
+	var earlyWithdrawalReward uint64
+	switch {
+	case valParams.EarlyWithdrawalPenalty >= 100 || fullReward == 0:
+		earlyWithdrawalReward = 0
+	case valParams.EarlyWithdrawalPenalty == 0:
+		earlyWithdrawalReward = fullReward
+	default:
+		earlyWithdrawalReward = lib.SafeMulDiv(fullReward, 100-valParams.EarlyWithdrawalPenalty, 100)
+	}
 	//s.log.Debugf("Distributed committee %d reward: to %s percent: %d%%, rewardPoolAmount: %d, numberOfSamples: %d, FullReward: %d, EarlyWithdrawalReward: %d",
 	//	chainId, address.String(), stub.Percent, rewardPoolAmount, numberOfSamples, fullReward, earlyWithdrawalReward)
 	// check if is validator
@@ -247,33 +276,6 @@ func (s *StateMachine) GetCommitteeMembers(chainId uint64) (vs lib.ValidatorSet,
 	return s.getValidatorSet(chainId, false)
 }
 
-// GetCommitteePaginated() returns a 'page' of committee members ordered from the highest stake to lowest
-func (s *StateMachine) GetCommitteePaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
-	// define a page and result variables
-	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using an iterator over the 'committee prefix' ordered by stake (high to low)
-	err = page.Load(CommitteePrefix(chainId), true, &res, s.store, func(key, value []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
-		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
-		}
-		// skip if validator is not paused and not unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
-		}
-		// append the validator to the page
-		res = append(res, validator)
-		return
-	})
-	return
-}
-
 // UpdateCommittees() updates the committee information in state for a specific validator
 func (s *StateMachine) UpdateCommittees(address crypto.AddressI, oldValidator *Validator, newStakedAmount uint64, newCommittees []uint64) lib.ErrorI {
 	// delete the committee information based on the 'previous state' of the validator
@@ -318,11 +320,19 @@ func (s *StateMachine) DeleteCommittees(address crypto.AddressI, totalStake uint
 
 // SetCommitteeMember() sets the address as a 'member' of the committee in the state
 func (s *StateMachine) SetCommitteeMember(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ derives committees from validator records; skip legacy committee index writes.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Set(KeyForCommittee(chainId, address, stakeForCommittee), nil)
 }
 
 // DeleteCommitteeMember() removes the address from being a 'member' of the committee in the state
 func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ stops mutating legacy committee index keys.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Delete(KeyForCommittee(chainId, address, stakeForCommittee))
 }
 
@@ -332,33 +342,6 @@ func (s *StateMachine) DeleteCommitteeMember(address crypto.AddressI, chainId, s
 // If MaximumDelegatesPerCommittee (from governance params) is 0, it will return all delegates; otherwise it returns only the top N.
 func (s *StateMachine) GetDelegates(chainId uint64) (vs lib.ValidatorSet, err lib.ErrorI) {
 	return s.getValidatorSet(chainId, true)
-}
-
-// GetDelegatesPaginated() returns a page of delegates
-func (s *StateMachine) GetDelegatesPaginated(p lib.PageParams, chainId uint64) (page *lib.Page, err lib.ErrorI) {
-	// create a page of validator objects
-	page, res := lib.NewPage(p, ValidatorsPageName), make(ValidatorPage, 0)
-	// populate the page using the 'delegates' prefix sorted by stake (high to low)
-	err = page.Load(DelegatePrefix(chainId), true, &res, s.store, func(key, _ []byte) (err lib.ErrorI) {
-		// get the address from the key
-		address, err := AddressFromKey(key)
-		if err != nil {
-			return err
-		}
-		// get the validator from the address
-		validator, err := s.GetValidator(address)
-		if err != nil {
-			return err
-		}
-		// skip if validator is paused or unstaking
-		if validator.UnstakingHeight != 0 || validator.MaxPausedHeight != 0 {
-			return
-		}
-		// append the validator to the page
-		res = append(res, validator)
-		return
-	})
-	return
 }
 
 // UpdateDelegations() updates the delegate information for an address, first removing the outdated delegation information and then setting the new info
@@ -411,11 +394,19 @@ func (s *StateMachine) DeleteDelegations(address crypto.AddressI, totalStake uin
 
 // SetDelegate() sets a delegate in state using the delegate prefix
 func (s *StateMachine) SetDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ derives delegates from validator records; skip legacy delegate index writes.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Set(KeyForDelegate(chainId, address, stakeForCommittee), nil)
 }
 
 // DeleteDelegate() removes a delegate from the state using the delegate prefix
 func (s *StateMachine) DeleteDelegate(address crypto.AddressI, chainId, stakeForCommittee uint64) lib.ErrorI {
+	// protocol v2+ stops mutating legacy delegate index keys.
+	if s.IsFeatureEnabled(2) {
+		return nil
+	}
 	return s.Delete(KeyForDelegate(chainId, address, stakeForCommittee))
 }
 

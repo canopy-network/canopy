@@ -6,6 +6,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
+	"math"
 	"testing"
 )
 
@@ -188,6 +189,85 @@ func TestHandleCommitteeSwaps(t *testing.T) {
 			require.Equal(t, escrowPoolBalance-balanceRemovedFromPool, balance)
 		})
 	}
+}
+
+func TestHandleCommitteeSwapsConflictingResetAndClosePrefersClose(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 106)
+	buyer := newTestAddress(t, 1)
+	amount := uint64(100)
+
+	require.NoError(t, sm.SetOrder(&lib.SellOrder{
+		Id:                  orderID,
+		Committee:           lib.CanopyChainId,
+		AmountForSale:       amount,
+		RequestedAmount:     amount,
+		BuyerReceiveAddress: buyer.Bytes(),
+		SellersSendAddress:  newTestAddressBytes(t, 2),
+	}, lib.CanopyChainId))
+	require.NoError(t, sm.PoolAdd(lib.CanopyChainId+EscrowPoolAddend, amount))
+
+	sm.HandleCommitteeSwaps(&lib.Orders{
+		ResetOrders: [][]byte{orderID},
+		CloseOrders: [][]byte{orderID},
+	}, lib.CanopyChainId)
+
+	_, err := sm.GetOrder(orderID, lib.CanopyChainId)
+	require.ErrorContains(t, err, "not found")
+
+	buyerBalance, err := sm.GetAccountBalance(buyer)
+	require.NoError(t, err)
+	require.Equal(t, amount, buyerBalance)
+
+	escrowBalance, err := sm.GetPoolBalance(lib.CanopyChainId + EscrowPoolAddend)
+	require.NoError(t, err)
+	require.Zero(t, escrowBalance)
+}
+
+func TestHandleCommitteeSwapsCloseOverflowKeepsEscrowAndOrder(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 105)
+	buyer := newTestAddress(t, 1)
+	amount := uint64(1)
+
+	require.NoError(t, sm.SetAccount(&Account{
+		Address: buyer.Bytes(),
+		Amount:  math.MaxUint64,
+	}))
+	require.NoError(t, sm.SetOrder(&lib.SellOrder{
+		Id:                  orderID,
+		Committee:           lib.CanopyChainId,
+		AmountForSale:       amount,
+		RequestedAmount:     amount,
+		BuyerReceiveAddress: buyer.Bytes(),
+		SellersSendAddress:  newTestAddressBytes(t, 2),
+	}, lib.CanopyChainId))
+	require.NoError(t, sm.PoolAdd(lib.CanopyChainId+EscrowPoolAddend, amount))
+
+	sm.HandleCommitteeSwaps(&lib.Orders{
+		CloseOrders: [][]byte{orderID},
+	}, lib.CanopyChainId)
+
+	orderAfter, err := sm.GetOrder(orderID, lib.CanopyChainId)
+	require.NoError(t, err)
+	require.Equal(t, amount, orderAfter.AmountForSale)
+
+	escrowAfter, err := sm.GetPoolBalance(lib.CanopyChainId + EscrowPoolAddend)
+	require.NoError(t, err)
+	require.Equal(t, amount, escrowAfter)
+
+	buyerAfter, err := sm.GetAccountBalance(buyer)
+	require.NoError(t, err)
+	require.Equal(t, uint64(math.MaxUint64), buyerAfter)
+}
+
+func TestHandleCommitteeSwapsNilLockOrderDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.NotPanics(t, func() {
+		sm.HandleCommitteeSwaps(&lib.Orders{
+			LockOrders: []*lib.LockOrder{nil},
+		}, lib.CanopyChainId)
+	})
 }
 
 func TestSetOrder(t *testing.T) {
@@ -707,6 +787,315 @@ func TestGetSetOrderBooks(t *testing.T) {
 				require.Equal(t, amount, balance)
 			}
 		})
+	}
+}
+
+func TestSetOrderBooksOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply := &Supply{Total: ^uint64(0)}
+	orderID := newTestOrderId(t, 200)
+	chainID := uint64(9)
+
+	err := sm.SetOrderBooks(&lib.OrderBooks{OrderBooks: []*lib.OrderBook{
+		{
+			ChainId: chainID,
+			Orders: []*lib.SellOrder{
+				{
+					Id:                   orderID,
+					Committee:            chainID,
+					AmountForSale:        1,
+					RequestedAmount:      1,
+					SellerReceiveAddress: newTestAddressBytes(t, 1),
+					SellersSendAddress:   newTestAddressBytes(t, 2),
+				},
+			},
+		},
+	}}, supply)
+	require.Error(t, err)
+	require.Equal(t, ^uint64(0), supply.Total)
+
+	_, getErr := sm.GetOrder(orderID, chainID)
+	require.ErrorContains(t, getErr, "not found")
+
+	balance, e := sm.GetPoolBalance(chainID + EscrowPoolAddend)
+	require.NoError(t, e)
+	require.Zero(t, balance)
+}
+
+func TestProcessRootChainOrderBookLockBindsBuyerSender(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 99)
+	sender := newTestAddressBytes(t, 1)
+	spoofedBuyer := newTestAddressBytes(t, 2)
+	buyerReceive := newTestAddressBytes(t, 3)
+
+	lockMemo, err := lib.MarshalJSON(&lib.LockOrder{
+		OrderId:             orderID,
+		ChainId:             sm.Config.ChainId,
+		BuyerSendAddress:    spoofedBuyer,
+		BuyerReceiveAddress: buyerReceive,
+	})
+	require.NoError(t, err)
+
+	book := &lib.OrderBook{
+		ChainId: sm.Config.ChainId,
+		Orders: []*lib.SellOrder{{
+			Id:                 orderID,
+			Committee:          sm.Config.ChainId,
+			AmountForSale:      100,
+			RequestedAmount:    50,
+			SellersSendAddress: newTestAddressBytes(t, 7),
+		}},
+	}
+	proposal := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: sm.Height()},
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, sender, sender, 1, 1_000_000, string(lockMemo), sm.Config.ChainId),
+		},
+	}
+
+	lockOrders, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, proposal)
+	require.Len(t, lockOrders, 1)
+	require.Empty(t, closedOrders)
+	require.Empty(t, resetOrders)
+	require.Equal(t, sender, lockOrders[0].BuyerSendAddress)
+	require.NotEqual(t, spoofedBuyer, lockOrders[0].BuyerSendAddress)
+}
+
+func TestProcessRootChainOrderBookCloseRequiresSenderAndRecipientBinding(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 100)
+	lockedBuyer := newTestAddressBytes(t, 1)
+	validRecipient := newTestAddressBytes(t, 2)
+
+	closeMemo, err := lib.MarshalJSON(&lib.CloseOrder{
+		OrderId:    orderID,
+		ChainId:    sm.Config.ChainId,
+		CloseOrder: true,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		sendFrom     []byte
+		sendTo       []byte
+		expectClosed bool
+	}{
+		{
+			name:         "valid sender and recipient",
+			sendFrom:     lockedBuyer,
+			sendTo:       validRecipient,
+			expectClosed: true,
+		},
+		{
+			name:         "invalid sender",
+			sendFrom:     newTestAddressBytes(t, 3),
+			sendTo:       validRecipient,
+			expectClosed: false,
+		},
+		{
+			name:         "invalid recipient",
+			sendFrom:     lockedBuyer,
+			sendTo:       newTestAddressBytes(t, 4),
+			expectClosed: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			book := &lib.OrderBook{
+				ChainId: sm.Config.ChainId,
+				Orders: []*lib.SellOrder{{
+					Id:                   orderID,
+					Committee:            sm.Config.ChainId,
+					AmountForSale:        100,
+					RequestedAmount:      50,
+					SellerReceiveAddress: validRecipient,
+					SellersSendAddress:   newTestAddressBytes(t, 6),
+					BuyerSendAddress:     lockedBuyer,
+					BuyerReceiveAddress:  newTestAddressBytes(t, 5),
+					BuyerChainDeadline:   sm.Height() + 100,
+				}},
+			}
+			proposal := &lib.BlockResult{
+				BlockHeader: &lib.BlockHeader{Height: sm.Height()},
+				Transactions: []*lib.TxResult{
+					newTestSendTxResult(t, test.sendFrom, test.sendTo, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+				},
+			}
+
+			_, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, proposal)
+			require.Empty(t, resetOrders)
+			if test.expectClosed {
+				require.Len(t, closedOrders, 1)
+				require.Equal(t, orderID, closedOrders[0])
+			} else {
+				require.Empty(t, closedOrders)
+			}
+		})
+	}
+}
+
+func TestParseBlockForLockAndCloseOrdersPrefersProposalLockOverHistorical(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 101)
+	proposalBuyer := newTestAddressBytes(t, 1)
+	proposalReceive := newTestAddressBytes(t, 3)
+	historicalBuyer := newTestAddressBytes(t, 2)
+	historicalReceive := newTestAddressBytes(t, 4)
+
+	proposalMemo, err := lib.MarshalJSON(&lib.LockOrder{
+		OrderId:             orderID,
+		ChainId:             sm.Config.ChainId,
+		BuyerSendAddress:    newTestAddressBytes(t, 7),
+		BuyerReceiveAddress: proposalReceive,
+	})
+	require.NoError(t, err)
+	historicalMemo, err := lib.MarshalJSON(&lib.LockOrder{
+		OrderId:             orderID,
+		ChainId:             sm.Config.ChainId,
+		BuyerSendAddress:    newTestAddressBytes(t, 6),
+		BuyerReceiveAddress: historicalReceive,
+	})
+	require.NoError(t, err)
+
+	proposalBlock := &lib.BlockResult{
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, proposalBuyer, proposalBuyer, 1, 1_000_000, string(proposalMemo), sm.Config.ChainId),
+		},
+	}
+	historicalBlock := &lib.BlockResult{
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, historicalBuyer, historicalBuyer, 1, 1_000_000, string(historicalMemo), sm.Config.ChainId),
+		},
+	}
+
+	lockOrders, closeOrders, coSends := sm.ParseBlockForLockAndCloseOrders(proposalBlock, historicalBlock)
+	require.Len(t, lockOrders, 1)
+	require.Empty(t, closeOrders)
+	require.Empty(t, coSends)
+	got := lockOrders[string(orderID)]
+	require.Equal(t, proposalBuyer, got.BuyerSendAddress)
+	require.Equal(t, proposalReceive, got.BuyerReceiveAddress)
+}
+
+func TestParseLockOrderDeadlineOverflowRejected(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = math.MaxUint64
+	orderID := newTestOrderId(t, 103)
+	buyerSend := newTestAddressBytes(t, 1)
+	buyerReceive := newTestAddressBytes(t, 2)
+
+	lockMemo, err := lib.MarshalJSON(&lib.LockOrder{
+		OrderId:             orderID,
+		ChainId:             sm.Config.ChainId,
+		BuyerReceiveAddress: buyerReceive,
+	})
+	require.NoError(t, err)
+
+	tx := newTestSendTxResult(t, buyerSend, buyerSend, 1, 1_000_000, string(lockMemo), sm.Config.ChainId)
+	lockOrder, ok := sm.ParseLockOrder(tx.Transaction, buyerSend, 1)
+	require.False(t, ok)
+	require.NotNil(t, lockOrder)
+	require.Zero(t, lockOrder.BuyerChainDeadline)
+}
+
+func TestProcessRootChainOrderBookCloseUsesFirstValidCandidate(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 104)
+	lockedBuyer := newTestAddressBytes(t, 1)
+	validRecipient := newTestAddressBytes(t, 2)
+
+	closeMemo, err := lib.MarshalJSON(&lib.CloseOrder{
+		OrderId:    orderID,
+		ChainId:    sm.Config.ChainId,
+		CloseOrder: true,
+	})
+	require.NoError(t, err)
+
+	book := &lib.OrderBook{
+		ChainId: sm.Config.ChainId,
+		Orders: []*lib.SellOrder{{
+			Id:                   orderID,
+			Committee:            sm.Config.ChainId,
+			AmountForSale:        100,
+			RequestedAmount:      50,
+			SellerReceiveAddress: validRecipient,
+			SellersSendAddress:   newTestAddressBytes(t, 6),
+			BuyerSendAddress:     lockedBuyer,
+			BuyerReceiveAddress:  newTestAddressBytes(t, 5),
+			BuyerChainDeadline:   sm.Height() + 100,
+		}},
+	}
+	proposal := &lib.BlockResult{
+		BlockHeader: &lib.BlockHeader{Height: sm.Height()},
+		Transactions: []*lib.TxResult{
+			// invalid candidate appears first and should not suppress the later valid close
+			newTestSendTxResult(t, newTestAddressBytes(t, 3), validRecipient, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+			newTestSendTxResult(t, lockedBuyer, validRecipient, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+		},
+	}
+
+	_, closedOrders, resetOrders := sm.ProcessRootChainOrderBook(book, proposal)
+	require.Empty(t, resetOrders)
+	require.Len(t, closedOrders, 1)
+	require.Equal(t, orderID, closedOrders[0])
+}
+
+func TestParseBlockForLockAndCloseOrdersPrefersProposalCloseOverHistorical(t *testing.T) {
+	sm := newTestStateMachine(t)
+	orderID := newTestOrderId(t, 102)
+	proposalBuyer := newTestAddressBytes(t, 1)
+	proposalRecipient := newTestAddressBytes(t, 3)
+	historicalBuyer := newTestAddressBytes(t, 2)
+	historicalRecipient := newTestAddressBytes(t, 4)
+
+	closeMemo, err := lib.MarshalJSON(&lib.CloseOrder{
+		OrderId:    orderID,
+		ChainId:    sm.Config.ChainId,
+		CloseOrder: true,
+	})
+	require.NoError(t, err)
+
+	proposalBlock := &lib.BlockResult{
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, proposalBuyer, proposalRecipient, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+		},
+	}
+	historicalBlock := &lib.BlockResult{
+		Transactions: []*lib.TxResult{
+			newTestSendTxResult(t, historicalBuyer, historicalRecipient, 50, 1_000_000, string(closeMemo), sm.Config.ChainId),
+		},
+	}
+
+	lockOrders, closeOrders, coSends := sm.ParseBlockForLockAndCloseOrders(proposalBlock, historicalBlock)
+	require.Empty(t, lockOrders)
+	require.Len(t, closeOrders, 1)
+	require.Len(t, coSends, 1)
+	gotSends := coSends[string(orderID)]
+	require.Len(t, gotSends, 2)
+	require.Equal(t, proposalBuyer, gotSends[0].FromAddress)
+	require.Equal(t, proposalRecipient, gotSends[0].ToAddress)
+}
+
+func newTestSendTxResult(t *testing.T, from, to []byte, amount, fee uint64, memo string, chainID uint64) *lib.TxResult {
+	anyMsg, err := lib.NewAny(&MessageSend{
+		FromAddress: from,
+		ToAddress:   to,
+		Amount:      amount,
+	})
+	require.NoError(t, err)
+	return &lib.TxResult{
+		Sender:      from,
+		Recipient:   to,
+		MessageType: MessageSendName,
+		Transaction: &lib.Transaction{
+			MessageType: MessageSendName,
+			Msg:         anyMsg,
+			Fee:         fee,
+			Memo:        memo,
+			ChainId:     chainID,
+		},
 	}
 }
 

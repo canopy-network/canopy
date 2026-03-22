@@ -66,8 +66,10 @@ type MainConfig struct {
 	RootChain        []RootChain        `json:"rootChain"`        // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
 	RunVDF           bool               `json:"runVDF"`           // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
 	Headless         bool               `json:"headless"`         // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate       bool               `json:"autoUpdate"`       // check for new versions of software each X time
-	Plugin           string             `json:"plugin"`           // the configured plugin to use
+	AutoUpdate           bool   `json:"autoUpdate"`           // check for new versions of software each X time
+	AutoUpdateRepoOwner  string `json:"autoUpdateRepoOwner"`  // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName   string `json:"autoUpdateRepoName"`   // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin               string `json:"plugin"`               // the configured plugin to use
 	PluginTimeoutMS  int                `json:"pluginTimeoutMS"`  // plugin request timeout in milliseconds
 	PluginAutoUpdate PluginAutoUpdateConfig `json:"pluginAutoUpdate"` // plugin auto-update configuration
 }
