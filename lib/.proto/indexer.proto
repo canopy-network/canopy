@@ -35,6 +35,13 @@ message IndexerBlob {
   repeated uint64 subsidized_committees = 13;
   repeated uint64 retired_committees = 14;
   bytes supply = 15;
+  uint32 total_validators_active = 16;
+  uint32 total_validators_paused = 17;
+  uint32 total_validators_unstaking = 18;
+  bool validators_delta = 19;
+  uint32 total_delegates_active = 20;
+  uint32 total_delegates_paused = 21;
+  uint32 total_delegates_unstaking = 22;
 }
 
 // IndexerBlobs groups the current and previous indexer blobs.

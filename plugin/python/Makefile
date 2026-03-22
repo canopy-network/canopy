@@ -1,42 +1,54 @@
-.PHONY: install dev test lint format type-check clean proto build docs
+.PHONY: venv install dev test lint format type-check clean proto build docs
+
+# Virtual environment
+VENV_DIR := .venv
+PYTHON := $(VENV_DIR)/bin/python3
+PIP := $(VENV_DIR)/bin/pip
+
+# Create virtual environment
+venv:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv $(VENV_DIR); \
+	fi
 
 # Development setup
-install:
-	pip install -e .
+install: venv
+	$(PIP) install -e .
 
-dev:
-	pip install -e ".[dev]"
+dev: venv
+	$(PIP) install -e ".[dev]"
 
 # Testing
-test:
-	pytest
+test: venv
+	$(VENV_DIR)/bin/pytest
 
-test-cov:
-	pytest --cov=plugin --cov-report=html --cov-report=term
+test-cov: venv
+	$(VENV_DIR)/bin/pytest --cov=plugin --cov-report=html --cov-report=term
 
-test-verbose:
-	pytest -v
+test-verbose: venv
+	$(VENV_DIR)/bin/pytest -v
 
 # Code quality
-lint:
-	flake8 plugin/ tests/
+lint: venv
+	$(VENV_DIR)/bin/flake8 plugin/ tests/
 
-format:
-	black plugin/ tests/
-	isort plugin/ tests/
+format: venv
+	$(VENV_DIR)/bin/black plugin/ tests/
+	$(VENV_DIR)/bin/isort plugin/ tests/
 
-type-check:
-	mypy plugin/
+type-check: venv
+	$(VENV_DIR)/bin/mypy plugin/
 
 # Protobuf generation
-proto:
-	cd contract/proto && python3 -m grpc_tools.protoc --python_out=. --proto_path=. *.proto
+proto: venv
+	cd contract/proto && $(PYTHON) -m grpc_tools.protoc --python_out=. --proto_path=. *.proto
 	# Fix relative imports in generated files
 	sed -i 's/^import \([^.]\)/from . import \1/' contract/proto/*_pb2.py
 
 # Build and distribution
-build:
-	python3 -m build
+build: venv
+	$(PYTHON) -m build
 
 clean:
 	rm -rf build/
@@ -48,18 +60,18 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 # Development servers
-serve:
-	uvicorn plugin.server:app --host 0.0.0.0 --port 8000
+serve: venv
+	$(VENV_DIR)/bin/uvicorn plugin.server:app --host 0.0.0.0 --port 8000
 
-serve-dev:
-	uvicorn plugin.server:app --reload --host 0.0.0.0 --port 8000
+serve-dev: venv
+	$(VENV_DIR)/bin/uvicorn plugin.server:app --reload --host 0.0.0.0 --port 8000
 
 # Plugin execution
-run-plugin:
-	python3 main.py
+run-plugin: venv
+	$(PYTHON) main.py
 
 # Full validation
-validate: lint type-check test
+validate: venv lint type-check test
 
 # Setup pre-commit hooks
 hooks:

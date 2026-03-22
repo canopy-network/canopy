@@ -1322,11 +1322,8 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 				}, {
 					Address: newTestAddressBytes(t, 3),
 					Points:  9, // 10 - 1 from withdraw
-				}, {
-					Address: newTestAddressBytes(t, 2),
-					Points:  0, // 1 token deposit creates ~0 points due to rounding
 				}},
-				TotalPoolPoints: 109, // 100 + 9 + 0
+				TotalPoolPoints: 109, // 100 + 9; zero-point LP entries are not persisted
 			},
 			expectedAccounts: []*Account{
 				{Address: newTestAddressBytes(t, 1), Amount: 0}, // Failed order
@@ -1666,6 +1663,46 @@ func TestHandleRemoteDexBatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleRemoteDexBatchIgnoresLivenessFlagInReceiptHash(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainID := uint64(1)
+
+	// Ensure liquidity pool is enabled.
+	liqPool, err := sm.GetPool(chainID + LiquidityPoolAddend)
+	require.NoError(t, err)
+	liqPool.Amount = 100
+	require.NoError(t, sm.SetPool(liqPool))
+
+	// Ensure we have something to rotate into the locked batch.
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), &lib.DexBatch{
+		Committee: chainID,
+		Orders: []*lib.DexLimitOrder{{
+			AmountForSale:   10,
+			RequestedAmount: 1,
+			Address:         newTestAddressBytes(t, 1),
+		}},
+		PoolSize: 100,
+	}))
+
+	remote := &lib.DexBatch{
+		Committee:        chainID,
+		ReceiptHash:      []byte{0xAA},
+		Orders:           []*lib.DexLimitOrder{},
+		Deposits:         []*lib.DexLiquidityDeposit{},
+		Withdrawals:      []*lib.DexLiquidityWithdraw{},
+		Receipts:         []uint64{},
+		PoolSize:         100,
+		LivenessFallback: true,
+	}
+	canonical := remote.Copy()
+	canonical.LivenessFallback = false
+
+	require.NoError(t, sm.HandleRemoteDexBatch(remote, chainID))
+	locked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Equal(t, canonical.Hash(), locked.ReceiptHash, "receipt hash must be stable regardless of liveness fallback flag")
 }
 
 func TestDexDeposit(t *testing.T) {
@@ -2263,6 +2300,129 @@ func TestSetGetDexBatch(t *testing.T) {
 	}
 }
 
+func TestIncludeSameBlockDex_MergesAndResetsNext(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 10
+	chainID := uint64(7)
+
+	locked := &lib.DexBatch{
+		Committee:    chainID,
+		LockedHeight: sm.Height(),
+		Orders: []*lib.DexLimitOrder{
+			{Address: newTestAddressBytes(t, 1), AmountForSale: 10, RequestedAmount: 5, OrderId: []byte{0x01}},
+		},
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Address: newTestAddressBytes(t, 2), Amount: 11, OrderId: []byte{0x02}},
+		},
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: newTestAddressBytes(t, 3), Percent: 10, OrderId: []byte{0x03}},
+		},
+	}
+	next := &lib.DexBatch{
+		Committee: chainID,
+		Orders: []*lib.DexLimitOrder{
+			{Address: newTestAddressBytes(t, 4), AmountForSale: 20, RequestedAmount: 6, OrderId: []byte{0x11}},
+		},
+		Deposits: []*lib.DexLiquidityDeposit{
+			{Address: newTestAddressBytes(t, 5), Amount: 21, OrderId: []byte{0x12}},
+		},
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: newTestAddressBytes(t, 6), Percent: 20, OrderId: []byte{0x13}},
+		},
+	}
+	require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(chainID), locked))
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), next))
+
+	require.NoError(t, sm.IncludeSameBlockDex())
+
+	gotLocked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Len(t, gotLocked.Orders, 2)
+	require.Len(t, gotLocked.Deposits, 2)
+	require.Len(t, gotLocked.Withdrawals, 2)
+	// Existing locked ops should remain first, and same-block ops should be appended in order.
+	require.Equal(t, []byte{0x01}, gotLocked.Orders[0].OrderId)
+	require.Equal(t, []byte{0x11}, gotLocked.Orders[1].OrderId)
+	require.Equal(t, []byte{0x02}, gotLocked.Deposits[0].OrderId)
+	require.Equal(t, []byte{0x12}, gotLocked.Deposits[1].OrderId)
+	require.Equal(t, []byte{0x03}, gotLocked.Withdrawals[0].OrderId)
+	require.Equal(t, []byte{0x13}, gotLocked.Withdrawals[1].OrderId)
+
+	gotNext, err := sm.GetDexBatch(chainID, false)
+	require.NoError(t, err)
+	require.True(t, gotNext.IsEmpty(), "next batch should be cleared after all ops are consumed")
+}
+
+func TestIncludeSameBlockDex_RespectsBatchCaps(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.height = 15
+	chainID := uint64(6)
+	addr := newTestAddressBytes(t, 1)
+
+	makeOrders := func(count int) []*lib.DexLimitOrder {
+		out := make([]*lib.DexLimitOrder, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLimitOrder{
+				Address:         addr,
+				AmountForSale:   uint64(i + 1),
+				RequestedAmount: 1,
+				OrderId:         []byte{0x20, byte(i)},
+			}
+		}
+		return out
+	}
+	makeDeposits := func(count int) []*lib.DexLiquidityDeposit {
+		out := make([]*lib.DexLiquidityDeposit, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLiquidityDeposit{
+				Address: addr,
+				Amount:  uint64(i + 1),
+				OrderId: []byte{0x21, byte(i)},
+			}
+		}
+		return out
+	}
+	makeWithdrawals := func(count int) []*lib.DexLiquidityWithdraw {
+		out := make([]*lib.DexLiquidityWithdraw, count)
+		for i := 0; i < count; i++ {
+			out[i] = &lib.DexLiquidityWithdraw{
+				Address: addr,
+				Percent: 1,
+				OrderId: []byte{0x22, byte(i)},
+			}
+		}
+		return out
+	}
+
+	require.NoError(t, sm.SetDexBatch(KeyForLockedBatch(chainID), &lib.DexBatch{
+		Committee:    chainID,
+		LockedHeight: sm.Height(),
+		Orders:       makeOrders(lib.MaxOrdersPerDexBatch - 1),
+		Deposits:     makeDeposits(lib.MaxDepositsPerDexBatch - 1),
+		Withdrawals:  makeWithdrawals(lib.MaxWithdrawsPerDexBatch - 1),
+	}))
+	require.NoError(t, sm.SetDexBatch(KeyForNextBatch(chainID), &lib.DexBatch{
+		Committee:   chainID,
+		Orders:      makeOrders(3),
+		Deposits:    makeDeposits(3),
+		Withdrawals: makeWithdrawals(3),
+	}))
+
+	require.NoError(t, sm.IncludeSameBlockDex())
+
+	gotLocked, err := sm.GetDexBatch(chainID, true)
+	require.NoError(t, err)
+	require.Len(t, gotLocked.Orders, lib.MaxOrdersPerDexBatch)
+	require.Len(t, gotLocked.Deposits, lib.MaxDepositsPerDexBatch)
+	require.Len(t, gotLocked.Withdrawals, lib.MaxWithdrawsPerDexBatch)
+
+	gotNext, err := sm.GetDexBatch(chainID, false)
+	require.NoError(t, err)
+	require.Len(t, gotNext.Orders, 2)
+	require.Len(t, gotNext.Deposits, 2)
+	require.Len(t, gotNext.Withdrawals, 2)
+}
+
 func TestGetDexBatches(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -2412,6 +2572,31 @@ func TestHandleDexBatchOrdersRespectsRequestedAmount(t *testing.T) {
 	require.Zero(t, receipts[1], "second order should fail slippage gate")
 }
 
+func TestHandleDexBatchOrdersRejectsReserveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	addr := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{Id: chainId + LiquidityPoolAddend, Amount: math.MaxUint64}))
+
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Orders: []*lib.DexLimitOrder{
+			{AmountForSale: 2, RequestedAmount: 1, Address: addr.Bytes(), OrderId: []byte{0x11}},
+		},
+	}
+
+	x, y := uint64(math.MaxUint64-1), uint64(math.MaxUint64)
+	x0, y0 := x, y
+
+	receipts, err := sm.HandleDexBatchOrders(batch, &x, &y, chainId)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+	require.Nil(t, receipts)
+	require.Equal(t, x0, x)
+	require.Equal(t, y0, y)
+}
+
 // Proves withdraw->redeposit cannot increase LP points (no gain loop), allowing only rounding loss.
 func TestWithdrawThenRedeploy_NoPointGain(t *testing.T) {
 	sm := newTestStateMachine(t)
@@ -2469,6 +2654,163 @@ func TestWithdrawThenRedeploy_NoPointGain(t *testing.T) {
 	require.NoError(t, err)
 
 	require.LessOrEqual(t, finalPoints, initialPoints, "round-trip should not increase LP points")
+}
+
+func TestHandleBatchDeposit_RejectsReserveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + LiquidityPoolAddend,
+		Amount: 1,
+	}))
+
+	x := ^uint64(0) - 5
+	y := uint64(1)
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: newTestAddressBytes(t, 1),
+			Amount:  10,
+			OrderId: []byte{0x01},
+		}},
+	}
+
+	err := sm.HandleBatchDeposit(batch, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
+func TestHandleBatchDepositRejectsPoolPointsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	account := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          1,
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: math.MaxUint64}},
+		TotalPoolPoints: math.MaxUint64,
+	}))
+
+	x := uint64(4)
+	y := uint64(4)
+	batch := &lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: account.Bytes(),
+			Amount:  5,
+			OrderId: []byte{0x12},
+		}},
+	}
+
+	err := sm.HandleBatchDeposit(batch, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidAmount().Code(), err.Code())
+}
+
+func TestHandleBatchDepositZeroShareDoesNotCreateGhostProvider(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	user := newTestAddress(t, 1)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          []*lib.PoolPoints{{Address: deadAddr.Bytes(), Points: 100}},
+		TotalPoolPoints: 100,
+	}))
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + HoldingPoolAddend,
+		Amount: 1,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchDeposit(&lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: user.Bytes(),
+			Amount:  1, // rounds to zero LP share at this pool size
+			OrderId: []byte{0x21},
+		}},
+	}, chainId, &x, &y, true)
+	require.NoError(t, err)
+
+	pool, err := sm.GetPool(chainId + LiquidityPoolAddend)
+	require.NoError(t, err)
+	_, pointErr := pool.GetPointsFor(user.Bytes())
+	require.Error(t, pointErr)
+	require.Equal(t, lib.CodePointHolderNotFound, pointErr.Code())
+}
+
+func TestHandleBatchDepositRemoteEnforcesMaxLiquidityProviders(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	newProvider := newTestAddress(t, 2)
+
+	points := make([]*lib.PoolPoints, lib.MaxLiquidityProviders)
+	for i := range points {
+		points[i] = &lib.PoolPoints{Address: deadAddr.Bytes(), Points: 1}
+	}
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          points,
+		TotalPoolPoints: lib.MaxLiquidityProviders,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchDeposit(&lib.DexBatch{
+		Committee: chainId,
+		Deposits: []*lib.DexLiquidityDeposit{{
+			Address: newProvider.Bytes(),
+			Amount:  100,
+			OrderId: []byte{0x22},
+		}},
+	}, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
+}
+
+func TestHandleBatchWithdrawNilWithdrawalEntryDoesNotPanic(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:     chainId + LiquidityPoolAddend,
+		Amount: 100,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	var err lib.ErrorI
+	require.NotPanics(t, func() {
+		err = sm.HandleBatchWithdraw(&lib.DexBatch{
+			Withdrawals: []*lib.DexLiquidityWithdraw{nil},
+		}, chainId, &x, &y, false)
+	})
+	require.NoError(t, err)
+}
+
+func TestHandleBatchWithdrawRejectsTotalPointsToRemoveOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	chainId := uint64(2)
+	addr := newTestAddress(t, 3)
+
+	require.NoError(t, sm.SetPool(&Pool{
+		Id:              chainId + LiquidityPoolAddend,
+		Amount:          100,
+		Points:          []*lib.PoolPoints{{Address: addr.Bytes(), Points: math.MaxUint64}},
+		TotalPoolPoints: math.MaxUint64,
+	}))
+
+	x, y := uint64(100), uint64(100)
+	err := sm.HandleBatchWithdraw(&lib.DexBatch{
+		Withdrawals: []*lib.DexLiquidityWithdraw{
+			{Address: addr.Bytes(), Percent: 100, OrderId: []byte{0x31}},
+			{Address: addr.Bytes(), Percent: 100, OrderId: []byte{0x32}},
+		},
+	}, chainId, &x, &y, false)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidLiquidityPool().Code(), err.Code())
 }
 
 type dexSim struct {
@@ -3451,6 +3793,24 @@ func clearLocks(t *testing.T, chain1, chain2 StateMachine, chain1Id, chain2Id ui
 	require.NoError(t, chain1.Delete(KeyForNextBatch(chain2Id)))
 	require.NoError(t, chain2.Delete(KeyForLockedBatch(chain1Id)))
 	require.NoError(t, chain2.Delete(KeyForNextBatch(chain1Id)))
+}
+
+func TestGetPriceUsesBigIntForE6ScaledPrice(t *testing.T) {
+	sm := newTestStateMachine(t)
+	sm.Config.ChainId = 10
+
+	price, err := sm.getPrice(&lib.DexBatch{
+		Committee:       1,
+		PoolSize:        24515572443456,
+		CounterPoolSize: 50998020079,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, price)
+	require.Equal(t, uint64(24515572443456), price.LocalPool)
+	require.Equal(t, uint64(50998020079), price.RemotePool)
+	require.Equal(t, uint64(480716161), price.E6ScaledPrice)
+	// Previous uint64 multiplication overflow produced this incorrect wrapped value.
+	require.NotEqual(t, uint64(119001254), price.E6ScaledPrice)
 }
 
 var _ lib.RCManagerI = new(MockRCManager)

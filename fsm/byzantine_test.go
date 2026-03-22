@@ -115,7 +115,7 @@ func TestHandleByzantine(t *testing.T) {
 			require.NoError(t, err)
 			// generate non-signer history for the first validator for 'reset and slash' testing
 			for j := uint64(0); j <= valParams.MaxNonSign; j++ {
-				require.NoError(t, sm.IncrementNonSigners([][]byte{committee.ValidatorSet.ValidatorSet[0].PublicKey}))
+				require.NoError(t, sm.IncrementNonSigners(lib.CanopyChainId, [][]byte{committee.ValidatorSet.ValidatorSet[0].PublicKey}))
 			}
 			// get the non-signers of the QC from the committee
 			expectedNonSigners, expectedPercent, err := test.qc.GetNonSigners(committee.ValidatorSet)
@@ -294,6 +294,22 @@ func TestSlashAndResetNonSigners(t *testing.T) {
 	}
 }
 
+func TestSlashAndResetNonSignersSkipsMalformedKey(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+
+	// malformed length-prefixed segment under non-signer prefix
+	badKey := append(NonSignerPrefix(), 0xff)
+	require.NoError(t, sm.Set(badKey, []byte{0x1}))
+
+	require.NoError(t, sm.SlashAndResetNonSigners(lib.CanopyChainId, valParams))
+
+	got, e := sm.Get(badKey)
+	require.NoError(t, e)
+	require.Nil(t, got)
+}
+
 func TestIncrementNonSigners(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -370,7 +386,7 @@ func TestIncrementNonSigners(t *testing.T) {
 				require.NoError(t, sm.Set(KeyForNonSigner(nonSigner.Address), bz))
 			}
 			// execute the function call and check for expected error
-			err := sm.IncrementNonSigners(test.nonSigners)
+			err := sm.IncrementNonSigners(lib.CanopyChainId, test.nonSigners)
 			// check for expected error
 			if err != nil {
 				require.NotEmpty(t, test.error)
@@ -759,6 +775,10 @@ func TestSlash(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
+			consParams, err := sm.GetParamsCons()
+			require.NoError(t, err)
+			consParams.ProtocolVersion = NewProtocolVersion(0, 2)
+			require.NoError(t, sm.SetParamsCons(consParams))
 			// get validator params
 			valParams, err := sm.GetParamsVal()
 			require.NoError(t, err)
@@ -942,6 +962,10 @@ func TestSlashTracker(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// create a state machine instance with default parameters
 			sm := newTestStateMachine(t)
+			consParams, err := sm.GetParamsCons()
+			require.NoError(t, err)
+			consParams.ProtocolVersion = NewProtocolVersion(0, 2)
+			require.NoError(t, sm.SetParamsCons(consParams))
 			// get validator params
 			valParams, err := sm.GetParamsVal()
 			require.NoError(t, err)
@@ -979,6 +1003,169 @@ func TestSlashTracker(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSlashAndResetNonSignersV1_NoCommitteeEjection(t *testing.T) {
+	const stakeAmount = uint64(100)
+	sm := newTestStateMachine(t)
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.NonSignSlashPercentage = 20
+	valParams.MaxSlashPerCommittee = 15 // would trigger ejection in chain-scoped slash path
+	valParams.MaxNonSign = 0
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	keyGroup := newTestKeyGroup(t)
+	address := keyGroup.Address
+	validator := &Validator{
+		Address:      address.Bytes(),
+		PublicKey:    keyGroup.PublicKey.Bytes(),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{1, 2},
+	}
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(1, stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(2, stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(address, stakeAmount, validator.Committees))
+
+	bz, err := lib.Marshal(&NonSigner{Counter: 1})
+	require.NoError(t, err)
+	require.NoError(t, sm.Set(KeyForNonSigner(address.Bytes()), bz))
+
+	require.NoError(t, sm.SlashAndResetNonSigners(1, valParams))
+
+	after, err := sm.GetValidator(address)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 2}, after.Committees)
+	require.Less(t, after.StakedAmount, stakeAmount)
+	require.NotZero(t, after.MaxPausedHeight)
+}
+
+func TestSlashValidatorLargeStakePercentMath(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+
+	stakeAmount := ^uint64(0)
+	validator := &Validator{
+		Address:      newTestAddressBytes(t),
+		PublicKey:    newTestPublicKeyBytes(t),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{lib.CanopyChainId},
+	}
+
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(crypto.NewAddressFromBytes(validator.Address), stakeAmount, validator.Committees))
+
+	require.NoError(t, sm.SlashValidator(validator, lib.CanopyChainId, 1, valParams))
+
+	after, e := sm.GetValidator(crypto.NewAddressFromBytes(validator.Address))
+	require.NoError(t, e)
+	require.Equal(t, lib.SafeMulDiv(stakeAmount, 99, 100), after.StakedAmount)
+}
+
+func TestSlashAndResetNonSignersV2_ChainScopedAndEjectsSpecificCommittee(t *testing.T) {
+	const stakeAmount = uint64(100)
+	sm := newTestStateMachine(t)
+
+	consParams, err := sm.GetParamsCons()
+	require.NoError(t, err)
+	consParams.ProtocolVersion = NewProtocolVersion(0, 2)
+	require.NoError(t, sm.SetParamsCons(consParams))
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.MaxNonSign = 0
+	valParams.NonSignSlashPercentage = 1
+	valParams.MaxSlashPerCommittee = 1
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	keyGroup := newTestKeyGroup(t)
+	validator := &Validator{
+		Address:      keyGroup.Address.Bytes(),
+		PublicKey:    keyGroup.PublicKey.Bytes(),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{1, 2},
+	}
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(1, stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(2, stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(keyGroup.Address, stakeAmount, validator.Committees))
+
+	// Miss only on chain 1. Processing chain 2 at reset must not slash/eject.
+	require.NoError(t, sm.IncrementNonSigners(1, [][]byte{keyGroup.PublicKey.Bytes()}))
+	require.NoError(t, sm.SlashAndResetNonSigners(2, valParams))
+	afterNoSlash, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Equal(t, stakeAmount, afterNoSlash.StakedAmount)
+	require.Equal(t, []uint64{1, 2}, afterNoSlash.Committees)
+
+	// Miss on chain 2. Processing chain 2 at reset should slash and eject committee 2.
+	require.NoError(t, sm.IncrementNonSigners(2, [][]byte{keyGroup.PublicKey.Bytes()}))
+	require.NoError(t, sm.SlashAndResetNonSigners(2, valParams))
+	afterSlash, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Less(t, afterSlash.StakedAmount, stakeAmount)
+	require.NotContains(t, afterSlash.Committees, uint64(2))
+	require.Contains(t, afterSlash.Committees, uint64(1))
+}
+
+func TestSlashAndResetNonSignersV2_FirstSettlementClearsWindowEvidence(t *testing.T) {
+	const stakeAmount = uint64(100)
+	sm := newTestStateMachine(t)
+
+	consParams, err := sm.GetParamsCons()
+	require.NoError(t, err)
+	consParams.ProtocolVersion = NewProtocolVersion(0, 2)
+	require.NoError(t, sm.SetParamsCons(consParams))
+
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.MaxNonSign = 0
+	valParams.NonSignSlashPercentage = 10
+	valParams.MaxSlashPerCommittee = 100
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	keyGroup := newTestKeyGroup(t)
+	validator := &Validator{
+		Address:      keyGroup.Address.Bytes(),
+		PublicKey:    keyGroup.PublicKey.Bytes(),
+		StakedAmount: stakeAmount,
+		Committees:   []uint64{1, 2},
+	}
+	require.NoError(t, sm.AddToTotalSupply(stakeAmount))
+	require.NoError(t, sm.AddToStakedSupply(stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(1, stakeAmount))
+	require.NoError(t, sm.AddToCommitteeSupplyForChain(2, stakeAmount))
+	require.NoError(t, sm.SetValidator(validator))
+	require.NoError(t, sm.SetCommittees(keyGroup.Address, stakeAmount, validator.Committees))
+
+	// Record misses for both chains in the same window.
+	require.NoError(t, sm.IncrementNonSigners(1, [][]byte{keyGroup.PublicKey.Bytes()}))
+	require.NoError(t, sm.IncrementNonSigners(2, [][]byte{keyGroup.PublicKey.Bytes()}))
+
+	// First chain settlement slashes once and clears the full non-signer window state.
+	require.NoError(t, sm.SlashAndResetNonSigners(1, valParams))
+	afterFirst, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Less(t, afterFirst.StakedAmount, stakeAmount)
+
+	nonSignerBz, err := sm.Get(KeyForNonSigner(keyGroup.Address.Bytes()))
+	require.NoError(t, err)
+	require.Nil(t, nonSignerBz)
+
+	// Later chain settlements in the same window should not apply additional slash from erased evidence.
+	require.NoError(t, sm.SlashAndResetNonSigners(2, valParams))
+	afterSecond, err := sm.GetValidator(keyGroup.Address)
+	require.NoError(t, err)
+	require.Equal(t, afterFirst.StakedAmount, afterSecond.StakedAmount)
 }
 
 func TestLoadMinimumEvidenceHeight(t *testing.T) {

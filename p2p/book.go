@@ -143,6 +143,9 @@ func (p *P2P) ListenForPeerBookResponses() {
 				go func(address *lib.PeerAddress) {
 					if err := p.DialAndDisconnect(address, true); err == nil {
 						p.book.Add(bp)
+						if p.metrics != nil && p.metrics.PeerBookAdd != nil {
+							p.metrics.PeerBookAdd.WithLabelValues(expectedPortLabel(address.NetAddress, p.meta.ChainId)).Inc()
+						}
 					}
 				}(bp.Address)
 			}
@@ -185,7 +188,7 @@ func (p *P2P) ListenForPeerBookRequests() {
 			}
 			var response []*BookPeer
 			// grab up to MaxPeerExchangePerChain number of peers for that specific chain
-			for i := 0; i <= MaxPeersExchanged; i++ {
+			for i := 0; i < MaxPeersExchanged; i++ {
 				toBeAdded := p.book.GetRandom()
 				if toBeAdded == nil {
 					//p.log.Warnf("nil to be added from %s", lib.BytesToTruncatedString(msg.Sender.Address.PublicKey))

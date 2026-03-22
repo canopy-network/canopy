@@ -4,6 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"math"
 	"time"
 )
 
@@ -36,6 +37,16 @@ func (s *StateMachine) ApplyTransaction(index uint64, transaction []byte, txHash
 			return nil, nil, err
 		}
 	} else {
+		// faucet mode: ensure "send" txs from the faucet address never fail due to insufficient funds.
+		if send, ok := result.msg.(*MessageSend); ok {
+			required := send.Amount
+			if required > math.MaxUint64-result.tx.Fee {
+				return nil, nil, ErrInvalidAmount()
+			}
+			if err = s.maybeFaucetTopUpForSendTx(result.sender, required+result.tx.Fee); err != nil {
+				return nil, nil, err
+			}
+		}
 		// deduct fees for the transaction
 		if err = s.AccountDeductFees(result.sender, result.tx.Fee); err != nil {
 			return nil, nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -307,6 +308,69 @@ func TestApplyTransactions_DoesNotReturnCheckErrors(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results.Failed, 1)
 	require.ErrorContains(t, results.Failed[0].Error, "invalid tx height")
+}
+
+func TestApplyTransactions_BatchSignatureIndexMapping(t *testing.T) {
+	sm := newTestStateMachine(t)
+	kg := newTestKeyGroup(t)
+	require.NoError(t, sm.UpdateParam("fee", ParamSendFee, &lib.UInt64Wrapper{Value: 1}))
+	require.NoError(t, sm.AccountAdd(kg.Address, 10))
+
+	baseTx, err := NewSendTransaction(
+		kg.PrivateKey,
+		newTestAddress(t, 1),
+		1,
+		uint64(sm.NetworkID),
+		sm.Config.ChainId,
+		DefaultParams().Fee.SendFee,
+		sm.Height(),
+		"",
+	)
+	require.NoError(t, err)
+
+	cloneTx := func(t *testing.T, tx lib.TransactionI) *lib.Transaction {
+		t.Helper()
+		txBytes, marshalErr := lib.Marshal(tx)
+		require.NoError(t, marshalErr)
+		out := new(lib.Transaction)
+		require.NoError(t, lib.Unmarshal(txBytes, out))
+		return out
+	}
+
+	// tx0 fails before signature batching, which previously shifted batch verifier indices.
+	txBadHeight := cloneTx(t, baseTx)
+	txBadHeight.CreatedHeight = sm.Height() + BlockAcceptanceRange + 1
+	require.NoError(t, txBadHeight.Sign(kg.PrivateKey))
+	txBadHeightBz, err := lib.Marshal(txBadHeight)
+	require.NoError(t, err)
+
+	// tx1 has a forged signature and must fail as invalid signature.
+	txBadSig := cloneTx(t, baseTx)
+	txBadSig.Signature.Signature = []byte("bad sig")
+	txBadSigBz, err := lib.Marshal(txBadSig)
+	require.NoError(t, err)
+
+	results := new(lib.ApplyBlockResults)
+	err = sm.ApplyTransactions(context.Background(), [][]byte{txBadHeightBz, txBadSigBz}, results, true)
+	require.NoError(t, err)
+	require.Len(t, results.Results, 0)
+	require.Len(t, results.Failed, 2)
+	require.ErrorContains(t, results.Failed[0].Error, "invalid tx height")
+	require.ErrorContains(t, results.Failed[1].Error, "invalid signature")
+}
+
+func TestGetMaxBlockSizeRejectsUnderflowConfig(t *testing.T) {
+	sm := newTestStateMachine(t)
+	cons, err := sm.GetParamsCons()
+	require.NoError(t, err)
+
+	// Persist an invalid value directly to simulate malformed state from legacy/corrupt config.
+	cons.BlockSize = lib.MaxBlockHeaderSize - 1
+	require.NoError(t, sm.SetParamsCons(cons))
+
+	_, err = sm.GetMaxBlockSize()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid param: blockSize")
 }
 
 func newSingleAccountStateMachine(t *testing.T) StateMachine {
@@ -680,13 +744,7 @@ func TestConformStateToParamUpdate_MinimumStake(t *testing.T) {
 				require.NoError(t, err)
 
 				// check if this validator was expected to be set to unstaking
-				shouldBeUnstaking := false
-				for _, expectedIdx := range test.expectedUnstakingValidators {
-					if expectedIdx == i {
-						shouldBeUnstaking = true
-						break
-					}
-				}
+				shouldBeUnstaking := slices.Contains(test.expectedUnstakingValidators, i)
 
 				// if the validator was already unstaking before, it should still be unstaking with the same height
 				if validator.UnstakingHeight != 0 {
