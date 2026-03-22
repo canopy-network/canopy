@@ -33,7 +33,6 @@ func init() {
 	queryCmd.AddCommand(poolsCmd)
 	queryCmd.AddCommand(validatorCmd)
 	queryCmd.AddCommand(validatorsCmd)
-	queryCmd.AddCommand(committeeCmd)
 	queryCmd.AddCommand(committeeDataCmd)
 	queryCmd.AddCommand(committeesDataCmd)
 	queryCmd.AddCommand(subsidizedCommitteeCmd)
@@ -129,16 +128,6 @@ var (
 		Short: "query all validators on the blockchain",
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.Validators(getFilterArgs()))
-		},
-	}
-
-	committeeCmd = &cobra.Command{
-		Use:   "committee <chain_id> --height=1 --per-page=10 --page-number=1",
-		Short: "query committee members",
-		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			h, params := getPaginatedArgs()
-			writeToConsole(client.Committee(h, uint64(argToInt(args[0])), params))
 		},
 	}
 

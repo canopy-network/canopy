@@ -11,7 +11,7 @@ import { types } from '../proto/types.js';
 // protobufjs may return uint64 as Long or number depending on value
 function normalizeId(id: Long | number | undefined): string {
     if (id === undefined || id === null) {
-        return "0";
+        return '0';
     }
     if (Long.isLong(id)) {
         return id.toString();
@@ -29,7 +29,7 @@ import {
     ErrUnexpectedFSMToPlugin,
     ErrInvalidFSMToPluginMMessage,
     ErrFromAny,
-    ErrInvalidMessageCast,
+    ErrInvalidMessageCast
 } from './error.js';
 
 // Forward declaration - Contract will be set after import
@@ -41,7 +41,7 @@ let ContractConfigValue: any;
 let ContractAsyncClass: any;
 
 // socketPath is the name of the plugin socket exposed by the base SDK
-const socketPath = "plugin.sock";
+const socketPath = 'plugin.sock';
 
 // CONFIG IMPLEMENTATION
 
@@ -54,7 +54,7 @@ export interface Config {
 export function DefaultConfig(): Config {
     return {
         ChainId: 1,
-        DataDirPath: "/tmp/plugin/",
+        DataDirPath: '/tmp/plugin/'
     };
 }
 
@@ -88,9 +88,11 @@ export class Plugin {
     }
 
     async Handshake(): Promise<IPluginError | null> {
-        console.log("Handshaking with FSM");
+        console.log('Handshaking with FSM');
         const contract = new ContractClass(this.config, this.fsmConfig, this, Long.ZERO);
-        const [response, err] = await this.sendToPluginSync(contract, { config: this.pluginConfig });
+        const [response, err] = await this.sendToPluginSync(contract, {
+            config: this.pluginConfig
+        });
         if (err) {
             return err;
         }
@@ -137,7 +139,7 @@ export class Plugin {
         });
 
         this.conn.on('close', () => {
-            console.log("Socket closed");
+            console.log('Socket closed');
             process.exit(0);
         });
     }
@@ -180,7 +182,7 @@ export class Plugin {
 
         // Route based on which field has actual content
         if (msg.config && Object.keys(msg.config).length >= 0 && msg.payload === 'config') {
-            console.log("Received config response from FSM");
+            console.log('Received config response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -188,7 +190,7 @@ export class Plugin {
             }
             return;
         } else if (msg.stateRead && msg.payload === 'stateRead') {
-            console.log("Received stateRead response from FSM");
+            console.log('Received stateRead response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -196,7 +198,7 @@ export class Plugin {
             }
             return;
         } else if (msg.stateWrite && msg.payload === 'stateWrite') {
-            console.log("Received stateWrite response from FSM");
+            console.log('Received stateWrite response from FSM');
             const handleErr = this.handleFSMResponse(msg);
             if (handleErr) {
                 console.error(handleErr.msg);
@@ -204,21 +206,21 @@ export class Plugin {
             }
             return;
         } else if (msg.genesis && msg.payload === 'genesis') {
-            console.log("Received genesis request from FSM");
+            console.log('Received genesis request from FSM');
             response = { genesis: c.Genesis(msg.genesis) };
         } else if (msg.begin && msg.payload === 'begin') {
-            console.log("Received begin request from FSM");
+            console.log('Received begin request from FSM');
             response = { begin: c.BeginBlock(msg.begin) };
         } else if (msg.check && msg.payload === 'check') {
-            console.log("Received check request from FSM");
+            console.log('Received check request from FSM');
             const checkResponse = await ContractAsyncClass.CheckTx(c, msg.check);
             response = { check: checkResponse };
         } else if (msg.deliver && msg.payload === 'deliver') {
-            console.log("Received deliver request from FSM");
+            console.log('Received deliver request from FSM');
             const deliverResponse = await ContractAsyncClass.DeliverTx(c, msg.deliver);
             response = { deliver: deliverResponse };
         } else if (msg.end && msg.payload === 'end') {
-            console.log("Received end request from FSM");
+            console.log('Received end request from FSM');
             response = { end: c.EndBlock(msg.end) };
         } else {
             // Fallback: check which field actually has content
@@ -228,10 +230,12 @@ export class Plugin {
             process.exit(1);
         }
 
-        const sendErr = this.sendProtoMsg(types.PluginToFSM.create({
-            id: msg.id,
-            ...response,
-        }));
+        const sendErr = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: msg.id,
+                ...response
+            })
+        );
 
         if (sendErr) {
             console.error(sendErr.msg);
@@ -274,17 +278,22 @@ export class Plugin {
         });
         this.pending.set(requestId, { resolve: resolvePromise! });
         this.requestContract.set(requestId, c);
-        const err = this.sendProtoMsg(types.PluginToFSM.create({
-            id: c.fsmId,
-            ...payload,
-        }));
+        const err = this.sendProtoMsg(
+            types.PluginToFSM.create({
+                id: c.fsmId,
+                ...payload
+            })
+        );
         return [promise, requestId, err];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async waitForResponse(promise: Promise<any>, requestId: string): Promise<[any | null, IPluginError | null]> {
+    async waitForResponse(
+        promise: Promise<any>,
+        requestId: string
+    ): Promise<[any | null, IPluginError | null]> {
         const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("timeout")), 10000)
+            setTimeout(() => reject(new Error('timeout')), 10000)
         );
         try {
             const response = await Promise.race([promise, timeoutPromise]);
@@ -325,7 +334,7 @@ export function StartPlugin(c: Config): void {
         const conn = net.createConnection(sockPath);
 
         conn.on('connect', () => {
-            console.log("Connected to plugin socket");
+            console.log('Connected to plugin socket');
             const p = new Plugin(c, conn, ContractConfigValue);
             p.ListenForInbound();
             p.Handshake().then((err) => {
@@ -372,7 +381,10 @@ export function Marshal(message: any): [Uint8Array | null, IPluginError | null] 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function Unmarshal<T>(protoBytes: Uint8Array | Buffer, MessageType: any): [T | null, IPluginError | null] {
+export function Unmarshal<T>(
+    protoBytes: Uint8Array | Buffer,
+    MessageType: any
+): [T | null, IPluginError | null] {
     if (!protoBytes || protoBytes.length === 0) {
         return [null, null];
     }
@@ -386,15 +398,15 @@ export function Unmarshal<T>(protoBytes: Uint8Array | Buffer, MessageType: any):
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function FromAny(any: any): [any | null, string | null, IPluginError | null] {
     if (!any || !any.value) {
-        return [null, null, ErrFromAny(new Error("any is null or has no value"))];
+        return [null, null, ErrFromAny(new Error('any is null or has no value'))];
     }
-    
+
     // Check both typeUrl and type_url (protobuf field name variations)
-    const typeUrl = any.typeUrl || any.type_url || "";
-    
+    const typeUrl = any.typeUrl || any.type_url || '';
+
     try {
-        if (typeUrl.includes("MessageSend")) {
-            return [types.MessageSend.decode(any.value), "MessageSend", null];
+        if (typeUrl.includes('MessageSend')) {
+            return [types.MessageSend.decode(any.value), 'MessageSend', null];
         }
         // NOTE: To add new message types, see TUTORIAL.md
         return [null, null, ErrInvalidMessageCast()];

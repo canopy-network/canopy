@@ -56,8 +56,17 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 	if err != nil {
 		return nil, ErrInvalidPublicKey(err)
 	}
+	// ensure the EVM chain id fits into Canopy's uint64 translation.
+	if tx.ChainId() == nil || !tx.ChainId().IsUint64() {
+		return nil, ErrInvalidRLPTx(fmt.Errorf("chain id exceeds uint64"))
+	}
 	// extract chain id and network id from the evm chain id
 	chainId, networkId := EvmChainIdToCanopyIds(tx.ChainId().Uint64())
+	// compute fee with unsigned gas to avoid signed narrowing skew
+	fee, ok := DownscaleTo6DecimalsChecked(new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas()), tx.GasPrice()))
+	if !ok {
+		return nil, ErrInvalidRLPTx(fmt.Errorf("invalid fee amount"))
+	}
 	// generate the transaction object
 	transaction = &lib.Transaction{
 		MessageType: MessageSendName, // fallback default
@@ -67,7 +76,7 @@ func RLPToCanopyTransaction(txBytes []byte) (transaction *lib.Transaction, e lib
 		},
 		CreatedHeight: tx.Nonce(), // the rpc ensures a proper value that satisfies replay protection
 		Time:          pseudoEthereumTimestamp(tx.Gas()),
-		Fee:           DownscaleTo6Decimals(new(big.Int).Mul(big.NewInt(int64(tx.Gas())), tx.GasPrice())),
+		Fee:           fee,
 		NetworkId:     networkId,
 		Memo:          RLPIndicator,
 		ChainId:       chainId,
@@ -132,8 +141,8 @@ func rlpToMessage(publicKey crypto.PublicKeyI, transaction *lib.Transaction, tx 
 			e = ErrInvalidERC20Tx(fmt.Errorf("unsupported selector: 0x%s", selector))
 		}
 	default: // non-contract call (transfer() only)
-		amount := DownscaleTo6Decimals(tx.Value())
-		if amount == 0 {
+		amount, ok := DownscaleTo6DecimalsChecked(tx.Value())
+		if !ok || amount == 0 {
 			return nil, ErrInvalidAmount()
 		}
 		msg = &MessageSend{
@@ -235,6 +244,19 @@ func UpscaleTo18Decimals(amount uint64) *big.Int {
 // DownscaleTo6Decimals converts from 18-decimal unit (Ethereum RPC) to 6-decimal (Canopy native)
 func DownscaleTo6Decimals(amount *big.Int) uint64 {
 	return new(big.Int).Div(amount, scaleFactor).Uint64()
+}
+
+// DownscaleTo6DecimalsChecked converts from 18-decimal unit (Ethereum RPC) to 6-decimal (Canopy native)
+// and reports overflow/invalid input instead of wrapping through Uint64().
+func DownscaleTo6DecimalsChecked(amount *big.Int) (uint64, bool) {
+	if amount == nil || amount.Sign() < 0 {
+		return 0, false
+	}
+	downscaled := new(big.Int).Div(amount, scaleFactor)
+	if !downscaled.IsUint64() {
+		return 0, false
+	}
+	return downscaled.Uint64(), true
 }
 
 // pseudoEthereumTimestamp() creates a fake timestamp to ensure collision resistance using the gas limit variable
