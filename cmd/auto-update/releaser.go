@@ -17,10 +17,14 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+var githubAPIBaseURL = "https://api.github.com"
+
 // GithubRelease represents a GitHub release with the used metadata
 type GithubRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName    string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -102,9 +106,11 @@ func (rm *ReleaseManager) Check() (*Release, error) {
 
 // GetLatestRelease returns the latest release from the GitHub API
 func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
-	// build the URL: https://api.github.com/repos/<owner>/<repo>/releases/latest
-	apiURL, err := url.JoinPath("https://api.github.com", "repos",
-		rm.config.RepoOwner, rm.config.RepoName, "releases", "latest")
+	// Query the releases list and select the newest release that contains the
+	// expected asset. This keeps CLI and plugin streams isolated even when a
+	// repository publishes both kinds of releases.
+	apiURL, err := url.JoinPath(githubAPIBaseURL, "repos",
+		rm.config.RepoOwner, rm.config.RepoName, "releases")
 	if err != nil {
 		return nil, err
 	}
@@ -128,23 +134,29 @@ func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	// parse the response
-	var rel GithubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	var releases []GithubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, err
 	}
-	// find matching asset
+	// find the first non-draft, non-prerelease with a matching asset. GitHub
+	// returns releases ordered from newest to oldest.
 	targetName := rm.getAssetName()
-	for _, asset := range rel.Assets {
-		if asset.Name == targetName {
-			return &Release{
-				Version:     rel.TagName,
-				DownloadURL: asset.BrowserDownloadURL,
-			}, nil
+	for _, rel := range releases {
+		if rel.Draft || rel.Prerelease {
+			continue
+		}
+		for _, asset := range rel.Assets {
+			if asset.Name == targetName {
+				return &Release{
+					Version:     rel.TagName,
+					DownloadURL: asset.BrowserDownloadURL,
+				}, nil
+			}
 		}
 	}
 	// return based on tagName
 	if rm.config.Type == ReleaseTypeCLI {
-		return nil, fmt.Errorf("unsupported architecture: %s-%s", runtime.GOOS, runtime.GOARCH)
+		return nil, fmt.Errorf("no matching asset found for CLI (looking for %s)", targetName)
 	}
 	return nil, fmt.Errorf("no matching asset found for plugin (looking for %s)", targetName)
 }
