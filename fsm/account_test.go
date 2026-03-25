@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -151,6 +152,20 @@ func TestGetSetAccounts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetAccountsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply := &Supply{Total: math.MaxUint64}
+	addr := newTestAddress(t)
+
+	err := sm.SetAccounts([]*Account{{Address: addr.Bytes(), Amount: 1}}, supply)
+	require.Error(t, err)
+
+	balance, e := sm.GetAccountBalance(addr)
+	require.NoError(t, e)
+	require.Zero(t, balance)
+	require.Equal(t, uint64(math.MaxUint64), supply.Total)
 }
 
 func TestGetAccountsPaginated(t *testing.T) {
@@ -311,6 +326,7 @@ func TestAccountAdd(t *testing.T) {
 		detail  string
 		account *Account
 		amount  uint64
+		error   bool
 	}{
 		{
 			name:   "empty account",
@@ -326,6 +342,16 @@ func TestAccountAdd(t *testing.T) {
 			},
 			amount: 100,
 		},
+		{
+			name:   "overflow",
+			detail: "reject adding to an account when uint64 would overflow",
+			account: &Account{
+				Address: newTestAddress(t).Bytes(),
+				Amount:  math.MaxUint64,
+			},
+			amount: 1,
+			error:  true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -340,8 +366,15 @@ func TestAccountAdd(t *testing.T) {
 			// retrieve the account to be added to
 			origBalance, err := sm.GetAccountBalance(testAddr)
 			require.NoError(t, err)
-			// ensure no error on function call
-			require.NoError(t, sm.AccountAdd(testAddr, test.amount))
+			// ensure expected behavior on function call
+			err = sm.AccountAdd(testAddr, test.amount)
+			require.Equal(t, test.error, err != nil)
+			if err != nil {
+				balanceAfterErr, e := sm.GetAccountBalance(testAddr)
+				require.NoError(t, e)
+				require.Equal(t, origBalance, balanceAfterErr)
+				return
+			}
 			// retrieve the account after being minted to
 			accAfter, err := sm.GetAccount(testAddr)
 			require.NoError(t, err)
@@ -536,6 +569,20 @@ func TestGetSetPools(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetPoolsOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply := &Supply{Total: math.MaxUint64}
+	const poolID = uint64(12345)
+
+	err := sm.SetPools([]*Pool{{Id: poolID, Amount: 1}}, supply)
+	require.Error(t, err)
+
+	balance, e := sm.GetPoolBalance(poolID)
+	require.NoError(t, e)
+	require.Zero(t, balance)
+	require.Equal(t, uint64(math.MaxUint64), supply.Total)
 }
 
 func TestGetPoolsPaginated(t *testing.T) {
@@ -773,6 +820,31 @@ func TestPoolSub(t *testing.T) {
 	}
 }
 
+func TestPoolAddPointsOverflow(t *testing.T) {
+	t.Run("total points overflow", func(t *testing.T) {
+		pool := &Pool{
+			TotalPoolPoints: math.MaxUint64,
+		}
+		err := pool.AddPoints(newTestAddressBytes(t), 1)
+		require.Error(t, err)
+		require.Equal(t, ErrInvalidAmount().Code(), err.Code())
+		require.Equal(t, uint64(math.MaxUint64), pool.TotalPoolPoints)
+	})
+
+	t.Run("holder points overflow", func(t *testing.T) {
+		addr := newTestAddressBytes(t)
+		pool := &Pool{
+			Points:          []*lib.PoolPoints{{Address: addr, Points: math.MaxUint64}},
+			TotalPoolPoints: math.MaxUint64 - 1,
+		}
+		err := pool.AddPoints(addr, 1)
+		require.Error(t, err)
+		require.Equal(t, ErrInvalidAmount().Code(), err.Code())
+		require.Equal(t, uint64(math.MaxUint64-1), pool.TotalPoolPoints)
+		require.Equal(t, uint64(math.MaxUint64), pool.Points[0].Points)
+	})
+}
+
 func TestAddToStakedSupply(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -813,6 +885,21 @@ func TestAddToStakedSupply(t *testing.T) {
 			require.Equal(t, afterSupply.Staked, supply.Staked+test.amount)
 		})
 	}
+}
+
+func TestAddToStakedSupplyOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.Staked = math.MaxUint64
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToStakedSupply(1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Equal(t, uint64(math.MaxUint64), after.Staked)
 }
 
 func TestAddToTotalSupply(t *testing.T) {
@@ -901,6 +988,39 @@ func TestAddToCommitteeStakedSupply(t *testing.T) {
 			require.Equal(t, supply.CommitteeStaked[0].Amount, test.preAmount+test.amount)
 		})
 	}
+}
+
+func TestAddToCommitteeSupplyForChainOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	const chainID = uint64(1)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.CommitteeStaked = []*Pool{{Id: chainID, Amount: math.MaxUint64}}
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToCommitteeSupplyForChain(chainID, 1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Len(t, after.CommitteeStaked, 1)
+	require.Equal(t, chainID, after.CommitteeStaked[0].Id)
+	require.Equal(t, uint64(math.MaxUint64), after.CommitteeStaked[0].Amount)
+}
+
+func TestAddToDelegateSupplyOverflow(t *testing.T) {
+	sm := newTestStateMachine(t)
+	supply, err := sm.GetSupply()
+	require.NoError(t, err)
+	supply.DelegatedOnly = math.MaxUint64
+	require.NoError(t, sm.SetSupply(supply))
+
+	err = sm.AddToDelegateSupply(1)
+	require.Error(t, err)
+
+	after, e := sm.GetSupply()
+	require.NoError(t, e)
+	require.Equal(t, uint64(math.MaxUint64), after.DelegatedOnly)
 }
 
 func TestAddToDelegationStakedSupply(t *testing.T) {

@@ -85,6 +85,10 @@ func (s *StateMachine) EndBlock(proposerAddress []byte) (events lib.Events, err 
 	if err = s.DeleteFinishedUnstaking(); err != nil {
 		return
 	}
+	// optimization to include any last minute dex ops in the batch
+	if err = s.IncludeSameBlockDex(); err != nil {
+		return
+	}
 	// execute plugin end block if enabled
 	if s.Plugin != nil {
 		resp, e := s.Plugin.EndBlock(s, &lib.PluginEndRequest{
@@ -132,6 +136,14 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc == nil || qc.Results == nil {
 		return lib.ErrNilCertResults()
 	}
+	// ensure the certificate header is not nil
+	if qc.Header == nil {
+		return lib.ErrEmptyView()
+	}
+	// ensure reward recipients are present before dereferencing
+	if qc.Results.RewardRecipients == nil {
+		return lib.ErrNilRewardRecipients()
+	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
 	if err != nil {
@@ -159,7 +171,7 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	// handle dex action ordered by the quorum
 	if qc.Header.ChainId != s.Config.ChainId || isNested {
 		if err = s.HandleDexBatch(qc.Header.ChainId, results, isNested); err != nil {
-			s.log.Error(err.Error()) // log error only - allow the rest of the receipt to be processed
+			return err
 		}
 	}
 	// handle the token swaps ordered by the quorum
@@ -175,6 +187,9 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	}
 	// reduce all payment percents proportional to the non-signer percent
 	for i, p := range results.RewardRecipients.PaymentPercents {
+		if p == nil {
+			return lib.ErrInvalidPercentAllocation()
+		}
 		results.RewardRecipients.PaymentPercents[i].Percent = lib.Uint64ReducePercentage(p.Percent, uint64(nonSignerPercent))
 	}
 	// if the quorum is signalling 'retire' for a 'nestedChain'
@@ -229,7 +244,8 @@ func (s *StateMachine) ForceUnstakeMaxPaused() lib.ErrorI {
 		// extract the address from the key
 		addr, err := AddressFromKey(key)
 		if err != nil {
-			return err
+			s.log.Warnf("skipping malformed paused key: %x", key)
+			return nil
 		}
 		// force unstake the validator
 		return s.ForceUnstakeValidator(addr)
