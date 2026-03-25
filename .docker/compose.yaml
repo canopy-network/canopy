@@ -37,9 +37,9 @@ services:
       - 50001:50001 # Explorer
       - 50002:50002 # RPC
       - 50003:50003 # Admin RPC
-      - 9001:9001   # TCP P2P
-      - 6060:6060   # Debug
-      - 9090:9090   # Metrics
+      - 9001:9001 # TCP P2P
+      - 6060:6060 # Debug
+      - 9090:9090 # Metrics
     networks:
       - canopy
     command: ["start"]
@@ -60,9 +60,9 @@ services:
       - 40001:40001 # Explorer
       - 40002:40002 # RPC
       - 40003:40003 # Admin RPC
-      - 9003:9003   # TCP P2P
-      - 6061:6060   # Debug
-      - 9091:9091   # Metrics
+      - 9002:9002 # TCP P2P
+      - 6061:6060 # Debug
+      - 9091:9091 # Metrics
     networks:
       - canopy
     command: ["start"]

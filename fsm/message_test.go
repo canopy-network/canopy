@@ -895,25 +895,29 @@ func TestHandleMessageStake(t *testing.T) {
 					require.NoError(t, e)
 					require.Equal(t, test.msg.Amount, stakedSupply.Amount)
 					// validate the delegate membership
-					page, e := sm.GetDelegatesPaginated(lib.PageParams{}, id)
+					page, e := sm.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{
+						Committee: id,
+						Delegate:  lib.FilterOption_MustBe,
+						Paused:    lib.FilterOption_Exclude,
+						Unstaking: lib.FilterOption_Exclude,
+					})
 					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the list count is correct
+					list := page.Results.(*ValidatorPage)
 					require.Len(t, *list, 1)
-					// ensure the expected validator is a member
 					require.EqualExportedValues(t, test.expected, (*list)[0])
 				}
 			} else {
 				for _, id := range val.Committees {
 					// validate the committee membership
-					page, e := sm.GetCommitteePaginated(lib.PageParams{}, id)
+					page, e := sm.GetValidatorsPaginated(lib.PageParams{}, lib.ValidatorFilters{
+						Committee: id,
+						Delegate:  lib.FilterOption_Exclude,
+						Paused:    lib.FilterOption_Exclude,
+						Unstaking: lib.FilterOption_Exclude,
+					})
 					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the list count is correct
+					list := page.Results.(*ValidatorPage)
 					require.Len(t, *list, 1)
-					// ensure the expected validator is a member
 					require.EqualExportedValues(t, test.expected, (*list)[0])
 				}
 			}
@@ -1354,45 +1358,17 @@ func TestHandleMessageEditStake(t *testing.T) {
 			nonMembershipCommittees := difference(test.presetValidator.Committees, val.Committees)
 			if val.Delegate {
 				for _, id := range val.Committees {
-					// validate the delegate membership
-					page, e := sm.GetDelegatesPaginated(lib.PageParams{}, id)
-					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the list count is correct
-					require.Len(t, *list, 1)
-					// ensure the expected validator is a member
-					require.EqualExportedValues(t, test.expectedValidator, (*list)[0])
+					require.True(t, validatorInCommitteeIndex(t, sm, id, true, val.Address))
 				}
 				for _, id := range nonMembershipCommittees {
-					// validate the delegate non-membership
-					page, e := sm.GetDelegatesPaginated(lib.PageParams{}, id)
-					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the non membership
-					require.Len(t, *list, 0)
+					require.False(t, validatorInCommitteeIndex(t, sm, id, true, val.Address))
 				}
 			} else {
 				for _, id := range val.Committees {
-					// validate the committee membership
-					page, e := sm.GetCommitteePaginated(lib.PageParams{}, id)
-					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the list count is correct
-					require.Len(t, *list, 1)
-					// ensure the expected validator is a member
-					require.EqualExportedValues(t, test.expectedValidator, (*list)[0])
+					require.True(t, validatorInCommitteeIndex(t, sm, id, false, val.Address))
 				}
 				for _, id := range nonMembershipCommittees {
-					// validate the committee non-membership
-					page, e := sm.GetCommitteePaginated(lib.PageParams{}, id)
-					require.NoError(t, e)
-					// extract the list from the page
-					list := (page.Results).(*ValidatorPage)
-					// ensure the non membership
-					require.Len(t, *list, 0)
+					require.False(t, validatorInCommitteeIndex(t, sm, id, false, val.Address))
 				}
 			}
 		})
@@ -2527,6 +2503,47 @@ func TestHandleMessageEditOrder(t *testing.T) {
 			require.EqualExportedValues(t, test.expected, order)
 		})
 	}
+}
+
+func TestHandleMessageEditOrder_LargeReductionRefundsSeller(t *testing.T) {
+	sm := newTestStateMachine(t)
+	valParams, err := sm.GetParamsVal()
+	require.NoError(t, err)
+	valParams.MinimumOrderSize = 1
+	require.NoError(t, sm.SetParamsVal(valParams))
+
+	chainID := uint64(lib.CanopyChainId)
+	orderID := newTestOrderId(t, 9)
+	seller := newTestAddressBytes(t)
+	oldAmount := uint64(1<<63 + 2)
+	newAmount := uint64(1)
+
+	require.NoError(t, sm.SetOrder(&lib.SellOrder{
+		Id:                   orderID,
+		Committee:            chainID,
+		AmountForSale:        oldAmount,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 1),
+		SellersSendAddress:   seller,
+	}, chainID))
+	require.NoError(t, sm.PoolAdd(chainID+EscrowPoolAddend, oldAmount))
+
+	err = sm.HandleMessageEditOrder(&MessageEditOrder{
+		OrderId:              orderID,
+		ChainId:              chainID,
+		AmountForSale:        newAmount,
+		RequestedAmount:      1,
+		SellerReceiveAddress: newTestAddressBytes(t, 2),
+	})
+	require.NoError(t, err)
+
+	gotAccount, err := sm.GetAccountBalance(crypto.NewAddress(seller))
+	require.NoError(t, err)
+	require.Equal(t, oldAmount-newAmount, gotAccount)
+
+	gotEscrow, err := sm.GetPoolBalance(chainID + EscrowPoolAddend)
+	require.NoError(t, err)
+	require.Equal(t, newAmount, gotEscrow)
 }
 
 func TestHandleMessageDelete(t *testing.T) {
