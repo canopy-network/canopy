@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder 
+FROM node:24-alpine AS builder 
 
 ARG BRANCH='latest'
 ARG CLI_DIR
@@ -42,7 +42,7 @@ RUN if [ ! -f "${BIN_PATH}" ]; then \
     echo "File ${BIN_PATH} already exists. Skipping build."; \
   fi
 
-FROM alpine:3.19
+FROM alpine:3.23
 WORKDIR /app
 ARG BIN_PATH=/bin/cli
 

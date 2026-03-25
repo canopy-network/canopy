@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 ARG BRANCH='latest'
 ARG BIN_PATH=/bin/cli
@@ -43,7 +43,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -o "${BIN_PATH}" ./cmd/main/...
 # =============================================================================
 # Final image for Python plugin
 # =============================================================================
-FROM alpine:3.19
+FROM alpine:3.23
 WORKDIR /app
 ARG BIN_PATH=/bin/cli
 
