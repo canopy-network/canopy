@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 
 	"github.com/canopy-network/canopy/lib"
@@ -106,6 +107,10 @@ func (s *StateMachine) SetAccount(account *Account) lib.ErrorI {
 func (s *StateMachine) SetAccounts(accounts []*Account, supply *Supply) (err lib.ErrorI) {
 	// for each account
 	for _, acc := range accounts {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-acc.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the account amount to the supply object
 		supply.Total += acc.Amount
 		// set the account in state
@@ -136,6 +141,10 @@ func (s *StateMachine) AccountAdd(address crypto.AddressI, amountToAdd uint64) l
 	account, err := s.GetAccount(address)
 	if err != nil {
 		return err
+	}
+	// ensure add operation is safe from uint64 overflow
+	if account.Amount > math.MaxUint64-amountToAdd {
+		return ErrInvalidAmount()
 	}
 	// add the tokens to the account structure
 	account.Amount += amountToAdd
@@ -306,6 +315,10 @@ func (s *StateMachine) SetPool(pool *Pool) (err lib.ErrorI) {
 func (s *StateMachine) SetPools(pools []*Pool, supply *Supply) (err lib.ErrorI) {
 	// for each pool
 	for _, pool := range pools {
+		// ensure add operation is safe from uint64 overflow
+		if supply.Total > math.MaxUint64-pool.Amount {
+			return ErrInvalidAmount()
+		}
 		// add the pool amount to the total supply
 		supply.Total += pool.Amount
 		// set the pool in state
@@ -426,6 +439,10 @@ func (s *StateMachine) AddToStakedSupply(amount uint64) lib.ErrorI {
 	if err != nil {
 		return err
 	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.Staked > math.MaxUint64-amount {
+		return ErrInvalidAmount()
+	}
 	// add to the staked amount in the supply tracker
 	supply.Staked += amount
 	// set the supply tracker back in state
@@ -438,6 +455,10 @@ func (s *StateMachine) AddToDelegateSupply(amount uint64) lib.ErrorI {
 	supply, err := s.GetSupply()
 	if err != nil {
 		return err
+	}
+	// ensure add operation is safe from uint64 overflow
+	if supply.DelegatedOnly > math.MaxUint64-amount {
+		return ErrInvalidAmount()
 	}
 	// add to the delegation only amount in the supply tracker
 	supply.DelegatedOnly += amount
@@ -571,6 +592,10 @@ func (s *StateMachine) marshalSupply(supply *Supply) ([]byte, lib.ErrorI) {
 func (s *StateMachine) addToSupplyPool(chainId, amount uint64, targetType SupplyPoolType) lib.ErrorI {
 	// execute the callback on the supply pool that has a certain chainID and type
 	return s.executeOnSupplyPool(chainId, targetType, func(s *Supply, p *Pool) (err lib.ErrorI) {
+		// ensure add operation is safe from uint64 overflow
+		if p.Amount > math.MaxUint64-amount {
+			return ErrInvalidAmount()
+		}
 		// add to the supply pool amount
 		p.Amount += amount
 		return
@@ -763,23 +788,41 @@ func (x *Pool) GetPointsFor(address []byte) (points uint64, err lib.ErrorI) {
 
 // AddPoints() converts a 'percent control' to points using N = (t × P) / (1 - t)
 // Where N is new_points, t = the desired ownership fraction, and P is the initial pool size
-func (x *Pool) AddPoints(address []byte, points uint64) {
-	// add to total points
-	x.TotalPoolPoints += points
+func (x *Pool) AddPoints(address []byte, points uint64) lib.ErrorI {
+	// zero-point updates are no-ops; do not create ghost LP entries
+	if points == 0 {
+		return nil
+	}
 	// add to existing if found
 	for _, lp := range x.Points {
 		// if the address is found
 		if bytes.Equal(lp.Address, address) {
+			// preflight both adds before mutating to preserve atomicity
+			if x.TotalPoolPoints > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
 			// add points
+			if lp.Points > math.MaxUint64-points {
+				return ErrInvalidAmount()
+			}
+			x.TotalPoolPoints += points
 			lp.Points += points
 			// exit
-			return
+			return nil
 		}
 	}
+	// add to total points
+	if x.TotalPoolPoints > math.MaxUint64-points {
+		return ErrInvalidAmount()
+	}
+	if len(x.Points) >= lib.MaxLiquidityProviders {
+		return ErrInvalidLiquidityPool()
+	}
+	x.TotalPoolPoints += points
 	// add to the points
 	x.Points = append(x.Points, &lib.PoolPoints{Address: address, Points: points})
 	// exit
-	return
+	return nil
 }
 
 // RemovePoints() removes liquidity points for a certain provider in the pool

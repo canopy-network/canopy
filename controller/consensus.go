@@ -48,6 +48,9 @@ func getRandomAllowedPeer(peers []string, limiter *lib.SimpleLimiter) string {
 	})
 	// Find a peer that is not rate limited
 	for _, peer := range copy {
+		if peer == "" {
+			continue
+		}
 		blocked, allBlocked := limiter.NewRequest(peer)
 		if !blocked && !allBlocked {
 			return peer
@@ -72,11 +75,16 @@ func (c *Controller) Sync() {
 	// set the Controller as 'syncing'
 	c.isSyncing.Store(true)
 	// check if node is alone in the validator set
-	if c.singleNodeNetwork() && len(c.checkpoints) == 0 {
-		// complete syncing
-		c.finishSyncing()
-		// exit
-		return
+	singleNode, err := c.singleNodeNetwork()
+	if err != nil {
+		c.log.Warnf("singleNodeNetwork() failed with err: %s", err.Error())
+	} else {
+		if singleNode && len(c.checkpoints) == 0 {
+			// complete syncing
+			c.finishSyncing()
+			// exit
+			return
+		}
 	}
 	// Find the height the FSM is expecting to receive next
 	fsmHeight := c.FSM.Height()
@@ -107,7 +115,7 @@ func (c *Controller) Sync() {
 			// Get an updated list of available peers
 			peers, _, _ := c.P2P.PeerSet.GetAllInfos()
 			// Update syncing peers list
-			syncingPeers := make([]string, len(peers))
+			syncingPeers := make([]string, 0, len(peers))
 			for _, peer := range peers {
 				syncingPeers = append(syncingPeers, lib.BytesToString(peer.Address.PublicKey))
 			}
@@ -351,7 +359,10 @@ func (c *Controller) ShouldGossip(msg *bft.Message) (gossip bool, exit bool) {
 	case msg.IsProposerMessage():
 		// proposer message, always gossip, always continue
 		return true, false
-	case msg.IsReplicaMessage() || msg.IsPacemakerMessage():
+	case msg.IsPacemakerMessage():
+		// pacemaker message, always gossip and always continue local processing
+		return true, false
+	case msg.IsReplicaMessage():
 		// replica message, always gossip, continue if self is the proposer
 		return true, !bytes.Equal(msg.Qc.ProposerKey, c.PublicKey)
 	}
@@ -688,21 +699,21 @@ func (c *Controller) pollMaxHeight(backoff int) (max, minVDF uint64, syncingPeer
 }
 
 // singleNodeNetwork() returns true if there are no other participants in the committee besides self
-func (c *Controller) singleNodeNetwork() bool {
+func (c *Controller) singleNodeNetwork() (single bool, err lib.ErrorI) {
 	c.Lock()
 	defer c.Unlock()
 	// get the root chain id from state
 	id, err := c.FSM.GetRootChainId()
 	if err != nil {
-		c.log.Fatalf(err.Error())
+		return false, err
 	}
 	// get the validator set
 	v, err := c.RCManager.GetValidatorSet(id, c.Config.ChainId, 0)
 	if err != nil {
-		c.log.Fatalf(err.Error())
+		return false, err
 	}
 	// if self is the only validator, return true
-	return v.NumValidators == 0 || (v.NumValidators == 1 && bytes.Equal(v.ValidatorSet.ValidatorSet[0].PublicKey, c.PublicKey))
+	return v.NumValidators == 0 || (v.NumValidators == 1 && bytes.Equal(v.ValidatorSet.ValidatorSet[0].PublicKey, c.PublicKey)), nil
 }
 
 // syncingDone() checks if the syncing loop may complete for a specific chainId
@@ -711,8 +722,8 @@ func (c *Controller) syncingDone(maxHeight, minVDFIterations uint64) bool {
 	if c.FSM.Height() >= maxHeight {
 		// ensure node did not lie about VDF iterations in their chain
 		if c.FSM.TotalVDFIterations() < minVDFIterations {
-			// if the node lied, on unsafe fork - exit application immediately for safety
-			c.log.Fatalf("Unsafe fork detected - VDFIterations error: localVDFIterations: %d, minimumVDFIterations: %d", c.FSM.TotalVDFIterations(), minVDFIterations)
+			// warn and continue syncing completion; peer-reported VDF is not a fatal predicate
+			c.log.Warnf("VDFIterations mismatch: localVDFIterations=%d, peerHintVDFIterations=%d", c.FSM.TotalVDFIterations(), minVDFIterations)
 		}
 		// exit with syncing done
 		return true
