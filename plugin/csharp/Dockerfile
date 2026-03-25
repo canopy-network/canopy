@@ -17,7 +17,7 @@ COPY plugin/csharp/ ./
 RUN dotnet publish CanopyPlugin.csproj -c Release -r linux-musl-x64 --self-contained true -o /out
 
 # Stage 3: Runtime (Alpine-based, self-contained binary includes .NET runtime)
-FROM alpine:3.19
+FROM alpine:3.23
 WORKDIR /app
 
 # Install runtime dependencies

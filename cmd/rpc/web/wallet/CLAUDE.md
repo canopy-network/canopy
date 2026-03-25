@@ -113,7 +113,6 @@ import { useConfig } from '@/app/providers/ConfigProvider'
 VITE_WALLET_RPC_PROXY_TARGET     # RPC base URL (default: http://localhost:50002)
 VITE_WALLET_ADMIN_RPC_PROXY_TARGET  # Admin RPC URL (default: http://localhost:50003)
 VITE_ROOT_WALLET_RPC_PROXY_TARGET   # Root chain RPC (default: same as RPC)
-VITE_WALLET_BASE_PATH            # Base path for routing (default: / in dev, /wallet/ in prod)
 ```
 
 ## Coding Conventions
