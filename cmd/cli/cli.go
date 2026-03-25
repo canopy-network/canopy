@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,8 +15,6 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
-	"github.com/canopy-network/canopy/cmd/rpc/oracle"
-	"github.com/canopy-network/canopy/cmd/rpc/oracle/eth"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
@@ -32,9 +29,6 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "canopy",
 	Short: "the canopy blockchain software",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		initEnv()
-	},
 }
 
 var versionCmd = &cobra.Command{
@@ -60,23 +54,12 @@ func init() {
 	autoCompleteCmd.AddCommand(generateCompleteCmd)
 	autoCompleteCmd.AddCommand(autoCompleteInstallCmd)
 	rootCmd.PersistentFlags().StringVar(&DataDir, "data-dir", lib.DefaultDataDirPath(), "custom data directory location")
-}
-
-// initEnv initializes global components required for operation
-func initEnv() {
-	data := os.Getenv("CANOPY_DATA_DIR")
-	if data != "" {
-		DataDir = data
-	}
-	// create logger used throughout the application
+	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
 	l = lib.NewLogger(lib.LoggerConfig{
 		Level:      config.GetLogLevel(),
 		Structured: config.Structured,
 		JSON:       config.JSON,
 	})
-	// initialize data directory, creating required files if neccessary
-	config, validatorKey = InitializeDataDirectory(DataDir, lib.NewDefaultLogger())
-	// create an rpc client for this node
 	client = rpc.NewClient(config.RPCUrl, config.AdminRPCUrl)
 }
 
@@ -101,9 +84,6 @@ func Start() {
 	if err := proxy.Start(); err != nil {
 		l.Fatal(err.Error())
 	}
-	// create a shared context for oracle and ethereum block provider
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	// initialize and start the metrics server
 	metrics := lib.NewMetricsServer(validatorKey.PublicKey().Address(), float64(config.ChainId), rpc.SoftwareVersion, config.MetricsConfig, l)
 	// create a new database object from the config
@@ -119,39 +99,8 @@ func Start() {
 	if err != nil {
 		l.Fatal(err.Error())
 	}
-	var o *oracle.Oracle
-	// only enable oracle if configuration is present
-	if config.OracleEnabled {
-		oracleRoot := filepath.Join(DataDir, "oracle")
-		l.Infof("Oracle enabled, see oracle log in %s for details", oracleRoot)
-		// create a seperate logger for the oracle and all oracle components
-		oracleLogger := lib.NewOracleLogger(
-			lib.LoggerConfig{Level: config.GetLogLevel()},
-			oracleRoot,
-		)
-		// create a new ethereum disk storage instance for the oracle order store
-		oracleStorage, e := oracle.NewOracleDiskStorage(filepath.Join(oracleRoot, "store"), oracleLogger)
-		if e != nil {
-			l.Fatal(e.Error())
-		}
-		// create a new order validator
-		orderValidator := oracle.NewOrderValidator()
-		// create the ethereum block provider
-		ethBlockProvider := eth.NewEthBlockProvider(config.EthBlockProviderConfig, orderValidator, oracleLogger, metrics)
-
-		// create an absolute path for the state save file
-		config.OracleConfig.StateFile = filepath.Join(oracleRoot, config.OracleConfig.StateFile)
-		// create a new oracle instance and pass the ethereum block provider with shared context
-		o, e = oracle.NewOracle(ctx, config.OracleConfig, ethBlockProvider, oracleStorage, oracleLogger, metrics)
-		if e != nil {
-			l.Fatal(e.Error())
-		}
-	} else {
-		l.Infof("Oracle not enabled")
-	}
-
 	// create a new instance of the application
-	app, err := controller.New(sm, o, config, validatorKey, metrics, l)
+	app, err := controller.New(sm, config, validatorKey, metrics, l)
 	if err != nil {
 		l.Fatal(err.Error())
 	}
@@ -166,10 +115,6 @@ func Start() {
 	// block until a kill signal is received
 	waitForKill()
 	proxy.Stop()
-	// cancel the shared context to stop oracle components
-	cancel()
-	// gracefuly stop oracle
-	o.Stop()
 	// gracefully stop the app
 	app.Stop()
 	// gracefully stop the metrics server
