@@ -38,16 +38,21 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return timeA - timeB
         })
 
-        // Always create 4 data points by dividing blocks into 4 equal groups
-        const numPoints = 4
-        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        // always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = Math.min(4, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
         const blockData: number[] = []
         const timeLabels: string[] = []
-        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
+        const groupTimeRanges: number[] = [] // store time range for each group in minutes
 
+        let offset = 0
         for (let i = 0; i < numPoints; i++) {
-            const startIdx = i * blocksPerGroup
-            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            // distribute remainder across first groups so sizes differ by at most 1
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const startIdx = offset
+            const endIdx = offset + groupSize
+            offset = endIdx
             const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
             if (groupBlocks.length === 0) {

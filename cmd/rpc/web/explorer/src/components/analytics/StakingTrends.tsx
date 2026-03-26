@@ -28,78 +28,9 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
         return value.toFixed(2)
     }
 
-    // Get time labels from blocks data
-    const getTimeLabels = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results) || !blockGroups || blockGroups.length === 0) {
-            return blockGroups?.map(group => `${group.start}-${group.end}`) || []
-        }
-
-        const realBlocks = blocksData.results
-        const fromBlockNum = parseInt(fromBlock) || 0
-        const toBlockNum = parseInt(toBlock) || 0
-
-        // Filter blocks by the specified range
-        const filteredBlocks = realBlocks.filter((block: any) => {
-            const blockHeight = block.blockHeader?.height || block.height || 0
-            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
-        })
-
-        if (filteredBlocks.length === 0) {
-            return blockGroups.map(group => `${group.start}-${group.end}`)
-        }
-
-        // Sort blocks by timestamp (oldest first)
-        filteredBlocks.sort((a: any, b: any) => {
-            const timeA = a.blockHeader?.time || a.time || 0
-            const timeB = b.blockHeader?.time || b.time || 0
-            return timeA - timeB
-        })
-
-        // Determine time interval based on number of filtered blocks
-        const use10MinuteIntervals = filteredBlocks.length >= 20
-
-        // Create time labels for each block group
-        const timeLabels = blockGroups.map((group, index) => {
-            // Find the time key for this group
-            const groupBlocks = filteredBlocks.filter((block: any) => {
-                const blockHeight = block.blockHeader?.height || block.height || 0
-                return blockHeight >= group.start && blockHeight <= group.end
-            })
-
-            if (groupBlocks.length === 0) {
-                return `${group.start}-${group.end}`
-            }
-
-            // Get the first block's time for this group
-            const firstBlock = groupBlocks[0]
-            const blockTime = firstBlock.blockHeader?.time || firstBlock.time || 0
-            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
-            const blockDate = new Date(blockTimeMs)
-
-            const minute = use10MinuteIntervals ?
-                Math.floor(blockDate.getMinutes() / 10) * 10 :
-                blockDate.getMinutes()
-
-            const timeKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-
-            if (!use10MinuteIntervals) {
-                return timeKey
-            }
-
-            // Create 10-minute range
-            const [hour, min] = timeKey.split(':').map(Number)
-            const endMinute = (min + 10) % 60
-            const endHour = endMinute < min ? (hour + 1) % 24 : hour
-
-            return `${timeKey}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
-        })
-
-        return timeLabels
-    }
-
-    // Generate real staking data from block reward events
+    // generate staking data from block reward events, using evenly distributed groups from actual data
     const generateStakingData = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results) || !blockGroups || blockGroups.length === 0) {
+        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
             return { rewards: [], timeLabels: [] }
         }
 
@@ -113,12 +44,29 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
             return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
         })
 
-        // sum actual reward events from blocks in each group
-        const rewards = blockGroups.map((group) => {
-            const groupBlocks = filteredBlocks.filter((block: any) => {
-                const blockHeight = block.blockHeader?.height || block.height || 0
-                return blockHeight >= group.start && blockHeight <= group.end
-            })
+        if (filteredBlocks.length === 0) {
+            return { rewards: [], timeLabels: [] }
+        }
+
+        // sort by timestamp
+        filteredBlocks.sort((a: any, b: any) => {
+            const timeA = a.blockHeader?.time || a.time || 0
+            const timeB = b.blockHeader?.time || b.time || 0
+            return timeA - timeB
+        })
+
+        // create evenly distributed groups from actual data
+        const numPoints = Math.min(6, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
+        const rewards: number[] = []
+        const timeLabels: string[] = []
+
+        let offset = 0
+        for (let i = 0; i < numPoints; i++) {
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const groupBlocks = filteredBlocks.slice(offset, offset + groupSize)
+            offset += groupSize
 
             // sum all reward events in this group's blocks
             const groupReward = groupBlocks.reduce((sum: number, block: any) => {
@@ -129,11 +77,20 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                 return sum + rewardSum
             }, 0)
 
-            // convert from micro to CNPY
-            return groupReward / 1000000
-        })
+            rewards.push(groupReward / 1000000)
 
-        const timeLabels = getTimeLabels()
+            // build time label from first and last block in group
+            const firstBlock = groupBlocks[0]
+            const lastBlock = groupBlocks[groupBlocks.length - 1]
+            const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
+            const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
+            const firstMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
+            const lastMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
+            const fmt = (d: Date) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+            const startLabel = fmt(new Date(firstMs))
+            const endLabel = fmt(new Date(lastMs))
+            timeLabels.push(startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`)
+        }
 
         return { rewards, timeLabels }
     }

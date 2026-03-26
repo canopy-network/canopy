@@ -16,90 +16,69 @@ interface TransactionTypesProps {
 }
 
 const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock, loading, transactionsData, blocksData, blockGroups }) => {
-    // Get time labels from blocks data
-    const getTimeLabels = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results) || !blockGroups || blockGroups.length === 0) {
-            return blockGroups?.map(group => `${group.start}-${group.end}`) || []
-        }
-
-        const realBlocks = blocksData.results
-        const fromBlockNum = parseInt(fromBlock) || 0
-        const toBlockNum = parseInt(toBlock) || 0
-
-        // Filter blocks by the specified range
-        const filteredBlocks = realBlocks.filter((block: any) => {
-            const blockHeight = block.blockHeader?.height || block.height || 0
-            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
-        })
-
-        if (filteredBlocks.length === 0) {
-            return blockGroups.map(group => `${group.start}-${group.end}`)
-        }
-
-        // Sort blocks by timestamp (oldest first)
-        filteredBlocks.sort((a: any, b: any) => {
-            const timeA = a.blockHeader?.time || a.time || 0
-            const timeB = b.blockHeader?.time || b.time || 0
-            return timeA - timeB
-        })
-
-        // Determine time interval based on number of filtered blocks
-        // Use 10-minute intervals only for very large datasets (100+ blocks)
-        const use10MinuteIntervals = filteredBlocks.length >= 100
-
-        // Create time labels for each block group
-        const timeLabels = blockGroups.map((group, index) => {
-            // Find the time key for this group
-            const groupBlocks = filteredBlocks.filter((block: any) => {
-                const blockHeight = block.blockHeader?.height || block.height || 0
-                return blockHeight >= group.start && blockHeight <= group.end
-            })
-
-            if (groupBlocks.length === 0) {
-                return `${group.start}-${group.end}`
-            }
-
-            // Get the first block's time for this group
-            const firstBlock = groupBlocks[0]
-            const blockTime = firstBlock.blockHeader?.time || firstBlock.time || 0
-            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
-            const blockDate = new Date(blockTimeMs)
-
-            const minute = use10MinuteIntervals ?
-                Math.floor(blockDate.getMinutes() / 10) * 10 :
-                blockDate.getMinutes()
-
-            const timeKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-
-            if (!use10MinuteIntervals) {
-                return timeKey
-            }
-
-            // Create 10-minute range
-            const [hour, min] = timeKey.split(':').map(Number)
-            const endMinute = (min + 10) % 60
-            const endHour = endMinute < min ? (hour + 1) % 24 : hour
-
-            return `${timeKey}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
-        })
-
-        return timeLabels
-    }
-    // Use real transaction data categorized by type, grouped by block groups
+    // categorize transactions by type using evenly distributed groups from actual block data
     const getTransactionTypeData = () => {
-        if (!transactionsData?.results || !Array.isArray(transactionsData.results) || !blockGroups || blockGroups.length === 0) {
-            return []
+        if (!transactionsData?.results || !Array.isArray(transactionsData.results) || transactionsData.results.length === 0) {
+            return { data: [], labels: [] }
+        }
+
+        if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
+            return { data: [], labels: [] }
         }
 
         const realTransactions = transactionsData.results
+        const fromBlockNum = parseInt(fromBlock) || 0
+        const toBlockNum = parseInt(toBlock) || 0
 
-        // categorize each transaction and assign to its block group
-        const categorizedByGroup: { [key: number]: { transfers: number, staking: number, governance: number, other: number } } = {}
+        // get actual blocks in range, sorted by time
+        const filteredBlocks = blocksData.results
+            .filter((block: any) => {
+                const h = block.blockHeader?.height || block.height || 0
+                return h >= fromBlockNum && h <= toBlockNum
+            })
+            .sort((a: any, b: any) => {
+                const tA = a.blockHeader?.time || a.time || 0
+                const tB = b.blockHeader?.time || b.time || 0
+                return tA - tB
+            })
 
-        // initialize all groups
-        for (let i = 0; i < blockGroups.length; i++) {
-            categorizedByGroup[i] = { transfers: 0, staking: 0, governance: 0, other: 0 }
+        if (filteredBlocks.length === 0) {
+            return { data: [], labels: [] }
         }
+
+        // create evenly distributed groups from actual blocks
+        const numGroups = Math.min(6, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numGroups)
+        const remainder = filteredBlocks.length % numGroups
+
+        const groups: { minHeight: number, maxHeight: number, label: string }[] = []
+        let offset = 0
+        for (let i = 0; i < numGroups; i++) {
+            const size = base + (i < remainder ? 1 : 0)
+            const groupBlocks = filteredBlocks.slice(offset, offset + size)
+            offset += size
+
+            const minH = groupBlocks[0].blockHeader?.height || groupBlocks[0].height || 0
+            const maxH = groupBlocks[groupBlocks.length - 1].blockHeader?.height || groupBlocks[groupBlocks.length - 1].height || 0
+
+            // build time label
+            const firstTime = groupBlocks[0].blockHeader?.time || groupBlocks[0].time || 0
+            const lastTime = groupBlocks[groupBlocks.length - 1].blockHeader?.time || groupBlocks[groupBlocks.length - 1].time || 0
+            const firstMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
+            const lastMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
+            const fmt = (d: Date) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+            const startLabel = fmt(new Date(firstMs))
+            const endLabel = fmt(new Date(lastMs))
+
+            groups.push({
+                minHeight: minH,
+                maxHeight: maxH,
+                label: startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`
+            })
+        }
+
+        // categorize transactions into groups
+        const categorized = groups.map(() => ({ transfers: 0, staking: 0, governance: 0, other: 0 }))
 
         realTransactions.forEach((tx: any) => {
             const messageType = tx.messageType || 'other'
@@ -113,31 +92,30 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                 category = 'governance'
             }
 
-            // find which block group this transaction belongs to
-            const txHeight = tx.blockHeight || 0
-            const groupIndex = blockGroups.findIndex(g => txHeight >= g.start && txHeight <= g.end)
+            const txHeight = tx.blockHeight || tx.height || 0
+            const groupIndex = groups.findIndex(g => txHeight >= g.minHeight && txHeight <= g.maxHeight)
             if (groupIndex >= 0) {
-                categorizedByGroup[groupIndex][category]++
+                categorized[groupIndex][category]++
             }
         })
 
-        return blockGroups.map((_, i) => {
-            const data = categorizedByGroup[i]
-            return {
-                day: i + 1,
-                transfers: data.transfers,
-                staking: data.staking,
-                governance: data.governance,
-                other: data.other,
-                total: data.transfers + data.staking + data.governance + data.other,
-            }
-        })
+        const data = categorized.map((d, i) => ({
+            day: i + 1,
+            transfers: d.transfers,
+            staking: d.staking,
+            governance: d.governance,
+            other: d.other,
+            total: d.transfers + d.staking + d.governance + d.other,
+        }))
+
+        const labels = groups.map(g => g.label)
+        return { data, labels }
     }
 
-    const transactionData = getTransactionTypeData()
-    const maxTotal = Math.max(...transactionData.map(d => d.total), 0) // Ensure maxTotal is not negative if all are 0
+    const { data: transactionData, labels: txTimeLabels } = getTransactionTypeData()
+    const maxTotal = transactionData.length > 0 ? Math.max(...transactionData.map(d => d.total), 0) : 0
 
-    // Get available transaction types from real data
+    // get available transaction types from real data
     const getAvailableTypes = () => {
         if (!transactionsData?.results || !Array.isArray(transactionsData.results)) {
             return []
@@ -155,14 +133,11 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                 category = 'staking'
             } else if (messageType.includes('governance') || messageType.includes('proposal') || messageType.includes('vote')) {
                 category = 'governance'
-            } else {
-                category = 'other'
             }
 
             typeCounts[category as keyof typeof typeCounts]++
         })
 
-        // Return only types that have transactions
         const availableTypes = []
         if (typeCounts.transfers > 0) availableTypes.push({ name: 'Transfers', count: typeCounts.transfers, color: '#4ADE80' })
         if (typeCounts.staking > 0) availableTypes.push({ name: 'Staking', count: typeCounts.staking, color: '#3b82f6' })
@@ -173,7 +148,6 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
     }
 
     const availableTypes = getAvailableTypes()
-    const timeLabels = getTimeLabels()
 
     if (loading) {
         return (
@@ -186,7 +160,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
         )
     }
 
-    // If no real data, show empty state
+    // if no real data, show empty state
     if (transactionData.length === 0 || maxTotal === 0) {
         return (
             <motion.div
@@ -302,14 +276,14 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             </div>
 
             <div className="mt-4 flex justify-between text-xs text-gray-400">
-                {timeLabels.slice(0, 6).map((label, index) => (
+                {txTimeLabels.map((label, index) => (
                     <span key={index} className="text-center flex-1 px-1 truncate">
                         {label}
                     </span>
                 ))}
             </div>
 
-            {/* Legend - Only show types that exist */}
+            {/* Legend - only show types that exist */}
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                 {availableTypes.map((type, index) => (
                     <div key={index} className="flex items-center">
