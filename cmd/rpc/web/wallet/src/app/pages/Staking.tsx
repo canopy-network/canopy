@@ -23,9 +23,7 @@ type ValidatorRow = {
   stakedAmount: number;
   status: "Staked" | "Paused" | "Unstaking" | "Delegate";
   rewards24h: number;
-  chains?: string[];
   isSynced: boolean;
-  // Additional validator information
   committees?: number[];
   compound?: boolean;
   delegate?: boolean;
@@ -35,8 +33,6 @@ type ValidatorRow = {
   publicKey?: string;
   unstakingHeight?: number;
 };
-
-const chainLabels = ["DEX", "CAN"] as const;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -96,27 +92,25 @@ export default function Staking(): JSX.Element {
 
   // 🧮 Construir filas memoizadas
   const rows: ValidatorRow[] = useMemo(() => {
-    return validators.map((v: any) => ({
-      address: v.address,
-      nickname: v.nickname,
-      stakedAmount: v.stakedAmount || 0,
-      status: v.unstaking ? "Unstaking" : v.paused ? "Paused" : v.delegate ? "Delegate" : "Staked",
-      rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
-      chains:
-        v.committees?.map(
-          (id: number) => chainLabels[id % chainLabels.length],
-        ) || [],
-      isSynced: !v.paused,
-      // Additional info
-      committees: v.committees,
-      compound: v.compound,
-      delegate: v.delegate,
-      maxPausedHeight: v.maxPausedHeight,
-      netAddress: v.netAddress,
-      output: v.output,
-      publicKey: v.publicKey,
-      unstakingHeight: v.unstakingHeight,
-    }));
+    return validators.map((v) => {
+      const extra = v as unknown as Record<string, unknown>;
+      return {
+        address: v.address,
+        nickname: v.nickname,
+        stakedAmount: v.stakedAmount || 0,
+        status: (v.unstaking ? "Unstaking" : v.paused ? "Paused" : v.delegate ? "Delegate" : "Staked") as ValidatorRow["status"],
+        rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
+        isSynced: !v.paused,
+        committees: extra.committees as number[] | undefined,
+        compound: extra.compound as boolean | undefined,
+        delegate: v.delegate,
+        maxPausedHeight: extra.maxPausedHeight as number | undefined,
+        netAddress: extra.netAddress as string | undefined,
+        output: extra.output as string | undefined,
+        publicKey: v.publicKey,
+        unstakingHeight: v.unstakingHeight,
+      };
+    });
   }, [validators, rewardsHistory]);
 
   const filtered: ValidatorRow[] = useMemo(() => {
@@ -133,18 +127,30 @@ export default function Staking(): JSX.Element {
     const header = [
       "address",
       "nickname",
+      "publicKey",
       "stakedAmount",
       "rewards24h",
       "status",
+      "netAddress",
+      "output",
+      "compound",
+      "committees",
+      "unstakingHeight",
     ];
     const lines = [header.join(",")].concat(
       filtered.map((r) =>
         [
           r.address,
           r.nickname || "",
+          r.publicKey || "",
           r.stakedAmount,
           r.rewards24h,
           r.status,
+          r.netAddress || "",
+          r.output || "",
+          String(r.compound ?? ""),
+          r.committees?.join(";") ?? "",
+          r.unstakingHeight ?? "",
         ].join(","),
       ),
     );

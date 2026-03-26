@@ -100,8 +100,11 @@ export const Governance = () => {
       if (!poll) return;
       openAction(GOVERNANCE_ACTION_IDS.votePoll, {
         proposalHash: poll.proposalHash || poll.hash,
+        proposal: poll.proposal ?? "",
+        endBlock: poll.endBlock,
         URL: poll.url,
         voteApprove: vote === "approve",
+        _skipToConfirm: true,
       });
     },
     [openAction],
@@ -111,6 +114,7 @@ export const Governance = () => {
     (proposalHash: string) => {
       openAction(GOVERNANCE_ACTION_IDS.deleteProposalVote, {
         proposalId: proposalHash,
+        _skipToConfirm: true,
       });
     },
     [openAction],

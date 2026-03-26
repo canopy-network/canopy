@@ -3,24 +3,23 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ValidatorDetailHeader from './ValidatorDetailHeader'
 import ValidatorStakeChains from './ValidatorStakeChains'
-import ValidatorRewards from './ValidatorRewards'
-import { useValidator, useAllValidators } from '../../hooks/useApi'
+import { useValidator } from '../../hooks/useApi'
+import { Committee } from '../../lib/api'
 import validatorDetailTexts from '../../data/validatorDetail.json'
 import ValidatorMetrics from './ValidatorMetrics'
 
 interface ValidatorDetail {
     address: string
     publicKey: string
-    stakedAmount: number // in micro denomination
-    committees: number[] // list of chain ids
+    stakedAmount: number
+    committees: number[]
     netAddress: string
-    maxPausedHeight: number // 0 if not paused
-    unstakingHeight: number // 0 if not unstaking
-    output: string // address where rewards are distributed
+    maxPausedHeight: number
+    unstakingHeight: number
+    output: string
     delegate: boolean
     compound: boolean
-    // Calculated from real data
-    status: 'active' | 'paused' | 'unstaking' | 'inactive'
+    status: 'active' | 'paused' | 'unstaking' | 'delegate'
     rank: number // From query param when navigating from table
     nestedChains: Array<{
         name: string
@@ -47,61 +46,70 @@ const ValidatorDetailPage: React.FC = () => {
     // Hook to get specific validator data
     const { data: validatorData, isLoading } = useValidator(0, validatorAddress || '')
 
-    // Hook to get all validators to calculate total stake
-    const { data: allValidatorsData } = useAllValidators()
+    // Per-committee total stake data
+    const [committeeTotals, setCommitteeTotals] = useState<Map<number, number>>(new Map())
 
-    // Helper function to convert micro denomination to CNPY
-    const toCNPY = (micro: number): number => {
-        return micro / 1000000
-    }
+    // Fetch per-committee total stake when validator committees are known
+    useEffect(() => {
+        const committees = validatorData?.committees || []
+        if (committees.length === 0) return
 
-    // Calculate total stake from all validators
-    const totalNetworkStake = React.useMemo(() => {
-        const allValidators = allValidatorsData?.results || []
-        return allValidators.reduce((sum: number, v: any) => sum + Number(v.stakedAmount || 0), 0)
-    }, [allValidatorsData])
+        const fetchCommitteeData = async () => {
+            const totals = new Map<number, number>()
+            for (const committeeId of committees) {
+                try {
+                    const data = await Committee(1, committeeId)
+                    const validators = data?.results || []
+                    const total = validators.reduce((sum: number, v: Record<string, unknown>) => sum + Number(v.stakedAmount || 0), 0)
+                    totals.set(committeeId, total)
+                } catch {
+                    totals.set(committeeId, 0)
+                }
+            }
+            setCommitteeTotals(totals)
+        }
+        fetchCommitteeData()
+    }, [validatorData?.committees])
 
-    // Generate nested chains from real committees data
-    // Restakes aren't split amongst chains, but instead the full amount is applied against each
-    const generateNestedChains = (committees: number[], validatorStake: number, totalStake: number) => {
+    const icons = [
+        'fa-solid fa-leaf',
+        'fa-brands fa-ethereum',
+        'fa-brands fa-bitcoin',
+        'fa-solid fa-circle-nodes',
+        'fa-solid fa-link',
+        'fa-solid fa-network-wired'
+    ]
+    const chainColors = [
+        'bg-green-300/10 text-primary text-lg',
+        'bg-blue-300/10 text-blue-500 text-lg',
+        'bg-yellow-600/10 text-yellow-400 text-lg',
+        'bg-purple-300/10 text-purple-500 text-lg',
+        'bg-red-300/10 text-red-500 text-lg',
+        'bg-cyan-300/10 text-cyan-500 text-lg'
+    ]
+
+    const generateNestedChains = (committees: number[], validatorStake: number) => {
         if (!committees || committees.length === 0) {
             return []
         }
 
-        // Staking power = Your stake / total stake
-        const stakingPower = totalStake > 0 ? (validatorStake / totalStake) * 100 : 0
-
         return committees.map((committeeId, index) => {
-            const icons = [
-                'fa-solid fa-leaf',
-                'fa-brands fa-ethereum',
-                'fa-brands fa-bitcoin',
-                'fa-solid fa-circle-nodes',
-                'fa-solid fa-link',
-                'fa-solid fa-network-wired'
-            ]
-            const colors = [
-                'bg-green-300/10 text-primary text-lg',
-                'bg-blue-300/10 text-blue-500 text-lg',
-                'bg-yellow-600/10 text-yellow-400 text-lg',
-                'bg-purple-300/10 text-purple-500 text-lg',
-                'bg-red-300/10 text-red-500 text-lg',
-                'bg-cyan-300/10 text-cyan-500 text-lg'
-            ]
+            const committeeTotal = committeeTotals.get(committeeId) || 0
+            const stakingPower = committeeTotal > 0 ? (validatorStake / committeeTotal) * 100 : 0
 
             return {
                 name: `Committee ${committeeId}`,
                 committeeId: committeeId,
-                stakedAmount: validatorStake, // Full amount applied to each committee
-                percentage: stakingPower, // Staking power percentage
+                stakedAmount: validatorStake,
+                percentage: stakingPower,
                 icon: icons[index % icons.length],
-                color: colors[index % colors.length]
+                color: chainColors[index % chainColors.length]
             }
         })
     }
 
     // Calculate validator status from real data
-    const calculateStatus = (maxPausedHeight: number, unstakingHeight: number, delegate: boolean): 'active' | 'paused' | 'unstaking' | 'inactive' => {
+    const calculateStatus = (maxPausedHeight: number, unstakingHeight: number, delegate: boolean): 'active' | 'paused' | 'unstaking' | 'delegate' => {
         if (unstakingHeight > 0) {
             return 'unstaking'
         }
@@ -109,7 +117,7 @@ const ValidatorDetailPage: React.FC = () => {
             return 'paused'
         }
         if (delegate) {
-            return 'inactive' // Delegates are not active validators
+            return 'delegate'
         }
         return 'active'
     }
@@ -145,13 +153,13 @@ const ValidatorDetailPage: React.FC = () => {
                 compound,
                 status,
                 rank: rank || 0, // Use rank from query param, 0 if not provided
-                nestedChains: generateNestedChains(committees, stakedAmount, totalNetworkStake)
+                nestedChains: generateNestedChains(committees, stakedAmount)
             }
 
             setValidator(validatorDetail)
             setLoading(false)
         }
-    }, [validatorData, validatorAddress, rank, totalNetworkStake])
+    }, [validatorData, validatorAddress, rank, committeeTotals])
 
     if (loading || isLoading) {
         return (

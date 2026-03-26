@@ -70,8 +70,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         return validator.activityScore === 'Unstaking'
                     case 'delegate':
                         return validator.activityScore === 'Delegate'
-                    case 'inactive':
-                        return validator.activityScore === 'Inactive'
                     default:
                         return true
                 }
@@ -125,8 +123,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         return validator.activityScore === 'Unstaking'
                     case 'delegate':
                         return validator.activityScore === 'Delegate'
-                    case 'inactive':
-                        return validator.activityScore === 'Inactive'
                     default:
                         return true
                 }
@@ -261,7 +257,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             <option value="paused">Paused</option>
                             <option value="unstaking">Unstaking</option>
                             <option value="delegate">Delegate</option>
-                            <option value="inactive">Inactive</option>
                         </select>
                     </div>
                     <div className="relative">
@@ -276,7 +271,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             <option value="weight">Sort by Weight</option>
                             <option value="power">Sort by Power</option>
                             <option value="name">Sort by Name</option>
-                            <option value="rank">Sort by Rank</option>
                         </select>
                     </div>
                     {/* Middle - Min Stake Slider */}

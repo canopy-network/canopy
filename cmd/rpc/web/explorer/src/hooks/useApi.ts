@@ -65,18 +65,31 @@ export const queryKeys = {
     tableData: (page: number, category: number, committee?: number) => ['tableData', page, category, committee],
 };
 
+const BLOCKS_POLL_MS = 3000;
+
+// Lightweight hook for the latest block height (polls every 3s)
+export const useLatestBlock = () => {
+    return useQuery({
+        queryKey: ['latestBlock'],
+        queryFn: () => Blocks(1, 0),
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+    });
+};
+
 // Hooks for Blocks
 export const useBlocks = (page: number, perPage: number = 10, filter: string = 'all') => {
-    // Load more blocks if the filter is week or 24h to have enough data to filter
     const blockCount = filter === 'week' ? 50 : filter === '24h' ? 30 : perPage;
 
     return useQuery({
         queryKey: queryKeys.blocks(page, blockCount, filter),
         queryFn: () => Blocks(page, blockCount),
-        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        refetchOnWindowFocus: false, // Don't refetch when window regains focus
-        gcTime: 600000 // Keep in cache for 10 minutes
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -97,6 +110,8 @@ export const useAllTransactions = (page: number, perPage: number = 10, filters?:
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -115,6 +130,8 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -390,10 +407,12 @@ export const useModalData = (query: string | number, page: number) => {
 // Hooks for Card Data
 export const useCardData = () => {
     return useQuery({
-        queryKey: [...queryKeys.cardData(), rpcURL], // Include RPC URL to invalidate on network change
+        queryKey: [...queryKeys.cardData(), rpcURL],
         queryFn: () => getCardData(),
-        staleTime: 5000, // Reduced stale time for more frequent updates
-        refetchOnWindowFocus: true, // Refetch when window regains focus
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -475,10 +494,10 @@ export const useAllBlocksCache = () => {
                 throw new Error(`Error fetching blocks: ${error.message}`);
             }
         },
-        staleTime: 300000, // Cache for 5 minutes
-        // Keep this in sync with live widgets (Navbar + Home Blocks table)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        gcTime: 600000, // Keep in cache for 10 minutes
+        staleTime: 5000,
+        refetchInterval: 10000,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -573,8 +592,8 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
             });
         }
 
-        // Limit to a maximum of 50 blocks to avoid too many requests
-        const limitedBlocks = Math.min(maxBlocksToFetch, 50);
+        // limit blocks to the requested max (capped at 100 to stay reasonable)
+        const limitedBlocks = Math.min(maxBlocksToFetch, 100);
         const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
 
         const allTransactions: any[] = [];

@@ -267,7 +267,7 @@ const BlockDetailPage: React.FC = () => {
 
     const networkInfo = {
         nonce: blockData?.blockHeader?.hash?.slice(0, 16) || '0x0000000000000000',
-        extraData: `Canopy Network ID: ${blockData?.blockHeader?.networkID || 1}`
+        extraData: `Total VDF Iterations: ${blockData?.blockHeader?.totalVDFIterations?.toLocaleString() ?? 'N/A'}`
     }
 
     // Get validator name or use address as fallback
@@ -302,7 +302,7 @@ const BlockDetailPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
-                    <BlockDetailInfo block={block} />
+                    <BlockDetailInfo block={block} blockData={blockData} />
                     <BlockTransactions
                         transactions={transactions}
                         totalTransactions={block.transactionCount}

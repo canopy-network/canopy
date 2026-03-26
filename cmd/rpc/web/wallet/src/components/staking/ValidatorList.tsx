@@ -8,9 +8,12 @@ interface Validator {
     stakedAmount: number;
     status: 'Staked' | 'Paused' | 'Unstaking' | 'Delegate';
     rewards24h: number;
-    chains?: string[];
+    committees?: number[];
     isSynced: boolean;
     delegate?: boolean;
+    netAddress?: string;
+    publicKey?: string;
+    output?: string;
 }
 
 interface ValidatorListProps {

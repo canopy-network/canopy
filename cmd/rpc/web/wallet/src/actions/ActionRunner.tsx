@@ -644,6 +644,30 @@ export default function ActionRunner({
     isEditMode,
   });
 
+  // _skipToConfirm: if prefilledData requests skipping, jump directly to
+  // confirm (when available) or auto-execute once all required fields are satisfied
+  const didSkipToConfirmRef = React.useRef(false);
+  React.useEffect(() => {
+    if (didSkipToConfirmRef.current) return;
+    if (!prefilledData?._skipToConfirm) return;
+    if (populatePhase !== "ready") return;
+
+    const requiredFields = allFields.filter((f: Record<string, unknown>) => f.required);
+    const allSatisfied = requiredFields.every((f: Record<string, unknown>) => {
+      const val = form[f.name as string];
+      return val != null && val !== "" && !(Array.isArray(val) && val.length === 0);
+    });
+
+    if (allSatisfied) {
+      didSkipToConfirmRef.current = true;
+      if (hasSummary) {
+        setStage("confirm");
+      } else {
+        void doExecute();
+      }
+    }
+  }, [prefilledData, populatePhase, hasSummary, allFields, form, doExecute]);
+
   const handleErrorsChange = React.useCallback(
     (errs: Record<string, string>, hasErrors: boolean) => {
       setErrorsMap(errs);

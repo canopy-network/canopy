@@ -38,16 +38,21 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             return timeA - timeB
         })
 
-        // Always create 4 data points by dividing blocks into 4 equal groups
-        const numPoints = 4
-        const blocksPerGroup = Math.max(1, Math.ceil(filteredBlocks.length / numPoints))
+        // always create 4 data points by dividing blocks into 4 equal groups
+        const numPoints = Math.min(4, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
         const blockData: number[] = []
         const timeLabels: string[] = []
-        const groupTimeRanges: number[] = [] // Store time range for each group in minutes
+        const groupTimeRanges: number[] = [] // store time range for each group in minutes
 
+        let offset = 0
         for (let i = 0; i < numPoints; i++) {
-            const startIdx = i * blocksPerGroup
-            const endIdx = Math.min(startIdx + blocksPerGroup, filteredBlocks.length)
+            // distribute remainder across first groups so sizes differ by at most 1
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const startIdx = offset
+            const endIdx = offset + groupSize
+            offset = endIdx
             const groupBlocks = filteredBlocks.slice(startIdx, endIdx)
 
             if (groupBlocks.length === 0) {
@@ -57,23 +62,26 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 continue
             }
 
-            // Count blocks in this group
-            blockData.push(groupBlocks.length)
-
-            // Get time label from first and last block in group
+            // get time label from first and last block in group
             const firstBlock = groupBlocks[0]
             const lastBlock = groupBlocks[groupBlocks.length - 1]
-            
+
             const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
             const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
-            
+
             const firstTimeMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
             const lastTimeMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
-            
-            // Calculate time range for this group in minutes
+
+            // calculate time range for this group in minutes
             const groupTimeRangeMs = lastTimeMs - firstTimeMs
             const groupTimeRangeMins = groupTimeRangeMs / (60 * 1000)
             groupTimeRanges.push(groupTimeRangeMins)
+
+            // normalize to blocks per minute: N blocks have N-1 intervals over the duration
+            const blocksPerMin = groupTimeRangeMins > 0 && groupBlocks.length > 1
+                ? (groupBlocks.length - 1) / groupTimeRangeMins
+                : groupBlocks.length
+            blockData.push(Math.round(blocksPerMin * 100) / 100)
             
             const firstDate = new Date(firstTimeMs)
             const lastDate = new Date(lastTimeMs)
@@ -150,7 +158,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                         Block Production Rate
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Blocks per time interval
+                        Blocks per minute
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -172,7 +180,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     Block Production Rate
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Blocks per {timeInterval} interval
+                    Blocks per minute
                 </p>
             </div>
 

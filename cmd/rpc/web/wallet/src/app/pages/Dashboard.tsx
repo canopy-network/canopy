@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
 import { TotalBalanceCard }       from '@/components/dashboard/TotalBalanceCard';
 import { StakedBalanceCard }      from '@/components/dashboard/StakedBalanceCard';
-import { QuickActionsCard }       from '@/components/dashboard/QuickActionsCard';
 import { AllAddressesCard }       from '@/components/dashboard/AllAddressesCard';
 import { NodeManagementCard }     from '@/components/dashboard/NodeManagementCard';
 import { ErrorBoundary }          from '@/components/ErrorBoundary';
@@ -17,10 +16,8 @@ const item = {
 export const Dashboard = () => {
     const {
         manifestLoading,
-        manifest,
         isTxLoading,
         allTxs,
-        onRunAction,
         isActionModalOpen,
         setIsActionModalOpen,
         selectedActions,
@@ -56,15 +53,15 @@ export const Dashboard = () => {
                             Dashboard
                         </h1>
                         <p className="text-xs text-muted-foreground font-body mt-0.5">
-                            Wallet overview & node management
+                            All wallets overview & node management
                         </p>
                     </div>
                 </motion.div>
 
-                {/* ── Row 1: Balance + Staked + Quick Actions ── */}
+                {/* ── Row 1: Balance + Staked ── */}
                 <motion.div
                     variants={item}
-                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <ErrorBoundary>
                         <TotalBalanceCard />
@@ -72,11 +69,6 @@ export const Dashboard = () => {
                     <ErrorBoundary>
                         <StakedBalanceCard />
                     </ErrorBoundary>
-                    <div className="md:col-span-2 xl:col-span-1">
-                        <ErrorBoundary>
-                            <QuickActionsCard onRunAction={onRunAction} actions={manifest?.actions} />
-                        </ErrorBoundary>
-                    </div>
                 </motion.div>
 
                 {/* ── Row 2: Transactions + Addresses ── */}
