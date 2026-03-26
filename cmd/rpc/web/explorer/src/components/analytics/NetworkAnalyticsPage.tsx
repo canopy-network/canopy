@@ -466,7 +466,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                     <KeyMetrics metrics={metrics} loading={isLoading} supplyData={supplyData} validatorsData={validatorsData} paramsData={paramsData} pendingData={pendingData} />
 
                     {/* Chain Status */}
-                    <ChainStatus metrics={metrics} loading={isLoading} />
+                    <ChainStatus metrics={metrics} loading={isLoading} paramsData={paramsData} />
                 </div>
 
                 {/* Second Column - 3 cards */}

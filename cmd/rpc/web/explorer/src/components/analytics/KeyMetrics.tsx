@@ -33,13 +33,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
             realMetrics.totalValueLocked = stakedAmount / 1000000000000 // Convert to M CNPY
         }
 
-        // 2. Average Transaction Fee - Real data from params
-        if (paramsData?.fee?.sendFee) {
-            const sendFee = paramsData.fee.sendFee || 0
-            realMetrics.avgTransactionFee = sendFee / 1000000 // Convert to CNPY
-        }
-
-        // 3. Validator Count - Real ACTIVE validators based on API fields
+        // 2. Validator Count - Real ACTIVE validators based on API fields
         // Active = not paused, not unstaking, and not delegate
         if (validatorsData?.results || validatorsData?.validators) {
             const validatorsList = validatorsData.results || validatorsData.validators || []
@@ -136,27 +130,6 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                         ></div>
                     </div>
                 </div> */}
-
-                {/* Average Transaction Fee */}
-                <div>
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-400">Avg. Transaction Fee</span>
-                        <span className="text-sm font-medium text-white">
-                            <AnimatedNumber
-                                value={realMetrics.avgTransactionFee}
-                                format={{ maximumFractionDigits: 4 }}
-                                suffix=" CNPY"
-                                className="text-white"
-                            />
-                        </span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div
-                            className="bg-primary h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(100, (realMetrics.avgTransactionFee / 0.01) * 100)}%` }}
-                        ></div>
-                    </div>
-                </div>
 
                 {/* Total Value Locked */}
                 <div>
