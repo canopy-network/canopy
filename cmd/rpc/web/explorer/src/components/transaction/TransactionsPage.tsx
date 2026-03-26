@@ -1,66 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useTransactionsWithRealPagination, useTransactions, useAllBlocksCache, useTxByHash } from '../../hooks/useApi'
+import { useBlockByHeight, useLatestBlock, usePending } from '../../hooks/useApi'
 import { getTotalTransactionCount } from '../../lib/api'
 import transactionsTexts from '../../data/transactions.json'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
-
-interface OverviewCardProps {
-    title: string
-    value: string | number
-    subValue?: string
-    icon?: string
-    progressBar?: number
-    valueColor?: string
-    subValueColor?: string
-}
-
-interface SelectFilter {
-    type: 'select'
-    label: string
-    options: string[]
-    value: string
-    onChange: (value: string) => void
-}
-
-interface BlockRangeFilter {
-    type: 'blockRange'
-    label: string
-    fromBlock: string
-    toBlock: string
-    onFromBlockChange: (block: string) => void
-    onToBlockChange: (block: string) => void
-}
-
-interface StatusFilter {
-    type: 'statusButtons'
-    label: string
-    options: Array<{ label: string; status: 'success' | 'failed' | 'pending' }>
-    selectedStatus: 'success' | 'failed' | 'pending' | 'all'
-    onStatusChange: (status: 'success' | 'failed' | 'pending' | 'all') => void
-}
-
-interface AmountRangeFilter {
-    type: 'amountRangeSlider' // Changed to slider
-    label: string
-    value: number // Selected value on the slider
-    onChange: (value: number) => void
-    min: number
-    max: number
-    step: number
-    displayLabels: { value: number; label: string }[]
-}
-
-interface SearchFilter {
-    type: 'search'
-    label: string
-    placeholder: string
-    value: string
-    onChange: (value: string) => void
-}
-
-type FilterProps = SelectFilter | BlockRangeFilter | StatusFilter | AmountRangeFilter | SearchFilter
 
 interface Transaction {
     hash: string
@@ -72,214 +16,220 @@ interface Transaction {
     status: 'success' | 'failed' | 'pending'
     age: string
     blockHeight?: number
-    date?: number // Timestamp in milliseconds for calculations
+    date?: number
 }
 
-interface ApiFilters {
-    type?: string
-    fromBlock?: string
-    toBlock?: string
-    status?: 'success' | 'failed' | 'pending'
-    address?: string
-    minAmount?: number
-    maxAmount?: number
-}
+const TX_TYPES = [
+    'All Types',
+    'send',
+    'stake',
+    'editStake',
+    'unstake',
+    'pause',
+    'unpause',
+    'changeParameter',
+    'daoTransfer',
+    'certificateResults',
+    'subsidy',
+    'createOrder',
+    'editOrder',
+    'deleteOrder',
+] as const
+
+type ViewMode = 'confirmed' | 'pending'
 
 const TransactionsPage: React.FC = () => {
-    const [transactions, setTransactions] = useState<Transaction[]>([])
-    const [loading, setLoading] = useState(true)
-    const [currentPage, setCurrentPage] = useState(1)
-
-    // Filter states
+    const [viewMode, setViewMode] = useState<ViewMode>('confirmed')
+    const [heightInput, setHeightInput] = useState('')
+    const [queryHeight, setQueryHeight] = useState(0)
     const [transactionType, setTransactionType] = useState('All Types')
-    const [fromBlock, setFromBlock] = useState('')
-    const [toBlock, setToBlock] = useState('')
-    const [statusFilter, setStatusFilter] = useState<'success' | 'failed' | 'pending' | 'all'>('all')
-    const [amountRangeValue, setAmountRangeValue] = useState(0)
-    const [addressSearch, setAddressSearch] = useState('')
+    const [currentPage, setCurrentPage] = useState(1)
     const [entriesPerPage, setEntriesPerPage] = useState(10)
+    const [pendingPage, setPendingPage] = useState(1)
 
-    // Applied filters used by API queries (separate from draft UI filter state).
-    const [appliedFilters, setAppliedFilters] = useState<ApiFilters>({})
+    const { data: latestBlockData } = useLatestBlock()
+    const { data: blockData, isLoading: isBlockLoading } = useBlockByHeight(
+        viewMode === 'confirmed' ? queryHeight : 0
+    )
+    const { data: pendingData, isLoading: isPendingLoading } = usePending(
+        viewMode === 'pending' ? pendingPage : 0
+    )
 
-    // Create filter object for API from applied state only
-    const apiFilters = appliedFilters
+    const latestHeight = useMemo(() => {
+        if (!latestBlockData) return 0
+        const results = latestBlockData.results || latestBlockData
+        if (Array.isArray(results) && results.length > 0) {
+            return Number(results[0]?.blockHeader?.height ?? results[0]?.height ?? 0)
+        }
+        return Number(latestBlockData.totalCount ?? 0)
+    }, [latestBlockData])
 
-    // Detect if search is a transaction hash
-    const appliedSearchTerm = appliedFilters.address || ''
-    const isHashSearch = appliedSearchTerm && appliedSearchTerm.length >= 32 && /^[a-fA-F0-9]+$/.test(appliedSearchTerm)
+    useEffect(() => {
+        if (latestHeight > 0 && queryHeight === 0) {
+            setQueryHeight(latestHeight)
+            setHeightInput(String(latestHeight))
+        }
+    }, [latestHeight, queryHeight])
 
-    // Hook for direct hash search
-    const { data: hashSearchData, isLoading: isHashLoading } = useTxByHash(isHashSearch ? appliedSearchTerm : '')
+    const normalizeBlockTransactions = (block: Record<string, unknown>): Transaction[] => {
+        if (!block) return []
 
-    // Hook to get all transactions data with real pagination
-    const { data: transactionsData, isLoading } = useTransactionsWithRealPagination(currentPage, entriesPerPage, apiFilters)
+        const txList = (block as Record<string, unknown>).blockTxs
+            ?? (block as Record<string, unknown>).transactions
+            ?? (block as Record<string, unknown>).txs
+        if (!Array.isArray(txList)) return []
 
-    // Hook to get blocks data to determine default block range
-    const { data: blocksData } = useAllBlocksCache() // Get first page of blocks
+        const blockHeight = Number(
+            (block as Record<string, unknown>).height
+            ?? ((block as Record<string, unknown>).blockHeader as Record<string, unknown>)?.height
+            ?? 0
+        )
+        const blockHeader = (block as Record<string, unknown>).blockHeader as Record<string, unknown> | undefined
+        const blockTime = blockHeader?.time ?? blockHeader?.timestamp ?? (block as Record<string, unknown>).time
 
-    // Normalize transaction data
-    const normalizeTransactions = (payload: any): Transaction[] => {
-        if (!payload) return []
-
-        // Real structure is: { results: [...], totalCount: number }
-        const transactionsList = payload.results || payload.transactions || payload.list || payload.data || payload
-        if (!Array.isArray(transactionsList)) return []
-
-        return transactionsList.map((tx: any) => {
-            // Extract transaction data
-            const hash = tx.txHash || tx.hash || 'N/A'
-            const type = tx.messageType || tx.type || 'send'
-            const from = tx.sender || tx.from || 'N/A'
-            // Handle different transaction types for "To" field
-            let to = tx.recipient || tx.to || 'N/A'
-
-            // For certificateResults, extract from reward recipients
-            if (type === 'certificateResults' && tx.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents) {
-                const recipients = tx.transaction.msg.qc.results.rewardRecipients.paymentPercents
-                if (recipients.length > 0) {
-                    to = recipients[0].address || 'N/A'
-                }
-            }
-            const amount = tx.amount || tx.value || 0
-            // Extract fee from transaction - it comes in micro denomination from endpoint
-            const fee = tx.transaction?.fee || tx.fee || 0 // Fee is in micro denomination (uCNPY) according to README
-            const status = tx.status || 'success'
-            const blockHeight = tx.blockHeight || tx.height || 0
-
-            let age = 'N/A'
-            let transactionDate: number | undefined
-
-            // Use blockTime if available, otherwise timestamp or time
-            const timeSource = tx.blockTime || tx.timestamp || tx.time
-            if (timeSource) {
-                try {
-                    // Handle different timestamp formats
-                    let date: Date
-                    if (typeof timeSource === 'number') {
-                        // If timestamp is in microseconds (Canopy format)
-                        if (timeSource > 1e12) {
-                            date = new Date(timeSource / 1000)
-                        } else {
-                            date = new Date(timeSource * 1000)
-                        }
-                    } else if (typeof timeSource === 'string') {
-                        date = parseISO(timeSource)
-                    } else {
-                        date = new Date(timeSource)
-                    }
-
-                    if (isValid(date)) {
-                        transactionDate = date.getTime()
-                        age = formatDistanceToNow(date, { addSuffix: true })
-                    }
-                } catch (error) {
-                    console.error('Error calculating age:', error)
-                    age = 'N/A'
-                }
-            }
-
-            return {
-                hash,
-                type,
-                from,
-                to,
-                amount,
-                fee,
-                status,
-                age,
-                blockHeight,
-                date: transactionDate,
-            }
-        })
+        return txList.map((tx: Record<string, unknown>) => normalizeSingleTx(tx, blockHeight, blockTime))
     }
 
-    // Effect to update transactions when data changes
-    useEffect(() => {
-        if (isHashSearch && hashSearchData) {
-            // If it's hash search, convert single result to array
-            const singleTransaction = normalizeTransactions({ results: [hashSearchData] })
-            setTransactions(singleTransaction)
-            setLoading(false)
-        } else if (!isHashSearch && transactionsData) {
-            // If it's normal search, use pagination data
-            const normalizedTransactions = normalizeTransactions(transactionsData)
-            setTransactions(normalizedTransactions)
-            setLoading(false)
-        }
-    }, [transactionsData, hashSearchData, isHashSearch])
+    const normalizePendingTransactions = (data: unknown): Transaction[] => {
+        if (!data) return []
+        const payload = data as Record<string, unknown>
+        const txList = payload.results ?? payload.transactions ?? payload.txs ?? payload
+        if (!Array.isArray(txList)) return []
 
-    // Effect to set default block values
-    useEffect(() => {
-        if (blocksData && Array.isArray(blocksData)) {
-            const blocks = blocksData
-            const latestBlock = blocks[0] // First block is the most recent
-            const oldestBlock = blocks[blocks.length - 1] // Last block is the oldest
+        return txList.map((tx: Record<string, unknown>) => normalizeSingleTx(tx, undefined, undefined, 'pending'))
+    }
 
-            const latestHeight = latestBlock.blockHeader?.height || latestBlock.height || 0
-            const oldestHeight = oldestBlock.blockHeader?.height || oldestBlock.height || 0
+    const normalizeSingleTx = (
+        tx: Record<string, unknown>,
+        blockHeight?: number,
+        blockTime?: unknown,
+        forceStatus?: 'pending'
+    ): Transaction => {
+        const hash = String(tx.txHash ?? tx.hash ?? 'N/A')
+        const type = String(tx.messageType ?? tx.type ?? 'send')
+        const from = String(tx.sender ?? tx.from ?? 'N/A')
 
-            // Set default values if not already set
-            if (!fromBlock && !toBlock) {
-                setToBlock(latestHeight.toString())
-                setFromBlock(oldestHeight.toString())
+        let to = String(tx.recipient ?? tx.to ?? 'N/A')
+        if (
+            type === 'certificateResults' &&
+            tx.transaction &&
+            typeof tx.transaction === 'object'
+        ) {
+            const msg = (tx.transaction as Record<string, unknown>).msg as Record<string, unknown> | undefined
+            const qc = msg?.qc as Record<string, unknown> | undefined
+            const results = qc?.results as Record<string, unknown> | undefined
+            const rr = results?.rewardRecipients as Record<string, unknown> | undefined
+            const pp = rr?.paymentPercents as Array<Record<string, unknown>> | undefined
+            if (pp && pp.length > 0) {
+                to = String(pp[0].address ?? 'N/A')
             }
         }
-    }, [blocksData, fromBlock, toBlock])
 
-    // Get transaction stats directly
+        const amount = Number(tx.amount ?? tx.value ?? 0)
+        const fee = Number(
+            (tx.transaction && typeof tx.transaction === 'object'
+                ? (tx.transaction as Record<string, unknown>).fee
+                : tx.fee) ?? 0
+        )
+        const status = forceStatus ?? ((tx.status as 'success' | 'failed' | 'pending') || 'success')
+
+        let age = 'N/A'
+        let transactionDate: number | undefined
+        const timeSource = blockTime ?? tx.blockTime ?? tx.timestamp ?? tx.time
+        if (timeSource) {
+            try {
+                let date: Date
+                if (typeof timeSource === 'number') {
+                    if (timeSource > 1e15) {
+                        date = new Date(timeSource / 1000)
+                    } else if (timeSource > 1e12) {
+                        date = new Date(timeSource)
+                    } else {
+                        date = new Date(timeSource * 1000)
+                    }
+                } else if (typeof timeSource === 'string') {
+                    if (/^\d+$/.test(timeSource)) {
+                        const n = Number(timeSource)
+                        if (n > 1e15) date = new Date(n / 1000)
+                        else if (n > 1e12) date = new Date(n)
+                        else date = new Date(n * 1000)
+                    } else {
+                        date = parseISO(timeSource)
+                    }
+                } else {
+                    date = new Date(timeSource as string | number)
+                }
+                if (isValid(date!)) {
+                    transactionDate = date!.getTime()
+                    age = formatDistanceToNow(date!, { addSuffix: true })
+                }
+            } catch {
+                age = 'N/A'
+            }
+        }
+
+        const height = blockHeight ?? (Number(tx.blockHeight ?? tx.height ?? 0) || undefined)
+
+        return { hash, type, from, to, amount, fee, status, age, blockHeight: height, date: transactionDate }
+    }
+
+    const allTransactions = useMemo(() => {
+        if (viewMode === 'pending') return normalizePendingTransactions(pendingData)
+        return normalizeBlockTransactions(blockData)
+    }, [blockData, pendingData, viewMode])
+
+    const filteredTransactions = useMemo(() => {
+        if (transactionType === 'All Types') return allTransactions
+        return allTransactions.filter(
+            (tx) => tx.type.toLowerCase() === transactionType.toLowerCase()
+        )
+    }, [allTransactions, transactionType])
+
+    const paginatedTransactions = useMemo(() => {
+        if (viewMode === 'pending') return filteredTransactions
+        const start = (currentPage - 1) * entriesPerPage
+        return filteredTransactions.slice(start, start + entriesPerPage)
+    }, [filteredTransactions, currentPage, entriesPerPage, viewMode])
+
+    // Overview stats
     const [transactionsToday, setTransactionsToday] = useState(0)
     const [tpmLast24h, setTpmLast24h] = useState(0)
-    const [totalTransactions, setTotalTransactions] = useState(0)
 
     useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const stats = await getTotalTransactionCount()
+        getTotalTransactionCount()
+            .then((stats) => {
                 setTransactionsToday(stats.last24h)
                 setTpmLast24h(stats.tpm)
-                setTotalTransactions(stats.total)
-            } catch (error) {
-                console.error('Error fetching transaction stats:', error)
-            }
-        }
-        fetchStats()
+            })
+            .catch(() => {})
     }, [])
 
-    const isLoadingData = isHashSearch ? isHashLoading : isLoading
-    const displayTotalTransactions = isHashSearch
-        ? (hashSearchData ? 1 : 0)
-        : (transactionsData?.totalCount ?? transactions.length)
-
-    // Helper function to format fee - shows in CNPY (converted from micro denomination)
     const formatFeeDisplay = (micro: number): string => {
         if (micro === 0) return '0 CNPY'
         const cnpy = micro / 1000000
         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
-    const averageFee = React.useMemo(() => {
-        if (transactions.length === 0) return '0'
-        const totalFees = transactions.reduce((sum, tx) => sum + (tx.fee || 0), 0)
-        const avgFeeMicro = totalFees / transactions.length
-        return formatFeeDisplay(avgFeeMicro)
-    }, [transactions])
+    const averageFee = useMemo(() => {
+        if (filteredTransactions.length === 0) return '0'
+        const total = filteredTransactions.reduce((s, tx) => s + (tx.fee || 0), 0)
+        return formatFeeDisplay(total / filteredTransactions.length)
+    }, [filteredTransactions])
 
+    const successRate = useMemo(() => {
+        if (filteredTransactions.length === 0) return 0
+        return Math.round(
+            (filteredTransactions.filter((tx) => tx.status === 'success').length /
+                filteredTransactions.length) *
+                100
+        )
+    }, [filteredTransactions])
 
-
-
-    // Calculate success rate
-    const successRate = React.useMemo(() => {
-        if (transactions.length === 0) return 0
-        const successfulTxs = transactions.filter(tx => tx.status === 'success').length
-        return Math.round((successfulTxs / transactions.length) * 100)
-    }, [transactions])
-
-    const overviewCards: OverviewCardProps[] = [
+    const overviewCards = [
         {
             title: 'Transactions (estimated)',
             value: transactionsToday.toLocaleString(),
-            subValue: `From recent blocks`,
+            subValue: 'From recent blocks',
             icon: 'fa-solid fa-arrow-right-arrow-left text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-primary',
@@ -287,7 +237,7 @@ const TransactionsPage: React.FC = () => {
         {
             title: 'Average Fee',
             value: averageFee,
-            subValue: 'CNPY (current page)',
+            subValue: viewMode === 'pending' ? 'CNPY (pending)' : 'CNPY (current block)',
             icon: 'fa-solid fa-coins text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-gray-400',
@@ -309,148 +259,69 @@ const TransactionsPage: React.FC = () => {
         },
     ]
 
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page)
-    }
-
-    const handleResetFilters = () => {
-        setTransactionType('All Types')
-        setFromBlock('')
-        setToBlock('')
-        setStatusFilter('all')
-        setAmountRangeValue(0)
-        setAddressSearch('')
-        setAppliedFilters({})
-        setCurrentPage(1)
-    }
-
-    const handleApplyFilters = () => {
-        const nextFilters: ApiFilters = {
-            type: transactionType !== 'All Types' ? transactionType : undefined,
-            fromBlock: fromBlock || undefined,
-            toBlock: toBlock || undefined,
-            status: statusFilter !== 'all' ? statusFilter : undefined,
-            address: addressSearch || undefined,
-            minAmount: amountRangeValue > 0 ? amountRangeValue : undefined,
-            maxAmount: amountRangeValue > 0 && amountRangeValue < 1000 ? amountRangeValue : undefined,
+    const handleQuery = () => {
+        if (viewMode === 'confirmed') {
+            const h = Number(heightInput)
+            if (h > 0) {
+                setQueryHeight(h)
+                setCurrentPage(1)
+            }
         }
-        setAppliedFilters(nextFilters)
+    }
+
+    const handleViewModeChange = (mode: ViewMode) => {
+        setViewMode(mode)
+        setTransactionType('All Types')
         setCurrentPage(1)
+        setPendingPage(1)
     }
 
-    // Function to change entries per page
-    const handleEntriesPerPageChange = (value: number) => {
-        setEntriesPerPage(value)
-        setCurrentPage(1) // Reset to first page when entries per page changes
-    }
-
-    const handleAmountRangeInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = event.target.value.replace(/,/g, '')
-        const parsedValue = Number(rawValue)
-        if (Number.isNaN(parsedValue)) return
-        const clampedValue = Math.min(Math.max(parsedValue, 0), 1000)
-        setAmountRangeValue(clampedValue)
-    }
-
-    // Function to handle export
     const handleExportTransactions = () => {
-        // create CSV with the filtered transactions
         const csvContent = [
             ['Hash', 'Type', 'From', 'To', 'Amount', 'Fee', 'Status', 'Age', 'Block Height'].join(','),
-            ...transactions.map(tx => [
-                tx.hash,
-                tx.type,
-                tx.from,
-                tx.to,
-                tx.amount,
-                tx.fee,
-                tx.status,
-                tx.age,
-                tx.blockHeight
-            ].join(','))
+            ...filteredTransactions.map((tx) =>
+                [tx.hash, tx.type, tx.from, tx.to, tx.amount, tx.fee, tx.status, tx.age, tx.blockHeight ?? ''].join(',')
+            ),
         ].join('\n')
 
         const blob = new Blob([csvContent], { type: 'text/csv' })
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
+        const suffix = viewMode === 'pending' ? 'pending' : `block_${queryHeight}`
+        a.download = `transactions_${suffix}_${new Date().toISOString().split('T')[0]}.csv`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         window.URL.revokeObjectURL(url)
     }
 
-    const filterConfigs: FilterProps[] = [
-        {
-            type: 'select',
-            label: 'Transaction Type',
-            options: ['All Types', 'send', 'stake', 'editStake', 'unstake', 'pause', 'unpause', 'changeParameter', 'daoTransfer', 'certificateResults', 'subsidy', 'createOrder', 'editOrder', 'deleteOrder'],
-            value: transactionType,
-            onChange: setTransactionType,
-        },
-        {
-            type: 'blockRange',
-            label: 'Block Range',
-            fromBlock: fromBlock,
-            toBlock: toBlock,
-            onFromBlockChange: setFromBlock,
-            onToBlockChange: setToBlock,
-        },
-        {
-            type: 'statusButtons',
-            label: 'Status',
-            options: [
-                { label: 'Success', status: 'success' },
-            ],
-            selectedStatus: statusFilter,
-            onStatusChange: setStatusFilter,
-        },
-        {
-            type: 'amountRangeSlider',
-            label: 'Amount Range',
-            value: amountRangeValue,
-            onChange: setAmountRangeValue,
-            min: 0,
-            max: 1000, // Adjusted for a more manageable range and then 1000+ will be handled visually
-            step: 1,
-            displayLabels: [
-                { value: 0, label: '0 CNPY' },
-                { value: 500, label: '500 CNPY' },
-                { value: 1000, label: '1000+ CNPY' },
-            ],
-        },
-        {
-            type: 'search',
-            label: 'Address Search',
-            placeholder: 'Search by address or hash...',
-            value: addressSearch,
-            onChange: setAddressSearch,
-        },
-    ]
+    const isLoadingData = viewMode === 'pending' ? isPendingLoading : isBlockLoading
+    const totalCount = viewMode === 'pending'
+        ? filteredTransactions.length
+        : filteredTransactions.length
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="mx-auto px-4 sm:px-6 lg:px-8 py-10 max-w-[100rem]"
         >
-            {/* Header with transaction information */}
+            {/* Header */}
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-white mb-2">
-                    {transactionsTexts.page.title}
-                </h1>
-                <p className="text-gray-400">
-                    {transactionsTexts.page.description}
-                </p>
+                <h1 className="text-2xl font-bold text-white mb-2">{transactionsTexts.page.title}</h1>
+                <p className="text-gray-400">{transactionsTexts.page.description}</p>
             </div>
 
             {/* Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                 {overviewCards.map((card, index) => (
-                    <div key={index} className="bg-card p-4 rounded-lg border border-gray-800/60 flex flex-col gap-2 justify-between">
+                    <div
+                        key={index}
+                        className="bg-card p-4 rounded-lg border border-gray-800/60 flex flex-col gap-2 justify-between"
+                    >
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400 text-sm">{card.title}</span>
                             <i className={`${card.icon} text-gray-500`}></i>
@@ -458,7 +329,9 @@ const TransactionsPage: React.FC = () => {
                         <div className="flex items-center justify-between">
                             <p className={`text-white text-3xl font-bold ${card.valueColor}`}>{card.value}</p>
                         </div>
-                        {card.subValue && <span className={`text-sm ${card.subValueColor}`}>{card.subValue}</span>}
+                        {card.subValue && (
+                            <span className={`text-sm ${card.subValueColor}`}>{card.subValue}</span>
+                        )}
                         {card.progressBar !== undefined && (
                             <div className="w-full bg-gray-700 rounded-full flex items-start justify-center mb-1">
                                 <div
@@ -471,154 +344,153 @@ const TransactionsPage: React.FC = () => {
                 ))}
             </div>
 
-            {/* Transaction filters */}
-            <div className="mb-6 p-4 bg-card rounded-lg border border-gray-800/60">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Transaction Type Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[0].label}</label>
-                        <select
-                            className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
-                            value={(filterConfigs[0] as SelectFilter).value}
-                            onChange={(e) => (filterConfigs[0] as SelectFilter).onChange(e.target.value)}
-                        >
-                            {(filterConfigs[0] as SelectFilter).options.map((option, idx) => (
-                                <option key={idx} value={option}>{option}</option>
-                            ))}
-                        </select>
-                    </div>
+            {/* View Mode Tabs + Filters */}
+            <div className="mb-6 bg-card rounded-lg border border-gray-800/60 overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-800/60">
+                    <button
+                        onClick={() => handleViewModeChange('confirmed')}
+                        className={`px-6 py-3 text-sm font-medium transition-colors ${
+                            viewMode === 'confirmed'
+                                ? 'text-primary border-b-2 border-primary bg-card'
+                                : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        <i className="fa-solid fa-cube mr-2"></i>
+                        Confirmed
+                    </button>
+                    <button
+                        onClick={() => handleViewModeChange('pending')}
+                        className={`px-6 py-3 text-sm font-medium transition-colors ${
+                            viewMode === 'pending'
+                                ? 'text-yellow-400 border-b-2 border-yellow-400 bg-card'
+                                : 'text-gray-400 hover:text-white'
+                        }`}
+                    >
+                        <i className="fa-solid fa-clock mr-2"></i>
+                        Pending
+                    </button>
+                </div>
 
-                    {/* Block Range Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[1].label}</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <input
-                                type="number"
-                                className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
-                                placeholder="From Block"
-                                value={(filterConfigs[1] as BlockRangeFilter).fromBlock}
-                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onFromBlockChange(e.target.value)}
-                            />
-                            <input
-                                type="number"
-                                className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
-                                placeholder="To Block"
-                                value={(filterConfigs[1] as BlockRangeFilter).toBlock}
-                                onChange={(e) => (filterConfigs[1] as BlockRangeFilter).onToBlockChange(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[2].label}</label>
-                        <div className="flex flex-wrap justify-between items-center gap-2">
-                            <div className="flex flex-wrap gap-2">
-                                {(filterConfigs[2] as StatusFilter).options.map((option, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => (filterConfigs[2] as StatusFilter).onStatusChange(option.status)}
-                                        className={`px-2 py-1.5 text-xs rounded-md pr-2.5
-                                            ${(filterConfigs[2] as StatusFilter).selectedStatus === option.status
-                                                ? option.status === 'success'
-                                                    ? 'bg-green-500/30 text-primary border border-green-500/50'
-                                                    : option.status === 'failed'
-                                                        ? 'bg-red-500/30 text-red-400 border border-red-500/50'
-                                                        : 'bg-yellow-500/30 text-yellow-400 border border-yellow-500/50'
-                                                : 'bg-input hover:bg-input text-gray-300'
-                                            }
-                                        `}
-                                    >
-                                        {option.status === 'success' && <i className="fa-solid fa-check text-xs mr-1"></i>}
-                                        {option.status === 'failed' && <i className="fa-solid fa-times text-xs mr-1"></i>}
-                                        {option.status === 'pending' && <i className="fa-solid fa-clock text-xs mr-1"></i>}
-                                        {option.label}
-                                    </button>
-                                ))}
+                {/* Filter Controls */}
+                <div className="p-4">
+                    {viewMode === 'confirmed' ? (
+                        <>
+                            {/* Labels row */}
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 mb-2">
+                                <label className="text-gray-400 text-sm">Block Height</label>
+                                <label className="text-gray-400 text-sm hidden md:block">Transaction Type</label>
+                                <div></div>
                             </div>
-
-                        </div>
-                    </div>
-
-                    {/* Amount Range Filter */}
-                    <div className="flex flex-col gap-2 col-span-1 md:col-span-2">
-                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[3].label}</label>
-                        <div className="relative pt-4">
-                            <div className="relative flex items-center gap-3">
-                                <div className="flex-1 relative">
-                                    <input
-                                        type="range"
-                                        min={(filterConfigs[3] as AmountRangeFilter).min}
-                                        max={(filterConfigs[3] as AmountRangeFilter).max}
-                                        step={(filterConfigs[3] as AmountRangeFilter).step}
-                                        value={(filterConfigs[3] as AmountRangeFilter).value}
-                                        onChange={(e) => (filterConfigs[3] as AmountRangeFilter).onChange(Number(e.target.value))}
-                                        className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer accent-primary"
-                                        style={{ background: `linear-gradient(to right, #4ADE80 0%, #4ADE80 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 ${(((filterConfigs[3] as AmountRangeFilter).value - (filterConfigs[3] as AmountRangeFilter).min) / ((filterConfigs[3] as AmountRangeFilter).max - (filterConfigs[3] as AmountRangeFilter).min)) * 100}%, #4B5563 100%)` }}
-                                    />
-                                </div>
-                                {/* Current value tag - fixed on the right */}
-                                <div className="px-2 py-1 bg-primary text-black text-xs font-medium rounded shadow-lg whitespace-nowrap">
-                                    {(filterConfigs[3] as AmountRangeFilter).value >= 1000 ? "1000+" : (filterConfigs[3] as AmountRangeFilter).value} CNPY
-                                </div>
+                            {/* Inputs row */}
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-center">
                                 <input
                                     type="number"
-                                    min="0"
-                                    max="1000"
-                                    value={(filterConfigs[3] as AmountRangeFilter).value}
-                                    onChange={handleAmountRangeInputChange}
-                                    className="w-32 px-3 py-1.5 bg-input border border-gray-800/80 rounded-md text-white text-sm"
-                                    placeholder="Amount"
-                                    aria-label="Transaction amount filter"
+                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    placeholder="Enter block height"
+                                    value={heightInput}
+                                    onChange={(e) => setHeightInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleQuery()
+                                    }}
+                                    min={1}
+                                    max={latestHeight || undefined}
                                 />
+                                <select
+                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    value={transactionType}
+                                    onChange={(e) => {
+                                        setTransactionType(e.target.value)
+                                        setCurrentPage(1)
+                                    }}
+                                >
+                                    {TX_TYPES.map((t) => (
+                                        <option key={t} value={t}>
+                                            {t}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={handleQuery}
+                                    className="px-6 py-2.5 bg-primary text-black font-medium hover:bg-primary/80 rounded-md whitespace-nowrap"
+                                >
+                                    <i className="fa-solid fa-search mr-2"></i>
+                                    Search
+                                </button>
                             </div>
-                            <div className="flex justify-between text-xs text-gray-400 mt-2">
-                                {(filterConfigs[3] as AmountRangeFilter).displayLabels.map((label, idx) => (
-                                    <span
-                                        key={idx}
-                                        className={`${label.value === (filterConfigs[3] as AmountRangeFilter).value ? 'text-white font-semibold' : ''}`}
-                                    >
-                                        {label.label}
+                            {latestHeight > 0 && (
+                                <span className="text-gray-500 text-xs mt-2 block">
+                                    Latest block: {latestHeight.toLocaleString()}
+                                </span>
+                            )}
+                            {queryHeight > 0 && (
+                                <div className="mt-3 text-sm text-gray-400">
+                                    Showing transactions for block{' '}
+                                    <span className="text-white font-medium">#{queryHeight.toLocaleString()}</span>
+                                    {transactionType !== 'All Types' && (
+                                        <>
+                                            {' '}filtered by type{' '}
+                                            <span className="text-primary font-medium">{transactionType}</span>
+                                        </>
+                                    )}
+                                    {' '}&mdash;{' '}
+                                    <span className="text-white font-medium">{filteredTransactions.length}</span>{' '}
+                                    transaction{filteredTransactions.length !== 1 ? 's' : ''} found
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            {/* Pending mode: only transaction type filter */}
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 mb-2">
+                                <label className="text-gray-400 text-sm">Transaction Type</label>
+                                <div></div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
+                                <select
+                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    value={transactionType}
+                                    onChange={(e) => {
+                                        setTransactionType(e.target.value)
+                                        setPendingPage(1)
+                                    }}
+                                >
+                                    {TX_TYPES.map((t) => (
+                                        <option key={t} value={t}>
+                                            {t}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="flex items-center gap-2 text-sm text-yellow-400">
+                                    <i className="fa-solid fa-clock"></i>
+                                    <span>
+                                        {filteredTransactions.length} pending transaction{filteredTransactions.length !== 1 ? 's' : ''}
                                     </span>
-                                ))}
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Address Search Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label className="text-gray-400 text-sm h-5 flex items-center">{filterConfigs[4].label}</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder={(filterConfigs[4] as SearchFilter).placeholder}
-                                className="w-full px-3 py-2.5 pl-10 bg-input border border-gray-800/80 rounded-md text-white"
-                                value={(filterConfigs[4] as SearchFilter).value}
-                                onChange={(e) => (filterConfigs[4] as SearchFilter).onChange(e.target.value)}
-                            />
-                            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-                        </div>
-                        <div className="flex items-center justify-end gap-2 mt-4">
-                            <button onClick={handleApplyFilters} className="px-3 py-1 text-sm bg-primary text-black hover:bg-primary/80 rounded">
-                                Apply Filters
-                            </button>
-                            <button onClick={handleResetFilters} className="px-3 py-1 text-sm bg-gray-700/50 hover:bg-gray-600 rounded text-gray-300">
-                                Reset
-                            </button>
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </div>
             </div>
 
             <TransactionsTable
-                transactions={transactions}
-                loading={loading || isLoadingData}
-                totalCount={displayTotalTransactions}
-                currentPage={currentPage}
-                onPageChange={handlePageChange}
-                showEntriesSelector={true}
+                transactions={paginatedTransactions}
+                loading={isLoadingData}
+                totalCount={totalCount}
+                currentPage={viewMode === 'pending' ? pendingPage : currentPage}
+                onPageChange={(page) => {
+                    if (viewMode === 'pending') {
+                        setPendingPage(page)
+                    } else {
+                        setCurrentPage(page)
+                    }
+                }}
+                showEntriesSelector={viewMode === 'confirmed'}
                 currentEntriesPerPage={entriesPerPage}
-                onEntriesPerPageChange={handleEntriesPerPageChange}
+                onEntriesPerPageChange={(value) => {
+                    setEntriesPerPage(value)
+                    setCurrentPage(1)
+                }}
                 showExportButton={true}
                 onExportButtonClick={handleExportTransactions}
             />
