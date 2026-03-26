@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useTxByHash, useBlockByHeight, useParams as useParamsHook, useAllBlocksCache } from '../../hooks/useApi'
+import { useTxByHash, useBlockByHeight, useParams as useParamsHook } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -37,14 +37,6 @@ const TransactionDetailPage: React.FC = () => {
     // Get block data to find all transactions in the same block
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
-
-    // Get latest block height to calculate confirmations
-    const { data: blocksCache } = useAllBlocksCache()
-    const latestBlockHeight = useMemo(() => {
-        if (!blocksCache) return 0
-        const blocks = Array.isArray(blocksCache) ? blocksCache : (blocksCache as any)
-        return blocks[0]?.blockHeader?.height || blocks[0]?.height || 0
-    }, [blocksCache])
 
     // Get params to access fee information
     const { data: paramsData } = useParamsHook(0)
@@ -253,15 +245,11 @@ const TransactionDetailPage: React.FC = () => {
 
     const from = transaction.sender || transaction.from || '0x0000000000000000000000000000000000000000'
     const to = transaction.recipient || transaction.to || '0x0000000000000000000000000000000000000000'
-    const nonce = transaction.nonce || 0
-    // Extract real data from endpoint
-    const position = transaction?.index ?? null // Position in block (index field from endpoint)
+    const position = transaction?.index ?? null
     const createdHeight = transaction?.transaction?.createdHeight ?? null
     const networkID = transaction?.transaction?.networkID ?? null
     const chainID = transaction?.transaction?.chainID ?? null
     const memo = transaction?.transaction?.memo ?? null
-    // Calculate confirmations: latest block height - transaction height
-    const confirmations = blockHeight > 0 && latestBlockHeight > 0 ? Math.max(0, latestBlockHeight - blockHeight + 1) : null
     const txHash = transaction.txHash || transactionHash || ''
 
     // Extract amount from transaction according to message type (from README)
@@ -467,11 +455,6 @@ const TransactionDetailPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-2">
-                                        <span className="text-gray-400 text-sm">Nonce</span>
-                                        <span className="text-white">{nonce}</span>
-                                    </div>
-
                                 </div>
 
                             </div>
@@ -537,7 +520,7 @@ const TransactionDetailPage: React.FC = () => {
                                 </div>
                             </motion.div>
 
-                            {/* Gas Information */}
+                            {/* Fee Information */}
                             <motion.div
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -545,31 +528,18 @@ const TransactionDetailPage: React.FC = () => {
                                 className="bg-card rounded-xl border border-gray-800/60 p-6"
                             >
                                 <h3 className="text-lg font-semibold text-white mb-4">
-                                    Gas Information
+                                    Fee Information
                                 </h3>
 
                                 <div className="space-y-4">
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-gray-400 text-sm">Gas Used</span>
-                                            <span className="text-white font-mono text-sm">{transactionFeeMicro.toLocaleString()}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-700/50 rounded-full h-2">
-                                            <div
-                                                className="bg-primary h-2 rounded-full transition-all duration-500"
-                                                style={{ width: '100%' }}
-                                            ></div>
-                                        </div>
-                                        <div className="flex justify-between items-center mt-1 text-xs text-gray-400">
-                                            <span>0</span>
-                                            <span>{transactionFeeMicro.toLocaleString()} (Gas Limit)</span>
-                                        </div>
-                                    </div>
-
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-400 text-sm">Transaction Fee</span>
+                                            <span className="text-gray-400 text-sm">Fee Paid</span>
                                             <span className="text-white font-mono text-sm">{formatFee(transactionFeeMicro)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400 text-sm">Fee (uCNPY)</span>
+                                            <span className="text-gray-300 font-mono text-sm">{transactionFeeMicro.toLocaleString()}</span>
                                         </div>
                                         {minimumFeeForTxType > 0 && (
                                             <div className="flex justify-between items-center">
@@ -631,12 +601,6 @@ const TransactionDetailPage: React.FC = () => {
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-400 text-sm">Memo</span>
                                             <span className="text-white text-sm break-all text-right max-w-[200px]">{memo}</span>
-                                        </div>
-                                    )}
-                                    {confirmations !== null && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400 text-sm">Confirmations</span>
-                                            <span className="text-primary text-sm">{confirmations.toLocaleString()}</span>
                                         </div>
                                     )}
                                 </div>

@@ -277,9 +277,9 @@ const TransactionsPage: React.FC = () => {
 
     const overviewCards: OverviewCardProps[] = [
         {
-            title: 'Transactions Today',
+            title: 'Transactions (estimated)',
             value: transactionsToday.toLocaleString(),
-            subValue: `Last 24 hours`,
+            subValue: `From recent blocks`,
             icon: 'fa-solid fa-arrow-right-arrow-left text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-primary',
@@ -287,7 +287,7 @@ const TransactionsPage: React.FC = () => {
         {
             title: 'Average Fee',
             value: averageFee,
-            subValue: 'CNPY',
+            subValue: 'CNPY (current page)',
             icon: 'fa-solid fa-coins text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-gray-400',
@@ -300,9 +300,9 @@ const TransactionsPage: React.FC = () => {
             valueColor: 'text-white',
         },
         {
-            title: 'Average TPM (24h)',
+            title: 'TPM (estimated)',
             value: tpmLast24h.toFixed(2).toLocaleString(),
-            subValue: 'Transactions Per Minute',
+            subValue: 'Transactions per minute from recent blocks',
             icon: 'fa-solid fa-chart-line text-primary',
             valueColor: 'text-white',
             subValueColor: 'text-gray-400',
@@ -332,7 +332,7 @@ const TransactionsPage: React.FC = () => {
             status: statusFilter !== 'all' ? statusFilter : undefined,
             address: addressSearch || undefined,
             minAmount: amountRangeValue > 0 ? amountRangeValue : undefined,
-            maxAmount: amountRangeValue >= 1000 ? undefined : amountRangeValue
+            maxAmount: amountRangeValue > 0 && amountRangeValue < 1000 ? amountRangeValue : undefined,
         }
         setAppliedFilters(nextFilters)
         setCurrentPage(1)
@@ -385,7 +385,7 @@ const TransactionsPage: React.FC = () => {
         {
             type: 'select',
             label: 'Transaction Type',
-            options: ['All Types', 'send', 'stake', 'edit-stake', 'unstake', 'pause', 'unpause', 'changeParameter', 'daoTransfer', 'certificateResults', 'subsidy', 'createOrder', 'editOrder', 'deleteOrder'],
+            options: ['All Types', 'send', 'stake', 'editStake', 'unstake', 'pause', 'unpause', 'changeParameter', 'daoTransfer', 'certificateResults', 'subsidy', 'createOrder', 'editOrder', 'deleteOrder'],
             value: transactionType,
             onChange: setTransactionType,
         },
@@ -402,8 +402,6 @@ const TransactionsPage: React.FC = () => {
             label: 'Status',
             options: [
                 { label: 'Success', status: 'success' },
-                { label: 'Failed', status: 'failed' },
-                { label: 'Pending', status: 'pending' },
             ],
             selectedStatus: statusFilter,
             onStatusChange: setStatusFilter,

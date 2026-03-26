@@ -154,5 +154,5 @@ export function useResolvedFees(
     return applyBucket(base, bucketDef);
   }, [raw, opts.actionId, opts.bucket, buckets]);
 
-  return { raw, amount, denom };
+  return useMemo(() => ({ raw, amount, denom }), [raw, amount, denom]);
 }

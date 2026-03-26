@@ -71,17 +71,8 @@ const ValidatorsPage: React.FC = () => {
     const normalizedValidators = React.useMemo(() => {
         if (!validatorsData) return []
 
-        // Real structure: { results: [...], totalCount: number }
         let validatorsList = validatorsData.results || []
         if (!Array.isArray(validatorsList)) return []
-
-        // Filter out delegators when on validators page (only show non-delegators)
-        if (!isDelegatorsPage) {
-            validatorsList = validatorsList.filter((validator: any) => {
-                // Exclude delegators (those with delegate: true)
-                return !validator.delegate || validator.delegate === false
-            })
-        }
 
         // Calculate total stake for percentages
         const totalStake = validatorsList.reduce((sum: number, validator: any) =>

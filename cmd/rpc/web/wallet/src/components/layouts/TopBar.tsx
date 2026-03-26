@@ -2,21 +2,11 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Key, Blocks } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/Select';
-import { useAccounts } from '@/app/providers/AccountsProvider';
 import { useTotalStage } from '@/hooks/useTotalStage';
 import { useDS } from '@/core/useDs';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 export const TopBar = (): JSX.Element => {
-    const {
-        accounts,
-        loading,
-        error: hasErrorInAccounts,
-        switchAccount,
-        selectedAccount,
-    } = useAccounts();
-
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
     const { data: blockHeight } = useDS<{ height: number }>('height', {}, {
         staleTimeMs: 10_000,
@@ -61,54 +51,6 @@ export const TopBar = (): JSX.Element => {
                 </div>
 
                 <div className="hidden h-4 w-px bg-border/70 sm:block" />
-
-                <Select value={selectedAccount?.id || ''} onValueChange={switchAccount}>
-                    <SelectTrigger className="h-8 w-44 rounded-md border-border/75 bg-secondary/80 px-2.5 text-xs font-medium">
-                        <div className="flex w-full min-w-0 items-center gap-2">
-                            <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm bg-primary/90 text-primary-foreground shadow-[0_0_10px_rgba(53,205,72,0.22)]">
-                                <span className="num text-[9px] font-bold">
-                                    {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
-                                </span>
-                            </div>
-                            <span className="truncate text-xs text-foreground">
-                                {loading
-                                    ? 'Loading...'
-                                    : selectedAccount?.nickname
-                                      ? selectedAccount.nickname
-                                      : selectedAccount?.address
-                                        ? `${selectedAccount.address.slice(0, 5)}...${selectedAccount.address.slice(-4)}`
-                                        : 'Account'}
-                            </span>
-                        </div>
-                    </SelectTrigger>
-                    <SelectContent className="border-border/80 bg-card/95 shadow-[0_16px_34px_rgba(0,0,0,0.42)]">
-                        {accounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                                <div className="flex w-full items-center gap-2.5">
-                                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm bg-primary/85 text-primary-foreground shadow-[0_0_10px_rgba(53,205,72,0.2)]">
-                                        <span className="num text-[9px] font-bold">
-                                            {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
-                                        </span>
-                                    </div>
-                                    <div className="flex min-w-0 flex-col">
-                                        <span className="truncate text-xs font-medium text-foreground">
-                                            {account.nickname || 'Unnamed'}
-                                        </span>
-                                        <span className="num truncate text-[10px] text-muted-foreground">
-                                            {account.address.slice(0, 6)}...{account.address.slice(-4)}
-                                        </span>
-                                    </div>
-                                    {account.isActive && (
-                                        <div className="ml-auto h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
-                                    )}
-                                </div>
-                            </SelectItem>
-                        ))}
-                        {(accounts.length === 0 && !loading) || hasErrorInAccounts ? (
-                            <div className="p-2 text-center text-xs text-muted-foreground">No accounts</div>
-                        ) : null}
-                    </SelectContent>
-                </Select>
 
                 <Link
                     to="/key-management"

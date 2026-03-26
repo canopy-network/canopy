@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import AccountsTable from './AccountsTable'
-import { useAccounts, useAllValidators } from '../../hooks/useApi'
-import { getTotalAccountCount } from '../../lib/api'
+import { useAccounts } from '../../hooks/useApi'
+import { getTotalAccountCount, Account as AccountApi } from '../../lib/api'
 import accountsTexts from '../../data/accounts.json'
 import AnimatedNumber from '../AnimatedNumber'
 
@@ -15,30 +15,8 @@ const AccountsPage: React.FC = () => {
     const [isLoadingStats, setIsLoadingStats] = useState(true)
 
     const { data: accountsData, isLoading, error } = useAccounts(currentPage)
-    const { data: validatorsData } = useAllValidators()
-
-    // Create a map of addresses to staking type
-    const stakingTypeMap = useMemo(() => {
-        const map = new Map<string, 'validator' | 'delegator' | 'unstaked'>()
-        
-        if (validatorsData?.results && Array.isArray(validatorsData.results)) {
-            validatorsData.results.forEach((validator: any) => {
-                const address = validator.address
-                if (!address) return
-                
-                // Check if unstaking
-                if (validator.unstakingHeight && validator.unstakingHeight > 0) {
-                    map.set(address.toLowerCase(), 'unstaked')
-                } else if (validator.delegate === true) {
-                    map.set(address.toLowerCase(), 'delegator')
-                } else {
-                    map.set(address.toLowerCase(), 'validator')
-                }
-            })
-        }
-        
-        return map
-    }, [validatorsData])
+    const [directSearchResult, setDirectSearchResult] = useState<{ address: string; amount: number } | null>(null)
+    const [isSearchingDirect, setIsSearchingDirect] = useState(false)
 
     // Fetch account statistics
     useEffect(() => {
@@ -57,9 +35,32 @@ const AccountsPage: React.FC = () => {
         fetchStats()
     }, [])
 
-    // Reset to first page when search term changes
+    // Reset to first page when search term changes and do direct lookup for exact addresses
     useEffect(() => {
         setCurrentPage(1)
+        setDirectSearchResult(null)
+
+        const trimmed = searchTerm.trim()
+        const isExactAddress = /^[a-fA-F0-9]{40}$/.test(trimmed)
+
+        if (isExactAddress) {
+            setIsSearchingDirect(true)
+            AccountApi(0, trimmed)
+                .then((data) => {
+                    if (data && data.address) {
+                        setDirectSearchResult({
+                            address: data.address,
+                            amount: Number(data.amount || 0) / 1_000_000,
+                        })
+                    }
+                })
+                .catch(() => {
+                    setDirectSearchResult(null)
+                })
+                .finally(() => {
+                    setIsSearchingDirect(false)
+                })
+        }
     }, [searchTerm])
 
     const handlePageChange = (page: number) => {
@@ -68,27 +69,30 @@ const AccountsPage: React.FC = () => {
 
     const handleEntriesPerPageChange = (value: number) => {
         setCurrentEntriesPerPage(value)
-        setCurrentPage(1) // Reset to first page when changing entries per page
+        setCurrentPage(1)
     }
 
-    // Filter accounts based on search term
-    const filteredAccounts = accountsData?.results?.filter(account =>
-        account.address.toLowerCase().includes(searchTerm.toLowerCase())
-    ) || []
-
-    // Calculate pagination for filtered results
     const isSearching = searchTerm.trim() !== ''
+    const isExactAddress = /^[a-fA-F0-9]{40}$/.test(searchTerm.trim())
 
-    // For search results, implement local pagination
-    // For normal browsing, use server pagination
-    const accountsToShow = isSearching ? filteredAccounts : (accountsData?.results || [])
-    const totalCount = isSearching ? filteredAccounts.length : (accountsData?.totalCount || 0)
+    // For exact address search, use direct API result; for partial, filter current page
+    const filteredAccounts = isSearching && !isExactAddress
+        ? (accountsData?.results?.filter(account =>
+            account.address.toLowerCase().includes(searchTerm.toLowerCase())
+        ) || [])
+        : []
 
-    // Local pagination for search results only
+    const accountsToShow = isSearching
+        ? (isExactAddress && directSearchResult ? [directSearchResult] : filteredAccounts)
+        : (accountsData?.results || [])
+    const totalCount = isSearching
+        ? accountsToShow.length
+        : (accountsData?.totalCount || 0)
+
     const startIndex = (currentPage - 1) * currentEntriesPerPage
     const endIndex = startIndex + currentEntriesPerPage
     const paginatedAccounts = isSearching
-        ? filteredAccounts.slice(startIndex, endIndex)
+        ? accountsToShow.slice(startIndex, endIndex)
         : accountsToShow
 
     // Stage card component
@@ -179,7 +183,7 @@ const AccountsPage: React.FC = () => {
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search by address..."
+                                    placeholder="Search by full address (40 hex chars) or filter current page..."
                                     className="w-full px-4 py-3 pl-10 bg-card border border-gray-800/80 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -201,14 +205,13 @@ const AccountsPage: React.FC = () => {
                     {/* Right Column - Accounts Table */}
                     <div className="lg:col-span-2">
                         <AccountsTable
-                            accounts={isSearching ? paginatedAccounts : (accountsData?.results || [])}
-                            loading={isLoading}
+                            accounts={paginatedAccounts}
+                            loading={isLoading || isSearchingDirect}
                             totalCount={totalCount}
                             currentPage={currentPage}
                             onPageChange={handlePageChange}
                             currentEntriesPerPage={currentEntriesPerPage}
                             onEntriesPerPageChange={handleEntriesPerPageChange}
-                            stakingTypeMap={stakingTypeMap}
                         />
                     </div>
                 </div>
