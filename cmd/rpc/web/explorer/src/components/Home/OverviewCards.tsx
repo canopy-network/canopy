@@ -218,7 +218,7 @@ const OverviewCards: React.FC = () => {
                         key={c.type}
                         title={c.title}
                         live
-                        viewAllPath="/swaps"
+                        viewAllPath="/token-swaps"
                         columns={[{ label: 'Action' }, { label: 'Exchange Rate' }, { label: 'Hash' }]}
                         rows={rows}
                     />
