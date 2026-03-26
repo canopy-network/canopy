@@ -65,7 +65,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
 
             // Count total transactions in this group
             const groupTxCount = groupBlocks.reduce((sum: number, block: any) => {
-                return sum + (block.blockHeader?.numTxs || 0)
+                return sum + (block.blockHeader?.totalTxs || 0)
             }, 0)
             txCounts.push(groupTxCount)
 

@@ -85,70 +85,51 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
 
         return timeLabels
     }
-    // Use real transaction data to categorize by type
+    // Use real transaction data categorized by type, grouped by block groups
     const getTransactionTypeData = () => {
-        if (!transactionsData?.results || !Array.isArray(transactionsData.results)) {
-            // Return empty array if no real data
+        if (!transactionsData?.results || !Array.isArray(transactionsData.results) || !blockGroups || blockGroups.length === 0) {
             return []
         }
 
         const realTransactions = transactionsData.results
-        const blockRange = parseInt(toBlock) - parseInt(fromBlock) + 1
-        const periods = Math.min(blockRange, 30) // Maximum 30 periods for visualization
-        const categorizedByPeriod: { [key: string]: { transfers: number, staking: number, governance: number, other: number } } = {}
 
+        // categorize each transaction and assign to its block group
+        const categorizedByGroup: { [key: number]: { transfers: number, staking: number, governance: number, other: number } } = {}
 
-        // Initialize all categories to 0 for each period
-        for (let i = 0; i < periods; i++) {
-            categorizedByPeriod[i] = { transfers: 0, staking: 0, governance: 0, other: 0 }
+        // initialize all groups
+        for (let i = 0; i < blockGroups.length; i++) {
+            categorizedByGroup[i] = { transfers: 0, staking: 0, governance: 0, other: 0 }
         }
 
-        // Count transactions by type
-        const typeCounts = { transfers: 0, staking: 0, governance: 0, other: 0 }
-
         realTransactions.forEach((tx: any) => {
-            // Categorize transactions by message type
             const messageType = tx.messageType || 'other'
-            let category = 'other'
+            let category: 'transfers' | 'staking' | 'governance' | 'other' = 'other'
 
-            // Map real message types to categories
             if (messageType === 'certificateResults' || messageType.includes('send') || messageType.includes('transfer')) {
                 category = 'transfers'
             } else if (messageType.includes('staking') || messageType.includes('delegate') || messageType.includes('undelegate')) {
                 category = 'staking'
             } else if (messageType.includes('governance') || messageType.includes('proposal') || messageType.includes('vote')) {
                 category = 'governance'
-            } else {
-                category = 'other'
             }
 
-            typeCounts[category as keyof typeof typeCounts]++
+            // find which block group this transaction belongs to
+            const txHeight = tx.blockHeight || 0
+            const groupIndex = blockGroups.findIndex(g => txHeight >= g.start && txHeight <= g.end)
+            if (groupIndex >= 0) {
+                categorizedByGroup[groupIndex][category]++
+            }
         })
 
-        // Distribute counts by type across periods
-        const totalTransactions = realTransactions.length
-        if (totalTransactions > 0) {
-            for (let i = 0; i < periods; i++) {
-                // Distribute proportionally based on block range
-                const periodWeight = 1 / periods
-                categorizedByPeriod[i] = {
-                    transfers: Math.floor(typeCounts.transfers * periodWeight),
-                    staking: Math.floor(typeCounts.staking * periodWeight),
-                    governance: Math.floor(typeCounts.governance * periodWeight),
-                    other: Math.floor(typeCounts.other * periodWeight)
-                }
-            }
-        }
-
-        return Array.from({ length: periods }, (_, i) => {
-            const periodData = categorizedByPeriod[i]
+        return blockGroups.map((_, i) => {
+            const data = categorizedByGroup[i]
             return {
                 day: i + 1,
-                transfers: periodData.transfers,
-                staking: periodData.staking,
-                governance: periodData.governance,
-                other: periodData.other,
-                total: periodData.transfers + periodData.staking + periodData.governance + periodData.other,
+                transfers: data.transfers,
+                staking: data.staking,
+                governance: data.governance,
+                other: data.other,
+                total: data.transfers + data.staking + data.governance + data.other,
             }
         })
     }

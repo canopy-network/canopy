@@ -97,36 +97,42 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
         return timeLabels
     }
 
-    // Generate real staking data based on validators and block groups
+    // Generate real staking data from block reward events
     const generateStakingData = () => {
-        if (!validatorsData?.results || !Array.isArray(validatorsData.results) || !blockGroups || blockGroups.length === 0) {
+        if (!blocksData?.results || !Array.isArray(blocksData.results) || !blockGroups || blockGroups.length === 0) {
             return { rewards: [], timeLabels: [] }
         }
 
-        const validators = validatorsData.results
+        const realBlocks = blocksData.results
+        const fromBlockNum = parseInt(fromBlock) || 0
+        const toBlockNum = parseInt(toBlock) || 0
 
-        // Calculate total staked amount from validators
-        const totalStaked = validators.reduce((sum: number, validator: any) => {
-            return sum + (validator.stakedAmount || 0)
-        }, 0)
-
-        // Calculate average staking rewards per validator
-        const avgRewardPerValidator = totalStaked > 0 ? totalStaked / validators.length : 0
-        const baseReward = avgRewardPerValidator / 1000000 // Convert from micro to CNPY
-
-        // Use blockGroups to generate realistic reward data
-        // Each block group will have a reward based on the number of blocks
-        const rewards = blockGroups.map((group, index) => {
-            // Calculate reward based on the number of blocks in this group
-            // and add a small variation to make it look more natural
-            const blockFactor = group.blockCount / 10 // Normalize by every 10 blocks
-            const timeFactor = Math.sin((index / blockGroups.length) * Math.PI) * 0.2 + 0.9 // Variation from 0.7 to 1.1
-
-            // Base reward * block factor * time factor
-            return Math.max(0, baseReward * blockFactor * timeFactor)
+        // filter blocks by the specified range
+        const filteredBlocks = realBlocks.filter((block: any) => {
+            const blockHeight = block.blockHeader?.height || block.height || 0
+            return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
         })
 
-        // Get time labels from blocks data
+        // sum actual reward events from blocks in each group
+        const rewards = blockGroups.map((group) => {
+            const groupBlocks = filteredBlocks.filter((block: any) => {
+                const blockHeight = block.blockHeader?.height || block.height || 0
+                return blockHeight >= group.start && blockHeight <= group.end
+            })
+
+            // sum all reward events in this group's blocks
+            const groupReward = groupBlocks.reduce((sum: number, block: any) => {
+                const events = block.events || []
+                const rewardSum = events
+                    .filter((e: any) => e.eventType === 'reward')
+                    .reduce((s: number, e: any) => s + (e.msg?.amount || 0), 0)
+                return sum + rewardSum
+            }, 0)
+
+            // convert from micro to CNPY
+            return groupReward / 1000000
+        })
+
         const timeLabels = getTimeLabels()
 
         return { rewards, timeLabels }
@@ -161,7 +167,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                         Staking Trends
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Average rewards over time
+                        Block rewards over time
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
