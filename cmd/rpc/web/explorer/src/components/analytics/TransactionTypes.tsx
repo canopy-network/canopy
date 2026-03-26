@@ -52,17 +52,17 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             return { data: [], labels: [] }
         }
 
-        // create evenly distributed groups from actual blocks
+        // create exactly equal groups by truncating leftover blocks so raw counts are comparable
         const numGroups = Math.min(6, filteredBlocks.length)
-        const base = Math.floor(filteredBlocks.length / numGroups)
-        const remainder = filteredBlocks.length % numGroups
+        const groupSize = Math.floor(filteredBlocks.length / numGroups)
+        // only use groupSize * numGroups blocks so every group is the same size
+        const usableBlocks = filteredBlocks.slice(filteredBlocks.length - groupSize * numGroups)
 
         const groups: { minHeight: number, maxHeight: number, label: string, blockCount: number }[] = []
         let offset = 0
         for (let i = 0; i < numGroups; i++) {
-            const size = base + (i < remainder ? 1 : 0)
-            const groupBlocks = filteredBlocks.slice(offset, offset + size)
-            offset += size
+            const groupBlocks = usableBlocks.slice(offset, offset + groupSize)
+            offset += groupSize
 
             const minH = groupBlocks[0].blockHeader?.height || groupBlocks[0].height || 0
             const maxH = groupBlocks[groupBlocks.length - 1].blockHeader?.height || groupBlocks[groupBlocks.length - 1].height || 0
@@ -106,17 +106,19 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             }
         })
 
-        // normalize per block so ±1 block difference between groups doesn't skew the chart
+        // count distinct types present in each group, not raw tx counts
         const data = categorized.map((d, i) => {
-            const bc = groups[i].blockCount || 1
-            const norm = (v: number) => Math.round((v / bc) * 100) / 100
+            const hasTransfers = d.transfers > 0 ? 1 : 0
+            const hasStaking = d.staking > 0 ? 1 : 0
+            const hasGovernance = d.governance > 0 ? 1 : 0
+            const hasOther = d.other > 0 ? 1 : 0
             return {
                 day: i + 1,
-                transfers: norm(d.transfers),
-                staking: norm(d.staking),
-                governance: norm(d.governance),
-                other: norm(d.other),
-                total: norm(d.transfers + d.staking + d.governance + d.other),
+                transfers: hasTransfers,
+                staking: hasStaking,
+                governance: hasGovernance,
+                other: hasOther,
+                total: hasTransfers + hasStaking + hasGovernance + hasOther,
             }
         })
 
@@ -186,7 +188,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                         Transaction Types
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Avg per block by category
+                        Breakdown by category
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -208,7 +210,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                     Transaction Types
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Avg per block by category
+                    Breakdown by category
                 </p>
             </div>
 
@@ -282,7 +284,9 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-400">
                     <span>{maxTotal}</span>
-                    <span>{Math.round(maxTotal / 2)}</span>
+                    {maxTotal > 1 && (
+                        <span>{Math.floor(maxTotal / 2)}</span>
+                    )}
                     <span>0</span>
                 </div>
             </div>
