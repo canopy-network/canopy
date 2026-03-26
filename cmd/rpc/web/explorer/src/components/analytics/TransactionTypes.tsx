@@ -27,14 +27,20 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
         }
 
         const realTransactions = transactionsData.results
-        const fromBlockNum = parseInt(fromBlock) || 0
-        const toBlockNum = parseInt(toBlock) || 0
 
-        // get actual blocks in range, sorted by time
+        // find the block height range that actually contains transactions
+        const txHeights = realTransactions.map((tx: any) => tx.blockHeight || tx.height || 0).filter((h: number) => h > 0)
+        if (txHeights.length === 0) {
+            return { data: [], labels: [] }
+        }
+        const minTxHeight = Math.min(...txHeights)
+        const maxTxHeight = Math.max(...txHeights)
+
+        // only use blocks in the range where transactions exist, sorted by time
         const filteredBlocks = blocksData.results
             .filter((block: any) => {
                 const h = block.blockHeader?.height || block.height || 0
-                return h >= fromBlockNum && h <= toBlockNum
+                return h >= minTxHeight && h <= maxTxHeight
             })
             .sort((a: any, b: any) => {
                 const tA = a.blockHeader?.time || a.time || 0
@@ -51,7 +57,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
         const base = Math.floor(filteredBlocks.length / numGroups)
         const remainder = filteredBlocks.length % numGroups
 
-        const groups: { minHeight: number, maxHeight: number, label: string }[] = []
+        const groups: { minHeight: number, maxHeight: number, label: string, blockCount: number }[] = []
         let offset = 0
         for (let i = 0; i < numGroups; i++) {
             const size = base + (i < remainder ? 1 : 0)
@@ -73,7 +79,8 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             groups.push({
                 minHeight: minH,
                 maxHeight: maxH,
-                label: startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`
+                label: startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`,
+                blockCount: groupBlocks.length,
             })
         }
 
@@ -99,14 +106,19 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             }
         })
 
-        const data = categorized.map((d, i) => ({
-            day: i + 1,
-            transfers: d.transfers,
-            staking: d.staking,
-            governance: d.governance,
-            other: d.other,
-            total: d.transfers + d.staking + d.governance + d.other,
-        }))
+        // normalize per block so ±1 block difference between groups doesn't skew the chart
+        const data = categorized.map((d, i) => {
+            const bc = groups[i].blockCount || 1
+            const norm = (v: number) => Math.round((v / bc) * 100) / 100
+            return {
+                day: i + 1,
+                transfers: norm(d.transfers),
+                staking: norm(d.staking),
+                governance: norm(d.governance),
+                other: norm(d.other),
+                total: norm(d.transfers + d.staking + d.governance + d.other),
+            }
+        })
 
         const labels = groups.map(g => g.label)
         return { data, labels }
@@ -174,7 +186,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                         Transaction Types
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Breakdown by category
+                        Avg per block by category
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -196,7 +208,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                     Transaction Types
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Breakdown by category
+                    Avg per block by category
                 </p>
             </div>
 

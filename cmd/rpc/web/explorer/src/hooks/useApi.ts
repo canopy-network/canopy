@@ -592,8 +592,8 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
             });
         }
 
-        // Limit to a maximum of 50 blocks to avoid too many requests
-        const limitedBlocks = Math.min(maxBlocksToFetch, 50);
+        // limit blocks to the requested max (capped at 100 to stay reasonable)
+        const limitedBlocks = Math.min(maxBlocksToFetch, 100);
         const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
 
         const allTransactions: any[] = [];

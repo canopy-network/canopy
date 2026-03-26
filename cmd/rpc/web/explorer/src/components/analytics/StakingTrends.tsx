@@ -77,7 +77,9 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                 return sum + rewardSum
             }, 0)
 
-            rewards.push(groupReward / 1000000)
+            // normalize to per-block average so groups with ±1 block difference are comparable
+            const avgReward = groupBlocks.length > 0 ? groupReward / groupBlocks.length : 0
+            rewards.push(avgReward / 1000000)
 
             // build time label from first and last block in group
             const firstBlock = groupBlocks[0]
@@ -146,7 +148,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                     Staking Trends
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Average rewards over time
+                    Average reward per block over time
                 </p>
             </div>
 

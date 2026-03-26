@@ -68,11 +68,12 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                 continue
             }
 
-            // count per-block transactions in this group (numTxs is per-block, totalTxs is cumulative)
-            const groupTxCount = groupBlocks.reduce((sum: number, block: any) => {
+            // average per-block transactions in this group so ±1 block difference doesn't skew the chart
+            const groupTxTotal = groupBlocks.reduce((sum: number, block: any) => {
                 return sum + parseInt(block.blockHeader?.numTxs || '0', 10)
             }, 0)
-            txCounts.push(groupTxCount)
+            const avgTxPerBlock = groupBlocks.length > 0 ? groupTxTotal / groupBlocks.length : 0
+            txCounts.push(Math.round(avgTxPerBlock * 100) / 100)
 
             // Get time label from first and last block in group
             const firstBlock = groupBlocks[0]
@@ -163,7 +164,7 @@ const NetworkActivity: React.FC<NetworkActivityProps> = ({ fromBlock, toBlock, l
                     Network Activity
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Transactions per {timeInterval}
+                    Avg transactions per block over time
                 </p>
             </div>
 

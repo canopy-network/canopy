@@ -62,23 +62,26 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 continue
             }
 
-            // Count blocks in this group
-            blockData.push(groupBlocks.length)
-
-            // Get time label from first and last block in group
+            // get time label from first and last block in group
             const firstBlock = groupBlocks[0]
             const lastBlock = groupBlocks[groupBlocks.length - 1]
-            
+
             const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
             const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
-            
+
             const firstTimeMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
             const lastTimeMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
-            
-            // Calculate time range for this group in minutes
+
+            // calculate time range for this group in minutes
             const groupTimeRangeMs = lastTimeMs - firstTimeMs
             const groupTimeRangeMins = groupTimeRangeMs / (60 * 1000)
             groupTimeRanges.push(groupTimeRangeMins)
+
+            // normalize to blocks per minute: N blocks have N-1 intervals over the duration
+            const blocksPerMin = groupTimeRangeMins > 0 && groupBlocks.length > 1
+                ? (groupBlocks.length - 1) / groupTimeRangeMins
+                : groupBlocks.length
+            blockData.push(Math.round(blocksPerMin * 100) / 100)
             
             const firstDate = new Date(firstTimeMs)
             const lastDate = new Date(lastTimeMs)
@@ -155,7 +158,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                         Block Production Rate
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Blocks per time interval
+                        Blocks per minute
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -177,7 +180,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     Block Production Rate
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Blocks per {timeInterval} interval
+                    Blocks per minute
                 </p>
             </div>
 
