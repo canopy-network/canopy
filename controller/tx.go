@@ -169,10 +169,11 @@ type Mempool struct {
 }
 
 type CachedProposal struct {
-	Block         *lib.Block
-	BlockResult   *lib.BlockResult
-	CertResults   *lib.CertificateResult
-	rcBuildHeight uint64
+	Block             *lib.Block
+	BlockResult       *lib.BlockResult
+	CertResults       *lib.CertificateResult
+	rcBuildHeight     uint64
+	buyDeadlineBlocks uint64
 }
 
 // NewMempool() creates a new instance of a Mempool structure
@@ -261,12 +262,18 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
+	valParams, err := m.FSM.GetParamsVal()
+	if err != nil {
+		m.log.Error(err.Error())
+		return
+	}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
-		Block:         block,
-		BlockResult:   blockResult,
-		CertResults:   m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
-		rcBuildHeight: rcBuildHeight,
+		Block:             block,
+		BlockResult:       blockResult,
+		CertResults:       m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
+		rcBuildHeight:     rcBuildHeight,
+		buyDeadlineBlocks: valParams.BuyDeadlineBlocks,
 	})
 	// create a cache of failed tx bytes to evict from the mempool
 	var failedTxBz [][]byte

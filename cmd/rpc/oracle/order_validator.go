@@ -33,10 +33,10 @@ const (
 			},
 			"buyerChainDeadline": {
 				"type": "integer",
-				"minimum": 1
+				"minimum": 0
 			}
 		},
-		"required": ["orderId", "chain_id", "buyerSendAddress", "buyerReceiveAddress", "buyerChainDeadline"],
+		"required": ["orderId", "chain_id", "buyerReceiveAddress"],
 		"additionalProperties": false
 	}`
 	// JSON schema for close order validation

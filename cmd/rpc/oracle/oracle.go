@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -494,7 +495,7 @@ func (o *Oracle) processBlock(block types.BlockI) lib.ErrorI {
 // ValidateProposedOrders verifies that the passed orders are all present in the local order store.
 // This is called when the BFT module validates a block proposal to ensure that each order
 // in the proposed block is an exact match for an order in the witnessed order store.
-func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.OrderBook) lib.ErrorI {
+func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.OrderBook, proposalHeight, buyDeadlineBlocks uint64) lib.ErrorI {
 	// oracle is disabled
 	if o == nil {
 		return nil
@@ -511,11 +512,15 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.O
 	// get current safe height for validation
 	safeHeight := o.state.GetSafeHeight()
 	// entry log with context
-	o.log.Debugf("[ORACLE-VALIDATE] Validating proposal: %d lock orders, %d close orders, %d reset orders, safeHeight=%d",
-		len(orders.LockOrders), len(orders.CloseOrders), len(orders.ResetOrders), safeHeight)
+	o.log.Debugf("[ORACLE-VALIDATE] Validating proposal: %d lock orders, %d close orders, %d reset orders, safeHeight=%d, proposalHeight=%d",
+		len(orders.LockOrders), len(orders.CloseOrders), len(orders.ResetOrders), safeHeight, proposalHeight)
 	// validate each lock order against the witnessed order store
 	for _, lock := range orders.LockOrders {
 		orderId := lib.BytesToString(lock.OrderId)
+		if rootOrderBook == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: root order book snapshot is nil", orderId)
+			return ErrNilOrderBook()
+		}
 		// get order from order store
 		witnessedOrder, err := o.orderStore.ReadOrder(lock.OrderId, types.LockOrderType)
 		if err != nil {
@@ -528,10 +533,32 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.O
 				orderId, witnessedOrder.WitnessedHeight, safeHeight, witnessedOrder.WitnessedHeight-safeHeight)
 			return ErrOrderNotVerified(orderId, errors.New("order witnessed above safe height"))
 		}
+		rootOrder, err := rootOrderBook.GetOrder(lock.OrderId)
+		if err != nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: error loading order from order book: %v", orderId, err)
+			return ErrOrderNotVerified(orderId, err)
+		}
+		if rootOrder == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: order missing from order book", orderId)
+			return ErrOrderNotVerified(orderId, errors.New("order not found in order book"))
+		}
+		if rootOrder.IsLocked() {
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: order already locked in root order book", orderId)
+			return ErrOrderNotVerified(orderId, errors.New("order already locked"))
+		}
 		// compare orderbook order and witnessed order
-		if !lock.Equals(witnessedOrder.LockOrder) {
+		if !lockWitnessEquals(lock, witnessedOrder.LockOrder) {
 			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: order data mismatch", orderId)
 			return ErrOrderNotVerified(orderId, errors.New("lock order unequal"))
+		}
+		expectedDeadline, err := buyerChainDeadlineForProposal(proposalHeight, buyDeadlineBlocks)
+		if err != nil {
+			return err
+		}
+		if lock.BuyerChainDeadline != expectedDeadline {
+			o.log.Warnf("[ORACLE-VALIDATE] Lock order %s rejected: deadline mismatch (got=%d expected=%d)",
+				orderId, lock.BuyerChainDeadline, expectedDeadline)
+			return ErrOrderNotVerified(orderId, errors.New("lock order deadline unequal"))
 		}
 		o.log.Infof("[ORACLE-VALIDATE] Lock order %s valid (witnessed=%d)", orderId, witnessedOrder.WitnessedHeight)
 	}
@@ -561,6 +588,28 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.O
 			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: order data mismatch", orderIdStr)
 			return ErrOrderNotVerified(orderIdStr, errors.New("close order unequal"))
 		}
+		if rootOrderBook == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: root order book snapshot is nil", orderIdStr)
+			return ErrNilOrderBook()
+		}
+		rootOrder, err := rootOrderBook.GetOrder(orderId)
+		if err != nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: error loading order from order book: %v", orderIdStr, err)
+			return ErrOrderNotVerified(orderIdStr, err)
+		}
+		if rootOrder == nil {
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: order missing from order book", orderIdStr)
+			return ErrOrderNotVerified(orderIdStr, errors.New("order not found in order book"))
+		}
+		if !rootOrder.IsLocked() {
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: order is not locked", orderIdStr)
+			return ErrOrderNotVerified(orderIdStr, errors.New("order is not locked"))
+		}
+		if proposalHeight > rootOrder.BuyerChainDeadline {
+			o.log.Warnf("[ORACLE-VALIDATE] Close order %s rejected: order expired (deadline=%d, proposalHeight=%d)",
+				orderIdStr, rootOrder.BuyerChainDeadline, proposalHeight)
+			return ErrOrderNotVerified(orderIdStr, errors.New("order deadline passed"))
+		}
 		o.log.Infof("[ORACLE-VALIDATE] Close order %s valid (witnessed=%d)", orderIdStr, witnessedOrder.WitnessedHeight)
 	}
 	// validate each reset order against the current order book and source-chain safe height
@@ -583,12 +632,12 @@ func (o *Oracle) ValidateProposedOrders(orders *lib.Orders, rootOrderBook *lib.O
 			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: order is not locked", orderIDStr)
 			return ErrOrderNotVerified(orderIDStr, errors.New("order is not locked"))
 		}
-		if safeHeight <= order.BuyerChainDeadline {
-			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: deadline not yet passed (deadline=%d, safe=%d)",
-				orderIDStr, order.BuyerChainDeadline, safeHeight)
+		if proposalHeight <= order.BuyerChainDeadline {
+			o.log.Warnf("[ORACLE-VALIDATE] Reset order %s rejected: deadline not yet passed (deadline=%d, proposalHeight=%d)",
+				orderIDStr, order.BuyerChainDeadline, proposalHeight)
 			return ErrOrderNotVerified(orderIDStr, errors.New("order deadline not passed"))
 		}
-		o.log.Infof("[ORACLE-VALIDATE] Reset order %s valid (deadline=%d, safe=%d)", orderIDStr, order.BuyerChainDeadline, safeHeight)
+		o.log.Infof("[ORACLE-VALIDATE] Reset order %s valid (deadline=%d, proposalHeight=%d)", orderIDStr, order.BuyerChainDeadline, proposalHeight)
 	}
 	// summary log
 	o.log.Infof("[ORACLE-VALIDATE] Validated %d lock orders, %d close orders, and %d reset orders",
@@ -777,7 +826,7 @@ func (o *Oracle) UpdateRootChainInfo(info *lib.RootChainInfo) {
 // WitnessedOrders returns witnessed orders that match orders in the order book
 // When the block proposer produces a block proposal it uses the orders returned here to build the proposed block
 // TODO watch for conflicts while syncing ethereum block, prooducer might resubmit order
-func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([]*lib.LockOrder, [][]byte, [][]byte) {
+func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, proposalHeight, rootHeight, buyDeadlineBlocks uint64) ([]*lib.LockOrder, [][]byte, [][]byte) {
 	lockOrders := []*lib.LockOrder{}
 	closeOrders := [][]byte{}
 	resetOrders := [][]byte{}
@@ -824,16 +873,22 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 				stats.lockHeldDelay++
 				continue
 			}
+			lockOrder, err := canonicalLockOrderForProposal(wOrder.LockOrder, proposalHeight, buyDeadlineBlocks)
+			if err != nil {
+				o.log.Warnf("[ORACLE-SUBMIT] Lock order %s held: %s", orderId, err.Error())
+				stats.lockHeldDelay++
+				continue
+			}
 			o.log.Infof("[ORACLE-SUBMIT] Submitting lock order %s (witnessed=%d)", orderId, wOrder.WitnessedHeight)
 			stats.lockSubmitting++
 			// submit this witnessed lock order by returning it in the lockOrders slice
-			lockOrders = append(lockOrders, wOrder.LockOrder)
+			lockOrders = append(lockOrders, lockOrder)
 		} else {
 			stats.resetChecked++
-			if order.BuyerChainDeadline > 0 && safeHeight > order.BuyerChainDeadline {
+			if order.BuyerChainDeadline > 0 && proposalHeight > order.BuyerChainDeadline {
 				stats.resetSubmitting++
-				o.log.Infof("[ORACLE-SUBMIT] Submitting reset order %s (deadline=%d, safe=%d)",
-					orderId, order.BuyerChainDeadline, safeHeight)
+				o.log.Infof("[ORACLE-SUBMIT] Submitting reset order %s (deadline=%d, proposalHeight=%d)",
+					orderId, order.BuyerChainDeadline, proposalHeight)
 				resetOrders = append(resetOrders, order.Id)
 				continue
 			}
@@ -884,6 +939,52 @@ func (o *Oracle) WitnessedOrders(orderBook *lib.OrderBook, rootHeight uint64) ([
 		o.metrics.OrdersAwaitingConfirmation.Set(float64(totalHeldSafe))
 	}
 	return lockOrders, closeOrders, resetOrders
+}
+
+func buyerChainDeadlineForProposal(proposalHeight, buyDeadlineBlocks uint64) (uint64, lib.ErrorI) {
+	if buyDeadlineBlocks == 0 {
+		return 0, ErrOrderValidation("buy deadline blocks unavailable")
+	}
+	if proposalHeight > math.MaxUint64-buyDeadlineBlocks {
+		return 0, ErrOrderValidation("buyer chain deadline overflow")
+	}
+	return proposalHeight + buyDeadlineBlocks, nil
+}
+
+func canonicalLockOrderForProposal(lockOrder *lib.LockOrder, proposalHeight, buyDeadlineBlocks uint64) (*lib.LockOrder, lib.ErrorI) {
+	if lockOrder == nil {
+		return nil, ErrOrderValidation("witnessed lock order cannot be nil")
+	}
+	deadline, err := buyerChainDeadlineForProposal(proposalHeight, buyDeadlineBlocks)
+	if err != nil {
+		return nil, err
+	}
+	return &lib.LockOrder{
+		OrderId:             lockOrder.OrderId,
+		ChainId:             lockOrder.ChainId,
+		BuyerReceiveAddress: lockOrder.BuyerReceiveAddress,
+		BuyerSendAddress:    lockOrder.BuyerSendAddress,
+		BuyerChainDeadline:  deadline,
+	}, nil
+}
+
+func lockWitnessEquals(a, b *lib.LockOrder) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if !bytes.Equal(a.OrderId, b.OrderId) {
+		return false
+	}
+	if a.ChainId != b.ChainId {
+		return false
+	}
+	if !bytes.Equal(a.BuyerReceiveAddress, b.BuyerReceiveAddress) {
+		return false
+	}
+	return bytes.Equal(a.BuyerSendAddress, b.BuyerSendAddress)
 }
 
 // updateMetrics updates various oracle metrics with current state information

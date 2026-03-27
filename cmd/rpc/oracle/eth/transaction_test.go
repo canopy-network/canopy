@@ -3,8 +3,10 @@ package eth
 import (
 	"encoding/hex"
 	"math/big"
+	"strings"
 	"testing"
 
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -178,7 +180,7 @@ func TestParseERC20Transfer_USDT(t *testing.T) {
 		},
 		{
 			name:              "USDT transfer without extra data",
-			amount:            big.NewInt(5000000), // 5 USDT
+			amount:            big.NewInt(5000000),
 			extraData:         nil,
 			expectedRecipient: recipient,
 			expectedAmount:    big.NewInt(5000000),
@@ -196,28 +198,19 @@ func TestParseERC20Transfer_USDT(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create ERC20 transfer data (same format for USDT and standard ERC20)
 			data := createERC20TransferData(tt.expectedRecipient, tt.amount, tt.extraData)
 
-			// Parse the transfer
 			parsedRecipient, parsedAmount, parsedExtra, err := parseERC20Transfer(data)
 
-			// Verify parsing succeeds
 			if err != nil {
 				t.Errorf("USDT transfer parsing failed: %v", err)
 			}
-
-			// Verify recipient matches
 			if parsedRecipient != tt.expectedRecipient {
 				t.Errorf("expected recipient %s, got %s", tt.expectedRecipient, parsedRecipient)
 			}
-
-			// Verify amount matches
 			if parsedAmount.Cmp(tt.expectedAmount) != 0 {
 				t.Errorf("expected amount %s, got %s", tt.expectedAmount.String(), parsedAmount.String())
 			}
-
-			// Verify extra data matches
 			if len(parsedExtra) != len(tt.expectedExtra) {
 				t.Errorf("expected extra data length %d, got %d", len(tt.expectedExtra), len(parsedExtra))
 			}
@@ -227,8 +220,7 @@ func TestParseERC20Transfer_USDT(t *testing.T) {
 				}
 			}
 
-			// Log success - USDT parsing works identically to standard ERC20
-			t.Logf("✓ USDT transfer parsed successfully (contract: %s, amount: %s)", usdtContract, parsedAmount.String())
+			t.Logf("USDT transfer parsed successfully (contract: %s, amount: %s)", usdtContract, parsedAmount.String())
 		})
 	}
 }
@@ -256,5 +248,101 @@ func TestNewTransaction_AllowsContractCreationTx(t *testing.T) {
 	}
 	if tx.To() != "" {
 		t.Fatalf("expected empty recipient for contract creation tx, got %q", tx.To())
+	}
+}
+
+func TestParseDataForOrders_DerivesBuyerSendAddressFromNativeSelfSend(t *testing.T) {
+	sender := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	payload := []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerReceiveAddress":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"}`)
+	tx := ethtypes.NewTx(&ethtypes.LegacyTx{To: &sender, Data: payload})
+	wrapped := &Transaction{
+		tx:   tx,
+		from: sender.Hex(),
+		to:   sender.Hex(),
+	}
+
+	err := wrapped.parseDataForOrders(oracle.NewOrderValidator())
+	if err != nil {
+		t.Fatalf("parseDataForOrders() unexpected error = %v", err)
+	}
+	if wrapped.order == nil || wrapped.order.LockOrder == nil {
+		t.Fatalf("expected lock order to be parsed")
+	}
+	expected := strings.ToLower(sender.Hex()[2:])
+	if got := hex.EncodeToString(wrapped.order.LockOrder.BuyerSendAddress); got != expected {
+		t.Fatalf("expected buyer send address %s, got %s", expected, got)
+	}
+}
+
+func TestParseDataForOrders_IgnoresMalformedBuyerSendAddressFromNativeSelfSend(t *testing.T) {
+	sender := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	payload := []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerReceiveAddress":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","buyerSendAddress":"not-hex"}`)
+	tx := ethtypes.NewTx(&ethtypes.LegacyTx{To: &sender, Data: payload})
+	wrapped := &Transaction{
+		tx:   tx,
+		from: sender.Hex(),
+		to:   sender.Hex(),
+	}
+
+	err := wrapped.parseDataForOrders(oracle.NewOrderValidator())
+	if err != nil {
+		t.Fatalf("parseDataForOrders() unexpected error = %v", err)
+	}
+	if wrapped.order == nil || wrapped.order.LockOrder == nil {
+		t.Fatalf("expected lock order to be parsed")
+	}
+	expected := strings.ToLower(sender.Hex()[2:])
+	if got := hex.EncodeToString(wrapped.order.LockOrder.BuyerSendAddress); got != expected {
+		t.Fatalf("expected buyer send address %s, got %s", expected, got)
+	}
+}
+
+func TestParseDataForOrders_DerivesBuyerSendAddressFromERC20SelfSend(t *testing.T) {
+	sender := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	payload := []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerReceiveAddress":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","buyerSendAddress":"deadbeef"}`)
+	data := createERC20TransferData(sender.Hex(), big.NewInt(0), payload)
+	contract := common.HexToAddress("0x9999999999999999999999999999999999999999")
+	tx := ethtypes.NewTx(&ethtypes.LegacyTx{To: &contract, Data: data})
+	wrapped := &Transaction{
+		tx:   tx,
+		from: sender.Hex(),
+		to:   contract.Hex(),
+	}
+
+	err := wrapped.parseDataForOrders(oracle.NewOrderValidator())
+	if err != nil {
+		t.Fatalf("parseDataForOrders() unexpected error = %v", err)
+	}
+	if wrapped.order == nil || wrapped.order.LockOrder == nil {
+		t.Fatalf("expected lock order to be parsed")
+	}
+	expected := strings.ToLower(sender.Hex()[2:])
+	if got := hex.EncodeToString(wrapped.order.LockOrder.BuyerSendAddress); got != expected {
+		t.Fatalf("expected buyer send address %s, got %s", expected, got)
+	}
+}
+
+func TestParseDataForOrders_IgnoresMalformedBuyerSendAddressFromERC20SelfSend(t *testing.T) {
+	sender := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	payload := []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerReceiveAddress":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","buyerSendAddress":"not-hex"}`)
+	data := createERC20TransferData(sender.Hex(), big.NewInt(0), payload)
+	contract := common.HexToAddress("0x9999999999999999999999999999999999999999")
+	tx := ethtypes.NewTx(&ethtypes.LegacyTx{To: &contract, Data: data})
+	wrapped := &Transaction{
+		tx:   tx,
+		from: sender.Hex(),
+		to:   contract.Hex(),
+	}
+
+	err := wrapped.parseDataForOrders(oracle.NewOrderValidator())
+	if err != nil {
+		t.Fatalf("parseDataForOrders() unexpected error = %v", err)
+	}
+	if wrapped.order == nil || wrapped.order.LockOrder == nil {
+		t.Fatalf("expected lock order to be parsed")
+	}
+	expected := strings.ToLower(sender.Hex()[2:])
+	if got := hex.EncodeToString(wrapped.order.LockOrder.BuyerSendAddress); got != expected {
+		t.Fatalf("expected buyer send address %s, got %s", expected, got)
 	}
 }
