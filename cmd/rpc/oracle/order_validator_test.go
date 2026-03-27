@@ -220,6 +220,11 @@ func TestValidateLockOrderJsonBytes(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name:        "empty buyerReceiveAddress string",
+			input:       []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerSendAddress":"0x12345678901234567890","buyerReceiveAddress":"","buyerChainDeadline":1234567890}`),
+			expectError: true,
+		},
+		{
 			name:        "extra fields with valid required fields",
 			input:       []byte(`{"orderId":"1234567890123456789012345678901234567890","chain_id":1,"buyerSendAddress":"0x12345678901234567890","buyerReceiveAddress":"0x12345678901234567890","buyerChainDeadline":1234567890,"extraField":"value"}`),
 			expectError: true,

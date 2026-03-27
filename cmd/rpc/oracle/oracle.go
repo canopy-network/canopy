@@ -334,6 +334,10 @@ func (o *Oracle) validateLockOrder(lockOrder *lib.LockOrder, sellOrder *lib.Sell
 		o.metrics.IncrementValidationFailure("lock_chain_mismatch")
 		return ErrOrderValidation("lock order chain ID does not match sell order committee")
 	}
+	if len(lockOrder.BuyerReceiveAddress) == 0 {
+		o.metrics.IncrementValidationFailure("lock_buyer_receive_empty")
+		return ErrOrderValidation("lock order buyer receive address cannot be empty")
+	}
 	return nil
 }
 
@@ -361,6 +365,15 @@ func (o *Oracle) validateCloseOrder(closeOrder *lib.CloseOrder, sellOrder *lib.S
 	if closeOrder.ChainId != sellOrder.Committee {
 		o.metrics.IncrementValidationFailure("close_chain_mismatch")
 		return ErrOrderValidation("close order chain ID does not match sell order committee")
+	}
+	sender, err := lib.StringToBytes(strings.TrimPrefix(tx.From(), "0x"))
+	if err != nil {
+		o.metrics.IncrementValidationFailure("sender_conversion_error")
+		return ErrOrderValidation("error converting sender address to bytes")
+	}
+	if !bytes.Equal(sellOrder.BuyerSendAddress, sender) {
+		o.metrics.IncrementValidationFailure("sender_mismatch")
+		return ErrOrderValidation("transaction sender does not match locked buyer send address")
 	}
 	// convenience variable
 	tokenTransfer := tx.TokenTransfer()
