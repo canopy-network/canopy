@@ -860,7 +860,7 @@ func TestOracle_WitnessedOrders_DoesNotPersistCloseSubmitHeightPreCommit(t *test
 	oracle.state.safeHeight = 10
 	oracle.state.sourceChainHeight = 10
 
-	_, closeOrders, _ := oracle.WitnessedOrders(orderBook, 100)
+	_, closeOrders, _ := oracle.WitnessedOrders(orderBook, 100, 100, 300)
 	require.Len(t, closeOrders, 1)
 
 	stored, err := store.ReadOrder([]byte(orderID), types.CloseOrderType)
