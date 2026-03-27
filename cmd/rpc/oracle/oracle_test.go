@@ -383,11 +383,14 @@ func createOrderBook(orders ...*lib.SellOrder) *lib.OrderBook {
 }
 
 func TestOracle_ValidateProposedOrders(t *testing.T) {
+	const proposalHeight = uint64(100)
+	const buyDeadlineBlocks = uint64(300)
 	orders := func(lockOrderIDs []string, closeOrderIDs []string, resetOrderIDs []string) *lib.Orders {
 		lockOrders := make([]*lib.LockOrder, len(lockOrderIDs))
 		for i, id := range lockOrderIDs {
 			lockOrders[i] = &lib.LockOrder{
-				OrderId: []byte(id),
+				OrderId:            []byte(id),
+				BuyerChainDeadline: proposalHeight + buyDeadlineBlocks,
 			}
 		}
 		closeOrders := make([][]byte, len(closeOrderIDs))
@@ -433,6 +436,10 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 				createWitnessedLockOrder("lock1"),
 				createWitnessedLockOrder("lock2"),
 			),
+			orderBook: createOrderBook(
+				createSellOrder("lock1", ""),
+				createSellOrder("lock2", ""),
+			),
 			expectedError: false,
 		},
 		{
@@ -442,6 +449,18 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 				createWitnessedCloseOrder("close1", 1),
 				createWitnessedCloseOrder("close2", 1),
 			),
+			orderBook: createOrderBook(
+				func() *lib.SellOrder {
+					order := createSellOrder("close1", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
+				func() *lib.SellOrder {
+					order := createSellOrder("close2", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
+			),
 			expectedError: false,
 		},
 		{
@@ -450,6 +469,14 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1"),
 				createWitnessedCloseOrder("close1", 1),
+			),
+			orderBook: createOrderBook(
+				createSellOrder("lock1", ""),
+				func() *lib.SellOrder {
+					order := createSellOrder("close1", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
 			),
 			expectedError: false,
 		},
@@ -471,6 +498,27 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1", "address"),
 			),
+			orderBook:     createOrderBook(createSellOrder("lock1", "")),
+			expectedError: true,
+			errorContains: "order not verified",
+		},
+		{
+			name:   "lock order missing from root order book should return error",
+			orders: orders([]string{"lock1"}, nil, nil),
+			orderStore: createOrderStore(
+				createWitnessedLockOrder("lock1"),
+			),
+			orderBook:     createOrderBook(),
+			expectedError: true,
+			errorContains: "order not verified",
+		},
+		{
+			name:   "lock order already locked in root order book should return error",
+			orders: orders([]string{"lock1"}, nil, nil),
+			orderStore: createOrderStore(
+				createWitnessedLockOrder("lock1"),
+			),
+			orderBook:     createOrderBook(createSellOrder("lock1", "", "buyer")),
 			expectedError: true,
 			errorContains: "order not verified",
 		},
@@ -480,6 +528,11 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder("close1"), // missing chain id
 			),
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder("close1", "", "buyer")
+				order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+				return order
+			}()),
 			expectedError: true,
 			errorContains: "order not verified",
 		},
@@ -489,7 +542,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(),
 			orderBook: createOrderBook(func() *lib.SellOrder {
 				order := createSellOrder("reset1", "", "buyer")
-				order.BuyerChainDeadline = 25
+				order.BuyerChainDeadline = proposalHeight + 25
 				return order
 			}()),
 			safeHeight:    20,
@@ -513,7 +566,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			oracle.state.safeHeight = tt.safeHeight
 
 			// Execute test
-			err := oracle.ValidateProposedOrders(tt.orders, tt.orderBook)
+			err := oracle.ValidateProposedOrders(tt.orders, tt.orderBook, proposalHeight, buyDeadlineBlocks)
 
 			// Verify results
 			if tt.expectedError {
@@ -579,6 +632,8 @@ func TestOracle_CommitCertificate_ResetOrderCleanup(t *testing.T) {
 }
 
 func TestOracle_WitnessedOrders(t *testing.T) {
+	const proposalHeight = uint64(100)
+	const buyDeadlineBlocks = uint64(300)
 	buyerReceiveAddress := "0034567890123456789012345678901234567800"
 	contractAddress := "0x1234567890123456789012345678901234567890"
 
@@ -737,7 +792,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			}
 			oracle.state.safeHeight = tt.safeHeight
 			// 100 to specify a high enough root height that shouldSubmit always passes
-			witnessedLockOrders, witnessedCloseOrders, witnessedResetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			witnessedLockOrders, witnessedCloseOrders, witnessedResetOrders := oracle.WitnessedOrders(tt.orderBook, proposalHeight, 100, buyDeadlineBlocks)
 			if len(witnessedLockOrders) != tt.expectedLockOrdersLen {
 				t.Errorf("expected %d lock orders, got %d", tt.expectedLockOrdersLen, len(witnessedLockOrders))
 			}
@@ -753,6 +808,9 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 					expectedIdHex := fmt.Sprintf("%x", []byte(expectedId))
 					if actualId != expectedIdHex {
 						t.Errorf("expected lock order id %s, got %s", expectedIdHex, actualId)
+					}
+					if witnessedLockOrders[i].BuyerChainDeadline != proposalHeight+buyDeadlineBlocks {
+						t.Errorf("expected lock order deadline %d, got %d", proposalHeight+buyDeadlineBlocks, witnessedLockOrders[i].BuyerChainDeadline)
 					}
 				}
 			}
@@ -1298,6 +1356,35 @@ func TestOracle_processBlock(t *testing.T) {
 	}
 }
 
+func TestOracle_processBlock_PreservesRawWitnessLockDeadline(t *testing.T) {
+	orderStore := createOrderStore()
+	orderBook := createOrderBook(createSellOrder("order1", "", "buyer"))
+	witnessed := createWitnessedLockOrder("order1", "buyer")
+	witnessed.WitnessedHeight = 125
+	witnessed.LockOrder.BuyerChainDeadline = 1
+
+	oracle := &Oracle{
+		orderStore: orderStore,
+		orderBook:  orderBook,
+		log:        lib.NewDefaultLogger(),
+	}
+
+	err := oracle.processBlock(createMockBlockWithTransactions(125, "0xblockhash", []types.TransactionI{
+		&mockTransaction{
+			order: witnessed,
+			tokenTransfer: types.TokenTransfer{
+				TokenBaseAmount: new(big.Int),
+			},
+		},
+	}))
+	require.NoError(t, err)
+
+	stored, readErr := orderStore.ReadOrder([]byte("order1"), types.LockOrderType)
+	require.NoError(t, readErr)
+	require.NotNil(t, stored.LockOrder)
+	require.Equal(t, uint64(1), stored.LockOrder.BuyerChainDeadline)
+}
+
 func TestOracle_validateLockOrder(t *testing.T) {
 	oracle := &Oracle{}
 
@@ -1822,7 +1909,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			}
 
 			// Get witnessed orders from oracle
-			lockOrders, closeOrders, resetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			lockOrders, closeOrders, resetOrders := oracle.WitnessedOrders(tt.orderBook, 100, 100, 300)
 
 			// Verify lock order count
 			if len(lockOrders) != tt.expectedLockOrders {

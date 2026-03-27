@@ -169,7 +169,7 @@ func (c *Controller) ProduceProposal(evidence *bft.ByzantineEvidence, vdf *crypt
 		return
 	}
 	// append any witnessed orders to the on chain orders
-	lockOrders, closeOrders, resetOrders := c.oracle.WitnessedOrders(orderBook, rcBuildHeight)
+	lockOrders, closeOrders, resetOrders := c.oracle.WitnessedOrders(orderBook, p.Block.BlockHeader.Height, rcBuildHeight, p.buyDeadlineBlocks)
 	results.Orders.LockOrders = lockOrders
 	results.Orders.CloseOrders = closeOrders
 	results.Orders.ResetOrders = resetOrders
@@ -227,6 +227,10 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 		// exit with error
 		return
 	}
+	valParams, err := c.FSM.GetParamsVal()
+	if err != nil {
+		return
+	}
 	// create a comparable certificate results (includes reward recipients, slash recipients, swap commands, etc)
 	compareResults := c.NewCertificateResults(c.FSM, block, blockResult, evidence, rcBuildHeight)
 
@@ -234,18 +238,20 @@ func (c *Controller) ValidateProposal(rcBuildHeight uint64, qc *lib.QuorumCertif
 	// This preserves existing behavior for oracle-disabled nodes and avoids introducing
 	// extra root-chain RPC dependencies in that mode.
 	if c.oracle != nil {
-		// Only load root-chain snapshot when reset orders are present; lock/close validation
-		// remains local-store based and should not depend on root RPC liveness.
 		var rootOrderBook *lib.OrderBook
-		if qc.Results != nil && qc.Results.Orders != nil && len(qc.Results.Orders.ResetOrders) > 0 {
-			// load root-chain order book at the proposal build height to validate reset orders deterministically
+		if qc.Results != nil && qc.Results.Orders != nil &&
+			(len(qc.Results.Orders.LockOrders) > 0 ||
+				len(qc.Results.Orders.CloseOrders) > 0 ||
+				len(qc.Results.Orders.ResetOrders) > 0) {
+			// load root-chain order book at the proposal build height so lock, close, and reset
+			// validation all run against the same proposal-time snapshot
 			rootOrderBook, err = c.LoadRootChainOrderBook(1, rcBuildHeight)
 			if err != nil {
 				return
 			}
 		}
 		// validate the proposed orders were witnessed by the oracle
-		err = c.oracle.ValidateProposedOrders(qc.Results.Orders, rootOrderBook)
+		err = c.oracle.ValidateProposedOrders(qc.Results.Orders, rootOrderBook, block.BlockHeader.Height, valParams.BuyDeadlineBlocks)
 		if err != nil {
 			return
 		}

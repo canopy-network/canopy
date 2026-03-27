@@ -1,8 +1,10 @@
 package eth
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/lib"
@@ -97,11 +99,12 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 			// self-sent transaction did not contain canopy lock order json - normal condition
 			return err
 		}
-		order := &lib.LockOrder{}
-		// unmarshal the validated json data
-		err = order.UnmarshalJSON(txData)
+		order, err := unmarshalLockOrderIgnoringDerivedFields(txData)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal lock order json: %w", err)
+		}
+		if err = t.setBuyerSendAddress(order); err != nil {
+			return err
 		}
 		// create and store witnessed order
 		t.order = &types.WitnessedOrder{
@@ -136,11 +139,12 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 			// erc20 transaction did not contain canopy lock order json - normal condition
 			return err
 		}
-		order := &lib.LockOrder{}
-		// unmarshal the validated json data
-		err = order.UnmarshalJSON(data)
+		order, err := unmarshalLockOrderIgnoringDerivedFields(data)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal validated lock order json: %w", err)
+		}
+		if err = t.setBuyerSendAddress(order); err != nil {
+			return err
 		}
 		// create witnessed order
 		t.order = &types.WitnessedOrder{
@@ -174,6 +178,37 @@ func (t *Transaction) parseDataForOrders(orderValidator OrderValidator) error {
 	// store erc20 fields
 	t.erc20Recipient = recipient
 	t.erc20Amount = amount
+	return nil
+}
+
+func unmarshalLockOrderIgnoringDerivedFields(data []byte) (*lib.LockOrder, error) {
+	sanitized, err := stripIgnoredLockOrderFields(data)
+	if err != nil {
+		return nil, err
+	}
+	order := &lib.LockOrder{}
+	if err := order.UnmarshalJSON(sanitized); err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func stripIgnoredLockOrderFields(data []byte) ([]byte, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	delete(payload, "buyerSendAddress")
+	delete(payload, "buyerChainDeadline")
+	return json.Marshal(payload)
+}
+
+func (t *Transaction) setBuyerSendAddress(order *lib.LockOrder) error {
+	buyerSendAddress, err := lib.StringToBytes(strings.TrimPrefix(t.from, "0x"))
+	if err != nil {
+		return fmt.Errorf("failed to derive buyer send address from transaction sender: %w", err)
+	}
+	order.BuyerSendAddress = buyerSendAddress
 	return nil
 }
 
