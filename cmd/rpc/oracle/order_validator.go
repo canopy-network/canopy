@@ -29,7 +29,8 @@ const (
 				"type": "string"
 			},
 			"buyerReceiveAddress": {
-				"type": "string"
+				"type": "string",
+				"minLength": 1
 			},
 			"buyerChainDeadline": {
 				"type": "integer",
