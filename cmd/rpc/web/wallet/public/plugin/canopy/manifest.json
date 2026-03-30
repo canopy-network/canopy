@@ -677,54 +677,20 @@
           {
             "id": "selectCommittees",
             "name": "selectCommittees",
-            "type": "tableSelect",
-            "label": "Select Committees",
+            "type": "text",
+            "label": "Committees",
             "required": true,
-            "help": "Maximum 15 committees per validator.",
+            "placeholder": "e.g. 1,2,3",
+            "help": "Enter committee IDs separated by commas. Maximum 15 committees per validator.",
+            "value": "{{ (params.selectCommittees || ds.validator?.committees || []).join ? (params.selectCommittees || ds.validator?.committees || []).join(',') : (params.selectCommittees || '') }}",
+            "autoPopulate": "once",
             "validation": {
-              "max": 15,
               "messages": {
-                "required": "Please select at least one committee",
-                "max": "Maximum 15 committees allowed per validator"
+                "required": "Please enter at least one committee ID"
               }
             },
-            "multiple": true,
-            "rowKey": "id",
-            "selectMode": "action",
-            "value": "{{ params.selectCommittees || ds.validator?.committees || [] }}",
-            "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Staked Amount",
-                "type": "html",
-                "html": "{{ (() => { const isStaked = ds.validator?.committees?.includes(row.id); const isSelected = Array.isArray(form.selectCommittees) && (form.selectCommittees.includes(row.id) || form.selectCommittees.includes(String(row.id))); const amt = Number(form.amount) || 0; if (isStaked) { const current = ds.validator.stakedAmount / 1000000; const diff = amt - current; return '<span class=\"text-white font-medium\">' + current.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY <span class=\"text-emerald-400 text-xs font-semibold\">+ ' + (diff > 0 ? diff : 0).toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span></span>'; } else if (isSelected) { return '<span class=\"text-emerald-400 font-medium\">' + amt.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span>'; } else { return '<span class=\"text-neutral-400\">0 CNPY</span>'; } })() }}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ ds.validator?.committees?.includes(row.id) ? 'Staked' : 'Stake' }}",
-              "disabledIf": "{{ ds.validator?.committees?.includes(row.id) }}",
-              "emit": {
-                "op": "select"
-              }
+            "span": {
+              "base": 12
             },
             "step": "committees"
           },
@@ -853,7 +819,7 @@
           "coerce": "string"
         },
         "committees": {
-          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}",
+          "value": "{{form.selectCommittees}}",
           "coerce": "string"
         },
         "netAddress": {
@@ -4114,11 +4080,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Seller Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Seller address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4128,8 +4100,6 @@
             "id": "receiveAddress",
             "name": "receiveAddress",
             "type": "advancedSelect",
-            "allowFreeInput": true,
-            "allowCreate": true,
             "label": "Receive Address (Counter-Asset)",
             "required": true,
             "value": "{{params.receiveAddress || account.address || ''}}",
@@ -4148,42 +4118,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy"
-              },
-              {
-                "id": 2,
-                "name": "Canary"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {
@@ -4460,44 +4404,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {
@@ -4752,44 +4668,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {
@@ -5219,6 +5107,7 @@
       "icon": "ArrowLeftRight",
       "ds": {
         "admin.config": {},
+        "keystore": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5226,7 +5115,8 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -5262,11 +5152,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5274,44 +5170,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the limit order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the limit order.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {
@@ -5454,6 +5322,7 @@
       "icon": "Droplets",
       "ds": {
         "admin.config": {},
+        "keystore": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5461,7 +5330,8 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -5497,11 +5367,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5509,44 +5385,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the liquidity deposit.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the liquidity deposit.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {
@@ -5664,6 +5512,7 @@
       "icon": "CircleDashed",
       "ds": {
         "admin.config": {},
+        "keystore": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5671,7 +5520,8 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -5707,11 +5557,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5719,44 +5575,16 @@
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the liquidity withdraw.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the liquidity withdraw.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
             "span": {

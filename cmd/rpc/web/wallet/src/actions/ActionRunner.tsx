@@ -59,6 +59,7 @@ const extractServiceErrorMessage = (response: any, statusText?: string): string 
       response?.error?.reason,
       response?.error?.details,
       response?.message,
+      response?.msg,
       response?.reason,
       response?.detail,
       response?.description,
