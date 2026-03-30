@@ -75,15 +75,16 @@ func (b *BatchVerifier) Add(pk PublicKeyI, publicKey, message, signature []byte)
 	// initialize the batch tuple object and append to the proper list
 	t := BatchTuple{PublicKey: pk, Message: message, Signature: signature, index: b.count}
 	listIdx := b.count % 8
-	// depending on the public key length
-	switch len(publicKey) {
-	case Ed25519PubKeySize:
+	// classify by the decoded key type so serialized multisig keys follow the same path
+	// as one-by-one verification through NewPublicKeyFromBytes().
+	switch pk.(type) {
+	case *ED25519PublicKey:
 		b.ed25519[listIdx] = append(b.ed25519[listIdx], t)
-	case ETHSECP256K1PubKeySize, ETHSECP256K1PubKeySize + 1:
+	case *ETHSECP256K1PublicKey:
 		b.ethSecp256k1[listIdx] = append(b.ethSecp256k1[listIdx], t)
-	case SECP256K1PubKeySize:
+	case *SECP256K1PublicKey:
 		b.secp256k1[listIdx] = append(b.secp256k1[listIdx], t)
-	case BLS12381PubKeySize:
+	case *BLS12381PublicKey, *BLS12381MultiPublicKey:
 		b.bls12381[listIdx] = append(b.bls12381[listIdx], t)
 	default:
 		return fmt.Errorf("unrecognized public key format")

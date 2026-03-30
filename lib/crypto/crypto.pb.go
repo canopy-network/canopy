@@ -340,6 +340,69 @@ func (x *VDF) GetIterations() uint64 {
 	return 0
 }
 
+type MultiPublicKey struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// public_keys: the full signer set when the signature is an aggregate BLS multisig signature
+	PublicKeys [][]byte `protobuf:"bytes,1,rep,name=public_keys,json=publicKeys,proto3" json:"public_keys,omitempty"` // @gotags: json:"publicKeys,omitempty"
+	// bitmap: identifies which multi_public_keys are included in the aggregate signature
+	Bitmap []byte `protobuf:"bytes,2,opt,name=bitmap,proto3" json:"bitmap,omitempty"` // @gotags: json:"bitmap,omitempty"
+	// threshold: minimum number of enabled signers required for verification; 0 disables threshold enforcement
+	Threshold     uint32 `protobuf:"varint,3,opt,name=threshold,proto3" json:"threshold,omitempty"` // @gotags: json:"threshold,omitempty"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MultiPublicKey) Reset() {
+	*x = MultiPublicKey{}
+	mi := &file_crypto_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultiPublicKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultiPublicKey) ProtoMessage() {}
+
+func (x *MultiPublicKey) ProtoReflect() protoreflect.Message {
+	mi := &file_crypto_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultiPublicKey.ProtoReflect.Descriptor instead.
+func (*MultiPublicKey) Descriptor() ([]byte, []int) {
+	return file_crypto_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MultiPublicKey) GetPublicKeys() [][]byte {
+	if x != nil {
+		return x.PublicKeys
+	}
+	return nil
+}
+
+func (x *MultiPublicKey) GetBitmap() []byte {
+	if x != nil {
+		return x.Bitmap
+	}
+	return nil
+}
+
+func (x *MultiPublicKey) GetThreshold() uint32 {
+	if x != nil {
+		return x.Threshold
+	}
+	return 0
+}
+
 var File_crypto_proto protoreflect.FileDescriptor
 
 const file_crypto_proto_rawDesc = "" +
@@ -361,7 +424,12 @@ const file_crypto_proto_rawDesc = "" +
 	"\x06output\x18\x02 \x01(\fR\x06output\x12\x1e\n" +
 	"\n" +
 	"iterations\x18\x03 \x01(\x04R\n" +
-	"iterationsB-Z+github.com/canopy-network/canopy/lib/cryptob\x06proto3"
+	"iterations\"g\n" +
+	"\x0eMultiPublicKey\x12\x1f\n" +
+	"\vpublic_keys\x18\x01 \x03(\fR\n" +
+	"publicKeys\x12\x16\n" +
+	"\x06bitmap\x18\x02 \x01(\fR\x06bitmap\x12\x1c\n" +
+	"\tthreshold\x18\x03 \x01(\rR\tthresholdB-Z+github.com/canopy-network/canopy/lib/cryptob\x06proto3"
 
 var (
 	file_crypto_proto_rawDescOnce sync.Once
@@ -375,7 +443,7 @@ func file_crypto_proto_rawDescGZIP() []byte {
 	return file_crypto_proto_rawDescData
 }
 
-var file_crypto_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_crypto_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_crypto_proto_goTypes = []any{
 	(*ProtoAddress)(nil),    // 0: types.ProtoAddress
 	(*ProtoAddresses)(nil),  // 1: types.ProtoAddresses
@@ -383,6 +451,7 @@ var file_crypto_proto_goTypes = []any{
 	(*ProtoPrivKey)(nil),    // 3: types.ProtoPrivKey
 	(*ProtoClassGroup)(nil), // 4: types.ProtoClassGroup
 	(*VDF)(nil),             // 5: types.VDF
+	(*MultiPublicKey)(nil),  // 6: types.MultiPublicKey
 }
 var file_crypto_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -403,7 +472,7 @@ func file_crypto_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crypto_proto_rawDesc), len(file_crypto_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
