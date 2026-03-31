@@ -14,12 +14,21 @@ import {
   RefreshCcw,
   ShoppingCart,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/Select";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import type { ActionFinishResult } from "@/app/providers/ActionModalProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { useAccountsList, useSelectedAccount } from "@/app/providers/AccountsProvider";
 import { isOrderLocked, RpcOrder, useOrdersData } from "@/hooks/useOrdersData";
 import { cx } from "@/ui/cx";
 
@@ -185,6 +194,8 @@ const OrderTypeMetric: React.FC<OrderTypeMetricProps> = ({
 export default function Orders(): JSX.Element {
   const { chain } = useConfig();
   const { openAction } = useActionModal();
+  const { accounts } = useAccountsList();
+  const { selectedAccount, switchAccount } = useSelectedAccount();
   const [optimisticallyLockedOrderIds, setOptimisticallyLockedOrderIds] = React.useState<Set<string>>(new Set());
 
   const {
@@ -298,14 +309,30 @@ export default function Orders(): JSX.Element {
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mt-4">
+          <div className="mt-4">
+            <Select
+              value={selectedAccount?.id ?? ""}
+              onValueChange={switchAccount}
+            >
+              <SelectTrigger className="w-full gap-2 h-11 text-sm">
+                <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
+                <SelectValue placeholder="Select address" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.nickname
+                      ? `${account.nickname} (${shortHex(account.address)})`
+                      : shortHex(account.address)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
             <StatusBadge label={`Committee ${committeeId ?? "-"}`} status="info" size="sm" />
             <StatusBadge label={`Polling ${Math.round(POLL_INTERVAL_MS / 1000)}s`} status="live" size="sm" pulse />
-            <StatusBadge
-              label={selectedAddress ? shortHex(selectedAddress, 8, 6) : "No selected account"}
-              status={selectedAddress ? "active" : "warning"}
-              size="sm"
-            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 mt-4">
