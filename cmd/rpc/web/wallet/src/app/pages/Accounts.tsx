@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   ArrowLeftRight,
   Box,
+  Copy,
   Layers,
   Lock,
   Search,
@@ -22,6 +23,7 @@ import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 
 export const Accounts = () => {
@@ -44,6 +46,7 @@ export const Accounts = () => {
     useStakedBalanceHistory();
   const { openAction } = useActionModal();
   const { chain } = useConfig();
+  const { copyToClipboard } = useCopyToClipboard();
 
   const symbol   = chain?.denom?.symbol   || "CNPY";
   const decimals = chain?.denom?.decimals ?? 6;
@@ -94,30 +97,34 @@ export const Accounts = () => {
       : { label: "Liquid",  cls: "bg-muted/40 text-muted-foreground border border-border/60"    };
   };
 
-  const processedAddresses = accounts.map((account, index) => {
-    const { liquid, staked, total } = getRealTotal(account.address);
-    const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
-    const { icon, bg } = getAccountIcon(index);
-    return {
-      id:               account.address,
-      fullAddress:      account.address,
-      address:          fmtAddress(account.address),
-      nickname:         account.nickname || fmtAddress(account.address),
-      total,
-      liquid,
-      staked,
-      stakedPct:        total > 0 ? (staked / total) * 100 : 0,
-      liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
-      statusLabel,
-      statusCls,
-      icon,
-      iconBg: bg,
-    };
-  });
+  const processedAddresses = accounts
+    .map((account, index) => {
+      const { liquid, staked, total } = getRealTotal(account.address);
+      const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
+      const { icon, bg } = getAccountIcon(index);
+      return {
+        id:               account.address,
+        fullAddress:      account.address,
+        address:          fmtAddress(account.address),
+        nickname:         account.nickname || fmtAddress(account.address),
+        publicKey:        account.publicKey || "",
+        total,
+        liquid,
+        staked,
+        stakedPct:        total > 0 ? (staked / total) * 100 : 0,
+        liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
+        statusLabel,
+        statusCls,
+        icon,
+        iconBg: bg,
+      };
+    })
+    .sort((a, b) => a.nickname.localeCompare(b.nickname));
 
   const filteredAddresses = processedAddresses.filter(addr =>
     addr.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    addr.nickname.toLowerCase().includes(searchTerm.toLowerCase()),
+    addr.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    addr.fullAddress.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleSendAction = (address: string) => {
@@ -336,10 +343,11 @@ export const Accounts = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b border-border/40">
                 <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Address</th>
+                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Public Key</th>
                 <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total</th>
                 <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Staked</th>
                 <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Liquid</th>
@@ -350,7 +358,7 @@ export const Accounts = () => {
             <tbody>
               {filteredAddresses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center font-body text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-5 py-10 text-center font-body text-sm text-muted-foreground">
                     No addresses found
                   </td>
                 </tr>
@@ -378,6 +386,25 @@ export const Accounts = () => {
                           </div>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Public Key */}
+                    <td className="px-5 py-3.5">
+                      {addr.publicKey ? (
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            {`${addr.publicKey.slice(0, 8)}…${addr.publicKey.slice(-6)}`}
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(addr.publicKey, "Public Key")}
+                            className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                          >
+                            <Copy style={{ width: 10, height: 10 }} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="font-mono text-[11px] text-muted-foreground/40">—</span>
+                      )}
                     </td>
 
                     {/* Total */}

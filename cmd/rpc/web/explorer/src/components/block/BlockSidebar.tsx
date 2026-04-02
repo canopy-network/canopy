@@ -92,7 +92,6 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                                 </button>
                             )}
                         </div>
-                        <div className="text-gray-400 text-sm">Proposer Address</div>
                     </div>
                 </div>
 

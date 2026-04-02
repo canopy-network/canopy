@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 
 interface AnalyticsFiltersProps {
     fromBlock: string
@@ -9,14 +9,24 @@ interface AnalyticsFiltersProps {
     isLoading?: boolean
     errorMessage?: string
     blocksData?: any
+    blockTime?: number // seconds per block
 }
 
-const blockRangeFilters = [
-    { key: '10', oldLabel: '10 Blocks', recentLabel: 'Last 1 minute' },
-    { key: '25', oldLabel: '25 Blocks', recentLabel: 'Last 5 minutes' },
-    { key: '50', oldLabel: '50 Blocks', recentLabel: 'Last 15 minutes' },
-    { key: '100', oldLabel: '100 Blocks', recentLabel: 'Last 30 minutes' }
+// target time ranges in seconds
+const timeTargets = [
+    { seconds: 60, label: '1 min' },
+    { seconds: 300, label: '5 min' },
+    { seconds: 900, label: '15 min' },
+    { seconds: 1800, label: '30 min' },
 ]
+
+// snap to a round number so small blockTime fluctuations don't change labels
+const snapToRound = (n: number): number => {
+    if (n <= 5) return n
+    if (n <= 20) return Math.round(n / 5) * 5
+    if (n <= 50) return Math.round(n / 10) * 10
+    return Math.round(n / 25) * 25
+}
 
 const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     fromBlock,
@@ -26,64 +36,46 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     onSearch,
     isLoading = false,
     errorMessage = '',
-    blocksData
+    blocksData,
+    blockTime = 20,
 }) => {
     const [selectedRange, setSelectedRange] = useState<string>('')
+    // lock filters once computed so blockTime jitter doesn't change them
+    const lockedFilters = useRef<{ key: string; label: string }[] | null>(null)
 
-    // Determine if blocks are recent (less than 2 months old)
-    const areBlocksRecent = useMemo(() => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results) || blocksData.results.length === 0) {
-            return false
-        }
+    // compute block counts once from block time, then lock them
+    const blockRangeFilters = useMemo(() => {
+        if (lockedFilters.current) return lockedFilters.current
 
-        // Get the most recent block
-        const sortedBlocks = [...blocksData.results].sort((a: any, b: any) => {
-            const heightA = a.blockHeader?.height || a.height || 0
-            const heightB = b.blockHeader?.height || b.height || 0
-            return heightB - heightA
+        const filters = timeTargets.map(target => {
+            const raw = Math.max(1, Math.round(target.seconds / blockTime))
+            const snapped = snapToRound(raw)
+            const capped = Math.min(snapped, 100)
+            return {
+                key: capped.toString(),
+                label: `Last ${capped} blocks (~${target.label})`,
+            }
         })
+        // deduplicate if multiple targets resolve to the same block count
+        .filter((f, i, arr) => arr.findIndex(x => x.key === f.key) === i)
 
-        if (sortedBlocks.length === 0) {
-            return false
-        }
+        lockedFilters.current = filters
+        return filters
+    }, [blockTime])
 
-        const mostRecentBlock = sortedBlocks[0]
-        const mostRecentTime = mostRecentBlock.blockHeader?.time || mostRecentBlock.time || 0
-
-        if (!mostRecentTime) {
-            return false
-        }
-
-        // Convert timestamp (may be in microseconds)
-        const mostRecentTimeMs = mostRecentTime > 1e12 ? mostRecentTime / 1000 : mostRecentTime
-        const now = Date.now()
-
-        // Calculate age of most recent block from now
-        const ageOfMostRecentMs = now - mostRecentTimeMs
-        const ageOfMostRecentDays = ageOfMostRecentMs / (24 * 60 * 60 * 1000)
-
-        // If blocks are old (2 months or more), return false
-        return ageOfMostRecentDays < 60 // 2 months = ~60 days
-    }, [blocksData])
-
-    // Detect when custom range is being used
+    // when toBlock changes and a range is selected, auto-update fromBlock to maintain the window
     useEffect(() => {
-        if (fromBlock && toBlock) {
-            const from = parseInt(fromBlock)
-            const to = parseInt(toBlock)
-            const range = to - from + 1
+        if (selectedRange && selectedRange !== 'custom' && toBlock) {
+            const blockCount = parseInt(selectedRange)
+            const currentToBlock = parseInt(toBlock) || 0
+            const expectedFrom = Math.max(0, currentToBlock - blockCount + 1)
+            const currentFrom = parseInt(fromBlock) || 0
 
-            // Check if it matches any predefined range
-            const predefinedRanges = ['10', '25', '50', '100']
-            const matchingRange = predefinedRanges.find(r => parseInt(r) === range)
-
-            if (matchingRange) {
-                setSelectedRange(matchingRange)
-            } else {
-                setSelectedRange('custom')
+            if (currentFrom !== expectedFrom) {
+                onFromBlockChange(expectedFrom.toString())
             }
         }
-    }, [fromBlock, toBlock])
+    }, [toBlock, selectedRange])
 
     const handleBlockRangeSelect = (range: string) => {
         setSelectedRange(range)
@@ -102,9 +94,6 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
             <div className="flex items-center space-x-2">
                 {blockRangeFilters.map((filter) => {
                     const isSelected = selectedRange === filter.key
-                    const isCustom = filter.key === 'custom'
-                    // Use recentLabel if blocks are recent, otherwise use oldLabel
-                    const displayText = areBlocksRecent ? filter.recentLabel : filter.oldLabel
 
                     return (
                         <button
@@ -112,13 +101,11 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                             onClick={() => handleBlockRangeSelect(filter.key)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isSelected
                                 ? 'bg-primary text-black shadow-lg shadow-primary/25'
-                                : isCustom
-                                    ? 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
-                                    : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
                                 }`}
                         >
                             <div className="flex flex-col items-center">
-                                <span>{displayText}</span>
+                                <span>{filter.label}</span>
                             </div>
                         </button>
                     )

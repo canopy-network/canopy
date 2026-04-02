@@ -2,8 +2,8 @@ import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, WalletCards} from 'lucide-react';
 import { useAccountData } from '@/hooks/useAccountData';
-import { useAccountsList } from '@/app/providers/AccountsProvider';
-import { NavLink } from 'react-router-dom';
+import { useAccountsList, useSelectedAccount } from '@/app/providers/AccountsProvider';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -18,12 +18,13 @@ interface AddressData {
     status: string;
 }
 
-const AddressRow = React.memo<{ address: AddressData; index: number }>(({ address, index }) => (
+const AddressRow = React.memo<{ address: AddressData; index: number; onClick?: () => void }>(({ address, index, onClick }) => (
     <motion.div
-        className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/50 hover:border-primary/20 hover:bg-primary/3 transition-all duration-150"
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/50 hover:border-primary/20 hover:bg-primary/3 transition-all duration-150 cursor-pointer"
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.18, delay: index * 0.04 }}
+        onClick={onClick}
     >
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/70 to-primary/30 flex items-center justify-center flex-shrink-0">
             <span className="font-mono text-[10px] font-bold text-primary-foreground">
@@ -47,6 +48,8 @@ AddressRow.displayName = 'AddressRow';
 
 export const AllAddressesCard = React.memo(() => {
     const { accounts, loading: accountsLoading } = useAccountsList();
+    const { switchAccount } = useSelectedAccount();
+    const navigate = useNavigate();
     const { balances, stakingData, loading: dataLoading } = useAccountData();
 
     const formatBalance = useCallback((amount: number) => (amount / 1_000_000).toFixed(2), []);
@@ -112,7 +115,15 @@ export const AllAddressesCard = React.memo(() => {
             <div className="space-y-1.5 flex-1">
                 {processedAddresses.length > 0 ? (
                     processedAddresses.slice(0, 4).map((address, index) => (
-                        <AddressRow key={address.id} address={address} index={index} />
+                        <AddressRow
+                            key={address.id}
+                            address={address}
+                            index={index}
+                            onClick={() => {
+                                switchAccount(address.id);
+                                navigate('/accounts');
+                            }}
+                        />
                     ))
                 ) : (
                     <EmptyState icon="MapPin" title="No addresses" description="Add an address to get started" size="sm" />

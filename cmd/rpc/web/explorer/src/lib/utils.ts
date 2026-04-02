@@ -11,9 +11,11 @@ export function toUCNPY(cnpy: number): number {
     return cnpy * cnpyConversionRate;
 }
 
-// convertNumberWCommas() formats a number with commas
+// convertNumberWCommas() formats a number with commas (integer part only)
 export function convertNumberWCommas(x: number): string {
-    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const parts = x.toString().split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join('.');
 }
 
 // convertNumber() formats a number with commas or in compact notation

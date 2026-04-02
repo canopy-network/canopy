@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import blockDetailTexts from '../../data/blockDetail.json'
@@ -16,9 +16,11 @@ interface BlockDetailInfoProps {
         blockHash: string
         parentHash: string
     }
+    blockData?: Record<string, unknown>
 }
 
-const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
+const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) => {
+    const [viewMode, setViewMode] = useState<'decoded' | 'raw'>('decoded')
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success('Copied to clipboard!', {
@@ -54,10 +56,56 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
             transition={{ duration: 0.3 }}
             className="bg-card rounded-xl border border-gray-800/60 p-6"
         >
-            <h2 className="text-lg font-semibold text-white mb-4">
-                {blockDetailTexts.blockDetails.title}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">
+                    {blockDetailTexts.blockDetails.title}
+                </h2>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setViewMode('decoded')}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'decoded' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-600/10'}`}
+                    >
+                        Decoded
+                    </button>
+                    <button
+                        onClick={() => setViewMode('raw')}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'raw' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-600/10'}`}
+                    >
+                        Raw
+                    </button>
+                </div>
+            </div>
 
+            {viewMode === 'raw' && blockData ? (
+                <div className="border border-gray-600/60 rounded-lg p-4">
+                    <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                        <code className="text-gray-300">
+                            {JSON.stringify(blockData, null, 2)
+                                .split('\n')
+                                .map((line, index) => (
+                                    <div key={index} className="flex">
+                                        <span className="text-gray-600 mr-4 select-none w-8 text-right">
+                                            {String(index + 1).padStart(2, '0')}
+                                        </span>
+                                        <span
+                                            className="flex-1"
+                                            dangerouslySetInnerHTML={{
+                                                __html: line
+                                                    .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')
+                                                    .replace(/:\s*(".*?")/g, ': <span class="text-green-400">$1</span>')
+                                                    .replace(/:\s*(\d+)/g, ': <span class="text-yellow-400">$1</span>')
+                                                    .replace(/:\s*(true|false|null)/g, ': <span class="text-purple-400">$1</span>')
+                                                    .replace(/({|}|\[|\])/g, '<span class="text-gray-500">$1</span>')
+                                                    || '&nbsp;'
+                                            }}
+                                        />
+                                    </div>
+                                ))
+                            }
+                        </code>
+                    </pre>
+                </div>
+            ) : (
             <div className="md:grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left Column */}
                 <div className="space-y-4">
@@ -143,6 +191,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block }) => {
                     </div>
                 </div>
             </div>
+            )}
         </motion.div>
     )
 }

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { useAccountsList } from "@/app/providers/AccountsProvider";
 import { LucideIcon } from "@/components/ui/LucideIcon";
 import { TransactionDetailModal, type TxDetail } from "@/components/transactions/TransactionDetailModal";
 
@@ -162,15 +163,14 @@ export const AllTransactions = () => {
   const {
     allTxs,
     isTxLoading,
-    hasMoreTxs,
-    isFetchingMoreTxs,
-    fetchMoreTxs,
   } = useDashboard();
   const { manifest, chain } = useConfig();
+  const { accounts } = useAccountsList();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterAccount, setFilterAccount] = useState<string>("all");
   const [selectedTx, setSelectedTx] = useState<TxDetail | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -212,17 +212,19 @@ export const AllTransactions = () => {
         getTxMap(tx.type).toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       const matchesStatus = filterStatus === "all" || tx.status === filterStatus;
-      return matchesSearch && matchesType && matchesStatus;
+      const matchesAccount =
+        filterAccount === "all" ||
+        (tx.relatedAccounts?.includes(filterAccount) ?? false);
+      return matchesSearch && matchesType && matchesStatus && matchesAccount;
     });
-  }, [allTxs, searchTerm, filterType, filterStatus, getTxMap]);
+  }, [allTxs, searchTerm, filterType, filterStatus, filterAccount, getTxMap]);
 
   // Total pages for current filter
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE));
 
-  // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterType, filterStatus]);
+  }, [searchTerm, filterType, filterStatus, filterAccount]);
 
   // Current page slice
   const from = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -274,9 +276,9 @@ export const AllTransactions = () => {
 
         {/* Filters */}
         <div className="bg-card rounded-xl p-4 border border-border mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             {/* Search */}
-            <div className="relative md:col-span-1">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <input
                 type="text"
@@ -287,6 +289,21 @@ export const AllTransactions = () => {
                   placeholder-text-muted text-sm focus:outline-none focus:border-primary/40 transition-colors"
               />
             </div>
+
+            {/* Account filter */}
+            <select
+              value={filterAccount}
+              onChange={(e) => setFilterAccount(e.target.value)}
+              className="px-4 py-2 bg-background border border-border rounded-lg text-foreground text-sm
+                focus:outline-none focus:border-primary/40 transition-colors"
+            >
+              <option value="all">All Accounts</option>
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.address}>
+                  {acc.nickname || `${acc.address.slice(0, 8)}…${acc.address.slice(-4)}`}
+                </option>
+              ))}
+            </select>
 
             {/* Type filter */}
             <select
@@ -427,10 +444,10 @@ export const AllTransactions = () => {
             from={displayFrom}
             to={displayTo}
             count={filteredTransactions.length}
-            hasMore={hasMoreTxs}
-            isFetchingMore={isFetchingMoreTxs}
+            hasMore={false}
+            isFetchingMore={false}
             onChange={setCurrentPage}
-            onLoadMore={fetchMoreTxs}
+            onLoadMore={() => {}}
           />
         </div>
       </div>

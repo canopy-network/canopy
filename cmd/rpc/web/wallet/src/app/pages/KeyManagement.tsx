@@ -87,7 +87,7 @@ export const KeyManagement = (): JSX.Element => {
                 </motion.div>
 
                 <motion.div
-                    className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+                    className="grid grid-cols-1 gap-6"
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"

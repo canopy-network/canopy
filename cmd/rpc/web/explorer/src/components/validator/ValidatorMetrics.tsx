@@ -38,11 +38,11 @@ const ValidatorMetrics: React.FC<ValidatorMetricsProps> = ({ validator }) => {
             subtitle: null
         },
         {
-            title: 'Committees',
+            title: 'Committees Staked',
             value: validator.committees.length,
             suffix: '',
             icon: 'fa-solid fa-network-wired',
-            subtitle: validator.committees.length > 0 ? `${validator.committees.join(', ')}` : 'None'
+            subtitle: validator.committees.length > 0 ? `IDs: ${validator.committees.join(', ')}` : 'None'
         },
         {
             title: 'Max Paused Height',
