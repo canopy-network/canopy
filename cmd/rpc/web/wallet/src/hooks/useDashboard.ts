@@ -5,7 +5,7 @@ import { Transaction } from "@/components/dashboard/RecentTransactionsCard";
 import { useAccounts, useAccountsList } from "@/app/providers/AccountsProvider";
 import { useManifest } from "@/hooks/useManifest";
 import { Action as ManifestAction } from "@/manifest/types";
-import { useConfig } from "@/app/providers/ConfigProvider";
+
 
 const TX_POLL_INTERVAL_MS = 6000;
 const TX_PER_PAGE = 20;
@@ -98,7 +98,6 @@ export const useDashboard = () => {
   const [selectedActions, setSelectedActions] = React.useState<ManifestAction[]>([]);
   const [prefilledData, setPrefilledData] = React.useState<Record<string, unknown> | undefined>(undefined);
   const { manifest, loading: manifestLoading } = useManifest();
-  const { chain } = useConfig();
   const { isReady: isAccountReady } = useAccounts();
   const { accounts, loading: accountsLoading } = useAccountsList();
   const dsFetch = useDSFetcher();
@@ -108,19 +107,13 @@ export const useDashboard = () => {
     [accounts],
   );
 
-  const hasDistinctRootRpc = useMemo(() => {
-    const base = String(chain?.rpc?.base ?? "").trim();
-    const root = String(chain?.rpc?.root ?? "").trim();
-    return !!root && root !== base;
-  }, [chain?.rpc?.base, chain?.rpc?.root]);
-
   const addressesKey = useMemo(
     () => allAddresses.sort().join(","),
     [allAddresses],
   );
 
   const txQuery = useQuery({
-    queryKey: ["dashboard.allTxs", addressesKey, hasDistinctRootRpc],
+    queryKey: ["dashboard.allTxs", addressesKey],
     enabled: !accountsLoading && allAddresses.length > 0 && isAccountReady,
     staleTime: TX_POLL_INTERVAL_MS,
     refetchInterval: TX_POLL_INTERVAL_MS,
@@ -157,24 +150,6 @@ export const useDashboard = () => {
         }
         for (const item of extractItems(failed as TxPage | null)) {
           upsertTx(makeTx(item, { status: "Failed" }), address);
-        }
-
-        if (hasDistinctRootRpc) {
-          const [rootSent, rootReceived, rootFailed] = await Promise.all([
-            dsFetch<TxPage>("txs.root.sent", ctx).catch(() => null),
-            dsFetch<TxPage>("txs.root.received", ctx).catch(() => null),
-            dsFetch<TxPage>("txs.root.failed", ctx).catch(() => null),
-          ]);
-
-          for (const item of extractItems(rootReceived as TxPage | null)) {
-            upsertTx(makeTx(item, { type: "receive" }), address);
-          }
-          for (const item of extractItems(rootSent as TxPage | null)) {
-            upsertTx(makeTx(item), address);
-          }
-          for (const item of extractItems(rootFailed as TxPage | null)) {
-            upsertTx(makeTx(item, { status: "Failed" }), address);
-          }
         }
       };
 

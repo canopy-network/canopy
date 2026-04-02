@@ -7,7 +7,7 @@ export type FeeBuckets = Record<
 >;
 export type FeeProviderQuery = {
   type: "query";
-  base: "rpc" | "admin" | "root";
+  base: "rpc" | "admin";
   path: string;
   method?: "GET" | "POST";
   encoding?: "json" | "text";
