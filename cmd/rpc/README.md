@@ -5,7 +5,9 @@
 ## RPC Routes Reference
 - /v1/
 - /v1/tx
+- /v1/txs
 - /v1/query/height
+- /v1/query/indexer-blobs
 - /v1/query/account
 - /v1/query/accounts
 - /v1/query/pool
@@ -83,7 +85,7 @@
 - /v1/admin/tx-dex-liquidity-withdraw
 - /v1/admin/tx-lock-order
 - /v1/admin/tx-close-order
-- /v1/admin/subsidy
+- /v1/admin/tx-subsidy
 - /v1/admin/tx-start-poll
 - /v1/admin/tx-vote-poll
 - /v1/admin/resource-usage
@@ -166,6 +168,57 @@ $ curl -X POST localhost:50002/v1/tx \
 > "25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"
 ```
 
+## Txs
+
+**Route**: `/v1/txs`
+
+**Description**: submits multiple transactions in a single request
+
+**HTTP Method**: `POST`
+
+**Request**: `array` of transactions, each with the same structure as the `/v1/tx` request:
+
+- **type**: `string` - the message name (`"send"`, `"stake"`, `"edit-stake"`, ...)
+- **msg**: `Message` - the payload of the transaction (`MessageSend`, `MessageStake`, ...)
+- **signature**: `Signature` - the authorization (public key and signature) of the transaction
+- **time**: `uint64` - the creation time of the transaction for replay protection (unix micro)
+- **createdHeight**: `uint64` - the height the transaction was created `+/- 4320` accepted
+- **fee**: `uint64`  the network fee for sending the transaction (minimum is parameterized)
+- **memo**: `string` - an embedded message in the transaction (optional)
+- **networkID**: `uint64` - the unique identifier of the network (`1` for mainnet, `2` for testnet, ...)
+- **chainID**: `uint64` - the unique identifier of the committee (`1` for canopy, `2` for canary, ...)
+
+**Response**: `array of hex strings` - the hashes of the submitted transactions
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/txs \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "type": "send",
+      "msg": {
+        "fromAddress": "b8bc466953be5f6f31954108f683d2b02b8b7453",
+        "toAddress": "08c18a0e3ef3727b42eab9eef51494f8f7f83bd0",
+        "amount": 1000000
+      },
+      "signature": {
+        "publicKey": "a5b97c05cb26c9bc118b3e2258f03101a9a427317dccd80abd4f3a82a42afc6c27ae5f63a04aaef180558b0176282f1c78a51af474036316b1c2ae826bf8c23a",
+        "signature": "89ce883843a4ebfc763e0fd377718e659063bdfee492f3fff1cfe055b9cbc1f67da580e3ad638c32d520c3db4baf94a0c4f605cb73b0ee021a330a23a93ffe99"
+      },
+      "time": 1747865418150488,
+      "createdHeight": 1,
+      "fee": 10000,
+      "memo": "hello world",
+      "networkID": 1,
+      "chainID": 1
+    }
+  ]'
+
+> ["25c7216b7523fdfdb60b989b38c4b9d83a546a63029d56f2ce6f2be6bd255aa4"]
+```
+
 ## Height
 
 **Route:** `/v1/query/height`
@@ -186,6 +239,57 @@ $ curl -X POST localhost:50002/v1/tx \
 $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v1/query/height
 
 > 9157
+```
+
+## Indexer Blobs
+
+**Route:** `/v1/query/indexer-blobs`
+
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. When delta mode is enabled, only the differences between current and previous blobs are returned.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+- **delta**: `bool` – if true, returns only the differences between the current and previous blobs (optional: defaults to false)
+
+**Response**: raw protobuf bytes (`application/x-protobuf`) representing an `IndexerBlobs` message containing:
+- **current**: `IndexerBlob` - the indexer blob at the requested height
+  - **block**: `bytes` - the block data
+  - **accounts**: `[]bytes` - the account entries
+  - **pools**: `[]bytes` - the pool entries
+  - **validators**: `[]bytes` - the validator entries
+  - **dexPrices**: `[]bytes` - the DEX price entries
+  - **nonSigners**: `[]bytes` - the non-signer entries
+  - **doubleSigners**: `[]bytes` - the double-signer entries
+  - **orders**: `bytes` - the order book data
+  - **params**: `bytes` - the protocol parameters
+  - **dexBatches**: `[]bytes` - the DEX batch entries
+  - **nextDexBatches**: `[]bytes` - the next DEX batch entries
+  - **committeesData**: `bytes` - the committees data
+  - **subsidizedCommittees**: `[]uint64` - the subsidized committee IDs
+  - **retiredCommittees**: `[]uint64` - the retired committee IDs
+  - **supply**: `bytes` - the token supply data
+  - **totalValidatorsActive**: `uint32` - count of active validators
+  - **totalValidatorsPaused**: `uint32` - count of paused validators
+  - **totalValidatorsUnstaking**: `uint32` - count of unstaking validators
+  - **validatorsDelta**: `bool` - whether validators are returned as a delta
+  - **totalDelegatesActive**: `uint32` - count of active delegates
+  - **totalDelegatesPaused**: `uint32` - count of paused delegates
+  - **totalDelegatesUnstaking**: `uint32` - count of unstaking delegates
+- **previous**: `IndexerBlob` - the indexer blob at the previous height (same structure as current, absent for heights ≤ 2)
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/indexer-blobs \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 100,
+        "delta": false
+      }'
+
+> <binary protobuf response>
 ```
 
 ## Account
