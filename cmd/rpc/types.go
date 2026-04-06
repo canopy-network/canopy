@@ -18,7 +18,6 @@ type heightRequest struct {
 
 type indexerBlobsRequest struct {
 	heightRequest
-	Delta bool `json:"delta,omitempty"`
 }
 
 type chainRequest struct {
@@ -391,8 +390,9 @@ const defaultIndexerBlobCacheEntries = 64
 
 type indexerBlobCacheEntry struct {
 	height     uint64
-	blobs      *fsm.IndexerBlobs
-	protoBytes []byte
+	current    *fsm.IndexerBlob
+	deltaBlobs *fsm.IndexerBlobs
+	deltaBytes []byte
 }
 
 type indexerBlobCache struct {
@@ -422,10 +422,10 @@ func (c *indexerBlobCache) get(height uint64) (*indexerBlobCacheEntry, bool) {
 
 func (c *indexerBlobCache) getCurrent(height uint64) (*fsm.IndexerBlob, bool) {
 	entry, ok := c.get(height)
-	if !ok || entry == nil || entry.blobs == nil {
+	if !ok || entry == nil || entry.current == nil {
 		return nil, false
 	}
-	return entry.blobs.Current, entry.blobs.Current != nil
+	return entry.current, true
 }
 
 func (c *indexerBlobCache) put(height uint64, entry *indexerBlobCacheEntry) {

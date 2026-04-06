@@ -188,6 +188,55 @@ $ curl -H "Content-Type: application/json" -X POST --data '{}' localhost:50002/v
 > 9157
 ```
 
+## Indexer Blobs
+
+**Route:** `/v1/query/indexer-blobs`
+
+**Description**: responds with the current and previous indexer blobs as protobuf bytes. The indexer blob is a snapshot of the blockchain state at a given height, containing blocks, accounts, pools, validators, orders, params, supply, dex data, committee data, and signer information. Accounts, pools, and validators are always returned as deltas between the current and previous blobs.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **height**: `uint64` – the block height to read data from (optional: use 0 to read from the latest block)
+
+**Response**: raw protobuf bytes (`application/x-protobuf`) representing an `IndexerBlobs` message containing:
+- **current**: `IndexerBlob` - the indexer blob at the requested height
+  - **block**: `bytes` - the block data
+  - **accounts**: `[]bytes` - the account entries
+  - **pools**: `[]bytes` - the pool entries
+  - **validators**: `[]bytes` - the validator entries
+  - **dexPrices**: `[]bytes` - the DEX price entries
+  - **nonSigners**: `[]bytes` - the non-signer entries
+  - **doubleSigners**: `[]bytes` - the double-signer entries
+  - **orders**: `bytes` - the order book data
+  - **params**: `bytes` - the protocol parameters
+  - **dexBatches**: `[]bytes` - the DEX batch entries
+  - **nextDexBatches**: `[]bytes` - the next DEX batch entries
+  - **committeesData**: `bytes` - the committees data
+  - **subsidizedCommittees**: `[]uint64` - the subsidized committee IDs
+  - **retiredCommittees**: `[]uint64` - the retired committee IDs
+  - **supply**: `bytes` - the token supply data
+  - **totalValidatorsActive**: `uint32` - count of active validators
+  - **totalValidatorsPaused**: `uint32` - count of paused validators
+  - **totalValidatorsUnstaking**: `uint32` - count of unstaking validators
+  - **validatorsDelta**: `bool` - whether validators are returned as a delta
+  - **totalDelegatesActive**: `uint32` - count of active delegates
+  - **totalDelegatesPaused**: `uint32` - count of paused delegates
+  - **totalDelegatesUnstaking**: `uint32` - count of unstaking delegates
+- **previous**: `IndexerBlob` - the indexer blob at the previous height (same structure as current, absent for heights ≤ 2)
+
+**Example**:
+
+```
+$ curl -X POST localhost:50002/v1/query/indexer-blobs \
+  -H "Content-Type: application/json" \
+  -d '{
+        "height": 100
+      }'
+
+> <binary protobuf response>
+```
+
 ## Account
 
 **Route:** `/v1/query/account`
