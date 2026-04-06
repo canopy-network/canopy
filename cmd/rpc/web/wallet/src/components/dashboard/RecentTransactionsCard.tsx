@@ -24,6 +24,7 @@ export interface Transaction {
     status: string;
     address?: string;
     error?: TxError;
+    relatedAccounts?: string[];
 }
 
 export interface RecentTransactionsCardProps {

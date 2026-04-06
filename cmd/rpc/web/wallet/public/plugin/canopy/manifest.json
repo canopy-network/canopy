@@ -90,12 +90,17 @@
           }
         },
         "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 0,
           "refetchOnMount": "always",
           "refetchOnWindowFocus": false,
-          "watch": ["form.address"],
-          "critical": ["keystore"]
+          "watch": [
+            "form.address"
+          ],
+          "critical": [
+            "keystore"
+          ]
         }
       },
       "ui": {
@@ -121,7 +126,9 @@
             "value": "{{account.address}}",
             "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "output",
@@ -142,23 +149,9 @@
                 "op": "paste"
               }
             ],
-            "span": { "base": 12 }
-          },
-          {
-            "type": "divider",
-            "variant": "gradient",
-            "spacing": "md",
-            "span": { "base": 12 }
-          },
-          {
-            "id": "asset",
-            "name": "asset",
-            "type": "text",
-            "label": "Asset",
-            "value": "{{chain.displayName}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -166,7 +159,7 @@
             "type": "amount",
             "label": "Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
             "validation": {
               "messages": {
@@ -185,7 +178,9 @@
                 "value": "{{ fromMicroDenom<{{(ds.account?.amount ?? 0) - fees.raw.sendFee}}> }}"
               }
             ],
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "info": {
@@ -197,7 +192,7 @@
             },
             {
               "label": "Estimation time",
-              "value": "≈ 20",
+              "value": "≈ {{chain.params.avgBlockTimeSec}} seconds",
               "icon": "Timer"
             }
           ]
@@ -208,10 +203,6 @@
             {
               "label": "Receiving Address",
               "value": "{{form.address}}"
-            },
-            {
-              "label": "Asset",
-              "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})"
             }
           ]
         },
@@ -334,7 +325,7 @@
         "hideSubmit": true,
         "slots": {
           "modal": {
-            "className": "sm:max-w-[20rem] md:max-w-[24rem]"
+            "className": "sm:max-w-[22rem] md:max-w-[26rem]"
           }
         }
       },
@@ -365,13 +356,19 @@
             ]
           },
           {
-            "id": "asset",
-            "name": "asset",
+            "id": "publicKey",
+            "name": "publicKey",
             "type": "text",
-            "label": "Asset",
-            "autoPopulate": "always",
-            "value": "{{chain.denom.symbol}} (Balance: {{formatToCoin<{{ds.account.amount}}>}})",
-            "readOnly": true
+            "label": "Public Key",
+            "value": "{{account.pubKey}}",
+            "readOnly": true,
+            "features": [
+              {
+                "id": "copyPubKeyBtn",
+                "op": "copy",
+                "from": "{{account.pubKey}}"
+              }
+            ]
           }
         ],
         "info": {
@@ -411,6 +408,7 @@
           }
         },
         "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 30000,
           "refetchOnMount": true,
@@ -420,7 +418,9 @@
             "form.output",
             "form.signerResponsible"
           ],
-          "critical": ["keystore"]
+          "critical": [
+            "keystore"
+          ]
         }
       },
       "ui": {
@@ -452,7 +452,9 @@
             "text": "Addresses",
             "level": 3,
             "color": "secondary",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "setup"
           },
           {
@@ -492,7 +494,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "setup"
           },
           {
@@ -558,7 +562,9 @@
             "label": "Stake Amount",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "setup"
           },
           {
@@ -609,7 +615,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "setup",
             "showIf": "{{ ds.validator }}"
           },
@@ -653,66 +661,36 @@
             "description": "Select the committees you want to delegate to. You can select up to 15 committees per validator. Your stake will be distributed across all selected committees.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "committees"
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "committees"
           },
           {
             "id": "selectCommittees",
             "name": "selectCommittees",
-            "type": "tableSelect",
-            "label": "Select Committees",
+            "type": "text",
+            "label": "Committees",
             "required": true,
-            "help": "Maximum 15 committees per validator.",
+            "placeholder": "e.g. 1,2,3",
+            "help": "Enter committee IDs separated by commas. Maximum 15 committees per validator.",
+            "value": "{{ (params.selectCommittees || ds.validator?.committees || []).join ? (params.selectCommittees || ds.validator?.committees || []).join(',') : (params.selectCommittees || '') }}",
+            "autoPopulate": "once",
             "validation": {
-              "max": 15,
               "messages": {
-                "required": "Please select at least one committee",
-                "max": "Maximum 15 committees allowed per validator"
+                "required": "Please enter at least one committee ID"
               }
             },
-            "multiple": true,
-            "rowKey": "id",
-            "selectMode": "action",
-            "value": "{{ params.selectCommittees || ds.validator?.committees || [] }}",
-            "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Staked Amount",
-                "type": "html",
-                "html": "{{ (() => { const isStaked = ds.validator?.committees?.includes(row.id); const isSelected = Array.isArray(form.selectCommittees) && (form.selectCommittees.includes(row.id) || form.selectCommittees.includes(String(row.id))); const amt = Number(form.amount) || 0; if (isStaked) { const current = ds.validator.stakedAmount / 1000000; const diff = amt - current; return '<span class=\"text-white font-medium\">' + current.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY <span class=\"text-emerald-400 text-xs font-semibold\">+ ' + (diff > 0 ? diff : 0).toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span></span>'; } else if (isSelected) { return '<span class=\"text-emerald-400 font-medium\">' + amt.toLocaleString('en-US', {maximumFractionDigits: 3}) + ' CNPY</span>'; } else { return '<span class=\"text-neutral-400\">0 CNPY</span>'; } })() }}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ ds.validator?.committees?.includes(row.id) ? 'Staked' : 'Stake' }}",
-              "disabledIf": "{{ ds.validator?.committees?.includes(row.id) }}",
-              "emit": {
-                "op": "select"
-              }
+            "span": {
+              "base": 12
             },
             "step": "committees"
           },
@@ -726,7 +704,9 @@
             "variant": "default",
             "defaultExpanded": false,
             "step": "committees",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "manualCommittees",
@@ -758,7 +738,9 @@
             "label": "Transaction Fee",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "committees"
           },
           {
@@ -766,11 +748,13 @@
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)}}> }}",
+            "value": "{{fees.raw ? fromMicroDenom(ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)) : ''}}",
             "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{ds.validator ? (fees.raw.editStakeFee ?? fees.raw.stakeFee ?? 0) : (fees.raw.stakeFee ?? 0)}}> }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
@@ -835,7 +819,7 @@
           "coerce": "string"
         },
         "committees": {
-          "value": "{{form?.selectCommittees?.filter(c => c !== '').map(c => c).join(',')}}",
+          "value": "{{form.selectCommittees}}",
           "coerce": "string"
         },
         "netAddress": {
@@ -931,12 +915,16 @@
             "description": "Your vote will be recorded on-chain and cannot be changed after submission. Ensure you review the proposal details before voting.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposalId",
@@ -944,7 +932,9 @@
             "type": "text",
             "label": "Proposal ID",
             "required": true,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Proposal ID is required"
@@ -956,7 +946,9 @@
             "label": "Your Decision",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "vote",
@@ -964,7 +956,9 @@
             "type": "option",
             "label": "Your Vote",
             "required": true,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "options": [
               {
                 "label": "Yes",
@@ -986,7 +980,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "voterAddress",
@@ -995,7 +991,9 @@
             "label": "Voter Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -1083,19 +1081,25 @@
             "description": "Proposals require a minimum deposit and will be open for community voting. Deposits are returned if the proposal passes or is rejected normally.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "heading",
             "text": "Proposal Details",
             "level": 3,
             "color": "secondary",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "title",
@@ -1103,7 +1107,9 @@
             "type": "text",
             "label": "Proposal Title",
             "required": true,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Title is required"
@@ -1117,7 +1123,9 @@
             "label": "Description",
             "required": true,
             "rows": 5,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Description is required"
@@ -1129,7 +1137,9 @@
             "label": "Submission Details",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposerAddress",
@@ -1138,7 +1148,9 @@
             "label": "Proposer Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "deposit",
@@ -1147,7 +1159,9 @@
             "label": "Deposit Amount",
             "required": true,
             "min": 0,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Deposit is required",
@@ -1241,8 +1255,12 @@
         "__options": {
           "staleTimeMs": 0,
           "refetchOnMount": true,
-          "watch": ["form.validatorAddress"],
-          "critical": ["keystore"]
+          "watch": [
+            "form.validatorAddress"
+          ],
+          "critical": [
+            "keystore"
+          ]
         }
       },
       "form": {
@@ -1253,12 +1271,16 @@
             "description": "Maximum pause duration: 4,380 blocks (~24.3 hours). If not unpaused within this period, the validator will be automatically unstaked.",
             "icon": "AlertTriangle",
             "variant": "warning",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "validatorAddress",
@@ -1273,7 +1295,9 @@
             "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address of the validator to pause",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "signerAddress",
@@ -1288,12 +1312,16 @@
             "required": true,
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address that will sign this transaction",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "divider",
             "spacing": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "memo",
@@ -1302,18 +1330,22 @@
             "label": "Memo (Optional)",
             "required": false,
             "placeholder": "Add a note about this pause action",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "txFee",
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
+            "value": "{{fees.raw?.pauseFee != null ? fromMicroDenom(fees.raw.pauseFee) : ''}}",
             "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.pauseFee}}> }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
@@ -1431,8 +1463,12 @@
         "__options": {
           "staleTimeMs": 0,
           "refetchOnMount": true,
-          "watch": ["form.validatorAddress"],
-          "critical": ["keystore"]
+          "watch": [
+            "form.validatorAddress"
+          ],
+          "critical": [
+            "keystore"
+          ]
         }
       },
       "form": {
@@ -1443,12 +1479,16 @@
             "description": "This action will resume your validator's participation in consensus and block production. Make sure your node is fully synced before unpausing.",
             "icon": "Info",
             "variant": "success",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "validatorAddress",
@@ -1463,7 +1503,9 @@
             "autoPopulate": "once",
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address of the validator to unpause",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "signerAddress",
@@ -1478,12 +1520,16 @@
             "required": true,
             "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "help": "The address that will sign this transaction",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "divider",
             "spacing": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "memo",
@@ -1492,18 +1538,22 @@
             "label": "Memo (Optional)",
             "required": false,
             "placeholder": "Add a note about this unpause action",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "txFee",
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
+            "value": "{{fees.raw?.unpauseFee != null ? fromMicroDenom(fees.raw.unpauseFee) : ''}}",
             "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.unpauseFee}}> }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
@@ -1630,19 +1680,25 @@
             "description": "Community polls allow validators and delegators to gauge sentiment on non-binding proposals. Results are publicly visible but do not execute on-chain actions.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "heading",
             "text": "Poll Question",
             "level": 3,
             "color": "secondary",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "question",
@@ -1651,7 +1707,9 @@
             "label": "Poll Question",
             "required": true,
             "placeholder": "What would you like to ask?",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Question is required"
@@ -1665,14 +1723,18 @@
             "label": "Description (Optional)",
             "rows": 3,
             "placeholder": "Provide additional context for the poll...",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "divider",
             "label": "Configuration",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "duration",
@@ -1681,7 +1743,9 @@
             "label": "Poll Duration",
             "required": true,
             "value": "24",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "options": [
               {
                 "label": "24 Hours",
@@ -1708,7 +1772,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "creatorAddress",
@@ -1717,7 +1783,9 @@
             "label": "Creator Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -1800,6 +1868,7 @@
             "address": "{{account.address}}"
           }
         },
+        "fees": {},
         "__options": {
           "staleTimeMs": 0,
           "refetchOnMount": true
@@ -1817,7 +1886,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "validatorAddress",
@@ -1827,7 +1898,9 @@
             "required": true,
             "readOnly": true,
             "help": "The address of the validator to unstake",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "section",
@@ -1836,7 +1909,9 @@
             "icon": "Info",
             "variant": "default",
             "showIf": "{{ form.validatorAddress && ds.validator }}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "signerAddress",
@@ -1847,7 +1922,9 @@
             "required": true,
             "readOnly": true,
             "help": "The address that will sign this transaction",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "memo",
@@ -1856,14 +1933,16 @@
             "label": "Memo (Optional)",
             "required": false,
             "placeholder": "Add a note about this unstake action",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "txFee",
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
+            "value": "{{fees.raw?.unstakeFee != null ? fromMicroDenom(fees.raw.unstakeFee) : ''}}",
             "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{fees.raw.unstakeFee}}> }}",
@@ -1874,7 +1953,9 @@
               }
             },
             "help": "Network minimum fee: {{ fromMicroDenom<{{fees.raw.unstakeFee}}> }} {{chain.denom.symbol}}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -1999,6 +2080,7 @@
       "ds": {
         "height": {},
         "params": {},
+        "fees": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -2025,12 +2107,16 @@
             "description": "Parameter change proposals require +2/3 validator approval to pass. Ensure start/end heights allow sufficient voting time.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "parameterSpace",
@@ -2072,7 +2158,9 @@
                 "required": "Parameter space is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "parameterKey",
@@ -2088,7 +2176,10 @@
                 "required": "Parameter key is required"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "parameterValue",
@@ -2105,14 +2196,19 @@
                 "required": "Parameter value is required"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "type": "divider",
             "label": "Voting Period",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "startHeight",
@@ -2130,7 +2226,10 @@
                 "required": "Start height is required"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "endHeight",
@@ -2153,12 +2252,17 @@
                 "max": "End height must be at most {{max}} (start height + 10,000)."
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "signerAddress",
@@ -2169,7 +2273,9 @@
             "required": true,
             "readOnly": true,
             "help": "Must be a validator address to create proposals",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -2267,6 +2373,7 @@
       "icon": "Coins",
       "ds": {
         "height": {},
+        "fees": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -2293,19 +2400,25 @@
             "description": "DAO treasury transfers require +2/3 validator approval to pass. Funds will be automatically transferred if proposal is approved.",
             "icon": "Info",
             "variant": "primary",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "heading",
             "text": "Transfer Details",
             "level": 3,
             "color": "secondary",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -2313,9 +2426,11 @@
             "type": "amount",
             "label": "Treasury Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "placeholder": "Amount to transfer from DAO treasury",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Amount is required",
@@ -2332,7 +2447,9 @@
             "required": true,
             "placeholder": "Address to receive treasury funds",
             "help": "The address that will receive the funds if proposal passes",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Recipient address is required"
@@ -2350,7 +2467,9 @@
             "label": "Voting Period",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "startHeight",
@@ -2363,7 +2482,10 @@
             "readOnly": true,
             "placeholder": "Block height to start voting",
             "help": "Block height when voting begins",
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "validation": {
               "messages": {
                 "required": "Start height is required"
@@ -2382,7 +2504,10 @@
             "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
             "placeholder": "Block height to end voting",
             "help": "Block height when voting ends. Must be > start height and within 10,000 blocks.",
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "validation": {
               "min": "{{Number(form.startHeight || resolveHeight(ds.height)) + 1}}",
               "max": "{{Number(form.startHeight || resolveHeight(ds.height)) + 10000}}",
@@ -2396,7 +2521,9 @@
           {
             "type": "divider",
             "spacing": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "memo",
@@ -2407,12 +2534,16 @@
             "rows": 3,
             "placeholder": "Provide justification for this treasury request...",
             "help": "Explanation of why this transfer is needed",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "signerAddress",
@@ -2423,7 +2554,9 @@
             "required": true,
             "readOnly": true,
             "help": "Must be a validator address to create proposals",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -2536,12 +2669,16 @@
             "description": "This will permanently remove your vote from the specified proposal. You can vote again later if the voting period is still active.",
             "icon": "AlertTriangle",
             "variant": "warning",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposalHash",
@@ -2551,7 +2688,9 @@
             "required": true,
             "placeholder": "Enter proposal hash",
             "help": "The hash of the proposal to remove your vote from",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Proposal hash is required"
@@ -2567,7 +2706,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "voterAddress",
@@ -2577,7 +2718,9 @@
             "value": "{{account.address}}",
             "readOnly": true,
             "help": "Your validator address",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -2624,6 +2767,7 @@
       "icon": "CheckSquare",
       "ds": {
         "height": {},
+        "fees": {},
         "polls": {
           "id": "gov.poll"
         },
@@ -2648,19 +2792,25 @@
             "description": "Community polls are non-binding votes to gauge community sentiment. Your vote will be publicly recorded but will not trigger any on-chain actions.",
             "icon": "Info",
             "variant": "info",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "spacer",
             "height": "md",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "type": "heading",
             "text": "Poll Identification",
             "level": 3,
             "color": "secondary",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "pollQuestion",
@@ -2670,7 +2820,9 @@
             "required": true,
             "placeholder": "Enter the poll question",
             "help": "The exact question from the poll you want to vote on",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Poll question is required"
@@ -2686,7 +2838,10 @@
             "min": "{{resolveHeight(ds.height) + 1}}",
             "placeholder": "Block height when poll ends",
             "help": "The end block height of the poll",
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "validation": {
               "min": "{{resolveHeight(ds.height) + 1}}",
               "messages": {
@@ -2703,14 +2858,19 @@
             "required": false,
             "placeholder": "https://discord.com/...",
             "help": "Optional URL for poll discussion",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "type": "divider",
             "label": "Your Vote",
             "variant": "gradient",
             "spacing": "lg",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "voteApprove",
@@ -2719,7 +2879,9 @@
             "label": "Your Vote",
             "required": true,
             "value": true,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "options": [
               {
                 "label": "Approve",
@@ -2738,7 +2900,9 @@
           {
             "type": "spacer",
             "height": "sm",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "voterAddress",
@@ -2747,7 +2911,9 @@
             "label": "Voter Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -2850,7 +3016,9 @@
             "label": "Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposal",
@@ -2860,7 +3028,9 @@
             "required": true,
             "placeholder": "Poll proposal or question",
             "help": "Clearly describe the question or decision being voted on.",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "endBlock",
@@ -2868,7 +3038,7 @@
             "type": "number",
             "label": "End Block",
             "required": true,
-            "value": "{{resolveHeight(ds.height) + 1}}",
+            "value": "{{resolveHeight(ds.height) + 1000}}",
             "autoPopulate": "once",
             "min": "{{resolveHeight(ds.height) + 1}}",
             "validation": {
@@ -2878,8 +3048,11 @@
               }
             },
             "placeholder": "Block height when poll ends",
-            "help": "Use a valid future block height to allow participation.",
-            "span": { "base": 12, "md": 6 }
+            "help": "Use a valid future block height to allow participation. Pre-filled with current height + 1000.",
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "URL",
@@ -2889,7 +3062,10 @@
             "required": false,
             "placeholder": "https://...",
             "help": "Optional link to Discord, forum, or proposal context.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           }
         ],
         "confirmation": {
@@ -2982,7 +3158,9 @@
             "label": "Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposalHash",
@@ -2992,17 +3170,22 @@
             "required": true,
             "map": "{{Object.entries(ds['gov.poll'] || {}).map(([k, v]) => { const h = v?.proposalHash || k; return { label: String(h).slice(0, 12) + '...', value: h }; })}}",
             "help": "Select the poll you want to vote on.",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposal",
             "name": "proposal",
-            "type": "text",
+            "type": "textarea",
             "label": "Proposal Text",
             "required": true,
+            "rows": 3,
             "placeholder": "Enter the exact proposal text used to start the poll",
             "help": "Must exactly match the proposal text that was used when this poll was created.",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "endBlock",
@@ -3012,7 +3195,10 @@
             "required": true,
             "placeholder": "Enter the end block used to start the poll",
             "help": "Must exactly match the endBlock value that was used when this poll was created.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "URL",
@@ -3024,7 +3210,10 @@
             "autoPopulate": "always",
             "placeholder": "https://...",
             "help": "Auto-filled from the poll data.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "voteApprove",
@@ -3045,7 +3234,9 @@
                 "help": "Vote against"
               }
             ],
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -3110,6 +3301,7 @@
       "ds": {
         "height": {},
         "params": {},
+        "fees": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3138,7 +3330,9 @@
             "label": "Proposer Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "paramSpace",
@@ -3149,13 +3343,31 @@
             "value": "fee",
             "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const toValue = { consensus: 'cons', validator: 'val', fee: 'fee', governance: 'gov', economics: 'eco' }; const toLabel = { consensus: 'Consensus Parameters', validator: 'Validator Parameters', fee: 'Fee Parameters', governance: 'Governance Parameters', economics: 'Economics Parameters' }; const keys = Object.keys(root || {}); if (!keys.length) return null; return keys.map(k => ({ label: toLabel[k] || k, value: toValue[k] || k })); })()}}",
             "options": [
-              { "label": "Fee Parameters", "value": "fee" },
-              { "label": "Consensus Parameters", "value": "cons" },
-              { "label": "Validator Parameters", "value": "val" },
-              { "label": "Governance Parameters", "value": "gov" },
-              { "label": "Economics Parameters", "value": "eco" }
+              {
+                "label": "Fee Parameters",
+                "value": "fee"
+              },
+              {
+                "label": "Consensus Parameters",
+                "value": "cons"
+              },
+              {
+                "label": "Validator Parameters",
+                "value": "val"
+              },
+              {
+                "label": "Governance Parameters",
+                "value": "gov"
+              },
+              {
+                "label": "Economics Parameters",
+                "value": "eco"
+              }
             ],
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "paramKey",
@@ -3163,8 +3375,11 @@
             "type": "select",
             "label": "Parameter Key",
             "required": true,
-            "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || ''; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); const space = root?.[resolved] || {}; return Object.keys(space).map(k => ({ label: k, value: k })); })()}}",
-            "span": { "base": 12, "md": 6 }
+            "map": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); const space = root?.[resolved] || {}; return Object.keys(space).map(k => ({ label: k, value: k })); })()}}",
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "paramValue",
@@ -3172,9 +3387,11 @@
             "type": "text",
             "label": "New Value",
             "required": true,
-            "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || ''; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.paramKey] ?? ''; })()}}",
+            "value": "{{(() => { const root = ds.params?.params ?? ds.params ?? {}; const aliasToRoot = { cons: 'consensus', val: 'validator', fee: 'fee', gov: 'governance', eco: 'economics' }; const selected = form.paramSpace || 'fee'; const resolved = root[selected] ? selected : (aliasToRoot[selected] || selected); return root?.[resolved]?.[form.paramKey] ?? ''; })()}}",
             "autoPopulate": "once",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "startBlock",
@@ -3186,7 +3403,10 @@
             "autoPopulate": "always",
             "readOnly": true,
             "help": "Always uses current chain height.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "endBlock",
@@ -3207,7 +3427,10 @@
               }
             },
             "help": "Must be greater than start block and within 10,000 blocks.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "memo",
@@ -3215,7 +3438,9 @@
             "type": "textarea",
             "label": "Memo",
             "placeholder": "Description/reason for change",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
@@ -3223,9 +3448,12 @@
             "type": "amount",
             "label": "Fee",
             "required": true,
-            "value": "{{fromMicroDenom<{{fees.raw.changeParameterFee ?? 0}}>}}",
-            "autoPopulate": "once",
-            "span": { "base": 12, "md": 12 }
+            "value": "{{fees.raw?.changeParameterFee != null ? fromMicroDenom(fees.raw.changeParameterFee) : ''}}",
+            "autoPopulate": "always",
+            "span": {
+              "base": 12,
+              "md": 12
+            }
           }
         ],
         "confirmation": {
@@ -3315,6 +3543,7 @@
       "icon": "Coins",
       "ds": {
         "height": {},
+        "fees": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3343,7 +3572,9 @@
             "label": "Proposer Address",
             "value": "{{account.address}}",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -3351,7 +3582,10 @@
             "type": "amount",
             "label": "Amount (CNPY)",
             "required": true,
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "fee",
@@ -3359,7 +3593,7 @@
             "type": "amount",
             "label": "Fee",
             "required": true,
-            "value": "{{fromMicroDenom<{{fees.raw.subsidyFee ?? 0}}>}}",
+            "value": "{{fees.raw?.subsidyFee != null ? fromMicroDenom(fees.raw.subsidyFee) : ''}}",
             "min": "{{ fromMicroDenom<{{fees.raw.subsidyFee ?? 0}}> }}",
             "validation": {
               "messages": {
@@ -3367,8 +3601,11 @@
                 "min": "Transaction fee cannot be less than the network minimum: {{min}} {{chain.denom.symbol}}"
               }
             },
-            "autoPopulate": "once",
-            "span": { "base": 12, "md": 6 }
+            "autoPopulate": "always",
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "startBlock",
@@ -3380,7 +3617,10 @@
             "autoPopulate": "always",
             "readOnly": true,
             "help": "Always uses current chain height.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "endBlock",
@@ -3401,7 +3641,10 @@
               }
             },
             "help": "Must be greater than start block and within 10,000 blocks.",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "memo",
@@ -3409,7 +3652,9 @@
             "type": "textarea",
             "label": "Memo",
             "placeholder": "Description/reason for transfer",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -3515,7 +3760,9 @@
             "placeholder": "{\"type\":\"...\"}",
             "help": "Advanced mode: paste a fully signed raw transaction JSON to broadcast via /v1/tx.",
             "rows": 12,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -3572,7 +3819,9 @@
             "placeholder": "Paste the generated proposal JSON here",
             "help": "Paste the raw transaction JSON from step 1 (Generate Proposal). This adds the proposal to the node's local approve list.",
             "rows": 12,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "approve",
@@ -3591,7 +3840,9 @@
                 "value": false
               }
             ],
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -3659,7 +3910,9 @@
             "label": "Proposal",
             "required": true,
             "map": "{{Object.keys(ds['gov.proposals'] || {}).map(k => ({ label: k, value: k }))}}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposalMsg",
@@ -3670,7 +3923,9 @@
             "autoPopulate": "always",
             "readOnly": true,
             "rows": 10,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "proposalType",
@@ -3680,7 +3935,10 @@
             "value": "{{ds['gov.proposals']?.[form.proposalId]?.proposal?.type || 'unknown'}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "currentVoteStatus",
@@ -3690,7 +3948,10 @@
             "value": "{{(() => { const v = ds['gov.proposals']?.[form.proposalId]?.approve; if (v === true) return 'Approved'; if (v === false) return 'Rejected'; return 'No vote'; })()}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "changeSummary",
@@ -3701,7 +3962,9 @@
             "autoPopulate": "always",
             "readOnly": true,
             "rows": 3,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -3755,6 +4018,7 @@
           }
         },
         "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -3816,20 +4080,26 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Seller Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12 },
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Seller address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
             "id": "receiveAddress",
             "name": "receiveAddress",
             "type": "advancedSelect",
-            "allowFreeInput": true,
-            "allowCreate": true,
             "label": "Receive Address (Counter-Asset)",
             "required": true,
             "value": "{{params.receiveAddress || account.address || ''}}",
@@ -3840,51 +4110,29 @@
               }
             },
             "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy"
-              },
-              {
-                "id": 2,
-                "name": "Canary"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
@@ -3893,7 +4141,7 @@
             "type": "amount",
             "label": "Amount For Sale",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "max": "{{ fromMicroDenom<{{ds.account?.amount ?? 0}}> }}",
             "validation": {
               "messages": {
@@ -3902,7 +4150,10 @@
                 "max": "Insufficient balance. Max available: {{max}} {{chain.denom.symbol}}"
               }
             },
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "step": "pricing"
           },
           {
@@ -3911,14 +4162,17 @@
             "type": "amount",
             "label": "Requested Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "validation": {
               "messages": {
                 "required": "Requested amount is required",
                 "min": "Requested amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "step": "pricing"
           },
           {
@@ -3929,7 +4183,9 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "pricing"
           },
           {
@@ -3937,10 +4193,12 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.createOrderFee ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.createOrderFee != null ? fromMicroDenom(fees.raw.createOrderFee) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.createOrderFee ?? 0}}> }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "pricing"
           }
         ],
@@ -4032,6 +4290,7 @@
       "ds": {
         "admin.config": {},
         "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4097,7 +4356,9 @@
             "value": "{{params.address || account.address}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
@@ -4114,7 +4375,9 @@
                 "required": "Order ID is required"
               }
             },
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
@@ -4133,53 +4396,29 @@
               }
             },
             "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
@@ -4188,7 +4427,7 @@
             "type": "amount",
             "label": "Amount For Sale",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "value": "{{params.amount ?? ''}}",
             "autoPopulate": "once",
             "validation": {
@@ -4197,7 +4436,10 @@
                 "min": "Amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "step": "pricing"
           },
           {
@@ -4208,14 +4450,17 @@
             "required": true,
             "value": "{{params.receiveAmount ?? ''}}",
             "autoPopulate": "once",
-            "min": 0.000001,
+            "min": 1e-06,
             "validation": {
               "messages": {
                 "required": "Requested amount is required",
                 "min": "Requested amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "step": "pricing"
           },
           {
@@ -4226,7 +4471,9 @@
             "placeholder": "Sub-asset contract address (hex)",
             "value": "{{params.data || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "context"
           },
           {
@@ -4237,7 +4484,9 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "step": "pricing"
           },
           {
@@ -4245,10 +4494,13 @@
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.editOrderFee ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.editOrderFee != null ? fromMicroDenom(fees.raw.editOrderFee) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.editOrderFee ?? 0}}> }}",
-            "span": { "base": 12, "md": 6 },
+            "span": {
+              "base": 12,
+              "md": 6
+            },
             "step": "pricing"
           }
         ],
@@ -4343,6 +4595,7 @@
       "icon": "Trash2",
       "ds": {
         "admin.config": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4390,7 +4643,9 @@
             "value": "{{params.address || account.address}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "orderId",
@@ -4406,52 +4661,28 @@
                 "required": "Order ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the committee used for this order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "placeholder": "e.g. 1",
+            "help": "Enter the committee ID for this order.",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "memo",
@@ -4461,17 +4692,22 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.deleteOrderFee ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.deleteOrderFee != null ? fromMicroDenom(fees.raw.deleteOrderFee) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.deleteOrderFee ?? 0}}> }}",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           }
         ],
         "confirmation": {
@@ -4542,6 +4778,7 @@
       "ds": {
         "keystore": {},
         "params": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4590,7 +4827,9 @@
             "value": "{{params.address || account.address}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "receiveAddress",
@@ -4608,7 +4847,9 @@
               }
             },
             "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "orderId",
@@ -4624,18 +4865,22 @@
                 "required": "Order ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "txFee",
             "name": "txFee",
             "type": "amount",
             "label": "Transaction Fee",
-            "value": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
+            "value": "{{fees.raw ? fromMicroDenom((fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)) : ''}}",
             "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
-            "span": { "base": 12 },
+            "span": {
+              "base": 12
+            },
             "validation": {
               "messages": {
                 "required": "Transaction fee is required",
@@ -4712,6 +4957,7 @@
       "icon": "CheckCircle2",
       "ds": {
         "params": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
@@ -4759,7 +5005,9 @@
             "value": "{{params.address || account.address}}",
             "autoPopulate": "always",
             "readOnly": true,
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "orderId",
@@ -4775,15 +5023,17 @@
                 "required": "Order ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw ? fromMicroDenom((fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)) : ''}}",
+            "autoPopulate": "always",
             "required": true,
             "min": "{{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }}",
             "validation": {
@@ -4793,7 +5043,9 @@
               }
             },
             "help": "Network minimum fee: {{ fromMicroDenom<{{(fees.raw.sendFee ?? 0) * (ds.params?.validator?.lockOrderFeeMultiplier ?? 1)}}> }} {{chain.denom.symbol}}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -4855,13 +5107,16 @@
       "icon": "ArrowLeftRight",
       "ds": {
         "admin.config": {},
+        "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -4897,57 +5152,39 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12 }
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the limit order.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the limit order.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -4955,14 +5192,17 @@
             "type": "amount",
             "label": "Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "validation": {
               "messages": {
                 "required": "Amount is required",
                 "min": "Amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "receiveAmount",
@@ -4970,14 +5210,17 @@
             "type": "amount",
             "label": "Minimum Receive Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "validation": {
               "messages": {
                 "required": "Minimum receive amount is required",
                 "min": "Amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "memo",
@@ -4987,17 +5230,21 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.dexLimitOrderFee ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.dexLimitOrderFee != null ? fromMicroDenom(fees.raw.dexLimitOrderFee) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.dexLimitOrderFee ?? 0}}> }}",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           }
         ],
         "confirmation": {
@@ -5075,13 +5322,16 @@
       "icon": "Droplets",
       "ds": {
         "admin.config": {},
+        "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -5117,57 +5367,39 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12 }
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the liquidity deposit.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the liquidity deposit.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "amount",
@@ -5175,14 +5407,17 @@
             "type": "amount",
             "label": "Amount",
             "required": true,
-            "min": 0.000001,
+            "min": 1e-06,
             "validation": {
               "messages": {
                 "required": "Amount is required",
                 "min": "Amount must be greater than 0"
               }
             },
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           },
           {
             "id": "memo",
@@ -5192,17 +5427,22 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.dexLiquidityDeposit ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.dexLiquidityDeposit != null ? fromMicroDenom(fees.raw.dexLiquidityDeposit) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.dexLiquidityDeposit ?? 0}}> }}",
-            "span": { "base": 12, "md": 6 }
+            "span": {
+              "base": 12,
+              "md": 6
+            }
           }
         ],
         "confirmation": {
@@ -5272,13 +5512,16 @@
       "icon": "CircleDashed",
       "ds": {
         "admin.config": {},
+        "keystore": {},
+        "fees": {},
         "__options": {
           "staleTimeMs": 6000,
           "refetchIntervalMs": 6000,
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -5314,57 +5557,39 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "span": { "base": 12 }
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "committees",
             "name": "committees",
-            "type": "tableSelect",
+            "type": "text",
             "label": "Committee",
             "required": true,
-            "help": "Select the target committee for the liquidity withdraw.",
-            "multiple": false,
-            "rowKey": "id",
-            "selectMode": "action",
+            "help": "Enter the target committee ID for the liquidity withdraw.",
+            "placeholder": "e.g. 1",
             "value": "{{ params.committees ?? ds['admin.config']?.chainId ?? '' }}",
             "autoPopulate": "once",
-            "rows": [
-              {
-                "id": 1,
-                "name": "Canopy",
-                "minStake": "1 CNPY"
-              },
-              {
-                "id": 2,
-                "name": "Canary",
-                "minStake": "1 CNPY"
-              }
-            ],
-            "columns": [
-              {
-                "title": "Committee",
-                "type": "committee",
-                "align": "left"
-              },
-              {
-                "title": "Committee ID",
-                "expr": "{{row.id}}",
-                "align": "left"
-              }
-            ],
-            "rowAction": {
-              "title": "Action",
-              "label": "{{ (form.committees ?? '') + '' === (row.id ?? '') + '' ? 'Selected' : 'Select' }}",
-              "emit": {
-                "op": "select"
+            "validation": {
+              "messages": {
+                "required": "Committee ID is required"
               }
             },
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "percent",
@@ -5377,12 +5602,30 @@
             "step": 1,
             "suffix": "%",
             "showInput": true,
-            "marks": [1, 25, 50, 75, 100],
+            "marks": [
+              1,
+              25,
+              50,
+              75,
+              100
+            ],
             "presets": [
-              { "label": "25%", "value": 25 },
-              { "label": "50%", "value": 50 },
-              { "label": "75%", "value": 75 },
-              { "label": "100%", "value": 100 }
+              {
+                "label": "25%",
+                "value": 25
+              },
+              {
+                "label": "50%",
+                "value": 50
+              },
+              {
+                "label": "75%",
+                "value": 75
+              },
+              {
+                "label": "100%",
+                "value": 100
+              }
             ],
             "help": "Use the slider or direct input. Allowed range: 1% to 100%.",
             "value": "{{params.percent ?? 50}}",
@@ -5394,7 +5637,10 @@
                 "max": "Percent cannot exceed {{max}}"
               }
             },
-            "span": { "base": 12, "md": 12 }
+            "span": {
+              "base": 12,
+              "md": 12
+            }
           },
           {
             "id": "memo",
@@ -5404,17 +5650,22 @@
             "placeholder": "Optional message",
             "value": "{{params.memo || ''}}",
             "autoPopulate": "once",
-            "span": { "base": 12 }
+            "span": {
+              "base": 12
+            }
           },
           {
             "id": "fee",
             "name": "fee",
             "type": "amount",
             "label": "Fee",
-            "value": "{{fromMicroDenom<{{fees.raw.dexLiquidityWithdraw ?? 0}}>}}",
-            "autoPopulate": "once",
+            "value": "{{fees.raw?.dexLiquidityWithdraw != null ? fromMicroDenom(fees.raw.dexLiquidityWithdraw) : ''}}",
+            "autoPopulate": "always",
             "min": "{{ fromMicroDenom<{{fees.raw.dexLiquidityWithdraw ?? 0}}> }}",
-            "span": { "base": 12, "md": 12 }
+            "span": {
+              "base": 12,
+              "md": 12
+            }
           }
         ],
         "confirmation": {

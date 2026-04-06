@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import React from 'react'
 import menuConfig from '../data/navbar.json'
 import Logo from './Logo'
-import { useAllBlocksCache } from '../hooks/useApi'
+import { useLatestBlock } from '../hooks/useApi'
 import NetworkSelector from './NetworkSelector'
 
 const Navbar = () => {
@@ -48,7 +48,7 @@ const Navbar = () => {
     // State for mobile dropdowns (accordion)
     const [mobileOpenIndex, setMobileOpenIndex] = React.useState<number | null>(null)
     const toggleMobileIndex = (index: number) => setMobileOpenIndex(prev => prev === index ? null : index)
-    const blocks = useAllBlocksCache()
+    const latestBlock = useLatestBlock()
 
     // Check whether the current route is inside an item's child routes
     const isActiveRoute = (item: MenuItem): boolean => {
@@ -93,7 +93,7 @@ const Navbar = () => {
                             <Logo size={180} showText={false} />
                             <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-base">
                                 <p className='text-gray-500 font-light'>Block:</p>
-                                <p className="font-medium text-primary">#{blocks.data?.[0]?.blockHeader?.height?.toLocaleString() || '0'}</p>
+                                <p className="font-medium text-primary">#{latestBlock.data?.totalCount?.toLocaleString() || '0'}</p>
                             </div>
                         </Link>
                     </div>

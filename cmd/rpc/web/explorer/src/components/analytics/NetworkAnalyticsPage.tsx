@@ -63,6 +63,17 @@ const NetworkAnalyticsPage: React.FC = () => {
         }
     }, [blockRange]);
 
+    // auto-sync searchParams when fromBlock/toBlock change so data re-fetches without manual search
+    useEffect(() => {
+        if (fromBlock && toBlock) {
+            const from = parseInt(fromBlock)
+            const to = parseInt(toBlock)
+            if (!isNaN(from) && !isNaN(to) && to >= from && to - from + 1 <= 100) {
+                setSearchParams({ from: fromBlock, to: toBlock })
+            }
+        }
+    }, [fromBlock, toBlock]);
+
     const blocksToFetch = blockRange > 0 ? Math.min(blockRange, 100) : 10; // Default 10 blocks, maximum 100
 
     // Only make the request if searchParams.from and searchParams.to are valid
@@ -444,6 +455,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                 isLoading={filteredBlocksLoading}
                 errorMessage={errorMessage}
                 blocksData={filteredBlocksData || analyticsBlocksData || blocksData}
+                blockTime={metrics.blockTime || undefined}
             />
 
             {/* Analytics Grid - 3 columns layout */}
@@ -454,7 +466,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                     <KeyMetrics metrics={metrics} loading={isLoading} supplyData={supplyData} validatorsData={validatorsData} paramsData={paramsData} pendingData={pendingData} />
 
                     {/* Chain Status */}
-                    <ChainStatus metrics={metrics} loading={isLoading} />
+                    <ChainStatus metrics={metrics} loading={isLoading} paramsData={paramsData} />
                 </div>
 
                 {/* Second Column - 3 cards */}

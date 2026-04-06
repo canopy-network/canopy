@@ -29,8 +29,28 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
         return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
     }
 
+    const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉']
+
     const formatPercentage = (num: number) => {
-        return `${num.toFixed(2)}%`
+        if (num === 0) return '0.00%'
+        if (num >= 0.01) return `${num.toFixed(2)}%`
+
+        // For very small numbers, use subscript notation: 0.0₅34%
+        const str = num.toFixed(10)
+        const [, decimal] = str.split('.')
+        if (!decimal) return `${num.toFixed(2)}%`
+
+        let leadingZeros = 0
+        for (const c of decimal) {
+            if (c === '0') leadingZeros++
+            else break
+        }
+
+        if (leadingZeros < 2) return `${num.toFixed(4)}%`
+
+        const significantDigits = decimal.slice(leadingZeros, leadingZeros + 3)
+        const subscript = subscriptDigits[leadingZeros]
+        return `0.0${subscript}${significantDigits}%`
     }
 
     const getProgressBarColor = (color: string) => {

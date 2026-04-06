@@ -28,106 +28,71 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
         return value.toFixed(2)
     }
 
-    // Get time labels from blocks data
-    const getTimeLabels = () => {
-        if (!blocksData?.results || !Array.isArray(blocksData.results) || !blockGroups || blockGroups.length === 0) {
-            return blockGroups?.map(group => `${group.start}-${group.end}`) || []
+    // generate staking data from block reward events, using evenly distributed groups from actual data
+    const generateStakingData = () => {
+        if (!blocksData?.results || !Array.isArray(blocksData.results)) {
+            return { rewards: [], timeLabels: [] }
         }
 
         const realBlocks = blocksData.results
         const fromBlockNum = parseInt(fromBlock) || 0
         const toBlockNum = parseInt(toBlock) || 0
 
-        // Filter blocks by the specified range
+        // filter blocks by the specified range
         const filteredBlocks = realBlocks.filter((block: any) => {
             const blockHeight = block.blockHeader?.height || block.height || 0
             return blockHeight >= fromBlockNum && blockHeight <= toBlockNum
         })
 
         if (filteredBlocks.length === 0) {
-            return blockGroups.map(group => `${group.start}-${group.end}`)
+            return { rewards: [], timeLabels: [] }
         }
 
-        // Sort blocks by timestamp (oldest first)
+        // sort by timestamp
         filteredBlocks.sort((a: any, b: any) => {
             const timeA = a.blockHeader?.time || a.time || 0
             const timeB = b.blockHeader?.time || b.time || 0
             return timeA - timeB
         })
 
-        // Determine time interval based on number of filtered blocks
-        const use10MinuteIntervals = filteredBlocks.length >= 20
+        // create evenly distributed groups from actual data
+        const numPoints = Math.min(6, filteredBlocks.length)
+        const base = Math.floor(filteredBlocks.length / numPoints)
+        const remainder = filteredBlocks.length % numPoints
+        const rewards: number[] = []
+        const timeLabels: string[] = []
 
-        // Create time labels for each block group
-        const timeLabels = blockGroups.map((group, index) => {
-            // Find the time key for this group
-            const groupBlocks = filteredBlocks.filter((block: any) => {
-                const blockHeight = block.blockHeader?.height || block.height || 0
-                return blockHeight >= group.start && blockHeight <= group.end
-            })
+        let offset = 0
+        for (let i = 0; i < numPoints; i++) {
+            const groupSize = base + (i < remainder ? 1 : 0)
+            const groupBlocks = filteredBlocks.slice(offset, offset + groupSize)
+            offset += groupSize
 
-            if (groupBlocks.length === 0) {
-                return `${group.start}-${group.end}`
-            }
+            // sum all reward events in this group's blocks
+            const groupReward = groupBlocks.reduce((sum: number, block: any) => {
+                const events = block.events || []
+                const rewardSum = events
+                    .filter((e: any) => e.eventType === 'reward')
+                    .reduce((s: number, e: any) => s + (e.msg?.amount || 0), 0)
+                return sum + rewardSum
+            }, 0)
 
-            // Get the first block's time for this group
+            // normalize to per-block average so groups with ±1 block difference are comparable
+            const avgReward = groupBlocks.length > 0 ? groupReward / groupBlocks.length : 0
+            rewards.push(avgReward / 1000000)
+
+            // build time label from first and last block in group
             const firstBlock = groupBlocks[0]
-            const blockTime = firstBlock.blockHeader?.time || firstBlock.time || 0
-            const blockTimeMs = blockTime > 1e12 ? blockTime / 1000 : blockTime
-            const blockDate = new Date(blockTimeMs)
-
-            const minute = use10MinuteIntervals ?
-                Math.floor(blockDate.getMinutes() / 10) * 10 :
-                blockDate.getMinutes()
-
-            const timeKey = `${blockDate.getHours().toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-
-            if (!use10MinuteIntervals) {
-                return timeKey
-            }
-
-            // Create 10-minute range
-            const [hour, min] = timeKey.split(':').map(Number)
-            const endMinute = (min + 10) % 60
-            const endHour = endMinute < min ? (hour + 1) % 24 : hour
-
-            return `${timeKey}-${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`
-        })
-
-        return timeLabels
-    }
-
-    // Generate real staking data based on validators and block groups
-    const generateStakingData = () => {
-        if (!validatorsData?.results || !Array.isArray(validatorsData.results) || !blockGroups || blockGroups.length === 0) {
-            return { rewards: [], timeLabels: [] }
+            const lastBlock = groupBlocks[groupBlocks.length - 1]
+            const firstTime = firstBlock.blockHeader?.time || firstBlock.time || 0
+            const lastTime = lastBlock.blockHeader?.time || lastBlock.time || 0
+            const firstMs = firstTime > 1e12 ? firstTime / 1000 : firstTime
+            const lastMs = lastTime > 1e12 ? lastTime / 1000 : lastTime
+            const fmt = (d: Date) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+            const startLabel = fmt(new Date(firstMs))
+            const endLabel = fmt(new Date(lastMs))
+            timeLabels.push(startLabel === endLabel ? startLabel : `${startLabel}-${endLabel}`)
         }
-
-        const validators = validatorsData.results
-
-        // Calculate total staked amount from validators
-        const totalStaked = validators.reduce((sum: number, validator: any) => {
-            return sum + (validator.stakedAmount || 0)
-        }, 0)
-
-        // Calculate average staking rewards per validator
-        const avgRewardPerValidator = totalStaked > 0 ? totalStaked / validators.length : 0
-        const baseReward = avgRewardPerValidator / 1000000 // Convert from micro to CNPY
-
-        // Use blockGroups to generate realistic reward data
-        // Each block group will have a reward based on the number of blocks
-        const rewards = blockGroups.map((group, index) => {
-            // Calculate reward based on the number of blocks in this group
-            // and add a small variation to make it look more natural
-            const blockFactor = group.blockCount / 10 // Normalize by every 10 blocks
-            const timeFactor = Math.sin((index / blockGroups.length) * Math.PI) * 0.2 + 0.9 // Variation from 0.7 to 1.1
-
-            // Base reward * block factor * time factor
-            return Math.max(0, baseReward * blockFactor * timeFactor)
-        })
-
-        // Get time labels from blocks data
-        const timeLabels = getTimeLabels()
 
         return { rewards, timeLabels }
     }
@@ -161,7 +126,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                         Staking Trends
                     </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                        Average rewards over time
+                        Block rewards over time
                     </p>
                 </div>
                 <div className="h-32 flex items-center justify-center">
@@ -183,7 +148,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                     Staking Trends
                 </h3>
                 <p className="text-sm text-gray-400 mt-1">
-                    Average rewards over time
+                    Average reward per block over time
                 </p>
             </div>
 

@@ -15,9 +15,28 @@ interface NetworkMetrics {
 interface ChainStatusProps {
     metrics: NetworkMetrics
     loading: boolean
+    paramsData?: any
 }
 
-const ChainStatus: React.FC<ChainStatusProps> = ({ metrics, loading }) => {
+const ChainStatus: React.FC<ChainStatusProps> = ({ metrics, loading, paramsData }) => {
+    // compute average of all fee params
+    const getAvgFee = () => {
+        if (!paramsData?.fee) return 0
+        const feeKeys = [
+            'sendFee', 'stakeFee', 'editStakeFee', 'unstakeFee',
+            'pauseFee', 'unpauseFee', 'changeParameterFee',
+            'daoTransferFee', 'certificateResultsFee', 'subsidyFee',
+            'createOrderFee', 'editOrderFee', 'deleteOrderFee',
+        ]
+        const fees = feeKeys
+            .map(k => paramsData.fee[k])
+            .filter((v: any) => typeof v === 'number' && v > 0)
+        if (fees.length === 0) return 0
+        const avg = fees.reduce((sum: number, f: number) => sum + f, 0) / fees.length
+        return avg / 1000000 // convert to CNPY
+    }
+
+    const avgFee = getAvgFee()
     if (loading) {
         return (
             <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
@@ -77,6 +96,13 @@ const ChainStatus: React.FC<ChainStatusProps> = ({ metrics, loading }) => {
                     <span className="text-sm text-gray-400">Network Version</span>
                     <span className="text-sm font-medium text-white">
                         {metrics.networkVersion}
+                    </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Avg. Transaction Fee</span>
+                    <span className="text-sm font-medium text-white">
+                        {parseFloat(avgFee.toFixed(4))} CNPY
                     </span>
                 </div>
             </div>
