@@ -666,11 +666,18 @@ func (s *Store) MaybeBackup() {
 			if err == nil {
 				return
 			}
-			s.log.Errorf("backup failed at height [%d]: %v", err)
+			s.log.Errorf("backup failed at height [%d]: %v", version, err)
 		}()
 		// delete current backup files as pebbleDB expects an empty directory
 		if err = os.RemoveAll(tempBackupDir); err != nil {
 			err = fmt.Errorf("remove temporary backup: %w", err)
+			return
+		}
+		// flush the memtable to SST before checkpointing so the backup does not
+		// depend on WAL replay for recovery (commits use NoSync so WAL records
+		// may not be durable on disk at checkpoint time)
+		if err = s.db.Flush(); err != nil {
+			err = fmt.Errorf("flush before checkpoint: %w", err)
 			return
 		}
 		// perform the backup using pebble's checkpointing mechanism which creates a
@@ -681,19 +688,25 @@ func (s *Store) MaybeBackup() {
 		}
 		// write the current height to a separate file
 		heightFile := filepath.Join(tempBackupDir, "height.txt")
-		if err = os.WriteFile(heightFile, []byte(fmt.Sprintf("%d", version)), 0644); err != nil {
+		if err = os.WriteFile(heightFile, fmt.Appendf(nil, "%d", version), 0644); err != nil {
 			err = fmt.Errorf("write height file: %w", err)
 			return
 		}
-		// remove current backup directory
-		if err = os.RemoveAll(backupDir); err != nil {
-			err = fmt.Errorf("remove current backup: %w", err)
+		// rotate: atomically move current backup to a previous slot so there is
+		// always at least one valid backup on disk during the swap
+		prevBackupDir := backupDir + "_prev"
+		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
+			err = fmt.Errorf("rotate backup: %w", err)
 			return
 		}
-		// rename the temporary directory to the actual backup directory
+		// promote: atomically move the temp backup into the active slot
 		if err = os.Rename(tempBackupDir, backupDir); err != nil {
 			err = fmt.Errorf("finalize backup: %w", err)
 			return
+		}
+		// clean up the previous backup now that the new one is safely in place
+		if removeErr := os.RemoveAll(prevBackupDir); removeErr != nil {
+			s.log.Warnf("failed to remove previous backup: %v", removeErr)
 		}
 		s.log.Infof("backup completed at height [%d] in %s", version, time.Since(start))
 	}()
