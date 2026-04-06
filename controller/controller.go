@@ -44,6 +44,7 @@ type Controller struct {
 	oracle      *oracle.Oracle                     // witness oracle
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
 	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
+	bftStarted  *atomic.Bool                       // whether the BFT loop is running and ready to consume resets
 	log         lib.LoggerI                        // object for logging
 	*sync.Mutex                                    // mutex for thread safety
 }
@@ -77,6 +78,7 @@ func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey cryp
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
 		isSyncing:  &atomic.Bool{},
+		bftStarted: &atomic.Bool{},
 		log:        l,
 		Mutex:      &sync.Mutex{},
 
@@ -163,6 +165,7 @@ func (c *Controller) Start() {
 			time.Sleep(untilTime)
 		}
 		// start the bft consensus (if synced to top)
+		c.bftStarted.Store(true)
 		go c.Consensus.Start()
 	}()
 }
@@ -218,6 +221,14 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	// if timestamp is not 0
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
+	}
+	// Root-chain updates arrive during oracle startup, before the BFT loop is
+	// running. Dropping those early resets prevents the queue from filling with
+	// stale startup work before consensus can consume it.
+	if !c.bftStarted.Load() {
+		c.log.Debug("Skipping root-chain reset before BFT startup")
+		c.UpdateP2PMustConnect(info.ValidatorSet)
+		return
 	}
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
