@@ -695,7 +695,11 @@ func (s *Store) MaybeBackup() {
 		// rotate: atomically move current backup to a previous slot so there is
 		// always at least one valid backup on disk during the swap
 		prevBackupDir := backupDir + "_prev"
-		if err = os.Rename(backupDir, prevBackupDir); err != nil && !os.IsNotExist(err) {
+		if err = os.RemoveAll(prevBackupDir); err != nil {
+			err = fmt.Errorf("remove stale previous backup: %w", err)
+			return
+		}
+		if err = os.Rename(backupDir, prevBackupDir); err != nil {
 			err = fmt.Errorf("rotate backup: %w", err)
 			return
 		}
