@@ -582,7 +582,7 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 	if ok := unmarshal(w, r, req); !ok {
 		return
 	}
-	_, bz, err := s.IndexerBlobsCached(req.Height, req.Delta)
+	_, bz, err := s.IndexerBlobsCached(req.Height)
 	if err != nil {
 		status := http.StatusBadRequest
 		if err.Code() == lib.CodeMarshal {
@@ -600,25 +600,14 @@ func (s *Server) IndexerBlobs(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 // IndexerBlobsCached() is a helper function for the indexer blobs implementation
-func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
+func (s *Server) IndexerBlobsCached(height uint64) (*fsm.IndexerBlobs, []byte, lib.ErrorI) {
 	currentHeight := s.controller.FSM.Height()
 	if height == 0 || height > currentHeight {
 		height = currentHeight
 	}
 
-	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.blobs != nil && entry.protoBytes != nil {
-		if !delta {
-			return entry.blobs, entry.protoBytes, nil
-		}
-		blobDelta, err := fsm.DeltaIndexerBlobs(entry.blobs)
-		if err != nil {
-			return nil, nil, err
-		}
-		deltaBytes, err := lib.Marshal(blobDelta)
-		if err != nil {
-			return nil, nil, err
-		}
-		return blobDelta, deltaBytes, nil
+	if entry, ok := s.indexerBlobCache.get(height); ok && entry != nil && entry.deltaBlobs != nil && entry.deltaBytes != nil {
+		return entry.deltaBlobs, entry.deltaBytes, nil
 	}
 
 	current, err := s.controller.FSM.IndexerBlob(height)
@@ -645,20 +634,6 @@ func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlob
 		Current:  current,
 		Previous: previous,
 	}
-	protoBytes, err := lib.Marshal(blobs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s.indexerBlobCache.put(height, &indexerBlobCacheEntry{
-		height:     height,
-		blobs:      blobs,
-		protoBytes: protoBytes,
-	})
-
-	if !delta {
-		return blobs, protoBytes, nil
-	}
 	blobDelta, err := fsm.DeltaIndexerBlobs(blobs)
 	if err != nil {
 		return nil, nil, err
@@ -667,6 +642,13 @@ func (s *Server) IndexerBlobsCached(height uint64, delta bool) (*fsm.IndexerBlob
 	if err != nil {
 		return nil, nil, err
 	}
+	s.indexerBlobCache.put(height, &indexerBlobCacheEntry{
+		height:     height,
+		current:    current,
+		deltaBlobs: blobDelta,
+		deltaBytes: deltaBytes,
+	})
+
 	return blobDelta, deltaBytes, nil
 }
 
