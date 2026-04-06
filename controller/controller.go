@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/canopy-network/canopy/bft"
+	"github.com/canopy-network/canopy/cmd/rpc/oracle"
 	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -39,14 +41,16 @@ type Controller struct {
 
 	RCManager   lib.RCManagerI                     // the data manager for the 'root chain'
 	Plugin      *lib.Plugin                        // extensible plugin for FSM
+	oracle      *oracle.Oracle                     // witness oracle
 	checkpoints map[uint64]map[uint64]lib.HexBytes // cached checkpoints loaded from file
 	isSyncing   *atomic.Bool                       // is the chain currently being downloaded from peers
+	bftStarted  *atomic.Bool                       // whether the BFT loop is running and ready to consume resets
 	log         lib.LoggerI                        // object for logging
 	*sync.Mutex                                    // mutex for thread safety
 }
 
 // New() creates a new instance of a Controller, this is the entry point when initializing an instance of a Canopy application
-func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
+func New(fsm *fsm.StateMachine, oracle *oracle.Oracle, c lib.Config, valKey crypto.PrivateKeyI, metrics *lib.Metrics, l lib.LoggerI) (controller *Controller, err lib.ErrorI) {
 	address := valKey.PublicKey().Address()
 	// load the maximum validators param to set limits on P2P
 	maxMembersPerCommittee, err := fsm.GetMaxValidators()
@@ -74,8 +78,11 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 		Consensus:  nil,
 		P2P:        p2p.New(valKey, maxMembersPerCommittee, metrics, c, l),
 		isSyncing:  &atomic.Bool{},
+		bftStarted: &atomic.Bool{},
 		log:        l,
 		Mutex:      &sync.Mutex{},
+
+		oracle: oracle,
 	}
 	// load checkpoints from file (if provided)
 	controller.loadCheckpointsFile()
@@ -125,6 +132,18 @@ func (c *Controller) Start() {
 				c.Mempool.CheckMempool()
 				// update the peer 'must connect'
 				c.UpdateP2PMustConnect(rootChainInfo.ValidatorSet)
+				// oracle specific initialization
+				if c.Config.OracleEnabled {
+					// update oracle's order book so it can start processing blocks
+					c.oracle.UpdateRootChainInfo(rootChainInfo)
+					c.log.Info("Starting Oracle, waiting for source chain sync")
+					// channel to indicate source chain is synced
+					syncCh := make(chan bool)
+					// start the oracle with context and a channel to wait for source chain sync
+					c.oracle.Start(context.Background(), syncCh)
+					<-syncCh // wait for syncCh to be closed
+					c.log.Info("Oracle is synced to top, starting Canopy")
+				}
 				// exit the loop
 				break
 			}
@@ -146,6 +165,7 @@ func (c *Controller) Start() {
 			time.Sleep(untilTime)
 		}
 		// start the bft consensus (if synced to top)
+		c.bftStarted.Store(true)
 		go c.Consensus.Start()
 	}()
 }
@@ -183,6 +203,10 @@ func (c *Controller) Stop() {
 // UpdateRootChainInfo() receives updates from the root-chain thread
 func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	c.log.Debugf("Updating root chain info")
+	if info == nil {
+		c.log.Warn("Ignoring nil root chain info update")
+		return
+	}
 	// ensure this root chain is active
 	activeRootChainId, _ := c.FSM.GetRootChainId()
 	// if inactive
@@ -190,11 +214,21 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 		c.log.Debugf("Detected inactive root-chain update at rootChainId=%d", info.RootChainId)
 		return
 	}
+	// sync the order store
+	c.oracle.UpdateRootChainInfo(info)
 	// set timestamp if included
 	var timestamp time.Time
 	// if timestamp is not 0
 	if info.Timestamp != 0 {
 		timestamp = time.UnixMicro(int64(info.Timestamp))
+	}
+	// Root-chain updates arrive during oracle startup, before the BFT loop is
+	// running. Dropping those early resets prevents the queue from filling with
+	// stale startup work before consensus can consume it.
+	if !c.bftStarted.Load() {
+		c.log.Debug("Skipping root-chain reset before BFT startup")
+		c.UpdateP2PMustConnect(info.ValidatorSet)
+		return
 	}
 	// if the last validator set is empty
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
@@ -216,6 +250,11 @@ func (c *Controller) LoadCommittee(rootChainId, rootHeight uint64) (lib.Validato
 // LoadRootChainOrderBook() gets the order book from the root-chain
 func (c *Controller) LoadRootChainOrderBook(rootChainId, rootHeight uint64) (*lib.OrderBook, lib.ErrorI) {
 	return c.RCManager.GetOrders(rootChainId, rootHeight, c.Config.ChainId)
+}
+
+// GetOrderBook fetches the root chain order book at the latest height
+func (c *Controller) GetOrderBook() (*lib.OrderBook, lib.ErrorI) {
+	return c.RCManager.GetOrders(c.LoadRootChainId(c.ChainHeight()), c.RootChainHeight(), c.Config.ChainId)
 }
 
 // GetRootChainLotteryWinner() gets the pseudorandomly selected delegate to reward and their cut

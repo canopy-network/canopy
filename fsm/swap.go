@@ -18,7 +18,9 @@ import (
 // - 'reset' is a 'claimed' order whose 'buyer' did not send the tokens to the seller before the deadline, thus the order is re-opened for sale
 // - 'close' is a 'claimed' order whose 'buyer' sent the tokens to the seller before the deadline, thus the order is 'closed' and the tokens are moved from escrow to the buyer
 func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) {
-	if orders != nil {
+	// root chain processes all committee swap results (including self);
+	// nested chains only process swaps for external committees.
+	if orders != nil && (s.Config.ChainId == 1 || s.Config.ChainId != chainId) {
 		// close and reset are mutually exclusive for the same order in one instruction set
 		closeSet := make(map[string]struct{}, len(orders.CloseOrders))
 		for _, closeOrderId := range orders.CloseOrders {
@@ -32,7 +34,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 				continue
 			}
 			if err := s.LockOrder(lockOrder, chainId); err != nil {
-				s.log.Warnf("LockOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("LockOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(lockOrder.OrderId), err.Error())
 			}
 		}
 		// reset orders are a result of the committee witnessing 'no-action' from the buyer of the sell order aka NOT sending the
@@ -51,7 +53,7 @@ func (s *StateMachine) HandleCommitteeSwaps(orders *lib.Orders, chainId uint64) 
 		// buy assets before the 'deadline height' of the 'buyer chain'
 		for _, closeOrderId := range orders.CloseOrders {
 			if err := s.CloseOrder(closeOrderId, chainId); err != nil {
-				s.log.Warnf("CloseOrder failed (can happen due to asynchronicity): %s", err.Error())
+				s.log.Warnf("CloseOrder %s failed (can happen due to asynchronicity): %s", lib.BytesToString(closeOrderId), err.Error())
 			}
 		}
 	}

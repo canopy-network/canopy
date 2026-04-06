@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1
+
+FROM golang:1.24.0-alpine AS builder
+
+# Install build dependencies
+RUN apk update && apk add --no-cache make bash nodejs npm git
+
+ARG EXPLORER_BASE_PATH
+ARG WALLET_BASE_PATH
+
+WORKDIR /go/src/github.com/canopy-network/canopy
+
+# ============================================
+# OPTIMIZATION 1: Cache Go module dependencies
+# Copy only go.mod and go.sum first to cache dependencies layer
+# This layer only invalidates when dependencies change
+# ============================================
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+# ============================================
+# OPTIMIZATION 2: Cache NPM dependencies for wallet
+# Copy only package.json files first to cache npm install layer
+# ============================================
+COPY cmd/rpc/web/wallet/package*.json ./cmd/rpc/web/wallet/
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefix ./cmd/rpc/web/wallet
+
+# ============================================
+# OPTIMIZATION 3: Cache NPM dependencies for explorer
+# ============================================
+COPY cmd/rpc/web/explorer/package*.json ./cmd/rpc/web/explorer/
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefix ./cmd/rpc/web/explorer
+
+# ============================================
+# OPTIMIZATION 4: Copy web source and build BEFORE copying all source
+# This caches web builds - only invalidates when web files change
+# ============================================
+COPY cmd/rpc/web/wallet/ ./cmd/rpc/web/wallet/
+COPY cmd/rpc/web/explorer/ ./cmd/rpc/web/explorer/
+
+ENV EXPLORER_BASE_PATH=${EXPLORER_BASE_PATH}
+ENV WALLET_BASE_PATH=${WALLET_BASE_PATH}
+
+# Build web assets (cached unless web source changes)
+RUN --mount=type=cache,target=/root/.npm \
+    npm run build --prefix ./cmd/rpc/web/wallet
+RUN --mount=type=cache,target=/root/.npm \
+    npm run build --prefix ./cmd/rpc/web/explorer
+
+# ============================================
+# OPTIMIZATION 5: Copy remaining source code
+# Web builds are already cached above
+# ============================================
+COPY . .
+
+# ============================================
+# OPTIMIZATION 6: Use build cache mounts for Go
+# Preserves Go build cache and module cache between builds
+# This can speed up rebuilds by 5-10x
+# ============================================
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go build -a -o bin ./cmd/main/...
+
+# ============================================
+# Final stage - minimal runtime image
+# ============================================
+FROM alpine:3.19
+
+WORKDIR /app
+
+# Copy only the built binary (web assets are embedded)
+COPY --from=builder /go/src/github.com/canopy-network/canopy/bin ./bin
+
+ENTRYPOINT ["/app/bin"]
