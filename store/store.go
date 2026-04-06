@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -657,15 +656,17 @@ func (s *Store) MaybeBackup() {
 		s.log.Debugf("data backup skipped [%d]: already in progress", version)
 		return
 	}
+	s.backup.Store(true)
 	// perform the backup in a separate goroutine to avoid blocking the main thread
 	go func() {
 		var err error
 		start := time.Now()
 		defer func() {
+			s.backup.Store(false)
 			if err == nil {
 				return
 			}
-			s.log.Errorf("backup failed at height [%d]: %w", err)
+			s.log.Errorf("backup failed at height [%d]: %v", err)
 		}()
 		// delete current backup files as pebbleDB expects an empty directory
 		if err = os.RemoveAll(tempBackupDir); err != nil {
@@ -680,7 +681,7 @@ func (s *Store) MaybeBackup() {
 		}
 		// write the current height to a separate file
 		heightFile := filepath.Join(tempBackupDir, "height.txt")
-		if err = os.WriteFile(heightFile, []byte(strconv.Itoa(int(version))), 0644); err != nil {
+		if err = os.WriteFile(heightFile, []byte(fmt.Sprintf("%d", version)), 0644); err != nil {
 			err = fmt.Errorf("write height file: %w", err)
 			return
 		}
