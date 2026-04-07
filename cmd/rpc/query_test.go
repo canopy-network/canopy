@@ -60,7 +60,44 @@ func TestIndexerBlobsCached_CachesDeltaResponsesOnly(t *testing.T) {
 	require.Equal(t, entry.deltaBytes, bzAgain)
 }
 
+func TestIndexerBlobsCached_RetainsOnlyLatestFullSnapshot(t *testing.T) {
+	server := newTestIndexerBlobServerWithHeights(t, 4)
+
+	got3, _, err := server.IndexerBlobsCached(3)
+	require.NoError(t, err)
+	require.NotNil(t, got3)
+
+	entry3, ok := server.indexerBlobCache.get(3)
+	require.True(t, ok)
+	require.NotNil(t, entry3)
+	require.NotNil(t, entry3.current)
+
+	got4, _, err := server.IndexerBlobsCached(4)
+	require.NoError(t, err)
+	require.NotNil(t, got4)
+	require.NotNil(t, got4.Previous)
+
+	entry3, ok = server.indexerBlobCache.get(3)
+	require.True(t, ok)
+	require.NotNil(t, entry3)
+	require.Nil(t, entry3.current)
+	require.NotNil(t, entry3.deltaBlobs)
+	require.NotEmpty(t, entry3.deltaBytes)
+
+	entry4, ok := server.indexerBlobCache.get(4)
+	require.True(t, ok)
+	require.NotNil(t, entry4)
+	require.NotNil(t, entry4.current)
+	require.NotNil(t, entry4.deltaBlobs)
+	require.NotEmpty(t, entry4.deltaBytes)
+}
+
 func newTestIndexerBlobServer(t *testing.T) *Server {
+	t.Helper()
+	return newTestIndexerBlobServerWithHeights(t, 3)
+}
+
+func newTestIndexerBlobServerWithHeights(t *testing.T, height uint64) *Server {
 	t.Helper()
 
 	log := lib.NewDefaultLogger()
@@ -102,6 +139,22 @@ func newTestIndexerBlobServer(t *testing.T) *Server {
 	_, err = db.Commit()
 	require.NoError(t, err)
 	setFSMHeight(t, sm, 3)
+
+	if height >= 4 {
+		require.NoError(t, sm.SetParams(fsm.DefaultParams()))
+		require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrA.Bytes(), Amount: 125}))
+		require.NoError(t, sm.SetAccount(&fsm.Account{Address: addrB.Bytes(), Amount: 75}))
+		require.NoError(t, db.IndexBlock(&lib.BlockResult{
+			BlockHeader: &lib.BlockHeader{
+				Height: 3,
+				Hash:   crypto.Hash([]byte("block-3")),
+				Time:   now + 2,
+			},
+		}))
+		_, err = db.Commit()
+		require.NoError(t, err)
+		setFSMHeight(t, sm, 4)
+	}
 
 	return &Server{
 		controller:       &controller.Controller{FSM: sm},
