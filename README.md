@@ -39,5 +39,5 @@ TypeScript + Go (Canopy Network Templates)
 ## Submission Info
 
 Built for the **Canopy Vibe Code Challenge**
-Submitted by **Goomu** — Canopy Builder #6 | Ambassador
+Submitted by **Makdaveli** — Canopy Builder |
 Built using Canopy Templates + Claude AI
