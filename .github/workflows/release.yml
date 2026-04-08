@@ -8,7 +8,6 @@ on:
         required: true
 
 permissions:
-  # required for GITHUB_TOKEN to create a release
   contents: write
 
 jobs:
@@ -32,9 +31,7 @@ jobs:
           make build/wallet
           make build/explorer
           mkdir -p dist
-          # AMD64 build
           GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/cli-linux-amd64 ./cmd/main/...
-          # ARM64 build
           GOARCH=arm64 CGO_ENABLED=0 GOOS=linux go build -a -o dist/cli-linux-arm64 ./cmd/main/...
 
       - name: Create GitHub release
@@ -48,9 +45,205 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Dispatch to Docker release repo
+  docker-main:
+    name: Docker - Main
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
         run: |
-          curl -X POST https://api.github.com/repos/canopy-network/deployments/dispatches \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
-            -d '{"event_type":"docker-release","client_payload":{"tag":"${{ github.event.inputs.tag }}"}}'
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:${DOCKER_TAG} \
+            -t canopynetwork/canopy:latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:${DOCKER_TAG}
+          docker push canopynetwork/canopy:latest
+
+  docker-go:
+    name: Docker - Go Plugin
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:go-${DOCKER_TAG} \
+            -t canopynetwork/canopy:go-latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            -f ./.docker/auto-update/Dockerfile.go \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:go-${DOCKER_TAG}
+          docker push canopynetwork/canopy:go-latest
+
+  docker-python:
+    name: Docker - Python Plugin
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:python-${DOCKER_TAG} \
+            -t canopynetwork/canopy:python-latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            -f ./.docker/auto-update/Dockerfile.python \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:python-${DOCKER_TAG}
+          docker push canopynetwork/canopy:python-latest
+
+  docker-typescript:
+    name: Docker - TypeScript Plugin
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:typescript-${DOCKER_TAG} \
+            -t canopynetwork/canopy:typescript-latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            -f ./.docker/auto-update/Dockerfile.typescript \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:typescript-${DOCKER_TAG}
+          docker push canopynetwork/canopy:typescript-latest
+
+  docker-kotlin:
+    name: Docker - Kotlin Plugin
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:kotlin-${DOCKER_TAG} \
+            -t canopynetwork/canopy:kotlin-latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            -f ./.docker/auto-update/Dockerfile.kotlin \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:kotlin-${DOCKER_TAG}
+          docker push canopynetwork/canopy:kotlin-latest
+
+  docker-csharp:
+    name: Docker - C# Plugin
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        run: |
+          TAG=${{ github.event.inputs.tag }}
+          DOCKER_TAG=${TAG//+/-}
+          docker build \
+            -t canopynetwork/canopy:csharp-${DOCKER_TAG} \
+            -t canopynetwork/canopy:csharp-latest \
+            --build-arg BRANCH=${TAG} \
+            --build-arg BUILD_PATH=cmd/cli \
+            -f ./.docker/auto-update/Dockerfile.csharp \
+            ./.docker/auto-update/
+          docker push canopynetwork/canopy:csharp-${DOCKER_TAG}
+          docker push canopynetwork/canopy:csharp-latest

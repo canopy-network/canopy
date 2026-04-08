@@ -19,7 +19,6 @@ const (
 	PoolsRoutePath                 = "/v1/query/pools"
 	ValidatorRoutePath             = "/v1/query/validator"
 	ValidatorsRoutePath            = "/v1/query/validators"
-	CommitteeRoutePath             = "/v1/query/committee"
 	CommitteeDataRoutePath         = "/v1/query/committee-data"
 	CommitteesDataRoutePath        = "/v1/query/committees-data"
 	SubsidizedCommitteesRoutePath  = "/v1/query/subsidized-committees"
@@ -51,7 +50,6 @@ const (
 	DexPriceRoutePath              = "/v1/query/dex-price"
 	DexBatchRoutePath              = "/v1/query/dex-batch"
 	NextDexBatchRoutePath          = "/v1/query/next-dex-batch"
-	OracleOrdersRoutePath          = "/v1/query/oracle-orders"
 	LastProposersRoutePath         = "/v1/query/last-proposers"
 	IsValidDoubleSignerRoutePath   = "/v1/query/valid-double-signer"
 	DoubleSignersRoutePath         = "/v1/query/double-signers"
@@ -121,7 +119,6 @@ const (
 	ValidatorRouteName             = "validator"
 	ValidatorsRouteName            = "validators"
 	ValidatorSetRouteName          = "validator-set"
-	CommitteeRouteName             = "committee"
 	CommitteeDataRouteName         = "committee-data"
 	CommitteesDataRouteName        = "committees-data"
 	SubsidizedCommitteesRouteName  = "subsidized-committees"
@@ -157,7 +154,6 @@ const (
 	DexPriceRouteName              = "dex-price"
 	DexBatchRouteName              = "dex-batch"
 	NextDexBatchRouteName          = "next-dex-batch"
-	OracleOrdersRouteName          = "oracle-orders"
 	LastProposersRouteName         = "last-proposers"
 	IsValidDoubleSignerRouteName   = "valid-double-signer"
 	DoubleSignersRouteName         = "double-signers"
@@ -228,7 +224,6 @@ var routePaths = routes{
 	PoolsRouteName:                 {Method: http.MethodPost, Path: PoolsRoutePath},
 	ValidatorRouteName:             {Method: http.MethodPost, Path: ValidatorRoutePath},
 	ValidatorsRouteName:            {Method: http.MethodPost, Path: ValidatorsRoutePath},
-	CommitteeRouteName:             {Method: http.MethodPost, Path: CommitteeRoutePath},
 	CommitteeDataRouteName:         {Method: http.MethodPost, Path: CommitteeDataRoutePath},
 	CommitteesDataRouteName:        {Method: http.MethodPost, Path: CommitteesDataRoutePath},
 	SubsidizedCommitteesRouteName:  {Method: http.MethodPost, Path: SubsidizedCommitteesRoutePath},
@@ -260,7 +255,6 @@ var routePaths = routes{
 	DexPriceRouteName:              {Method: http.MethodPost, Path: DexPriceRoutePath},
 	DexBatchRouteName:              {Method: http.MethodPost, Path: DexBatchRoutePath},
 	NextDexBatchRouteName:          {Method: http.MethodPost, Path: NextDexBatchRoutePath},
-	OracleOrdersRouteName:          {Method: http.MethodPost, Path: OracleOrdersRoutePath},
 	LastProposersRouteName:         {Method: http.MethodPost, Path: LastProposersRoutePath},
 	IsValidDoubleSignerRouteName:   {Method: http.MethodPost, Path: IsValidDoubleSignerRoutePath},
 	DoubleSignersRouteName:         {Method: http.MethodPost, Path: DoubleSignersRoutePath},
@@ -334,7 +328,6 @@ func createRouter(s *Server) *httprouter.Router {
 		PoolsRouteName:                 s.Pools,
 		ValidatorRouteName:             s.Validator,
 		ValidatorsRouteName:            s.Validators,
-		CommitteeRouteName:             s.Committee,
 		ValidatorSetRouteName:          s.ValidatorSet,
 		CommitteeDataRouteName:         s.CommitteeData,
 		CommitteesDataRouteName:        s.CommitteesData,
@@ -367,7 +360,6 @@ func createRouter(s *Server) *httprouter.Router {
 		DexPriceRouteName:              s.DexPrice,
 		DexBatchRouteName:              s.DexBatch,
 		NextDexBatchRouteName:          s.NextDexBatch,
-		OracleOrdersRouteName:          s.OracleOrders,
 		LastProposersRouteName:         s.LastProposers,
 		IsValidDoubleSignerRouteName:   s.IsValidDoubleSigner,
 		DoubleSignersRouteName:         s.DoubleSigners,

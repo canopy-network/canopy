@@ -41,9 +41,6 @@ type Config struct {
 	ConsensusConfig    // bft options
 	MempoolConfig      // mempool options
 	MetricsConfig      // telemetry options
-
-	EthBlockProviderConfig `json:"ethBlockProviderConfig"` // ethereum block provider configuration
-	OracleConfig           `json:"oracleConfig"`           // oracle configuration
 }
 
 // DefaultConfig() returns a Config with developer set options
@@ -57,9 +54,6 @@ func DefaultConfig() Config {
 		ConsensusConfig:    DefaultConsensusConfig(),
 		MempoolConfig:      DefaultMempoolConfig(),
 		MetricsConfig:      DefaultMetricsConfig(),
-
-		EthBlockProviderConfig: DefaultEthBlockProviderConfig(),
-		OracleConfig:           DefaultOracleConfig(),
 	}
 }
 
@@ -72,8 +66,10 @@ type MainConfig struct {
 	RootChain        []RootChain        `json:"rootChain"`        // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
 	RunVDF           bool               `json:"runVDF"`           // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
 	Headless         bool               `json:"headless"`         // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate       bool               `json:"autoUpdate"`       // check for new versions of software each X time
-	Plugin           string             `json:"plugin"`           // the configured plugin to use
+	AutoUpdate           bool   `json:"autoUpdate"`           // check for new versions of software each X time
+	AutoUpdateRepoOwner  string `json:"autoUpdateRepoOwner"`  // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName   string `json:"autoUpdateRepoName"`   // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin               string `json:"plugin"`               // the configured plugin to use
 	PluginTimeoutMS  int                `json:"pluginTimeoutMS"`  // plugin request timeout in milliseconds
 	PluginAutoUpdate PluginAutoUpdateConfig `json:"pluginAutoUpdate"` // plugin auto-update configuration
 }
@@ -343,51 +339,6 @@ func DefaultMetricsConfig() MetricsConfig {
 		PrometheusAddress:      "0.0.0.0:9090", // the default prometheus address
 		HeapProfilingEnabled:   false,          // disabled by default (causes GC pauses)
 		HeapProfilingIntervalS: 10,             // 10 second interval when enabled
-	}
-}
-
-type EthBlockProviderConfig struct {
-	NodeUrl           string `json:"ethNodeUrl"`        // ethereum rpc node url
-	NodeWSUrl         string `json:"ethNodeWsUrl"`      // ethereum node websocket url
-	EVMChainId        uint64 `json:"evmChainId"`        // ethereum chain id
-	RetryDelay        int    `json:"retryDelay"`        // retry delay in seconds for connection failures
-	StartupBlockDepth uint64 `json:"startupBlockDepth"` // how far back to start processing blocks when no next height was provided
-}
-
-// DefaultEthBlockProviderConfig() returns the default ethereum block provider configuration
-func DefaultEthBlockProviderConfig() EthBlockProviderConfig {
-	return EthBlockProviderConfig{
-		NodeUrl:           "http://localhost:8545",
-		NodeWSUrl:         "ws://localhost:8545",
-		EVMChainId:        1,
-		RetryDelay:        5, // default 5 seconds reconnect retry delay
-		StartupBlockDepth: 1000,
-	}
-}
-
-// OracleConfig represents the configuration of the off-chain order witness oracle
-type OracleConfig struct {
-	OracleEnabled            bool   `json:"oracleEnabled"`            // enables or disables the oracle functionality
-	StateFile                string `json:"stateSaveFile"`            // file to save oracle state
-	OrderResubmitDelayBlocks uint64 `json:"orderResubmitDelayBlocks"` // how many root blocks to wait to resubmit order
-	Committee                uint64 `json:"committee"`                // committee this oracle will witnessed orders for
-	ProposeDelayBlocks       uint64 `json:"proposeDelayBlocks"`       // oracle will wait this number of source chain blocks before including a newly witnessed order in a proposed block
-	ReorgRollbackBlocks      uint64 `json:"reorgRollbackBlocks"`      // how far back to rollback the order store on reorgs
-	LockOrderCooldownBlocks  uint64 `json:"lockOrderCooldownBlocks"`  // how many root blocks to wait to prevent resubmission of lock orders with same ID
-	SafeBlockConfirmations   uint64 `json:"safeBlockConfirmations"`   // number of block confirmations required before considering a block safe
-}
-
-// DefaultOracleConfig() returns the default ethereum block provider configuration
-func DefaultOracleConfig() OracleConfig {
-	return OracleConfig{
-		OracleEnabled:            false,
-		StateFile:                "oracle.state",
-		OrderResubmitDelayBlocks: 2,
-		Committee:                2,
-		ProposeDelayBlocks:       3,
-		ReorgRollbackBlocks:      60,
-		LockOrderCooldownBlocks:  2,
-		SafeBlockConfirmations:   5,
 	}
 }
 

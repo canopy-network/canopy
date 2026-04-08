@@ -134,16 +134,35 @@ func KeyForNextBatch(chainId uint64) []byte {
 }
 
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return nil, err
+	}
 	return crypto.NewAddressFromBytes(segments[len(segments)-1]), nil
 }
 
 func IdFromKey(k []byte) (uint64, lib.ErrorI) {
-	segments := lib.DecodeLengthPrefixed(k)
-	if len(segments) < 2 {
+	segments, err := decodeLengthPrefixedSafe(k)
+	if err != nil {
+		return 0, err
+	}
+	if len(segments) < 2 || len(segments[1]) != 8 {
 		return 0, ErrInvalidKey(k)
 	}
 	return binary.BigEndian.Uint64(segments[1]), nil
+}
+
+func decodeLengthPrefixedSafe(k []byte) (segments [][]byte, err lib.ErrorI) {
+	defer func() {
+		if recover() != nil {
+			segments, err = nil, ErrInvalidKey(k)
+		}
+	}()
+	segments = lib.DecodeLengthPrefixed(k)
+	if len(segments) == 0 {
+		return nil, ErrInvalidKey(k)
+	}
+	return segments, nil
 }
 
 func formatUint64(u uint64) []byte {

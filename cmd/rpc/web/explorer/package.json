@@ -1,33 +1,43 @@
 {
   "name": "explorer",
-  "version": "0.1.0",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev -p 50001",
-    "build": "next build",
-    "start": "npx serve@latest out -p 50001",
-    "lint": "next lint",
-    "prettier": "prettier --write ."
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@mui/material": "^5.16.13",
-    "@mui/x-data-grid": "^7.23.5",
-    "@next/font": "^14.2.15",
-    "@textea/json-viewer": "^3.5.0",
-    "ag-grid-community": "^33.0.3",
-    "ag-grid-react": "^33.0.3",
-    "bootstrap": "^5.3.3",
-    "eslint": "8.57.0",
-    "eslint-config-next": "14.2.3",
-    "mdb-react-ui-kit": "^8.0.0",
-    "next": "14.2.3",
-    "react": "18.3.1",
-    "react-bootstrap": "^2.10.2",
-    "react-dom": "18.3.1",
-    "react-middle-ellipsis": "^1.2.2",
-    "react-truncate-inside": "^1.0.3"
+    "@number-flow/react": "^0.5.10",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@tanstack/react-query": "^5.85.6",
+    "@tanstack/react-query-devtools": "^5.85.6",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.23.12",
+    "react": "^19.1.1",
+    "react-datepicker": "^8.7.0",
+    "react-dom": "^19.1.1",
+    "react-hook-form": "^7.62.0",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.8.2"
   },
   "devDependencies": {
-    "prettier": "^3.4.2"
+    "@eslint/js": "^9.33.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.12",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.39.1",
+    "vite": "^7.1.2"
   }
 }

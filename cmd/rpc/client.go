@@ -9,7 +9,6 @@ import (
 
 	"github.com/canopy-network/canopy/fsm"
 
-	"github.com/canopy-network/canopy/cmd/rpc/oracle/types"
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
@@ -41,20 +40,9 @@ func (c *Client) Height() (p *lib.HeightResult, err lib.ErrorI) {
 
 // IndexerBlobs retrieves the indexer blob protobuf and unmarshals it.
 func (c *Client) IndexerBlobs(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
-	return c.indexerBlobs(height, false)
-}
-
-// IndexerBlobsDelta retrieves changed accounts/pools/validators between current and previous blobs.
-// Other entities remain full snapshots.
-func (c *Client) IndexerBlobsDelta(height uint64) (p *fsm.IndexerBlobs, err lib.ErrorI) {
-	return c.indexerBlobs(height, true)
-}
-
-func (c *Client) indexerBlobs(height uint64, delta bool) (p *fsm.IndexerBlobs, err lib.ErrorI) {
 	p = new(fsm.IndexerBlobs)
 	req := indexerBlobsRequest{
 		heightRequest: heightRequest{Height: height},
-		Delta:         delta,
 	}
 	bz, err := lib.MarshalJSON(req)
 	if err != nil {
@@ -217,12 +205,6 @@ func (c *Client) Validators(height uint64, params lib.PageParams, filter lib.Val
 	return
 }
 
-func (c *Client) Committee(height uint64, id uint64, params lib.PageParams) (p *lib.Page, err lib.ErrorI) {
-	p = new(lib.Page)
-	err = c.paginatedHeightRequest(CommitteeRouteName, height, params, p, lib.ValidatorFilters{Committee: id})
-	return
-}
-
 func (c *Client) CommitteeData(height uint64, id uint64) (p *lib.CommitteeData, err lib.ErrorI) {
 	p = new(lib.CommitteeData)
 	err = c.heightAndIdRequest(CommitteeDataRouteName, height, id, p)
@@ -298,11 +280,6 @@ func (c *Client) DexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBa
 func (c *Client) NextDexBatch(height, chainId uint64, withPoints bool) (p *lib.DexBatch, err lib.ErrorI) {
 	p = new(lib.DexBatch)
 	err = c.heightIdAndPointsRequest(NextDexBatchRouteName, height, chainId, withPoints, p)
-	return
-}
-
-func (c *Client) OracleOrders(height uint64, params lib.PageParams) (orders []*types.WitnessedOrder, err lib.ErrorI) {
-	err = c.paginatedHeightRequest(OracleOrdersRouteName, height, params, &orders)
 	return
 }
 
