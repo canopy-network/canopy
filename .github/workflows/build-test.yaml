@@ -12,6 +12,9 @@ on:
       - staging
     paths:
       - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/**'
 jobs:
   build:
     name: Build
