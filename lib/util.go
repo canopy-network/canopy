@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -982,6 +983,12 @@ func SqrtProductUint64(x, y uint64) uint64 {
 	p := new(big.Int).Mul(a, b)
 
 	return new(big.Int).Sqrt(p).Uint64()
+}
+
+// AddUint64 returns a+b and whether the operation overflowed.
+func AddUint64(a, b uint64) (sum uint64, overflow bool) {
+	sum, carry := bits.Add64(a, b, 0)
+	return sum, carry != 0
 }
 
 // SafeMulDiv computes (a * b) / c safely using big.Int.

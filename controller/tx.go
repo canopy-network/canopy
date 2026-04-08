@@ -169,10 +169,11 @@ type Mempool struct {
 }
 
 type CachedProposal struct {
-	Block         *lib.Block
-	BlockResult   *lib.BlockResult
-	CertResults   *lib.CertificateResult
-	rcBuildHeight uint64
+	Block             *lib.Block
+	BlockResult       *lib.BlockResult
+	CertResults       *lib.CertificateResult
+	rcBuildHeight     uint64
+	buyDeadlineBlocks uint64
 }
 
 // NewMempool() creates a new instance of a Mempool structure
@@ -230,17 +231,22 @@ func (m *Mempool) CheckMempool() {
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
 	m.stop = stop
-	// get RC build height
-	rcBuildHeight := m.controller.RootChainHeight()
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
 		m.log.Error(err.Error())
 	}
+	rcBuildHeight := uint64(0)
 	// if ownRoot
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
 	} else {
+		// Use mempool FSM snapshot to avoid races with controller FSM resets.
+		if rootChainID, e := m.FSM.GetRootChainId(); e != nil {
+			m.log.Error(e.Error())
+		} else {
+			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
+		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
 		rootDexBatch, err := m.controller.getDexRootBatch(rcBuildHeight)
 		if err != nil {
@@ -256,12 +262,18 @@ func (m *Mempool) CheckMempool() {
 	}
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
+	valParams, err := m.FSM.GetParamsVal()
+	if err != nil {
+		m.log.Error(err.Error())
+		return
+	}
 	// cache the proposal
 	m.cachedProposal.Store(&CachedProposal{
-		Block:         block,
-		BlockResult:   blockResult,
-		CertResults:   m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
-		rcBuildHeight: rcBuildHeight,
+		Block:             block,
+		BlockResult:       blockResult,
+		CertResults:       m.controller.NewCertificateResults(m.FSM, block, blockResult, &bft.ByzantineEvidence{DSE: bft.DoubleSignEvidences{}}, rcBuildHeight),
+		rcBuildHeight:     rcBuildHeight,
+		buyDeadlineBlocks: valParams.BuyDeadlineBlocks,
 	})
 	// create a cache of failed tx bytes to evict from the mempool
 	var failedTxBz [][]byte

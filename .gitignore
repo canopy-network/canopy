@@ -7,12 +7,12 @@
 *.dll
 *.so
 *.dylib
-
+.cache
 # Test binary, built with `go test -c`
 *.test
-
+tmp
 audit
-
+.llm
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 

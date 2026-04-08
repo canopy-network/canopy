@@ -29,7 +29,7 @@ const (
 	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
 	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
 	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
-	heartbeatTimeout       = 2 * time.Second                     // how long to wait for a pong before dropping the peer
+	heartbeatTimeout       = 2 * time.Second                     // how long to wait for liveness before dropping the peer
 	heartbeatTopic         = lib.Topic_HEARTBEAT                 // dedicated heartbeat stream
 	heartbeatPing          = "ping"
 	heartbeatPong          = "pong"
@@ -73,6 +73,10 @@ type MultiConn struct {
 	log           lib.LoggerI                         // logging
 	hasError      atomic.Bool                         // flag to identify if MultiConn has encountered an error
 	lastPong      atomic.Int64                        // last time we saw a pong (unix nano)
+	lastHeard     atomic.Int64                        // last time we read any message from the wire (unix nano)
+	lastPingSent  atomic.Int64                        // last time we queued a ping (unix nano)
+	lastPingRecv  atomic.Int64                        // last time we received a ping (unix nano)
+	lastPongSent  atomic.Int64                        // last time we queued a pong (unix nano)
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -111,7 +115,12 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		close:         sync.Once{},
 		log:           p.log,
 	}
-	c.lastPong.Store(time.Now().UnixNano())
+	now := time.Now().UnixNano()
+	c.lastPong.Store(now)
+	c.lastHeard.Store(now)
+	c.lastPingSent.Store(0)
+	c.lastPingRecv.Store(0)
+	c.lastPongSent.Store(0)
 	_ = c.conn.SetReadDeadline(time.Time{})
 	_ = c.conn.SetWriteDeadline(time.Time{})
 	// start the connection service
@@ -227,6 +236,7 @@ func (c *MultiConn) startReceiveService() {
 				c.Error(err)
 				return
 			}
+			c.lastHeard.Store(time.Now().UnixNano())
 			// handle different message types
 			switch x := msg.(type) {
 			case *Packet: // receive packet is a partial or full 'Message' with a Stream Topic designation and an EOF signal
@@ -262,15 +272,40 @@ func (c *MultiConn) startReceiveService() {
 	}
 }
 
-// startHeartbeat periodically sends ping packets and drops the peer if no pong is seen in time.
+// startHeartbeat periodically sends ping packets and drops the peer if no inbound traffic is seen in time.
+//
+// Using "any inbound message" for liveness avoids disconnecting a busy connection just because a pong
+// was delayed/lost, while still reacting quickly to a stalled link.
 func (c *MultiConn) startHeartbeat() {
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if time.Since(time.Unix(0, c.lastPong.Load())) > heartbeatTimeout {
-				c.log.Warnf("Heartbeat timeout: closing peer %s", lib.BytesToTruncatedString(c.Address.PublicKey))
+			if time.Since(time.Unix(0, c.lastHeard.Load())) > heartbeatTimeout {
+				if c.p2p.metrics != nil {
+					c.p2p.metrics.HeartbeatTimeout.Inc()
+				}
+				lastHeardAge := time.Since(time.Unix(0, c.lastHeard.Load()))
+				lastPongAge := time.Since(time.Unix(0, c.lastPong.Load()))
+				lastPingSentAge := time.Duration(0)
+				if ts := c.lastPingSent.Load(); ts != 0 {
+					lastPingSentAge = time.Since(time.Unix(0, ts))
+				}
+				lastPingRecvAge := time.Duration(0)
+				if ts := c.lastPingRecv.Load(); ts != 0 {
+					lastPingRecvAge = time.Since(time.Unix(0, ts))
+				}
+				lastPongSentAge := time.Duration(0)
+				if ts := c.lastPongSent.Load(); ts != 0 {
+					lastPongSentAge = time.Since(time.Unix(0, ts))
+				}
+
+				c.log.Warnf(
+					"Heartbeat timeout: closing peer %s lastHeardAge=%s lastPongAge=%s lastPingSentAge=%s lastPingRecvAge=%s lastPongSentAge=%s",
+					lib.BytesToTruncatedString(c.Address.PublicKey),
+					lastHeardAge, lastPongAge, lastPingSentAge, lastPingRecvAge, lastPongSentAge,
+				)
 				c.Error(ErrPongTimeout())
 				return
 			}
@@ -289,29 +324,53 @@ func (c *MultiConn) sendHeartbeat() {
 		return
 	}
 	sendStart := time.Now()
-	_ = stream.queueSend(&Packet{
+	if ok := stream.queueSend(&Packet{
 		StreamId: heartbeatTopic,
 		Eof:      true,
 		Bytes:    []byte(heartbeatPing),
-	}, sendStart, c.p2p.metrics)
+	}, sendStart, c.p2p.metrics); ok {
+		c.lastPingSent.Store(sendStart.UnixNano())
+		if c.p2p.metrics != nil {
+			c.p2p.metrics.HeartbeatPingSent.Inc()
+		}
+	}
 }
 
 func (c *MultiConn) handleHeartbeatPacket(packet *Packet) {
 	switch string(packet.Bytes) {
 	case heartbeatPing:
+		c.lastPingRecv.Store(time.Now().UnixNano())
+		if c.p2p.metrics != nil {
+			c.p2p.metrics.HeartbeatPingRecv.Inc()
+		}
 		// respond
 		stream, ok := c.streams[heartbeatTopic]
 		if !ok {
 			return
 		}
 		sendStart := time.Now()
-		_ = stream.queueSend(&Packet{
+		if ok := stream.queueSend(&Packet{
 			StreamId: heartbeatTopic,
 			Eof:      true,
 			Bytes:    []byte(heartbeatPong),
-		}, sendStart, c.p2p.metrics)
+		}, sendStart, c.p2p.metrics); ok {
+			c.lastPongSent.Store(sendStart.UnixNano())
+			if c.p2p.metrics != nil {
+				c.p2p.metrics.HeartbeatPongSent.Inc()
+			}
+		}
 	case heartbeatPong:
-		c.lastPong.Store(time.Now().UnixNano())
+		now := time.Now()
+		c.lastPong.Store(now.UnixNano())
+		if c.p2p.metrics != nil {
+			c.p2p.metrics.HeartbeatPongRecv.Inc()
+			if ts := c.lastPingSent.Load(); ts != 0 {
+				rtt := now.Sub(time.Unix(0, ts)).Seconds()
+				if rtt >= 0 {
+					c.p2p.metrics.HeartbeatRTT.Observe(rtt)
+				}
+			}
+		}
 	default:
 		c.log.Warnf("Unknown heartbeat payload from %s", lib.BytesToTruncatedString(c.Address.PublicKey))
 	}

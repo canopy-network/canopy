@@ -383,11 +383,14 @@ func createOrderBook(orders ...*lib.SellOrder) *lib.OrderBook {
 }
 
 func TestOracle_ValidateProposedOrders(t *testing.T) {
+	const proposalHeight = uint64(100)
+	const buyDeadlineBlocks = uint64(300)
 	orders := func(lockOrderIDs []string, closeOrderIDs []string, resetOrderIDs []string) *lib.Orders {
 		lockOrders := make([]*lib.LockOrder, len(lockOrderIDs))
 		for i, id := range lockOrderIDs {
 			lockOrders[i] = &lib.LockOrder{
-				OrderId: []byte(id),
+				OrderId:            []byte(id),
+				BuyerChainDeadline: proposalHeight + buyDeadlineBlocks,
 			}
 		}
 		closeOrders := make([][]byte, len(closeOrderIDs))
@@ -433,6 +436,10 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 				createWitnessedLockOrder("lock1"),
 				createWitnessedLockOrder("lock2"),
 			),
+			orderBook: createOrderBook(
+				createSellOrder("lock1", ""),
+				createSellOrder("lock2", ""),
+			),
 			expectedError: false,
 		},
 		{
@@ -442,6 +449,18 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 				createWitnessedCloseOrder("close1", 1),
 				createWitnessedCloseOrder("close2", 1),
 			),
+			orderBook: createOrderBook(
+				func() *lib.SellOrder {
+					order := createSellOrder("close1", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
+				func() *lib.SellOrder {
+					order := createSellOrder("close2", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
+			),
 			expectedError: false,
 		},
 		{
@@ -450,6 +469,14 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1"),
 				createWitnessedCloseOrder("close1", 1),
+			),
+			orderBook: createOrderBook(
+				createSellOrder("lock1", ""),
+				func() *lib.SellOrder {
+					order := createSellOrder("close1", "", "buyer")
+					order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+					return order
+				}(),
 			),
 			expectedError: false,
 		},
@@ -471,6 +498,27 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedLockOrder("lock1", "address"),
 			),
+			orderBook:     createOrderBook(createSellOrder("lock1", "")),
+			expectedError: true,
+			errorContains: "order not verified",
+		},
+		{
+			name:   "lock order missing from root order book should return error",
+			orders: orders([]string{"lock1"}, nil, nil),
+			orderStore: createOrderStore(
+				createWitnessedLockOrder("lock1"),
+			),
+			orderBook:     createOrderBook(),
+			expectedError: true,
+			errorContains: "order not verified",
+		},
+		{
+			name:   "lock order already locked in root order book should return error",
+			orders: orders([]string{"lock1"}, nil, nil),
+			orderStore: createOrderStore(
+				createWitnessedLockOrder("lock1"),
+			),
+			orderBook:     createOrderBook(createSellOrder("lock1", "", "buyer")),
 			expectedError: true,
 			errorContains: "order not verified",
 		},
@@ -480,6 +528,11 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(
 				createWitnessedCloseOrder("close1"), // missing chain id
 			),
+			orderBook: createOrderBook(func() *lib.SellOrder {
+				order := createSellOrder("close1", "", "buyer")
+				order.BuyerChainDeadline = proposalHeight + buyDeadlineBlocks
+				return order
+			}()),
 			expectedError: true,
 			errorContains: "order not verified",
 		},
@@ -489,7 +542,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			orderStore: createOrderStore(),
 			orderBook: createOrderBook(func() *lib.SellOrder {
 				order := createSellOrder("reset1", "", "buyer")
-				order.BuyerChainDeadline = 25
+				order.BuyerChainDeadline = proposalHeight + 25
 				return order
 			}()),
 			safeHeight:    20,
@@ -513,7 +566,7 @@ func TestOracle_ValidateProposedOrders(t *testing.T) {
 			oracle.state.safeHeight = tt.safeHeight
 
 			// Execute test
-			err := oracle.ValidateProposedOrders(tt.orders, tt.orderBook)
+			err := oracle.ValidateProposedOrders(tt.orders, tt.orderBook, proposalHeight, buyDeadlineBlocks)
 
 			// Verify results
 			if tt.expectedError {
@@ -579,6 +632,8 @@ func TestOracle_CommitCertificate_ResetOrderCleanup(t *testing.T) {
 }
 
 func TestOracle_WitnessedOrders(t *testing.T) {
+	const proposalHeight = uint64(100)
+	const buyDeadlineBlocks = uint64(300)
 	buyerReceiveAddress := "0034567890123456789012345678901234567800"
 	contractAddress := "0x1234567890123456789012345678901234567890"
 
@@ -737,7 +792,7 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 			}
 			oracle.state.safeHeight = tt.safeHeight
 			// 100 to specify a high enough root height that shouldSubmit always passes
-			witnessedLockOrders, witnessedCloseOrders, witnessedResetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			witnessedLockOrders, witnessedCloseOrders, witnessedResetOrders := oracle.WitnessedOrders(tt.orderBook, proposalHeight, 100, buyDeadlineBlocks)
 			if len(witnessedLockOrders) != tt.expectedLockOrdersLen {
 				t.Errorf("expected %d lock orders, got %d", tt.expectedLockOrdersLen, len(witnessedLockOrders))
 			}
@@ -753,6 +808,9 @@ func TestOracle_WitnessedOrders(t *testing.T) {
 					expectedIdHex := fmt.Sprintf("%x", []byte(expectedId))
 					if actualId != expectedIdHex {
 						t.Errorf("expected lock order id %s, got %s", expectedIdHex, actualId)
+					}
+					if witnessedLockOrders[i].BuyerChainDeadline != proposalHeight+buyDeadlineBlocks {
+						t.Errorf("expected lock order deadline %d, got %d", proposalHeight+buyDeadlineBlocks, witnessedLockOrders[i].BuyerChainDeadline)
 					}
 				}
 			}
@@ -802,7 +860,7 @@ func TestOracle_WitnessedOrders_DoesNotPersistCloseSubmitHeightPreCommit(t *test
 	oracle.state.safeHeight = 10
 	oracle.state.sourceChainHeight = 10
 
-	_, closeOrders, _ := oracle.WitnessedOrders(orderBook, 100)
+	_, closeOrders, _ := oracle.WitnessedOrders(orderBook, 100, 100, 300)
 	require.Len(t, closeOrders, 1)
 
 	stored, err := store.ReadOrder([]byte(orderID), types.CloseOrderType)
@@ -1082,6 +1140,11 @@ func assertOrderIds(t *testing.T, orderType string, actual [][]byte, expected []
 func TestOracle_processBlock(t *testing.T) {
 	buyerReceiveAddress := "0034567890123456789012345678901234567800"
 	contractAddress := "0x1234567890123456789012345678901234567890"
+	buyerSendAddressHex := "0x1111111111111111111111111111111111111111"
+	buyerSendAddress, err := lib.StringToBytes(strings.TrimPrefix(buyerSendAddressHex, "0x"))
+	require.NoError(t, err)
+	sellerReceiveAddress := []byte("seller_receive_addr")
+	sellerReceiveAddressHex := fmt.Sprintf("%x", sellerReceiveAddress)
 
 	transactionWithOrder := func(order *types.WitnessedOrder, toAddress ...string) *mockTransaction {
 		t := &mockTransaction{
@@ -1094,6 +1157,28 @@ func TestOracle_processBlock(t *testing.T) {
 			t.to = toAddress[0]
 		}
 		return t
+	}
+	closeSellOrder := func(orderID string) *lib.SellOrder {
+		return &lib.SellOrder{
+			Id:                   []byte(orderID),
+			Committee:            0,
+			Data:                 common.HexToAddress(contractAddress).Bytes(),
+			RequestedAmount:      0,
+			BuyerSendAddress:     buyerSendAddress,
+			BuyerReceiveAddress:  []byte(buyerReceiveAddress),
+			SellerReceiveAddress: sellerReceiveAddress,
+		}
+	}
+	closeTx := func(orderID, from string) *mockTransaction {
+		return &mockTransaction{
+			from:  from,
+			to:    contractAddress,
+			order: createWitnessedCloseOrder(orderID),
+			tokenTransfer: types.TokenTransfer{
+				TokenBaseAmount:  new(big.Int),
+				RecipientAddress: sellerReceiveAddressHex,
+			},
+		}
 	}
 
 	tests := []struct {
@@ -1143,13 +1228,11 @@ func TestOracle_processBlock(t *testing.T) {
 				100,
 				"0xblockhash",
 				[]types.TransactionI{
-					// create transaction with To address as contract address
-					transactionWithOrder(createWitnessedCloseOrder("order1"), contractAddress),
+					closeTx("order1", buyerSendAddressHex),
 				},
 			),
-			orderStore: createOrderStore(),
-			// create sell order with contractAdcress as data
-			orderBook:             createOrderBook(createSellOrder("order1", contractAddress, buyerReceiveAddress)),
+			orderStore:            createOrderStore(),
+			orderBook:             createOrderBook(closeSellOrder("order1")),
 			expectedCloseOrderIds: [][]byte{[]byte("order1")},
 		},
 		{
@@ -1159,14 +1242,14 @@ func TestOracle_processBlock(t *testing.T) {
 				"0xblockhash",
 				[]types.TransactionI{
 					transactionWithOrder(createWitnessedLockOrder("lock1", buyerReceiveAddress)),
-					transactionWithOrder(createWitnessedCloseOrder("close1"), contractAddress),
+					closeTx("close1", buyerSendAddressHex),
 					&mockTransaction{},
 				},
 			),
 			orderStore: createOrderStore(),
 			orderBook: createOrderBook(
 				createSellOrder("lock1", contractAddress, buyerReceiveAddress),
-				createSellOrder("close1", contractAddress, buyerReceiveAddress),
+				closeSellOrder("close1"),
 			),
 			expectedLockOrderIds:  [][]byte{[]byte("lock1")},
 			expectedCloseOrderIds: [][]byte{[]byte("close1")},
@@ -1205,17 +1288,31 @@ func TestOracle_processBlock(t *testing.T) {
 				[]types.TransactionI{
 					transactionWithOrder(createWitnessedLockOrder("lock1", buyerReceiveAddress)),
 					transactionWithOrder(createWitnessedLockOrder("nonexistent")),
-					transactionWithOrder(createWitnessedCloseOrder("close1"), contractAddress),
+					closeTx("close1", buyerSendAddressHex),
 					&mockTransaction{},
 				},
 			),
 			orderStore: createOrderStore(),
 			orderBook: createOrderBook(
 				createSellOrder("lock1", contractAddress, buyerReceiveAddress),
-				createSellOrder("close1", contractAddress, buyerReceiveAddress),
+				closeSellOrder("close1"),
 			),
 			expectedLockOrderIds:  [][]byte{[]byte("lock1")},
 			expectedCloseOrderIds: [][]byte{[]byte("close1")},
+		},
+		{
+			name: "should skip third-party close witness and store later valid buyer close",
+			block: createMockBlockWithTransactions(
+				100,
+				"0xblockhash",
+				[]types.TransactionI{
+					closeTx("order1", "0x2222222222222222222222222222222222222222"),
+					closeTx("order1", buyerSendAddressHex),
+				},
+			),
+			orderStore:            createOrderStore(),
+			orderBook:             createOrderBook(closeSellOrder("order1")),
+			expectedCloseOrderIds: [][]byte{[]byte("order1")},
 		},
 		{
 			name: "should not overwrite existing order in store",
@@ -1296,6 +1393,35 @@ func TestOracle_processBlock(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOracle_processBlock_PreservesRawWitnessLockDeadline(t *testing.T) {
+	orderStore := createOrderStore()
+	orderBook := createOrderBook(createSellOrder("order1", "", "buyer"))
+	witnessed := createWitnessedLockOrder("order1", "buyer")
+	witnessed.WitnessedHeight = 125
+	witnessed.LockOrder.BuyerChainDeadline = 1
+
+	oracle := &Oracle{
+		orderStore: orderStore,
+		orderBook:  orderBook,
+		log:        lib.NewDefaultLogger(),
+	}
+
+	err := oracle.processBlock(createMockBlockWithTransactions(125, "0xblockhash", []types.TransactionI{
+		&mockTransaction{
+			order: witnessed,
+			tokenTransfer: types.TokenTransfer{
+				TokenBaseAmount: new(big.Int),
+			},
+		},
+	}))
+	require.NoError(t, err)
+
+	stored, readErr := orderStore.ReadOrder([]byte("order1"), types.LockOrderType)
+	require.NoError(t, readErr)
+	require.NotNil(t, stored.LockOrder)
+	require.Equal(t, uint64(1), stored.LockOrder.BuyerChainDeadline)
 }
 
 func TestOracle_validateLockOrder(t *testing.T) {
@@ -1392,7 +1518,8 @@ func TestOracle_validateLockOrder(t *testing.T) {
 				BuyerSendAddress:    []byte{},
 				BuyerChainDeadline:  baseDeadline,
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "lock order buyer receive address cannot be empty",
 		},
 	}
 
@@ -1425,6 +1552,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 	baseChainId := uint64(1)
 	baseRequestedAmount := uint64(1000)
 	baseTo := common.HexToAddress("1234567890abcdef")
+	baseBuyerSendAddressHex := "0x1111111111111111111111111111111111111111"
+	baseBuyerSendAddress := common.HexToAddress(baseBuyerSendAddressHex).Bytes()
 
 	baseSellerReceiveAddress := []byte("seller_receive_addr")
 	baseSellerReceiveAddressHex := fmt.Sprintf("%x", baseSellerReceiveAddress)
@@ -1433,6 +1562,7 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 		Committee:            baseChainId,
 		RequestedAmount:      baseRequestedAmount,
 		Data:                 baseTo.Bytes(),
+		BuyerSendAddress:     baseBuyerSendAddress,
 		SellerReceiveAddress: baseSellerReceiveAddress,
 	}
 
@@ -1442,7 +1572,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 	}
 
 	baseTx := &mockTransaction{
-		to: baseTo.String(),
+		from: baseBuyerSendAddressHex,
+		to:   baseTo.String(),
 		tokenTransfer: types.TokenTransfer{
 			TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 			RecipientAddress: baseSellerReceiveAddressHex,
@@ -1472,6 +1603,7 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 				Committee:            baseChainId,
 				RequestedAmount:      baseRequestedAmount,
 				Data:                 []byte("0xdifferentaddress"),
+				BuyerSendAddress:     baseBuyerSendAddress,
 				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx:          baseTx,
@@ -1483,7 +1615,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 					RecipientAddress: fmt.Sprintf("%x", []byte("different_recipient_address")),
@@ -1497,7 +1630,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
 					RecipientAddress: "invalid_hex_address_gg",
@@ -1529,11 +1663,27 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			errorMsg:    "close order chain ID does not match sell order committee",
 		},
 		{
+			name:       "transaction sender does not match buyer send address",
+			closeOrder: baseCloseOrder,
+			sellOrder:  baseSellOrder,
+			tx: &mockTransaction{
+				from: "0x2222222222222222222222222222222222222222",
+				to:   baseTo.String(),
+				tokenTransfer: types.TokenTransfer{
+					TokenBaseAmount:  big.NewInt(int64(baseRequestedAmount)),
+					RecipientAddress: baseSellerReceiveAddressHex,
+				},
+			},
+			expectError: true,
+			errorMsg:    "transaction sender does not match locked buyer send address",
+		},
+		{
 			name:       "token transfer amount is nil",
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  nil,
 					RecipientAddress: baseSellerReceiveAddressHex,
@@ -1547,7 +1697,8 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 			closeOrder: baseCloseOrder,
 			sellOrder:  baseSellOrder,
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(500), // Different from requested amount
 					RecipientAddress: baseSellerReceiveAddressHex,
@@ -1564,10 +1715,12 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 				Committee:            baseChainId,
 				RequestedAmount:      0,
 				Data:                 baseTo.Bytes(),
+				BuyerSendAddress:     baseBuyerSendAddress,
 				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(0),
 					RecipientAddress: baseSellerReceiveAddressHex,
@@ -1583,10 +1736,12 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 				Committee:            baseChainId,
 				RequestedAmount:      18446744073709551615, // Max uint64
 				Data:                 baseTo.Bytes(),
+				BuyerSendAddress:     baseBuyerSendAddress,
 				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount:  big.NewInt(0).SetUint64(18446744073709551615),
 					RecipientAddress: baseSellerReceiveAddressHex,
@@ -1602,10 +1757,12 @@ func TestOracle_validateCloseOrder(t *testing.T) {
 				Committee:            baseChainId,
 				RequestedAmount:      1,
 				Data:                 baseTo.Bytes(),
+				BuyerSendAddress:     baseBuyerSendAddress,
 				SellerReceiveAddress: baseSellerReceiveAddress,
 			},
 			tx: &mockTransaction{
-				to: baseTo.String(),
+				from: baseBuyerSendAddressHex,
+				to:   baseTo.String(),
 				tokenTransfer: types.TokenTransfer{
 					TokenBaseAmount: new(big.Int).Add(
 						new(big.Int).SetUint64(1),
@@ -1651,6 +1808,9 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 
 	buyerReceiveAddress := "0034567890123456789012345678901234567800"
 	sellerReceiveAddress := "seller_receive_address"
+	buyerSendAddressHex := "0x1111111111111111111111111111111111111111"
+	buyerSendAddress, err := lib.StringToBytes(strings.TrimPrefix(buyerSendAddressHex, "0x"))
+	require.NoError(t, err)
 
 	// Create order IDs for different tokens
 	usdcOrderId := "usdc_order_1"
@@ -1701,10 +1861,12 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			},
 			transactions: []types.TransactionI{
 				&mockTransaction{
+					from:  buyerSendAddressHex,
 					to:    usdcContract,
 					order: createWitnessedCloseOrder(usdcOrderId, 1),
 				},
 				&mockTransaction{
+					from:  buyerSendAddressHex,
 					to:    usdtContract,
 					order: createWitnessedCloseOrder(usdtOrderId, 1),
 				},
@@ -1729,6 +1891,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 					order: createWitnessedLockOrder(usdcOrderId, buyerReceiveAddress),
 				},
 				&mockTransaction{
+					from:  buyerSendAddressHex,
 					to:    usdtContract,
 					order: createWitnessedCloseOrder(usdtOrderId, 1),
 				},
@@ -1752,6 +1915,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			},
 			transactions: []types.TransactionI{
 				&mockTransaction{
+					from:  buyerSendAddressHex,
 					to:    usdtContract,
 					order: createWitnessedCloseOrder(usdtOrderId, 1),
 					tokenTransfer: types.TokenTransfer{
@@ -1793,6 +1957,9 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 					if len(order.SellerReceiveAddress) == 0 {
 						order.SellerReceiveAddress = []byte(sellerReceiveAddress)
 					}
+					if len(order.BuyerReceiveAddress) != 0 && len(order.BuyerSendAddress) == 0 {
+						order.BuyerSendAddress = buyerSendAddress
+					}
 				}
 				// Normalize test fixtures for committee and close-order transfer checks.
 				for _, tx := range tt.transactions {
@@ -1822,7 +1989,7 @@ func TestOracle_MultiTokenSupport(t *testing.T) {
 			}
 
 			// Get witnessed orders from oracle
-			lockOrders, closeOrders, resetOrders := oracle.WitnessedOrders(tt.orderBook, 100)
+			lockOrders, closeOrders, resetOrders := oracle.WitnessedOrders(tt.orderBook, 100, 100, 300)
 
 			// Verify lock order count
 			if len(lockOrders) != tt.expectedLockOrders {
