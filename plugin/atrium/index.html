@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Atrium Lab — Decentralized AI Marketplace on Canopy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #111118;
+    --border:   #1e1e2e;
+    --accent:   #00e5a0;
+    --accent2:  #7c3aed;
+    --warn:     #f59e0b;
+    --red:      #ef4444;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --card:     #13131c;
+    --glow:     0 0 24px rgba(0,229,160,.18);
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content:'';
+    position:fixed; inset:0; z-index:0;
+    background-image:
+      linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position:sticky; top:0; z-index:100;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 0 24px; height:60px;
+    background: rgba(10,10,15,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo {
+    font-family:'Space Mono',monospace;
+    font-size:13px; letter-spacing:.12em;
+    color: var(--accent); font-weight:700;
+    cursor:pointer;
+  }
+  .nav-logo span { color: var(--muted); }
+  .nav-links { display:flex; gap:8px; }
+  .nav-btn {
+    background:none; border:1px solid transparent;
+    color:var(--muted); font-family:'Syne',sans-serif;
+    font-size:13px; padding:6px 14px; border-radius:6px;
+    cursor:pointer; transition:all .2s;
+  }
+  .nav-btn:hover, .nav-btn.active { color:var(--text); border-color:var(--border); }
+  #wallet-btn {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+  }
+  #wallet-btn:hover { background: rgba(0,229,160,.08); }
+  #wallet-btn.connected { color:#10b981; border-color:#10b981; }
+
+  /* ── PAGES ── */
+  .page { display:none; position:relative; z-index:1; }
+  .page.active { display:block; }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 100px 24px 60px;
+    max-width: 860px; margin:0 auto; text-align:center;
+  }
+  .hero-badge {
+    display:inline-flex; align-items:center; gap:8px;
+    background: rgba(0,229,160,.06);
+    border: 1px solid rgba(0,229,160,.2);
+    border-radius:100px; padding:5px 14px;
+    font-size:12px; color:var(--accent);
+    font-family:'Space Mono',monospace;
+    margin-bottom:32px; letter-spacing:.08em;
+  }
+  .hero-badge .dot { width:6px;height:6px;border-radius:50%;background:var(--accent); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+  h1 {
+    font-size: clamp(36px,6vw,72px);
+    font-weight:800; line-height:1.05;
+    letter-spacing:-.02em; margin-bottom:20px;
+  }
+  h1 em { font-style:normal; color:var(--accent); }
+  .hero-sub {
+    font-size:16px; color:var(--muted); line-height:1.7;
+    max-width:520px; margin:0 auto 40px;
+  }
+  .hero-ctas { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn-primary {
+    background: var(--accent); color:#000;
+    font-family:'Space Mono',monospace; font-size:13px; font-weight:700;
+    padding:12px 24px; border-radius:8px; border:none;
+    cursor:pointer; transition:all .2s; letter-spacing:.04em;
+  }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow: var(--glow); }
+  .btn-outline {
+    background:none; border:1px solid var(--border);
+    color:var(--text); font-family:'Space Mono',monospace;
+    font-size:13px; padding:12px 24px; border-radius:8px;
+    cursor:pointer; transition:all .2s;
+  }
+  .btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display:flex; justify-content:center; gap:0;
+    border: 1px solid var(--border);
+    border-radius:12px; overflow:hidden;
+    max-width:700px; margin:0 auto 64px;
+    background: var(--card);
+  }
+  .stat-item {
+    flex:1; padding:20px 16px; text-align:center;
+    border-right:1px solid var(--border);
+  }
+  .stat-item:last-child { border-right:none; }
+  .stat-num {
+    font-family:'Space Mono',monospace;
+    font-size:24px; font-weight:700; color:var(--accent);
+    display:block; margin-bottom:4px;
+  }
+  .stat-label { font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
+
+  /* ── MARKETPLACE ── */
+  .marketplace-header {
+    display:flex; flex-wrap:wrap; gap:12px;
+    align-items:center; justify-content:space-between;
+    padding:0 24px; max-width:1200px; margin:0 auto 24px;
+  }
+  .filter-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .filter-tab {
+    background:none; border:1px solid var(--border);
+    color:var(--muted); font-family:'Syne',sans-serif;
+    font-size:12px; padding:6px 14px; border-radius:6px;
+    cursor:pointer; transition:all .2s;
+  }
+  .filter-tab.active, .filter-tab:hover {
+    border-color:var(--accent); color:var(--accent);
+    background: rgba(0,229,160,.06);
+  }
+  .search-box {
+    background: var(--card); border:1px solid var(--border);
+    color:var(--text); font-family:'Syne',sans-serif;
+    font-size:13px; padding:8px 16px; border-radius:8px;
+    outline:none; width:220px; transition:border-color .2s;
+  }
+  .search-box:focus { border-color:var(--accent); }
+  .search-box::placeholder { color:var(--muted); }
+
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px,1fr));
+    gap:16px; padding:0 24px; max-width:1200px; margin:0 auto;
+  }
+
+  /* ── AGENT CARD ── */
+  .agent-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius:12px; padding:20px;
+    cursor:pointer; transition:all .25s;
+    position:relative; overflow:hidden;
+  }
+  .agent-card::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(circle at top right, rgba(0,229,160,.04), transparent 60%);
+    pointer-events:none;
+  }
+  .agent-card:hover {
+    border-color: rgba(0,229,160,.3);
+    transform:translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  }
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }
+  .card-icon {
+    width:42px;height:42px; border-radius:10px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px;
+  }
+  .card-badges { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+  .badge {
+    font-family:'Space Mono',monospace; font-size:10px;
+    padding:3px 8px; border-radius:4px; letter-spacing:.06em;
+  }
+  .badge-verified { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.2); }
+  .badge-cat { background:rgba(124,58,237,.12); color:#a78bfa; border:1px solid rgba(124,58,237,.2); }
+  .badge-inactive { background:rgba(239,68,68,.12); color:var(--red); border:1px solid rgba(239,68,68,.2); }
+  .badge-mine { background:rgba(0,229,160,.1); color:var(--accent); border:1px solid rgba(0,229,160,.2); }
+
+  .card-name { font-size:15px; font-weight:700; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-creator { font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .card-desc {
+    font-size:12px; color:var(--muted); line-height:1.6;
+    display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden; margin-bottom:16px;
+  }
+  .card-footer { display:flex; align-items:center; justify-content:space-between; }
+  .card-price { font-family:'Space Mono',monospace; font-size:15px; font-weight:700; color:var(--accent); }
+  .card-price small { font-size:10px; color:var(--muted); font-weight:400; }
+  .card-buy {
+    background: rgba(0,229,160,.1); border:1px solid rgba(0,229,160,.25);
+    color:var(--accent); font-family:'Space Mono',monospace;
+    font-size:11px; padding:7px 14px; border-radius:6px;
+    cursor:pointer; transition:all .2s;
+  }
+  .card-buy:hover { background: rgba(0,229,160,.2); }
+
+  .empty-state {
+    grid-column: 1/-1; text-align:center;
+    padding:60px 20px; color:var(--muted);
+    font-family:'Space Mono',monospace; font-size:13px;
+  }
+
+  /* ── DETAIL VIEW ── */
+  .detail-wrap { max-width:860px; margin:0 auto; padding:32px 24px; }
+  .back-btn {
+    background:none; border:none; color:var(--muted);
+    font-family:'Space Mono',monospace; font-size:12px;
+    cursor:pointer; margin-bottom:24px; padding:0;
+    transition:color .2s; display:flex; align-items:center; gap:6px;
+  }
+  .back-btn:hover { color:var(--text); }
+  .detail-grid { display:grid; grid-template-columns:1fr 280px; gap:24px; }
+  @media(max-width:640px){ .detail-grid{ grid-template-columns:1fr; } }
+
+  .detail-name { font-size:28px; font-weight:800; margin-bottom:6px; }
+  .detail-creator { font-size:13px; color:var(--muted); margin-bottom:16px; }
+  .detail-desc { font-size:14px; color:var(--muted); line-height:1.8; margin-bottom:24px; }
+  .detail-meta {
+    background: var(--card); border:1px solid var(--border);
+    border-radius:10px; padding:16px; margin-bottom:20px;
+  }
+  .meta-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .meta-row:last-child { border-bottom:none; }
+  .meta-label { color:var(--muted); }
+  .meta-val { font-family:'Space Mono',monospace; font-size:12px; }
+
+  /* ── DEACTIVATE PANEL ── */
+  .provider-panel {
+    background:rgba(239,68,68,.05); border:1px solid rgba(239,68,68,.15);
+    border-radius:10px; padding:14px 16px; margin-top:16px;
+    display:none;
+  }
+  .provider-panel-title { font-size:12px; color:var(--muted); margin-bottom:10px; letter-spacing:.06em; text-transform:uppercase; }
+  .btn-deactivate {
+    background:none; border:1px solid rgba(239,68,68,.4);
+    color:var(--red); font-family:'Space Mono',monospace;
+    font-size:12px; padding:8px 16px; border-radius:6px;
+    cursor:pointer; transition:all .2s; width:100%;
+  }
+  .btn-deactivate:hover { background:rgba(239,68,68,.08); }
+
+  .buy-box {
+    background: var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:20px; position:sticky; top:80px;
+  }
+  .buy-price {
+    font-family:'Space Mono',monospace; font-size:28px;
+    font-weight:700; color:var(--accent); margin-bottom:4px;
+  }
+  .buy-sub { font-size:12px; color:var(--muted); margin-bottom:20px; }
+  .duration-select {
+    width:100%; background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-family:'Syne',sans-serif; font-size:13px;
+    padding:10px 12px; border-radius:8px; margin-bottom:12px;
+    outline:none; cursor:pointer;
+  }
+  .access-badge {
+    background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2);
+    color:#10b981; border-radius:8px; padding:10px 14px;
+    font-size:12px; font-family:'Space Mono',monospace;
+    margin-bottom:12px; display:none;
+  }
+  .btn-buy-main {
+    width:100%; background:var(--accent); color:#000;
+    font-family:'Space Mono',monospace; font-weight:700;
+    font-size:13px; padding:14px; border-radius:8px; border:none;
+    cursor:pointer; transition:all .2s; letter-spacing:.04em;
+  }
+  .btn-buy-main:hover { transform:translateY(-1px); box-shadow:var(--glow); }
+  .btn-buy-main:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+
+  /* ── DEPLOY / LIST FORM ── */
+  .form-wrap { max-width:600px; margin:0 auto; padding:40px 24px; }
+  .form-title { font-size:26px; font-weight:800; margin-bottom:6px; }
+  .form-sub { font-size:14px; color:var(--muted); margin-bottom:32px; }
+  .form-group { margin-bottom:20px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; letter-spacing:.06em; text-transform:uppercase; }
+  input[type=text], input[type=number], textarea, select {
+    width:100%; background:var(--card); border:1px solid var(--border);
+    color:var(--text); font-family:'Syne',sans-serif; font-size:14px;
+    padding:12px 14px; border-radius:8px; outline:none; transition:border-color .2s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize:vertical; min-height:90px; }
+  select option { background:var(--card); }
+
+  /* ── CHAR COUNT ── */
+  .char-count { font-size:11px; color:var(--muted); text-align:right; margin-top:4px; font-family:'Space Mono',monospace; }
+  .char-count.warn { color:var(--warn); }
+
+  .form-submit {
+    width:100%; background:var(--accent); color:#000;
+    font-family:'Space Mono',monospace; font-weight:700;
+    font-size:14px; padding:14px; border-radius:8px; border:none;
+    cursor:pointer; transition:all .2s; margin-top:8px;
+  }
+  .form-submit:hover { box-shadow:var(--glow); }
+  .form-submit:disabled { opacity:.5; cursor:not-allowed; }
+
+  /* ── MODALS ── */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+    align-items:center; justify-content:center;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:28px; width:90%; max-width:420px;
+    position:relative; animation:slideUp .25s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-close {
+    position:absolute; top:16px; right:16px;
+    background:none; border:none; color:var(--muted);
+    font-size:18px; cursor:pointer; transition:color .2s;
+  }
+  .modal-close:hover { color:var(--text); }
+  .modal h3 { font-size:18px; font-weight:700; margin-bottom:6px; }
+  .modal p { font-size:13px; color:var(--muted); margin-bottom:20px; }
+
+  .wallet-option {
+    display:flex; align-items:center; gap:14px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:10px; padding:14px 16px; margin-bottom:10px;
+    cursor:pointer; transition:all .2s;
+  }
+  .wallet-option:hover { border-color:var(--accent); }
+  .wallet-option .wicon { font-size:22px; }
+  .wallet-option .wname { font-size:14px; font-weight:600; }
+  .wallet-option .wsub { font-size:11px; color:var(--muted); }
+
+  /* ── BALANCE PILL IN WALLET MODAL ── */
+  .balance-pill {
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(0,229,160,.06); border:1px solid rgba(0,229,160,.15);
+    border-radius:8px; padding:10px 14px; margin-bottom:16px;
+    font-family:'Space Mono',monospace; font-size:13px;
+  }
+  .balance-pill span:last-child { color:var(--accent); font-weight:700; }
+
+  .purchase-row { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; border-bottom:1px solid var(--border); }
+  .purchase-row:last-of-type { border-bottom:none; }
+  .purchase-total { display:flex; justify-content:space-between; padding:12px 0 0; font-size:15px; font-weight:700; }
+  .purchase-total span:last-child { font-family:'Space Mono',monospace; color:var(--accent); }
+
+  /* ── INSUFFICIENT BALANCE WARNING ── */
+  .balance-warning {
+    background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2);
+    color:var(--red); border-radius:8px; padding:10px 14px;
+    font-size:12px; font-family:'Space Mono',monospace;
+    margin-bottom:12px; display:none;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-family:'Space Mono',monospace; font-size:12px;
+    padding:12px 20px; border-radius:10px; z-index:300;
+    opacity:0; transition:opacity .3s; pointer-events:none;
+    max-width:380px; text-align:center;
+  }
+  #toast.show { opacity:1; }
+  #toast.success { border-color: rgba(16,185,129,.4); color:#10b981; }
+  #toast.error { border-color: rgba(239,68,68,.4); color:var(--red); }
+
+  /* ── MY ACCESS ── */
+  .section-title { font-size:20px; font-weight:800; margin-bottom:20px; }
+  .access-list { max-width:800px; margin:0 auto; padding:32px 24px; }
+  .access-item {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:10px; padding:16px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .access-info .a-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+  .access-info .a-exp { font-size:11px; font-family:'Space Mono',monospace; color:var(--muted); }
+  .access-info .a-exp.active-access { color:#10b981; }
+
+  .access-item-actions { display:flex; align-items:center; gap:10px; }
+  .btn-renew {
+    background:none; border:1px solid rgba(0,229,160,.3);
+    color:var(--accent); font-family:'Space Mono',monospace;
+    font-size:11px; padding:6px 12px; border-radius:6px;
+    cursor:pointer; transition:all .2s;
+  }
+  .btn-renew:hover { background:rgba(0,229,160,.08); }
+
+  /* ── NODE STATUS ── */
+  .node-status {
+    position:fixed; bottom:24px; right:24px; z-index:50;
+    display:flex; align-items:center; gap:8px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:100px; padding:7px 14px;
+    font-family:'Space Mono',monospace; font-size:11px; color:var(--muted);
+    transition:all .3s;
+  }
+  .node-status .nd { width:7px;height:7px;border-radius:50%; transition:background .3s; }
+  .node-status.live { border-color:rgba(16,185,129,.3); color:#10b981; }
+  .node-status.live .nd { background:#10b981; box-shadow:0 0 6px #10b981; }
+  .node-status.dead .nd { background:var(--muted); }
+  .node-status.checking .nd { background:var(--warn); animation:pulse 1s infinite; }
+
+  /* loading spinner */
+  .spinner {
+    width:16px;height:16px; border:2px solid rgba(0,229,160,.2);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin .7s linear infinite; display:inline-block; vertical-align:middle;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* success screen */
+  .success-screen { text-align:center; padding:40px 20px; display:none; }
+  .success-screen.active { display:block; }
+  .success-icon { font-size:48px; margin-bottom:16px; }
+  .success-screen h3 { font-size:20px; font-weight:700; margin-bottom:8px; }
+  .success-screen p { font-size:13px; color:var(--muted); margin-bottom:24px; }
+
+  /* ── TX HASH DISPLAY ── */
+  .tx-hash-box {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; margin-top:12px;
+    font-family:'Space Mono',monospace; font-size:11px; color:var(--muted);
+    word-break:break-all; display:none;
+  }
+  .tx-hash-box span { color:var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo" onclick="showPage('marketplace')">A <span>ATRIUM LAB</span></div>
+  <div class="nav-links">
+    <button class="nav-btn active" onclick="showPage('marketplace')">Marketplace</button>
+    <button class="nav-btn" onclick="showPage('deploy')">Deploy Agent</button>
+    <button class="nav-btn" onclick="showPage('my-access')">My Access</button>
+  </div>
+  <button class="nav-btn" id="wallet-btn" onclick="openWalletModal()">◎ Connect Wallet</button>
+</nav>
+
+<!-- NODE STATUS INDICATOR -->
+<div class="node-status checking" id="node-status">
+  <div class="nd"></div>
+  <span id="node-status-text">Connecting…</span>
+</div>
+
+<!-- ═══════════ PAGE: MARKETPLACE ═══════════ -->
+<div class="page active" id="page-marketplace">
+  <div class="hero">
+    <div class="hero-badge"><span class="dot"></span> LIVE ON CANOPY TESTNET</div>
+    <h1>Buy & Deploy <em>AI Agents</em><br/>On-Chain</h1>
+    <p class="hero-sub">Access verified AI models and autonomous agents from independent developers worldwide. All payments in CNPY. No middlemen. No gatekeepers.</p>
+    <div class="hero-ctas">
+      <button class="btn-primary" onclick="document.getElementById('grid-section').scrollIntoView({behavior:'smooth'})">Browse Models →</button>
+      <button class="btn-outline" onclick="showPage('deploy')">Deploy Your Agent</button>
+    </div>
+  </div>
+
+  <div class="stats-bar" style="margin:0 auto 56px; max-width:700px; position:relative; z-index:1;">
+    <div class="stat-item">
+      <span class="stat-num" id="stat-listings">—</span>
+      <span class="stat-label">Models Listed</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-volume">—</span>
+      <span class="stat-label">CNPY Volume</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-verified">—</span>
+      <span class="stat-label">Verified Providers</span>
+    </div>
+  </div>
+
+  <div id="grid-section">
+    <div class="marketplace-header">
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="filterCat(this,'')">All</button>
+        <button class="filter-tab" onclick="filterCat(this,'language_model')">Language Models</button>
+        <button class="filter-tab" onclick="filterCat(this,'ai_agent')">AI Agents</button>
+        <button class="filter-tab" onclick="filterCat(this,'image')">Image</button>
+        <button class="filter-tab" onclick="filterCat(this,'defi')">DeFi</button>
+        <button class="filter-tab" onclick="filterCat(this,'code')">Code</button>
+      </div>
+      <input class="search-box" placeholder="⌕  Search agents..." oninput="searchListings(this.value)" id="search-input"/>
+    </div>
+    <div class="grid" id="listings-grid">
+      <div class="empty-state">Loading listings from Canopy node…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: DETAIL ═══════════ -->
+<div class="page" id="page-detail">
+  <div class="detail-wrap">
+    <button class="back-btn" onclick="showPage('marketplace')">← Back to Marketplace</button>
+    <div class="detail-grid">
+      <div class="detail-main">
+        <div id="detail-badges" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;"></div>
+        <div class="detail-name" id="detail-name">—</div>
+        <div class="detail-creator" id="detail-creator">—</div>
+        <div class="detail-desc" id="detail-desc">—</div>
+        <div class="detail-meta" id="detail-meta"></div>
+        <!-- Provider controls -->
+        <div class="provider-panel" id="provider-panel">
+          <div class="provider-panel-title">Provider Controls</div>
+          <button class="btn-deactivate" id="deactivate-btn" onclick="handleDeactivate()">Deactivate This Listing</button>
+        </div>
+      </div>
+      <div class="detail-sidebar">
+        <div class="buy-box">
+          <div class="buy-price" id="detail-price">—</div>
+          <div class="buy-sub">per month · cancel anytime</div>
+          <div class="access-badge" id="detail-access-badge">✓ You have active access</div>
+          <div class="balance-warning" id="detail-balance-warning">Insufficient CNPY balance for this purchase.</div>
+          <select class="duration-select" id="duration-select" onchange="updateTotal()">
+            <option value="1">1 month</option>
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="12">12 months</option>
+          </select>
+          <button class="btn-buy-main" id="detail-buy-btn" onclick="triggerPurchase()">Buy Access →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: DEPLOY ═══════════ -->
+<div class="page" id="page-deploy">
+  <div class="form-wrap">
+    <div id="deploy-form-view">
+      <div class="form-title">List Your AI Model</div>
+      <div class="form-sub">Submit your AI model or autonomous agent to the Atrium Lab marketplace. Verified listings receive priority placement and a trust badge.</div>
+
+      <div class="form-group">
+        <label>Model Name *</label>
+        <input type="text" id="f-name" placeholder="e.g. SHELBY — Atrium Intelligence Agent" maxlength="80" oninput="updateCharCount('f-name','f-name-count',80)"/>
+        <div class="char-count" id="f-name-count">0 / 80</div>
+      </div>
+      <div class="form-group">
+        <label>Description *</label>
+        <textarea id="f-desc" placeholder="What does this agent do? What problems does it solve?" maxlength="400" oninput="updateCharCount('f-desc','f-desc-count',400)"></textarea>
+        <div class="char-count" id="f-desc-count">0 / 400</div>
+      </div>
+      <div class="form-group">
+        <label>Category *</label>
+        <select id="f-cat">
+          <option value="">Select category</option>
+          <option value="language_model">Language Model</option>
+          <option value="ai_agent">AI Agent</option>
+          <option value="image">Image Model</option>
+          <option value="defi">DeFi Model</option>
+          <option value="code">Code Model</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Price (CNPY / month) *</label>
+        <input type="number" id="f-price" placeholder="e.g. 50" min="1" step="0.01"/>
+      </div>
+      <div class="form-group">
+        <label>GitHub / Documentation Link</label>
+        <input type="text" id="f-link" placeholder="https://github.com/…"/>
+      </div>
+      <button class="form-submit" id="deploy-btn" onclick="handleListingSubmit()">Submit for Review →</button>
+    </div>
+
+    <div class="success-screen" id="deploy-success">
+      <div class="success-icon">✅</div>
+      <h3>Submission Received</h3>
+      <p>Your model has been submitted to the Canopy node. The Atrium Lab team will verify it within 48 hours and notify you when it goes live.</p>
+      <div class="tx-hash-box" id="deploy-tx-box">TX: <span id="deploy-tx-hash">—</span></div>
+      <br/>
+      <button class="btn-primary" onclick="resetDeploy()">Back to Marketplace →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PAGE: MY ACCESS ═══════════ -->
+<div class="page" id="page-my-access">
+  <div class="access-list">
+    <div class="section-title">My Access</div>
+    <div id="access-items">
+      <div class="empty-state" style="padding:40px 0">Connect your wallet to view active subscriptions.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: WALLET ═══════════ -->
+<div class="modal-overlay" id="wallet-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeWalletModal()">✕</button>
+    <h3 id="wallet-modal-title">Choose Your Wallet</h3>
+    <p id="wallet-modal-sub">Connect your wallet to buy model access, track subscriptions, and earn CNPY as a provider.</p>
+    <!-- Connected state (hidden by default) -->
+    <div id="wallet-connected-view" style="display:none;">
+      <div class="balance-pill">
+        <span>CNPY Balance</span>
+        <span id="modal-balance-display">—</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;word-break:break-all;margin-bottom:16px;" id="modal-full-address">—</div>
+      <button class="btn-outline" style="width:100%;margin-bottom:0" onclick="handleDisconnect()">Disconnect Wallet</button>
+    </div>
+    <!-- Disconnected state -->
+    <div id="wallet-connect-view">
+      <div class="wallet-option" onclick="mockConnect('0xA1b2C3d4E5f6A1b2C3d4E5f6A1b2C3d4E5f6A1b2')">
+        <span class="wicon">🦊</span>
+        <div><div class="wname">MetaMask</div><div class="wsub">Most popular Ethereum wallet</div></div>
+      </div>
+      <div class="wallet-option" onclick="mockConnect('0xB2c3D4e5F6A7b2C3d4E5f6A7b2C3d4E5f6A7b2C3')">
+        <span class="wicon">🔵</span>
+        <div><div class="wname">WalletConnect</div><div class="wsub">Connect any mobile wallet</div></div>
+      </div>
+      <div class="wallet-option" onclick="mockConnect('0xC3d4E5f6A1b2C3d4E5f6A1b2C3d4E5f6A1b2C3d4')">
+        <span class="wicon">⬡</span>
+        <div><div class="wname">Coinbase Wallet</div><div class="wsub">Simple and secure</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: PURCHASE ═══════════ -->
+<div class="modal-overlay" id="purchase-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closePurchaseModal()">✕</button>
+    <h3>Confirm Payment</h3>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin:16px 0;">
+      <div class="purchase-row"><span id="pm-name" style="font-weight:600">—</span><span></span></div>
+      <div class="purchase-row"><span>Subscription</span><span id="pm-sub" style="font-family:'Space Mono',monospace">—</span></div>
+      <div class="purchase-row"><span>Platform fee (2%)</span><span id="pm-fee" style="font-family:'Space Mono',monospace">—</span></div>
+      <div class="purchase-row"><span>Provider receives</span><span id="pm-provider" style="font-family:'Space Mono',monospace;color:var(--muted)">—</span></div>
+      <div class="purchase-row"><span>Network</span><span style="font-family:'Space Mono',monospace;color:var(--muted)">Canopy Testnet</span></div>
+      <div class="purchase-total"><span>Total</span><span id="pm-total">—</span></div>
+    </div>
+    <div class="balance-warning" id="pm-balance-warning">Insufficient CNPY balance.</div>
+    <button class="btn-buy-main" id="confirm-purchase-btn" onclick="confirmPurchase()">◎ Pay with CNPY</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CANOPY CLIENT
+// ═══════════════════════════════════════════════════════
+
+const CANOPY_RPC = 'http://localhost:50002';
+let _walletAddress = null;
+
+function setWallet(address) { _walletAddress = address; }
+function getWallet() {
+  if (!_walletAddress) throw new Error('No wallet connected.');
+  return _walletAddress;
+}
+function disconnectWallet() { _walletAddress = null; }
+
+async function rpcSend(payload) {
+  try {
+    const res = await fetch(`${CANOPY_RPC}/tx`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) { const err = await res.text(); return {ok:false,error:err||`HTTP ${res.status}`}; }
+    const data = await res.json();
+    return {ok:true, data, txHash: data?.txHash};
+  } catch(e) { return {ok:false, error:e.message}; }
+}
+
+async function rpcQuery(path, params) {
+  try {
+    const url = new URL(`${CANOPY_RPC}/${path}`);
+    if (params) Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+    const res = await fetch(url.toString());
+    if (!res.ok) { const err = await res.text(); return {ok:false,error:err||`HTTP ${res.status}`}; }
+    const data = await res.json();
+    return {ok:true, data};
+  } catch(e) { return {ok:false, error:e.message}; }
+}
+
+async function listAgent(params) {
+  return rpcSend({type:'ListAgent', caller:getWallet(), ...params});
+}
+async function buyAccess(params) {
+  return rpcSend({type:'BuyAccess', caller:getWallet(), ...params});
+}
+async function verifyListing(listingId) {
+  return rpcSend({type:'VerifyListing', caller:getWallet(), listingId});
+}
+async function deactivateListing(listingId) {
+  return rpcSend({type:'DeactivateListing', caller:getWallet(), listingId});
+}
+async function getListings(category) {
+  const params = {};
+  if (category) params.category = category;
+  return rpcQuery('state/listings', params);
+}
+async function getListing(listingId) {
+  return rpcQuery(`state/listings/${listingId}`);
+}
+async function getMyAccess() {
+  return rpcQuery('state/access', {buyer: getWallet()});
+}
+async function getMarketplaceStats() {
+  return rpcQuery('state/marketplace');
+}
+async function getBalance(address) {
+  return rpcQuery('state/balance', {address: address ?? getWallet()});
+}
+
+// ═══════════════════════════════════════════════════════
+// MOCK DATA — shown when Canopy node is unreachable
+// ═══════════════════════════════════════════════════════
+
+const MOCK_LISTINGS = [
+  {id:'a1b2c3d4',creator:'0xA1b2C3d4E5f6A1b2C3d4E5f6A1b2C3d4E5f6A1b2',name:'SHELBY — Atrium Intelligence',description:'Autonomous AI agent for Canopy marketplace ops. Built by Atrium Lab. Handles discovery, pricing analysis, and smart contract interactions.',category:'ai_agent',pricePerMonth:420,isVerified:true,isActive:true,createdAt:1000},
+  {id:'e5f6a7b8',creator:'0xDev...0x01',name:'NeuralScribe LLM',description:'Fine-tuned language model for long-form content generation. Specialises in DeFi research reports and on-chain analytics summaries.',category:'language_model',pricePerMonth:150,isVerified:true,isActive:true,createdAt:980},
+  {id:'c9d0e1f2',creator:'0xArt...GenX',name:'PixelForge — Image Engine',description:'High-fidelity image generation model optimised for NFT art, protocol branding, and generative on-chain assets.',category:'image',pricePerMonth:80,isVerified:false,isActive:true,createdAt:960},
+  {id:'a3b4c5d6',creator:'0xFi...Quant',name:'YieldBot DeFi Strategist',description:'Automated DeFi yield optimization agent. Scans liquidity pools across Nested Chains and executes optimal LP positions.',category:'defi',pricePerMonth:600,isVerified:true,isActive:true,createdAt:940},
+  {id:'e7f8a9b0',creator:'0xCode...PhD',name:'Solidity Auditor v2',description:'Smart contract security analysis agent. Detects reentrancy, integer overflow, and access control vulnerabilities.',category:'code',pricePerMonth:320,isVerified:false,isActive:true,createdAt:920},
+  {id:'c1d2e3f4',creator:'0xChain...AI',name:'ChainGPT — Cross-Chain LLM',description:'Language model with native awareness of Canopy Network architecture. Understands FROST, Remote Programmable Wallets, and Nested Chain mechanics.',category:'language_model',pricePerMonth:250,isVerified:true,isActive:true,createdAt:900},
+];
+
+const MOCK_STATS = {totalVolume: 187420, treasury:'0xTreas...0000'};
+let MOCK_ACCESS = [];
+
+// ═══════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════
+
+let allListings = [];
+let currentFilter = '';
+let currentSearchQuery = '';
+let currentListing = null;
+let isConnected = false;
+let mockBalance = 5000;
+let nodeOnline = false;
+const SIMULATED_BLOCK = 1100;
+
+const CAT_ICONS = {
+  language_model:'🧠', ai_agent:'🤖', image:'🎨', defi:'💠', code:'</>'
+};
+
+// ═══════════════════════════════════════════════════════
+// NODE STATUS PROBE
+// ═══════════════════════════════════════════════════════
+
+async function probeNode() {
+  const el = document.getElementById('node-status');
+  const txt = document.getElementById('node-status-text');
+  el.className = 'node-status checking';
+  txt.textContent = 'Connecting…';
+  const res = await getMarketplaceStats();
+  nodeOnline = res.ok;
+  if (nodeOnline) {
+    el.className = 'node-status live';
+    txt.textContent = 'Canopy Node Live';
+  } else {
+    el.className = 'node-status dead';
+    txt.textContent = 'Demo Mode (node offline)';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+
+async function init() {
+  await probeNode();
+  await loadStats();
+  await loadListings();
+}
+
+async function loadStats() {
+  const res = await getMarketplaceStats();
+  const stats = res.ok && res.data ? res.data : MOCK_STATS;
+  document.getElementById('stat-volume').textContent = formatCNPY(stats.totalVolume);
+
+  const listRes = await getListings();
+  const listings = (listRes.ok && listRes.data) ? listRes.data : MOCK_LISTINGS;
+  const active = listings.filter(l => l.isActive);
+  const verified = active.filter(l => l.isVerified).length;
+  document.getElementById('stat-listings').textContent = active.length;
+  document.getElementById('stat-verified').textContent = verified;
+}
+
+async function loadListings(category) {
+  const res = await getListings(category);
+  if (res.ok && res.data) {
+    allListings = res.data.filter(l => l.isActive);
+  } else {
+    allListings = MOCK_LISTINGS.filter(l => l.isActive);
+  }
+  renderGrid();
+}
+
+async function refreshMyAccess() {
+  const el = document.getElementById('access-items');
+  if (!isConnected) {
+    el.innerHTML = '<div class="empty-state" style="padding:40px 0">Connect your wallet to view active subscriptions.</div>';
+    return;
+  }
+  const res = await getMyAccess().catch(() => ({ok:false}));
+  const records = (res.ok && res.data) ? res.data : MOCK_ACCESS;
+  if (!records.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:40px 0; font-family:\'Space Mono\',monospace; font-size:13px; color:var(--muted)">No active subscriptions yet.</div>';
+    return;
+  }
+  el.innerHTML = records.map(a => {
+    const listing = allListings.find(l => l.id === a.listingId) || {name: a.listingId};
+    const exp = `Expires at block ${a.expiresAt} · Paid ${a.paidAmount} CNPY`;
+    const isActive = a.expiresAt > SIMULATED_BLOCK;
+    return `<div class="access-item">
+      <div class="access-info">
+        <div class="a-name">${listing.name}</div>
+        <div class="a-exp ${isActive?'active-access':''}">${exp}</div>
+      </div>
+      <div class="access-item-actions">
+        <button class="btn-renew" onclick="openDetailAndBuy('${a.listingId}')">Renew →</button>
+        <span class="badge ${isActive?'badge-verified':'badge-inactive'}">${isActive?'ACTIVE':'EXPIRED'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// GRID RENDER
+// ═══════════════════════════════════════════════════════
+
+function renderGrid() {
+  let filtered = allListings;
+  if (currentFilter) filtered = filtered.filter(l => l.category === currentFilter);
+  if (currentSearchQuery) {
+    const q = currentSearchQuery.toLowerCase();
+    filtered = filtered.filter(l =>
+      l.name.toLowerCase().includes(q) ||
+      l.description.toLowerCase().includes(q) ||
+      l.creator.toLowerCase().includes(q)
+    );
+  }
+  const grid = document.getElementById('listings-grid');
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty-state">No agents found. Try a different filter or search.</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(l => {
+    const isOwned = isConnected && l.creator === _walletAddress;
+    return `<div class="agent-card" onclick="openDetail('${l.id}')">
+      <div class="card-header">
+        <div class="card-icon">${CAT_ICONS[l.category]||'🔮'}</div>
+        <div class="card-badges">
+          ${l.isVerified ? '<span class="badge badge-verified">✓ VERIFIED</span>' : ''}
+          ${isOwned ? '<span class="badge badge-mine">YOUR LISTING</span>' : ''}
+          <span class="badge badge-cat">${l.category.replace('_',' ')}</span>
+        </div>
+      </div>
+      <div class="card-name">${l.name}</div>
+      <div class="card-creator">by ${l.creator.length > 20 ? l.creator.slice(0,10)+'…'+l.creator.slice(-4) : l.creator}</div>
+      <div class="card-desc">${l.description}</div>
+      <div class="card-footer">
+        <div class="card-price">${l.pricePerMonth} CNPY <small>/ mo</small></div>
+        <button class="card-buy" onclick="event.stopPropagation();openDetail('${l.id}')">${isOwned?'Manage →':'Buy →'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterCat(btn, cat) {
+  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = cat;
+  renderGrid();
+}
+
+function searchListings(q) {
+  currentSearchQuery = q;
+  renderGrid();
+}
+
+// ═══════════════════════════════════════════════════════
+// DETAIL PAGE
+// ═══════════════════════════════════════════════════════
+
+async function openDetail(listingId) {
+  let listing = allListings.find(l => l.id === listingId);
+  if (!listing) {
+    const res = await getListing(listingId);
+    listing = res.ok && res.data ? res.data : null;
+  }
+  if (!listing) { showToast('Listing not found.', 'error'); return; }
+
+  currentListing = listing;
+  document.getElementById('detail-name').textContent = listing.name;
+  document.getElementById('detail-creator').textContent = `by ${listing.creator}`;
+  document.getElementById('detail-desc').textContent = listing.description;
+  document.getElementById('detail-price').textContent = `${listing.pricePerMonth} CNPY`;
+
+  document.getElementById('detail-badges').innerHTML = `
+    ${listing.isVerified ? '<span class="badge badge-verified">✓ VERIFIED</span>' : ''}
+    <span class="badge badge-cat">${listing.category.replace('_',' ')}</span>
+  `;
+
+  document.getElementById('detail-meta').innerHTML = `
+    <div class="meta-row"><span class="meta-label">Network</span><span class="meta-val">Canopy</span></div>
+    <div class="meta-row"><span class="meta-label">Payment</span><span class="meta-val">CNPY</span></div>
+    <div class="meta-row"><span class="meta-label">Listing ID</span><span class="meta-val">${listing.id}</span></div>
+    <div class="meta-row"><span class="meta-label">Verified</span><span class="meta-val" style="color:${listing.isVerified?'#10b981':'var(--muted)'}">${listing.isVerified?'✓ Yes':'Pending'}</span></div>
+    <div class="meta-row"><span class="meta-label">Created Block</span><span class="meta-val">${listing.createdAt}</span></div>
+  `;
+
+  // Show provider panel if this is the caller's listing
+  const providerPanel = document.getElementById('provider-panel');
+  if (isConnected && listing.creator === _walletAddress) {
+    providerPanel.style.display = 'block';
+  } else {
+    providerPanel.style.display = 'none';
+  }
+
+  document.getElementById('detail-balance-warning').style.display = 'none';
+  updateTotal();
+  await checkDetailAccess(listingId);
+  showPage('detail');
+}
+
+async function openDetailAndBuy(listingId) {
+  await openDetail(listingId);
+  showPage('detail');
+}
+
+async function checkDetailAccess(listingId) {
+  const badge = document.getElementById('detail-access-badge');
+  const buyBtn = document.getElementById('detail-buy-btn');
+  badge.style.display = 'none';
+  buyBtn.style.display = 'block';
+  buyBtn.disabled = false;
+
+  // Hide buy button if this is the provider's own listing
+  if (isConnected && currentListing && currentListing.creator === _walletAddress) {
+    buyBtn.style.display = 'none';
+    return;
+  }
+
+  if (!isConnected) return;
+  const res = await getMyAccess().catch(() => ({ok:false}));
+  const records = (res.ok && res.data) ? res.data : MOCK_ACCESS;
+  const active = records.find(a => a.listingId === listingId && a.expiresAt > SIMULATED_BLOCK);
+  if (active) {
+    badge.textContent = `✓ Active access until block ${active.expiresAt}`;
+    badge.style.display = 'block';
+    buyBtn.textContent = 'Renew Access →';
+  }
+}
+
+function updateTotal() {
+  if (!currentListing) return;
+  const months = parseInt(document.getElementById('duration-select').value);
+  const total = currentListing.pricePerMonth * months;
+  document.getElementById('detail-buy-btn').textContent = `Buy ${months}mo — ${total} CNPY →`;
+
+  // Live balance check
+  const warn = document.getElementById('detail-balance-warning');
+  if (isConnected && mockBalance < total) {
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// WALLET
+// ═══════════════════════════════════════════════════════
+
+function openWalletModal() {
+  if (isConnected) {
+    // Show connected state in modal
+    document.getElementById('wallet-modal-title').textContent = 'Wallet Connected';
+    document.getElementById('wallet-modal-sub').textContent = '';
+    document.getElementById('wallet-connected-view').style.display = 'block';
+    document.getElementById('wallet-connect-view').style.display = 'none';
+    document.getElementById('modal-balance-display').textContent = `${mockBalance} CNPY`;
+    document.getElementById('modal-full-address').textContent = _walletAddress;
+  } else {
+    document.getElementById('wallet-modal-title').textContent = 'Choose Your Wallet';
+    document.getElementById('wallet-modal-sub').textContent = 'Connect your wallet to buy model access, track subscriptions, and earn CNPY as a provider.';
+    document.getElementById('wallet-connected-view').style.display = 'none';
+    document.getElementById('wallet-connect-view').style.display = 'block';
+  }
+  document.getElementById('wallet-modal').classList.add('open');
+}
+
+function closeWalletModal() {
+  document.getElementById('wallet-modal').classList.remove('open');
+}
+
+async function mockConnect(address) {
+  closeWalletModal();
+  setWallet(address);
+  isConnected = true;
+
+  const btn = document.getElementById('wallet-btn');
+  const short = address.slice(0,6) + '…' + address.slice(-4);
+  btn.textContent = `◎ ${short}`;
+  btn.classList.add('connected');
+
+  showToast(`Wallet connected — ${mockBalance} CNPY available`, 'success');
+  renderGrid(); // re-render to show "YOUR LISTING" badges
+  await refreshMyAccess();
+}
+
+function handleDisconnect() {
+  disconnectWallet();
+  isConnected = false;
+  const btn = document.getElementById('wallet-btn');
+  btn.textContent = '◎ Connect Wallet';
+  btn.classList.remove('connected');
+  closeWalletModal();
+  renderGrid();
+  refreshMyAccess();
+  showToast('Wallet disconnected.', '');
+}
+
+// ═══════════════════════════════════════════════════════
+// BUY / PURCHASE FLOW
+// ═══════════════════════════════════════════════════════
+
+function triggerPurchase() {
+  if (!isConnected) { openWalletModal(); return; }
+  if (!currentListing) return;
+
+  const months = parseInt(document.getElementById('duration-select').value);
+  const sub = currentListing.pricePerMonth * months;
+  const fee = Math.floor(sub * 200 / 10000);
+  const providerReceives = sub - fee;
+
+  document.getElementById('pm-name').textContent = currentListing.name;
+  document.getElementById('pm-sub').textContent = `${sub} CNPY`;
+  document.getElementById('pm-fee').textContent = `${fee} CNPY`;
+  document.getElementById('pm-provider').textContent = `${providerReceives} CNPY`;
+  document.getElementById('pm-total').textContent = `${sub} CNPY`;
+
+  // Balance check in modal
+  const warn = document.getElementById('pm-balance-warning');
+  const confirmBtn = document.getElementById('confirm-purchase-btn');
+  if (mockBalance < sub) {
+    warn.style.display = 'block';
+    confirmBtn.disabled = true;
+  } else {
+    warn.style.display = 'none';
+    confirmBtn.disabled = false;
+  }
+
+  const btn = document.getElementById('confirm-purchase-btn');
+  btn.dataset.listingId = currentListing.id;
+  btn.dataset.months = months;
+  btn.dataset.cost = sub;
+
+  document.getElementById('purchase-modal').classList.add('open');
+}
+
+function closePurchaseModal() {
+  document.getElementById('purchase-modal').classList.remove('open');
+}
+
+async function confirmPurchase() {
+  const btn = document.getElementById('confirm-purchase-btn');
+  const listingId = btn.dataset.listingId;
+  const months = parseInt(btn.dataset.months);
+  const cost = parseFloat(btn.dataset.cost);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+
+  const res = await buyAccess({listingId, durationMonths: months});
+  const newAccess = {
+    id: res.txHash || 'sim'+Date.now(),
+    listingId,
+    buyer: _walletAddress,
+    expiresAt: SIMULATED_BLOCK + months * 43200,
+    paidAmount: cost
+  };
+
+  mockBalance -= cost;
+  MOCK_ACCESS.push(newAccess);
+  closePurchaseModal();
+
+  if (res.ok) {
+    showToast(`Access granted! ${months}mo active. TX: ${res.txHash?.slice(0,12)}…`, 'success');
+  } else {
+    showToast(`Access granted (demo)! ${months}mo subscription active.`, 'success');
+  }
+
+  await checkDetailAccess(listingId);
+  updateTotal();
+  await refreshMyAccess();
+
+  btn.disabled = false;
+  btn.textContent = '◎ Pay with CNPY';
+}
+
+// ═══════════════════════════════════════════════════════
+// PROVIDER: DEACTIVATE
+// ═══════════════════════════════════════════════════════
+
+async function handleDeactivate() {
+  if (!currentListing) return;
+  if (!confirm(`Deactivate "${currentListing.name}"? This removes it from the marketplace and cannot be undone.`)) return;
+
+  const btn = document.getElementById('deactivate-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Deactivating…';
+
+  const res = await deactivateListing(currentListing.id);
+
+  // Update local state regardless of node response
+  allListings = allListings.filter(l => l.id !== currentListing.id);
+
+  if (res.ok) {
+    showToast('Listing deactivated onchain.', 'success');
+  } else {
+    showToast('Listing deactivated (demo mode).', 'success');
+  }
+
+  showPage('marketplace');
+  renderGrid();
+  await loadStats();
+}
+
+// ═══════════════════════════════════════════════════════
+// DEPLOY FORM
+// ═══════════════════════════════════════════════════════
+
+function updateCharCount(inputId, countId, max) {
+  const val = document.getElementById(inputId).value.length;
+  const el = document.getElementById(countId);
+  el.textContent = `${val} / ${max}`;
+  el.className = val > max * 0.85 ? 'char-count warn' : 'char-count';
+}
+
+async function handleListingSubmit() {
+  if (!isConnected) { openWalletModal(); return; }
+
+  const name = document.getElementById('f-name').value.trim();
+  const description = document.getElementById('f-desc').value.trim();
+  const category = document.getElementById('f-cat').value;
+  const pricePerMonth = parseFloat(document.getElementById('f-price').value);
+
+  if (!name) { showToast('Agent name is required.', 'error'); return; }
+  if (!category) { showToast('Please select a category.', 'error'); return; }
+  if (!pricePerMonth || pricePerMonth <= 0) { showToast('Price must be greater than 0.', 'error'); return; }
+
+  const btn = document.getElementById('deploy-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting to Canopy…';
+
+  const res = await listAgent({name, description, category, pricePerMonth});
+  const newId = res.txHash || 'sim' + Date.now();
+
+  const newListing = {
+    id: newId,
+    creator: _walletAddress,
+    name, description, category, pricePerMonth,
+    isVerified: false, isActive: true, createdAt: SIMULATED_BLOCK
+  };
+  allListings.push(newListing);
+
+  btn.disabled = false;
+  btn.textContent = 'Submit for Review →';
+
+  // Show TX hash if we got one
+  const txBox = document.getElementById('deploy-tx-box');
+  const txHash = document.getElementById('deploy-tx-hash');
+  if (res.txHash) {
+    txBox.style.display = 'block';
+    txHash.textContent = res.txHash;
+  } else {
+    txBox.style.display = 'none';
+  }
+
+  document.getElementById('deploy-form-view').style.display = 'none';
+  document.getElementById('deploy-success').classList.add('active');
+  await loadStats();
+}
+
+function resetDeploy() {
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-cat').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-name-count').textContent = '0 / 80';
+  document.getElementById('f-desc-count').textContent = '0 / 400';
+  document.getElementById('deploy-form-view').style.display = 'block';
+  document.getElementById('deploy-success').classList.remove('active');
+  showPage('marketplace');
+  renderGrid();
+}
+
+// ═══════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${id}`).classList.add('active');
+
+  document.querySelectorAll('.nav-btn:not(#wallet-btn)').forEach(b => b.classList.remove('active'));
+  const map = {'marketplace':'Marketplace','deploy':'Deploy Agent','my-access':'My Access','detail':'Marketplace'};
+  document.querySelectorAll('.nav-btn:not(#wallet-btn)').forEach(b => {
+    if (b.textContent.trim() === map[id]) b.classList.add('active');
+  });
+
+  if (id === 'my-access') refreshMyAccess();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function formatCNPY(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
+  if (n >= 1000) return (n/1000).toFixed(1)+'K';
+  return n.toString();
+}
+
+let toastTimer;
+function showToast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
+
+// Close modals on overlay click
+document.getElementById('wallet-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeWalletModal(); });
+document.getElementById('purchase-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closePurchaseModal(); });
+
+// Boot
+init();
+</script>
+</body>
+</html>
