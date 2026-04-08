@@ -1,12 +1,13 @@
 package lib
 
 import (
-	"github.com/canopy-network/canopy/lib/crypto"
 	"maps"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/canopy-network/canopy/lib/crypto"
 )
 
 /* This file defines and implements a mempool that maintains an ordered list of 'valid, pending to be included' transactions in memory */
