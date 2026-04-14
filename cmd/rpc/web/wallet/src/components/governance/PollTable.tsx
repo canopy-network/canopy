@@ -95,7 +95,7 @@ export const PollTable: React.FC<PollTableProps> = ({
           <p className="text-xs text-muted-foreground mt-1">
             Built for high poll volume with dense information and quick actions.
           </p>
-          <div className="mt-2 h-1 w-28 rounded-full bg-gradient-to-r from-primary/80 via-primary/50 to-transparent" />
+          <div className="mt-2 h-1 w-28 rounded-full bg-primary/50" />
         </div>
         <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Visible</div>

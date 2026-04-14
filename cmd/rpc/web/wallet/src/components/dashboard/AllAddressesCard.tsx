@@ -26,7 +26,7 @@ const AddressRow = React.memo<{ address: AddressData; index: number; onClick?: (
         transition={{ duration: 0.18, delay: index * 0.04 }}
         onClick={onClick}
     >
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/70 to-primary/30 flex items-center justify-center flex-shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
             <span className="text-[10px] font-bold text-primary-foreground">
                 {address.nickname.charAt(0).toUpperCase()}
             </span>

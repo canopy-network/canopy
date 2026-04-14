@@ -15,10 +15,10 @@ import { useDS } from '@/core/useDs';
 const shortAddr = (address: string) => `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
 
 const NODE_ACCENT_COLORS = [
-    'from-primary/60 to-primary/30',
-    'from-orange-500/60 to-orange-500/30',
-    'from-blue-500/60 to-blue-500/30',
-    'from-rose-500/60 to-rose-500/30',
+    'bg-primary/25',
+    'bg-orange-500/25',
+    'bg-blue-500/25',
+    'bg-rose-500/25',
 ];
 
 interface ProcessedNode {
@@ -53,7 +53,7 @@ const ValidatorRow = React.memo<{
         >
             <td className="py-3 pr-4">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <div className={`w-6 h-6 rounded-md ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
                     <div>
                         <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
@@ -119,7 +119,7 @@ const ValidatorMobileCard = React.memo<{
         >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <div className={`w-6 h-6 rounded-md ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
                     <div>
                         <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}

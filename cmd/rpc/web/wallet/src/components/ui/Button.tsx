@@ -22,7 +22,7 @@ const buttonVariants = cva(
         clear2: "bg-transparent hover:bg-accent/70 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         neomorphic:
-          "border border-white/15 bg-[linear-gradient(145deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))] text-white hover:border-primary/35",
+          "border border-white/10 bg-secondary text-foreground hover:border-white/15 hover:bg-secondary/90",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

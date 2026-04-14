@@ -785,7 +785,7 @@ export default function ActionRunner({
                   <motion.div
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-xl border border-rose-500/40 bg-[linear-gradient(135deg,rgba(159,18,57,0.24),rgba(39,39,42,0.35))] p-3 sm:p-4"
+                    className="rounded-xl border border-rose-500/40 bg-rose-950/25 p-3 sm:p-4"
                   >
                     <div className="flex items-start gap-3">
                       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/45 bg-rose-500/20 text-rose-200">

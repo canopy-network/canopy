@@ -215,7 +215,7 @@ export const AllAddresses = () => {
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-r from-primary/80 to-primary/40 rounded-full flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 bg-primary/25 rounded-full flex items-center justify-center flex-shrink-0">
                             <Wallet className="text-foreground w-4 h-4" />
                           </div>
                           <div>

@@ -75,11 +75,11 @@ export const Accounts = () => {
 
   const getAccountIcon = (index: number) => {
     const icons = [
-      { icon: Wallet,          bg: "bg-gradient-to-br from-primary/80 to-primary/40"       },
-      { icon: Layers,          bg: "bg-gradient-to-br from-blue-500/80 to-blue-500/40"      },
-      { icon: ArrowLeftRight,  bg: "bg-gradient-to-br from-purple-500/80 to-purple-500/40"  },
-      { icon: Shield,          bg: "bg-gradient-to-br from-green-500/80 to-green-500/40"    },
-      { icon: Box,             bg: "bg-gradient-to-br from-red-500/80 to-red-500/40"        },
+      { icon: Wallet,          bg: "bg-primary/25"       },
+      { icon: Layers,          bg: "bg-blue-500/25"      },
+      { icon: ArrowLeftRight,  bg: "bg-purple-500/25"  },
+      { icon: Shield,          bg: "bg-emerald-500/25"    },
+      { icon: Box,             bg: "bg-red-500/25"        },
     ];
     return icons[index % icons.length];
   };

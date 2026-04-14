@@ -15,13 +15,11 @@ export const TopBar = (): JSX.Element => {
 
     return (
         <motion.header
-            className="relative z-20 hidden h-[52px] flex-shrink-0 items-center justify-between gap-3 border-b border-border/70 bg-[linear-gradient(180deg,rgba(20,20,20,0.82),rgba(13,13,13,0.72))] px-5 backdrop-blur-xl lg:flex"
+            className="relative z-20 hidden h-[52px] flex-shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-card px-5 lg:flex"
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
         >
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
-
             <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(69,202,70,0.12)]">
                     <span className="relative flex h-1.5 w-1.5 flex-shrink-0">

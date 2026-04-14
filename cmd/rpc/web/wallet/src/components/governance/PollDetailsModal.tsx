@@ -60,7 +60,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
               exit={{ opacity: 0, y: 20, scale: 0.97 }}
               transition={{ type: "spring", duration: 0.45 }}
             >
-              <div className="shrink-0 border-b border-border bg-gradient-to-r from-primary/10 via-card to-card p-4 sm:p-5">
+              <div className="shrink-0 border-b border-border bg-card p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center gap-2">

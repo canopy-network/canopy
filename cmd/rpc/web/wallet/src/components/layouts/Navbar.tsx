@@ -159,7 +159,7 @@ export const Navbar = (): JSX.Element => {
                                     style={{ background: 'hsl(var(--card))' }}
                                 >
                                     <div className="flex items-center gap-3 w-full min-w-0">
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-7 h-7 rounded-full bg-primary/25 flex items-center justify-center flex-shrink-0">
                                             <span className="text-xs font-bold text-foreground">
                                                 {selectedAccount?.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                             </span>
@@ -173,7 +173,7 @@ export const Navbar = (): JSX.Element => {
                                     {accounts.map((account, index) => (
                                         <SelectItem key={account.id} value={account.id} className="text-foreground hover:bg-muted">
                                             <div className="flex items-center gap-3 w-full">
-                                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center flex-shrink-0">
+                                                <div className="w-7 h-7 rounded-full bg-primary/25 flex items-center justify-center flex-shrink-0">
                                                     <span className="text-xs font-bold text-foreground">
                                                         {account.nickname?.charAt(0)?.toUpperCase() || 'A'}
                                                     </span>
