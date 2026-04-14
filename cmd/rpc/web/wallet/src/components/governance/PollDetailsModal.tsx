@@ -75,7 +75,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                     <h2 className="text-xl sm:text-2xl font-bold text-foreground truncate">
                       {poll.title || "Governance Poll"}
                     </h2>
-                    <p className="mt-1 text-xs text-muted-foreground font-mono">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {normalizedHash}
                     </p>
                   </div>
@@ -128,7 +128,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                       <div className="space-y-2 text-xs">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Proposal Ref</span>
-                          <span className="font-mono text-foreground break-all text-right">{poll.proposal || "-"}</span>
+                          <span className="text-foreground break-all text-right">{poll.proposal || "-"}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Display End</span>
@@ -136,7 +136,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Canonical Hash</span>
-                          <span className="font-mono text-foreground break-all text-right">{normalizedHash}</span>
+                          <span className="text-foreground break-all text-right">{normalizedHash}</span>
                         </div>
                       </div>
                     </div>

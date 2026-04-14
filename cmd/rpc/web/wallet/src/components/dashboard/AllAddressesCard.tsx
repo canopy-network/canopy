@@ -27,18 +27,18 @@ const AddressRow = React.memo<{ address: AddressData; index: number; onClick?: (
         onClick={onClick}
     >
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/70 to-primary/30 flex items-center justify-center flex-shrink-0">
-            <span className="font-mono text-[10px] font-bold text-primary-foreground">
+            <span className="text-[10px] font-bold text-primary-foreground">
                 {address.nickname.charAt(0).toUpperCase()}
             </span>
         </div>
 
         <div className="flex-1 min-w-0">
-            <div className="text-sm font-body font-medium text-foreground truncate leading-tight">{address.nickname}</div>
-            <div className="text-xs font-mono text-muted-foreground/60 mt-0.5">{address.address}</div>
+            <div className="text-sm font-medium text-foreground truncate leading-tight">{address.nickname}</div>
+            <div className="text-xs text-muted-foreground/60 mt-0.5">{address.address}</div>
         </div>
 
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <span className="text-xs font-mono font-semibold text-foreground tabular-nums">{Number(address.totalValue).toLocaleString()}</span>
+            <span className="text-xs font-semibold text-foreground tabular-nums">{Number(address.totalValue).toLocaleString()}</span>
             <StatusBadge label={address.status} size="sm" />
         </div>
     </motion.div>
@@ -99,13 +99,13 @@ export const AllAddressesCard = React.memo(() => {
                     <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                         <WalletCards className="text-primary" style={{ width: 13, height: 13 }} />
                     </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                         Addresses
                     </span>
                 </div>
                 <NavLink
                     to="/accounts"
-                    className="text-xs font-body text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
                 >
                     All ({processedAddresses.length})
                     <ChevronRight style={{ width: 12, height: 12 }} />

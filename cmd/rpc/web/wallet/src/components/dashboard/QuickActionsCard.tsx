@@ -85,7 +85,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
                 <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                     <Zap className="text-primary" style={{ width: 14, height: 14 }} />
                 </div>
-                <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                     Quick Actions
                 </span>
             </div>
@@ -106,7 +106,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
                         <div className="w-8 h-8 rounded-lg bg-muted/60 group-hover:bg-primary/15 flex items-center justify-center transition-colors duration-150 border border-border/40 group-hover:border-primary/20">
                             <LucideIcon name={a.icon || a.id} className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-150" />
                         </div>
-                        <span className="text-xs font-display font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
+                        <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors duration-150 text-center leading-tight">
                             {a.title ?? a.id}
                         </span>
                     </motion.button>

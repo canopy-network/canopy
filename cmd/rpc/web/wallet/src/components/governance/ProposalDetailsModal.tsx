@@ -89,7 +89,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         {proposal.title}
                                     </h2>
                                     <p className="text-sm text-muted-foreground">
-                                        Proposal ID: <span className="font-mono">{proposal.hash.slice(0, 16)}...</span>
+                                        Proposal ID: <span>{proposal.hash.slice(0, 16)}...</span>
                                     </p>
                                 </div>
                                 <button
@@ -160,7 +160,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                         <div className="bg-background rounded-xl p-4 space-y-3">
                                             <div className="flex justify-between items-center py-2 border-b border-border gap-3">
                                                 <span className="text-sm text-muted-foreground">Proposer</span>
-                                                <span className="text-sm text-foreground font-mono break-all text-right">
+                                                <span className="text-sm text-foreground break-all text-right">
                                                     {formatAddress(proposal.proposer)}
                                                 </span>
                                             </div>
@@ -172,13 +172,13 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                             </div>
                                             <div className="flex justify-between items-center py-2 border-b border-border">
                                                 <span className="text-sm text-muted-foreground">Start Block</span>
-                                                <span className="text-sm text-foreground font-mono">
+                                                <span className="text-sm text-foreground">
                                                     #{proposal.startHeight.toLocaleString()}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center py-2 border-b border-border">
                                                 <span className="text-sm text-muted-foreground">End Block</span>
-                                                <span className="text-sm text-foreground font-mono">
+                                                <span className="text-sm text-foreground">
                                                     #{proposal.endHeight.toLocaleString()}
                                                 </span>
                                             </div>
@@ -198,7 +198,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                                 Technical Details
                                             </h3>
                                             <div className="bg-background rounded-xl p-4 overflow-x-auto">
-                                                <pre className="text-xs text-foreground/80 font-mono whitespace-pre">
+                                                <pre className="text-xs text-foreground/80 whitespace-pre">
                                                     {JSON.stringify(proposal.msg, null, 2)}
                                                 </pre>
                                             </div>

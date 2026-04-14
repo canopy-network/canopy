@@ -821,7 +821,7 @@ export default function ActionRunner({
                                 <span className="text-rose-200/75">
                                   {errorPanelCopy.statusLabel}:
                                 </span>{" "}
-                                <span className="font-mono text-rose-50">
+                                <span className="text-rose-50">
                                   {inlineError.status || "N/A"} {inlineError.statusText}
                                 </span>
                               </div>
@@ -829,7 +829,7 @@ export default function ActionRunner({
                                 <span className="text-rose-200/75">
                                   {errorPanelCopy.requestLabel}:
                                 </span>{" "}
-                                <span className="font-mono text-rose-50 break-all">
+                                <span className="text-rose-50 break-all">
                                   {inlineError.requestMethod} {inlineError.requestPath}
                                 </span>
                               </div>
@@ -1127,7 +1127,7 @@ function GeneratedTxResult({
             )}
           </button>
         </div>
-        <pre className="max-h-72 overflow-auto p-3 text-[11px] text-foreground/90 whitespace-pre-wrap break-words font-mono">
+        <pre className="max-h-72 overflow-auto p-3 text-[11px] text-foreground/90 whitespace-pre-wrap break-words">
           {jsonStr}
         </pre>
       </div>

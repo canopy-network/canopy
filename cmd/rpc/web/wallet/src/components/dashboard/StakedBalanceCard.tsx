@@ -39,7 +39,7 @@ export const StakedBalanceCard = React.memo(() => {
                 <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                     <Coins className="text-primary" style={{ width: 14, height: 14 }} />
                 </div>
-                <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                     Total Staked Balance
                 </span>
             </div>
@@ -50,13 +50,13 @@ export const StakedBalanceCard = React.memo(() => {
                     <div className="h-9 w-36 rounded-md skeleton mb-1" />
                 ) : (
                     <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-[2.25rem] font-semibold text-foreground tabular-nums leading-none">
+                        <span className="text-[2.25rem] font-semibold text-foreground tabular-nums leading-none">
                             <AnimatedNumber
                                 value={totalStaked / 1_000_000}
                                 format={{ notation: 'standard', maximumFractionDigits: 2 }}
                             />
                         </span>
-                        <span className="font-mono text-sm font-medium text-muted-foreground/50">{symbol}</span>
+                        <span className="text-sm font-medium text-muted-foreground/50">{symbol}</span>
                     </div>
                 )}
             </div>

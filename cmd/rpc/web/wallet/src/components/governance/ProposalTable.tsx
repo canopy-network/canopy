@@ -261,7 +261,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground mb-1">{proposal.title}</div>
                           <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{proposal.description}</div>
-                          <div className="text-[11px] text-muted-foreground font-mono">
+                          <div className="text-[11px] text-muted-foreground">
                             {proposal.hash.slice(0, 12)}...{proposal.hash.slice(-6)}
                           </div>
                         </div>

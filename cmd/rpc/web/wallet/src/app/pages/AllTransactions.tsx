@@ -391,7 +391,7 @@ export const AllTransactions = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm text-foreground font-mono">
+                          <span className="text-sm text-foreground">
                             {tx.hash.slice(0, 8)}…{tx.hash.slice(-6)}
                           </span>
                         </td>

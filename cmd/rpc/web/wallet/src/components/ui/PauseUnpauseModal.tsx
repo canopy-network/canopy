@@ -341,7 +341,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                           <span className="text-sm text-foreground">
                             {displayName}
                           </span>
-                          <span className="text-xs text-muted-foreground font-mono">
+                          <span className="text-xs text-muted-foreground">
                             ({validator.address.substring(0, 8)}...
                             {validator.address.substring(
                               validator.address.length - 4,

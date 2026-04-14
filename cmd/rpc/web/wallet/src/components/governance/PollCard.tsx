@@ -63,7 +63,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                         </span>
                     )}
                 </div>
-                <span className="text-xs text-muted-foreground font-mono">
+                <span className="text-xs text-muted-foreground">
                     #{poll.hash.slice(0, 8)}...
                 </span>
             </div>

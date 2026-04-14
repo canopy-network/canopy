@@ -111,7 +111,7 @@ module.exports = {
       },
       fontFamily: {
         display: ['Inter', 'system-ui', 'sans-serif'],
-        mono:    ['JetBrains Mono', 'Menlo', 'Consolas', 'monospace'],
+        mono:    ['Inter', 'system-ui', 'sans-serif'],
         body:    ['Inter', 'system-ui', 'sans-serif'],
         inter:   ['Inter', 'system-ui', 'sans-serif'],
       },

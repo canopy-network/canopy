@@ -58,7 +58,7 @@ export default function NodeStatus({
             <p className="text-sm font-semibold text-foreground">
               {currentNode?.name || "Current Node"}
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {truncate(nodeStatus.nodeAddress)}
             </p>
           </div>
@@ -89,7 +89,7 @@ export default function NodeStatus({
         {/* Block height */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Block Height</span>
-          <span className="text-sm font-semibold text-foreground font-mono">
+          <span className="text-sm font-semibold text-foreground">
             #{nodeStatus.blockHeight.toLocaleString()}
           </span>
         </div>
@@ -109,7 +109,7 @@ export default function NodeStatus({
         {/* Node Address */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Node Address</span>
-          <span className="text-sm font-mono text-foreground">
+          <span className="text-sm text-foreground">
             {truncate(nodeStatus.nodeAddress)}
           </span>
         </div>
@@ -120,7 +120,7 @@ export default function NodeStatus({
             <Globe className="w-3 h-3" />
             Net Address
           </span>
-          <span className="text-sm font-mono text-foreground break-all">
+          <span className="text-sm text-foreground break-all">
             {currentNode?.netAddress || "N/A"}
           </span>
         </div>

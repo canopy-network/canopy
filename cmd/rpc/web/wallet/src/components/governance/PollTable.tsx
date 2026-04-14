@@ -187,7 +187,7 @@ export const PollTable: React.FC<PollTableProps> = ({
                     <td className="py-3 px-3 align-middle">
                       <div className="text-sm font-medium text-foreground mb-1">{poll.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{poll.description}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground">
+                      <div className="text-[11px] text-muted-foreground">
                         {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
                       </div>
                     </td>

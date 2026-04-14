@@ -204,7 +204,7 @@ export const SparklineChart = React.memo<SparklineChartProps>(({
     if (data.length === 0) {
         return (
             <div
-                className={`flex items-center justify-center text-xs text-muted-foreground font-body ${className}`}
+                className={`flex items-center justify-center text-xs text-muted-foreground ${className}`}
                 style={{ height }}
             >
                 No data

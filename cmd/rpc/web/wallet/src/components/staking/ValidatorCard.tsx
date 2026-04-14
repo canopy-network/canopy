@@ -99,7 +99,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                   <i className="fa-solid fa-server text-muted-foreground text-xs"></i>
                 </button>
               </div>
-              <div className="text-muted-foreground text-sm font-mono">
+              <div className="text-muted-foreground text-sm">
                 {truncateAddress(validator.address)}
               </div>
               <button
@@ -118,7 +118,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
               {validator.publicKey && (
                 <div className="flex items-center gap-1 mt-1.5" title="Public Key">
                   <Key className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
-                  <span className="text-muted-foreground text-xs font-mono">
+                  <span className="text-muted-foreground text-xs">
                     {truncateAddress(validator.publicKey)}
                   </span>
                   <button
@@ -135,7 +135,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
               {validator.netAddress && (
                 <div className="flex items-center gap-1 mt-1" title="Network Address">
                   <Globe className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
-                  <span className="text-muted-foreground text-xs font-mono">
+                  <span className="text-muted-foreground text-xs">
                     {validator.netAddress}
                   </span>
                   <button
@@ -155,7 +155,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                   {validator.committees!.map((id) => (
                     <span
                       key={id}
-                      className="px-2 py-0.5 text-xs bg-primary/15 text-primary border border-primary/20 rounded font-mono font-medium"
+                      className="px-2 py-0.5 text-xs bg-primary/15 text-primary border border-primary/20 rounded font-medium"
                     >
                       {id}
                     </span>

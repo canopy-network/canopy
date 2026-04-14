@@ -74,7 +74,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-muted-foreground text-sm font-mono">
+            <span className="text-muted-foreground text-sm">
               #{proposal.id.slice(0, 8)}...
             </span>
             <span
@@ -191,7 +191,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       <div className="mt-4 pt-4 border-t border-border">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Proposed by:</span>
-          <span className="text-foreground/80 font-mono">
+          <span className="text-foreground/80">
             {proposal.proposer.slice(0, 6)}...{proposal.proposer.slice(-4)}
           </span>
         </div>

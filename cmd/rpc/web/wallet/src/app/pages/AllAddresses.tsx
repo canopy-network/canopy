@@ -219,7 +219,7 @@ export const AllAddresses = () => {
                             <Wallet className="text-foreground w-4 h-4" />
                           </div>
                           <div>
-                            <div className="text-sm text-foreground font-mono">
+                            <div className="text-sm text-foreground">
                               {formatAddress(addr.address)}
                             </div>
                             <button

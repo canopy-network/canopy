@@ -63,7 +63,7 @@ export const AppSidebar = (): JSX.Element => {
                                     animate={{ opacity: 1, width: 'auto' }}
                                     exit={{ opacity: 0, width: 0 }}
                                     transition={{ duration: 0.18 }}
-                                    className="overflow-hidden whitespace-nowrap font-display text-base font-bold tracking-tight text-foreground"
+                                    className="overflow-hidden whitespace-nowrap text-base font-bold tracking-tight text-foreground"
                                 >
                                     Canopy Wallet
                                 </motion.span>
@@ -103,7 +103,7 @@ export const AppSidebar = (): JSX.Element => {
                                                 animate={{ opacity: 1, width: 'auto' }}
                                                 exit={{ opacity: 0, width: 0 }}
                                                 transition={{ duration: 0.18 }}
-                                                className="truncate overflow-hidden whitespace-nowrap font-body"
+                                                className="truncate overflow-hidden whitespace-nowrap"
                                             >
                                                 {name}
                                             </motion.span>
@@ -146,7 +146,7 @@ export const AppSidebar = (): JSX.Element => {
                         <div className="flex h-7 w-7 items-center justify-center text-primary">
                             <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(69,202,70,0.3)]" />
                         </div>
-                        <span className="font-display text-sm font-bold text-foreground">Canopy Wallet</span>
+                        <span className="text-sm font-bold text-foreground">Canopy Wallet</span>
                     </Link>
                     <div className="w-9" />
                 </header>
@@ -181,7 +181,7 @@ export const AppSidebar = (): JSX.Element => {
                                             <div className="flex h-7 w-7 items-center justify-center text-primary">
                                                 <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(69,202,70,0.3)]" />
                                             </div>
-                                            <span className="font-display text-sm font-bold text-foreground">
+                                            <span className="text-sm font-bold text-foreground">
                                                 Canopy Wallet
                                             </span>
                                         </Link>
@@ -219,7 +219,7 @@ export const AppSidebar = (): JSX.Element => {
                                                             isActive ? 'text-primary' : 'text-muted-foreground'
                                                         }`}
                                                     />
-                                                    <span className="font-body">{name}</span>
+                                                    <span>{name}</span>
                                                 </>
                                             )}
                                         </NavLink>

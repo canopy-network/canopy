@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -30,7 +30,7 @@
   --sidebar-width: 220px;
   --topbar-height: 52px;
   --font-display: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --surface-base: linear-gradient(145deg, hsl(0 0% 13% / 0.92), hsl(0 0% 9% / 0.95));
   --surface-elevated: linear-gradient(145deg, hsl(0 0% 14% / 0.92), hsl(0 0% 10% / 0.96));

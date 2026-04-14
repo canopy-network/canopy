@@ -171,10 +171,10 @@ export const Accounts = () => {
     if (loading) return <div className="h-4 w-20 rounded skeleton" />;
     const pos = pct >= 0;
     return (
-      <span className={`flex items-center gap-1 text-xs font-mono font-medium ${pos ? "text-primary" : "text-destructive"}`}>
+      <span className={`flex items-center gap-1 text-xs font-medium ${pos ? "text-primary" : "text-destructive"}`}>
         {pos ? <TrendingUp style={{ width: 11, height: 11 }} /> : <TrendingDown style={{ width: 11, height: 11 }} />}
         {pos ? "+" : ""}{pct.toFixed(2)}%
-        <span className="text-muted-foreground font-body font-normal">{label}</span>
+        <span className="text-muted-foreground font-normal">{label}</span>
       </span>
     );
   };
@@ -189,10 +189,10 @@ export const Accounts = () => {
       {/* ── Page header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Accounts
           </h1>
-          <p className="font-body text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5">
             {accounts.length} address{accounts.length !== 1 ? "es" : ""} across your keystore
           </p>
         </div>
@@ -205,7 +205,7 @@ export const Accounts = () => {
             placeholder="Search addresses…"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm font-body text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
+            className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
           />
         </div>
       </div>
@@ -225,24 +225,24 @@ export const Accounts = () => {
               <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                 <Wallet className="text-primary" style={{ width: 13, height: 13 }} />
               </div>
-              <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                 Total Balance
               </span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               <AnimatedNumber value={totalBalance / divisor} format={{ notation: "standard", maximumFractionDigits: 2 }} />
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">{symbol}</span>
+            <span className="text-sm text-muted-foreground/50">{symbol}</span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <ChangePill loading={balanceHistoryLoading} pct={balanceChangePercentage} />
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Droplets style={{ width: 11, height: 11 }} className="text-blue-400/70" />
-              <span className="font-mono text-foreground/70">{fmt(totalLiquid)}</span>
+              <span className="text-foreground/70">{fmt(totalLiquid)}</span>
               <span className="text-muted-foreground/50">liquid</span>
             </div>
           </div>
@@ -260,24 +260,24 @@ export const Accounts = () => {
               <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
                 <Lock className="text-primary" style={{ width: 13, height: 13 }} />
               </div>
-              <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                 Total Staked
               </span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               <AnimatedNumber value={totalStaked / divisor} format={{ notation: "standard", maximumFractionDigits: 2 }} />
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">{symbol}</span>
+            <span className="text-sm text-muted-foreground/50">{symbol}</span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <ChangePill loading={stakedHistoryLoading} pct={stakedChangePercentage} />
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Percent style={{ width: 11, height: 11 }} className="text-primary/60" />
-              <span className="font-mono text-foreground/70">{stakingRate.toFixed(1)}%</span>
+              <span className="text-foreground/70">{stakingRate.toFixed(1)}%</span>
               <span className="text-muted-foreground/50">of total</span>
             </div>
           </div>
@@ -294,29 +294,29 @@ export const Accounts = () => {
             <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
               <Users className="text-primary" style={{ width: 13, height: 13 }} />
             </div>
-            <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
               Portfolio
             </span>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               {accounts.length}
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">
+            <span className="text-sm text-muted-foreground/50">
               address{accounts.length !== 1 ? "es" : ""}
             </span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70 flex-shrink-0" />
-              <span className="font-mono text-foreground/70">{stakingCount}</span>
+              <span className="text-foreground/70">{stakingCount}</span>
               <span className="text-muted-foreground/50">staking</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
-              <span className="font-mono text-foreground/70">{liquidCount}</span>
+              <span className="text-foreground/70">{liquidCount}</span>
               <span className="text-muted-foreground/50">liquid only</span>
             </div>
           </div>
@@ -332,7 +332,7 @@ export const Accounts = () => {
       >
         {/* Table header */}
         <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between">
-          <h2 className="font-display text-sm font-semibold text-foreground tracking-tight">
+          <h2 className="text-sm font-semibold text-foreground tracking-tight">
             Address Portfolio
           </h2>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20">
@@ -340,7 +340,7 @@ export const Accounts = () => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
             </span>
-            <span className="font-mono text-[10px] font-semibold text-primary">Live</span>
+            <span className="text-[10px] font-semibold text-primary">Live</span>
           </div>
         </div>
 
@@ -348,18 +348,18 @@ export const Accounts = () => {
           <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b border-border/40">
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Address</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Staked</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Liquid</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Actions</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Address</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Staked</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Liquid</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</th>
+                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredAddresses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center font-body text-sm text-muted-foreground">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
                     No addresses found
                   </td>
                 </tr>
@@ -379,11 +379,11 @@ export const Accounts = () => {
                           <addr.icon className="text-white/90 w-3.5 h-3.5" />
                         </div>
                         <div>
-                          <div className="font-body text-sm font-medium text-foreground leading-tight">
+                          <div className="text-sm font-medium text-foreground leading-tight">
                             {addr.nickname}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
-                            <span className="font-mono text-[11px] text-muted-foreground leading-tight">
+                            <span className="text-[11px] text-muted-foreground leading-tight">
                               {addr.address}
                             </span>
                             <button
@@ -399,18 +399,18 @@ export const Accounts = () => {
 
                     {/* Total */}
                     <td className="px-5 py-3.5">
-                      <span className="font-mono text-sm text-foreground tabular-nums">
+                      <span className="text-sm text-foreground tabular-nums">
                         {fmt(addr.total)}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                      <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
                     </td>
 
                     {/* Staked */}
                     <td className="px-5 py-3.5">
                       <div>
-                        <span className="font-mono text-sm text-foreground tabular-nums">{fmt(addr.staked)}</span>
-                        <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
-                        <div className="font-mono text-[11px] text-muted-foreground/60 mt-0.5">
+                        <span className="text-sm text-foreground tabular-nums">{fmt(addr.staked)}</span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        <div className="text-[11px] text-muted-foreground/60 mt-0.5">
                           {addr.stakedPct.toFixed(1)}%
                         </div>
                       </div>
@@ -419,9 +419,9 @@ export const Accounts = () => {
                     {/* Liquid */}
                     <td className="px-5 py-3.5">
                       <div>
-                        <span className="font-mono text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
-                        <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
-                        <div className="font-mono text-[11px] text-muted-foreground/60 mt-0.5">
+                        <span className="text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        <div className="text-[11px] text-muted-foreground/60 mt-0.5">
                           {addr.liquidPct.toFixed(1)}%
                         </div>
                       </div>
@@ -429,7 +429,7 @@ export const Accounts = () => {
 
                     {/* Status */}
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-medium ${addr.statusCls}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${addr.statusCls}`}>
                         {addr.statusLabel}
                       </span>
                     </td>
