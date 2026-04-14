@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDSFetcher } from '@/core/dsFetch'
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation'
@@ -8,6 +9,7 @@ export function useBalanceHistory() {
     const addresses = accounts.map(a => a.address).filter(Boolean)
     const dsFetch = useDSFetcher()
     const { currentHeight, height24hAgo, calculateHistory, isReady } = useHistoryCalculation()
+    const lastGoodResultRef = useRef<HistoryResult | null>(null)
 
     return useQuery({
         queryKey: ['balanceHistory', addresses, currentHeight],
@@ -30,6 +32,10 @@ export function useBalanceHistory() {
                 }
             }
 
+            if (height24hAgo == null) {
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 }
+            }
+
             const [currentBalances, previousBalances] = await Promise.all([
                 Promise.all(addresses.map(addr => fetchBalance(addr, currentHeight))),
                 Promise.all(addresses.map(addr => fetchBalance(addr, height24hAgo))),
@@ -49,12 +55,25 @@ export function useBalanceHistory() {
                     )
                     const liveTotal = liveBalances.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0)
                     if (liveTotal > 0) {
-                        return calculateHistory(liveTotal, liveTotal)
+                        const liveResult = calculateHistory(liveTotal, liveTotal)
+                        lastGoodResultRef.current = liveResult
+                        return liveResult
                     }
                 } catch { /* fall through */ }
             }
 
-            return calculateHistory(currentTotal, previousTotal)
+            const result = calculateHistory(currentTotal, previousTotal)
+
+            if (result.current > 0) {
+                lastGoodResultRef.current = result
+                return result
+            }
+
+            if (lastGoodResultRef.current) {
+                return lastGoodResultRef.current
+            }
+
+            return result
         }
     })
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Coins, ArrowUpRight } from 'lucide-react';
+import { Coins } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
@@ -25,26 +25,23 @@ export const StakedBalanceCard = React.memo(() => {
 
     return (
         <motion.div
-            className="canopy-card p-5 h-full flex flex-col"
+            className="canopy-card p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.06 }}
+            onClick={() => navigate('/staking')}
+            title="View Staking"
         >
             <div className="absolute -top-8 -left-8 w-28 h-28 rounded-full bg-primary/4 blur-2xl pointer-events-none" />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Coins className="text-primary" style={{ width: 14, height: 14 }} />
-                    </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                        Total Staked Balance
-                    </span>
+            <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
+                    <Coins className="text-primary" style={{ width: 14, height: 14 }} />
                 </div>
-                <button onClick={() => navigate('/staking')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Staking">
-                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
-                </button>
+                <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    Total Staked Balance
+                </span>
             </div>
 
             {/* Balance */}

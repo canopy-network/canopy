@@ -216,7 +216,6 @@
         "body": "{\"height\":0,\"address\":\"\"}"
       }
     ],
-    "avgBlockTimeSec": 50,
     "refresh": {
       "staleTimeMs": 3000,
       "refetchIntervalMs": 3000

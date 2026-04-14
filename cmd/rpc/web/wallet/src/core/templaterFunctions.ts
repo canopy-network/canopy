@@ -65,5 +65,5 @@ export const templateFns = {
     },
     resolveHeight: (v: any) => resolveHeightInput(v),
     toUpper: (v: any) => String(v ?? "")?.toUpperCase(),
-    shortAddress: (v: any) => String(v ?? "")?.slice(0, 6) + "..." + String(v ?? "")?.slice(-6),
+    shortAddress: (v: any) => String(v ?? "")?.slice(0, 10) + "..." + String(v ?? "")?.slice(-10),
 }

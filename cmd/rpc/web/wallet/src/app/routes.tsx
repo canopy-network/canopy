@@ -1,5 +1,5 @@
 
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import MainLayout from '@/components/layouts/MainLayout'
 
 import Dashboard from '@/app/pages/Dashboard'
@@ -9,7 +9,6 @@ import Staking from '@/app/pages/Staking'
 import Monitoring from '@/app/pages/Monitoring'
 import Governance from '@/app/pages/Governance'
 import AllTransactions from '@/app/pages/AllTransactions'
-import AllAddresses from '@/app/pages/AllAddresses'
 import Orders from '@/app/pages/Orders'
 
 // Placeholder components for the new routes
@@ -28,7 +27,7 @@ const router = createBrowserRouter([
             { path: '/monitoring', element: <Monitoring /> },
             { path: '/key-management', element: <KeyManagement /> },
             { path: '/all-transactions', element: <AllTransactions /> },
-            { path: '/all-addresses', element: <AllAddresses /> },
+            { path: '/all-addresses', element: <Navigate to="/accounts" replace /> },
         ],
     },
 ], {

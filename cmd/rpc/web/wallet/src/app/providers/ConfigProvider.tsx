@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useEmbeddedConfig } from '@/manifest/loader'
 import { useNodeParams } from '@/manifest/params'
+import { useBlockTime } from '@/hooks/useBlockTime'
 import type { Manifest } from '@/manifest/types'
 
 type Ctx = {
@@ -17,13 +18,26 @@ const ConfigCtx = createContext<Ctx>({ params: {}, isLoading: true, error: null,
 export const ConfigProvider: React.FC<React.PropsWithChildren<{ chainId?: string }>> = ({ children, chainId }) => {
   const { chain, manifest, isLoading, error, base } = useEmbeddedConfig(chainId)
   const { data: params, loading: pLoading, error: pError } = useNodeParams(chain)
+  const { blockTimeSec, isLoading: btLoading } = useBlockTime(chain)
+
+  const enrichedChain = useMemo(() => {
+    if (!chain) return chain
+    if (blockTimeSec == null) return chain
+    return {
+      ...chain,
+      params: {
+        ...(chain.params ?? {}),
+        avgBlockTimeSec: blockTimeSec,
+      },
+    }
+  }, [chain, blockTimeSec])
 
   const value = useMemo<Ctx>(() => ({
-    chain, manifest, params,
-    isLoading: isLoading || pLoading,
+    chain: enrichedChain, manifest, params,
+    isLoading: isLoading || pLoading || btLoading,
     error: error ?? pError,
     base
-  }), [chain, manifest, params, isLoading, pLoading, error, pError, base])
+  }), [enrichedChain, manifest, params, isLoading, pLoading, btLoading, error, pError, base])
 
   // bridge for FormRenderer validators (optional)
   if (typeof window !== 'undefined') {

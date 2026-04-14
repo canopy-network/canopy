@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import SwapFilters from './SwapFilters';
+import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
 import { useOrders } from '../../hooks/useApi';
 
@@ -23,16 +24,23 @@ export interface SwapData {
     fromAddress: string;
     toAddress: string;
     exchangeRate: string;
+    exchangeRateNum: number;
     amount: string;
+    amountRaw: number;
     status: 'Active' | 'Locked';
 }
+
+export type SortKey = 'committee' | 'exchangeRate' | 'amount' | 'status';
+export type SortDir = 'asc' | 'desc';
+
+const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
 
 const TokenSwapsPage: React.FC = () => {
     const navigate = useNavigate();
     const [selectedChainId] = useState<number>(1);
-    const [filters, setFilters] = useState({
-        minAmount: ''
-    });
+    const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
+    const [sortKey, setSortKey] = useState<SortKey | null>(null);
+    const [sortDir, setSortDir] = useState<SortDir>('asc');
 
     const { data: ordersData, isLoading } = useOrders(selectedChainId);
 
@@ -45,21 +53,23 @@ const TokenSwapsPage: React.FC = () => {
 
         if (ordersList.length === 0) return [];
 
+        const truncateAddress = (addr: string) => {
+            if (!addr || addr.length < 10) return addr;
+            return addr.slice(0, 6) + '...' + addr.slice(-4);
+        };
+
         return ordersList.map((rawOrder) => {
             const order = rawOrder as Order;
-            const exchangeRate = order.requestedAmount > 0
-                ? `1 : ${(order.amountForSale / order.requestedAmount).toFixed(6)}`
+            const exchangeRateNum = order.requestedAmount > 0
+                ? order.amountForSale / order.requestedAmount
+                : 0;
+            const exchangeRate = exchangeRateNum > 0
+                ? `1 : ${exchangeRateNum.toFixed(6)}`
                 : 'N/A';
 
             const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
-
-            const cnpyAmount = (order.amountForSale / 1000000).toFixed(6);
-            const amount = `${cnpyAmount} CNPY`;
-
-            const truncateAddress = (addr: string) => {
-                if (!addr || addr.length < 10) return addr;
-                return addr.slice(0, 6) + '...' + addr.slice(-4);
-            };
+            const amountRaw = order.amountForSale / 1000000;
+            const amount = `${amountRaw.toFixed(6)} CNPY`;
 
             return {
                 orderId: order.id,
@@ -67,33 +77,89 @@ const TokenSwapsPage: React.FC = () => {
                 fromAddress: truncateAddress(order.sellersSendAddress),
                 toAddress: truncateAddress(order.sellerReceiveAddress),
                 exchangeRate,
+                exchangeRateNum,
                 amount,
+                amountRaw,
                 status
             } satisfies SwapData;
         });
     }, [ordersData]);
 
+    const availableCommittees = useMemo(() => {
+        const set = new Set(swaps.map((s) => s.committee));
+        return Array.from(set).sort((a, b) => a - b);
+    }, [swaps]);
+
     const filteredSwaps = useMemo(() => {
-        return swaps.filter((swap) => {
-            if (filters.minAmount && parseFloat(swap.amount.replace(/[^\d.-]/g, '')) < parseFloat(filters.minAmount)) {
-                return false;
+        let result = swaps;
+
+        if (filters.minAmount) {
+            const min = parseFloat(filters.minAmount);
+            if (!isNaN(min)) {
+                result = result.filter((s) => s.amountRaw >= min);
             }
-            return true;
-        });
+        }
+
+        if (filters.status !== 'All') {
+            result = result.filter((s) => s.status === filters.status);
+        }
+
+        if (filters.committee !== 'All') {
+            const cid = Number(filters.committee);
+            result = result.filter((s) => s.committee === cid);
+        }
+
+        return result;
     }, [swaps, filters]);
 
-    const handleApplyFilters = (newFilters: { minAmount: string }) => {
+    const sortedSwaps = useMemo(() => {
+        if (!sortKey) return filteredSwaps;
+
+        const sorted = [...filteredSwaps];
+        sorted.sort((a, b) => {
+            let cmp = 0;
+            switch (sortKey) {
+                case 'committee':
+                    cmp = a.committee - b.committee;
+                    break;
+                case 'amount':
+                    cmp = a.amountRaw - b.amountRaw;
+                    break;
+                case 'exchangeRate':
+                    cmp = a.exchangeRateNum - b.exchangeRateNum;
+                    break;
+                case 'status':
+                    cmp = a.status.localeCompare(b.status);
+                    break;
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [filteredSwaps, sortKey, sortDir]);
+
+    const handleSort = (key: SortKey) => {
+        if (sortKey === key) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    };
+
+    const handleApplyFilters = (newFilters: SwapFilterValues) => {
         setFilters(newFilters);
     };
 
     const handleResetFilters = () => {
-        setFilters({ minAmount: '' });
+        setFilters(DEFAULT_FILTERS);
+        setSortKey(null);
+        setSortDir('asc');
     };
 
     const handleExportData = () => {
         const csvContent = [
             ['Order ID', 'Committee', 'From Address', 'To Address', 'Exchange Rate', 'Amount', 'Status'],
-            ...filteredSwaps.map((swap) => [
+            ...sortedSwaps.map((swap) => [
                 swap.orderId,
                 swap.committee.toString(),
                 swap.fromAddress,
@@ -151,8 +217,16 @@ const TokenSwapsPage: React.FC = () => {
                 onResetFilters={handleResetFilters}
                 filters={filters}
                 onFiltersChange={setFilters}
+                availableCommittees={availableCommittees}
             />
-            <RecentSwapsTable swaps={filteredSwaps} loading={isLoading && !ordersData} onRowClick={handleRowClick} />
+            <RecentSwapsTable
+                swaps={sortedSwaps}
+                loading={isLoading && !ordersData}
+                onRowClick={handleRowClick}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+            />
         </motion.div>
     );
 };

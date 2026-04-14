@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
 
-interface SwapFiltersProps {
-    onApplyFilters: (filters: { minAmount: string }) => void;
-    onResetFilters: () => void;
-    filters: {
-        minAmount: string;
-    };
-    onFiltersChange: (filters: { minAmount: string }) => void;
+export interface SwapFilterValues {
+    minAmount: string;
+    status: 'All' | 'Active' | 'Locked';
+    committee: string;
 }
 
-const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilters, filters, onFiltersChange }) => {
+interface SwapFiltersProps {
+    onApplyFilters: (filters: SwapFilterValues) => void;
+    onResetFilters: () => void;
+    filters: SwapFilterValues;
+    onFiltersChange: (filters: SwapFilterValues) => void;
+    availableCommittees: number[];
+}
+
+const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilters, filters, onFiltersChange, availableCommittees }) => {
     const [localFilters, setLocalFilters] = useState(filters);
 
     useEffect(() => {
         setLocalFilters(filters);
     }, [filters]);
 
-    const handleFilterChange = (key: string, value: string) => {
+    const handleFilterChange = <K extends keyof SwapFilterValues>(key: K, value: SwapFilterValues[K]) => {
         const newFilters = { ...localFilters, [key]: value };
         setLocalFilters(newFilters);
         onFiltersChange(newFilters);
@@ -27,7 +32,7 @@ const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilter
     };
 
     const handleReset = () => {
-        const resetFilters = { minAmount: '' };
+        const resetFilters: SwapFilterValues = { minAmount: '', status: 'All', committee: 'All' };
         setLocalFilters(resetFilters);
         onFiltersChange(resetFilters);
         onResetFilters();
@@ -46,6 +51,33 @@ const SwapFilters: React.FC<SwapFiltersProps> = ({ onApplyFilters, onResetFilter
                         placeholder="0.00"
                         className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
                     />
+                </div>
+                <div>
+                    <label htmlFor="status" className="block text-sm font-medium text-gray-400 mb-1">Status</label>
+                    <select
+                        id="status"
+                        value={localFilters.status}
+                        onChange={(e) => handleFilterChange('status', e.target.value as SwapFilterValues['status'])}
+                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
+                    >
+                        <option value="All">All</option>
+                        <option value="Active">Active</option>
+                        <option value="Locked">Locked</option>
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="committee" className="block text-sm font-medium text-gray-400 mb-1">Committee</label>
+                    <select
+                        id="committee"
+                        value={localFilters.committee}
+                        onChange={(e) => handleFilterChange('committee', e.target.value)}
+                        className="w-full p-2 bg-input border border-gray-700 rounded-lg text-white focus:ring-primary focus:border-primary"
+                    >
+                        <option value="All">All Committees</option>
+                        {availableCommittees.map((c) => (
+                            <option key={c} value={String(c)}>Committee {c}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 

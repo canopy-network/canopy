@@ -1,9 +1,9 @@
+import { useRef, useMemo } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useConfig } from '@/app/providers/ConfigProvider'
 import { useDSFetcher } from "@/core/dsFetch"
 import { hasDsKey } from "@/core/dsCore"
 import { useAccountsList } from "@/app/providers/AccountsProvider"
-import { useMemo } from 'react'
 
 interface AccountBalance {
     address: string
@@ -32,13 +32,18 @@ export function useAccountData() {
     const chainReadyBalances = !!chain && hasDsKey(chain, 'account')
     const chainReadyValidators = !!chain && hasDsKey(chain, 'validators')
 
-    // Create stable query key from addresses (sorted, joined string)
     const addressesKey = useMemo(
         () => accounts.map(a => a.address).sort().join(','),
         [accounts]
     )
 
-    // ---- CONSOLIDATED QUERY: Balances + Staking ----
+    const lastGoodDataRef = useRef<{
+        totalBalance: number
+        totalStaked: number
+        balances: AccountBalance[]
+        stakingData: StakingData[]
+    } | null>(null)
+
     const accountDataQuery = useQuery({
         queryKey: ['accountData.consolidated', chainId, addressesKey],
         enabled: !accountsLoading && accounts.length > 0 && (chainReadyBalances || chainReadyValidators),
@@ -100,6 +105,15 @@ export function useAccountData() {
                 return { address: acc.address, staked: staked || 0, rewards: 0, nickname: acc.nickname }
             })
             result.totalStaked = result.stakingData.reduce((s, d) => s + (d.staked || 0), 0)
+
+            if (result.totalBalance > 0 || result.totalStaked > 0) {
+                lastGoodDataRef.current = result
+                return result
+            }
+
+            if (lastGoodDataRef.current) {
+                return lastGoodDataRef.current
+            }
 
             return result
         }

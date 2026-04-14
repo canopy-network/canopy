@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
@@ -30,28 +30,25 @@ export const TotalBalanceCard = React.memo(() => {
 
     return (
         <motion.div
-            className="canopy-card p-5 h-full flex flex-col"
+            className="canopy-card p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
             initial={hasAnimated ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
             onAnimationComplete={() => setHasAnimated(true)}
+            onClick={() => navigate('/accounts')}
+            title="View Accounts"
         >
             {/* Ambient glow */}
             <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-primary/6 blur-2xl pointer-events-none" />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Wallet className="text-primary" style={{ width: 14, height: 14 }} />
-                    </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                        Total Balance
-                    </span>
+            <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
+                    <Wallet className="text-primary" style={{ width: 14, height: 14 }} />
                 </div>
-                <button onClick={() => navigate('/accounts')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Accounts">
-                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
-                </button>
+                <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    Total Balance
+                </span>
             </div>
 
             {/* Balance */}

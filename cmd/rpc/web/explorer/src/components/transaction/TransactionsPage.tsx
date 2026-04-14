@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
 import { useBlockByHeight, useLatestBlock, usePending } from '../../hooks/useApi'
@@ -64,12 +64,28 @@ const TransactionsPage: React.FC = () => {
         return Number(latestBlockData.totalCount ?? 0)
     }, [latestBlockData])
 
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
     useEffect(() => {
-        if (latestHeight > 0 && queryHeight === 0) {
-            setQueryHeight(latestHeight)
-            setHeightInput(String(latestHeight))
+        if (viewMode !== 'confirmed') return
+
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+
+        debounceRef.current = setTimeout(() => {
+            const h = Number(heightInput)
+            if (heightInput === '') {
+                setQueryHeight(0)
+                setCurrentPage(1)
+            } else if (h > 0) {
+                setQueryHeight(h)
+                setCurrentPage(1)
+            }
+        }, 500)
+
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current)
         }
-    }, [latestHeight, queryHeight])
+    }, [heightInput, viewMode])
 
     const normalizeBlockTransactions = (block: Record<string, unknown>): Transaction[] => {
         if (!block) return []
@@ -260,13 +276,21 @@ const TransactionsPage: React.FC = () => {
     ]
 
     const handleQuery = () => {
-        if (viewMode === 'confirmed') {
-            const h = Number(heightInput)
-            if (h > 0) {
-                setQueryHeight(h)
-                setCurrentPage(1)
-            }
+        if (viewMode !== 'confirmed') return
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        const h = Number(heightInput)
+        if (heightInput === '') {
+            setQueryHeight(0)
+        } else if (h > 0) {
+            setQueryHeight(h)
         }
+        setCurrentPage(1)
+    }
+
+    const handleGoToLatest = () => {
+        setHeightInput('')
+        setQueryHeight(0)
+        setCurrentPage(1)
     }
 
     const handleViewModeChange = (mode: ViewMode) => {
@@ -387,7 +411,7 @@ const TransactionsPage: React.FC = () => {
                                 <input
                                     type="number"
                                     className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
-                                    placeholder="Enter block height"
+                                    placeholder={latestHeight > 0 ? `Latest (${latestHeight})` : 'Enter block height'}
                                     value={heightInput}
                                     onChange={(e) => setHeightInput(e.target.value)}
                                     onKeyDown={(e) => {
@@ -419,25 +443,36 @@ const TransactionsPage: React.FC = () => {
                                 </button>
                             </div>
                             {latestHeight > 0 && (
-                                <span className="text-gray-500 text-xs mt-2 block">
+                                <button
+                                    onClick={handleGoToLatest}
+                                    className="text-primary text-xs mt-2 block hover:text-primary/80 transition-colors cursor-pointer"
+                                >
+                                    <i className="fa-solid fa-arrow-rotate-right mr-1"></i>
                                     Latest block: {latestHeight.toLocaleString()}
-                                </span>
+                                </button>
                             )}
-                            {queryHeight > 0 && (
-                                <div className="mt-3 text-sm text-gray-400">
-                                    Showing transactions for block{' '}
-                                    <span className="text-white font-medium">#{queryHeight.toLocaleString()}</span>
-                                    {transactionType !== 'All Types' && (
-                                        <>
-                                            {' '}filtered by type{' '}
-                                            <span className="text-primary font-medium">{transactionType}</span>
-                                        </>
-                                    )}
-                                    {' '}&mdash;{' '}
-                                    <span className="text-white font-medium">{filteredTransactions.length}</span>{' '}
-                                    transaction{filteredTransactions.length !== 1 ? 's' : ''} found
-                                </div>
-                            )}
+                            <div className="mt-3 text-sm text-gray-400">
+                                {queryHeight === 0 ? (
+                                    <>
+                                        Showing transactions for{' '}
+                                        <span className="text-white font-medium">latest block</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        Showing transactions for block{' '}
+                                        <span className="text-white font-medium">#{queryHeight.toLocaleString()}</span>
+                                    </>
+                                )}
+                                {transactionType !== 'All Types' && (
+                                    <>
+                                        {' '}filtered by type{' '}
+                                        <span className="text-primary font-medium">{transactionType}</span>
+                                    </>
+                                )}
+                                {' '}&mdash;{' '}
+                                <span className="text-white font-medium">{filteredTransactions.length}</span>{' '}
+                                transaction{filteredTransactions.length !== 1 ? 's' : ''} found
+                            </div>
                         </>
                     ) : (
                         <>

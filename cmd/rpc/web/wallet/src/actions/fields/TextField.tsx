@@ -20,6 +20,8 @@ export const TextField: React.FC<BaseFieldProps> = ({
 
     // Track previous resolved value to sync when template changes
     const prevResolvedRef = React.useRef<string | null>(null)
+    // Track whether user has manually edited this field
+    const touchedRef = React.useRef(false)
 
     // Sync field value when the resolved template changes (e.g., table selection)
     // This allows computed fields to stay in sync while still being editable
@@ -27,21 +29,29 @@ export const TextField: React.FC<BaseFieldProps> = ({
         if (field.value && resolvedValue != null) {
             const resolvedStr = String(resolvedValue)
             if (prevResolvedRef.current !== null && prevResolvedRef.current !== resolvedStr) {
-                // Template value changed, sync the input
                 onChange(resolvedStr)
+                touchedRef.current = false
             }
             prevResolvedRef.current = resolvedStr
         }
     }, [resolvedValue, field.value, onChange])
 
+    const isOncePopulate = (field as Record<string, unknown>).autoPopulate === 'once'
+
     // For readOnly fields with a value template, always use the resolved template
-    // For editable fields, use form value but initialize from template if empty
+    // For editable fields with autoPopulate=once, respect user clearing the field
+    // For other editable fields, use form value but initialize from template if empty
     const currentValue =
         field.readOnly && field.value && resolvedValue != null
             ? resolvedValue
-            : value === '' && resolvedValue != null
+            : value === '' && resolvedValue != null && !(isOncePopulate && touchedRef.current)
                 ? resolvedValue
                 : value || (dsValue?.amount ?? dsValue?.value ?? '')
+
+    const handleChange = (newValue: string) => {
+        touchedRef.current = true
+        onChange(newValue)
+    }
 
     const hasFeatures = !!(field.features?.length)
     const commonBase = 'w-full bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors'
@@ -68,7 +78,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
                 value={currentValue ?? ''}
                 readOnly={field.readOnly}
                 required={field.required}
-                onChange={(e: any) => onChange(e.currentTarget.value)}
+                onChange={(e: any) => handleChange(e.currentTarget.value)}
             />
         </FieldWrapper>
     )

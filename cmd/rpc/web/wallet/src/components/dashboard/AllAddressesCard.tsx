@@ -104,7 +104,7 @@ export const AllAddressesCard = React.memo(() => {
                     </span>
                 </div>
                 <NavLink
-                    to="/all-addresses"
+                    to="/accounts"
                     className="text-xs font-body text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
                 >
                     All ({processedAddresses.length})

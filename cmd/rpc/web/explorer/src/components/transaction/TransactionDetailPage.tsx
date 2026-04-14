@@ -243,8 +243,8 @@ const TransactionDetailPage: React.FC = () => {
     const timestamp = transaction?.transaction?.time || transaction?.timestamp || transaction?.time || new Date().toISOString()
     const fee = formatFee(transactionFeeMicro)
 
-    const from = transaction.sender || transaction.from || '0x0000000000000000000000000000000000000000'
-    const to = transaction.recipient || transaction.to || '0x0000000000000000000000000000000000000000'
+    const from = transaction.sender || transaction.from || 'N/A'
+    const to = transaction.recipient || transaction.to || 'N/A'
     const position = transaction?.index ?? null
     const createdHeight = transaction?.transaction?.createdHeight ?? null
     const networkID = transaction?.transaction?.networkID ?? null
@@ -642,19 +642,17 @@ const TransactionDetailPage: React.FC = () => {
 
                     <div className="space-y-4">
                         {activeTab === 'decoded' ? (
-                            // Simplified decoded information
                             <div className="space-y-4">
-                                {/* Log Index 0 */}
                                 <div className="border border-gray-600/60 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-gray-400 text-sm">Log Index: 0</span>
+                                        <span className="text-gray-400 text-sm">Message Type</span>
                                         <span className="px-2 py-1 text-xs bg-blue-500/20 text-blue-400 rounded">
                                             {txType}
                                         </span>
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-start">
-                                            <span className="text-gray-400 text-sm">Address</span>
+                                            <span className="text-gray-400 text-sm">Sender</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-white font-mono text-sm">{truncate(from, 10)}</span>
                                                 <button
@@ -666,23 +664,28 @@ const TransactionDetailPage: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-start">
-                                            <span className="text-gray-400 text-sm">Topics</span>
-                                            <div className="text-right">
-                                                <div className="text-white text-sm">{txType}(address,address,uint256)</div>
+                                            <span className="text-gray-400 text-sm">Recipient</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white font-mono text-sm">{truncate(to, 10)}</span>
+                                                <button
+                                                    onClick={() => copyToClipboard(to)}
+                                                    className="text-primary hover:text-primary/80 transition-colors"
+                                                >
+                                                    <i className="fa-solid fa-copy text-xs"></i>
+                                                </button>
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-start">
-                                            <span className="text-gray-400 text-sm">Data</span>
+                                            <span className="text-gray-400 text-sm">Amount</span>
                                             <span className="text-white text-sm">{value}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Log Index 1 - only if additional data exists */}
                                 {txType === 'certificateResults' && transaction.transaction?.msg?.qc?.results?.rewardRecipients?.paymentPercents && (
                                     <div className="border border-gray-600/60 rounded-lg p-4">
                                         <div className="flex items-center justify-between mb-3">
-                                            <span className="text-gray-400 text-sm">Log Index: 1</span>
+                                            <span className="text-gray-400 text-sm">Reward Distribution</span>
                                             <span className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded">
                                                 Rewards
                                             </span>
@@ -697,7 +700,7 @@ const TransactionDetailPage: React.FC = () => {
                                             <div className="flex justify-between items-start">
                                                 <span className="text-gray-400 text-sm">Total</span>
                                                 <span className="text-white font-mono text-sm">
-                                                    {transaction.transaction.msg.qc.results.rewardRecipients.paymentPercents.reduce((sum: number, r: any) => sum + (r.percents || 0), 0)}%
+                                                    {transaction.transaction.msg.qc.results.rewardRecipients.paymentPercents.reduce((sum: number, r: Record<string, number>) => sum + (r.percents || 0), 0)}%
                                                 </span>
                                             </div>
                                         </div>

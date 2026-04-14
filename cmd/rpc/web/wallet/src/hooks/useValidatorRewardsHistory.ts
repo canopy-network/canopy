@@ -17,6 +17,9 @@ export function useValidatorRewardsHistory(address?: string) {
         staleTime: 30_000,
 
         queryFn: async (): Promise<HistoryResult> => {
+            if (secondsPerBlock == null) {
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 };
+            }
             try {
                 const { events } = await fetchRewardEventsInRange(dsFetch, {
                     address: address || "",

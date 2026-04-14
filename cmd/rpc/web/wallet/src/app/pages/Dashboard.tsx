@@ -71,7 +71,14 @@ export const Dashboard = () => {
                     </ErrorBoundary>
                 </motion.div>
 
-                {/* ── Row 2: Transactions + Addresses ── */}
+                {/* ── Row 2: Node Management ── */}
+                <motion.div variants={item} className="w-full">
+                    <ErrorBoundary>
+                        <NodeManagementCard />
+                    </ErrorBoundary>
+                </motion.div>
+
+                {/* ── Row 3: Transactions + Addresses ── */}
                 <motion.div
                     variants={item}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-4"
@@ -86,13 +93,6 @@ export const Dashboard = () => {
                             <AllAddressesCard />
                         </ErrorBoundary>
                     </div>
-                </motion.div>
-
-                {/* ── Row 3: Node Management ── */}
-                <motion.div variants={item} className="w-full">
-                    <ErrorBoundary>
-                        <NodeManagementCard />
-                    </ErrorBoundary>
                 </motion.div>
             </motion.div>
 

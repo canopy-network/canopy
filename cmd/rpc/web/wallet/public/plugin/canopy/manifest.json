@@ -379,7 +379,7 @@
               "icon": "Coins"
             },
             {
-              "label": "Allow 20 seconds for confirmation.",
+              "label": "Allow {{chain.params.avgBlockTimeSec}} seconds for confirmation.",
               "icon": "Timer"
             }
           ]
@@ -2988,6 +2988,7 @@
       "icon": "BarChart3",
       "ds": {
         "height": {},
+        "keystore": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3012,10 +3013,12 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{account.address}}",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -3302,6 +3305,7 @@
         "height": {},
         "params": {},
         "fees": {},
+        "keystore": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3326,10 +3330,12 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Proposer Address",
+            "required": true,
             "value": "{{account.address}}",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -3544,6 +3550,7 @@
       "ds": {
         "height": {},
         "fees": {},
+        "keystore": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3568,10 +3575,12 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Proposer Address",
+            "required": true,
             "value": "{{account.address}}",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -4060,16 +4069,6 @@
               "icon": "Info"
             },
             {
-              "label": "For Sale",
-              "value": "{{numberToLocaleString<{{form.amount || 0}}>}} {{chain.denom.symbol}}",
-              "icon": "Coins"
-            },
-            {
-              "label": "Requested",
-              "value": "{{numberToLocaleString<{{form.receiveAmount || 0}}>}}",
-              "icon": "ArrowLeftRight"
-            },
-            {
               "label": "Rule",
               "value": "Only unlocked orders can be repriced or voided",
               "icon": "AlertTriangle"
@@ -4210,6 +4209,10 @@
               "value": "{{shortAddress<{{form.address}}>}}"
             },
             {
+              "label": "Receive Address",
+              "value": "{{shortAddress<{{form.receiveAddress}}>}}"
+            },
+            {
               "label": "Committee",
               "value": "{{form.committees}}"
             },
@@ -4220,6 +4223,10 @@
             {
               "label": "Requested",
               "value": "{{numberToLocaleString<{{form.receiveAmount}}>}}"
+            },
+            {
+              "label": "Fee",
+              "value": "{{formatToCoin<{{toMicroDenom<{{form.fee || 0}}>}}>}} {{chain.denom.symbol}}"
             }
           ],
           "btn": {
@@ -4369,7 +4376,7 @@
             "required": true,
             "value": "{{params.orderId || ''}}",
             "autoPopulate": "once",
-            "readOnly": true,
+            "placeholder": "Enter order ID",
             "validation": {
               "messages": {
                 "required": "Order ID is required"
@@ -4655,7 +4662,7 @@
             "required": true,
             "value": "{{params.orderId || ''}}",
             "autoPopulate": "once",
-            "readOnly": true,
+            "placeholder": "Enter order ID",
             "validation": {
               "messages": {
                 "required": "Order ID is required"
@@ -4859,7 +4866,7 @@
             "required": true,
             "value": "{{params.orderId || ''}}",
             "autoPopulate": "once",
-            "readOnly": true,
+            "placeholder": "Enter order ID",
             "validation": {
               "messages": {
                 "required": "Order ID is required"
@@ -5017,7 +5024,7 @@
             "required": true,
             "value": "{{params.orderId || ''}}",
             "autoPopulate": "once",
-            "readOnly": true,
+            "placeholder": "Enter order ID",
             "validation": {
               "messages": {
                 "required": "Order ID is required"
