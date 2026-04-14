@@ -98,7 +98,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                                 </div>
                                 {/* Progress bar */}
                                 <div className="w-full mt-2 sm:hidden">
-                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                    <div className="w-full bg-white/10 rounded-full h-2">
                                         <div
                                             className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
                                             style={{ width: `${chain.percentage}%` }}
@@ -110,7 +110,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
 
                         {/* Progress bar - Desktop */}
                         <div className="hidden sm:block w-full sm:w-auto sm:flex-1 max-w-xs">
-                            <div className="w-full bg-gray-700 rounded-full h-2">
+                            <div className="w-full bg-white/10 rounded-full h-2">
                                 <div
                                     className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
                                     style={{ width: `${chain.percentage}%` }}
@@ -134,7 +134,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
             </div>
 
             {/* Total Network Control */}
-            <div className="mt-4 sm:mt-6 pt-4 border-t border-gray-700">
+            <div className="mt-4 sm:mt-6 pt-4 border-t border-white/10">
                 <div className="text-xs sm:text-sm text-gray-400 text-center flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
                     <p>{validatorDetailTexts.stakeByChains.totalNetworkControl}:</p>
                     <p className="text-primary">

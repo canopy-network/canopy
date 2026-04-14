@@ -108,7 +108,7 @@ const SearchPage: React.FC = () => {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Search blocks, transactions, addresses..."
-                            className="w-full bg-input border border-gray-800/50 rounded-lg px-4 py-3 pl-12 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring focus:ring-primary/50 focus:border-primary"
+                            className="w-full bg-input border border-white/8 rounded-lg px-4 py-3 pl-12 pr-3 text-white placeholder-gray-500 focus:outline-none focus:ring focus:ring-primary/50 focus:border-primary"
                         />
                         {searchTerm && (
                             <button

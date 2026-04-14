@@ -280,7 +280,7 @@ const TableSelect: React.FC<TableSelectProps> = ({
         <div className="col-span-12 w-full">
             {!!label && <div className="text-sm mb-3 text-foreground/80 font-medium">{label}</div>}
 
-            <div className="rounded-lg bg-[#1a1d24] overflow-x-auto overflow-y-hidden">
+            <div className="rounded-lg bg-[#1a1a1a] overflow-x-auto overflow-y-hidden">
                 <div className="min-w-full">
                     {/* Header */}
                     <div className="grid grid-cols-12 gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-xs text-muted-foreground font-medium">

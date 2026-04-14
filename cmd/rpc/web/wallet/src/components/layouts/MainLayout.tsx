@@ -5,7 +5,7 @@ import { TopBar } from './TopBar'
 export default function MainLayout() {
     return (
         <div className="relative flex h-screen overflow-hidden bg-background">
-            <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(80%_60%_at_82%_-10%,rgba(53,205,72,0.12),transparent_55%)]" />
+            <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(80%_60%_at_82%_-10%,rgba(69,202,70,0.12),transparent_55%)]" />
 
             <AppSidebar />
 

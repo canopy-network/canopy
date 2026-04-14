@@ -344,7 +344,7 @@ const TransactionsPage: React.FC = () => {
                 {overviewCards.map((card, index) => (
                     <div
                         key={index}
-                        className="bg-card p-4 rounded-lg border border-gray-800/60 flex flex-col gap-2 justify-between"
+                        className="bg-card p-4 rounded-lg border border-white/10 flex flex-col gap-2 justify-between"
                     >
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400 text-sm">{card.title}</span>
@@ -357,7 +357,7 @@ const TransactionsPage: React.FC = () => {
                             <span className={`text-sm ${card.subValueColor}`}>{card.subValue}</span>
                         )}
                         {card.progressBar !== undefined && (
-                            <div className="w-full bg-gray-700 rounded-full flex items-start justify-center mb-1">
+                            <div className="w-full bg-white/10 rounded-full flex items-start justify-center mb-1">
                                 <div
                                     className="h-2 rounded-full bg-primary"
                                     style={{ width: `${card.progressBar}%` }}
@@ -369,9 +369,9 @@ const TransactionsPage: React.FC = () => {
             </div>
 
             {/* View Mode Tabs + Filters */}
-            <div className="mb-6 bg-card rounded-lg border border-gray-800/60 overflow-hidden">
+            <div className="mb-6 bg-card rounded-lg border border-white/10 overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-800/60">
+                <div className="flex border-b border-white/10">
                     <button
                         onClick={() => handleViewModeChange('confirmed')}
                         className={`px-6 py-3 text-sm font-medium transition-colors ${
@@ -410,7 +410,7 @@ const TransactionsPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-center">
                                 <input
                                     type="number"
-                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    className="w-full px-3 py-2.5 bg-input border border-white/10 rounded-md text-white"
                                     placeholder={latestHeight > 0 ? `Latest (${latestHeight})` : 'Enter block height'}
                                     value={heightInput}
                                     onChange={(e) => setHeightInput(e.target.value)}
@@ -421,7 +421,7 @@ const TransactionsPage: React.FC = () => {
                                     max={latestHeight || undefined}
                                 />
                                 <select
-                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    className="w-full px-3 py-2.5 bg-input border border-white/10 rounded-md text-white"
                                     value={transactionType}
                                     onChange={(e) => {
                                         setTransactionType(e.target.value)
@@ -483,7 +483,7 @@ const TransactionsPage: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
                                 <select
-                                    className="w-full px-3 py-2.5 bg-input border border-gray-800/80 rounded-md text-white"
+                                    className="w-full px-3 py-2.5 bg-input border border-white/10 rounded-md text-white"
                                     value={transactionType}
                                     onChange={(e) => {
                                         setTransactionType(e.target.value)

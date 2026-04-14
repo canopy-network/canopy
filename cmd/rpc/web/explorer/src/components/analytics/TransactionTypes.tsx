@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 
 // color palette for dynamic message types
 const TYPE_COLORS = [
-    '#4ADE80', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#45ca46', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6',
     '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#06b6d4',
 ]
 
@@ -152,10 +152,10 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -167,7 +167,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.5 }}
-                className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+                className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
             >
                 <div className="mb-4">
                     <h3 className="text-lg font-semibold text-white">
@@ -189,7 +189,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.5 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
@@ -204,7 +204,7 @@ const TransactionTypes: React.FC<TransactionTypesProps> = ({ fromBlock, toBlock,
                 <svg className="w-full h-full" viewBox="0 0 300 120">
                     <defs>
                         <pattern id="grid-transactions" width="30" height="20" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="0.5" />
+                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid-transactions)" />

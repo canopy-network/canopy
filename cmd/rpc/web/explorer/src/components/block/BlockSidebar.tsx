@@ -42,7 +42,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
-                className="bg-card rounded-xl border border-gray-800/60 p-6"
+                className="bg-card rounded-xl border border-white/10 p-6"
             >
                 <h3 className="text-lg font-semibold text-white mb-4">
                     {blockDetailTexts.networkInfo.title}
@@ -69,7 +69,7 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
-                className="bg-card rounded-xl border border-gray-800/60 p-6"
+                className="bg-card rounded-xl border border-white/10 p-6"
             >
                 <h3 className="text-lg font-semibold text-white mb-4">
                     {blockDetailTexts.validatorInfo.title}

@@ -80,7 +80,7 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading, onR
         <span className="text-red-400 text-sm">{swap.amount}</span>,
 
         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-            swap.status === 'Active' ? 'bg-green-500/20 text-green-400' :
+            swap.status === 'Active' ? 'bg-primary/20 text-primary' :
             'bg-yellow-500/20 text-yellow-400'
         }`}>
             {swap.status}

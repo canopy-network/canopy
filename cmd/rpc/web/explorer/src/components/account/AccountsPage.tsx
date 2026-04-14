@@ -106,7 +106,7 @@ const AccountsPage: React.FC = () => {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card rounded-lg p-6 border border-gray-800/50"
+            className="bg-card rounded-lg p-6 border border-white/8"
         >
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-gray-400">{title}</h3>
@@ -184,7 +184,7 @@ const AccountsPage: React.FC = () => {
                                 <input
                                     type="text"
                                     placeholder="Search by full address (40 hex chars) or filter current page..."
-                                    className="w-full px-4 py-3 pl-10 bg-card border border-gray-800/80 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                    className="w-full px-4 py-3 pl-10 bg-card border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />

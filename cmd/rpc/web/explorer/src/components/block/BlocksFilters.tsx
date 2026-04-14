@@ -51,7 +51,7 @@ const BlocksFilters: React.FC<BlocksFiltersProps> = ({
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                                 activeFilter === filter.key
                                     ? 'bg-primary text-black'
-                                    : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+                                    : 'bg-gray-700/50 text-gray-300 hover:bg-white/8'
                             }`}
                         >
                             {filter.label}

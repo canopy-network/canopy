@@ -103,10 +103,10 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -119,7 +119,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.6 }}
-                className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+                className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
             >
                 <div className="mb-4">
                     <h3 className="text-lg font-semibold text-white">
@@ -141,7 +141,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.6 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
@@ -157,7 +157,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                     {/* Grid lines */}
                     <defs>
                         <pattern id="grid-staking" width="30" height="20" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="0.5" />
+                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid-staking)" />
@@ -166,7 +166,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                     {rewards.length > 1 && (
                         <polyline
                             fill="none"
-                            stroke="#4ADE80"
+                            stroke="#45ca46"
                             strokeWidth="3"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -189,9 +189,9 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                                 cx={x}
                                 cy={y}
                                 r="4"
-                                fill="#4ADE80"
+                                fill="#45ca46"
                                 className="cursor-pointer transition-all duration-200 hover:r-6 drop-shadow-lg"
-                                stroke="#2D5A3D"
+                                stroke="#1a3a1a"
                                 strokeWidth="1"
                                 onMouseEnter={() => setHoveredPoint({
                                     index,
@@ -209,7 +209,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                 {/* Tooltip */}
                 {hoveredPoint && (
                     <div
-                        className="absolute bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white shadow-lg z-10 pointer-events-none"
+                        className="absolute bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white shadow-lg z-10 pointer-events-none"
                         style={{
                             left: `${(hoveredPoint.x / 300) * 100}%`,
                             top: `${(hoveredPoint.y / 120) * 100}%`,
@@ -217,7 +217,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
                         }}
                     >
                         <div className="font-semibold">{hoveredPoint.timeLabel}</div>
-                        <div className="text-green-400">{formatNumber(hoveredPoint.value)} CNPY</div>
+                        <div className="text-primary">{formatNumber(hoveredPoint.value)} CNPY</div>
                     </div>
                 )}
 

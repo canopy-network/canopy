@@ -154,7 +154,7 @@ const ExtraTables: React.FC = () => {
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary font-semibold">
                         {address && address !== 'N/A' ? address.slice(0, 2).toUpperCase() : 'N/A'}
                     </div>
-                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
+                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -169,7 +169,7 @@ const ExtraTables: React.FC = () => {
                         chainsStaked || '0'
                     )}
                 </span>,
-                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-green-500/20 text-primary' :
+                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-primary/20 text-primary' :
                     activityScore === 'Standby' ? 'bg-yellow-500/20 text-yellow-400' :
                         activityScore === 'Paused' ? 'bg-orange-500/20 text-orange-400' :
                             activityScore === 'Unstaking' ? 'bg-red-500/20 text-red-400' :
@@ -308,7 +308,7 @@ const ExtraTables: React.FC = () => {
                     const actionIcon = getTransactionIcon(action)
 
                     const baseRow = [
-                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
+                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-primary hover:underline">{truncate(String(hash))}</Link>,
                         <span className="text-gray-400">
                             {timeAgo}
                         </span>,
@@ -328,8 +328,8 @@ const ExtraTables: React.FC = () => {
                                 <span className="text-primary">{amount !== 'N/A' ? `${(Number(amount) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : 'N/A'}</span>
                             )}
                         </span>,
-                        <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
-                        <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
+                        <Link to={`/account/${from}`} className="text-white hover:text-primary hover:underline">{truncate(String(from))}</Link>,
+                        <Link to={`/account/${to}`} className="text-white hover:text-primary hover:underline">{truncate(String(to))}</Link>,
                     ]
 
                     if (!allCanopy) {

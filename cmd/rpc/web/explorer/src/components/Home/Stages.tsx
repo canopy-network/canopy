@@ -268,12 +268,12 @@ const Stages = () => {
                         viewport={{ amount: 0.6 }}
                         onViewportEnter={() => markActive(index)}
                         transition={{ duration: 0.22, delay: index * 0.03, ease: 'easeOut' }}
-                        className="relative rounded-xl border border-gray-800/60 bg-card shadow-xl p-5"
+                        className="relative rounded-xl border border-white/10 bg-card shadow-xl p-5"
                     >
                         <div className="flex items-start justify-between">
                             <h3 className="text-sm text-gray-300">{stage.title}</h3>
                             <div className="h-7 w-7 rounded-md grid place-items-center">
-                                <span className="text-[#1B4435] text-base leading-none">{stage.icon}</span>
+                                <span className="text-[#1a3a1a] text-base leading-none">{stage.icon}</span>
                             </div>
                         </div>
 

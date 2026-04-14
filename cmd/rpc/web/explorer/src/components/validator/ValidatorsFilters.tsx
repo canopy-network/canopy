@@ -304,7 +304,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     <button
                         type="button"
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors"
+                        className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/8 transition-colors"
                     >
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}

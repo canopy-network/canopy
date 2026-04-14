@@ -90,7 +90,7 @@ const NetworkSelector: React.FC = () => {
         <div className="relative max-w-full" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-primary hover:bg-gray-700 transition-colors duration-200 max-w-full"
+                className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-primary hover:bg-white/10 transition-colors duration-200 max-w-full"
             >
                 <div className="flex items-center space-x-2 min-w-0 flex-1 overflow-hidden">
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selectedNetwork.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />
@@ -114,7 +114,7 @@ const NetworkSelector: React.FC = () => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.18, ease: 'easeOut' }}
-                        className="absolute right-0 mt-2 min-w-[200px] overflow-hidden rounded-lg border border-gray-700/70 bg-card shadow-2xl z-50"
+                        className="absolute right-0 mt-2 min-w-[200px] overflow-hidden rounded-lg border border-white/10 bg-card shadow-2xl z-50"
                     >
                         <motion.div
                             initial={{ opacity: 0 }}
@@ -132,7 +132,7 @@ const NetworkSelector: React.FC = () => {
                                     onClick={() => handleNetworkSelect(network)}
                                     className={`w-full text-left px-3 py-2 text-sm font-normal transition-colors duration-200 flex items-center space-x-3 ${selectedNetwork.id === network.id
                                         ? 'text-primary bg-primary/10'
-                                        : 'text-gray-300 hover:text-primary hover:bg-gray-700/70'
+                                        : 'text-gray-300 hover:text-primary hover:bg-white/10'
                                         }`}
                                 >
                                     <div className={`w-2 h-2 rounded-full ${network.isTestnet ? 'bg-yellow-400' : 'bg-green-400'}`} />

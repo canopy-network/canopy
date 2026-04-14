@@ -88,19 +88,19 @@ const OverviewCards: React.FC = () => {
 
                             return [
                                 hash ? (
-                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>
+                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-primary hover:underline">{truncate(String(hash))}</Link>
                                 ) : (
                                     <span className="text-gray-400">-</span>
                                 ),
-                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>,
+                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-primary hover:underline">{truncate(String(displayFrom), 8)}</Link>,
                                 <div>
                                     {to ? (
-                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
+                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-primary hover:underline">{truncate(String(displayTo), 8)}</Link>
                                     ) : (
                                         <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
                                     )}
                                 </div>,
-                                <span className="text-green-400">
+                                <span className="text-primary">
                                     {typeof amount === 'number' ? (() => {
                                         // Amount comes in micro denomination, convert to CNPY
                                         const cnpy = amount / 1000000
@@ -152,7 +152,7 @@ const OverviewCards: React.FC = () => {
                                 }
                             }
                             return [
-                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-green-400 hover:underline">
+                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-primary hover:underline">
                                     <div className="bg-green-300/10 rounded-full py-0.5 px-1">
                                         <i className="fa-solid fa-cube text-primary"></i>
                                     </div>
@@ -160,14 +160,14 @@ const OverviewCards: React.FC = () => {
                                         {typeof height === 'number' ? (
                                             <AnimatedNumber
                                                 value={height}
-                                                className="text-gray-200 hover:text-green-400 hover:underline"
+                                                className="text-gray-200 hover:text-primary hover:underline"
                                             />
                                         ) : (
                                             height
                                         )}
                                     </p>
                                 </Link>,
-                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">
+                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-primary hover:underline">
                                     {truncate(String(hash))}
                                 </Link>,
                                 <span className="text-gray-200">
@@ -195,7 +195,7 @@ const OverviewCards: React.FC = () => {
                     const rate = sell > 0 && receive > 0 ? (receive / sell) : (o.rate || 0)
                     const hash = o.hash || o.orderId || o.id || '-'
                     return [
-                        <span className={/sell/i.test(String(action)) ? 'text-red-400' : 'text-green-400'}>{action || 'Swap'}</span>,
+                        <span className={/sell/i.test(String(action)) ? 'text-red-400' : 'text-primary'}>{action || 'Swap'}</span>,
                         <span>
                             {rate ? (
                                 <>

@@ -68,7 +68,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({ blocks, loading = false, tota
         if (count <= 50) {
             return 'bg-blue-500/20 text-blue-400' // Blue for low
         } else if (count <= 150) {
-            return 'bg-green-500/20 text-green-400' // Green for medium
+            return 'bg-primary/20 text-primary' // Green for medium
         } else {
             return 'bg-orange-500/20 text-orange-400' // Orange for high
         }

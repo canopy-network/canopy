@@ -26,9 +26,9 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
         toast.success('Copied to clipboard!', {
             icon: '📋',
             style: {
-                background: '#1f2937',
-                color: '#f9fafb',
-                border: '1px solid #4ade80',
+                background: '#1a1a1a',
+                color: '#fafafa',
+                border: '1px solid #45ca46',
             },
         })
     }
@@ -54,7 +54,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-card rounded-xl border border-gray-800/60 p-6"
+            className="bg-card rounded-xl border border-white/10 p-6"
         >
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-white">
@@ -63,13 +63,13 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setViewMode('decoded')}
-                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'decoded' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-600/10'}`}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'decoded' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
                     >
                         Decoded
                     </button>
                     <button
                         onClick={() => setViewMode('raw')}
-                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'raw' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-600/10'}`}
+                        className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'raw' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5'}`}
                     >
                         Raw
                     </button>
@@ -77,7 +77,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
             </div>
 
             {viewMode === 'raw' && blockData ? (
-                <div className="border border-gray-600/60 rounded-lg p-4">
+                <div className="border border-white/10 rounded-lg p-4">
                     <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
                         <code className="text-gray-300">
                             {JSON.stringify(blockData, null, 2)
@@ -92,7 +92,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                                             dangerouslySetInnerHTML={{
                                                 __html: line
                                                     .replace(/(".*?")\s*:/g, '<span class="text-blue-400">$1</span>:')
-                                                    .replace(/:\s*(".*?")/g, ': <span class="text-green-400">$1</span>')
+                                                    .replace(/:\s*(".*?")/g, ': <span class="text-primary">$1</span>')
                                                     .replace(/:\s*(\d+)/g, ': <span class="text-yellow-400">$1</span>')
                                                     .replace(/:\s*(true|false|null)/g, ': <span class="text-purple-400">$1</span>')
                                                     .replace(/({|}|\[|\])/g, '<span class="text-gray-500">$1</span>')
@@ -117,7 +117,7 @@ const BlockDetailInfo: React.FC<BlockDetailInfoProps> = ({ block, blockData }) =
                     <div className="flex flex-wrap justify-between items-center border-b border-gray-400/30 pb-4">
                         <span className="text-gray-400 mr-2">{blockDetailTexts.blockDetails.fields.status}</span>
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${block.status === 'confirmed'
-                            ? 'bg-green-500/20 text-green-400'
+                            ? 'bg-primary/20 text-primary'
                             : 'bg-yellow-500/20 text-yellow-400'
                             }`}>
                             {block.status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}

@@ -419,7 +419,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                             disabled={isExporting}
                             className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${isExporting
                                 ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                : 'bg-card border-gray-800/40 text-gray-300 hover:bg-card/80'
+                                : 'bg-card border-white/10 text-gray-300 hover:bg-card/80'
                                 }`}
                         >
                             {isExporting ? (

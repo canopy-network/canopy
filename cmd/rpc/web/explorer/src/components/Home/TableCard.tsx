@@ -125,7 +125,7 @@ const TableCard: React.FC<TableCardProps> = ({
             initial={{ opacity: 1, y: 10, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={`p-5 flex flex-col ${className || 'rounded-xl border border-gray-800/60 bg-card shadow-xl'}`}
+            className={`p-5 flex flex-col ${className || 'rounded-xl border border-white/10 bg-card shadow-xl'}`}
         >
             <div className={`flex items-center ${title ? 'justify-between ' : 'justify-end'} mb-4`}>
                 {title && (
@@ -147,7 +147,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                 <>
                                     <span className="text-gray-400 text-sm">Show:</span>
                                     <select
-                                        className="px-3 py-1 bg-input border border-gray-800/80 rounded-md text-white text-sm"
+                                        className="px-3 py-1 bg-input border border-white/10 rounded-md text-white text-sm"
                                         value={currentEntriesPerPage}
                                         onChange={(e) => onEntriesPerPageChange && onEntriesPerPageChange(Number(e.target.value))}
                                     >
@@ -160,7 +160,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             {showExportButton && (
                                 <button
                                     onClick={onExportButtonClick}
-                                    className="px-3 py-1 text-sm bg-input hover:bg-gray-700 rounded text-gray-300"
+                                    className="px-3 py-1 text-sm bg-input hover:bg-white/10 rounded text-gray-300"
                                 >
                                     <i className="fa-solid fa-download mr-2"></i>Export
                                 </button>
@@ -172,7 +172,7 @@ const TableCard: React.FC<TableCardProps> = ({
 
 
             <div className="overflow-x-auto flex-1">
-                <table className={`w-full divide-y divide-gray-400/20 ${tableClassName}`} style={{ tableLayout: 'fixed' }}>
+                <table className={`w-full divide-y divide-white/10 ${tableClassName}`} style={{ tableLayout: 'fixed' }}>
                     <thead className={theadClassName}>
                         <tr>
                             {columns.map((c, index) => (
@@ -182,7 +182,7 @@ const TableCard: React.FC<TableCardProps> = ({
                             ))}
                         </tr>
                     </thead>
-                    <motion.tbody layout className={`divide-y divide-gray-400/20 ${tbodyClassName}`}>
+                    <motion.tbody layout className={`divide-y divide-white/10 ${tbodyClassName}`}>
                         {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <tr key={`s-${i}`} className="animate-pulse">
@@ -257,7 +257,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                     <button
                                         onClick={prev}
                                         disabled={currentPaginatedPage === 1}
-                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === 1 ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
                                     >
                                         <i className="fa-solid fa-angle-left mr-1"></i>Previous
                                     </button>
@@ -267,7 +267,7 @@ const TableCard: React.FC<TableCardProps> = ({
                                     <button
                                         onClick={next}
                                         disabled={currentPaginatedPage === totalPages}
-                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                        className={`px-3 py-2 rounded text-sm ${currentPaginatedPage === totalPages ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
                                     >
                                         Next<i className="fa-solid fa-angle-right ml-1"></i>
                                     </button>
@@ -280,18 +280,18 @@ const TableCard: React.FC<TableCardProps> = ({
                             {/* Desktop Pagination */}
                             <div className="hidden md:flex items-center justify-between text-sm text-gray-400">
                                 <div className="flex items-center gap-2">
-                                    <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
+                                    <button onClick={prev} disabled={currentPaginatedPage === 1} className={`px-2 py-1 rounded ${currentPaginatedPage === 1 ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10'}`}> <i className="fa-solid fa-angle-left"></i> Previous</button>
                                     {visiblePages.map((p, idx, arr) => {
                                         const prevNum = arr[idx - 1]
                                         const needDots = idx > 0 && p - (prevNum || 0) > 1
                                         return (
                                             <React.Fragment key={p}>
                                                 {needDots && <span className="px-1">…</span>}
-                                                <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-gray-700/60'}`}>{p}</button>
+                                                <button onClick={() => goToPage(p)} className={`min-w-[28px] px-2 py-1 rounded ${currentPaginatedPage === p ? 'bg-primary text-black' : 'bg-input hover:bg-white/10'}`}>{p}</button>
                                             </React.Fragment>
                                         )
                                     })}
-                                    <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-gray-700/60'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
+                                    <button onClick={next} disabled={currentPaginatedPage === totalPages} className={`px-2 py-1 rounded ${currentPaginatedPage === totalPages ? 'bg-input text-gray-500 cursor-not-allowed' : 'bg-input hover:bg-white/10'}`}>Next <i className="fa-solid fa-angle-right"></i></button>
                                 </div>
                                 <div>
                                     Showing {totalItems === 0 ? 0 : startIdx + 1} to {Math.min(endIdx, totalItems)} of <AnimatedNumber value={totalItems} /> entries

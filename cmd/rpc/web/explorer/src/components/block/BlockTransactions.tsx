@@ -85,7 +85,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'success':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'failed':
                 return 'bg-red-500/20 text-red-400'
             case 'pending':
@@ -128,7 +128,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             case 'transfer':
                 return 'bg-blue-500/20 text-blue-400'
             case 'stake':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'unstake':
                 return 'bg-orange-500/20 text-orange-400'
             case 'swap':
@@ -140,7 +140,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             case 'undelegate':
                 return 'bg-pink-500/20 text-pink-400'
             case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
+                return 'bg-primary/20 text-primary'
             default:
                 return 'bg-gray-500/20 text-gray-400'
         }
@@ -174,7 +174,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             // Hash
             <span
                 key="hash"
-                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
+                className="font-mono text-white text-sm cursor-pointer hover:text-primary hover:underline"
                 onClick={() => navigate(`/transaction/${tx.hash}`)}
             >
                 {truncate(tx.hash, 8)}
@@ -193,7 +193,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             <Link
                 key="from"
                 to={`/account/${tx.from}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+                className="text-gray-400 font-mono text-sm hover:text-primary hover:underline"
             >
                 {truncate(tx.from, 12)}
             </Link>,
@@ -202,7 +202,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             <Link
                 key="to"
                 to={`/account/${tx.to}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline"
+                className="text-gray-400 font-mono text-sm hover:text-primary hover:underline"
             >
                 {tx.to === 'N/A' ? (
                     <span className="text-gray-500">N/A</span>

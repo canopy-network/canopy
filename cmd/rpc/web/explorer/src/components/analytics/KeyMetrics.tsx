@@ -86,14 +86,14 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/3 mb-4"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/3 mb-4"></div>
                     <div className="space-y-3">
-                        <div className="h-3 bg-gray-700 rounded"></div>
-                        <div className="h-3 bg-gray-700 rounded w-5/6"></div>
-                        <div className="h-3 bg-gray-700 rounded w-4/6"></div>
-                        <div className="h-3 bg-gray-700 rounded w-3/6"></div>
+                        <div className="h-3 bg-white/10 rounded"></div>
+                        <div className="h-3 bg-white/10 rounded w-5/6"></div>
+                        <div className="h-3 bg-white/10 rounded w-4/6"></div>
+                        <div className="h-3 bg-white/10 rounded w-3/6"></div>
                     </div>
                 </div>
             </div>
@@ -105,7 +105,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <h3 className="text-lg font-semibold text-white mb-4">Key Metrics</h3>
 
@@ -123,7 +123,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                             />
                         </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-white/10 rounded-full h-2">
                         <div
                             className="bg-primary h-2 rounded-full transition-all duration-500"
                             style={{ width: `${realMetrics.networkUptime}%` }}
@@ -144,7 +144,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                             />
                         </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-white/10 rounded-full h-2">
                         <div
                             className="bg-primary h-2 rounded-full transition-all duration-500"
                             style={{ width: `${Math.min(100, (realMetrics.totalValueLocked / 50) * 100)}%` }}
@@ -163,7 +163,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
                             />
                         </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-white/10 rounded-full h-2">
                         <div
                             className="bg-primary h-2 rounded-full transition-all duration-500"
                             style={{ width: `${Math.min(100, (realMetrics.validatorCount / 100) * 100)}%` }}

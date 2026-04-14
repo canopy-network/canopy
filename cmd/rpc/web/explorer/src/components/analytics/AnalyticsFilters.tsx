@@ -90,7 +90,7 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
     }
 
     return (
-        <div className="flex items-center justify-between flex-col lg:flex-row gap-4 lg:gap-0 space-x-2 mb-8 bg-card border border-gray-800/30 hover:border-gray-800/50 rounded-xl p-4">
+        <div className="flex items-center justify-between flex-col lg:flex-row gap-4 lg:gap-0 space-x-2 mb-8 bg-card border border-white/5 hover:border-white/8 rounded-xl p-4">
             <div className="flex items-center space-x-2">
                 {blockRangeFilters.map((filter) => {
                     const isSelected = selectedRange === filter.key
@@ -101,7 +101,7 @@ const AnalyticsFilters: React.FC<AnalyticsFiltersProps> = ({
                             onClick={() => handleBlockRangeSelect(filter.key)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isSelected
                                 ? 'bg-primary text-black shadow-lg shadow-primary/25'
-                                : 'bg-input text-gray-300 hover:bg-gray-600 hover:text-white'
+                                : 'bg-input text-gray-300 hover:bg-white/10 hover:text-white'
                                 }`}
                         >
                             <div className="flex flex-col items-center">

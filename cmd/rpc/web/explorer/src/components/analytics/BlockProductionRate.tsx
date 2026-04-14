@@ -135,10 +135,10 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -151,7 +151,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: 0.2 }}
-                className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+                className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
             >
                 <div className="mb-4">
                     <h3 className="text-lg font-semibold text-white">
@@ -173,7 +173,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
@@ -189,7 +189,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     {/* Grid lines */}
                     <defs>
                         <pattern id="grid-blocks" width="30" height="20" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="#374151" strokeWidth="0.5" />
+                            <path d="M 30 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
                         </pattern>
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid-blocks)" />
@@ -197,8 +197,8 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                     {/* Area chart */}
                     <defs>
                         <linearGradient id="blockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#4ADE80" stopOpacity="0.3" />
-                            <stop offset="100%" stopColor="#4ADE80" stopOpacity="0.1" />
+                            <stop offset="0%" stopColor="#45ca46" stopOpacity="0.3" />
+                            <stop offset="100%" stopColor="#45ca46" stopOpacity="0.1" />
                         </linearGradient>
                     </defs>
 
@@ -217,7 +217,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                             {/* Line */}
                             <polyline
                                 fill="none"
-                                stroke="#4ADE80"
+                                stroke="#45ca46"
                                 strokeWidth="2"
                                 points={blockData.map((value, index) => {
                                     const x = (index / (blockData.length - 1)) * 280 + 10
@@ -235,7 +235,7 @@ const BlockProductionRate: React.FC<BlockProductionRateProps> = ({ fromBlock, to
                             cx="150"
                             cy="55"
                             r="4"
-                            fill="#4ADE80"
+                            fill="#45ca46"
                         />
                     )}
                 </svg>

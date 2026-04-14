@@ -94,8 +94,8 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
             duration: 2000,
             position: 'top-right',
             style: {
-                background: '#1A1B23',
-                color: '#4ADE80',
+                background: '#1a1a1a',
+                color: '#45ca46',
             },
         })
     }
@@ -158,7 +158,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white break-all font-mono">
                                     {validator.address}
                                 </h1>
-                                <i className="fa-solid fa-copy cursor-pointer hover:text-green-600 transition-colors text-primary flex-shrink-0"
+                                <i className="fa-solid fa-copy cursor-pointer hover:text-primary transition-colors text-primary flex-shrink-0"
                                     onClick={() => copyToClipboard(validator.address)}
                                     title="Copy address"></i>
                             </div>
@@ -198,7 +198,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                             {/* Auto-Compound */}
                             <div className="text-start flex items-center gap-2">
                                 <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Auto-Compound:</div>
-                                <div className={`text-xs sm:text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-green-400' : 'text-gray-500'}`}>
+                                <div className={`text-xs sm:text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-primary' : 'text-gray-500'}`}>
                                     <i className={`fa-solid ${validator.compound ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
                                     <span>{validator.compound ? 'Enabled' : 'Disabled'}</span>
                                 </div>

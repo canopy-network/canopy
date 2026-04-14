@@ -22,9 +22,9 @@ import { Line } from 'react-chartjs-2';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
 // ── Design tokens ────────────────────────────────────────────────────────────
-const PRIMARY        = '#35CD48';                  // hsl(128 60% 51%)
-const PRIMARY_STROKE = 'rgba(53,205,72,0.50)';    // dimmed line — softer on dark bg
-const PRIMARY_FILL   = 'rgba(53,205,72,0.06)';    // subtle area fill fallback
+const PRIMARY        = '#45ca46';
+const PRIMARY_STROKE = 'rgba(69,202,70,0.50)';
+const PRIMARY_FILL   = 'rgba(69,202,70,0.06)';
 const CARD_BG        = 'hsl(0,0%,13%)';
 const BORDER_CLR     = 'hsl(0,0%,20%)';
 const MUTED          = '#6b7280';
@@ -67,7 +67,7 @@ function toRgb(color: string): [number, number, number] {
     if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
     const rgb = color.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
     if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
-    return [53, 205, 72]; // fallback: primary green
+    return [69, 202, 70]; // fallback: primary green
 }
 
 /** Build a top-to-bottom fade gradient for the area fill. */

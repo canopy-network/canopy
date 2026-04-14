@@ -99,7 +99,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'success':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'failed':
                 return 'bg-red-500/20 text-red-400'
             case 'pending':
@@ -142,7 +142,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             case 'transfer':
                 return 'bg-blue-500/20 text-blue-400'
             case 'stake':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'unstake':
                 return 'bg-orange-500/20 text-orange-400'
             case 'swap':
@@ -154,7 +154,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             case 'undelegate':
                 return 'bg-pink-500/20 text-pink-400'
             case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
+                return 'bg-primary/20 text-primary'
             default:
                 return 'bg-gray-500/20 text-gray-400'
         }
@@ -255,7 +255,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
     const rows = sortedTransactions.map((transaction) => [
         // Hash
-        <span className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline"
+        <span className="font-mono text-white text-sm cursor-pointer hover:text-primary hover:underline"
             onClick={() => navigate(`/transaction/${transaction.hash}`)}>
             {truncate(transaction.hash, 12)}
         </span>,
@@ -267,12 +267,12 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         </div>,
 
         // From
-        <Link to={`/account/${transaction.from}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
+        <Link to={`/account/${transaction.from}`} className="text-gray-400 font-mono text-sm hover:text-primary hover:underline">
             {truncate(transaction.from, 12)}
         </Link>,
 
         // To
-        <Link to={`/account/${transaction.to}`} className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline">
+        <Link to={`/account/${transaction.to}`} className="text-gray-400 font-mono text-sm hover:text-primary hover:underline">
             {transaction.to === 'N/A' ? (
                 <span className="text-gray-500">N/A</span>
             ) : (

@@ -29,7 +29,7 @@ const navItems = [
 const NAV_BASE =
     'relative flex w-full min-w-0 items-center gap-3 rounded-lg border py-2 pr-2.5 pl-4 text-sm font-medium transition-all duration-150';
 const NAV_ACTIVE =
-    'nav-item-active border-primary/30 text-primary shadow-[0_0_0_1px_rgba(53,205,72,0.16)]';
+    'nav-item-active border-primary/30 text-primary shadow-[0_0_0_1px_rgba(69,202,70,0.16)]';
 const NAV_INACTIVE =
     'border-transparent text-muted-foreground hover:border-primary/20 hover:bg-accent/65 hover:text-foreground';
 
@@ -54,7 +54,7 @@ export const AppSidebar = (): JSX.Element => {
                         className={`group flex h-full w-full items-center ${collapsed ? 'justify-center' : 'justify-start gap-3'}`}
                     >
                         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-5 w-5 drop-shadow-[0_0_10px_rgba(53,205,72,0.35)]" />
+                            <CnpyLogoIcon className="h-5 w-5 drop-shadow-[0_0_10px_rgba(69,202,70,0.35)]" />
                         </div>
                         <AnimatePresence>
                             {!collapsed && (
@@ -144,7 +144,7 @@ export const AppSidebar = (): JSX.Element => {
                     </button>
                     <Link to="/" className="flex items-center gap-2">
                         <div className="flex h-7 w-7 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
+                            <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(69,202,70,0.3)]" />
                         </div>
                         <span className="font-display text-sm font-bold text-foreground">Canopy Wallet</span>
                     </Link>
@@ -179,7 +179,7 @@ export const AppSidebar = (): JSX.Element => {
                                             className="flex items-center gap-2.5"
                                         >
                                             <div className="flex h-7 w-7 items-center justify-center text-primary">
-                                                <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(53,205,72,0.3)]" />
+                                                <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_8px_rgba(69,202,70,0.3)]" />
                                             </div>
                                             <span className="font-display text-sm font-bold text-foreground">
                                                 Canopy Wallet

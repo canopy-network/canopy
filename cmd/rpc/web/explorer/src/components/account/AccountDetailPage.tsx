@@ -100,7 +100,7 @@ const AccountDetailPage: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                    <div className="flex gap-1 border-b border-gray-700 overflow-x-auto">
+                    <div className="flex gap-1 border-b border-white/10 overflow-x-auto">
                         <motion.button
                             onClick={() => handleTabChange('sent')}
                             className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${activeTab === 'sent'
@@ -110,8 +110,8 @@ const AccountDetailPage: React.FC = () => {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             animate={{
-                                backgroundColor: activeTab === 'sent' ? '#4ADE80' : 'transparent',
-                                color: activeTab === 'sent' ? '#000000' : '#9CA3AF'
+                                backgroundColor: activeTab === 'sent' ? '#45ca46' : 'transparent',
+                                color: activeTab === 'sent' ? '#0f0f0f' : '#a3a3a3'
                             }}
                         >
                             {accountDetailTexts.tabs.sentTransactions}
@@ -125,8 +125,8 @@ const AccountDetailPage: React.FC = () => {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             animate={{
-                                backgroundColor: activeTab === 'received' ? '#4ADE80' : 'transparent',
-                                color: activeTab === 'received' ? '#000000' : '#9CA3AF'
+                                backgroundColor: activeTab === 'received' ? '#45ca46' : 'transparent',
+                                color: activeTab === 'received' ? '#0f0f0f' : '#a3a3a3'
                             }}
                         >
                             {accountDetailTexts.tabs.receivedTransactions}

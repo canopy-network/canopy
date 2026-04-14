@@ -78,7 +78,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
             >
                 {/* Address */}
                 <motion.div
-                    className="bg-input rounded-lg p-3 sm:p-4 border border-gray-800/50"
+                    className="bg-input rounded-lg p-3 sm:p-4 border border-white/8"
                     transition={{ duration: 0.2 }}
                 >
                     <div className="flex items-center justify-between mb-2 relative">
@@ -90,7 +90,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                         </div>
                         <motion.button
                             onClick={copyToClipboard}
-                            className="bg-gray-700/50 hover:bg-gray-700/70 rounded-lg py-1 px-2 absolute right-0 top-1/2 -translate-y-1/2 text-primary hover:text-green-500/80 transition-colors border border-gray-800/50 flex-shrink-0"
+                            className="bg-gray-700/50 hover:bg-white/10 rounded-lg py-1 px-2 absolute right-0 top-1/2 -translate-y-1/2 text-primary hover:text-green-500/80 transition-colors border border-white/8 flex-shrink-0"
                             title="Copy address"
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
@@ -110,7 +110,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
 
                 {/* Status */}
                 <motion.div
-                    className="bg-input rounded-lg p-4 border border-gray-800/50"
+                    className="bg-input rounded-lg p-4 border border-white/8"
                     transition={{ duration: 0.2 }}
                 >
                     <div className="flex items-center gap-2 mb-2">

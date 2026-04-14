@@ -23,7 +23,7 @@ export const TopBar = (): JSX.Element => {
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
 
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(53,205,72,0.12)]">
+                <div className="flex items-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(69,202,70,0.12)]">
                     <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
                         <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
