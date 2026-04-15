@@ -53,9 +53,52 @@ extract_if_needed() {
     return 1
 }
 
+# get_process_cmd returns the process command using a portable ps invocation
 get_process_cmd() {
     local pid="$1"
     ps -p "$pid" -o args= 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null
+}
+
+# find_matching_pids finds all running go-plugin pids by binary path
+find_matching_pids() {
+    ps ax -o pid= -o args= 2>/dev/null | grep -F "$BINARY_PATH" | awk '{print $1}'
+}
+
+# stop_pid stops a process gracefully and force kills it on timeout
+stop_pid() {
+    local pid="$1"
+    if ! ps -p "$pid" > /dev/null 2>&1; then
+        return 0
+    fi
+    kill -TERM "$pid" 2>/dev/null
+    local count=0
+    while [ $count -lt $STOP_TIMEOUT ]; do
+        if ! ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null
+    sleep 1
+    ! ps -p "$pid" > /dev/null 2>&1
+}
+
+# cleanup_orphaned_processes stops any matching go-plugin process not tracked by the pid file
+cleanup_orphaned_processes() {
+    local found=0
+    for pid in $(find_matching_pids); do
+        if [ -f "$PID_FILE" ] && [ "$pid" = "$(cat "$PID_FILE" 2>/dev/null)" ]; then
+            continue
+        fi
+        found=1
+        echo "Cleaning up orphaned go-plugin process (PID: $pid)..."
+        if ! stop_pid "$pid"; then
+            echo "Error: Failed to stop orphaned go-plugin process $pid"
+            return 1
+        fi
+    done
+    return 0
 }
 
 # Check if the process is running based on PID file
@@ -94,6 +137,8 @@ start() {
         echo "go-plugin is already running (PID: $(cat "$PID_FILE"))"
         return 1
     fi
+    # Clean up any orphaned processes left behind by an earlier failed run
+    cleanup_orphaned_processes || return 1
     # Clean up any stale PID file
     cleanup_pid
     # Try to extract from tarball if binary doesn't exist
@@ -129,33 +174,18 @@ start() {
 stop() {
     # Check if running
     if ! is_running; then
-        echo "go-plugin is not running"
+        if cleanup_orphaned_processes; then
+            echo "go-plugin is not running"
+        fi
         cleanup_pid
         return 0
     fi
     # Read PID from file
     local pid=$(cat "$PID_FILE")
     echo "Stopping go-plugin (PID: $pid)..."
-    # Send SIGTERM for graceful shutdown
-    kill -TERM "$pid" 2>/dev/null
-    # Wait for process to exit with timeout
-    local count=0
-    while [ $count -lt $STOP_TIMEOUT ]; do
-        if ! ps -p "$pid" > /dev/null 2>&1; then
-            echo "go-plugin stopped successfully"
-            cleanup_pid
-            return 0
-        fi
-        sleep 1
-        count=$((count + 1))
-    done
-    # If still running after timeout, force kill
-    echo "Process did not stop gracefully, forcing shutdown..."
-    kill -KILL "$pid" 2>/dev/null
-    sleep 1
-    # Verify it's stopped
-    if ! ps -p "$pid" > /dev/null 2>&1; then
-        echo "go-plugin stopped (forced)"
+    if stop_pid "$pid"; then
+        cleanup_orphaned_processes || return 1
+        echo "go-plugin stopped successfully"
         cleanup_pid
         return 0
     else
