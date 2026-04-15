@@ -502,11 +502,11 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 				Help: "Execution time of the database backup",
 			}),
 			DBLSSCompactionTime: promauto.NewHistogram(prometheus.HistogramOpts{
-				Name: "canopy_store_compaction_time",
+				Name: "canopy_store_lss_compaction_time",
 				Help: "Execution time of LSS database compaction",
 			}),
 			DBHSSCompactionTime: promauto.NewHistogram(prometheus.HistogramOpts{
-				Name: "canopy_store_compaction_time",
+				Name: "canopy_store_hss_compaction_time",
 				Help: "Execution time of HSS database compaction",
 			}),
 		},
