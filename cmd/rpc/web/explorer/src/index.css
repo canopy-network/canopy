@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Semantic border — matches canopy-frontend dark `border` token; enables `border-border/40` on the header */
+@theme {
+  --color-border: rgba(255, 255, 255, 0.1);
+}
+
 html,
 body,
 #root {

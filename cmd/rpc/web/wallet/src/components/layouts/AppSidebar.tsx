@@ -147,7 +147,7 @@ export const AppSidebar = (): JSX.Element => {
             </motion.aside>
 
             <div className="lg:hidden">
-                <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-zinc-800 bg-card px-4">
+                <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-border/40 bg-card px-4">
                     <button
                         type="button"
                         onClick={() => setMobileOpen(true)}

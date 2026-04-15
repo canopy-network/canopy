@@ -84,7 +84,7 @@ const Navbar = () => {
     }, [])
 
     return (
-        <nav ref={navRef} className="bg-navbar shadow-lg">
+        <nav ref={navRef} className="bg-background border-b border-border/40">
             <div className="mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16 gap-4">
                     {/* Section 1: Left - Logo + Block # */}
@@ -93,7 +93,7 @@ const Navbar = () => {
                             <Logo size={180} showText={false} />
                             <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-base">
                                 <p className='text-gray-500 font-light'>Block:</p>
-                                <p className="font-medium text-primary">#{latestBlock.data?.totalCount?.toLocaleString() || '0'}</p>
+                                <p className="font-medium text-white">#{latestBlock.data?.totalCount?.toLocaleString() || '0'}</p>
                             </div>
                         </Link>
                     </div>
@@ -104,7 +104,7 @@ const Navbar = () => {
                             <input
                                 type="text"
                                 placeholder="Search blocks, transactions, addresses..."
-                                className="bg-card rounded-full p-2 py-2.5 pl-10 text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40 w-full"
+                                className="bg-card rounded-full p-2 py-2.5 pl-10 text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 w-full"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 onKeyDown={(e) => {
@@ -136,7 +136,7 @@ const Navbar = () => {
                                 >
                                     <button
                                         onClick={() => handleToggle(index)}
-                                        className={`relative z-20 px-3 py-2 rounded-md text-base font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:text-primary hover:bg-white/10'}`}
+                                        className={`relative z-20 px-3 py-2 rounded-md text-base font-normal transition-colors duration-200 flex items-center gap-1 ${openIndex === index || isActiveRoute(item) ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
                                     >
                                         {item.label}
                                         <motion.svg
@@ -149,7 +149,7 @@ const Navbar = () => {
                                             <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
                                         </motion.svg>
                                         <motion.span
-                                            className="pointer-events-none absolute left-2 right-2 -bottom-0.5 h-0.5 rounded bg-primary/70"
+                                            className="pointer-events-none absolute left-2 right-2 -bottom-0.5 h-0.5 rounded bg-white/70"
                                             animate={{ scaleX: openIndex === index || isActiveRoute(item) ? 1 : 0 }}
                                             initial={false}
                                             transition={{ duration: 0.16, ease: 'easeOut' }}
@@ -181,7 +181,7 @@ const Navbar = () => {
                                                         >
                                                             <Link
                                                                 to={child.path}
-                                                                className={`block px-3 py-2 text-base font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-white/10'}`}
+                                                                className={`block px-3 py-2 text-base font-normal ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                                                                 onClick={handleClose}
                                                             >
                                                                 {child.label}
@@ -209,7 +209,7 @@ const Navbar = () => {
                     <div className="md:hidden flex items-center justify-end col-start-3">
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="text-gray-300 hover:text-primary focus:outline-none focus:text-primary"
+                            className="text-gray-300 hover:text-white focus:outline-none focus:text-white"
                         >
                             <motion.svg
                                 className="h-6 w-6"
@@ -238,7 +238,7 @@ const Navbar = () => {
                             <div key={item.label} className="mb-1">
                                 <button
                                     onClick={() => toggleMobileIndex(index)}
-                                    className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index || isActiveRoute(item) ? 'bg-primary/20 text-primary' : 'text-gray-300 hover:text-primary hover:bg-white/10'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-base font-medium flex items-center justify-between ${mobileOpenIndex === index || isActiveRoute(item) ? 'bg-white/10 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                                 >
                                     <span>{item.label}</span>
                                     <svg className={`h-4 w-4 transition-transform ${mobileOpenIndex === index ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" /></svg>
@@ -250,7 +250,7 @@ const Navbar = () => {
                                                 <li key={child.path}>
                                                     <Link
                                                         to={child.path}
-                                                        className={`block px-3 py-2 text-sm rounded-md ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-primary bg-primary/10' : 'text-gray-300 hover:text-primary hover:bg-white/10'}`}
+                                                        className={`block px-3 py-2 text-sm rounded-md ${location.pathname === child.path || location.pathname.startsWith(child.path + '/') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                                                         onClick={() => setMobileOpenIndex(null)}
                                                     >
                                                         {child.label}
@@ -276,7 +276,7 @@ const Navbar = () => {
                                 <input
                                     type="text"
                                     placeholder="Search blocks, transactions, addresses..."
-                                    className="w-full px-4 py-3 pl-10 bg-card border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                    className="w-full px-4 py-3 pl-10 bg-card border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-white/30"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     onKeyDown={(e) => {

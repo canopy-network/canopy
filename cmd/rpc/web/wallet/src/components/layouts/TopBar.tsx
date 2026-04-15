@@ -15,19 +15,19 @@ export const TopBar = (): JSX.Element => {
 
     return (
         <motion.header
-            className="relative z-20 hidden h-[52px] flex-shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-card px-5 lg:flex"
+            className="relative z-20 hidden h-[52px] flex-shrink-0 items-center justify-between gap-3 border-b border-border/40 bg-background px-5 lg:flex"
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
         >
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(69,202,70,0.12)]">
+                <div className="flex items-center gap-2 rounded-md border border-white/15 bg-white/[0.06] px-2.5 py-1.5">
                     <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70 opacity-70" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
                     </span>
-                    <Blocks className="h-3 w-3 flex-shrink-0 text-primary/80" />
-                    <span className="num text-xs font-semibold text-primary">
+                    <Blocks className="h-3 w-3 flex-shrink-0 text-white/60" />
+                    <span className="num text-xs font-semibold text-white">
                         {blockHeight != null ? `#${blockHeight.height.toLocaleString()}` : '-'}
                     </span>
                 </div>
@@ -37,12 +37,12 @@ export const TopBar = (): JSX.Element => {
                 <div className="hidden items-center gap-1.5 rounded-md border border-border/70 bg-secondary/75 px-2.5 py-1.5 sm:flex">
                     <span className="text-xs text-muted-foreground">Total</span>
                     {stageLoading ? (
-                        <span className="num text-xs font-semibold text-primary">...</span>
+                        <span className="num text-xs font-semibold text-white">...</span>
                     ) : (
                         <AnimatedNumber
                             value={totalStage ? totalStage / 1_000_000 : 0}
                             format={{ notation: 'compact', maximumFractionDigits: 1 }}
-                            className="num text-xs font-semibold text-primary"
+                            className="num text-xs font-semibold text-white"
                         />
                     )}
                     <span className="num text-xs text-muted-foreground/60">CNPY</span>
@@ -52,7 +52,7 @@ export const TopBar = (): JSX.Element => {
 
                 <Link
                     to="/key-management"
-                    className="btn-glow flex h-8 items-center gap-1.5 rounded-md border border-primary/35 bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all duration-150 hover:bg-primary/90"
+                    className="flex h-8 items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.08] px-3 text-xs font-semibold text-white transition-all duration-150 hover:bg-white/[0.14]"
                 >
                     <Key className="h-3 w-3 flex-shrink-0" />
                     <span className="hidden sm:inline">Keys</span>

@@ -54,7 +54,7 @@ export const TextField: React.FC<BaseFieldProps> = ({
     }
 
     const hasFeatures = !!(field.features?.length)
-    const commonBase = 'w-full bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-colors'
+    const commonBase = 'w-full bg-background/60 border placeholder:text-muted-foreground/70 text-foreground rounded-xl px-3 focus:outline-none focus:ring-2 focus:ring-white/12 focus:border-white/20 transition-colors'
     const common = isTextarea
         ? `${commonBase} py-2.5 min-h-[112px] resize-y`
         : `${commonBase} h-11 sm:h-12`

@@ -24,14 +24,14 @@ export const Option: React.FC<{
       <span
           className={cx(
               "mt-1  h-4 w-4 rounded-full border relative",
-              selected ? "border-emerald-400" : "border-border"
+              selected ? "border-foreground/50" : "border-border"
           )}
           aria-hidden
       >
-          <span className={cx(selected && "bg-primary" , " absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full")}/>
+          <span className={cx(selected && "bg-foreground" , " absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full")}/>
       </span>
             <div className="flex-1">
-                <div className="font-medium text-canopy-50">{label}</div>
+                <div className="font-medium text-foreground">{label}</div>
                 {help ? <div className="text-xs text-muted-foreground mt-0.5">{help}</div> : null}
             </div>
         </div>

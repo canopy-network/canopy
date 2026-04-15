@@ -39,7 +39,7 @@ const tabsTriggerVariants = cva(
         outline:
           "rounded-lg border border-border/80 bg-muted/65 text-muted-foreground leading-none tracking-normal data-[state=active]:border-primary/42 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_0_1px_rgba(69,202,70,0.18)]",
         wallet:
-          "shrink-0 -mb-[1px] rounded-none border-b-[2px] border-transparent bg-transparent px-4 py-3 pb-3 font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary",
+          "shrink-0 -mb-[1px] rounded-none border-b-[2px] border-transparent bg-transparent px-4 py-3 pb-3 font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground",
       },
     },
     defaultVariants: {

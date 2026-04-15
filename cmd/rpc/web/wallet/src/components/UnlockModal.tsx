@@ -94,8 +94,8 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                         <div className="p-4 pt-7 sm:p-6 sm:pt-8 overflow-y-auto min-h-0">
                             {/* Icon */}
                             <div className="flex justify-center mb-5">
-                                <div className="relative w-16 h-16 rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center">
-                                    <Shield className="w-8 h-8 text-primary" />
+                                <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/10">
+                                    <Shield className="h-8 w-8 text-white" />
                                 </div>
                             </div>
 
@@ -131,7 +131,7 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                             placeholder:text-muted-foreground
                                             ${err
                                                 ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-                                                : 'border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20'
+                                                : 'border-border/50 focus:border-white/30 focus:ring-2 focus:ring-white/10'
                                             }
                                         `}
                                         disabled={isSubmitting}
@@ -181,13 +181,13 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                     onClick={submit}
                                     disabled={isSubmitting || !pwd}
                                     className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                                        bg-primary text-primary-foreground font-semibold
-                                        hover:bg-primary/90 transition-all duration-200
+                                        bg-zinc-500 text-white font-semibold
+                                        hover:bg-zinc-400 hover:text-white transition-all duration-200
                                         disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isSubmitting ? (
                                         <motion.div
-                                            className="w-5 h-5 border-2 border-bg-primary/30 border-t-bg-primary rounded-full"
+                                            className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
                                             animate={{ rotate: 360 }}
                                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                                         />

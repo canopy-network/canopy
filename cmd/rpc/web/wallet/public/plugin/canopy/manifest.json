@@ -181,6 +181,16 @@
             "span": {
               "base": 12
             }
+          },
+          {
+            "id": "memo",
+            "name": "memo",
+            "type": "text",
+            "label": "Memo (optional)",
+            "placeholder": "Add a note for this transfer",
+            "span": {
+              "base": 12
+            }
           }
         ],
         "info": {
@@ -220,6 +230,10 @@
             {
               "label": "Amount",
               "value": "{{numberToLocaleString<{{form.amount}}>}} {{chain.denom.symbol}}"
+            },
+            {
+              "label": "Memo",
+              "value": "{{form.memo || '—'}}"
             },
             {
               "label": "Fee",

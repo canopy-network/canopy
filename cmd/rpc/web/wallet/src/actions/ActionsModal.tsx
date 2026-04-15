@@ -11,7 +11,7 @@ const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'))
 
 const ActionRunnerFallback = () => (
   <div className="flex flex-col items-center justify-center py-12 gap-3">
-    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+    <Loader2 className="w-8 h-8 text-white/60 animate-spin" />
     <span className="text-muted-foreground text-sm">Loading action...</span>
   </div>
 )

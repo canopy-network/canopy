@@ -70,10 +70,10 @@ export const SectionField: React.FC<SectionFieldProps> = ({
       icon: "text-red-400",
     },
     primary: {
-      bg: "bg-primary/10",
-      border: "border-primary/30",
-      text: "text-primary-foreground",
-      icon: "text-primary",
+      bg: "bg-white/[0.06]",
+      border: "border-white/12",
+      text: "text-foreground",
+      icon: "text-foreground/70",
     },
   };
 
