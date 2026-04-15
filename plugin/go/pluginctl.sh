@@ -53,6 +53,11 @@ extract_if_needed() {
     return 1
 }
 
+get_process_cmd() {
+    local pid="$1"
+    ps -p "$pid" -o args= 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null
+}
+
 # Check if the process is running based on PID file
 is_running() {
     # Return 1 if PID file doesn't exist
@@ -68,7 +73,7 @@ is_running() {
     # Check if process exists and is the go-plugin binary
     if ps -p "$pid" > /dev/null 2>&1; then
         # Verify it's actually our binary
-        if ps -p "$pid" -o cmd= | grep -q "go-plugin"; then
+        if get_process_cmd "$pid" | grep -q "go-plugin"; then
             return 0
         fi
     fi

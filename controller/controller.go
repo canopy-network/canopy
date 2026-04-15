@@ -3,10 +3,12 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -81,7 +83,9 @@ func New(fsm *fsm.StateMachine, c lib.Config, valKey crypto.PrivateKeyI, metrics
 	controller.loadCheckpointsFile()
 	// setup plugin if enabled
 	if c.Plugin != "" {
-		controller.PluginExecute(c.Plugin)
+		if err = controller.PluginExecute(c.Plugin); err != nil {
+			return nil, err
+		}
 		controller.PluginConnectSync()
 	}
 	// initialize the consensus in the controller, passing a reference to itself
@@ -252,24 +256,25 @@ const socketDir = "/tmp/plugin"
 const socketFile = "plugin.sock"
 
 // PluginExecute() executes the plugin control script to start the plugin process
-func (c *Controller) PluginExecute(plugin string) {
+func (c *Controller) PluginExecute(plugin string) lib.ErrorI {
 	if plugin == "" || strings.Contains(plugin, "..") || strings.ContainsRune(plugin, os.PathSeparator) {
-		c.log.Errorf("Invalid plugin name %q", plugin)
-		return
+		return lib.NewError(lib.NoCode, lib.MainModule, fmt.Sprintf("invalid plugin name %q", plugin))
 	}
-	// construct the shell command path: plugin/<plugin>/pluginctl.sh start
-	cmdPath := filepath.Join("plugin", plugin, "pluginctl.sh")
+	cmdPath, err := resolvePluginCtlPath(plugin)
+	if err != nil {
+		return lib.NewError(lib.NoCode, lib.MainModule, err.Error())
+	}
 	// create the command to execute the plugin control script with 'start' argument
 	cmd := exec.Command(cmdPath, "start")
 	// execute the command and capture output
 	output, err := cmd.CombinedOutput()
 	// if an error occurred during execution
 	if err != nil {
-		// log the error and exit
-		c.log.Errorf("Failed to execute plugin %s: %v, output: %s", plugin, err, string(output))
+		return lib.NewError(lib.NoCode, lib.MainModule, fmt.Sprintf("failed to execute plugin %s: %v, output: %s", plugin, err, string(output)))
 	}
 	// log successful plugin execution
 	c.log.Infof("Plugin %s started: %s", plugin, string(output))
+	return nil
 }
 
 // PluginConnectSync() blocking: enables a unix socket file where plugins can interact with the Canopy FSM
@@ -300,6 +305,31 @@ func (c *Controller) PluginConnectSync() {
 	c.Plugin = lib.NewPlugin(conn, c.log, time.Duration(c.Config.PluginTimeoutMS)*time.Millisecond)
 	// set plugin in FSM and mempool FSM
 	c.FSM.Plugin, c.Mempool.FSM.Plugin = c.Plugin, c.Plugin
+}
+
+func resolvePluginCtlPath(plugin string) (string, error) {
+	relPath := filepath.Join("plugin", plugin, "pluginctl.sh")
+	candidates := []string{
+		relPath,
+	}
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, relPath),
+			filepath.Join(filepath.Dir(exeDir), relPath),
+		)
+	}
+	if _, sourceFile, _, ok := runtime.Caller(0); ok {
+		repoRoot := filepath.Dir(filepath.Dir(sourceFile))
+		candidates = append(candidates, filepath.Join(repoRoot, relPath))
+	}
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("plugin launcher not found for %q; checked: %s", plugin, strings.Join(candidates, ", "))
 }
 
 // INTERNAL CALLS BELOW
