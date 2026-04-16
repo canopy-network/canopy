@@ -8,7 +8,6 @@ import {
   Lock,
   Pencil,
   PlusCircle,
-  ShoppingCart,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -128,7 +127,6 @@ export default function Orders(): JSX.Element {
       <div className="px-6 py-8 space-y-6">
         <section className="canopy-card p-5 md:p-6">
           <div className="flex items-center gap-2 mb-2">
-            <ShoppingCart className="w-5 h-5 text-primary" />
             <h1 className="text-2xl font-semibold text-foreground">Orders</h1>
           </div>
           <p className="text-sm text-muted-foreground">

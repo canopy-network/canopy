@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Coins } from 'lucide-react';
+
+
 import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
@@ -25,7 +26,7 @@ export const StakedBalanceCard = React.memo(() => {
 
     return (
         <motion.div
-            className="canopy-card p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
+            className="canopy-card bg-[#191919] p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.06 }}
@@ -36,10 +37,7 @@ export const StakedBalanceCard = React.memo(() => {
 
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                    <Coins className="text-primary" style={{ width: 14, height: 14 }} />
-                </div>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                <span className="text-sm font-medium text-muted-foreground">
                     Total Staked Balance
                 </span>
             </div>

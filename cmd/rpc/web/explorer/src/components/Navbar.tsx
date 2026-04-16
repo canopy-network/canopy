@@ -90,7 +90,7 @@ const Navbar = () => {
                     {/* Section 1: Left - Logo + Block # */}
                     <div className="flex items-center">
                         <Link to="/" className="flex items-center space-x-3">
-                            <Logo size={180} showText={false} />
+                            <Logo size={260} showText={false} />
                             <div className="bg-card rounded-full px-2 py-1 flex items-center gap-2 text-base">
                                 <p className='text-gray-500 font-light'>Block:</p>
                                 <p className="font-medium text-white">#{latestBlock.data?.totalCount?.toLocaleString() || '0'}</p>
@@ -198,6 +198,28 @@ const Navbar = () => {
 
                         {/* Spacer */}
                         <div className="w-4"></div>
+
+                        <button
+                            onClick={() => window.open("https://discord.com/channels/1310733928436600912/1439049045145419806/1439945810446909560", "_blank")}
+                            className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-white/15 px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 shrink-0"
+                            >
+                                <path
+                                    d="M8 9.33333V7M6.19615 12.3224L7.57285 13.4764C7.81949 13.6832 8.17861 13.6842 8.42643 13.4789L9.8253 12.32C9.94489 12.2209 10.0953 12.1667 10.2506 12.1667H11.5C12.6046 12.1667 13.5 11.2712 13.5 10.1667V4.5C13.5 3.39543 12.6046 2.5 11.5 2.5H4.5C3.39543 2.5 2.5 3.39543 2.5 4.5V10.1667C2.5 11.2712 3.39543 12.1667 4.5 12.1667H5.76788C5.9245 12.1667 6.07612 12.2218 6.19615 12.3224Z"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                />
+                                <path d="M8 5.33337H8.00667" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="round" />
+                            </svg>
+                            Create a Ticket
+                        </button>
 
                         {/* Network Selector */}
                         {import.meta.env.VITE_NODE_ENV === 'production' && (

@@ -305,7 +305,7 @@ const Stages = () => {
 
                             {stage.category && (
                                 <div className="mt-2">
-                                    <p className="text-xs text-gray-400 font-light uppercase tracking-wider">{stage.category}</p>
+                                    <p className="text-xs text-gray-400 font-light">{stage.category}</p>
                                 </div>
                             )}
                         </div>

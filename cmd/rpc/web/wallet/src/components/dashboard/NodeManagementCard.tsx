@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Play, Pause, Workflow } from 'lucide-react';
+import { Copy, Play, Pause } from 'lucide-react';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
@@ -11,15 +11,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDS } from '@/core/useDs';
+import { getCanopySymbol } from '@/lib/utils/canopySymbols';
 
 const shortAddr = (address: string) => `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
-
-const NODE_ACCENT_COLORS = [
-    'bg-primary/25',
-    'bg-orange-500/25',
-    'bg-blue-500/25',
-    'bg-rose-500/25',
-];
 
 interface ProcessedNode {
     address: string;
@@ -44,16 +38,18 @@ const ValidatorRow = React.memo<{
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
+    const rowBg = node.status === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]';
+
     return (
         <motion.tr
-            className="group border-b border-border/40 last:border-0"
+            className={`group border-b border-border/40 last:border-0 ${rowBg}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
             <td className="py-3 pr-4">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
                         <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
@@ -110,16 +106,18 @@ const ValidatorMobileCard = React.memo<{
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
+    const mobileBg = node.status === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]';
+
     return (
         <motion.div
-            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-background/30"
+            className={`rounded-lg p-3.5 space-y-3 border border-border/50 ${mobileBg}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
                         <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
@@ -147,15 +145,15 @@ const ValidatorMobileCard = React.memo<{
             </div>
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
                 <div>
-                    <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Stake</div>
                     <div className="text-sm text-foreground">{node.stakeAmount}</div>
                 </div>
                 <div>
-                    <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Status</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Status</div>
                     <StatusBadge label={node.status} size="sm" />
                 </div>
                 <div>
-                    <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Rewards</div>
                     <div className={`text-sm ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
                 </div>
             </div>
@@ -258,10 +256,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
             <motion.div className={cardBase} {...cardMotion}>
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-5">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Workflow className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-sm font-medium text-muted-foreground">
                         Node Management
                     </span>
                     {processedKeystores.length > 0 && (
@@ -278,7 +273,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                             <thead>
                                 <tr className="border-b border-border/50">
                                     {['Key', 'Staked', 'Status', 'Rewards Δ24h', 'Action'].map(h => (
-                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-medium text-muted-foreground">
                                             {h}
                                         </th>
                                     ))}

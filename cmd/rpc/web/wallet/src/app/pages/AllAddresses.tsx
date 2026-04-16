@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Wallet, Copy } from "lucide-react";
+import { Search, Copy } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useAccounts } from "@/app/providers/AccountsProvider";
+import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 
 export const AllAddresses = () => {
   const { accounts, loading: accountsLoading } = useAccounts();
@@ -208,16 +209,14 @@ export const AllAddresses = () => {
                   filteredAddresses.map((addr, i) => (
                     <motion.tr
                       key={addr.id}
-                      className="border-b border-border/30 hover:bg-accent/20 transition-colors"
+                      className={`border-b border-border/30 hover:bg-accent/20 transition-colors ${addr.status === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]'}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: i * 0.05 }}
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/25 rounded-full flex items-center justify-center flex-shrink-0">
-                            <Wallet className="text-foreground w-4 h-4" />
-                          </div>
+                          <img src={getCanopySymbol(i)} alt="" className="w-10 h-10 rounded-full object-contain flex-shrink-0" />
                           <div>
                             <div className="text-sm text-foreground">
                               {formatAddress(addr.address)}

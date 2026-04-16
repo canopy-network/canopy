@@ -1,12 +1,13 @@
 import React, { useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, WalletCards} from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useAccountsList, useSelectedAccount } from '@/app/providers/AccountsProvider';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { getCanopySymbol } from '@/lib/utils/canopySymbols';
 
 const shortAddr = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
@@ -26,11 +27,7 @@ const AddressRow = React.memo<{ address: AddressData; index: number; onClick?: (
         transition={{ duration: 0.18, delay: index * 0.04 }}
         onClick={onClick}
     >
-        <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-[10px] font-bold text-primary-foreground">
-                {address.nickname.charAt(0).toUpperCase()}
-            </span>
-        </div>
+        <img src={getCanopySymbol(index)} alt="" className="w-7 h-7 rounded-lg object-contain flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground truncate leading-tight">{address.nickname}</div>
@@ -96,10 +93,7 @@ export const AllAddressesCard = React.memo(() => {
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <WalletCards className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-sm font-medium text-muted-foreground">
                         Addresses
                     </span>
                 </div>

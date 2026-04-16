@@ -14,7 +14,6 @@ import {
     Menu,
     X,
 } from 'lucide-react';
-import { CnpyLogoIcon } from '@/components/ui/CnpyLogo';
 
 const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -68,23 +67,32 @@ export const AppSidebar = (): JSX.Element => {
                     <Link
                         to="/"
                         className={`flex h-full w-full min-w-0 items-center overflow-hidden transition-all duration-300 ${
-                            collapsed ? 'justify-center' : 'justify-start gap-3'
+                            collapsed ? 'justify-center' : 'justify-start'
                         }`}
                     >
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-5 w-5 drop-shadow-[0_0_4px_rgba(34,197,94,0.22)]" />
-                        </div>
-                        <AnimatePresence>
-                            {!collapsed && (
-                                <motion.span
-                                    initial={{ opacity: 0, width: 0 }}
-                                    animate={{ opacity: 1, width: 'auto' }}
-                                    exit={{ opacity: 0, width: 0 }}
+                        <AnimatePresence mode="wait" initial={false}>
+                            {collapsed ? (
+                                <motion.img
+                                    key="symbol"
+                                    src="/canopy-symbol.png"
+                                    alt="Canopy"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                     transition={{ duration: 0.18 }}
-                                    className="overflow-hidden whitespace-nowrap text-sm font-medium tracking-tight text-white"
-                                >
-                                    Canopy Wallet
-                                </motion.span>
+                                    className="h-8 w-8 flex-shrink-0 object-contain drop-shadow-[0_0_4px_rgba(34,197,94,0.22)]"
+                                />
+                            ) : (
+                                <motion.img
+                                    key="logo"
+                                    src="/canopy-logo.png"
+                                    alt="Canopy Wallet"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.18 }}
+                                    className="h-7 w-auto flex-shrink-0 object-contain"
+                                />
                             )}
                         </AnimatePresence>
                     </Link>
@@ -156,11 +164,8 @@ export const AppSidebar = (): JSX.Element => {
                     >
                         <Menu className="h-5 w-5" />
                     </button>
-                    <Link to="/" className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center text-primary">
-                            <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(34,197,94,0.22)]" />
-                        </div>
-                        <span className="text-sm font-medium text-white">Canopy Wallet</span>
+                    <Link to="/" className="flex items-center">
+                        <img src="/canopy-logo.png" alt="Canopy Wallet" className="h-6 w-auto object-contain" />
                     </Link>
                     <div className="w-9" />
                 </header>
@@ -190,12 +195,9 @@ export const AppSidebar = (): JSX.Element => {
                                         <Link
                                             to="/"
                                             onClick={() => setMobileOpen(false)}
-                                            className="flex items-center gap-2.5"
+                                            className="flex items-center"
                                         >
-                                            <div className="flex h-7 w-7 items-center justify-center text-primary">
-                                                <CnpyLogoIcon className="h-4 w-4 drop-shadow-[0_0_4px_rgba(34,197,94,0.22)]" />
-                                            </div>
-                                            <span className="text-sm font-medium text-white">Canopy Wallet</span>
+                                            <img src="/canopy-logo.png" alt="Canopy Wallet" className="h-6 w-auto object-contain" />
                                         </Link>
                                         <button
                                             type="button"

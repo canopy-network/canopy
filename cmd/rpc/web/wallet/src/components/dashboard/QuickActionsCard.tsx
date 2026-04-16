@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Zap } from 'lucide-react';
+
+
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { selectQuickActions } from '@/core/actionForm';
@@ -82,10 +83,7 @@ export const QuickActionsCard = React.memo(function QuickActionsCard({ actions, 
         >
             {/* Header */}
             <div className="flex items-center gap-2 mb-4">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                    <Zap className="text-primary" style={{ width: 14, height: 14 }} />
-                </div>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                <span className="text-sm font-medium text-muted-foreground">
                     Quick Actions
                 </span>
             </div>

@@ -1,19 +1,12 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeftRight,
-  Box,
   Copy,
-  Layers,
-  Lock,
   Search,
   Send,
   Scan,
-  Shield,
-  Wallet,
   TrendingUp,
   TrendingDown,
-  Users,
   Droplets,
   Percent,
 } from "lucide-react";
@@ -25,6 +18,7 @@ import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
+import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 
 export const Accounts = () => {
   const {
@@ -73,16 +67,7 @@ export const Accounts = () => {
   const fmtAddress = (addr: string) =>
     `${addr.slice(0, 5)}…${addr.slice(-6)}`;
 
-  const getAccountIcon = (index: number) => {
-    const icons = [
-      { icon: Wallet,          bg: "bg-primary/25"       },
-      { icon: Layers,          bg: "bg-blue-500/25"      },
-      { icon: ArrowLeftRight,  bg: "bg-purple-500/25"  },
-      { icon: Shield,          bg: "bg-emerald-500/25"    },
-      { icon: Box,             bg: "bg-red-500/25"        },
-    ];
-    return icons[index % icons.length];
-  };
+  const getAccountSymbol = (index: number) => getCanopySymbol(index);
 
   const getRealTotal = (address: string) => {
     const liquid = balances.find(b => b.address === address)?.amount ?? 0;
@@ -101,7 +86,7 @@ export const Accounts = () => {
     .map((account, index) => {
       const { liquid, staked, total } = getRealTotal(account.address);
       const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
-      const { icon, bg } = getAccountIcon(index);
+      const symbolSrc = getAccountSymbol(index);
       return {
         id:               account.address,
         fullAddress:      account.address,
@@ -115,8 +100,7 @@ export const Accounts = () => {
         liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
         statusLabel,
         statusCls,
-        icon,
-        iconBg: bg,
+        symbolSrc,
       };
     })
     .sort((a, b) => a.nickname.localeCompare(b.nickname));
@@ -222,10 +206,7 @@ export const Accounts = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                <Wallet className="text-primary" style={{ width: 13, height: 13 }} />
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-sm font-medium text-muted-foreground">
                 Total Balance
               </span>
             </div>
@@ -257,10 +238,7 @@ export const Accounts = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                <Lock className="text-primary" style={{ width: 13, height: 13 }} />
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-sm font-medium text-muted-foreground">
                 Total Staked
               </span>
             </div>
@@ -291,10 +269,7 @@ export const Accounts = () => {
           transition={{ duration: 0.3, delay: 0.12 }}
         >
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-              <Users className="text-primary" style={{ width: 13, height: 13 }} />
-            </div>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-sm font-medium text-muted-foreground">
               Portfolio
             </span>
           </div>
@@ -348,12 +323,12 @@ export const Accounts = () => {
           <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b border-border/40">
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Address</th>
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total</th>
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Staked</th>
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Liquid</th>
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</th>
-                <th className="px-5 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Actions</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Address</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Total</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Staked</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Liquid</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -367,7 +342,7 @@ export const Accounts = () => {
                 filteredAddresses.map((addr, index) => (
                   <motion.tr
                     key={addr.id}
-                    className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors"
+                    className={`border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors ${addr.statusLabel === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]'}`}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.18 + index * 0.04 }}
@@ -375,9 +350,7 @@ export const Accounts = () => {
                     {/* Address */}
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 ${addr.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                          <addr.icon className="text-white/90 w-3.5 h-3.5" />
-                        </div>
+                        <img src={addr.symbolSrc} alt="" className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
                         <div>
                           <div className="text-sm font-medium text-foreground leading-tight">
                             {addr.nickname}

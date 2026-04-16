@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Receipt } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useConfig } from '@/app/providers/ConfigProvider';
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { NavLink } from 'react-router-dom';
@@ -163,10 +163,7 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Receipt className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-sm font-medium text-muted-foreground">
                         Recent Transactions
                     </span>
                     {/* Live indicator */}
