@@ -102,24 +102,6 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                         <div className="h-full bg-rose-400 transition-all duration-300" style={{ width: `${noPercent}%` }} />
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">End Block</div>
-                        <div className="text-sm font-semibold text-foreground">#{poll.endBlock || 0}</div>
-                      </div>
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Account Vote</div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {clampPercent(poll.accountVotes.yes).toFixed(1)} / {clampPercent(poll.accountVotes.no).toFixed(1)}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Validator Vote</div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {clampPercent(poll.validatorVotes.yes).toFixed(1)} / {clampPercent(poll.validatorVotes.no).toFixed(1)}
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

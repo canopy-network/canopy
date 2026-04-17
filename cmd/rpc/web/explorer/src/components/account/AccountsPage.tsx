@@ -11,7 +11,6 @@ const AccountsPage: React.FC = () => {
     const [currentEntriesPerPage, setCurrentEntriesPerPage] = useState(10)
     const [searchTerm, setSearchTerm] = useState('')
     const [totalAccounts, setTotalAccounts] = useState(0)
-    const [accountsLast24h, setAccountsLast24h] = useState(0)
     const [isLoadingStats, setIsLoadingStats] = useState(true)
 
     const { data: accountsData, isLoading, error } = useAccounts(currentPage)
@@ -25,7 +24,6 @@ const AccountsPage: React.FC = () => {
                 setIsLoadingStats(true)
                 const stats = await getTotalAccountCount()
                 setTotalAccounts(stats.total)
-                setAccountsLast24h(stats.last24h)
             } catch (error) {
                 console.error('Error fetching account stats:', error)
             } finally {
@@ -196,7 +194,7 @@ const AccountsPage: React.FC = () => {
                         <StageCard
                             title="Total Accounts"
                             data={totalAccounts.toLocaleString()}
-                            subtitle={<p className="text-sm text-primary">+ {accountsLast24h.toLocaleString()} last 24h</p>}
+                            subtitle={<></>}
                             icon={<i className="fa-solid fa-users text-primary"></i>}
                             isLoading={isLoadingStats}
                         />

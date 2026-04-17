@@ -105,6 +105,16 @@ export const useTransactions = (page: number, height: number = 0) => {
     });
 };
 
+// Hook for transactions at a specific block height with configurable perPage
+export const useTransactionsByHeight = (height: number, perPage: number = 1000, enabled: boolean = true) => {
+    return useQuery({
+        queryKey: ['txsByHeight', height, perPage],
+        queryFn: () => Transactions(1, height, perPage),
+        staleTime: 30000,
+        enabled,
+    });
+};
+
 // Hook for all transactions with filters
 export const useAllTransactions = (page: number, perPage: number = 10, filters?: {
     type?: string;
@@ -637,13 +647,12 @@ export const useOrders = (chainId: number = 1) => {
 };
 
 // Hook for fetching a specific order
-export const useOrder = (chainId: number, orderId: string, height: number = 0) => {
+export const useOrder = (committee: number, orderId: string, height: number = 0) => {
     return useQuery({
-        queryKey: ['order', chainId, orderId, height],
-        // Order() already returns parsed JSON via POST(), not a Response object.
-        queryFn: () => Order(chainId, orderId, height),
-        enabled: !!orderId, // Only run if orderId is provided
-        staleTime: 30000, // Cache for 30 seconds
+        queryKey: ['order', committee, orderId, height],
+        queryFn: () => Order(committee, orderId, height),
+        enabled: !!orderId,
+        staleTime: 30000,
     });
 };
 

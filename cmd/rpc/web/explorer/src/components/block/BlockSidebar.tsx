@@ -113,18 +113,6 @@ const BlockSidebar: React.FC<BlockSidebarProps> = ({
                             )}
                         </div>
                     </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Committee Height</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.committeeHeight?.toLocaleString() ?? '0'}</span>
-                    </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Round</span>
-                        <span className="text-white font-mono text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.round ?? 0}</span>
-                    </div>
-                    <div className="flex flex-wrap justify-between items-center">
-                        <span className="text-gray-400 text-sm mr-2">Phase</span>
-                        <span className="text-white text-sm">{blockData?.blockHeader?.lastQuorumCertificate?.header?.phase || 'N/A'}</span>
-                    </div>
                 </div>
             </motion.div>
         </div>

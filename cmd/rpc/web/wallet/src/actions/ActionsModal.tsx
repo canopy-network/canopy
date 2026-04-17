@@ -53,6 +53,16 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
     if (availableTabs.length > 0) setSelectedTab(availableTabs[0])
   }, [availableTabs])
 
+  // Derive a safe active tab: if selectedTab is stale (doesn't match any
+  // current action), fall back to the first available tab so ActionRunner
+  // always receives the correct actionId and prefilledData on the first render.
+  const activeTab = useMemo(() => {
+    if (selectedTab && availableTabs.some((t) => t.value === selectedTab.value)) {
+      return selectedTab
+    }
+    return availableTabs[0]
+  }, [selectedTab, availableTabs])
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -100,14 +110,15 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
 
             <div className="shrink-0 px-3 pt-3 pb-2 sm:px-5 sm:pt-5 sm:pb-3 md:px-6 md:pt-6">
               <ModalTabs
-                activeTab={selectedTab}
+                activeTab={activeTab}
                 onTabChange={setSelectedTab}
                 tabs={availableTabs}
               />
             </div>
 
-            {selectedTab && (
+            {activeTab && (
               <motion.div
+                key={activeTab.value}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: 0.05 }}
@@ -115,12 +126,12 @@ export const ActionsModal: React.FC<ActionModalProps> = ({
               >
                 <Suspense fallback={<ActionRunnerFallback />}>
                   <ActionRunner
-                    actionId={selectedTab.value}
+                    actionId={activeTab.value}
                     onFinish={onClose}
                     className="p-0"
                     prefilledData={
                       propPrefilledData ??
-                      actions?.find((a) => a.id === selectedTab.value)?.prefilledData
+                      actions?.find((a) => a.id === activeTab.value)?.prefilledData
                     }
                   />
                 </Suspense>

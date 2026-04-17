@@ -75,9 +75,7 @@ const Stages = () => {
     }, [totalStakeCNPY, totalSupplyCNPY])
 
     const [totalAccounts, setTotalAccounts] = React.useState(0)
-    const [accountsLast24h, setAccountsLast24h] = React.useState(0)
     const [totalTxs, setTotalTxs] = React.useState(0)
-    const [txsLast24h, setTxsLast24h] = React.useState(0)
     const [isLoadingStats, setIsLoadingStats] = React.useState(true)
 
     React.useEffect(() => {
@@ -85,48 +83,29 @@ const Stages = () => {
             try {
                 setIsLoadingStats(true)
 
-                // Use totalTxs from block if available, otherwise fetch from API
                 if (totalTxsFromBlock !== null) {
                     setTotalTxs(totalTxsFromBlock)
-                    // For last24h, we still need to fetch from API if available
-                    try {
-                        const txStats = await getTotalTransactionCount()
-                        setTxsLast24h(txStats.last24h)
-                    } catch (error) {
-                        console.error('Error fetching tx stats for last24h:', error)
-                        setTxsLast24h(0)
-                    }
                 } else {
-                    // Check if this network has real transactions
                     const hasRealTransactions = cardData?.hasRealTransactions ?? true
-
                     if (hasRealTransactions) {
                         const txStats = await getTotalTransactionCount()
                         setTotalTxs(txStats.total)
-                        setTxsLast24h(txStats.last24h)
                     } else {
                         setTotalTxs(0)
-                        setTxsLast24h(0)
                     }
                 }
 
-                // Always fetch account stats
                 try {
                     const accountStats = await getTotalAccountCount()
                     setTotalAccounts(accountStats.total)
-                    setAccountsLast24h(accountStats.last24h)
                 } catch (error) {
                     console.error('Error fetching account stats:', error)
                     setTotalAccounts(0)
-                    setAccountsLast24h(0)
                 }
             } catch (error) {
                 console.error('Error fetching stats:', error)
-                // Set zeros on error
                 setTotalTxs(0)
-                setTxsLast24h(0)
                 setTotalAccounts(0)
-                setAccountsLast24h(0)
             } finally {
                 setIsLoadingStats(false)
             }
@@ -147,20 +126,25 @@ const Stages = () => {
 
     const stages: StageCardProps[] = [
         {
-            title: 'Staking %',
+            title: 'Supply %',
             data: `${stakingPercent.toFixed(1)}%`,
             isProgressBar: true,
+            subtitle: (
+                <div className="flex items-center justify-between w-full">
+                    <p className="text-2xl font-semibold text-primary">{stakingPercent.toFixed(1)}% <span className="text-sm font-normal">staked</span></p>
+                    <p className="text-2xl font-semibold text-gray-400">{(100 - stakingPercent).toFixed(1)}% <span className="text-sm font-normal">liquid</span></p>
+                </div>
+            ),
             icon: <i className="fa-solid fa-chart-pie"></i>,
             metric: 'stakingPercent',
-
         },
         {
-            title: 'CNPY Staking',
-            data: `+${convertNumber(delegatedOnlyCNPY)}`,
+            title: 'Total Delegate',
+            data: convertNumber(delegatedOnlyCNPY),
             isProgressBar: false,
-            subtitle: <p className="text-sm text-primary">delta</p>,
+            subtitle: <p className="text-sm text-gray-500">CNPY</p>,
             icon: <i className="fa-solid fa-coins"></i>,
-            metric: 'cnpyStakingDelta',
+            metric: 'totalDelegate',
             category: 'Staking'
         },
         {
@@ -208,11 +192,6 @@ const Stages = () => {
             title: 'Total Accounts',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalAccounts),
             isProgressBar: false,
-            subtitle: isLoadingStats ? (
-                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-            ) : <p className="text-sm text-primary">+ {convertNumber(accountsLast24h)} last 24h</p>,
             icon: <i className="fa-solid fa-users"></i>,
             metric: 'accounts',
             category: 'Network Activity'
@@ -221,11 +200,6 @@ const Stages = () => {
             title: 'Total Txs',
             data: isLoadingStats ? 'Loading...' : convertNumber(totalTxs),
             isProgressBar: false,
-            subtitle: isLoadingStats ? (
-                <div className="h-4 bg-gray-700/30 rounded w-1/2 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-600/20 to-transparent animate-pulse"></div>
-                </div>
-            ) : <p className="text-sm text-primary">+ {convertNumber(txsLast24h)} last 24h</p>,
             icon: <i className="fa-solid fa-arrow-right-arrow-left"></i>,
             metric: 'txs',
             category: 'Network Activity'
@@ -268,7 +242,7 @@ const Stages = () => {
                         viewport={{ amount: 0.6 }}
                         onViewportEnter={() => markActive(index)}
                         transition={{ duration: 0.22, delay: index * 0.03, ease: 'easeOut' }}
-                        className="relative rounded-xl border border-white/10 bg-card shadow-xl p-5"
+                        className={`relative rounded-xl border border-white/10 bg-card shadow-xl p-5${stage.metric === 'stakingPercent' ? ' flex flex-col' : ''}`}
                     >
                         <div className="flex items-start justify-between">
                             <h3 className="text-sm text-gray-300">{stage.title}</h3>
@@ -277,73 +251,94 @@ const Stages = () => {
                             </div>
                         </div>
 
-                        <div className="mt-3">
-                            <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
-                                {(() => {
-                                    const { number, prefix, suffix } = parseNumberFromString(stage.data)
-                                    return (
-                                        <>
-                                            {prefix}
-                                            <AnimatedNumber
-                                                value={number}
-                                                format={{ maximumFractionDigits: 2 }}
-                                                className="text-white"
-                                            />
-                                            {suffix}
-                                        </>
-                                    )
-                                })()}
+                        {stage.metric !== 'stakingPercent' && (
+                            <div className="mt-3">
+                                <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
+                                    {(() => {
+                                        const { number, prefix, suffix } = parseNumberFromString(stage.data)
+                                        return (
+                                            <>
+                                                {prefix}
+                                                <AnimatedNumber
+                                                    value={number}
+                                                    format={{ maximumFractionDigits: 2 }}
+                                                    className="text-white"
+                                                />
+                                                {suffix}
+                                            </>
+                                        )
+                                    })()}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-center justify-between">
-                            {stage.subtitle && (
-                                <div className="mt-2">
-                                    {stage.subtitle}
+                        {(() => {
+                            const subtitleBlock = stage.subtitle && (
+                                <div className="flex items-center justify-between mt-2">
+                                    <div className="flex-1">
+                                        {stage.subtitle}
+                                    </div>
+                                    {stage.category && (
+                                        <div>
+                                            <p className="text-xs text-gray-400 font-light">{stage.category}</p>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-
-                            {stage.category && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-gray-400 font-light">{stage.category}</p>
+                            )
+                            const categoryBlock = !stage.subtitle && stage.category && (
+                                <div className="flex items-center justify-between mt-2">
+                                    <div>
+                                        <p className="text-xs text-gray-400 font-light">{stage.category}</p>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-
-                        {(stage.isProgressBar || /%/.test(stage.data)) && (
-                            <div className="mt-2">
-                                <div className="h-2 w-full rounded bg-gray-700/40 overflow-hidden relative flex">
-                                    {stage.metric === 'stakingPercent' ? (
-                                        <>
-                                            {/* Staked portion in green */}
+                            )
+                            const barBlock = (stage.isProgressBar || /%/.test(stage.data)) && (
+                                <div className="mt-2">
+                                    <div className="h-2 w-full rounded bg-gray-700/40 overflow-hidden relative flex">
+                                        {stage.metric === 'stakingPercent' ? (
+                                            <>
+                                                <motion.div
+                                                    className="h-2 rounded-l bg-primary"
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
+                                                    transition={{ duration: 0.9, ease: 'easeOut' }}
+                                                />
+                                                <motion.div
+                                                    className="h-2 rounded-r bg-gray-500/60"
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: activated.has(index) ? `${100 - parsePercent(stage.data)}%` : 0 }}
+                                                    transition={{ duration: 0.9, ease: 'easeOut' }}
+                                                />
+                                            </>
+                                        ) : (
                                             <motion.div
-                                                className="h-2 rounded-l bg-primary"
+                                                className="h-2 rounded bg-primary"
                                                 initial={{ width: 0 }}
                                                 animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
                                                 transition={{ duration: 0.9, ease: 'easeOut' }}
                                             />
-                                            {/* Liquid portion in gray */}
-                                            <motion.div
-                                                className="h-2 rounded-r bg-gray-500/60"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: activated.has(index) ? `${100 - parsePercent(stage.data)}%` : 0 }}
-                                                transition={{ duration: 0.9, ease: 'easeOut' }}
-                                            />
-                                        </>
-                                    ) : (
-                                        <motion.div
-                                            className="h-2 rounded bg-primary"
-                                            initial={{ width: 0 }}
-                                            animate={{ width: activated.has(index) ? `${parsePercent(stage.data)}%` : 0 }}
-                                            transition={{ duration: 0.9, ease: 'easeOut' }}
-                                        />
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
-                                {stage.metric === 'stakingPercent' && (
-                                    <p className="text-xs text-gray-400 absolute mt-1">{convertNumber(liquidSupplyCNPY)} CNPY liquid</p>
-                                )}
-                            </div>
-                        )}
+                            )
+
+                            if (stage.metric === 'stakingPercent') {
+                                return (
+                                    <div className="flex-1 flex flex-col justify-center">
+                                        {subtitleBlock}
+                                        {barBlock}
+                                    </div>
+                                )
+                            }
+
+                            return (
+                                <>
+                                    {subtitleBlock}
+                                    {categoryBlock}
+                                    {barBlock}
+                                </>
+                            )
+                        })()}
                     </motion.article>
                 ))}
             </div>

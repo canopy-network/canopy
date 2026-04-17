@@ -9,20 +9,11 @@ import {
   Pencil,
   PlusCircle,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/Select";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
-import { useAccountsList, useSelectedAccount } from "@/app/providers/AccountsProvider";
 import { useDS } from "@/core/useDs";
 
 const ACTION_IDS = {
@@ -35,13 +26,6 @@ const ACTION_IDS = {
   dexLiquidityDeposit: "dexLiquidityDeposit",
   dexLiquidityWithdraw: "dexLiquidityWithdraw",
 } as const;
-
-const shortHex = (value: string, head = 6, tail = 4) => {
-  const v = String(value ?? "");
-  if (!v) return "-";
-  if (v.length <= head + tail + 2) return v;
-  return `${v.slice(0, head)}...${v.slice(-tail)}`;
-};
 
 type ActionCardProps = {
   title: string;
@@ -88,8 +72,6 @@ const toSafeInt = (value: unknown): number | undefined => {
 export default function Orders(): JSX.Element {
   const { chain } = useConfig();
   const { openAction } = useActionModal();
-  const { accounts } = useAccountsList();
-  const { selectedAccount, switchAccount, selectedAddress } = useSelectedAccount();
 
   const configQ = useDS<AdminConfigResponse>("admin.config", {}, {
     staleTimeMs: 5000,
@@ -104,10 +86,9 @@ export default function Orders(): JSX.Element {
 
   const prefill = React.useMemo(
     () => ({
-      address: selectedAddress || "",
       committees: String(committeeId ?? ""),
     }),
-    [selectedAddress, committeeId],
+    [committeeId],
   );
 
   const runAction = React.useCallback(
@@ -134,27 +115,6 @@ export default function Orders(): JSX.Element {
             Fill in the order details manually in each form.
           </p>
 
-          <div className="mt-4">
-            <Select
-              value={selectedAccount?.id ?? ""}
-              onValueChange={switchAccount}
-            >
-              <SelectTrigger className="w-full gap-2 h-11 text-sm">
-                <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
-                <SelectValue placeholder="Select address" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.nickname
-                      ? `${account.nickname} (${shortHex(account.address)})`
-                      : shortHex(account.address)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <StatusBadge label={`Committee ${committeeId ?? "-"}`} status="info" size="sm" />
           </div>
@@ -173,41 +133,30 @@ export default function Orders(): JSX.Element {
                   description="Create a new sell order on the committee."
                   icon={<PlusCircle className="w-4 h-4" />}
                   variant="default"
-                  disabled={!selectedAddress}
-                  onClick={() => runAction(ACTION_IDS.createOrder, {
-                    ...prefill,
-                    receiveAddress: selectedAddress || "",
-                  })}
+                  onClick={() => runAction(ACTION_IDS.createOrder, prefill)}
                 />
                 <ActionCard
                   title="Reprice Order"
                   description="Change the price of an existing open order."
                   icon={<Pencil className="w-4 h-4" />}
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.repriceOrder, prefill)}
                 />
                 <ActionCard
                   title="Void Order"
                   description="Cancel an open order you created."
                   icon={<Trash2 className="w-4 h-4" />}
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.voidOrder, prefill)}
                 />
                 <ActionCard
                   title="Lock Order"
                   description="Lock an available order as buyer."
                   icon={<Lock className="w-4 h-4" />}
-                  disabled={!selectedAddress}
-                  onClick={() => runAction(ACTION_IDS.lockOrder, {
-                    ...prefill,
-                    receiveAddress: selectedAddress || "",
-                  })}
+                  onClick={() => runAction(ACTION_IDS.lockOrder, prefill)}
                 />
                 <ActionCard
                   title="Close Order"
                   description="Close a locked order to finalize the swap."
                   icon={<CheckCircle2 className="w-4 h-4" />}
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.closeOrder, prefill)}
                 />
               </div>
@@ -226,21 +175,18 @@ export default function Orders(): JSX.Element {
                   description="Swap with a price constraint."
                   icon={<ArrowLeftRight className="w-4 h-4" />}
                   variant="default"
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.dexLimitOrder, { ...prefill, memo: "" })}
                 />
                 <ActionCard
                   title="Deposit Liquidity"
                   description="Add liquidity to the DEX pool."
                   icon={<Droplets className="w-4 h-4" />}
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.dexLiquidityDeposit, { ...prefill, memo: "" })}
                 />
                 <ActionCard
                   title="Withdraw Liquidity"
                   description="Remove liquidity from the DEX pool."
                   icon={<CircleDashed className="w-4 h-4" />}
-                  disabled={!selectedAddress}
                   onClick={() => runAction(ACTION_IDS.dexLiquidityWithdraw, { ...prefill, memo: "" })}
                 />
               </div>

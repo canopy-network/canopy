@@ -168,8 +168,8 @@ function heightAndIDRequest(height: number, id: number) {
     return JSON.stringify({ height: height, id: id });
 }
 
-function pageHeightReq(page: number, height: number) {
-    return JSON.stringify({ pageNumber: page, perPage: 10, height: height });
+function pageHeightReq(page: number, height: number, perPage: number = 10) {
+    return JSON.stringify({ pageNumber: page, perPage: perPage, height: height });
 }
 
 function validatorsReq(page: number, height: number, committee: number) {
@@ -181,8 +181,8 @@ export function Blocks(page: number, perPage: number = 10) {
     return POST(rpcURL, JSON.stringify({ pageNumber: page, perPage: perPage }), blocksPath);
 }
 
-export function Transactions(page: number, height: number) {
-    return POST(rpcURL, pageHeightReq(page, height), txsByHeightPath);
+export function Transactions(page: number, height: number, perPage: number = 10) {
+    return POST(rpcURL, pageHeightReq(page, height, perPage), txsByHeightPath);
 }
 
 // Optimized function to get transactions with real pagination
@@ -714,8 +714,8 @@ export function Orders(chain_id: number) {
     return POST(rpcURL, heightAndIDRequest(0, chain_id), ordersPath);
 }
 
-export function Order(chain_id: number, order_id: string, height: number = 0) {
-    return POST(rpcURL, JSON.stringify({ chainId: chain_id, orderId: order_id, height: height }), orderPath);
+export function Order(committee: number, order_id: string, height: number = 0) {
+    return POST(rpcURL, JSON.stringify({ committee: committee, orderId: order_id, height: height }), orderPath);
 }
 
 export function DexBatch(height: number, chainId: number, points: boolean = false) {

@@ -100,11 +100,8 @@ export const Governance = () => {
       if (!poll) return;
       openAction(GOVERNANCE_ACTION_IDS.votePoll, {
         proposalHash: poll.proposalHash || poll.hash,
-        proposal: poll.proposal ?? "",
-        endBlock: poll.endBlock,
         URL: poll.url,
         voteApprove: vote === "approve",
-        _skipToConfirm: true,
       });
     },
     [openAction],
@@ -168,13 +165,6 @@ export const Governance = () => {
         help: "Generates a signed treasury proposal. Copy the JSON, then Approve it (step 2) and Submit it (step 3).",
         icon: Coins,
       },
-      {
-        id: GOVERNANCE_ACTION_IDS.votePoll,
-        title: "Vote on Poll",
-        description: "Approve or reject an on-chain poll with auto-filled fields.",
-        help: "Casts your on-chain poll vote. Select a poll and submit Approve or Reject with fields prefilled from live data.",
-        icon: Vote,
-      },
     ],
     [],
   );
@@ -218,7 +208,7 @@ export const Governance = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold text-foreground">Primary Governance Actions</div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {criticalActions.map((item) => {
                 const Icon = item.icon;
                 return (

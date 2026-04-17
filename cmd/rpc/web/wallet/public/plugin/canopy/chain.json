@@ -107,6 +107,33 @@
         "submit": true
       }
     },
+    "keystoreImportRaw": {
+      "source": {
+        "base": "admin",
+        "path": "/v1/admin/keystore-import-raw",
+        "method": "POST"
+      },
+      "body": {
+        "nickname": "{{nickname}}",
+        "password": "{{password}}",
+        "privateKey": "{{privateKey}}"
+      }
+    },
+    "keystoreImport": {
+      "source": {
+        "base": "admin",
+        "path": "/v1/admin/keystore-import",
+        "method": "POST"
+      },
+      "body": {
+        "nickname": "{{nickname}}",
+        "address": "{{address}}",
+        "publicKey": "{{publicKey}}",
+        "salt": "{{salt}}",
+        "encrypted": "{{encrypted}}",
+        "keyAddress": "{{keyAddress}}"
+      }
+    },
     "keystoreDelete": {
       "source": {
         "base": "admin",

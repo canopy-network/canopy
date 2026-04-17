@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useBlockByHeight, useLatestBlock, usePending } from '../../hooks/useApi'
+import { useTransactionsByHeight, useLatestBlock, usePending } from '../../hooks/useApi'
 import { getTotalTransactionCount } from '../../lib/api'
 import transactionsTexts from '../../data/transactions.json'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
@@ -48,12 +48,6 @@ const TransactionsPage: React.FC = () => {
     const [pendingPage, setPendingPage] = useState(1)
 
     const { data: latestBlockData } = useLatestBlock()
-    const { data: blockData, isLoading: isBlockLoading } = useBlockByHeight(
-        viewMode === 'confirmed' ? queryHeight : 0
-    )
-    const { data: pendingData, isLoading: isPendingLoading } = usePending(
-        viewMode === 'pending' ? pendingPage : 0
-    )
 
     const latestHeight = useMemo(() => {
         if (!latestBlockData) return 0
@@ -63,6 +57,15 @@ const TransactionsPage: React.FC = () => {
         }
         return Number(latestBlockData.totalCount ?? 0)
     }, [latestBlockData])
+
+    const { data: txsData, isLoading: isTxsLoading } = useTransactionsByHeight(
+        viewMode === 'confirmed' ? queryHeight : -1,
+        1000,
+        viewMode === 'confirmed'
+    )
+    const { data: pendingData, isLoading: isPendingLoading } = usePending(
+        viewMode === 'pending' ? pendingPage : 0
+    )
 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -87,23 +90,18 @@ const TransactionsPage: React.FC = () => {
         }
     }, [heightInput, viewMode])
 
-    const normalizeBlockTransactions = (block: Record<string, unknown>): Transaction[] => {
-        if (!block) return []
-
-        const txList = (block as Record<string, unknown>).blockTxs
-            ?? (block as Record<string, unknown>).transactions
-            ?? (block as Record<string, unknown>).txs
+    const normalizePageTransactions = (data: unknown): Transaction[] => {
+        if (!data) return []
+        const payload = data as Record<string, unknown>
+        const txList = payload.results ?? payload.transactions ?? payload.txs ?? payload
         if (!Array.isArray(txList)) return []
 
-        const blockHeight = Number(
-            (block as Record<string, unknown>).height
-            ?? ((block as Record<string, unknown>).blockHeader as Record<string, unknown>)?.height
-            ?? 0
-        )
-        const blockHeader = (block as Record<string, unknown>).blockHeader as Record<string, unknown> | undefined
-        const blockTime = blockHeader?.time ?? blockHeader?.timestamp ?? (block as Record<string, unknown>).time
-
-        return txList.map((tx: Record<string, unknown>) => normalizeSingleTx(tx, blockHeight, blockTime))
+        return txList.map((tx: Record<string, unknown>) => {
+            const txObj = tx.transaction as Record<string, unknown> | undefined
+            const txTime = txObj?.time ?? tx.time ?? tx.timestamp
+            const txHeight = Number(tx.height ?? 0) || undefined
+            return normalizeSingleTx(tx, txHeight, txTime)
+        })
     }
 
     const normalizePendingTransactions = (data: unknown): Transaction[] => {
@@ -191,8 +189,8 @@ const TransactionsPage: React.FC = () => {
 
     const allTransactions = useMemo(() => {
         if (viewMode === 'pending') return normalizePendingTransactions(pendingData)
-        return normalizeBlockTransactions(blockData)
-    }, [blockData, pendingData, viewMode])
+        return normalizePageTransactions(txsData)
+    }, [txsData, pendingData, viewMode])
 
     const filteredTransactions = useMemo(() => {
         if (transactionType === 'All Types') return allTransactions
@@ -312,7 +310,7 @@ const TransactionsPage: React.FC = () => {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        const suffix = viewMode === 'pending' ? 'pending' : `block_${queryHeight}`
+        const suffix = viewMode === 'pending' ? 'pending' : `block_${queryHeight || latestHeight}`
         a.download = `transactions_${suffix}_${new Date().toISOString().split('T')[0]}.csv`
         document.body.appendChild(a)
         a.click()
@@ -320,7 +318,7 @@ const TransactionsPage: React.FC = () => {
         window.URL.revokeObjectURL(url)
     }
 
-    const isLoadingData = viewMode === 'pending' ? isPendingLoading : isBlockLoading
+    const isLoadingData = viewMode === 'pending' ? isPendingLoading : isTxsLoading
     const totalCount = viewMode === 'pending'
         ? filteredTransactions.length
         : filteredTransactions.length
@@ -455,7 +453,7 @@ const TransactionsPage: React.FC = () => {
                                 {queryHeight === 0 ? (
                                     <>
                                         Showing transactions for{' '}
-                                        <span className="text-white font-medium">latest block</span>
+                                        <span className="text-white font-medium">latest block #{latestHeight.toLocaleString()}</span>
                                     </>
                                 ) : (
                                     <>

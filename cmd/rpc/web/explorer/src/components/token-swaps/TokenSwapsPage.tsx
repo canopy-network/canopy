@@ -180,7 +180,7 @@ const TokenSwapsPage: React.FC = () => {
     };
 
     const handleRowClick = (swap: SwapData) => {
-        navigate(`/transaction/${swap.orderId}`);
+        navigate(`/order/${swap.committee}/${swap.orderId}`);
     };
 
     return (

@@ -3012,7 +3012,8 @@
           "staleTimeMs": 4000,
           "refetchIntervalMs": 4000,
           "refetchOnMount": true,
-          "refetchOnWindowFocus": false
+          "refetchOnWindowFocus": false,
+          "critical": ["height"]
         }
       },
       "ui": {
@@ -3147,6 +3148,7 @@
         "height": {},
         "gov.poll": {},
         "gov.proposals": {},
+        "keystore": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3171,10 +3173,12 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Address",
+            "required": true,
             "value": "{{account.address}}",
-            "readOnly": true,
+            "autoPopulate": "once",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -3284,7 +3288,7 @@
       },
       "payload": {
         "address": {
-          "value": "{{account.address}}",
+          "value": "{{form.address || account.address}}",
           "coerce": "string"
         },
         "pollJSON": {
@@ -3329,7 +3333,8 @@
           "staleTimeMs": 4000,
           "refetchIntervalMs": 4000,
           "refetchOnMount": true,
-          "refetchOnWindowFocus": false
+          "refetchOnWindowFocus": false,
+          "critical": ["height"]
         }
       },
       "ui": {
@@ -3419,10 +3424,10 @@
             "type": "number",
             "label": "Start Block",
             "required": true,
-            "value": "{{resolveHeight(ds.height)}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "help": "Always uses current chain height.",
+            "value": "{{resolveHeight(ds.height) + 5}}",
+            "autoPopulate": "once",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "help": "Pre-filled with current height + 5 to avoid race conditions.",
             "span": {
               "base": 12,
               "md": 6
@@ -3520,7 +3525,7 @@
           "coerce": "string"
         },
         "startBlock": {
-          "value": "{{resolveHeight(ds.height)}}",
+          "value": "{{Number(form.startBlock || resolveHeight(ds.height) + 5)}}",
           "coerce": "number"
         },
         "endBlock": {
@@ -3574,7 +3579,8 @@
           "staleTimeMs": 4000,
           "refetchIntervalMs": 4000,
           "refetchOnMount": true,
-          "refetchOnWindowFocus": false
+          "refetchOnWindowFocus": false,
+          "critical": ["height"]
         }
       },
       "ui": {
@@ -3636,10 +3642,10 @@
             "type": "number",
             "label": "Start Block",
             "required": true,
-            "value": "{{resolveHeight(ds.height)}}",
-            "autoPopulate": "always",
-            "readOnly": true,
-            "help": "Always uses current chain height.",
+            "value": "{{resolveHeight(ds.height) + 5}}",
+            "autoPopulate": "once",
+            "min": "{{resolveHeight(ds.height) + 1}}",
+            "help": "Pre-filled with current height + 5 to avoid race conditions.",
             "span": {
               "base": 12,
               "md": 6
@@ -3724,7 +3730,7 @@
           "coerce": "string"
         },
         "startBlock": {
-          "value": "{{resolveHeight(ds.height)}}",
+          "value": "{{Number(form.startBlock || resolveHeight(ds.height) + 5)}}",
           "coerce": "number"
         },
         "endBlock": {
@@ -4096,7 +4102,7 @@
             "type": "advancedSelect",
             "label": "Seller Address",
             "required": true,
-            "value": "{{params.address || account.address}}",
+            "value": "{{account.address}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -4115,7 +4121,7 @@
             "type": "advancedSelect",
             "label": "Receive Address (Counter-Asset)",
             "required": true,
-            "value": "{{params.receiveAddress || account.address || ''}}",
+            "value": "{{account.address || ''}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -4372,11 +4378,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Seller Address",
-            "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "required": true,
+            "value": "{{account.address}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Seller address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4409,7 +4421,7 @@
             "allowCreate": true,
             "label": "Receive Address (Counter-Asset)",
             "required": true,
-            "value": "{{params.receiveAddress || ''}}",
+            "value": "{{account.address || ''}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -4616,6 +4628,7 @@
       "icon": "Trash2",
       "ds": {
         "admin.config": {},
+        "keystore": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -4623,7 +4636,8 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "admin.config"
+            "admin.config",
+            "keystore"
           ]
         }
       },
@@ -4659,11 +4673,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Seller Address",
-            "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "required": true,
+            "value": "{{account.address}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Seller address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -4843,11 +4863,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Buyer Address (Nested Chain)",
-            "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "required": true,
+            "value": "{{account.address}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Buyer address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -4860,7 +4886,7 @@
             "allowCreate": true,
             "label": "Receive Address (Root Chain)",
             "required": true,
-            "value": "{{params.receiveAddress || account.address || ''}}",
+            "value": "{{account.address || ''}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -4977,6 +5003,7 @@
       "title": "Close Order",
       "icon": "CheckCircle2",
       "ds": {
+        "keystore": {},
         "params": {},
         "fees": {},
         "__options": {
@@ -4985,6 +5012,7 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
+            "keystore",
             "params"
           ]
         }
@@ -5021,11 +5049,17 @@
           {
             "id": "address",
             "name": "address",
-            "type": "text",
+            "type": "advancedSelect",
             "label": "Buyer Address",
-            "value": "{{params.address || account.address}}",
-            "autoPopulate": "always",
-            "readOnly": true,
+            "required": true,
+            "value": "{{account.address}}",
+            "autoPopulate": "once",
+            "validation": {
+              "messages": {
+                "required": "Buyer address is required"
+              }
+            },
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5176,7 +5210,7 @@
             "type": "advancedSelect",
             "label": "Address",
             "required": true,
-            "value": "{{params.address || account.address}}",
+            "value": "{{account.address}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -5391,7 +5425,7 @@
             "type": "advancedSelect",
             "label": "Address",
             "required": true,
-            "value": "{{params.address || account.address}}",
+            "value": "{{account.address}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {
@@ -5581,7 +5615,7 @@
             "type": "advancedSelect",
             "label": "Address",
             "required": true,
-            "value": "{{params.address || account.address}}",
+            "value": "{{account.address}}",
             "autoPopulate": "once",
             "validation": {
               "messages": {

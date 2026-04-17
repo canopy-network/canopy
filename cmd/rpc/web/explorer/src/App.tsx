@@ -16,6 +16,7 @@ import AccountsPage from './components/account/AccountsPage'
 import AccountDetailPage from './components/account/AccountDetailPage'
 import NetworkAnalyticsPage from './components/analytics/NetworkAnalyticsPage'
 import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
+import OrderDetailPage from './components/token-swaps/OrderDetailPage'
 import DexBatchesPage from './components/dex/DexBatchesPage'
 import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
@@ -41,6 +42,7 @@ function AnimatedRoutes() {
         <Route path="/account/:address" element={<AccountDetailPage />} />
         <Route path="/analytics" element={<NetworkAnalyticsPage />} />
         <Route path="/token-swaps" element={<TokenSwapsPage />} />
+        <Route path="/order/:committee/:orderId" element={<OrderDetailPage />} />
         <Route path="/dex" element={<DexBatchesPage />} />
         <Route path="/staking" element={<StakingPage />} />
         <Route path="/governance" element={<GovernancePage />} />

@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Eye, EyeOff, KeyRound, FileJson } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/toast/ToastContext';
 import { useDSFetcher } from '@/core/dsFetch';
 import { useQueryClient } from '@tanstack/react-query';
+
+interface EncryptedKeyFile {
+    publicKey: string;
+    salt: string;
+    encrypted: string;
+    keyAddress: string;
+    keyNickname?: string;
+}
 
 export const ImportWallet = (): JSX.Element => {
     const toast = useToast();
@@ -20,6 +28,11 @@ export const ImportWallet = (): JSX.Element => {
         nickname: ''
     });
 
+    const [keystoreForm, setKeystoreForm] = useState({ nickname: '' });
+    const [keystoreFile, setKeystoreFile] = useState<EncryptedKeyFile | null>(null);
+    const [keystoreFileName, setKeystoreFileName] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     const panelVariants = {
         hidden: { opacity: 0, y: 20 },
         visible: {
@@ -27,6 +40,13 @@ export const ImportWallet = (): JSX.Element => {
             y: 0,
             transition: { duration: 0.4 }
         }
+    };
+
+    const invalidateKeystore = async () => {
+        await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+        setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+        }, 500);
     };
 
     const handleImportWallet = async () => {
@@ -50,7 +70,6 @@ export const ImportWallet = (): JSX.Element => {
             return;
         }
 
-        // Validate private key format (should be hex, 64-128 chars)
         const cleanPrivateKey = importForm.privateKey.trim().replace(/^0x/, '');
         if (!/^[0-9a-fA-F]{64,128}$/.test(cleanPrivateKey)) {
             toast.error({
@@ -67,14 +86,13 @@ export const ImportWallet = (): JSX.Element => {
         });
 
         try {
-            const response = await dsFetch('keystoreImportRaw', {
+            await dsFetch('keystoreImportRaw', {
                 nickname: importForm.nickname,
                 password: importForm.password,
                 privateKey: cleanPrivateKey
             });
 
-            // Invalidate keystore cache to refetch
-            await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+            await invalidateKeystore();
 
             toast.dismiss(loadingToast);
             toast.success({
@@ -83,19 +101,104 @@ export const ImportWallet = (): JSX.Element => {
             });
 
             setImportForm({ privateKey: '', password: '', confirmPassword: '', nickname: '' });
-
-            // Switch to the newly imported account if response contains address
-            const newAddress = typeof response === 'string' ? response : (response as any)?.address;
-            if (newAddress) {
-                // Wait a bit for keystore to update, then try to switch
-                setTimeout(() => {
-                    queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
-                }, 500);
-            }
         } catch (error) {
             toast.dismiss(loadingToast);
             toast.error({
                 title: 'Error importing wallet',
+                description: error instanceof Error ? error.message : String(error)
+            });
+        }
+    };
+
+    const handleKeystoreFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const parsed = JSON.parse(ev.target?.result as string) as Record<string, unknown>;
+
+                let epk: EncryptedKeyFile | null = null;
+
+                if (parsed.addressMap && typeof parsed.addressMap === 'object') {
+                    const entries = Object.values(parsed.addressMap as Record<string, EncryptedKeyFile>);
+                    if (entries.length > 0) epk = entries[0];
+                } else if (parsed.publicKey && parsed.salt && parsed.encrypted && parsed.keyAddress) {
+                    epk = parsed as unknown as EncryptedKeyFile;
+                }
+
+                if (!epk || !epk.publicKey || !epk.salt || !epk.encrypted || !epk.keyAddress) {
+                    toast.error({
+                        title: 'Invalid keystore file',
+                        description: 'File must be an exported keyfile with addressMap or contain publicKey, salt, encrypted, and keyAddress fields.'
+                    });
+                    setKeystoreFile(null);
+                    setKeystoreFileName('');
+                    return;
+                }
+
+                setKeystoreFile(epk);
+                setKeystoreFileName(file.name);
+
+                const nickname = epk.keyNickname
+                    || (parsed.nicknameMap ? Object.keys(parsed.nicknameMap as Record<string, string>)[0] : '');
+                if (nickname && !keystoreForm.nickname) {
+                    setKeystoreForm(prev => ({ ...prev, nickname }));
+                }
+            } catch {
+                toast.error({ title: 'Invalid file', description: 'Could not parse JSON keystore file.' });
+                setKeystoreFile(null);
+                setKeystoreFileName('');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleImportKeystore = async () => {
+        if (!keystoreFile) {
+            toast.error({ title: 'Missing keystore file', description: 'Please select a keystore JSON file.' });
+            return;
+        }
+
+        const nickname = keystoreForm.nickname || keystoreFile.keyNickname || '';
+        if (!nickname) {
+            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
+            return;
+        }
+
+        const loadingToast = toast.info({
+            title: 'Importing keystore...',
+            description: 'Please wait while your keystore is imported.',
+            sticky: true,
+        });
+
+        try {
+            await dsFetch('keystoreImport', {
+                nickname,
+                address: keystoreFile.keyAddress,
+                publicKey: keystoreFile.publicKey,
+                salt: keystoreFile.salt,
+                encrypted: keystoreFile.encrypted,
+                keyAddress: keystoreFile.keyAddress,
+            });
+
+            await invalidateKeystore();
+
+            toast.dismiss(loadingToast);
+            toast.success({
+                title: 'Keystore imported',
+                description: `Wallet "${nickname}" has been imported successfully.`,
+            });
+
+            setKeystoreForm({ nickname: '' });
+            setKeystoreFile(null);
+            setKeystoreFileName('');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } catch (error) {
+            toast.dismiss(loadingToast);
+            toast.error({
+                title: 'Error importing keystore',
                 description: error instanceof Error ? error.message : String(error)
             });
         }
@@ -229,23 +332,14 @@ export const ImportWallet = (): JSX.Element => {
                         </label>
                         <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
                             <FileJson className="w-3.5 h-3.5" />
-                            Upload encrypted JSON keystore
+                            {keystoreFileName || 'Upload encrypted JSON keystore'}
                         </div>
                         <input
+                            ref={fileInputRef}
                             type="file"
                             accept=".json"
+                            onChange={handleKeystoreFileChange}
                             className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-foreground/80 mb-2">
-                            Keystore Password
-                        </label>
-                        <input
-                            type="password"
-                            placeholder="Enter keystore password"
-                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
 
@@ -256,6 +350,8 @@ export const ImportWallet = (): JSX.Element => {
                         <input
                             type="text"
                             placeholder="Imported Wallet"
+                            value={keystoreForm.nickname}
+                            onChange={(e) => setKeystoreForm({ ...keystoreForm, nickname: e.target.value })}
                             className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground"
                         />
                     </div>
@@ -273,7 +369,7 @@ export const ImportWallet = (): JSX.Element => {
                     </div>
 
                     <Button
-                        onClick={handleImportWallet}
+                        onClick={handleImportKeystore}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 font-semibold"
                     >
                         Import Keystore
