@@ -38,11 +38,9 @@ const ValidatorRow = React.memo<{
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
-    const rowBg = node.status === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]';
-
     return (
         <motion.tr
-            className={`group border-b border-border/40 last:border-0 ${rowBg}`}
+            className="group border-b border-border/40 last:border-0 bg-[#0F0F0F]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
@@ -106,11 +104,9 @@ const ValidatorMobileCard = React.memo<{
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
-    const mobileBg = node.status === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]';
-
     return (
         <motion.div
-            className={`rounded-lg p-3.5 space-y-3 border border-border/50 ${mobileBg}`}
+            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-[#0F0F0F]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}

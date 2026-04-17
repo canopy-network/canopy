@@ -342,7 +342,7 @@ export const Accounts = () => {
                 filteredAddresses.map((addr, index) => (
                   <motion.tr
                     key={addr.id}
-                    className={`border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors ${addr.statusLabel === 'Liquid' ? 'bg-[#6C6C6C]' : 'bg-[#0F0F0F]'}`}
+                    className="border-b border-border/40 last:border-0 bg-[#0F0F0F] hover:bg-muted/20 transition-colors"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.18 + index * 0.04 }}
