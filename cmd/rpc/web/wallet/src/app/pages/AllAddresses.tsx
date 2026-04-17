@@ -5,11 +5,13 @@ import { useAccountData } from "@/hooks/useAccountData";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { getCanopySymbol } from "@/lib/utils/canopySymbols";
+import { useDenom } from "@/hooks/useDenom";
 
 export const AllAddresses = () => {
   const { accounts, loading: accountsLoading } = useAccounts();
   const { balances, stakingData } = useAccountData();
   const { copyToClipboard } = useCopyToClipboard();
+  const { symbol, factor } = useDenom();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -21,7 +23,7 @@ export const AllAddresses = () => {
   };
 
   const formatBalance = (amount: number) => {
-    return (amount / 1000000).toLocaleString("en-US", {
+    return (amount / factor).toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -161,13 +163,13 @@ export const AllAddresses = () => {
           <div className="bg-card rounded-xl p-4 border border-border">
             <div className="text-sm text-muted-foreground mb-1">Total Balance</div>
             <div className="text-2xl font-bold text-foreground">
-              {formatBalance(totalBalance)} CNPY
+              {formatBalance(totalBalance)} {symbol}
             </div>
           </div>
           <div className="bg-card rounded-xl p-4 border border-border">
             <div className="text-sm text-muted-foreground mb-1">Total Staked</div>
             <div className="text-2xl font-bold text-primary">
-              {formatBalance(totalStaked)} CNPY
+              {formatBalance(totalStaked)} {symbol}
             </div>
           </div>
           <div className="bg-card rounded-xl p-4 border border-border">
@@ -243,17 +245,17 @@ export const AllAddresses = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-foreground">
-                          {formatBalance(addr.balance)} CNPY
+                          {formatBalance(addr.balance)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-primary">
-                          {formatBalance(addr.staked)} CNPY
+                          {formatBalance(addr.staked)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-foreground">
-                          {formatBalance(addr.total)} CNPY
+                          {formatBalance(addr.total)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">

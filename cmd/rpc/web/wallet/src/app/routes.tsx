@@ -11,16 +11,12 @@ import Governance from '@/app/pages/Governance'
 import AllTransactions from '@/app/pages/AllTransactions'
 import Orders from '@/app/pages/Orders'
 
-// Placeholder components for the new routes
-const Portfolio = () => <div className="min-h-screen bg-background flex items-center justify-center"><div className="text-foreground text-xl">Portfolio - Coming Soon</div></div>
-
 const router = createBrowserRouter([
     {
         element: <MainLayout />,
         children: [
             { path: '/', element: <Dashboard /> },
             { path: '/accounts', element: <Accounts /> },
-            { path: '/portfolio', element: <Portfolio /> },
             { path: '/staking', element: <Staking /> },
             { path: '/governance', element: <Governance /> },
             { path: '/orders', element: <Orders /> },

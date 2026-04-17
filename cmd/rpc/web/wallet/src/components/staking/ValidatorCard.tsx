@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useValidatorRewardsHistory } from "@/hooks/useValidatorRewardsHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
+import { useDenom } from "@/hooks/useDenom";
 import { LockOpen, Pause, Pen, Play, Globe, Key, Copy } from "lucide-react";
 
 interface ValidatorCardProps {
@@ -22,17 +23,17 @@ interface ValidatorCardProps {
   index: number;
 }
 
-const formatStakedAmount = (amount: number) => {
+const formatStakedAmount = (amount: number, factor: number) => {
   if (!amount && amount !== 0) return "0.00";
-  return (amount / 1000000).toLocaleString(undefined, {
+  return (amount / factor).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 };
 
-const formatRewards = (amount: number) => {
+const formatRewards = (amount: number, factor: number) => {
   if (!amount && amount !== 0) return "+0.00";
-  return `+${(amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `+${(amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const truncateAddress = (address: string) =>
@@ -49,6 +50,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 }) => {
   const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
+  const { symbol, factor } = useDenom();
 
   const { data: rewardsHistory, isLoading: rewardsLoading } =
     useValidatorRewardsHistory(validator.address);
@@ -66,6 +68,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
   const handleEditStake = () => {
     openAction("stake", {
+      titleOverride: "Edit Stake",
       prefilledData: {
         operator: validator.address,
         selectCommittees: validator.committees || [],
@@ -169,7 +172,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
           <div className="lg:col-span-6 grid grid-cols-2 sm:grid-cols-2 gap-4">
             <div className="flex flex-col">
               <div className="text-foreground font-medium">
-                {formatStakedAmount(validator.stakedAmount)} CNPY
+                {formatStakedAmount(validator.stakedAmount, factor)} {symbol}
               </div>
               <div className="text-muted-foreground text-xs">Total Staked</div>
             </div>
@@ -178,7 +181,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
               <div className="text-primary font-medium">
                 {rewardsLoading
                   ? "..."
-                  : formatRewards(rewardsHistory?.change24h || 0)}
+                  : formatRewards(rewardsHistory?.change24h || 0, factor)}
               </div>
               <div className="text-muted-foreground text-xs">24h Rewards</div>
             </div>

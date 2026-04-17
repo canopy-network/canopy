@@ -34,6 +34,7 @@ interface ActionModalOptions {
   onClose?: () => void;
   prefilledData?: Record<string, any>;
   relatedActions?: string[];
+  titleOverride?: string;
 }
 
 const ActionModalContext = createContext<ActionModalContextType | undefined>(undefined);
@@ -87,7 +88,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const tabs: Tab[] = [
       {
         value: currentAction.id,
-        label: currentAction.title || currentAction.id,
+        label: options.titleOverride || currentAction.title || currentAction.id,
         icon: currentAction.icon,
       },
     ];
@@ -105,7 +106,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
 
     return tabs;
-  }, [currentActionId, manifest, options.relatedActions]);
+  }, [currentActionId, manifest, options.relatedActions, options.titleOverride]);
 
   useEffect(() => {
     if (availableTabs.length > 0 && !selectedTab) {

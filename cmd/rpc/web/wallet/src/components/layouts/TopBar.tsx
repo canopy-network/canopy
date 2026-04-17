@@ -4,10 +4,14 @@ import { Link } from 'react-router-dom';
 import { Key, Blocks } from 'lucide-react';
 import { useTotalStage } from '@/hooks/useTotalStage';
 import { useDS } from '@/core/useDs';
+import { useDenom } from '@/hooks/useDenom';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
+
+const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL as string | undefined;
 
 export const TopBar = (): JSX.Element => {
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
+    const { symbol, factor } = useDenom();
     const { data: blockHeight } = useDS<{ height: number }>('height', {}, {
         staleTimeMs: 10_000,
         refetchIntervalMs: 10_000,
@@ -40,18 +44,21 @@ export const TopBar = (): JSX.Element => {
                         <span className="num text-xs font-semibold text-white">...</span>
                     ) : (
                         <AnimatedNumber
-                            value={totalStage ? totalStage / 1_000_000 : 0}
+                            value={totalStage ? totalStage / factor : 0}
                             format={{ notation: 'compact', maximumFractionDigits: 1 }}
                             className="num text-xs font-semibold text-white"
                         />
                     )}
-                    <span className="num text-xs text-muted-foreground/60">CNPY</span>
+                    <span className="num text-xs text-muted-foreground/60">{symbol}</span>
                 </div>
 
                 <div className="hidden h-4 w-px bg-border/70 sm:block" />
 
                 <button
-                    onClick={() => window.open("https://discord.com/channels/1310733928436600912/1439049045145419806/1439945810446909560", "_blank")}
+                    onClick={() => {
+                        const url = SUPPORT_URL || "https://discord.com/channels/1310733928436600912/1439049045145419806/1439945810446909560";
+                        window.open(url, "_blank");
+                    }}
                     className="flex h-8 items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.08] px-3 text-xs font-semibold text-white transition-all duration-150 hover:bg-white/[0.14]"
                 >
                     <svg

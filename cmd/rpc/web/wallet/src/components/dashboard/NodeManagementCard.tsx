@@ -12,6 +12,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDS } from '@/core/useDs';
 import { getCanopySymbol } from '@/lib/utils/canopySymbols';
+import { useDenom } from '@/hooks/useDenom';
 
 const shortAddr = (address: string) => `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
 
@@ -180,15 +181,16 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [selectedActions, setSelectedActions] = useState<any[]>([]);
     const isLoading = keystoreLoading || validatorsLoading;
+    const { symbol, factor } = useDenom();
 
     const formatStakeAmount = useCallback((amount: number) =>
-        (amount / 1000000).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), []);
+        (amount / factor).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), [factor]);
 
     const formatRewardsDelta = useCallback((rewards: number) => {
-        const value = rewards / 1000000;
+        const value = rewards / factor;
         const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-        return `${sign}${Math.abs(value).toFixed(2)} CNPY`;
-    }, []);
+        return `${sign}${Math.abs(value).toFixed(2)} ${symbol}`;
+    }, [factor, symbol]);
 
     const getStatus = useCallback((validator: any) => {
         if (!validator) return 'Liquid';
@@ -221,7 +223,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                     address: shortAddr(address),
                     stakeAmount: validator ? formatStakeAmount(validator.stakedAmount) : '0.00',
                     status: getStatus(validator),
-                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : '0.00 CNPY',
+                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : `0.00 ${symbol}`,
                     rewardsDelta24hValue: validator ? Number(rewardsData[address]?.change24h || 0) : 0,
                     originalValidator: validator || { address, nickname: keyData.keyNickname || 'Unnamed Key', stakedAmount: 0 },
                 };

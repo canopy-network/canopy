@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useTotalStage } from "@/hooks/useTotalStage";
 import { useDS } from "@/core/useDs";
+import { useDenom } from "@/hooks/useDenom";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import Logo from './Logo';
 import { Link, NavLink } from 'react-router-dom';
@@ -34,6 +35,7 @@ export const Navbar = (): JSX.Element => {
     } = useAccounts();
 
     const { data: totalStage, isLoading: stageLoading } = useTotalStage();
+    const { symbol, factor } = useDenom();
     const { data: blockHeight } = useDS<{ height: number }>('height', {}, {
         staleTimeMs: 10_000,
         refetchIntervalMs: 10_000,
@@ -137,12 +139,12 @@ export const Navbar = (): JSX.Element => {
                                         <span className="text-sm font-semibold text-primary">…</span>
                                     ) : (
                                         <AnimatedNumber
-                                            value={totalStage ? totalStage / 1_000_000 : 0}
+                                            value={totalStage ? totalStage / factor : 0}
                                             format={{ notation: 'compact', maximumFractionDigits: 1 }}
                                             className="text-sm font-semibold text-primary tabular-nums"
                                         />
                                     )}
-                                    <span className="text-xs font-semibold text-muted-foreground/60">CNPY</span>
+                                    <span className="text-xs font-semibold text-muted-foreground/60">{symbol}</span>
                                 </div>
                             </div>
 

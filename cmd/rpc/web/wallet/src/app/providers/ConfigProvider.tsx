@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useMemo } from 'react'
+import React, { createContext, useContext, useEffect, useMemo } from 'react'
 import { useEmbeddedConfig } from '@/manifest/loader'
 import { useNodeParams } from '@/manifest/params'
 import { useBlockTime } from '@/hooks/useBlockTime'
+import { setDenomDecimals } from '@/core/templaterFunctions'
 import type { Manifest } from '@/manifest/types'
 
 type Ctx = {
@@ -38,6 +39,13 @@ export const ConfigProvider: React.FC<React.PropsWithChildren<{ chainId?: string
     error: error ?? pError,
     base
   }), [enrichedChain, manifest, params, isLoading, pLoading, btLoading, error, pError, base])
+
+  useEffect(() => {
+    const decimals = (chain as Record<string, Record<string, number>>)?.denom?.decimals
+    if (decimals != null) {
+      setDenomDecimals(decimals)
+    }
+  }, [(chain as Record<string, Record<string, number>>)?.denom?.decimals])
 
   // bridge for FormRenderer validators (optional)
   if (typeof window !== 'undefined') {

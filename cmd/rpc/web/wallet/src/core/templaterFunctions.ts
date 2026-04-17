@@ -13,31 +13,36 @@ const resolveHeightInput = (v: any): number => {
     return 0
 }
 
+let _denomFactor = 1_000_000
+
+export function setDenomDecimals(decimals: number) {
+    _denomFactor = Math.pow(10, decimals)
+}
+
+export function getDenomFactor(): number {
+    return _denomFactor
+}
+
 export const templateFns = {
-    // Convert from base denom (micro) to display denom - returns formatted string
     formatToCoin: (v: any) => {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return (n / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 3 })
+        return (n / _denomFactor).toLocaleString(undefined, { maximumFractionDigits: 3 })
     },
 
-    // Convert from base denom (micro) to display denom - returns NUMBER (not string)
-    // Use this for field values, min, max, etc.
     fromMicroDenom: (v: any) => {
         if (v === '' || v == null) return 0
         const n = Number(v)
         if (!Number.isFinite(n)) return 0
-        return n / 1_000_000
+        return n / _denomFactor
     },
 
-    // Convert from display denom to base denom (micro) - returns NUMBER
-    // Use this for payload values that need to be sent to RPC
     toMicroDenom: (v: any) => {
         if (v === '' || v == null) return 0
         const n = Number(v)
         if (!Number.isFinite(n)) return 0
-        return Math.floor(n * 1_000_000)
+        return Math.floor(n * _denomFactor)
     },
 
     // DEPRECATED: Use fromMicroDenom instead
@@ -54,7 +59,7 @@ export const templateFns = {
         if (v === '' || v == null) return ''
         const n = Number(v)
         if (!Number.isFinite(n)) return ''
-        return (n * 1_000_000).toFixed(0)
+        return (n * _denomFactor).toFixed(0)
     },
 
     numberToLocaleString: (v: any) => {

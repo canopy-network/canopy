@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
+import { useDenom } from '@/hooks/useDenom';
 
 interface StatsCardsProps {
     totalStaked: number;
@@ -10,14 +11,14 @@ interface StatsCardsProps {
     activeValidatorsCount: number;
 }
 
-const formatStakedAmount = (amount: number) => {
+const formatStakedAmount = (amount: number, factor: number) => {
     if (!amount && amount !== 0) return '0.00';
-    return (amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const formatRewards = (amount: number) => {
+const formatRewards = (amount: number, factor: number) => {
     if (!amount && amount !== 0) return '+0.00';
-    return `+${(amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `+${(amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const itemVariants = {
@@ -33,13 +34,14 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                                                           activeValidatorsCount
                                                       }) => {
     const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
+    const { symbol, factor } = useDenom();
     const stakedChangePercentage = stakedHistory?.changePercentage || 0;
 
     const statsData = [
         {
             id: 'totalStaked',
             title: 'Total Staked',
-            value: `${formatStakedAmount(totalStaked)} CNPY`,
+            value: `${formatStakedAmount(totalStaked, factor)} ${symbol}`,
             subtitle: stakedHistoryLoading ? (
                 'Loading 24h change...'
             ) : stakedHistory ? (
@@ -63,7 +65,7 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
         {
             id: 'rewardsEarned',
             title: 'Rewards Earned',
-            value: `${formatRewards(totalRewards)} CNPY`,
+            value: `${formatRewards(totalRewards, factor)} ${symbol}`,
             subtitle: `Last 24 hours - ${validatorsCount} validators`,
             icon: 'fa-solid fa-ellipsis',
             iconColor: 'text-muted-foreground',

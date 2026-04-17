@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceHistory } from '@/hooks/useBalanceHistory';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
-import { useConfig } from '@/app/providers/ConfigProvider';
+import { useDenom } from '@/hooks/useDenom';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 
@@ -14,16 +14,13 @@ export const TotalBalanceCard = React.memo(() => {
     const { totalBalance, loading } = useAccountData();
     const { data: historyData, isLoading: historyLoading } = useBalanceHistory();
     const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'balance' });
-    const { chain } = useConfig();
+    const { symbol, decimals, factor } = useDenom();
     const [hasAnimated, setHasAnimated] = useState(false);
-
-    const symbol   = chain?.denom?.symbol   || 'CNPY';
-    const decimals = chain?.denom?.decimals ?? 6;
 
     const isPositive = (historyData?.changePercentage ?? 0) >= 0;
 
     const formatValue = (v: number) =>
-        `${(v / Math.pow(10, decimals)).toLocaleString('en-US', {
+        `${(v / factor).toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         })} ${symbol}`;
@@ -56,7 +53,7 @@ export const TotalBalanceCard = React.memo(() => {
                     <div className="flex items-baseline gap-2">
                         <span className="text-[2.25rem] font-semibold text-foreground tabular-nums leading-none text-glow">
                             <AnimatedNumber
-                                value={totalBalance / 1_000_000}
+                                value={totalBalance / factor}
                                 format={{ notation: 'standard', maximumFractionDigits: 2 }}
                             />
                         </span>

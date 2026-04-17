@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Proposal } from '@/hooks/useGovernance';
+import { useDenom } from '@/hooks/useDenom';
 
 interface ProposalDetailsModalProps {
     proposal: Proposal | null;
@@ -13,6 +14,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
     isOpen,
     onClose,
 }) => {
+    const { symbol, factor } = useDenom();
     if (!proposal) return null;
 
     const getCategoryColor = (category: string) => {
@@ -216,7 +218,7 @@ export const ProposalDetailsModal: React.FC<ProposalDetailsModalProps> = ({
                                                     <div className="flex justify-between items-center py-2 border-b border-border">
                                                         <span className="text-sm text-muted-foreground">Fee</span>
                                                         <span className="text-sm text-foreground">
-                                                            {(proposal.fee / 1000000).toFixed(6)} CNPY
+                                                            {(proposal.fee / factor).toFixed(6)} {symbol}
                                                         </span>
                                                     </div>
                                                 )}

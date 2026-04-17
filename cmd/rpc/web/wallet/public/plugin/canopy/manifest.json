@@ -1882,6 +1882,7 @@
             "address": "{{account.address}}"
           }
         },
+        "keystore": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 0,
@@ -1907,11 +1908,15 @@
           {
             "id": "validatorAddress",
             "name": "validatorAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Validator Address",
+            "placeholder": "Select Validator Address",
             "required": true,
-            "readOnly": true,
+            "autoPopulate": "once",
             "help": "The address of the validator to unstake",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "span": {
               "base": 12
             }
@@ -1930,12 +1935,16 @@
           {
             "id": "signerAddress",
             "name": "signerAddress",
-            "type": "text",
+            "type": "advancedSelect",
+            "allowFreeInput": true,
+            "allowCreate": true,
             "label": "Signer Address",
+            "placeholder": "Select Signer Address",
             "value": "{{account.address}}",
             "required": true,
-            "readOnly": true,
+            "autoPopulate": "once",
             "help": "The address that will sign this transaction",
+            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
             "span": {
               "base": 12
             }

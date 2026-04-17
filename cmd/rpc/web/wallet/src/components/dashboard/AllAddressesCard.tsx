@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getCanopySymbol } from '@/lib/utils/canopySymbols';
+import { useDenom } from '@/hooks/useDenom';
 
 const shortAddr = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
@@ -48,8 +49,9 @@ export const AllAddressesCard = React.memo(() => {
     const { switchAccount } = useSelectedAccount();
     const navigate = useNavigate();
     const { balances, stakingData, loading: dataLoading } = useAccountData();
+    const { factor } = useDenom();
 
-    const formatBalance = useCallback((amount: number) => (amount / 1_000_000).toFixed(2), []);
+    const formatBalance = useCallback((amount: number) => (amount / factor).toFixed(2), [factor]);
 
     const getStatus = useCallback((address: string) => {
         const info = stakingData.find(d => d.address === address);
