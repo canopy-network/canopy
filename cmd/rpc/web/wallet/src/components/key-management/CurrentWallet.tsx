@@ -479,7 +479,7 @@ export const CurrentWallet = (): JSX.Element => {
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">
-              Type <span className="font-mono font-semibold text-foreground">
+              Type <span className="font-semibold text-foreground">
                 {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
               </span> to confirm deletion:
             </p>

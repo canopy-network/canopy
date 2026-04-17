@@ -29,8 +29,28 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
         return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
     }
 
+    const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉']
+
     const formatPercentage = (num: number) => {
-        return `${num.toFixed(2)}%`
+        if (num === 0) return '0.00%'
+        if (num >= 0.01) return `${num.toFixed(2)}%`
+
+        // For very small numbers, use subscript notation: 0.0₅34%
+        const str = num.toFixed(10)
+        const [, decimal] = str.split('.')
+        if (!decimal) return `${num.toFixed(2)}%`
+
+        let leadingZeros = 0
+        for (const c of decimal) {
+            if (c === '0') leadingZeros++
+            else break
+        }
+
+        if (leadingZeros < 2) return `${num.toFixed(4)}%`
+
+        const significantDigits = decimal.slice(leadingZeros, leadingZeros + 3)
+        const subscript = subscriptDigits[leadingZeros]
+        return `0.0${subscript}${significantDigits}%`
     }
 
     const getProgressBarColor = (color: string) => {
@@ -78,7 +98,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
                                 </div>
                                 {/* Progress bar */}
                                 <div className="w-full mt-2 sm:hidden">
-                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                    <div className="w-full bg-white/10 rounded-full h-2">
                                         <div
                                             className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
                                             style={{ width: `${chain.percentage}%` }}
@@ -90,7 +110,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
 
                         {/* Progress bar - Desktop */}
                         <div className="hidden sm:block w-full sm:w-auto sm:flex-1 max-w-xs">
-                            <div className="w-full bg-gray-700 rounded-full h-2">
+                            <div className="w-full bg-white/10 rounded-full h-2">
                                 <div
                                     className={`h-2 rounded-full transition-all duration-300 ${getProgressBarColor(chain.color)}`}
                                     style={{ width: `${chain.percentage}%` }}
@@ -114,7 +134,7 @@ const ValidatorStakeChains: React.FC<ValidatorStakeChainsProps> = ({ validator }
             </div>
 
             {/* Total Network Control */}
-            <div className="mt-4 sm:mt-6 pt-4 border-t border-gray-700">
+            <div className="mt-4 sm:mt-6 pt-4 border-t border-white/10">
                 <div className="text-xs sm:text-sm text-gray-400 text-center flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
                     <p>{validatorDetailTexts.stakeByChains.totalNetworkControl}:</p>
                     <p className="text-primary">

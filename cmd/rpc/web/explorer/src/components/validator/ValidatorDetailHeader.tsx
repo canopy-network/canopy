@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 
 interface ValidatorDetail {
     address: string
-    status: 'active' | 'paused' | 'unstaking' | 'inactive'
+    status: 'active' | 'paused' | 'unstaking' | 'delegate'
     stakedAmount: number
     committees: number[]
     delegate: boolean
@@ -65,8 +65,8 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                 return 'bg-yellow-500'
             case 'unstaking':
                 return 'bg-orange-500'
-            case 'inactive':
-                return 'bg-gray-500'
+            case 'delegate':
+                return 'bg-blue-500'
             default:
                 return 'bg-gray-500'
         }
@@ -80,8 +80,8 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                 return 'Paused'
             case 'unstaking':
                 return 'Unstaking'
-            case 'inactive':
-                return validatorDetailTexts.header.status.inactive
+            case 'delegate':
+                return 'Delegator'
             default:
                 return 'Unknown'
         }
@@ -94,8 +94,8 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
             duration: 2000,
             position: 'top-right',
             style: {
-                background: '#1A1B23',
-                color: '#4ADE80',
+                background: '#1a1a1a',
+                color: '#45ca46',
             },
         })
     }
@@ -158,7 +158,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                                 <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white break-all font-mono">
                                     {validator.address}
                                 </h1>
-                                <i className="fa-solid fa-copy cursor-pointer hover:text-green-600 transition-colors text-primary flex-shrink-0"
+                                <i className="fa-solid fa-copy cursor-pointer hover:text-primary transition-colors text-primary flex-shrink-0"
                                     onClick={() => copyToClipboard(validator.address)}
                                     title="Copy address"></i>
                             </div>
@@ -179,7 +179,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
 
                             {/* Committees */}
                             <div className="text-start flex items-center gap-2">
-                                <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Committees:</div>
+                                <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Committee IDs:</div>
                                 <div className="text-xs sm:text-sm font-normal text-white break-words">
                                     {validator.committees.length > 0 ? validator.committees.join(', ') : 'None'}
                                 </div>
@@ -198,7 +198,7 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                             {/* Auto-Compound */}
                             <div className="text-start flex items-center gap-2">
                                 <div className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">Auto-Compound:</div>
-                                <div className={`text-xs sm:text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-green-400' : 'text-gray-500'}`}>
+                                <div className={`text-xs sm:text-sm font-normal flex items-center gap-1 ${validator.compound ? 'text-primary' : 'text-gray-500'}`}>
                                     <i className={`fa-solid ${validator.compound ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
                                     <span>{validator.compound ? 'Enabled' : 'Disabled'}</span>
                                 </div>
@@ -207,26 +207,16 @@ const ValidatorDetailHeader: React.FC<ValidatorDetailHeaderProps> = ({ validator
                     </div>
                 </div>
 
-                {/* Status and actions */}
+                {/* Type badge */}
                 <div className="flex items-start justify-start gap-4 h-full w-full lg:w-auto">
-
-                    {/* Action buttons */}
-                    {/* <div className="flex items-start gap-3">
-                        <button className={`flex items-center gap-2 ${typeInfo.color} px-4 py-2 rounded-lg hover:opacity-90 transition-colors`}>
+                    <div className="flex items-start gap-3">
+                        <span className={`flex items-center gap-2 ${typeInfo.color} px-4 py-2 rounded-lg`}>
                             <i className={`${typeInfo.icon} text-sm`}></i>
                             <span className="text-sm font-medium">
                                 {typeInfo.label}
                             </span>
-                        </button>
-                        <button type="button" onClick={() => {
-                            shareToSocialMedia(window.location.href)
-                        }} className="flex items-start gap-2 bg-input border border-gray-800/60 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-800/50 transition-colors">
-                            <i className="fa-solid fa-share text-sm translate-y-1"></i>
-                            <span className="text-sm font-medium">
-                                {validatorDetailTexts.header.actions.share}
-                            </span>
-                        </button>
-                    </div> */}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,5 +1,6 @@
 import { useDS } from "@/core/useDs"
 import { useConfig } from '@/app/providers/ConfigProvider'
+import { useBlockTime } from '@/hooks/useBlockTime'
 
 export interface HistoryResult {
     current: number;
@@ -15,21 +16,23 @@ export interface HistoryResult {
  */
 export function useHistoryCalculation() {
     const { chain } = useConfig()
-    const { data: currentHeightRaw } = useDS<any>('height', {}, { staleTimeMs: 30_000 })
+    const { blockTimeSec } = useBlockTime(chain)
+    const { data: currentHeightRaw } = useDS<unknown>('height', {}, { staleTimeMs: 30_000 })
 
     // DS `height` can come as number or object ({ height: number }).
     const currentHeight =
         typeof currentHeightRaw === "number"
             ? currentHeightRaw
-            : Number(currentHeightRaw?.height ?? 0)
+            : Number((currentHeightRaw as Record<string, unknown>)?.height ?? 0)
 
-    // Calculate height 24h ago using consistent logic
-    const secondsPerBlock = Number(chain?.params?.avgBlockTimeSec) > 0
-        ? Number(chain?.params?.avgBlockTimeSec)
-        : 20 // Default to 20 seconds if not available
+    const secondsPerBlock = blockTimeSec
 
-    const blocksPerDay = Math.round((24 * 60 * 60) / secondsPerBlock)
-    const height24hAgo = Math.max(0, currentHeight - blocksPerDay)
+    const blocksPerDay = secondsPerBlock != null
+        ? Math.round((24 * 60 * 60) / secondsPerBlock)
+        : null
+    const height24hAgo = blocksPerDay != null
+        ? Math.max(0, currentHeight - blocksPerDay)
+        : null
 
     /**
      * Calculate history metrics from current and previous values
@@ -54,6 +57,6 @@ export function useHistoryCalculation() {
         blocksPerDay,
         secondsPerBlock,
         calculateHistory,
-        isReady: currentHeight > 0
+        isReady: currentHeight > 0 && secondsPerBlock != null
     }
 }

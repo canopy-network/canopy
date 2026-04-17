@@ -3,7 +3,7 @@ import { type VariantProps, cva } from "class-variance-authority";
 import { cx } from "@/ui/cx";
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center rounded-md font-mono font-medium tracking-tight transition-colors",
+  "inline-flex items-center rounded-md font-medium tracking-tight transition-colors",
   {
     variants: {
       status: {

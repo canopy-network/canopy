@@ -95,7 +95,7 @@ export const PollTable: React.FC<PollTableProps> = ({
           <p className="text-xs text-muted-foreground mt-1">
             Built for high poll volume with dense information and quick actions.
           </p>
-          <div className="mt-2 h-1 w-28 rounded-full bg-gradient-to-r from-primary/80 via-primary/50 to-transparent" />
+          <div className="mt-2 h-1 w-28 rounded-full bg-primary/50" />
         </div>
         <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Visible</div>
@@ -187,7 +187,7 @@ export const PollTable: React.FC<PollTableProps> = ({
                     <td className="py-3 px-3 align-middle">
                       <div className="text-sm font-medium text-foreground mb-1">{poll.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{poll.description}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground">
+                      <div className="text-[11px] text-muted-foreground">
                         {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
                       </div>
                     </td>

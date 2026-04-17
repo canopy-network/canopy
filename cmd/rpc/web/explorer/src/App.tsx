@@ -16,6 +16,7 @@ import AccountsPage from './components/account/AccountsPage'
 import AccountDetailPage from './components/account/AccountDetailPage'
 import NetworkAnalyticsPage from './components/analytics/NetworkAnalyticsPage'
 import TokenSwapsPage from './components/token-swaps/TokenSwapsPage'
+import OrderDetailPage from './components/token-swaps/OrderDetailPage'
 import DexBatchesPage from './components/dex/DexBatchesPage'
 import StakingPage from './components/staking/StakingPage'
 import GovernancePage from './components/staking/GovernancePage'
@@ -41,6 +42,7 @@ function AnimatedRoutes() {
         <Route path="/account/:address" element={<AccountDetailPage />} />
         <Route path="/analytics" element={<NetworkAnalyticsPage />} />
         <Route path="/token-swaps" element={<TokenSwapsPage />} />
+        <Route path="/order/:committee/:orderId" element={<OrderDetailPage />} />
         <Route path="/dex" element={<DexBatchesPage />} />
         <Route path="/staking" element={<StakingPage />} />
         <Route path="/governance" element={<GovernancePage />} />
@@ -70,9 +72,9 @@ function App() {
           toastOptions={{
             duration: 3000,
             style: {
-              background: '#1f2937',
-              color: '#f9fafb',
-              border: '1px solid #374151',
+              background: '#1a1a1a',
+              color: '#fafafa',
+              border: '1px solid rgba(255,255,255,0.10)',
               borderRadius: '12px',
               padding: '12px 16px',
               fontSize: '14px',
@@ -80,23 +82,23 @@ function App() {
             },
             success: {
               iconTheme: {
-                primary: '#4ade80',
-                secondary: '#1f2937',
+                primary: '#45ca46',
+                secondary: '#1a1a1a',
               },
               style: {
-                background: '#1f2937',
-                color: '#f9fafb',
-                border: '1px solid #4ade80',
+                background: '#1a1a1a',
+                color: '#fafafa',
+                border: '1px solid #45ca46',
               },
             },
             error: {
               iconTheme: {
                 primary: '#ef4444',
-                secondary: '#1f2937',
+                secondary: '#1a1a1a',
               },
               style: {
-                background: '#1f2937',
-                color: '#f9fafb',
+                background: '#1a1a1a',
+                color: '#fafafa',
                 border: '1px solid #ef4444',
               },
             },

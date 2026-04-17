@@ -149,7 +149,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               Built for high volume: filter, sort, and navigate pages without losing context.
             </p>
           )}
-          <div className="mt-2 h-1 w-28 rounded-full bg-gradient-to-r from-primary/80 via-primary/50 to-transparent" />
+          <div className="mt-2 h-1 w-28 rounded-full bg-primary/50" />
         </div>
         <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Visible</div>
@@ -261,7 +261,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground mb-1">{proposal.title}</div>
                           <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{proposal.description}</div>
-                          <div className="text-[11px] text-muted-foreground font-mono">
+                          <div className="text-[11px] text-muted-foreground">
                             {proposal.hash.slice(0, 12)}...{proposal.hash.slice(-6)}
                           </div>
                         </div>

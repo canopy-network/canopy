@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Receipt } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useConfig } from '@/app/providers/ConfigProvider';
 import { LucideIcon } from '@/components/ui/LucideIcon';
 import { NavLink } from 'react-router-dom';
@@ -24,6 +24,7 @@ export interface Transaction {
     status: string;
     address?: string;
     error?: TxError;
+    relatedAccounts?: string[];
 }
 
 export interface RecentTransactionsCardProps {
@@ -94,14 +95,14 @@ const TransactionRow = React.memo<TransactionRowProps>(({
             </div>
 
             <div className="flex-1 min-w-0">
-                <div className="text-sm font-body font-medium text-foreground truncate leading-tight">
+                <div className="text-sm font-medium text-foreground truncate leading-tight">
                     {getTxMap(tx?.type)}
                 </div>
-                <div className="text-xs font-mono text-muted-foreground/60 mt-0.5">{timeAgo}</div>
+                <div className="text-xs text-muted-foreground/60 mt-0.5">{timeAgo}</div>
             </div>
 
             <div className="flex flex-col items-end gap-1 shrink-0">
-                <span className={`text-xs font-mono font-semibold tabular-nums ${amountColor}`}>
+                <span className={`text-xs font-semibold tabular-nums ${amountColor}`}>
                     {amountTxt}
                 </span>
                 <StatusBadge label={tx.status} size="sm" />
@@ -162,10 +163,7 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Receipt className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-sm font-medium text-muted-foreground">
                         Recent Transactions
                     </span>
                     {/* Live indicator */}
@@ -174,12 +172,12 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                         </span>
-                        <span className="font-mono text-[10px] text-primary font-medium">Live</span>
+                        <span className="text-[10px] text-primary font-medium">Live</span>
                     </span>
                 </div>
                 <NavLink
                     to="/all-transactions"
-                    className="text-xs font-body text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1"
                 >
                     See all
                     <ChevronRight style={{ width: 12, height: 12 }} />
@@ -204,7 +202,7 @@ export const RecentTransactionsCard: React.FC<RecentTransactionsCardProps> = Rea
 
             {transactions.length > 5 && (
                 <div className="text-center mt-3">
-                    <NavLink to="/all-transactions" className="text-xs font-body text-muted-foreground hover:text-primary font-medium transition-colors">
+                    <NavLink to="/all-transactions" className="text-xs text-muted-foreground hover:text-primary font-medium transition-colors">
                         All {transactions.length} transactions →
                     </NavLink>
                 </div>

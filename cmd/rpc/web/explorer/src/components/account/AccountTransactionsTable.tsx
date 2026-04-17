@@ -86,7 +86,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             case 'transfer':
                 return 'bg-blue-500/20 text-blue-400'
             case 'stake':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'unstake':
                 return 'bg-orange-500/20 text-orange-400'
             case 'swap':
@@ -98,16 +98,16 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             case 'undelegate':
                 return 'bg-pink-500/20 text-pink-400'
             case 'certificateresults':
-                return 'bg-green-500/20 text-primary'
+                return 'bg-primary/20 text-primary'
             case 'send':
                 return 'bg-blue-500/20 text-blue-400'
             case 'edit-stake':
             case 'editstake':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             case 'pause':
                 return 'bg-yellow-500/20 text-yellow-400'
             case 'unpause':
-                return 'bg-green-500/20 text-green-400'
+                return 'bg-primary/20 text-primary'
             default:
                 return 'bg-gray-500/20 text-gray-400'
         }
@@ -116,7 +116,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'success':
-                return 'bg-green-500/20 text-primary'
+                return 'bg-primary/20 text-primary'
             case 'failed':
                 return 'bg-red-500/20 text-red-400'
             case 'pending':
@@ -229,7 +229,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             // Hash
             <span
                 key="hash"
-                className="font-mono text-white text-sm cursor-pointer hover:text-green-400 hover:underline break-all"
+                className="font-mono text-white text-sm cursor-pointer hover:text-primary hover:underline break-all"
                 onClick={() => navigate(`/transaction/${transaction.txHash}`)}
             >
                 {truncate(transaction.txHash, 10)}
@@ -248,7 +248,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             <Link
                 key="from"
                 to={`/account/${fromAddress}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline break-all"
+                className="text-gray-400 font-mono text-sm hover:text-primary hover:underline break-all"
             >
                 {truncate(fromAddress, 10)}
             </Link>,
@@ -257,7 +257,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
             <Link
                 key="to"
                 to={`/account/${toAddress}`}
-                className="text-gray-400 font-mono text-sm hover:text-green-400 hover:underline break-all"
+                className="text-gray-400 font-mono text-sm hover:text-primary hover:underline break-all"
             >
                 {toAddress === 'N/A' ? (
                     <span className="text-gray-500">{truncate('0x00000000000000000000000000000000000', 10)}</span>
@@ -329,7 +329,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
     if (!loading && (!Array.isArray(transactions) || transactions.length === 0)) {
         return (
             <motion.div
-                className="bg-card rounded-lg p-8 text-center border border-gray-800/50"
+                className="bg-card rounded-lg p-8 text-center border border-white/8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
@@ -377,7 +377,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                             key={transaction.txHash || idx}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-card rounded-lg p-4 border border-gray-800/50"
+                            className="bg-card rounded-lg p-4 border border-white/8"
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -386,7 +386,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                         <span className="hidden sm:inline">{txType}</span>
                                     </div>
                                     <span
-                                        className="font-mono text-white text-xs cursor-pointer hover:text-green-400 hover:underline truncate flex-1"
+                                        className="font-mono text-white text-xs cursor-pointer hover:text-primary hover:underline truncate flex-1"
                                         onClick={() => navigate(`/transaction/${transaction.txHash}`)}
                                     >
                                         {truncate(transaction.txHash, 8)}
@@ -403,7 +403,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                     <span className="text-gray-400">From:</span>
                                     <Link
                                         to={`/account/${fromAddress}`}
-                                        className="text-gray-300 font-mono hover:text-green-400 hover:underline truncate ml-2 max-w-[60%]"
+                                        className="text-gray-300 font-mono hover:text-primary hover:underline truncate ml-2 max-w-[60%]"
                                     >
                                         {truncate(fromAddress, 8)}
                                     </Link>
@@ -412,7 +412,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                     <span className="text-gray-400">To:</span>
                                     <Link
                                         to={`/account/${toAddress}`}
-                                        className="text-gray-300 font-mono hover:text-green-400 hover:underline truncate ml-2 max-w-[60%]"
+                                        className="text-gray-300 font-mono hover:text-primary hover:underline truncate ml-2 max-w-[60%]"
                                     >
                                         {toAddress === 'N/A' ? truncate('0x00000000000000000000000000000000000', 8) : truncate(toAddress, 8)}
                                     </Link>
@@ -457,7 +457,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
         <div>
             {/* Mobile Card View */}
             <div className="md:hidden">
-                <div className="bg-card rounded-lg p-4 border border-gray-800/60">
+                <div className="bg-card rounded-lg p-4 border border-white/10">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base text-white/90 inline-flex items-center gap-2">
                             {type === 'sent' ? accountDetailTexts.table.sentTitle : accountDetailTexts.table.receivedTitle}
@@ -498,7 +498,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                     <button
                                         onClick={() => onPageChange && onPageChange(Math.max(1, currentPage - 1))}
                                         disabled={currentPage === 1}
-                                        className={`px-3 py-2 rounded text-xs ${currentPage === 1 ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                        className={`px-3 py-2 rounded text-xs ${currentPage === 1 ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
                                     >
                                         <i className="fa-solid fa-angle-left mr-1"></i>Previous
                                     </button>
@@ -508,7 +508,7 @@ const AccountTransactionsTable: React.FC<AccountTransactionsTableProps> = ({
                                     <button
                                         onClick={() => onPageChange && onPageChange(Math.min(Math.ceil(transactions.length / 10), currentPage + 1))}
                                         disabled={currentPage >= Math.ceil(transactions.length / 10)}
-                                        className={`px-3 py-2 rounded text-xs ${currentPage >= Math.ceil(transactions.length / 10) ? 'bg-gray-800/40 text-gray-500 cursor-not-allowed' : 'bg-gray-800/70 hover:bg-gray-700/60 text-white'}`}
+                                        className={`px-3 py-2 rounded text-xs ${currentPage >= Math.ceil(transactions.length / 10) ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/8 hover:bg-white/10 text-white'}`}
                                     >
                                         Next<i className="fa-solid fa-angle-right ml-1"></i>
                                     </button>

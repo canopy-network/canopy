@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Wallet, Lock, Gift } from "lucide-react";
 import { Line } from "react-chartjs-2";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
+import { useDenom } from "@/hooks/useDenom";
 
 interface StatsCardsProps {
   totalBalance: number;
@@ -34,6 +35,8 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
   rewardsChartData,
   chartOptions,
 }) => {
+  const { symbol, factor } = useDenom();
+
   const statsData = [
     {
       id: "totalBalance",
@@ -80,13 +83,13 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
           </div>
           <div className="text-3xl font-medium text-foreground mb-2">
             <AnimatedNumber
-              value={stat.value / 1000000}
+              value={stat.value / factor}
               format={{
                 notation: "standard",
                 maximumFractionDigits: 2,
               }}
             />
-            &nbsp;CNPY
+            &nbsp;{symbol}
           </div>
           <div className="flex items-center justify-between">
             <span

@@ -54,7 +54,7 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                         </div>
                         <div className="flex flex-wrap items-center gap-3 mt-2">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${status === 'confirmed'
-                                ? 'bg-green-500/20 text-primary'
+                                ? 'bg-primary/20 text-primary'
                                 : 'bg-yellow-500/20 text-yellow-400'
                                 }`}>
                                 {status === 'confirmed' ? blockDetailTexts.page.status.confirmed : blockDetailTexts.page.status.pending}
@@ -72,7 +72,7 @@ const BlockDetailHeader: React.FC<BlockDetailHeaderProps> = ({
                         onClick={onPreviousBlock}
                         disabled={!hasPrevious}
                         className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${hasPrevious
-                            ? 'bg-gray-700/50 text-white hover:bg-gray-600/50'
+                            ? 'bg-gray-700/50 text-white hover:bg-white/8'
                             : 'bg-gray-800/30 text-gray-500 cursor-not-allowed'
                             }`}
                     >

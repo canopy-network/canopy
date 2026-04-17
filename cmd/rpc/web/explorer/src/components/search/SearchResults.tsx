@@ -239,7 +239,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-gray-600/10 rounded-xl p-4 md:p-6 hover:border-gray-600/20 transition-colors"
+                className="bg-card border border-white/5 rounded-xl p-4 md:p-6 hover:border-white/10 transition-colors"
             >
                 <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -260,7 +260,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                 <span className="text-gray-400 text-sm mb-1">Address:</span>
                                 <Link
                                     to={`/account/${address}`}
-                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-green-400 hover:underline transition-colors w-full"
+                                    className="text-white font-mono text-sm sm:text-base md:text-lg break-all hover:text-primary hover:underline transition-colors w-full"
                                 >
                                     {address || 'N/A'}
                                 </Link>
@@ -303,7 +303,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             </Link>
                             <button
                                 onClick={() => copyToClipboard(address)}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                             >
                                 <i className="fa-solid fa-copy text-white mr-2"></i> Copy Address
                             </button>
@@ -442,7 +442,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                         {linkTo ? (
                                             <Link
                                                 to={linkTo}
-                                                className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-all'} hover:text-green-400 hover:underline transition-colors`}
+                                                className={`${field.fullWidth ? 'text-white font-mono text-sm sm:text-base md:text-lg break-all' : 'text-white text-sm'} ${field.truncate ? 'truncate' : field.fullWidth ? '' : 'break-all'} hover:text-primary hover:underline transition-colors`}
                                             >
                                                 {linkValue}
                                             </Link>
@@ -465,7 +465,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             </Link>
                             <button
                                 onClick={() => copyToClipboard(config.copyValue)}
-                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-gray-600 transition-colors"
+                                className="px-3 py-1.5 bg-input text-white rounded-md text-sm font-medium hover:bg-white/10 transition-colors"
                             >
                                 <i className="fa-solid fa-copy text-white mr-2"></i> {config.copyLabel}
                             </button>
@@ -704,7 +704,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             disabled={currentPage === 1}
                             className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === 1
                                 ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-gray-600'
+                                : 'bg-input text-white hover:bg-white/10'
                                 }`}
                         >
                             Previous
@@ -718,7 +718,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                                     onClick={() => handlePageChange(pageNum)}
                                     className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${currentPage === pageNum
                                         ? 'bg-primary text-black'
-                                        : 'bg-input text-white hover:bg-gray-600'
+                                        : 'bg-input text-white hover:bg-white/10'
                                         }`}
                                 >
                                     {pageNum}
@@ -731,7 +731,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, filters }) => {
                             disabled={currentPage === totalPages}
                             className={`px-3 py-1.5 rounded-md text-xs sm:text-sm transition-colors ${currentPage === totalPages
                                 ? 'bg-input text-gray-500 cursor-not-allowed'
-                                : 'bg-input text-white hover:bg-gray-600'
+                                : 'bg-input text-white hover:bg-white/10'
                                 }`}
                         >
                             Next

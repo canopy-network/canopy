@@ -65,18 +65,31 @@ export const queryKeys = {
     tableData: (page: number, category: number, committee?: number) => ['tableData', page, category, committee],
 };
 
+const BLOCKS_POLL_MS = 3000;
+
+// Lightweight hook for the latest block height (polls every 3s)
+export const useLatestBlock = () => {
+    return useQuery({
+        queryKey: ['latestBlock'],
+        queryFn: () => Blocks(1, 0),
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+    });
+};
+
 // Hooks for Blocks
 export const useBlocks = (page: number, perPage: number = 10, filter: string = 'all') => {
-    // Load more blocks if the filter is week or 24h to have enough data to filter
     const blockCount = filter === 'week' ? 50 : filter === '24h' ? 30 : perPage;
 
     return useQuery({
         queryKey: queryKeys.blocks(page, blockCount, filter),
         queryFn: () => Blocks(page, blockCount),
-        staleTime: 300000, // Cache for 5 minutes (increased from 30 seconds)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        refetchOnWindowFocus: false, // Don't refetch when window regains focus
-        gcTime: 600000 // Keep in cache for 10 minutes
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -92,11 +105,23 @@ export const useTransactions = (page: number, height: number = 0) => {
     });
 };
 
+// Hook for transactions at a specific block height with configurable perPage
+export const useTransactionsByHeight = (height: number, perPage: number = 1000, enabled: boolean = true) => {
+    return useQuery({
+        queryKey: ['txsByHeight', height, perPage],
+        queryFn: () => Transactions(1, height, perPage),
+        staleTime: 30000,
+        enabled,
+    });
+};
+
 // Hook for all transactions with filters
 export const useAllTransactions = (page: number, perPage: number = 10, filters?: {
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -115,6 +140,8 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
     type?: string;
     fromDate?: string;
     toDate?: string;
+    fromBlock?: string;
+    toBlock?: string;
     status?: string;
     address?: string;
     minAmount?: number;
@@ -390,10 +417,12 @@ export const useModalData = (query: string | number, page: number) => {
 // Hooks for Card Data
 export const useCardData = () => {
     return useQuery({
-        queryKey: [...queryKeys.cardData(), rpcURL], // Include RPC URL to invalidate on network change
+        queryKey: [...queryKeys.cardData(), rpcURL],
         queryFn: () => getCardData(),
-        staleTime: 5000, // Reduced stale time for more frequent updates
-        refetchOnWindowFocus: true, // Refetch when window regains focus
+        staleTime: 0,
+        refetchInterval: BLOCKS_POLL_MS,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -475,10 +504,10 @@ export const useAllBlocksCache = () => {
                 throw new Error(`Error fetching blocks: ${error.message}`);
             }
         },
-        staleTime: 300000, // Cache for 5 minutes
-        // Keep this in sync with live widgets (Navbar + Home Blocks table)
-        refetchInterval: REFRESH_INTERVAL_MS,
-        gcTime: 600000, // Keep in cache for 10 minutes
+        staleTime: 5000,
+        refetchInterval: 10000,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
     });
 };
 
@@ -573,8 +602,8 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
             });
         }
 
-        // Limit to a maximum of 50 blocks to avoid too many requests
-        const limitedBlocks = Math.min(maxBlocksToFetch, 50);
+        // limit blocks to the requested max (capped at 100 to stay reasonable)
+        const limitedBlocks = Math.min(maxBlocksToFetch, 100);
         const finalBlocks = filteredBlocks.slice(0, limitedBlocks);
 
         const allTransactions: any[] = [];
@@ -618,13 +647,12 @@ export const useOrders = (chainId: number = 1) => {
 };
 
 // Hook for fetching a specific order
-export const useOrder = (chainId: number, orderId: string, height: number = 0) => {
+export const useOrder = (committee: number, orderId: string, height: number = 0) => {
     return useQuery({
-        queryKey: ['order', chainId, orderId, height],
-        // Order() already returns parsed JSON via POST(), not a Response object.
-        queryFn: () => Order(chainId, orderId, height),
-        enabled: !!orderId, // Only run if orderId is provided
-        staleTime: 30000, // Cache for 30 seconds
+        queryKey: ['order', committee, orderId, height],
+        queryFn: () => Order(committee, orderId, height),
+        enabled: !!orderId,
+        staleTime: 30000,
     });
 };
 

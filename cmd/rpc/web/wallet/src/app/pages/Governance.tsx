@@ -111,6 +111,7 @@ export const Governance = () => {
     (proposalHash: string) => {
       openAction(GOVERNANCE_ACTION_IDS.deleteProposalVote, {
         proposalId: proposalHash,
+        _skipToConfirm: true,
       });
     },
     [openAction],
@@ -164,13 +165,6 @@ export const Governance = () => {
         help: "Generates a signed treasury proposal. Copy the JSON, then Approve it (step 2) and Submit it (step 3).",
         icon: Coins,
       },
-      {
-        id: GOVERNANCE_ACTION_IDS.votePoll,
-        title: "Vote on Poll",
-        description: "Approve or reject an on-chain poll with auto-filled fields.",
-        help: "Casts your on-chain poll vote. Select a poll and submit Approve or Reject with fields prefilled from live data.",
-        icon: Vote,
-      },
     ],
     [],
   );
@@ -184,10 +178,7 @@ export const Governance = () => {
         variants={containerVariants}
       >
         <div className="px-6 py-8">
-          <div className="relative mb-6 overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 via-background to-card p-5 md:p-6">
-            <div className="absolute -top-16 -right-16 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
-            <div className="absolute -bottom-20 -left-10 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
-            <div className="relative z-10">
+          <div className="mb-6 rounded-2xl border border-white/10 bg-card p-5 md:p-6">
               <div className="text-[11px] uppercase tracking-[0.2em] text-primary/90 mb-2">Governance Control Deck</div>
               <h1 className="text-2xl md:text-3xl font-bold text-foreground">Governance</h1>
               <p className="text-sm text-muted-foreground mt-2 max-w-3xl">
@@ -211,14 +202,13 @@ export const Governance = () => {
                   <div className="text-base font-semibold text-foreground">{proposalCounts.rejected}</div>
                 </div>
               </div>
-            </div>
           </div>
 
-          <div className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-4 md:p-5">
+          <div className="mb-6 rounded-2xl border border-white/10 bg-card p-4 md:p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold text-foreground">Primary Governance Actions</div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {criticalActions.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -301,7 +291,7 @@ export const Governance = () => {
             </div>
           </div>
 
-          <div className="mb-8 rounded-2xl border border-border/70 bg-gradient-to-br from-background via-card to-card p-4 md:p-5">
+          <div className="mb-8 rounded-2xl border border-white/10 bg-card p-4 md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-xl md:text-2xl font-bold text-foreground mb-1">Governance Queue</h2>

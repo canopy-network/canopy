@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Coins, ArrowUpRight } from 'lucide-react';
+
+
 import { useNavigate } from 'react-router-dom';
 import { useAccountData } from '@/hooks/useAccountData';
 import { useBalanceChart } from '@/hooks/useBalanceChart';
-import { useConfig } from '@/app/providers/ConfigProvider';
+import { useDenom } from '@/hooks/useDenom';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 import { SparklineChart } from '@/components/ui/SparklineChart';
 
@@ -12,39 +13,30 @@ export const StakedBalanceCard = React.memo(() => {
     const navigate = useNavigate();
     const { totalStaked, loading } = useAccountData();
     const { data: chartData = [], isLoading: chartLoading } = useBalanceChart({ points: 12, type: 'staked' });
-    const { chain } = useConfig();
-
-    const symbol   = chain?.denom?.symbol   || 'CNPY';
-    const decimals = chain?.denom?.decimals ?? 6;
+    const { symbol, factor } = useDenom();
 
     const formatValue = (v: number) =>
-        `${(v / Math.pow(10, decimals)).toLocaleString('en-US', {
+        `${(v / factor).toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         })} ${symbol}`;
 
     return (
         <motion.div
-            className="canopy-card p-5 h-full flex flex-col"
+            className="canopy-card bg-[#191919] p-5 h-full flex flex-col cursor-pointer hover:border-primary/30 transition-colors"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.06 }}
+            onClick={() => navigate('/staking')}
+            title="View Staking"
         >
             <div className="absolute -top-8 -left-8 w-28 h-28 rounded-full bg-primary/4 blur-2xl pointer-events-none" />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Coins className="text-primary" style={{ width: 14, height: 14 }} />
-                    </div>
-                    <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                        Total Staked Balance
-                    </span>
-                </div>
-                <button onClick={() => navigate('/staking')} className="p-1 rounded-md hover:bg-accent transition-colors" aria-label="Go to Staking">
-                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/40 hover:text-foreground" />
-                </button>
+            <div className="flex items-center gap-2 mb-4">
+                <span className="text-sm font-medium text-muted-foreground">
+                    Total Staked Balance
+                </span>
             </div>
 
             {/* Balance */}
@@ -53,13 +45,13 @@ export const StakedBalanceCard = React.memo(() => {
                     <div className="h-9 w-36 rounded-md skeleton mb-1" />
                 ) : (
                     <div className="flex items-baseline gap-2">
-                        <span className="font-mono text-[2.25rem] font-semibold text-foreground tabular-nums leading-none">
+                        <span className="text-[2.25rem] font-semibold text-foreground tabular-nums leading-none">
                             <AnimatedNumber
-                                value={totalStaked / 1_000_000}
+                                value={totalStaked / factor}
                                 format={{ notation: 'standard', maximumFractionDigits: 2 }}
                             />
                         </span>
-                        <span className="font-mono text-sm font-medium text-muted-foreground/50">{symbol}</span>
+                        <span className="text-sm font-medium text-muted-foreground/50">{symbol}</span>
                     </div>
                 )}
             </div>

@@ -181,10 +181,10 @@ const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, para
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200">
+            <div className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200">
                 <div className="animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-1/2 mb-4"></div>
-                    <div className="h-32 bg-gray-700 rounded"></div>
+                    <div className="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
+                    <div className="h-32 bg-white/10 rounded"></div>
                 </div>
             </div>
         )
@@ -195,7 +195,7 @@ const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, para
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.7 }}
-            className="bg-card rounded-xl p-6 border border-gray-800/30 hover:border-gray-800/50 transition-colors duration-200"
+            className="bg-card rounded-xl p-6 border border-white/5 hover:border-white/8 transition-colors duration-200"
         >
             <div className="mb-4">
                 <h3 className="text-lg font-semibold text-white">
@@ -209,9 +209,9 @@ const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, para
             {/* Real fee data display */}
             <div className="h-32 flex flex-col justify-center items-center text-center">
                 <div className="text-gray-400 space-y-2">
-                    <div className="text-sm">Fee Range: <span className="text-green-400">{feeData.feeRange}</span></div>
-                    <div className="text-sm">Total Fees: <span className="text-green-400">{feeData.totalFees}</span></div>
-                    <div className="text-sm">Avg Fee: <span className="text-green-400">{formatNumber(feeData.avgFee)} CNPY</span></div>
+                    <div className="text-sm">Fee Range: <span className="text-primary">{feeData.feeRange}</span></div>
+                    <div className="text-sm">Total Fees: <span className="text-primary">{feeData.totalFees}</span></div>
+                    <div className="text-sm">Avg Fee: <span className="text-primary">{formatNumber(feeData.avgFee)} CNPY</span></div>
                     {feeData.txCount > 0 && (
                         <div className="text-xs text-gray-500 mt-1">({feeData.txCount} transactions)</div>
                     )}

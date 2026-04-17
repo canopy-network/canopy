@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDSFetcher } from '@/core/dsFetch'
 import { useHistoryCalculation } from './useHistoryCalculation'
@@ -19,6 +20,7 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
     const addresses = accounts.map(a => a.address).filter(Boolean)
     const dsFetch = useDSFetcher()
     const { currentHeight, secondsPerBlock, isReady } = useHistoryCalculation()
+    const lastGoodDataRef = useRef<ChartDataPoint[]>([])
 
     return useQuery({
         queryKey: ['balanceChart', type, addresses, currentHeight, points],
@@ -30,13 +32,11 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
         placeholderData: (prev) => prev,
 
         queryFn: async (): Promise<ChartDataPoint[]> => {
-            if (addresses.length === 0 || currentHeight === 0) {
+            if (addresses.length === 0 || currentHeight === 0 || secondsPerBlock == null) {
                 return []
             }
 
-            // Calculate blocks per hour using consistent logic
             const blocksPerHour = Math.round((60 * 60) / secondsPerBlock)
-            const blocksPerDay = blocksPerHour * 24
 
 
             const hoursInterval = 24 / (points - 1)
@@ -110,7 +110,6 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                     })
                 } catch (error) {
                     console.warn(`Error fetching data for height ${height}:`, error)
-                    // Add point with value 0 in case of error
                     const errorLabel = hoursAgo === 0 ? 'Now' : hoursAgo === 24 ? '24h ago' : `${hoursAgo}h ago`
                     dataPoints.push({
                         timestamp: height,
@@ -118,6 +117,16 @@ export function useBalanceChart({ points = 7, type = 'balance' }: BalanceChartOp
                         label: errorLabel
                     })
                 }
+            }
+
+            const hasNonZero = dataPoints.some(p => p.value > 0)
+            if (hasNonZero) {
+                lastGoodDataRef.current = dataPoints
+                return dataPoints
+            }
+
+            if (lastGoodDataRef.current.length > 0) {
+                return lastGoodDataRef.current
             }
 
             return dataPoints

@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Wallet, Copy } from "lucide-react";
+import { Search, Copy } from "lucide-react";
 import { useAccountData } from "@/hooks/useAccountData";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useAccounts } from "@/app/providers/AccountsProvider";
+import { getCanopySymbol } from "@/lib/utils/canopySymbols";
+import { useDenom } from "@/hooks/useDenom";
 
 export const AllAddresses = () => {
   const { accounts, loading: accountsLoading } = useAccounts();
   const { balances, stakingData } = useAccountData();
   const { copyToClipboard } = useCopyToClipboard();
+  const { symbol, factor } = useDenom();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -20,7 +23,7 @@ export const AllAddresses = () => {
   };
 
   const formatBalance = (amount: number) => {
-    return (amount / 1000000).toLocaleString("en-US", {
+    return (amount / factor).toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -160,13 +163,13 @@ export const AllAddresses = () => {
           <div className="bg-card rounded-xl p-4 border border-border">
             <div className="text-sm text-muted-foreground mb-1">Total Balance</div>
             <div className="text-2xl font-bold text-foreground">
-              {formatBalance(totalBalance)} CNPY
+              {formatBalance(totalBalance)} {symbol}
             </div>
           </div>
           <div className="bg-card rounded-xl p-4 border border-border">
             <div className="text-sm text-muted-foreground mb-1">Total Staked</div>
             <div className="text-2xl font-bold text-primary">
-              {formatBalance(totalStaked)} CNPY
+              {formatBalance(totalStaked)} {symbol}
             </div>
           </div>
           <div className="bg-card rounded-xl p-4 border border-border">
@@ -208,18 +211,16 @@ export const AllAddresses = () => {
                   filteredAddresses.map((addr, i) => (
                     <motion.tr
                       key={addr.id}
-                      className="border-b border-border/30 hover:bg-accent/20 transition-colors"
+                      className="border-b border-border/30 bg-[#0F0F0F] hover:bg-accent/20 transition-colors"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: i * 0.05 }}
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-r from-primary/80 to-primary/40 rounded-full flex items-center justify-center flex-shrink-0">
-                            <Wallet className="text-foreground w-4 h-4" />
-                          </div>
+                          <img src={getCanopySymbol(i)} alt="" className="w-10 h-10 rounded-full object-contain flex-shrink-0" />
                           <div>
-                            <div className="text-sm text-foreground font-mono">
+                            <div className="text-sm text-foreground">
                               {formatAddress(addr.address)}
                             </div>
                             <button
@@ -244,17 +245,17 @@ export const AllAddresses = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-foreground">
-                          {formatBalance(addr.balance)} CNPY
+                          {formatBalance(addr.balance)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-primary">
-                          {formatBalance(addr.staked)} CNPY
+                          {formatBalance(addr.staked)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-foreground">
-                          {formatBalance(addr.total)} CNPY
+                          {formatBalance(addr.total)} {symbol}
                         </div>
                       </td>
                       <td className="px-6 py-4">

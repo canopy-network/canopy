@@ -35,7 +35,6 @@ function applyWindowConfig<T extends Record<string, unknown>>(chain: T): T {
       ...rpc,
       base: window.__CONFIG__.rpcURL,
       admin: window.__CONFIG__.adminRPCURL,
-      root: window.__CONFIG__.rpcURL,
     },
   }
 }

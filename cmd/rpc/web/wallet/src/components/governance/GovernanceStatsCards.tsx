@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Proposal } from '@/hooks/useGovernance';
+import { useDenom } from '@/hooks/useDenom';
 
 interface GovernanceStatsCardsProps {
     proposals: Proposal[];
@@ -19,10 +20,11 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
     const activeProposals = proposals.filter(p => p.status === 'active').length;
     const passedProposals = proposals.filter(p => p.status === 'passed').length;
     const totalProposals = proposals.length;
+    const { symbol, factor } = useDenom();
 
     const formatVotingPower = (amount: number) => {
         if (!amount && amount !== 0) return '0.00';
-        return (amount / 1000000).toLocaleString(undefined, {
+        return (amount / factor).toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
@@ -32,7 +34,7 @@ export const GovernanceStatsCards: React.FC<GovernanceStatsCardsProps> = ({
         {
             id: 'votingPower',
             title: 'Your Voting Power',
-            value: `${formatVotingPower(votingPower)} CNPY`,
+            value: `${formatVotingPower(votingPower)} ${symbol}`,
             subtitle: 'Based on staked amount',
             icon: 'fa-solid fa-balance-scale',
             iconColor: 'text-primary',

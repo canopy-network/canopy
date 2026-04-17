@@ -11,7 +11,7 @@ const ActionRunner = React.lazy(() => import('@/actions/ActionRunner'));
 
 const ActionRunnerFallback = () => (
   <div className="flex flex-col items-center justify-center py-12 gap-3">
-    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+    <Loader2 className="w-8 h-8 text-white/60 animate-spin" />
     <span className="text-muted-foreground text-sm">Loading action...</span>
   </div>
 );
@@ -34,6 +34,7 @@ interface ActionModalOptions {
   onClose?: () => void;
   prefilledData?: Record<string, any>;
   relatedActions?: string[];
+  titleOverride?: string;
 }
 
 const ActionModalContext = createContext<ActionModalContextType | undefined>(undefined);
@@ -87,7 +88,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const tabs: Tab[] = [
       {
         value: currentAction.id,
-        label: currentAction.title || currentAction.id,
+        label: options.titleOverride || currentAction.title || currentAction.id,
         icon: currentAction.icon,
       },
     ];
@@ -105,7 +106,7 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
 
     return tabs;
-  }, [currentActionId, manifest, options.relatedActions]);
+  }, [currentActionId, manifest, options.relatedActions, options.titleOverride]);
 
   useEffect(() => {
     if (availableTabs.length > 0 && !selectedTab) {
@@ -180,8 +181,8 @@ export const ActionModalProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 <div className="shrink-0 px-3 pt-4 pb-2 sm:px-5 sm:pt-5 sm:pb-3 md:px-6 md:pt-6">
                   <div className="mb-2 pr-8 sm:mb-3 flex items-start gap-3">
                     {availableTabs[0].icon && (
-                      <div className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg">
-                        <LucideIcon name={availableTabs[0].icon} className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+                      <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10">
+                        <LucideIcon name={availableTabs[0].icon} className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                     )}
                     <h2 className="text-xl sm:text-2xl font-semibold text-foreground break-words">

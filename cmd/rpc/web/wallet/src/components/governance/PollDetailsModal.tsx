@@ -60,7 +60,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
               exit={{ opacity: 0, y: 20, scale: 0.97 }}
               transition={{ type: "spring", duration: 0.45 }}
             >
-              <div className="shrink-0 border-b border-border bg-gradient-to-r from-primary/10 via-card to-card p-4 sm:p-5">
+              <div className="shrink-0 border-b border-border bg-card p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center gap-2">
@@ -75,7 +75,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                     <h2 className="text-xl sm:text-2xl font-bold text-foreground truncate">
                       {poll.title || "Governance Poll"}
                     </h2>
-                    <p className="mt-1 text-xs text-muted-foreground font-mono">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {normalizedHash}
                     </p>
                   </div>
@@ -102,24 +102,6 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                         <div className="h-full bg-rose-400 transition-all duration-300" style={{ width: `${noPercent}%` }} />
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">End Block</div>
-                        <div className="text-sm font-semibold text-foreground">#{poll.endBlock || 0}</div>
-                      </div>
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Account Vote</div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {clampPercent(poll.accountVotes.yes).toFixed(1)} / {clampPercent(poll.accountVotes.no).toFixed(1)}
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Validator Vote</div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {clampPercent(poll.validatorVotes.yes).toFixed(1)} / {clampPercent(poll.validatorVotes.no).toFixed(1)}
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -128,7 +110,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                       <div className="space-y-2 text-xs">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Proposal Ref</span>
-                          <span className="font-mono text-foreground break-all text-right">{poll.proposal || "-"}</span>
+                          <span className="text-foreground break-all text-right">{poll.proposal || "-"}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Display End</span>
@@ -136,7 +118,7 @@ export const PollDetailsModal: React.FC<PollDetailsModalProps> = ({
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-muted-foreground">Canonical Hash</span>
-                          <span className="font-mono text-foreground break-all text-right">{normalizedHash}</span>
+                          <span className="text-foreground break-all text-right">{normalizedHash}</span>
                         </div>
                       </div>
                     </div>

@@ -9,7 +9,7 @@ export function CnpyLogo({ size = 36 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg, #1dd13a 0%, #0fa32c 100%)",
+        background: "linear-gradient(135deg, #45ca46 0%, #3aa33a 100%)",
       }}
       dangerouslySetInnerHTML={{
         __html: canopyIconSvg("#ffffff"),

@@ -1,10 +1,10 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { useManifest } from "@/hooks/useManifest";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useValidatorRewardsHistory } from "@/hooks/useValidatorRewardsHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
-import {LockOpen, Pause, Pen, Play} from "lucide-react";
+import { useDenom } from "@/hooks/useDenom";
+import { LockOpen, Pause, Pen, Play, Globe, Key, Copy } from "lucide-react";
 
 interface ValidatorCardProps {
   validator: {
@@ -13,24 +13,27 @@ interface ValidatorCardProps {
     stakedAmount: number;
     status: "Staked" | "Paused" | "Unstaking" | "Delegate";
     rewards24h: number;
-    committees?: string[];
+    committees?: number[];
     isSynced: boolean;
     delegate?: boolean;
+    netAddress?: string;
+    publicKey?: string;
+    output?: string;
   };
   index: number;
 }
 
-const formatStakedAmount = (amount: number) => {
+const formatStakedAmount = (amount: number, factor: number) => {
   if (!amount && amount !== 0) return "0.00";
-  return (amount / 1000000).toLocaleString(undefined, {
+  return (amount / factor).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 };
 
-const formatRewards = (amount: number) => {
+const formatRewards = (amount: number, factor: number) => {
   if (!amount && amount !== 0) return "+0.00";
-  return `+${(amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `+${(amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const truncateAddress = (address: string) =>
@@ -47,8 +50,8 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 }) => {
   const { copyToClipboard } = useCopyToClipboard();
   const { openAction } = useActionModal();
+  const { symbol, factor } = useDenom();
 
-  // Fetch real rewards data using block height comparison
   const { data: rewardsHistory, isLoading: rewardsLoading } =
     useValidatorRewardsHistory(validator.address);
 
@@ -65,6 +68,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
 
   const handleEditStake = () => {
     openAction("stake", {
+      titleOverride: "Edit Stake",
       prefilledData: {
         operator: validator.address,
         selectCommittees: validator.committees || [],
@@ -86,9 +90,8 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
       className="bg-card rounded-xl border border-border/60 relative overflow-hidden"
     >
       <div className="p-4">
-        {/* Grid layout for responsive design */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center">
-          {/* Validator identity - takes 3 columns on large screens */}
+          {/* Validator identity */}
           <div className="lg:col-span-3">
             <div className="flex flex-col">
               <div className="text-primary capitalize font-medium mb-1 flex items-center">
@@ -99,7 +102,7 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                   <i className="fa-solid fa-server text-muted-foreground text-xs"></i>
                 </button>
               </div>
-              <div className="text-muted-foreground text-sm font-mono">
+              <div className="text-muted-foreground text-sm">
                 {truncateAddress(validator.address)}
               </div>
               <button
@@ -114,49 +117,78 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
                 <i className="fa-solid fa-copy"></i> Copy
               </button>
 
-              {/* Chain badges */}
-              <div className="flex mt-2 gap-1 flex-wrap">
-                {(validator.committees || []).slice(0, 2).map((chain, i) => (
-                  <span
-                    key={i}
-                    className="px-2 py-0.5 text-xs bg-accent text-foreground rounded"
-                  >
-                    {chain}
-                  </span>
-                ))}
-                {(validator.committees || []).length > 2 && (
+              {/* Public Key */}
+              {validator.publicKey && (
+                <div className="flex items-center gap-1 mt-1.5" title="Public Key">
+                  <Key className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
                   <span className="text-muted-foreground text-xs">
-                    +{(validator.committees || []).length - 2} more
+                    {truncateAddress(validator.publicKey)}
                   </span>
-                )}
-              </div>
+                  <button
+                    className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-primary transition-colors flex-shrink-0"
+                    onClick={() => copyToClipboard(validator.publicKey!, "Public Key")}
+                    title="Copy Public Key"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Net Address */}
+              {validator.netAddress && (
+                <div className="flex items-center gap-1 mt-1" title="Network Address">
+                  <Globe className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
+                  <span className="text-muted-foreground text-xs">
+                    {validator.netAddress}
+                  </span>
+                  <button
+                    className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-primary transition-colors flex-shrink-0"
+                    onClick={() => copyToClipboard(validator.netAddress!, "Network Address")}
+                    title="Copy Network Address"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Committees */}
+              {(validator.committees?.length ?? 0) > 0 && (
+                <div className="flex items-center mt-2 gap-1.5 flex-wrap">
+                  <span className="text-muted-foreground text-xs">Committees:</span>
+                  {validator.committees!.map((id) => (
+                    <span
+                      key={id}
+                      className="px-2 py-0.5 text-xs bg-primary/15 text-primary border border-primary/20 rounded font-medium"
+                    >
+                      {id}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Stats section - responsive grid */}
+          {/* Stats section */}
           <div className="lg:col-span-6 grid grid-cols-2 sm:grid-cols-2 gap-4">
-            {/* Total Staked */}
             <div className="flex flex-col">
               <div className="text-foreground font-medium">
-                {formatStakedAmount(validator.stakedAmount)} CNPY
+                {formatStakedAmount(validator.stakedAmount, factor)} {symbol}
               </div>
               <div className="text-muted-foreground text-xs">Total Staked</div>
             </div>
 
-            {/* 24h Rewards */}
             <div className="flex flex-col">
               <div className="text-primary font-medium">
                 {rewardsLoading
                   ? "..."
-                  : formatRewards(rewardsHistory?.change24h || 0)}
+                  : formatRewards(rewardsHistory?.change24h || 0, factor)}
               </div>
               <div className="text-muted-foreground text-xs">24h Rewards</div>
             </div>
           </div>
 
-          {/* Status and Actions - takes 3 columns on large screens */}
+          {/* Status and Actions */}
           <div className="lg:col-span-3 flex flex-col sm:flex-row lg:flex-col xl:flex-row items-start sm:items-center lg:items-end xl:items-center justify-between lg:justify-end gap-3">
-            {/* Status badges */}
             <div className="flex items-center gap-2">
               <span
                 className={`${
@@ -174,54 +206,43 @@ export const ValidatorCard: React.FC<ValidatorCardProps> = ({
               ></span>
             </div>
 
-            {/* Action buttons */}
             {validator.status !== "Unstaking" && (
               <div className="flex items-center gap-2">
-                <button
-                  className={`p-2 border border-border/60 rounded-lg transition-colors ${
-                    validator.delegate && validator.status === "Staked"
-                      ? "opacity-40 cursor-not-allowed"
-                      : "hover:bg-accent group hover:border-primary/40"
-                  }`}
-                  onClick={validator.delegate && validator.status === "Staked" ? undefined : handlePauseUnpause}
-                  title={
-                    validator.delegate && validator.status === "Staked"
-                      ? "Delegate validators cannot be paused"
-                      : validator.status === "Staked"
-                        ? "Pause Validator"
-                        : "Unpause Validator"
-                  }
-                  disabled={validator.delegate && validator.status === "Staked"}
-                >
-                    {
-                        validator.status === 'Paused' ?
-                        (<Play className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>) :
-                        (<Pause className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>)
+                {!validator.delegate && (
+                  <button
+                    className="p-2 border border-border/60 rounded-lg transition-colors flex items-center gap-1.5 hover:bg-accent group hover:border-primary/40"
+                    onClick={handlePauseUnpause}
+                    title={validator.status === "Staked" ? "Pause Validator" : "Unpause Validator"}
+                  >
+                    {validator.status === 'Paused' ?
+                      (<Play className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>) :
+                      (<Pause className={"w-4 h-4 text-foreground text-sm group-hover:text-primary"}/>)
                     }
-
-                </button>
+                    <span className="text-xs text-muted-foreground group-hover:text-primary hidden sm:inline">
+                      {validator.status === 'Paused' ? 'Resume' : 'Pause'}
+                    </span>
+                  </button>
+                )}
                 <button
-                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors"
+                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors flex items-center gap-1.5"
                   onClick={handleEditStake}
                   title="Edit Stake"
                 >
-                  <Pen
-                    className={
-                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
-                    }
-                  />
+                  <Pen className="w-4 h-4 text-foreground text-sm group-hover:text-primary" />
+                  <span className="text-xs text-muted-foreground group-hover:text-primary hidden sm:inline">
+                    Edit
+                  </span>
                 </button>
 
                 <button
-                  className="p-2 hover:bg-accent group hover:border-red-400/40 border border-border/60 rounded-lg transition-colors"
+                  className="p-2 hover:bg-accent group hover:border-primary/40 border border-border/60 rounded-lg transition-colors flex items-center gap-1.5"
                   onClick={handleUnstake}
                   title="Unstake Validator"
                 >
-                  <LockOpen
-                    className={
-                      "w-4 h-4 text-foreground text-sm group-hover:text-primary"
-                    }
-                  />
+                  <LockOpen className="w-4 h-4 text-foreground text-sm group-hover:text-primary" />
+                  <span className="text-xs text-muted-foreground group-hover:text-primary hidden sm:inline">
+                    Unstake
+                  </span>
                 </button>
               </div>
             )}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy } from "lucide-react";
+import { Copy, Globe } from "lucide-react";
 
 interface NodeStatusProps {
   nodeStatus: {
@@ -58,9 +58,9 @@ export default function NodeStatus({
             <p className="text-sm font-semibold text-foreground">
               {currentNode?.name || "Current Node"}
             </p>
-            {currentNode?.netAddress && (
-              <p className="text-xs text-muted-foreground mt-0.5">{currentNode.netAddress}</p>
-            )}
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {truncate(nodeStatus.nodeAddress)}
+            </p>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export default function NodeStatus({
 
       {/* Status bar */}
       <div
-        className="grid grid-cols-4 gap-4 rounded-xl border border-border/60 p-4 mb-6"
+        className="grid grid-cols-2 md:grid-cols-5 gap-4 rounded-xl border border-border/60 p-4 mb-6"
         style={{ background: "hsl(var(--card))" }}
       >
         {/* Sync */}
@@ -89,7 +89,7 @@ export default function NodeStatus({
         {/* Block height */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Block Height</span>
-          <span className="text-sm font-semibold text-foreground font-mono">
+          <span className="text-sm font-semibold text-foreground">
             #{nodeStatus.blockHeight.toLocaleString()}
           </span>
         </div>
@@ -106,11 +106,22 @@ export default function NodeStatus({
           <span className="text-xs text-muted-foreground">{nodeStatus.syncProgress}%</span>
         </div>
 
-        {/* Address */}
+        {/* Node Address */}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">Node Address</span>
-          <span className="text-sm font-mono text-foreground">
+          <span className="text-sm text-foreground">
             {truncate(nodeStatus.nodeAddress)}
+          </span>
+        </div>
+
+        {/* Net Address */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <Globe className="w-3 h-3" />
+            Net Address
+          </span>
+          <span className="text-sm text-foreground break-all">
+            {currentNode?.netAddress || "N/A"}
           </span>
         </div>
       </div>

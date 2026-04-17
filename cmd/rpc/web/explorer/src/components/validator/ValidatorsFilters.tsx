@@ -70,8 +70,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         return validator.activityScore === 'Unstaking'
                     case 'delegate':
                         return validator.activityScore === 'Delegate'
-                    case 'inactive':
-                        return validator.activityScore === 'Inactive'
                     default:
                         return true
                 }
@@ -125,8 +123,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                         return validator.activityScore === 'Unstaking'
                     case 'delegate':
                         return validator.activityScore === 'Delegate'
-                    case 'inactive':
-                        return validator.activityScore === 'Inactive'
                     default:
                         return true
                 }
@@ -261,7 +257,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             <option value="paused">Paused</option>
                             <option value="unstaking">Unstaking</option>
                             <option value="delegate">Delegate</option>
-                            <option value="inactive">Inactive</option>
                         </select>
                     </div>
                     <div className="relative">
@@ -276,7 +271,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             <option value="weight">Sort by Weight</option>
                             <option value="power">Sort by Power</option>
                             <option value="name">Sort by Name</option>
-                            <option value="rank">Sort by Rank</option>
                         </select>
                     </div>
                     {/* Middle - Min Stake Slider */}
@@ -310,7 +304,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     <button
                         type="button"
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-600/50 transition-colors"
+                        className="flex items-center gap-2 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/8 transition-colors"
                     >
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}

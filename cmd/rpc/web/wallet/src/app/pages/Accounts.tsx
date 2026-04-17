@@ -1,18 +1,12 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeftRight,
-  Box,
-  Layers,
-  Lock,
+  Copy,
   Search,
   Send,
   Scan,
-  Shield,
-  Wallet,
   TrendingUp,
   TrendingDown,
-  Users,
   Droplets,
   Percent,
 } from "lucide-react";
@@ -22,7 +16,9 @@ import { useStakedBalanceHistory } from "@/hooks/useStakedBalanceHistory";
 import { useActionModal } from "@/app/providers/ActionModalProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useConfig } from "@/app/providers/ConfigProvider";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import AnimatedNumber from "@/components/ui/AnimatedNumber";
+import { getCanopySymbol } from "@/lib/utils/canopySymbols";
 
 export const Accounts = () => {
   const {
@@ -44,6 +40,7 @@ export const Accounts = () => {
     useStakedBalanceHistory();
   const { openAction } = useActionModal();
   const { chain } = useConfig();
+  const { copyToClipboard } = useCopyToClipboard();
 
   const symbol   = chain?.denom?.symbol   || "CNPY";
   const decimals = chain?.denom?.decimals ?? 6;
@@ -70,16 +67,7 @@ export const Accounts = () => {
   const fmtAddress = (addr: string) =>
     `${addr.slice(0, 5)}…${addr.slice(-6)}`;
 
-  const getAccountIcon = (index: number) => {
-    const icons = [
-      { icon: Wallet,          bg: "bg-gradient-to-br from-primary/80 to-primary/40"       },
-      { icon: Layers,          bg: "bg-gradient-to-br from-blue-500/80 to-blue-500/40"      },
-      { icon: ArrowLeftRight,  bg: "bg-gradient-to-br from-purple-500/80 to-purple-500/40"  },
-      { icon: Shield,          bg: "bg-gradient-to-br from-green-500/80 to-green-500/40"    },
-      { icon: Box,             bg: "bg-gradient-to-br from-red-500/80 to-red-500/40"        },
-    ];
-    return icons[index % icons.length];
-  };
+  const getAccountSymbol = (index: number) => getCanopySymbol(index);
 
   const getRealTotal = (address: string) => {
     const liquid = balances.find(b => b.address === address)?.amount ?? 0;
@@ -94,31 +82,36 @@ export const Accounts = () => {
       : { label: "Liquid",  cls: "bg-muted/40 text-muted-foreground border border-border/60"    };
   };
 
-  const processedAddresses = accounts.map((account, index) => {
-    const { liquid, staked, total } = getRealTotal(account.address);
-    const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
-    const { icon, bg } = getAccountIcon(index);
-    return {
-      id:               account.address,
-      fullAddress:      account.address,
-      address:          fmtAddress(account.address),
-      nickname:         account.nickname || fmtAddress(account.address),
-      total,
-      liquid,
-      staked,
-      stakedPct:        total > 0 ? (staked / total) * 100 : 0,
-      liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
-      statusLabel,
-      statusCls,
-      icon,
-      iconBg: bg,
-    };
-  });
+  const processedAddresses = accounts
+    .map((account, index) => {
+      const { liquid, staked, total } = getRealTotal(account.address);
+      const { label: statusLabel, cls: statusCls } = getStatusInfo(account.address);
+      const symbolSrc = getAccountSymbol(index);
+      return {
+        id:               account.address,
+        fullAddress:      account.address,
+        address:          fmtAddress(account.address),
+        nickname:         account.nickname || fmtAddress(account.address),
+        publicKey:        account.publicKey || "",
+        total,
+        liquid,
+        staked,
+        stakedPct:        total > 0 ? (staked / total) * 100 : 0,
+        liquidPct:        total > 0 ? (liquid / total) * 100 : 0,
+        statusLabel,
+        statusCls,
+        symbolSrc,
+      };
+    })
+    .sort((a, b) => a.nickname.localeCompare(b.nickname));
 
-  const filteredAddresses = processedAddresses.filter(addr =>
-    addr.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    addr.nickname.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredAddresses = processedAddresses.filter(addr => {
+    const term = searchTerm.toLowerCase();
+    return addr.address.toLowerCase().includes(term) ||
+      addr.nickname.toLowerCase().includes(term) ||
+      addr.fullAddress.toLowerCase().includes(term) ||
+      addr.publicKey.toLowerCase().includes(term);
+  });
 
   const handleSendAction = (address: string) => {
     const account = accounts.find(a => a.address === address);
@@ -162,10 +155,10 @@ export const Accounts = () => {
     if (loading) return <div className="h-4 w-20 rounded skeleton" />;
     const pos = pct >= 0;
     return (
-      <span className={`flex items-center gap-1 text-xs font-mono font-medium ${pos ? "text-primary" : "text-destructive"}`}>
+      <span className={`flex items-center gap-1 text-xs font-medium ${pos ? "text-primary" : "text-destructive"}`}>
         {pos ? <TrendingUp style={{ width: 11, height: 11 }} /> : <TrendingDown style={{ width: 11, height: 11 }} />}
         {pos ? "+" : ""}{pct.toFixed(2)}%
-        <span className="text-muted-foreground font-body font-normal">{label}</span>
+        <span className="text-muted-foreground font-normal">{label}</span>
       </span>
     );
   };
@@ -180,10 +173,10 @@ export const Accounts = () => {
       {/* ── Page header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             Accounts
           </h1>
-          <p className="font-body text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5">
             {accounts.length} address{accounts.length !== 1 ? "es" : ""} across your keystore
           </p>
         </div>
@@ -196,7 +189,7 @@ export const Accounts = () => {
             placeholder="Search addresses…"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm font-body text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
+            className="h-9 w-72 rounded-lg border border-border/60 bg-secondary/80 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-colors"
           />
         </div>
       </div>
@@ -213,27 +206,24 @@ export const Accounts = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                <Wallet className="text-primary" style={{ width: 13, height: 13 }} />
-              </div>
-              <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-sm font-medium text-muted-foreground">
                 Total Balance
               </span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               <AnimatedNumber value={totalBalance / divisor} format={{ notation: "standard", maximumFractionDigits: 2 }} />
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">{symbol}</span>
+            <span className="text-sm text-muted-foreground/50">{symbol}</span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <ChangePill loading={balanceHistoryLoading} pct={balanceChangePercentage} />
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Droplets style={{ width: 11, height: 11 }} className="text-blue-400/70" />
-              <span className="font-mono text-foreground/70">{fmt(totalLiquid)}</span>
+              <span className="text-foreground/70">{fmt(totalLiquid)}</span>
               <span className="text-muted-foreground/50">liquid</span>
             </div>
           </div>
@@ -248,27 +238,24 @@ export const Accounts = () => {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                <Lock className="text-primary" style={{ width: 13, height: 13 }} />
-              </div>
-              <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              <span className="text-sm font-medium text-muted-foreground">
                 Total Staked
               </span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               <AnimatedNumber value={totalStaked / divisor} format={{ notation: "standard", maximumFractionDigits: 2 }} />
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">{symbol}</span>
+            <span className="text-sm text-muted-foreground/50">{symbol}</span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
             <ChangePill loading={stakedHistoryLoading} pct={stakedChangePercentage} />
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Percent style={{ width: 11, height: 11 }} className="text-primary/60" />
-              <span className="font-mono text-foreground/70">{stakingRate.toFixed(1)}%</span>
+              <span className="text-foreground/70">{stakingRate.toFixed(1)}%</span>
               <span className="text-muted-foreground/50">of total</span>
             </div>
           </div>
@@ -282,32 +269,29 @@ export const Accounts = () => {
           transition={{ duration: 0.3, delay: 0.12 }}
         >
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-              <Users className="text-primary" style={{ width: 13, height: 13 }} />
-            </div>
-            <span className="font-display text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            <span className="text-sm font-medium text-muted-foreground">
               Portfolio
             </span>
           </div>
 
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
+            <span className="text-[1.9rem] font-semibold text-foreground tabular-nums leading-none">
               {accounts.length}
             </span>
-            <span className="font-mono text-sm text-muted-foreground/50">
+            <span className="text-sm text-muted-foreground/50">
               address{accounts.length !== 1 ? "es" : ""}
             </span>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70 flex-shrink-0" />
-              <span className="font-mono text-foreground/70">{stakingCount}</span>
+              <span className="text-foreground/70">{stakingCount}</span>
               <span className="text-muted-foreground/50">staking</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-body text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
-              <span className="font-mono text-foreground/70">{liquidCount}</span>
+              <span className="text-foreground/70">{liquidCount}</span>
               <span className="text-muted-foreground/50">liquid only</span>
             </div>
           </div>
@@ -323,7 +307,7 @@ export const Accounts = () => {
       >
         {/* Table header */}
         <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between">
-          <h2 className="font-display text-sm font-semibold text-foreground tracking-tight">
+          <h2 className="text-sm font-semibold text-foreground tracking-tight">
             Address Portfolio
           </h2>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20">
@@ -331,26 +315,26 @@ export const Accounts = () => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
             </span>
-            <span className="font-mono text-[10px] font-semibold text-primary">Live</span>
+            <span className="text-[10px] font-semibold text-primary">Live</span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b border-border/40">
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Address</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Staked</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Liquid</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Status</th>
-                <th className="px-5 py-3 text-left font-display text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Actions</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Address</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Total</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Staked</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Liquid</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredAddresses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center font-body text-sm text-muted-foreground">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
                     No addresses found
                   </td>
                 </tr>
@@ -358,7 +342,7 @@ export const Accounts = () => {
                 filteredAddresses.map((addr, index) => (
                   <motion.tr
                     key={addr.id}
-                    className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors"
+                    className="border-b border-border/40 last:border-0 bg-[#0F0F0F] hover:bg-muted/20 transition-colors"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.18 + index * 0.04 }}
@@ -366,15 +350,21 @@ export const Accounts = () => {
                     {/* Address */}
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 ${addr.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                          <addr.icon className="text-white/90 w-3.5 h-3.5" />
-                        </div>
+                        <img src={addr.symbolSrc} alt="" className="w-8 h-8 rounded-lg object-contain flex-shrink-0" />
                         <div>
-                          <div className="font-body text-sm font-medium text-foreground leading-tight">
+                          <div className="text-sm font-medium text-foreground leading-tight">
                             {addr.nickname}
                           </div>
-                          <div className="font-mono text-[11px] text-muted-foreground leading-tight mt-0.5">
-                            {addr.address}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[11px] text-muted-foreground leading-tight">
+                              {addr.address}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(addr.fullAddress, "Address")}
+                              className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                            >
+                              <Copy style={{ width: 10, height: 10 }} />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -382,18 +372,18 @@ export const Accounts = () => {
 
                     {/* Total */}
                     <td className="px-5 py-3.5">
-                      <span className="font-mono text-sm text-foreground tabular-nums">
+                      <span className="text-sm text-foreground tabular-nums">
                         {fmt(addr.total)}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                      <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
                     </td>
 
                     {/* Staked */}
                     <td className="px-5 py-3.5">
                       <div>
-                        <span className="font-mono text-sm text-foreground tabular-nums">{fmt(addr.staked)}</span>
-                        <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
-                        <div className="font-mono text-[11px] text-muted-foreground/60 mt-0.5">
+                        <span className="text-sm text-foreground tabular-nums">{fmt(addr.staked)}</span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        <div className="text-[11px] text-muted-foreground/60 mt-0.5">
                           {addr.stakedPct.toFixed(1)}%
                         </div>
                       </div>
@@ -402,9 +392,9 @@ export const Accounts = () => {
                     {/* Liquid */}
                     <td className="px-5 py-3.5">
                       <div>
-                        <span className="font-mono text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
-                        <span className="font-mono text-xs text-muted-foreground/50 ml-1">{symbol}</span>
-                        <div className="font-mono text-[11px] text-muted-foreground/60 mt-0.5">
+                        <span className="text-sm text-foreground tabular-nums">{fmt(addr.liquid)}</span>
+                        <span className="text-xs text-muted-foreground/50 ml-1">{symbol}</span>
+                        <div className="text-[11px] text-muted-foreground/60 mt-0.5">
                           {addr.liquidPct.toFixed(1)}%
                         </div>
                       </div>
@@ -412,7 +402,7 @@ export const Accounts = () => {
 
                     {/* Status */}
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-medium ${addr.statusCls}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${addr.statusCls}`}>
                         {addr.statusLabel}
                       </span>
                     </td>

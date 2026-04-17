@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDSFetcher } from "@/core/dsFetch";
 import { useConfig } from "@/app/providers/ConfigProvider";
 import { useAccounts } from "@/app/providers/AccountsProvider";
+import { useDenom } from "@/hooks/useDenom";
 import { AlertModal } from "./AlertModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,11 +33,13 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
 }) => {
   const { accounts } = useAccounts();
   const { chain } = useConfig();
+  const { symbol, factor } = useDenom();
+  const defaultFee = chain?.fees?.buckets?.avg?.default ? 0.01 : 0.01;
   const [formData, setFormData] = useState({
     account: validatorNickname || accounts[0]?.nickname || "",
     signer: validatorNickname || accounts[0]?.nickname || "",
     memo: "",
-    fee: 0.01,
+    fee: defaultFee,
     password: "",
   });
 
@@ -157,7 +160,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
         return;
       }
 
-      const feeInMicroUnits = formData.fee * 1000000; // Convert to micro-units
+      const feeInMicroUnits = Math.floor(formData.fee * factor);
 
       // Process each selected validator
       const promises = selectedValidators.map(async (validatorAddr) => {
@@ -211,7 +214,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
           account: validatorNickname || accounts[0]?.nickname || "",
           signer: validatorNickname || accounts[0]?.nickname || "",
           memo: "",
-          fee: 0.01,
+          fee: defaultFee,
           password: "",
         });
         setSelectedValidators([]);
@@ -341,7 +344,7 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                           <span className="text-sm text-foreground">
                             {displayName}
                           </span>
-                          <span className="text-xs text-muted-foreground font-mono">
+                          <span className="text-xs text-muted-foreground">
                             ({validator.address.substring(0, 8)}...
                             {validator.address.substring(
                               validator.address.length - 4,
@@ -441,12 +444,12 @@ export const PauseUnpauseModal: React.FC<PauseUnpauseModalProps> = ({
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     <span className="text-xs text-muted-foreground font-medium">
-                      CNPY
+                      {symbol}
                     </span>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Recommended: 0.01 CNPY
+                  Recommended: {defaultFee} {symbol}
                 </p>
               </div>
 

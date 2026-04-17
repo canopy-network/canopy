@@ -132,7 +132,7 @@ export default function RawJSON({
                         Loading...
                     </div>
                 ) : tabContentData ? (
-                    <pre className="text-foreground/80 text-xs font-mono whitespace-pre-wrap break-words">
+                    <pre className="text-foreground/80 text-xs whitespace-pre-wrap break-words">
                         {JSON.stringify(tabContentData, null, 2)}
                     </pre>
                 ) : (

@@ -79,7 +79,7 @@ const DetailRow = ({
     <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0">
       {label}
     </span>
-    <div className="text-sm text-foreground font-mono break-all text-right">
+    <div className="text-sm text-foreground break-all text-right">
       {children}
     </div>
   </div>
@@ -103,8 +103,8 @@ const CopyHash = ({ hash }: { hash: string }) => {
       className="inline-flex items-center gap-1.5 group"
       title="Copy full hash"
     >
-      <span className="font-mono text-sm text-foreground group-hover:text-primary transition-colors">
-        {hash.slice(0, 10)}...{hash.slice(-8)}
+      <span className="text-sm text-foreground group-hover:text-primary transition-colors">
+        {hash.slice(0, 14)}...{hash.slice(-12)}
       </span>
       {copied ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
@@ -210,19 +210,8 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">
                     Transaction Hash
                   </p>
-                  <div className="flex items-center justify-between gap-2 bg-background/60 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2 bg-background/60 rounded-lg px-3 py-2.5">
                     <CopyHash hash={tx.hash} />
-                    {explorerTxUrl && (
-                      <a
-                        href={`${explorerTxUrl}/${tx.hash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                        title="View on Explorer"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
                   </div>
                 </section>
 
@@ -277,7 +266,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
                   {tx.address && (
                     <DetailRow label="Account">
-                      <span className="font-mono text-xs">
+                      <span className="text-xs">
                         {tx.address.slice(0, 10)}...{tx.address.slice(-8)}
                       </span>
                     </DetailRow>
@@ -307,13 +296,13 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0">
                           Code
                         </span>
-                        <span className="text-sm text-red-400 font-mono">{tx.error.code}</span>
+                        <span className="text-sm text-red-400">{tx.error.code}</span>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider shrink-0">
                           Module
                         </span>
-                        <span className="text-sm text-foreground font-mono">{tx.error.module}</span>
+                        <span className="text-sm text-foreground">{tx.error.module}</span>
                       </div>
                       <div className="flex flex-col gap-1 pt-1 border-t border-red-500/20">
                         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">

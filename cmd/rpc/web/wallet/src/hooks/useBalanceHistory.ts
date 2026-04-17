@@ -1,13 +1,15 @@
+import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDSFetcher } from '@/core/dsFetch'
 import { useHistoryCalculation, HistoryResult } from './useHistoryCalculation'
-import {useAccounts} from "@/app/providers/AccountsProvider";
+import { useAccountsList } from "@/app/providers/AccountsProvider";
 
 export function useBalanceHistory() {
-    const { accounts, loading: accountsLoading } = useAccounts()
+    const { accounts, loading: accountsLoading } = useAccountsList()
     const addresses = accounts.map(a => a.address).filter(Boolean)
     const dsFetch = useDSFetcher()
     const { currentHeight, height24hAgo, calculateHistory, isReady } = useHistoryCalculation()
+    const lastGoodResultRef = useRef<HistoryResult | null>(null)
 
     return useQuery({
         queryKey: ['balanceHistory', addresses, currentHeight],
@@ -21,23 +23,57 @@ export function useBalanceHistory() {
                 return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 }
             }
 
-            // Fetch current and previous balances in parallel
-            const currentPromises = addresses.map(address =>
-                dsFetch<number>('accountByHeight', { address: address, height: currentHeight })
-            )
-            const previousPromises = addresses.map(address =>
-                dsFetch<number>('accountByHeight', { address, height: height24hAgo })
-            )
+            const fetchBalance = async (address: string, height: number): Promise<number> => {
+                try {
+                    const result = await dsFetch<number>('accountByHeight', { address, height })
+                    return typeof result === 'number' && Number.isFinite(result) ? result : 0
+                } catch {
+                    return 0
+                }
+            }
+
+            if (height24hAgo == null) {
+                return { current: 0, previous24h: 0, change24h: 0, changePercentage: 0, progressPercentage: 0 }
+            }
 
             const [currentBalances, previousBalances] = await Promise.all([
-                Promise.all(currentPromises),
-                Promise.all(previousPromises),
+                Promise.all(addresses.map(addr => fetchBalance(addr, currentHeight))),
+                Promise.all(addresses.map(addr => fetchBalance(addr, height24hAgo))),
             ])
 
-            const currentTotal  = currentBalances.reduce((sum: any, v: any) => sum + (v || 0), 0)
-            const previousTotal = previousBalances.reduce((sum: any, v: any) => sum + (v || 0), 0)
+            const currentTotal = currentBalances.reduce((sum, v) => sum + v, 0)
+            const previousTotal = previousBalances.reduce((sum, v) => sum + v, 0)
 
-            return calculateHistory(currentTotal, previousTotal)
+            if (currentTotal === 0 && previousTotal === 0) {
+                try {
+                    const liveBalances = await Promise.all(
+                        addresses.map(addr =>
+                            dsFetch<{ amount?: number }>('account', { account: { address: addr } })
+                                .then(r => (typeof r === 'number' ? r : Number(r?.amount ?? 0)))
+                                .catch(() => 0)
+                        )
+                    )
+                    const liveTotal = liveBalances.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0)
+                    if (liveTotal > 0) {
+                        const liveResult = calculateHistory(liveTotal, liveTotal)
+                        lastGoodResultRef.current = liveResult
+                        return liveResult
+                    }
+                } catch { /* fall through */ }
+            }
+
+            const result = calculateHistory(currentTotal, previousTotal)
+
+            if (result.current > 0) {
+                lastGoodResultRef.current = result
+                return result
+            }
+
+            if (lastGoodResultRef.current) {
+                return lastGoodResultRef.current
+            }
+
+            return result
         }
     })
 }

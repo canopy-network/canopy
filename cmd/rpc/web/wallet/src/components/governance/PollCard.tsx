@@ -63,7 +63,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                         </span>
                     )}
                 </div>
-                <span className="text-xs text-muted-foreground font-mono">
+                <span className="text-xs text-muted-foreground">
                     #{poll.hash.slice(0, 8)}...
                 </span>
             </div>
@@ -91,11 +91,11 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, onVote, onViewDetails 
                 {/* Combined Progress Bar */}
                 <div className="h-3 bg-accent rounded-full overflow-hidden mb-4 flex">
                     <div
-                        className="bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500"
+                        className="bg-primary transition-all duration-500"
                         style={{ width: `${poll.yesPercent}%` }}
                     />
                     <div
-                        className="bg-gradient-to-r from-red-400 to-red-500 transition-all duration-500"
+                        className="bg-red-500 transition-all duration-500"
                         style={{ width: `${poll.noPercent}%` }}
                     />
                 </div>

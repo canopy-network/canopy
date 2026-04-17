@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cx } from "@/ui/cx";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center cursor-pointer gap-2 whitespace-nowrap rounded-[10px] text-sm font-semibold font-body transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center cursor-pointer gap-2 whitespace-nowrap rounded-[10px] text-sm font-semibold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
@@ -22,7 +22,7 @@ const buttonVariants = cva(
         clear2: "bg-transparent hover:bg-accent/70 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         neomorphic:
-          "border border-white/15 bg-[linear-gradient(145deg,rgba(255,255,255,0.14),rgba(255,255,255,0.06))] text-white hover:border-primary/35",
+          "border border-white/10 bg-secondary text-foreground hover:border-white/15 hover:bg-secondary/90",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

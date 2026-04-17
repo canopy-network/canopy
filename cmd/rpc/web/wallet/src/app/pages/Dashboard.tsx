@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
 import { TotalBalanceCard }       from '@/components/dashboard/TotalBalanceCard';
 import { StakedBalanceCard }      from '@/components/dashboard/StakedBalanceCard';
-import { QuickActionsCard }       from '@/components/dashboard/QuickActionsCard';
 import { AllAddressesCard }       from '@/components/dashboard/AllAddressesCard';
 import { NodeManagementCard }     from '@/components/dashboard/NodeManagementCard';
 import { ErrorBoundary }          from '@/components/ErrorBoundary';
@@ -17,10 +16,8 @@ const item = {
 export const Dashboard = () => {
     const {
         manifestLoading,
-        manifest,
         isTxLoading,
         allTxs,
-        onRunAction,
         isActionModalOpen,
         setIsActionModalOpen,
         selectedActions,
@@ -30,7 +27,7 @@ export const Dashboard = () => {
     if (manifestLoading) {
         return (
             <div className="flex items-center justify-center py-20">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm font-body">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <span className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-70" />
                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
@@ -52,19 +49,19 @@ export const Dashboard = () => {
                 {/* Page heading */}
                 <motion.div variants={item} className="flex items-center justify-between mb-1">
                     <div>
-                        <h1 className="font-display text-xl font-bold text-foreground tracking-tight">
+                        <h1 className="text-xl font-bold text-foreground tracking-tight">
                             Dashboard
                         </h1>
-                        <p className="text-xs text-muted-foreground font-body mt-0.5">
-                            Wallet overview & node management
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            All wallets overview & node management
                         </p>
                     </div>
                 </motion.div>
 
-                {/* ── Row 1: Balance + Staked + Quick Actions ── */}
+                {/* ── Row 1: Balance + Staked ── */}
                 <motion.div
                     variants={item}
-                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <ErrorBoundary>
                         <TotalBalanceCard />
@@ -72,14 +69,16 @@ export const Dashboard = () => {
                     <ErrorBoundary>
                         <StakedBalanceCard />
                     </ErrorBoundary>
-                    <div className="md:col-span-2 xl:col-span-1">
-                        <ErrorBoundary>
-                            <QuickActionsCard onRunAction={onRunAction} actions={manifest?.actions} />
-                        </ErrorBoundary>
-                    </div>
                 </motion.div>
 
-                {/* ── Row 2: Transactions + Addresses ── */}
+                {/* ── Row 2: Node Management ── */}
+                <motion.div variants={item} className="w-full">
+                    <ErrorBoundary>
+                        <NodeManagementCard />
+                    </ErrorBoundary>
+                </motion.div>
+
+                {/* ── Row 3: Transactions + Addresses ── */}
                 <motion.div
                     variants={item}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-4"
@@ -94,13 +93,6 @@ export const Dashboard = () => {
                             <AllAddressesCard />
                         </ErrorBoundary>
                     </div>
-                </motion.div>
-
-                {/* ── Row 3: Node Management ── */}
-                <motion.div variants={item} className="w-full">
-                    <ErrorBoundary>
-                        <NodeManagementCard />
-                    </ErrorBoundary>
                 </motion.div>
             </motion.div>
 

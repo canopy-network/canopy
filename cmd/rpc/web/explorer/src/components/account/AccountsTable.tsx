@@ -22,7 +22,6 @@ interface AccountsTableProps {
     onEntriesPerPageChange?: (value: number) => void
     showExportButton?: boolean
     onExportButtonClick?: () => void
-    stakingTypeMap?: Map<string, 'validator' | 'delegator' | 'unstaked'>
 }
 
 const AccountsTable: React.FC<AccountsTableProps> = ({
@@ -31,14 +30,12 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
     totalCount = 0,
     currentPage = 1,
     onPageChange,
-    // Destructure the new props
     showEntriesSelector = false,
     entriesPerPageOptions = [10, 25, 50, 100],
     currentEntriesPerPage = 10,
     onEntriesPerPageChange,
     showExportButton = false,
     onExportButtonClick,
-    stakingTypeMap
 }) => {
     const navigate = useNavigate()
     const truncateLong = (s: string, start: number = 10, end: number = 8) => {
@@ -47,17 +44,8 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
     }
 
 
-    // Get staking type for an account
-    const getStakingType = (address: string): 'validator' | 'delegator' | 'unstaked' | null => {
-        if (!stakingTypeMap) return null
-        return stakingTypeMap.get(address.toLowerCase()) || null
-    }
-
     const rows = accounts.length > 0 ? accounts.map((account) => {
-        const stakingType = getStakingType(account.address)
-
         return [
-            // Address
             <span
                 className="text-primary cursor-pointer hover:underline font-mono text-sm"
                 onClick={() => navigate(`/account/${account.address}`)}
@@ -66,26 +54,16 @@ const AccountsTable: React.FC<AccountsTableProps> = ({
                 {truncateLong(account.address, 16, 12)}
             </span>,
 
-            // Amount
             <span className="text-white font-medium">
                 <AnimatedNumber value={account.amount} format={{ maximumFractionDigits: 4 }} className="text-white" />
                 <span className="text-gray-400 ml-1">CNPY</span>
             </span>,
-
-            // Staking Type
-            <span className="text-gray-300 text-sm">
-                {stakingType === 'validator' && <span className="text-green-400">Validator</span>}
-                {stakingType === 'delegator' && <span className="text-blue-400">Delegator</span>}
-                {stakingType === 'unstaked' && <span className="text-orange-400">Unstaked</span>}
-                {!stakingType && <span className="text-gray-500">—</span>}
-            </span>
         ]
     }) : []
 
     const columns = [
-        { label: accountsTexts.table.headers.address, width: 'w-[30%]' },
-        { label: accountsTexts.table.headers.balance, width: 'w-[25%]' },
-        { label: 'Staking', width: 'w-[20%]' }
+        { label: accountsTexts.table.headers.address, width: 'w-[40%]' },
+        { label: accountsTexts.table.headers.balance, width: 'w-[35%]' },
     ]
 
     // Show message when no data

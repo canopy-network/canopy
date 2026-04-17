@@ -77,15 +77,12 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
 
                     {/* Modal */}
                     <motion.div
-                        className="relative w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-gradient-to-b from-bg-secondary to-bg-primary border border-border/50 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                        className="relative w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-card border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         transition={{ duration: 0.2, ease: 'easeOut' }}
                     >
-                        {/* Header accent */}
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
-
                         {/* Close button */}
                         <button
                             onClick={onClose}
@@ -97,11 +94,8 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                         <div className="p-4 pt-7 sm:p-6 sm:pt-8 overflow-y-auto min-h-0">
                             {/* Icon */}
                             <div className="flex justify-center mb-5">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl" />
-                                    <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/30 flex items-center justify-center">
-                                        <Shield className="w-8 h-8 text-primary" />
-                                    </div>
+                                <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-white/10">
+                                    <Shield className="h-8 w-8 text-white" />
                                 </div>
                             </div>
 
@@ -137,7 +131,7 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                             placeholder:text-muted-foreground
                                             ${err
                                                 ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
-                                                : 'border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/20'
+                                                : 'border-border/50 focus:border-white/30 focus:ring-2 focus:ring-white/10'
                                             }
                                         `}
                                         disabled={isSubmitting}
@@ -187,14 +181,13 @@ export default function UnlockModal({ open, onClose, onUnlock }: UnlockModalProp
                                     onClick={submit}
                                     disabled={isSubmitting || !pwd}
                                     className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                                        bg-gradient-to-r from-primary to-primary/80 text-bg-primary font-semibold
-                                        hover:from-primary/90 hover:to-primary/70 transition-all duration-200
-                                        disabled:opacity-50 disabled:cursor-not-allowed
-                                        shadow-lg shadow-primary/20"
+                                        bg-zinc-500 text-white font-semibold
+                                        hover:bg-zinc-400 hover:text-white transition-all duration-200
+                                        disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isSubmitting ? (
                                         <motion.div
-                                            className="w-5 h-5 border-2 border-bg-primary/30 border-t-bg-primary rounded-full"
+                                            className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
                                             animate={{ rotate: 360 }}
                                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                                         />

@@ -50,7 +50,7 @@ export const KeyManagement = (): JSX.Element => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 md:p-6"
+                    className="rounded-2xl border border-white/10 bg-card p-5 md:p-6"
                 >
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
                         <div>
@@ -87,7 +87,7 @@ export const KeyManagement = (): JSX.Element => {
                 </motion.div>
 
                 <motion.div
-                    className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+                    className="grid grid-cols-1 gap-6"
                     variants={containerVariants}
                     initial="hidden"
                     animate="visible"

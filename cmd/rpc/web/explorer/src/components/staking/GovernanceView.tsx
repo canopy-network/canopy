@@ -353,7 +353,7 @@ const GovernanceView: React.FC = () => {
                         return (
                             <motion.div
                                 key={card.title}
-                                className="bg-card rounded-lg p-6 border border-gray-800/50 relative"
+                                className="bg-card rounded-lg p-6 border border-white/8 relative"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3, delay: 0.1 + (index * 0.1) }}

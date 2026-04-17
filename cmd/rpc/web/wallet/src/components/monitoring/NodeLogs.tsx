@@ -131,7 +131,7 @@ export default function NodeLogs({
             </div>
             <div
                 ref={containerRef}
-                className="bg-background rounded-lg text-muted-foreground p-4 max-h-[41rem] overflow-y-auto font-mono text-xs"
+                className="bg-background rounded-lg text-muted-foreground p-4 max-h-[41rem] overflow-y-auto text-xs"
             >
                 {visibleLogs.length > 0 ? (
                     visibleLogs.map((log, index) => (

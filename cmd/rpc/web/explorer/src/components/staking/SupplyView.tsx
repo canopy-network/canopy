@@ -43,44 +43,28 @@ const SupplyView: React.FC = () => {
             value: stakedSupplyCNPY,
             suffix: ' CNPY',
             icon: 'fa-solid fa-coins',
-            color: 'text-white',
-            bgColor: 'bg-card',
-            description: 'delta',
-            delta: '+2.09M',
-            deltaColor: 'text-primary'
+            iconColor: 'text-primary',
         },
         {
             title: 'Total Supply',
             value: totalSupplyCNPY,
             suffix: ' CNPY',
             icon: 'fa-solid fa-coins',
-            color: 'text-white',
-            bgColor: 'bg-card',
-            description: 'circulating',
-            delta: '+1.2M',
-            deltaColor: 'text-blue-400'
+            iconColor: 'text-blue-400',
         },
         {
             title: 'Liquid Supply',
             value: liquidSupplyCNPY,
             suffix: ' CNPY',
             icon: 'fa-solid fa-water',
-            color: 'text-white',
-            bgColor: 'bg-card',
-            description: 'available',
-            delta: '-0.5M',
-            deltaColor: 'text-red-400'
+            iconColor: 'text-red-400',
         },
         {
             title: 'Staking Ratio',
             value: stakingRatio,
             suffix: '%',
             icon: 'fa-solid fa-percentage',
-            color: 'text-white',
-            bgColor: 'bg-card',
-            description: 'ratio',
-            delta: '+5.2%',
-            deltaColor: 'text-primary'
+            iconColor: 'text-primary',
         }
     ]
 
@@ -105,14 +89,14 @@ const SupplyView: React.FC = () => {
                 {supplyMetrics.map((metric, index) => (
                     <motion.div
                         key={metric.title}
-                        className="bg-card rounded-lg p-6 border border-gray-800/50 relative"
+                        className="bg-card rounded-lg p-6 border border-white/8 relative"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                     >
                         {/* Icon in top-right */}
                         <div className="absolute top-4 right-4">
-                            <i className={`${metric.icon} ${metric.deltaColor} text-xl`}></i>
+                            <i className={`${metric.icon} ${metric.iconColor} text-xl`}></i>
                         </div>
                         
                         {/* Title */}
@@ -121,7 +105,7 @@ const SupplyView: React.FC = () => {
                         </div>
                         
                         {/* Main Value */}
-                        <div className="mb-2">
+                        <div>
                             <div className="text-3xl font-bold text-white">
                                 <AnimatedNumber
                                     value={metric.value}
@@ -134,23 +118,13 @@ const SupplyView: React.FC = () => {
                                 <span className="text-lg">{metric.suffix}</span>
                             </div>
                         </div>
-                        
-                        {/* Delta and Description */}
-                        <div className="flex items-center gap-2">
-                            <span className={`text-sm font-medium ${metric.deltaColor}`}>
-                                {metric.delta}
-                            </span>
-                            <span className="text-gray-400 text-sm">
-                                {metric.description}
-                            </span>
-                        </div>
                     </motion.div>
                 ))}
             </div>
 
             {/* Supply Distribution Chart */}
             <motion.div
-                className="bg-card rounded-lg p-6 border border-gray-800/50 mb-8"
+                className="bg-card rounded-lg p-6 border border-white/8 mb-8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
@@ -161,11 +135,11 @@ const SupplyView: React.FC = () => {
                     <div>
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-sm text-gray-400">Staked Supply</span>
-                            <span className="text-sm text-green-400 font-medium">
+                            <span className="text-sm text-primary font-medium">
                                 {stakingRatio.toFixed(2)}%
                             </span>
                         </div>
-                        <div className="w-full bg-gray-700 rounded-full h-3">
+                        <div className="w-full bg-white/10 rounded-full h-3">
                             <motion.div
                                 className="bg-green-500 h-3 rounded-full"
                                 initial={{ width: 0 }}
@@ -183,7 +157,7 @@ const SupplyView: React.FC = () => {
                                 {(100 - stakingRatio).toFixed(2)}%
                             </span>
                         </div>
-                        <div className="w-full bg-gray-700 rounded-full h-3">
+                        <div className="w-full bg-white/10 rounded-full h-3">
                             <motion.div
                                 className="bg-blue-500 h-3 rounded-full"
                                 initial={{ width: 0 }}
@@ -197,12 +171,11 @@ const SupplyView: React.FC = () => {
 
             {/* Supply Statistics */}
             <motion.div
-                className="grid grid-cols-1 md:grid-cols-2 gap-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.5 }}
             >
-                <div className="bg-card rounded-lg p-6 border border-gray-800/50">
+                <div className="bg-card rounded-lg p-6 border border-white/8">
                     <h3 className="text-lg font-semibold text-white mb-4">Supply Statistics</h3>
                     <div className="space-y-3">
                         <div className="flex justify-between items-center">
@@ -217,11 +190,11 @@ const SupplyView: React.FC = () => {
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-gray-400">Staked Amount</span>
-                            <span className="text-green-400 font-medium">
+                            <span className="text-primary font-medium">
                                 <AnimatedNumber
                                     value={stakedSupplyCNPY}
                                     format={{ maximumFractionDigits: 0 }}
-                                    className="text-green-400"
+                                    className="text-primary"
                                 /> CNPY
                             </span>
                         </div>
@@ -233,34 +206,6 @@ const SupplyView: React.FC = () => {
                                     format={{ maximumFractionDigits: 0 }}
                                     className="text-blue-400"
                                 /> CNPY
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-card rounded-lg p-6 border border-gray-800/50">
-                    <h3 className="text-lg font-semibold text-white mb-4">Staking Information</h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-400">Staking Ratio</span>
-                            <span className="text-purple-400 font-medium">
-                                <AnimatedNumber
-                                    value={stakingRatio}
-                                    format={{ maximumFractionDigits: 2 }}
-                                    className="text-purple-400"
-                                />%
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-400">Staking Status</span>
-                            <span className="text-green-400 font-medium">
-                                {stakingRatio > 50 ? 'High' : stakingRatio > 25 ? 'Medium' : 'Low'}
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-400">Network Health</span>
-                            <span className="text-primary font-medium">
-                                {stakingRatio > 60 ? 'Excellent' : stakingRatio > 40 ? 'Good' : 'Fair'}
                             </span>
                         </div>
                     </div>

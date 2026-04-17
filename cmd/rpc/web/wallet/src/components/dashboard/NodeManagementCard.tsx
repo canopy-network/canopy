@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Play, Pause, Workflow } from 'lucide-react';
+import { Copy, Play, Pause } from 'lucide-react';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
@@ -11,15 +11,10 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDS } from '@/core/useDs';
+import { getCanopySymbol } from '@/lib/utils/canopySymbols';
+import { useDenom } from '@/hooks/useDenom';
 
 const shortAddr = (address: string) => `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
-
-const NODE_ACCENT_COLORS = [
-    'from-primary/60 to-primary/30',
-    'from-orange-500/60 to-orange-500/30',
-    'from-blue-500/60 to-blue-500/30',
-    'from-rose-500/60 to-rose-500/30',
-];
 
 interface ProcessedNode {
     address: string;
@@ -46,20 +41,20 @@ const ValidatorRow = React.memo<{
 
     return (
         <motion.tr
-            className="group border-b border-border/40 last:border-0"
+            className="group border-b border-border/40 last:border-0 bg-[#0F0F0F]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
             <td className="py-3 pr-4">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
-                        <div className="text-base font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-sm font-mono text-muted-foreground/60">
+                            <span className="text-sm text-muted-foreground/60">
                                 {shortAddr(node.originalValidator.address)}
                             </span>
                             <button
@@ -74,13 +69,13 @@ const ValidatorRow = React.memo<{
                 </div>
             </td>
             <td className="py-3 pr-4">
-                <span className="text-base font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
+                <span className="text-base text-foreground tabular-nums">{node.stakeAmount}</span>
             </td>
             <td className="py-3 pr-4">
                 <StatusBadge label={node.status} size="sm" />
             </td>
             <td className="py-3 pr-4">
-                <span className={`text-sm font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
+                <span className={`text-sm font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
             </td>
             <td className="py-3">
                 {hasActions && (
@@ -112,20 +107,20 @@ const ValidatorMobileCard = React.memo<{
 
     return (
         <motion.div
-            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-background/30"
+            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-[#0F0F0F]"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
-                        <div className="text-base font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
                         <div className="flex items-center gap-1">
-                            <span className="text-sm font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</span>
+                            <span className="text-sm text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</span>
                             <button
                                 onClick={() => copyToClipboard(node.originalValidator.address, "Address")}
                                 className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
@@ -147,16 +142,16 @@ const ValidatorMobileCard = React.memo<{
             </div>
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
-                    <div className="text-sm font-mono text-foreground">{node.stakeAmount}</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Stake</div>
+                    <div className="text-sm text-foreground">{node.stakeAmount}</div>
                 </div>
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Status</div>
                     <StatusBadge label={node.status} size="sm" />
                 </div>
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
-                    <div className={`text-sm font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Rewards</div>
+                    <div className={`text-sm ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
                 </div>
             </div>
         </motion.div>
@@ -186,15 +181,16 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [selectedActions, setSelectedActions] = useState<any[]>([]);
     const isLoading = keystoreLoading || validatorsLoading;
+    const { symbol, factor } = useDenom();
 
     const formatStakeAmount = useCallback((amount: number) =>
-        (amount / 1000000).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), []);
+        (amount / factor).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), [factor]);
 
     const formatRewardsDelta = useCallback((rewards: number) => {
-        const value = rewards / 1000000;
+        const value = rewards / factor;
         const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-        return `${sign}${Math.abs(value).toFixed(2)} CNPY`;
-    }, []);
+        return `${sign}${Math.abs(value).toFixed(2)} ${symbol}`;
+    }, [factor, symbol]);
 
     const getStatus = useCallback((validator: any) => {
         if (!validator) return 'Liquid';
@@ -227,7 +223,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                     address: shortAddr(address),
                     stakeAmount: validator ? formatStakeAmount(validator.stakedAmount) : '0.00',
                     status: getStatus(validator),
-                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : '0.00 CNPY',
+                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : `0.00 ${symbol}`,
                     rewardsDelta24hValue: validator ? Number(rewardsData[address]?.change24h || 0) : 0,
                     originalValidator: validator || { address, nickname: keyData.keyNickname || 'Unnamed Key', stakedAmount: 0 },
                 };
@@ -258,14 +254,11 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
             <motion.div className={cardBase} {...cardMotion}>
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-5">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Workflow className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="font-display text-sm font-semibold text-muted-foreground uppercase tracking-widest">
+                    <span className="text-sm font-medium text-muted-foreground">
                         Node Management
                     </span>
                     {processedKeystores.length > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-xs font-mono font-semibold text-primary">
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-xs font-semibold text-primary">
                             {processedKeystores.length}
                         </span>
                     )}
@@ -278,7 +271,7 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                             <thead>
                                 <tr className="border-b border-border/50">
                                     {['Key', 'Staked', 'Status', 'Rewards Δ24h', 'Action'].map(h => (
-                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-display font-semibold text-muted-foreground uppercase tracking-widest">
+                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-medium text-muted-foreground">
                                             {h}
                                         </th>
                                     ))}

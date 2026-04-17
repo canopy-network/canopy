@@ -29,6 +29,8 @@ export function useMultipleValidatorRewardsHistory(addresses: string[]) {
             const results: Record<string, HistoryResult & { rewards24h: number; totalRewards: number }> = {};
 
             // Fetch rewards for all validators in parallel
+            if (secondsPerBlock == null) return results;
+
             const validatorPromises = addresses.map(async (address) => {
                 try {
                     const { events } = await fetchRewardEventsInRange(dsFetch, {
