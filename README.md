@@ -1,116 +1,279 @@
-🌿 Praxis — Prediction Market on Canopy
-A fully on-chain YES/NO prediction market built as a Canopy appchain plugin.
-Submitted for the Canopy Vibe Coding Contest 2026.
-What is Praxis?
+# 🌿 Praxis — Prediction Market on Canopy
+
+> A fully on-chain YES/NO prediction market built as a Canopy appchain plugin.
+> Submitted for the **Canopy Vibe Coding Contest 2026**.
+
+![Chain](https://img.shields.io/badge/Chain-Canopy%20Betanet-4CAF50?style=flat-square)
+![Language](https://img.shields.io/badge/Language-Go-00ADD8?style=flat-square&logo=go)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Testnet-orange?style=flat-square)
+
+---
+
+## What is Praxis?
+
 Praxis is a sovereign prediction market appchain built on the Canopy Network. Anyone can create a YES/NO question, stake tokens on an outcome, and earn a proportional payout from the losing pool when the market resolves.
+
 Every action — creating a market, placing a bet, resolving an outcome, claiming winnings — is a real on-chain transaction processed by a custom Canopy plugin. No smart contracts. No shared blockspace. Full sovereignty.
-How It Works
-The Flow
-Code
-Payout Formula
-Code
-If you bet 100 PRX on YES and YES wins with a 60/40 split:
-Your payout = 100 + (100 × 40/60) = ~167 PRX
-Transaction Types
-Transaction
-Who Signs
-What It Does
-create_market
-Creator
-Opens a new YES/NO market with a question, resolver, and resolution block height
-submit_prediction
-Forecaster
-Places a bet of X amount on YES (1) or NO (0)
-resolve_market
-Resolver
-Declares the winning outcome after the resolution height
-claim_winnings
-Winner
-Collects proportional payout from the losing pool
-send
-Sender
-Standard token transfer (built-in)
-State Schema
-Prefix
-Type
-Description
-0x01
-Account
-Token balances
-0x02
-Pool
-Fee pool
-0x07
-FeeParams
-Governance fee parameters
-0x10
-Market
-All market data (question, pools, status, winner)
-0x11
-Prediction
-Individual forecaster bets (keyed by marketId + address)
-0x12
-MarketCounter
-Auto-incrementing market ID counter
-0x13
-ForecasterRecord
-Leaderboard stats per forecaster
-Files Changed
-Code
-Running Locally
-Prerequisites
-Go 1.25+
-Git + Make
-protoc + protoc-gen-go
-Step 1 — Clone and build Canopy
-Bash
-Step 2 — Regenerate proto files
-Bash
-Step 3 — Build the plugin
-Bash
-Step 4 — Configure
+
+---
+
+## How It Works
+
+### The Flow
+
+```
+Creator opens a market  →  Forecasters place bets  →  Resolver declares winner  →  Winners claim payout
+```
+
+### Payout Formula
+
+```
+payout = your_stake + (your_stake × losing_pool / winning_pool)
+```
+
+**Example:** If you bet 100 PRX on YES and YES wins with a 60/40 split:
+
+```
+payout = 100 + (100 × 40/60) = ~167 PRX
+```
+
+---
+
+## Transaction Types
+
+| Transaction | Who Signs | What It Does |
+|---|---|---|
+| `create_market` | Creator | Opens a new YES/NO market with a question, resolver, and resolution block height |
+| `submit_prediction` | Forecaster | Places a bet of X amount on YES (1) or NO (0) |
+| `resolve_market` | Resolver | Declares the winning outcome after the resolution height |
+| `claim_winnings` | Winner | Collects proportional payout from the losing pool |
+| `send` | Sender | Standard token transfer (built-in) |
+
+---
+
+## State Schema
+
+| Prefix | Type | Description |
+|---|---|---|
+| `0x01` | Account | Token balances |
+| `0x02` | Pool | Fee pool |
+| `0x07` | FeeParams | Governance fee parameters |
+| `0x10` | Market | All market data (question, pools, status, winner) |
+| `0x11` | Prediction | Individual forecaster bets (keyed by marketId + address) |
+| `0x12` | MarketCounter | Auto-incrementing market ID counter |
+| `0x13` | ForecasterRecord | Leaderboard stats per forecaster |
+
+---
+
+## Files Changed
+
+```
+plugin/go/proto/tx.proto          ← Added 4 transaction message types + 5 state objects
+plugin/go/contract/contract.go    ← Full prediction market plugin logic
+plugin/go/frontend/index.html     ← Complete web frontend
+plugin/go/PRAXIS.md               ← This file
+cmd/rpc/web/explorer/dist/.gitkeep  ← Required for Go build
+cmd/rpc/web/wallet/out/.gitkeep     ← Required for Go build
+```
+
+---
+
+## Running Locally
+
+### Prerequisites
+
+- Go 1.25+
+- Git + Make
+- `protoc` + `protoc-gen-go`
+
+### Step 1 — Clone and build Canopy
+
+```bash
+git clone https://github.com/Makaveli912/canopy.git
+cd canopy
+git checkout feat/praxis-prediction-market
+
+# Create required placeholder folders
+mkdir -p cmd/rpc/web/explorer/dist
+mkdir -p cmd/rpc/web/wallet/out
+echo '<html></html>' > cmd/rpc/web/explorer/dist/index.html
+echo '<html></html>' > cmd/rpc/web/wallet/out/index.html
+
+# Build the canopy binary
+go build -o ~/go/bin/canopy ./cmd/main
+```
+
+### Step 2 — Regenerate proto files
+
+```bash
+cd plugin/go/proto
+chmod +x _generate.sh
+./_generate.sh
+```
+
+### Step 3 — Build the plugin
+
+```bash
+cd plugin/go
+GOTOOLCHAIN=local go mod tidy
+GOTOOLCHAIN=local go build -o go-plugin .
+```
+
+### Step 4 — Configure
+
 Start the node once to generate config files:
-Bash
-Set the plugin in ~/.canopy/config.json:
-Json
-Step 5 — Start the chain
-Bash
+
+```bash
+~/go/bin/canopy start
+# Press Enter twice for no password and default nickname
+# Then Ctrl+C after a few seconds
+```
+
+Set the plugin in `~/.canopy/config.json`:
+
+```json
+"plugin": "go"
+```
+
+### Step 5 — Start the chain
+
+```bash
+~/go/bin/canopy start
+```
+
 Watch for:
-Code
+
+```
+go-plugin started successfully
+Plugin service listening on socket: /tmp/plugin/plugin.sock
+```
+
 Then watch for blocks:
-Code
-Step 6 — Open the frontend
+
+```
+Committed block xxxxx at H:1 🔒
+```
+
+### Step 6 — Open the frontend
+
 In a separate terminal or background process:
-Bash
+
+```bash
+python3 -m http.server 8080 --directory plugin/go/frontend
+```
+
 Open your browser at:
-Code
+
+```
+http://localhost:8080
+```
+
 The green dot in the sidebar confirms the chain is connected.
-RPC Endpoints
-Port
-Purpose
-50002
-Public RPC — submit transactions, query state, check height
-50003
-Admin RPC — keystore access, key management (localhost only)
-Key endpoints used by the frontend
-Code
-Signing Transactions
-Canopy uses BLS12-381 signatures. Per the builder docs:
-Code
+
+---
+
+## RPC Endpoints
+
+| Port | Purpose |
+|---|---|
+| `50002` | Public RPC — submit transactions, query state, check height |
+| `50003` | Admin RPC — keystore access, key management (localhost only) |
+
+### Key endpoints used by the frontend
+
+```
+POST /v1/query/height        → current block height
+POST /v1/query/account       → account balance
+POST /v1/tx                  → submit signed transaction
+GET  /v1/query/state?prefix= → scan state by prefix
+POST /v1/admin/keystore-get  → retrieve signing key (admin only)
+```
+
+---
+
+## Signing Transactions
+
+Canopy uses **BLS12-381** signatures. Per the builder docs:
+
+```
+1. Build Transaction proto with signature = nil
+2. signBytes = proto.Marshal(transaction)
+3. sig = bls12381PrivKey.Sign(signBytes)
+4. Attach signature: { publicKey: hexPubKey, signature: hexSig }
+5. POST to /v1/tx — byte fields as base64 (protojson encoding)
+```
+
 Get your private key from the admin keystore:
-Bash
-Architecture
-Code
-Technical Notes
-Why package-level height variable?
-Canopy's plugin.go creates a new Contract instance for every FSM message. This means state set in BeginBlock() would be lost by the time DeliverTx() runs. We solve this with a package-level globalHeight variable protected by sync.RWMutex.
-Why GOTOOLCHAIN=local?
-The plugin's dependency github.com/drand/kyber requires Go 1.25. Setting GOTOOLCHAIN=local prevents Go from trying to auto-download a newer toolchain, which causes segfaults in constrained environments like Userland on Android.
-State key design
-All state keys use JoinLenPrefix with unique byte prefixes to avoid collisions with built-in keys (0x01 accounts, 0x02 pools, 0x07 fee params). Our custom types start at 0x10.
-About
-Built by Makaveli912 for the Canopy Vibe Coding Contest 2026.
-PR: https://github.com/canopy-network/canopy/pull/375
-Branch: feat/praxis-prediction-market
-Chain: Canopy Betanet
-"Praxis — where prediction meets sovereignty."
+
+```bash
+~/go/bin/canopy admin ks
+~/go/bin/canopy admin keystore-get --address <your-address> --password ""
+```
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│           CANOPY NODE                   │
+│  P2P │ NestBFT Consensus │ Persistence  │
+│              │                          │
+│         FSM Controller                  │
+│              │ Unix socket              │
+└──────────────┼──────────────────────────┘
+               │
+    ┌──────────▼──────────┐
+    │   PRAXIS PLUGIN     │
+    │                     │
+    │  CheckTx()          │ ← stateless validation
+    │  DeliverTx()        │ ← state transitions
+    │  BeginBlock()       │ ← capture block height
+    │  EndBlock()         │
+    └─────────────────────┘
+               ▲
+               │ HTTP (port 50002/50003)
+    ┌──────────┴──────────┐
+    │  PRAXIS FRONTEND    │
+    │  index.html         │
+    │                     │
+    │  - Create Markets   │
+    │  - Place Bets       │
+    │  - Resolve Markets  │
+    │  - Claim Winnings   │
+    │  - Leaderboard      │
+    └─────────────────────┘
+```
+
+---
+
+## Technical Notes
+
+### Why a package-level height variable?
+
+Canopy's `plugin.go` creates a **new Contract instance for every FSM message**. This means state set in `BeginBlock()` would be lost by the time `DeliverTx()` runs. We solve this with a package-level `globalHeight` variable protected by `sync.RWMutex`.
+
+### Why `GOTOOLCHAIN=local`?
+
+The plugin's dependency `github.com/drand/kyber` requires Go 1.25. Setting `GOTOOLCHAIN=local` prevents Go from trying to auto-download a newer toolchain, which causes segfaults in constrained environments like Userland on Android.
+
+### State key design
+
+All state keys use `JoinLenPrefix` with unique byte prefixes to avoid collisions with built-in keys (`0x01` accounts, `0x02` pools, `0x07` fee params). Our custom types start at `0x10`.
+
+---
+
+## About
+
+Built by **Makaveli912** for the Canopy Vibe Coding Contest 2026.
+
+| | |
+|---|---|
+| **PR** | https://github.com/canopy-network/canopy/pull/375 |
+| **Branch** | `feat/praxis-prediction-market` |
+| **Chain** | Canopy Betanet |
+
+---
+
+> *"Praxis — where prediction meets sovereignty."*
