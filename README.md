@@ -77,7 +77,10 @@ Step 5 — Start the chain
 Bash
 Watch for:
 Code
+Then watch for blocks:
+Code
 Step 6 — Open the frontend
+In a separate terminal or background process:
 Bash
 Open your browser at:
 Code
@@ -102,7 +105,7 @@ Technical Notes
 Why package-level height variable?
 Canopy's plugin.go creates a new Contract instance for every FSM message. This means state set in BeginBlock() would be lost by the time DeliverTx() runs. We solve this with a package-level globalHeight variable protected by sync.RWMutex.
 Why GOTOOLCHAIN=local?
-The plugin's dependency github.com/drand/kyber requires Go 1.25. Setting GOTOOLCHAIN=local prevents Go from trying to auto-download a newer toolchain, which causes segfaults in constrained environments.
+The plugin's dependency github.com/drand/kyber requires Go 1.25. Setting GOTOOLCHAIN=local prevents Go from trying to auto-download a newer toolchain, which causes segfaults in constrained environments like Userland on Android.
 State key design
 All state keys use JoinLenPrefix with unique byte prefixes to avoid collisions with built-in keys (0x01 accounts, 0x02 pools, 0x07 fee params). Our custom types start at 0x10.
 About
