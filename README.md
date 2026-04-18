@@ -1,108 +1,113 @@
-<img src="./canopy-logo-white-bg.svg" alt="Canopy Logo" width="500"/>
-
-_Official golang implementation of the Canopy Network Protocol_
-
-[![GoDoc](https://img.shields.io/badge/godoc-reference-white.svg)](https://godoc.org/github.com/canopy-network/canopy)
-[![Getting Started](https://img.shields.io/badge/getting%20started-guide-white)](https://canopynetwork.org)
-[![Go Version](https://img.shields.io/badge/golang-v1.21-white.svg)](https://golang.org)
-[![Next.js Version](https://img.shields.io/badge/next%20js-v14.2.3-white.svg)](https://nextjs.org/)
-
-
-# Overview
-
-[![License](https://img.shields.io/badge/License-MIT-white.svg)](https://opensource.org/licenses/MIT)
-[![Testing](https://img.shields.io/badge/testing-docker%20compose-white)](https://docs.docker.com/compose/)
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos-white.svg)](https://github.com/canopy-network/canopy/releases)
-[![Status](https://img.shields.io/badge/status-alphanet-white)](https://docs.docker.com/compose/)
-
-### ⫸ **Welcome to the Network that Powers the Peer-to-Peer Launchpad for New Chains**
-
-Built on a recursive architecture, chains bootstrap each other into independence —  
-forming an `unstoppable` web of utility and security. 
-
-**Here you'll find:**
-
-➪ A recursive framework to build blockchains.
-
-➪ The seed chain that started the recursive cycle.
-
-For more information on the Canopy Network Protocol visit [https://canopynetwork.org](https://canopynetwork.org)
-
-## Network Status
-
-⪢ Canopy is in `Betanet` 🚀 ➝ learn more about the [road-to-mainnet](https://www.canopynetwork.org/learn-more/road-to-mainnet)
-
-## Protocol Documentation
-
-➪ Check out the Canopy Network wiki:  [https://canopy-network.gitbook.io/docs](https://canopy-network.gitbook.io/docs)
-
-## Repository Documentation
-
-Welcome to the Canopy Network reference implementation. This repository can be well understood reading about the core modules:
-
-- [Controller](controller/README.md): Coordinates communication between all the major parts of the Canopy blockchain, like a central hub or "bus" that connects the system together.
-- [Finite State Machine (FSM)](fsm/README.md): Defines the logic for how transactions change the blockchain's state — it decides what’s valid and how state transitions happen from one block to the next.
-- [Byzantine Fault Tolerant (BFT) Consensus](bft/README.md): A consensus mechanism that allows the network to agree on new blocks even if some nodes are unreliable or malicious.
-- [Peer-to-Peer Networking](p2p/README.md): A secure and encrypted communication system that lets nodes talk directly to each other without needing a central server.
-- [Persistence](store/README.md): Manages the blockchain’s storage — it saves the current state (ledger), indexes past transactions, and ensures fast and reliable data verification.
-
-## How to Run It
-
-➪ To run the Canopy binary, use the following commands:
-
-```bash
-make build/canopy-full
-canopy start
-```
-
-## How to Run It with 🐳 Docker
-
-➪ To run a Canopy `Localnet` in a *containerized* environment, use the following commands:
-```bash
-make docker/build
-make docker/up-fast
-make docker/logs
-
-or simply
-
-make docker/up && make docker/logs
-```
-
-## Running Tests
-
-➪ To run Canopy unit tests, use the Go testing tools:
-
-```bash
-make test
-```
-
-## How to Contribute
-
-➪ Canopy is an open-source project, and we welcome contributions from the community. Here's how to get involved:
-
-1. **Fork** the repository and clone it locally.
-2. **Code** your improvements or fixes.
-3. **Submit a Pull Request** (PR) for review.
-
-➣ Please follow these [guidelines](CONTRIBUTING.md) to maintain high-quality contributions:
-
-### High Impact or Architectural Changes
-
-➪ Before making large changes, discuss them with the Canopy team on [Discord](https://discord.gg/pNcSJj7Wdh) to ensure alignment.
-
-### Coding Style
-
-- Code must adhere to official Go formatting (use [`gofmt`](https://golang.org/cmd/gofmt)).
-- (Optional) Use [EditorConfig](https://editorconfig.org) for consistent formatting.
-- All code should follow Go documentation/commentary guidelines.
-- PRs should be opened against the `development` branch.
-
-[![Pre-Release](https://img.shields.io/github/release-pre/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/canopy-network/canopy)](https://goreportcard.com/report/github.com/canopy-network/canopy)
-[![Contributors](https://img.shields.io/github/contributors/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/pulse)
-[![Last Commit](https://img.shields.io/github/last-commit/canopy-network/canopy.svg)](https://github.com/canopy-network/canopy/pulse)
-
-## Contact
-
-[![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://x.com/CNPYNetwork)
-[![Discord](https://img.shields.io/badge/discord-online-blue.svg)](https://discord.gg/pNcSJj7Wdh)
+🌿 Praxis — Prediction Market on Canopy
+A fully on-chain YES/NO prediction market built as a Canopy appchain plugin.
+Submitted for the Canopy Vibe Coding Contest 2026.
+What is Praxis?
+Praxis is a sovereign prediction market appchain built on the Canopy Network. Anyone can create a YES/NO question, stake tokens on an outcome, and earn a proportional payout from the losing pool when the market resolves.
+Every action — creating a market, placing a bet, resolving an outcome, claiming winnings — is a real on-chain transaction processed by a custom Canopy plugin. No smart contracts. No shared blockspace. Full sovereignty.
+How It Works
+The Flow
+Code
+Payout Formula
+Code
+If you bet 100 PRX on YES and YES wins with a 60/40 split:
+Your payout = 100 + (100 × 40/60) = ~167 PRX
+Transaction Types
+Transaction
+Who Signs
+What It Does
+create_market
+Creator
+Opens a new YES/NO market with a question, resolver, and resolution block height
+submit_prediction
+Forecaster
+Places a bet of X amount on YES (1) or NO (0)
+resolve_market
+Resolver
+Declares the winning outcome after the resolution height
+claim_winnings
+Winner
+Collects proportional payout from the losing pool
+send
+Sender
+Standard token transfer (built-in)
+State Schema
+Prefix
+Type
+Description
+0x01
+Account
+Token balances
+0x02
+Pool
+Fee pool
+0x07
+FeeParams
+Governance fee parameters
+0x10
+Market
+All market data (question, pools, status, winner)
+0x11
+Prediction
+Individual forecaster bets (keyed by marketId + address)
+0x12
+MarketCounter
+Auto-incrementing market ID counter
+0x13
+ForecasterRecord
+Leaderboard stats per forecaster
+Files Changed
+Code
+Running Locally
+Prerequisites
+Go 1.25+
+Git + Make
+protoc + protoc-gen-go
+Step 1 — Clone and build Canopy
+Bash
+Step 2 — Regenerate proto files
+Bash
+Step 3 — Build the plugin
+Bash
+Step 4 — Configure
+Start the node once to generate config files:
+Bash
+Set the plugin in ~/.canopy/config.json:
+Json
+Step 5 — Start the chain
+Bash
+Watch for:
+Code
+Step 6 — Open the frontend
+Bash
+Open your browser at:
+Code
+The green dot in the sidebar confirms the chain is connected.
+RPC Endpoints
+Port
+Purpose
+50002
+Public RPC — submit transactions, query state, check height
+50003
+Admin RPC — keystore access, key management (localhost only)
+Key endpoints used by the frontend
+Code
+Signing Transactions
+Canopy uses BLS12-381 signatures. Per the builder docs:
+Code
+Get your private key from the admin keystore:
+Bash
+Architecture
+Code
+Technical Notes
+Why package-level height variable?
+Canopy's plugin.go creates a new Contract instance for every FSM message. This means state set in BeginBlock() would be lost by the time DeliverTx() runs. We solve this with a package-level globalHeight variable protected by sync.RWMutex.
+Why GOTOOLCHAIN=local?
+The plugin's dependency github.com/drand/kyber requires Go 1.25. Setting GOTOOLCHAIN=local prevents Go from trying to auto-download a newer toolchain, which causes segfaults in constrained environments.
+State key design
+All state keys use JoinLenPrefix with unique byte prefixes to avoid collisions with built-in keys (0x01 accounts, 0x02 pools, 0x07 fee params). Our custom types start at 0x10.
+About
+Built by Makaveli912 for the Canopy Vibe Coding Contest 2026.
+PR: https://github.com/canopy-network/canopy/pull/375
+Branch: feat/praxis-prediction-market
+Chain: Canopy Betanet
+"Praxis — where prediction meets sovereignty."
