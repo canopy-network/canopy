@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Praxis — Forecasting Chain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black:      #050505;
+  --surface:    #0c0c0c;
+  --card:       #111111;
+  --card2:      #161616;
+  --border:     #1e1e1e;
+  --border2:    #2a2a2a;
+  --text:       #e8e8e8;
+  --muted:      #555;
+  --dim:        #333;
+  --green:      #00ff88;
+  --green-dim:  #00ff8818;
+  --green-glow: 0 0 12px #00ff8840;
+  --red:        #ff3b3b;
+  --red-dim:    #ff3b3b14;
+  --yes:        #00e5ff;
+  --yes-dim:    #00e5ff14;
+  --no:         #ff6b35;
+  --no-dim:     #ff6b3514;
+  --gold:       #ffc53d;
+  --font-d:     'Syne', sans-serif;
+  --font-m:     'DM Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--font-m);
+  font-size: 12.5px;
+  line-height: 1.65;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* scanlines */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,.008) 2px, rgba(0,255,136,.008) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Layout ──────────────────────────────────────────── */
+.shell { display: grid; grid-template-columns: 200px 1fr; min-height: 100vh; }
+
+/* ── Sidebar ──────────────────────────────────────────── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+  position: sticky; top: 0;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.logo-mark { margin-bottom: 10px; }
+.logo-mark svg { display: block; }
+.logo-name { font-family: var(--font-d); font-size: 19px; font-weight: 800; letter-spacing: -.5px; color: #fff; }
+.logo-sub { font-size: 10px; color: var(--green); letter-spacing: 2.5px; margin-top: 1px; }
+
+.nav-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); padding: 14px 20px 6px; display: block; }
+.nav-section { padding: 0 8px; }
+
+.nav-btn {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 7px 12px;
+  border-radius: 5px; border: none;
+  background: none; color: var(--muted);
+  font-family: var(--font-m); font-size: 12px;
+  cursor: pointer; transition: all .12s; text-align: left;
+}
+.nav-btn:hover { color: var(--text); background: var(--surface); }
+.nav-btn.active { color: var(--green); background: var(--green-dim); }
+.nav-btn .ico { font-size: 13px; width: 16px; text-align: center; opacity: .8; }
+
+.sidebar-footer {
+  margin-top: auto; padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.rpc-badge {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; color: var(--muted);
+}
+.rpc-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim); transition: background .4s, box-shadow .4s;
+  flex-shrink: 0;
+}
+.rpc-dot.live { background: var(--green); box-shadow: var(--green-glow); }
+
+.block-counter {
+  margin-top: 8px;
+  font-size: 10px; color: var(--dim);
+  letter-spacing: .5px;
+}
+.block-counter span { color: var(--muted); }
+
+/* ── Main ──────────────────────────────────────────────── */
+.main { display: flex; flex-direction: column; min-height: 100vh; }
+
+.topbar {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0;
+  background: var(--black); z-index: 10;
+}
+.topbar-title { font-family: var(--font-d); font-size: 14px; font-weight: 700; color: #fff; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.chain-pill {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 8px;
+  font-size: 10px; color: var(--green); letter-spacing: 1px;
+}
+
+.content { padding: 28px; flex: 1; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Stats ──────────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 24px; }
+
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px;
+  position: relative; overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--green-dim), transparent);
+}
+.stat-label { font-size: 9.5px; color: var(--muted); letter-spacing: 2px; margin-bottom: 6px; }
+.stat-value { font-family: var(--font-d); font-size: 21px; font-weight: 700; color: #fff; }
+.stat-sub { font-size: 10px; color: var(--green); margin-top: 2px; }
+
+/* ── Section header ──────────────────────────────────────── */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-title { font-family: var(--font-d); font-size: 13.5px; font-weight: 700; color: #fff; letter-spacing: -.2px; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 13px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-family: var(--font-m); font-size: 11.5px;
+  cursor: pointer; transition: all .12s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--border2); background: #1a1a1a; }
+.btn-primary { border-color: var(--green); color: var(--green); }
+.btn-primary:hover { background: var(--green-dim); box-shadow: var(--green-glow); }
+.btn-yes { border-color: var(--yes); color: var(--yes); }
+.btn-yes.active, .btn-yes:hover { background: var(--yes-dim); box-shadow: 0 0 10px #00e5ff30; }
+.btn-no { border-color: var(--no); color: var(--no); }
+.btn-no.active, .btn-no:hover { background: var(--no-dim); box-shadow: 0 0 10px #ff6b3530; }
+.btn-sm { padding: 4px 9px; font-size: 10.5px; }
+.btn-full { width: 100%; justify-content: center; }
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 18px;
+  transition: border-color .15s;
+}
+.card:hover { border-color: var(--border2); }
+
+/* ── Market cards ───────────────────────────────────────── */
+.markets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+
+.market-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  transition: border-color .15s, transform .12s;
+  cursor: pointer;
+}
+.market-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+.market-card.open { border-left: 2px solid var(--green); }
+.market-card.resolved { border-left: 2px solid var(--muted); opacity: .8; }
+
+.market-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9.5px; letter-spacing: 1.5px; color: var(--muted);
+  margin-bottom: 8px;
+}
+.market-status .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--muted);
+}
+.market-status.open .dot { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.market-status.resolved .dot { background: var(--gold); }
+
+.market-question {
+  font-family: var(--font-d); font-size: 13.5px; font-weight: 700;
+  color: #fff; line-height: 1.4; margin-bottom: 12px;
+}
+
+.pool-bars { margin-bottom: 10px; }
+.pool-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pool-label { font-size: 10px; width: 26px; font-weight: 500; }
+.pool-label.yes { color: var(--yes); }
+.pool-label.no { color: var(--no); }
+.pool-track {
+  flex: 1; height: 4px; background: var(--border);
+  border-radius: 2px; overflow: hidden;
+}
+.pool-fill { height: 100%; border-radius: 2px; transition: width .4s ease; }
+.pool-fill.yes { background: var(--yes); }
+.pool-fill.no { background: var(--no); }
+.pool-pct { font-size: 10px; color: var(--muted); width: 32px; text-align: right; }
+
+.market-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.market-meta { font-size: 10px; color: var(--dim); }
+.market-vol { font-size: 10.5px; color: var(--muted); }
+.market-vol span { color: var(--text); }
+
+/* ── Forms ───────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.full { grid-column: 1/-1; }
+.form-label { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; }
+
+input, textarea, select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--font-m); font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color .12s;
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--border2); }
+input::placeholder { color: var(--dim); }
+textarea { resize: vertical; min-height: 70px; }
+
+.payload-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 5px; padding: 12px;
+  font-size: 11px; color: var(--muted);
+  font-family: var(--font-m); line-height: 1.5;
+  white-space: pre; overflow-x: auto; max-height: 240px;
+  overflow-y: auto;
+}
+
+.output-section {
+  display: none; margin-top: 14px;
+  border-top: 1px solid var(--border); padding-top: 14px;
+}
+
+/* ── Outcome selector ────────────────────────────────────── */
+.outcome-row { display: flex; gap: 8px; align-items: center; }
+.outcome-hint { font-size: 10px; color: var(--dim); margin-left: 4px; }
+
+/* ── Table ───────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-size: 9.5px; letter-spacing: 2px; color: var(--muted);
+  padding: 8px 12px; text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+  font-size: 11.5px; color: var(--text);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface); }
+
+.rank-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 4px;
+  font-size: 10px; font-weight: 600;
+  background: var(--border); color: var(--muted);
+}
+.rank-badge.gold { background: #ffc53d22; color: var(--gold); border: 1px solid #ffc53d40; }
+.rank-badge.silver { background: #aaa2; color: #aaa; border: 1px solid #aaa3; }
+.rank-badge.bronze { background: #cd7f3220; color: #cd7f32; border: 1px solid #cd7f3240; }
+
+.acc-bar-wrap { width: 60px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.acc-bar-fill { height: 100%; background: var(--green); border-radius: 2px; }
+
+/* ── Wallet panel ────────────────────────────────────────── */
+.wallet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.balance-display {
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px;
+  text-align: center;
+}
+.balance-amount {
+  font-family: var(--font-d); font-size: 28px; font-weight: 800;
+  color: var(--green); letter-spacing: -1px;
+}
+.balance-addr { font-size: 10px; color: var(--dim); margin-top: 4px; word-break: break-all; }
+
+.keystore-out {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 5px; padding: 10px; font-size: 10.5px;
+  color: var(--muted); font-family: var(--font-m);
+  white-space: pre; overflow: auto; max-height: 180px; display: none;
+}
+
+/* ── RPC info panel ────────────────────────────────────────── */
+.rpc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.rpc-item {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px;
+}
+.rpc-item-label { font-size: 9.5px; color: var(--dim); letter-spacing: 1.5px; margin-bottom: 3px; }
+.rpc-item-val { font-size: 11px; color: var(--text); }
+
+/* ── Signing help ─────────────────────────────────────────── */
+.sign-help {
+  background: #ffc53d0a; border: 1px solid #ffc53d30;
+  border-radius: 6px; padding: 12px 14px;
+  font-size: 11px; color: #ffc53d99; line-height: 1.6;
+  margin-top: 10px;
+}
+.sign-help code {
+  background: #ffc53d14; color: var(--gold);
+  padding: 1px 5px; border-radius: 3px; font-size: 10.5px;
+}
+.sign-help a { color: var(--gold); }
+
+/* ── Toasts ──────────────────────────────────────────────── */
+#toastWrap { position: fixed; bottom: 20px; right: 20px; z-index: 9998; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--card2); border: 1px solid var(--border2);
+  border-left: 3px solid var(--green);
+  border-radius: 6px; padding: 10px 14px;
+  font-size: 11.5px; color: var(--text);
+  max-width: 340px; opacity: 1; transition: opacity .3s;
+}
+.toast.err { border-left-color: var(--red); }
+
+/* ── Tabs ──────────────────────────────────────────────── */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.tab {
+  padding: 8px 14px; font-size: 11.5px; color: var(--muted);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font-family: var(--font-m); transition: all .12s;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+/* ── Divider ──────────────────────────────────────────────── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+/* ── Empty state ──────────────────────────────────────────── */
+.empty { padding: 40px; text-align: center; color: var(--dim); font-size: 12px; }
+.empty-title { font-family: var(--font-d); font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+
+/* ── Loading ──────────────────────────────────────────────── */
+.loading { color: var(--dim); font-size: 11px; padding: 20px; text-align: center; }
+@keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
+.blink { animation: blink 1.2s infinite; }
+
+/* ── Badge ──────────────────────────────────────────────── */
+.badge {
+  display: inline-block; padding: 2px 7px; border-radius: 3px;
+  font-size: 9.5px; letter-spacing: 1px; font-weight: 600;
+}
+.badge-open   { background: var(--green-dim); color: var(--green); }
+.badge-closed { background: var(--dim); color: var(--muted); }
+.badge-resolved { background: #ffc53d18; color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ── Sidebar ────────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="34" height="20" viewBox="0 0 34 20" fill="none">
+        <rect x="0" y="8" width="6" height="12" rx="1" fill="#00ff88" opacity=".9"/>
+        <rect x="8" y="4" width="6" height="16" rx="1" fill="#00ff88" opacity=".7"/>
+        <rect x="16" y="0" width="6" height="20" rx="1" fill="#00ff88"/>
+        <rect x="24" y="5" width="6" height="15" rx="1" fill="#00ff88" opacity=".6"/>
+        <rect x="2" y="15" width="30" height="1" fill="#00ff8830"/>
+      </svg>
+    </div>
+    <div class="logo-name">Praxis</div>
+    <div class="logo-sub">FORECASTING CHAIN</div>
+  </div>
+
+  <span class="nav-label">MARKETS</span>
+  <div class="nav-section">
+    <button class="nav-btn active" onclick="showPage('markets',this)">
+      <span class="ico">◈</span> All Markets
+    </button>
+    <button class="nav-btn" onclick="showPage('create',this)">
+      <span class="ico">+</span> Create Market
+    </button>
+    <button class="nav-btn" onclick="showPage('predict',this)">
+      <span class="ico">◎</span> Submit Prediction
+    </button>
+  </div>
+
+  <span class="nav-label">MANAGE</span>
+  <div class="nav-section">
+    <button class="nav-btn" onclick="showPage('resolve',this)">
+      <span class="ico">✓</span> Resolve Market
+    </button>
+    <button class="nav-btn" onclick="showPage('claim',this)">
+      <span class="ico">⬡</span> Claim Winnings
+    </button>
+    <button class="nav-btn" onclick="showPage('leaderboard',this)">
+      <span class="ico">▲</span> Leaderboard
+    </button>
+  </div>
+
+  <span class="nav-label">ACCOUNT</span>
+  <div class="nav-section">
+    <button class="nav-btn" onclick="showPage('wallet',this)">
+      <span class="ico">◻</span> Wallet
+    </button>
+    <button class="nav-btn" onclick="showPage('node',this)">
+      <span class="ico">⬡</span> Node Info
+    </button>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="rpc-badge">
+      <div class="rpc-dot" id="rpcDot"></div>
+      <span id="rpcStatus">connecting...</span>
+    </div>
+    <div class="block-counter">Block <span id="heightDisplay">—</span></div>
+  </div>
+</nav>
+
+<!-- ── Main ────────────────────────────────────────────── -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">All Markets</div>
+    <div class="topbar-right">
+      <span class="chain-pill">CHAIN ID 1</span>
+      <button class="btn btn-sm" onclick="refreshAll()">⟳ Refresh</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Markets ────────────────────────────────────── -->
+    <div class="page active" id="page-markets">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">OPEN MARKETS</div>
+          <div class="stat-value" id="statOpen">—</div>
+          <div class="stat-sub">active now</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">TOTAL STAKED</div>
+          <div class="stat-value" id="statStaked">—</div>
+          <div class="stat-sub">$PRX pooled</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">RESOLVED</div>
+          <div class="stat-value" id="statResolved">—</div>
+          <div class="stat-sub">all time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">FORECASTERS</div>
+          <div class="stat-value" id="statForecasters">—</div>
+          <div class="stat-sub">unique bettors</div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <div class="section-title">Active Markets</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="loadMarkets()">⟳ Load from chain</button>
+        </div>
+      </div>
+
+      <div id="marketsList">
+        <div class="loading"><span class="blink">▪▪▪</span> Querying chain state...</div>
+      </div>
+    </div>
+
+    <!-- ── Create Market ────────────────────────────────── -->
+    <div class="page" id="page-create">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Create Prediction Market</div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">QUESTION</label>
+            <input id="c_question" placeholder="Will BTC hit $100k by end of 2025?" maxlength="280"/>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">DESCRIPTION (optional)</label>
+            <textarea id="c_desc" placeholder="Additional context about resolution criteria..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CREATOR ADDRESS (hex, 40 chars)</label>
+            <input id="c_creator" placeholder="dfd3c8dff19da7682f7fe5fde062c813b55c9eee"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RESOLVER ADDRESS (hex, 40 chars)</label>
+            <input id="c_resolver" placeholder="eed6c9dff19da7682f7fe5fde062c813b42c7abc"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RESOLUTION BLOCK HEIGHT</label>
+            <input id="c_resHeight" type="number" placeholder="e.g. 1000"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CREATOR STAKE (μPRX)</label>
+            <input id="c_stake" type="number" value="1000000" min="1000000"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FEE (μPRX)</label>
+            <input id="c_fee" type="number" value="10000"/>
+          </div>
+        </div>
+
+        <hr class="divider"/>
+        <button class="btn btn-primary" onclick="buildCreateMarket()">Build Transaction Payload</button>
+
+        <div class="output-section" id="c_output">
+          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD (sign before submitting)</div>
+          <textarea class="payload-box" id="c_payload" rows="14" style="font-size:10.5px;"></textarea>
+          <div class="sign-help">
+            ⚠ Sign this payload with BLS12-381 before submitting.<br/>
+            Sign bytes = <code>proto.Marshal(Transaction{...signature: nil})</code> → BLS sign → attach <code>signature: { publicKey, signature }</code><br/>
+            See <a href="#" onclick="showPage('node',null)">Node Info</a> for the admin keystore endpoint to retrieve your private key.
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="submitTx('c_payload')">Submit Signed Tx → RPC</button>
+            <button class="btn btn-sm" onclick="copyPayload('c_payload')">Copy Payload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Submit Prediction ───────────────────────────── -->
+    <div class="page" id="page-predict">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Submit Prediction</div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">MARKET ID</label>
+            <input id="p_marketId" type="number" placeholder="1" min="1"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FORECASTER ADDRESS (hex, 40 chars)</label>
+            <input id="p_forecaster" placeholder="your address"/>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">OUTCOME</label>
+            <div class="outcome-row">
+              <button class="btn btn-yes active" id="btn_yes" onclick="selectOutcome(1)">YES ↑</button>
+              <button class="btn btn-no" id="btn_no" onclick="selectOutcome(0)">NO ↓</button>
+              <span class="outcome-hint" id="outcomeHint">Selected: YES</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">AMOUNT (μPRX)</label>
+            <input id="p_amount" type="number" value="500000" min="100000"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FEE (μPRX)</label>
+            <input id="p_fee" type="number" value="10000"/>
+          </div>
+        </div>
+
+        <hr class="divider"/>
+        <button class="btn btn-primary" onclick="buildSubmitPrediction()">Build Transaction Payload</button>
+
+        <div class="output-section" id="p_output">
+          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
+          <textarea class="payload-box" id="p_payload" rows="12" style="font-size:10.5px;"></textarea>
+          <div class="sign-help">⚠ Sign with BLS12-381 before submitting. See Node Info page for keystore access.</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="submitTx('p_payload')">Submit Signed Tx → RPC</button>
+            <button class="btn btn-sm" onclick="copyPayload('p_payload')">Copy Payload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Resolve Market ───────────────────────────────── -->
+    <div class="page" id="page-resolve">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Resolve Market</div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin-bottom:16px;">
+          Only the designated resolver address for a market may call this.
+          Once resolved, forecasters who bet on the winning outcome may claim winnings.
+        </p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">MARKET ID</label>
+            <input id="r_marketId" type="number" placeholder="1" min="1"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RESOLVER ADDRESS (hex, 40 chars)</label>
+            <input id="r_resolver" placeholder="your resolver address"/>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">WINNING OUTCOME</label>
+            <div class="outcome-row">
+              <button class="btn btn-yes active" id="rbtn_yes" onclick="selectResolveOutcome(1)">YES wins ↑</button>
+              <button class="btn btn-no" id="rbtn_no" onclick="selectResolveOutcome(0)">NO wins ↓</button>
+              <span class="outcome-hint" id="resolveOutcomeHint">Selected: YES wins</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FEE (μPRX)</label>
+            <input id="r_fee" type="number" value="10000"/>
+          </div>
+        </div>
+
+        <hr class="divider"/>
+        <button class="btn btn-primary" onclick="buildResolveMarket()">Build Transaction Payload</button>
+
+        <div class="output-section" id="r_output">
+          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
+          <textarea class="payload-box" id="r_payload" rows="12" style="font-size:10.5px;"></textarea>
+          <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="submitTx('r_payload')">Submit Signed Tx → RPC</button>
+            <button class="btn btn-sm" onclick="copyPayload('r_payload')">Copy Payload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Claim Winnings ───────────────────────────────── -->
+    <div class="page" id="page-claim">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Claim Winnings</div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin-bottom:16px;">
+          If you predicted the winning outcome, submit this transaction to receive your proportional payout from the losing pool.
+        </p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">MARKET ID</label>
+            <input id="cl_marketId" type="number" placeholder="1" min="1"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">CLAIMER ADDRESS (hex, 40 chars)</label>
+            <input id="cl_addr" placeholder="your address"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FEE (μPRX)</label>
+            <input id="cl_fee" type="number" value="10000"/>
+          </div>
+        </div>
+
+        <hr class="divider"/>
+        <button class="btn btn-primary" onclick="buildClaim()">Build Transaction Payload</button>
+
+        <div class="output-section" id="cl_output">
+          <div class="form-label" style="margin-bottom:8px">TRANSACTION PAYLOAD</div>
+          <textarea class="payload-box" id="cl_payload" rows="10" style="font-size:10.5px;"></textarea>
+          <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-primary" onclick="submitTx('cl_payload')">Submit Signed Tx → RPC</button>
+            <button class="btn btn-sm" onclick="copyPayload('cl_payload')">Copy Payload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Leaderboard ──────────────────────────────────── -->
+    <div class="page" id="page-leaderboard">
+      <div class="section-header">
+        <div class="section-title">Forecaster Leaderboard</div>
+        <button class="btn btn-sm" onclick="loadLeaderboard()">⟳ Load from chain</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>RANK</th>
+                <th>ADDRESS</th>
+                <th>CORRECT / TOTAL</th>
+                <th>ACCURACY</th>
+                <th>TOTAL EARNED</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+              <tr><td colspan="5" class="loading"><span class="blink">▪▪▪</span> Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Wallet ───────────────────────────────────────── -->
+    <div class="page" id="page-wallet">
+      <div class="wallet-grid">
+        <div>
+          <div class="section-header"><div class="section-title">Query Account</div></div>
+          <div class="card">
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">ADDRESS (hex)</label>
+              <input id="w_addr" placeholder="dfd3c8dff19da7682f7fe5fde062c813b55c9eee"/>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="queryAccount()">Query Balance</button>
+            <div class="balance-display" id="w_balDisplay" style="display:none;margin-top:12px">
+              <div class="balance-amount" id="w_balance">—</div>
+              <div class="balance-addr" id="w_addrDisplay"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px">
+            <div class="section-header"><div class="section-title">Keystore</div></div>
+            <div class="card">
+              <p style="font-size:11px;color:var(--muted);margin-bottom:10px">
+                Lists accounts in your local node keystore. Admin RPC only (localhost).
+              </p>
+              <button class="btn btn-sm btn-full" onclick="listKeystore()">List Keystore Accounts</button>
+              <button class="btn btn-sm btn-full" style="margin-top:6px" onclick="newKeystoreKey()">+ New Key</button>
+              <div class="keystore-out" id="keystoreOutput"></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header"><div class="section-title">Send Tokens</div></div>
+          <div class="card">
+            <div class="form-grid" style="grid-template-columns:1fr">
+              <div class="form-group">
+                <label class="form-label">FROM ADDRESS (hex)</label>
+                <input id="s_from" placeholder="sender address"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">TO ADDRESS (hex)</label>
+                <input id="s_to" placeholder="recipient address"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">AMOUNT (μPRX)</label>
+                <input id="s_amount" type="number" value="1000000"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">FEE (μPRX)</label>
+                <input id="s_fee" type="number" value="10000"/>
+              </div>
+            </div>
+            <hr class="divider"/>
+            <button class="btn btn-primary" onclick="buildSend()">Build Send Payload</button>
+            <div class="output-section" id="s_output">
+              <textarea class="payload-box" id="s_payload" rows="10" style="font-size:10.5px;"></textarea>
+              <div class="sign-help">⚠ Sign with BLS12-381 before submitting.</div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-primary" onclick="submitTx('s_payload')">Submit → RPC</button>
+                <button class="btn btn-sm" onclick="copyPayload('s_payload')">Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Node Info ────────────────────────────────────── -->
+    <div class="page" id="page-node">
+      <div class="section-header"><div class="section-title">Node & RPC Info</div></div>
+
+      <div class="rpc-grid">
+        <div class="rpc-item">
+          <div class="rpc-item-label">PUBLIC RPC (queries + tx submit)</div>
+          <div class="rpc-item-val" id="ni_rpc">http://localhost:50002</div>
+        </div>
+        <div class="rpc-item">
+          <div class="rpc-item-label">ADMIN RPC (keystore)</div>
+          <div class="rpc-item-val" id="ni_admin">http://localhost:50003</div>
+        </div>
+        <div class="rpc-item">
+          <div class="rpc-item-label">CURRENT HEIGHT</div>
+          <div class="rpc-item-val" id="ni_height">—</div>
+        </div>
+        <div class="rpc-item">
+          <div class="rpc-item-label">CHAIN ID</div>
+          <div class="rpc-item-val">1</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title" style="margin-bottom:10px;font-size:12.5px">Key RPC Endpoints</div>
+        <table>
+          <thead><tr><th>METHOD</th><th>ENDPOINT</th><th>PURPOSE</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/v1/query/height</code></td><td>Get current block height</td></tr>
+            <tr><td>POST</td><td><code>/v1/query/account</code></td><td>Get account balance</td></tr>
+            <tr><td>POST</td><td><code>/v1/tx</code></td><td>Submit signed transaction</td></tr>
+            <tr><td>POST</td><td><code>/v1/query/txs-by-sender</code></td><td>Check tx inclusion</td></tr>
+            <tr><td>POST</td><td><code>/v1/query/failed-txs</code></td><td>Check for failed txs</td></tr>
+            <tr><td>GET</td><td><code>/v1/query/state-key?key=HEX</code></td><td>Read raw state by key</td></tr>
+            <tr><td>POST</td><td style="color:var(--no)">/v1/admin/keystore-new-key</td><td>Create keypair (admin)</td></tr>
+            <tr><td>POST</td><td style="color:var(--no)">/v1/admin/keystore-get</td><td>Get private key (admin)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-title" style="margin-bottom:10px;font-size:12.5px">Signing Reference</div>
+        <div class="sign-help" style="margin-top:0">
+          <strong style="color:var(--gold)">BLS12-381 Signing Flow (from rpc_test.go)</strong><br/><br/>
+          1. Build <code>Transaction{}</code> proto with <code>signature = nil</code><br/>
+          2. <code>signBytes = proto.Marshal(tx)</code> — must be deterministic protobuf, not JSON<br/>
+          3. <code>sig = bls12381PrivKey.Sign(signBytes)</code><br/>
+          4. Attach <code>signature: { publicKey: hexPubKey, signature: hexSig }</code><br/>
+          5. POST to <code>/v1/tx</code> as JSON (use <code>protojson</code> encoding for bytes fields — base64)<br/><br/>
+          For plugin-specific tx types (create_market, submit_prediction, resolve_market, claim_winnings):<br/>
+          Use <code>msgTypeUrl</code> + <code>msgBytes</code> fields instead of <code>msg</code> for exact byte control.<br/><br/>
+          <strong style="color:var(--gold)">Addresses</strong>: 20 bytes = first 20 bytes of SHA256(publicKey). Pass as base64 in JSON.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<div id="toastWrap"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────
+const RPC   = 'http://localhost:50002';
+const ADMIN = 'http://localhost:50003';
+
+// ── State ─────────────────────────────────────────────────────────
+let currentHeight   = 0;
+let selectedOutcome = 1;       // for predict page
+let resolveOutcome  = 1;       // for resolve page
+
+// ── Navigation ────────────────────────────────────────────────────
+const PAGE_TITLES = {
+  markets:     'All Markets',
+  create:      'Create Market',
+  predict:     'Submit Prediction',
+  resolve:     'Resolve Market',
+  claim:       'Claim Winnings',
+  leaderboard: 'Leaderboard',
+  wallet:      'Wallet',
+  node:        'Node Info',
+};
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[id] || id;
+
+  if (id === 'markets')     loadMarkets();
+  if (id === 'leaderboard') loadLeaderboard();
+}
+
+// ── RPC helpers ───────────────────────────────────────────────────
+async function rpcPost(path, body) {
+  const r = await fetch(RPC + path, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+async function rpcGet(path) {
+  const r = await fetch(RPC + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+async function adminPost(path, body) {
+  const r = await fetch(ADMIN + path, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ── Health check & height ─────────────────────────────────────────
+async function checkRPC() {
+  try {
+    const data = await rpcPost('/v1/query/height', {});
+    currentHeight = data.height || 0;
+    document.getElementById('rpcDot').className = 'rpc-dot live';
+    document.getElementById('rpcStatus').textContent = 'connected';
+    document.getElementById('heightDisplay').textContent = '#' + currentHeight;
+    document.getElementById('ni_height').textContent = currentHeight;
+    // pre-fill resolution height suggestion
+    const resH = document.getElementById('c_resHeight');
+    if (resH && !resH.value) resH.value = currentHeight + 100;
+  } catch {
+    document.getElementById('rpcDot').className = 'rpc-dot';
+    document.getElementById('rpcStatus').textContent = 'offline';
+  }
+}
+
+// ── Markets ───────────────────────────────────────────────────────
+// Markets are stored at prefix 0x10 in state.
+// We do a range scan using the query/state endpoint.
+async function loadMarkets() {
+  const el = document.getElementById('marketsList');
+  el.innerHTML = '<div class="loading"><span class="blink">▪▪▪</span> Scanning chain state...</div>';
+
+  try {
+    // Range scan: market prefix = 0x10 (hex = "10")
+    const data = await rpcGet('/v1/query/state?prefix=10&limit=100&reverse=false');
+    const entries = data.entries || [];
+
+    if (entries.length === 0) {
+      el.innerHTML = '<div class="empty"><div class="empty-title">No markets yet</div>Create the first prediction market on this chain.</div>';
+      updateStats([], [], []);
+      return;
+    }
+
+    // entries are raw protobuf bytes — display as decoded JSON if available
+    // or show raw hex with the market fields we can parse from JSON representation
+    renderMarketsFromEntries(entries);
+  } catch(e) {
+    // Fallback: try to show demo data with a clear note
+    el.innerHTML = `<div style="padding:16px;background:var(--red-dim);border:1px solid var(--red)30;border-radius:6px;font-size:11.5px;color:var(--muted);margin-bottom:12px">
+      ⚠ Could not reach chain at ${RPC}. Start your local Canopy node: <code>canopy start</code>
+    </div>`;
+    renderDemoMarkets();
+  }
+}
+
+function renderMarketsFromEntries(entries) {
+  const el = document.getElementById('marketsList');
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-title">No markets found</div></div>';
+    return;
+  }
+  // Real entries: protobuf-encoded Market messages
+  // We show the count and raw data note since full proto decode requires WASM or server-side decode
+  el.innerHTML = `
+    <div style="padding:12px 14px;background:var(--green-dim);border:1px solid var(--green)30;border-radius:6px;font-size:11px;color:var(--green);margin-bottom:14px">
+      ✓ ${entries.length} market(s) found on-chain. Raw protobuf entries — query individual markets by key for decoded data.
+    </div>
+    <div class="markets-grid">
+      ${entries.map((e, i) => `
+        <div class="market-card open">
+          <div class="market-status open"><span class="dot"></span>ON-CHAIN</div>
+          <div class="market-question">Market #${i+1}</div>
+          <div class="market-meta">Key: <code style="font-size:9.5px;color:var(--dim)">${(e.key||'').substring(0,24)}...</code></div>
+          <div class="market-footer">
+            <span class="market-meta">${(e.value||'').length} bytes</span>
+            <button class="btn btn-sm" onclick="queryMarketByKey('${e.key}')">Decode ↗</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  document.getElementById('statOpen').textContent = entries.length;
+}
+
+function renderDemoMarkets() {
+  const demo = [
+    { id:1, question:'Will ETH hit $5,000 before block 2000?', status:0, totalYesPool:4200000, totalNoPool:1800000, resolutionHeight:2000 },
+    { id:2, question:'Will Canopy mainnet launch before block 5000?', status:0, totalYesPool:8500000, totalNoPool:3200000, resolutionHeight:5000 },
+    { id:3, question:'Will BTC dominance drop below 40%?', status:2, totalYesPool:1200000, totalNoPool:6800000, resolutionHeight:1500, winningOutcome:0 },
+  ];
+  const el = document.getElementById('marketsList');
+  el.innerHTML = `
+    <div style="padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:5px;font-size:10.5px;color:var(--dim);margin-bottom:14px">
+      Demo data — start your local chain to load real markets
+    </div>
+    <div class="markets-grid">
+      ${demo.map(m => renderMarketCard(m)).join('')}
+    </div>`;
+  updateStats(demo, demo.filter(m=>m.status===0), demo.filter(m=>m.status===2));
+}
+
+function renderMarketCard(m) {
+  const total = m.totalYesPool + m.totalNoPool;
+  const yesPct = total > 0 ? Math.round((m.totalYesPool/total)*100) : 50;
+  const noPct  = 100 - yesPct;
+  const statusClass = m.status === 0 ? 'open' : 'resolved';
+  const statusLabel = m.status === 0 ? 'OPEN' : 'RESOLVED';
+  return `
+    <div class="market-card ${statusClass}">
+      <div class="market-status ${statusClass}">
+        <span class="dot"></span>${statusLabel}
+      </div>
+      <div class="market-question">${m.question}</div>
+      <div class="pool-bars">
+        <div class="pool-row">
+          <span class="pool-label yes">YES</span>
+          <div class="pool-track"><div class="pool-fill yes" style="width:${yesPct}%"></div></div>
+          <span class="pool-pct">${yesPct}%</span>
+        </div>
+        <div class="pool-row">
+          <span class="pool-label no">NO</span>
+          <div class="pool-track"><div class="pool-fill no" style="width:${noPct}%"></div></div>
+          <span class="pool-pct">${noPct}%</span>
+        </div>
+      </div>
+      <div class="market-footer">
+        <span class="market-meta">Block ${m.resolutionHeight}</span>
+        <span class="market-vol">Vol: <span>${fmtPRX(total)} $PRX</span></span>
+      </div>
+    </div>`;
+}
+
+function updateStats(all, open, resolved) {
+  document.getElementById('statOpen').textContent     = open.length;
+  document.getElementById('statResolved').textContent = resolved.length;
+  const total = all.reduce((s,m)=>s+(m.totalYesPool||0)+(m.totalNoPool||0),0);
+  document.getElementById('statStaked').textContent   = fmtPRX(total);
+}
+
+async function queryMarketByKey(key) {
+  try {
+    const data = await rpcGet(`/v1/query/state-key?key=${key}`);
+    toast('State key queried: ' + JSON.stringify(data).substring(0,80) + '...');
+  } catch(e) {
+    toast('Query failed: ' + e.message, true);
+  }
+}
+
+// ── Account ───────────────────────────────────────────────────────
+async function queryAccount() {
+  const addr = document.getElementById('w_addr').value.trim();
+  if (!addr) return toast('Enter an address', true);
+  try {
+    const data = await rpcPost('/v1/query/account', { address: addr });
+    document.getElementById('w_balance').textContent = fmtPRX(data.amount || 0) + ' $PRX';
+    document.getElementById('w_addrDisplay').textContent = addr;
+    document.getElementById('w_balDisplay').style.display = 'block';
+  } catch(e) {
+    toast('Query failed: ' + e.message, true);
+  }
+}
+
+async function listKeystore() {
+  try {
+    const r = await fetch(ADMIN + '/v1/admin/keystore');
+    const data = await r.json();
+    const el = document.getElementById('keystoreOutput');
+    el.style.display = 'block';
+    el.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    toast('Admin RPC error (ensure node is running locally): ' + e.message, true);
+  }
+}
+
+async function newKeystoreKey() {
+  const nick = prompt('Nickname for new key:');
+  if (!nick) return;
+  const pwd = prompt('Password (leave blank for none):') || '';
+  try {
+    const data = await adminPost('/v1/admin/keystore-new-key', { nickname: nick, password: pwd });
+    toast('New key created: ' + data);
+    listKeystore();
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+// ── Outcome selectors ─────────────────────────────────────────────
+function selectOutcome(v) {
+  selectedOutcome = v;
+  document.getElementById('btn_yes').classList.toggle('active', v===1);
+  document.getElementById('btn_no').classList.toggle('active',  v===0);
+  document.getElementById('outcomeHint').textContent = 'Selected: ' + (v===1?'YES':'NO');
+}
+
+function selectResolveOutcome(v) {
+  resolveOutcome = v;
+  document.getElementById('rbtn_yes').classList.toggle('active', v===1);
+  document.getElementById('rbtn_no').classList.toggle('active',  v===0);
+  document.getElementById('resolveOutcomeHint').textContent = 'Selected: ' + (v===1?'YES wins':'NO wins');
+}
+
+// ── Transaction builders ──────────────────────────────────────────
+// Per rpc_test.go: for plugin-specific types, use msgTypeUrl + msgBytes fields.
+// Bytes (addresses) are base64-encoded in the JSON body.
+// Sign bytes = proto.Marshal(Transaction with signature=nil)
+
+function hexToB64(hex) {
+  if (!hex) return '';
+  const bytes = hex.match(/.{1,2}/g).map(b => parseInt(b,16));
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function buildTxSkeleton(msgType, msgFields) {
+  return {
+    type: msgType,
+    msgTypeUrl: `type.googleapis.com/types.Message${toPascal(msgType)}`,
+    // msgBytes should be set after proto encoding the inner message
+    // For development/testing: include the fields as a readable object
+    msgFields: msgFields, // human readable; replace with msgBytes after proto encode
+    signature: null, // MUST be set before submitting: { publicKey: hexStr, signature: hexStr }
+    time: Date.now() * 1000,      // UnixMicro — matches rpc_test.go: time.Now().UnixMicro()
+    createdHeight: currentHeight,
+    fee: 0, // set per-form
+    memo: '',
+    networkID: 1,
+    chainID: 1,
+    // ──────────────────────────────────────────────────────────────
+    // SIGNING INSTRUCTIONS:
+    // 1. Encode inner message to proto bytes → set msgBytes (hex), remove msgFields
+    // 2. Build Transaction proto with signature=nil
+    // 3. signBytes = proto.Marshal(transaction)
+    // 4. sig = bls12381PrivKey.Sign(signBytes)
+    // 5. Set signature: { publicKey: hexPubKey, signature: hexSig }
+    // 6. POST to /v1/tx — bytes fields (addresses) as base64
+    // ──────────────────────────────────────────────────────────────
+  };
+}
+
+function toPascal(s) {
+  return s.split('_').map(w => w.charAt(0).toUpperCase()+w.slice(1)).join('');
+}
+
+function buildCreateMarket() {
+  const question   = document.getElementById('c_question').value.trim();
+  const desc       = document.getElementById('c_desc').value.trim();
+  const creator    = document.getElementById('c_creator').value.trim().toLowerCase();
+  const resolver   = document.getElementById('c_resolver').value.trim().toLowerCase();
+  const resHeight  = parseInt(document.getElementById('c_resHeight').value);
+  const stake      = parseInt(document.getElementById('c_stake').value);
+  const fee        = parseInt(document.getElementById('c_fee').value);
+
+  if (!question)  return toast('Question is required', true);
+  if (!creator || creator.length !== 40) return toast('Creator address must be 40 hex chars', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+  if (!resHeight || resHeight <= currentHeight) return toast(`Resolution height must be > ${currentHeight}`, true);
+  if (stake < 1000000) return toast('Min stake is 1,000,000 μPRX (1 $PRX)', true);
+
+  const tx = buildTxSkeleton('create_market', {
+    creatorAddress:   hexToB64(creator),  // base64 in JSON per protojson spec
+    question:         question,
+    description:      desc,
+    resolverAddress:  hexToB64(resolver),
+    resolutionHeight: resHeight,
+    stakeAmount:      stake,
+  });
+  tx.fee = fee;
+
+  const el = document.getElementById('c_payload');
+  el.value = JSON.stringify(tx, null, 2);
+  document.getElementById('c_output').style.display = 'block';
+  toast('Payload built — sign with BLS12-381 before submitting');
+}
+
+function buildSubmitPrediction() {
+  const marketId   = parseInt(document.getElementById('p_marketId').value);
+  const forecaster = document.getElementById('p_forecaster').value.trim().toLowerCase();
+  const amount     = parseInt(document.getElementById('p_amount').value);
+  const fee        = parseInt(document.getElementById('p_fee').value);
+
+  if (!marketId)  return toast('Market ID is required', true);
+  if (!forecaster || forecaster.length !== 40) return toast('Forecaster address must be 40 hex chars', true);
+  if (amount < 100000) return toast('Minimum bet is 100,000 μPRX', true);
+
+  const tx = buildTxSkeleton('submit_prediction', {
+    forecasterAddress: hexToB64(forecaster),
+    marketId:          marketId,
+    outcome:           selectedOutcome,
+    amount:            amount,
+  });
+  tx.fee = fee;
+
+  const el = document.getElementById('p_payload');
+  el.value = JSON.stringify(tx, null, 2);
+  document.getElementById('p_output').style.display = 'block';
+  toast('Payload built — sign with BLS12-381 before submitting');
+}
+
+function buildResolveMarket() {
+  const marketId  = parseInt(document.getElementById('r_marketId').value);
+  const resolver  = document.getElementById('r_resolver').value.trim().toLowerCase();
+  const fee       = parseInt(document.getElementById('r_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!resolver || resolver.length !== 40) return toast('Resolver address must be 40 hex chars', true);
+
+  const tx = buildTxSkeleton('resolve_market', {
+    resolverAddress: hexToB64(resolver),
+    marketId:        marketId,
+    winningOutcome:  resolveOutcome,
+  });
+  tx.fee = fee;
+
+  const el = document.getElementById('r_payload');
+  el.value = JSON.stringify(tx, null, 2);
+  document.getElementById('r_output').style.display = 'block';
+  toast('Payload built — sign with BLS12-381 before submitting');
+}
+
+function buildClaim() {
+  const marketId = parseInt(document.getElementById('cl_marketId').value);
+  const addr     = document.getElementById('cl_addr').value.trim().toLowerCase();
+  const fee      = parseInt(document.getElementById('cl_fee').value);
+
+  if (!marketId) return toast('Market ID is required', true);
+  if (!addr || addr.length !== 40) return toast('Claimer address must be 40 hex chars', true);
+
+  const tx = buildTxSkeleton('claim_winnings', {
+    claimerAddress: hexToB64(addr),
+    marketId:       marketId,
+  });
+  tx.fee = fee;
+
+  const el = document.getElementById('cl_payload');
+  el.value = JSON.stringify(tx, null, 2);
+  document.getElementById('cl_output').style.display = 'block';
+  toast('Payload built — sign with BLS12-381 before submitting');
+}
+
+function buildSend() {
+  const from   = document.getElementById('s_from').value.trim().toLowerCase();
+  const to     = document.getElementById('s_to').value.trim().toLowerCase();
+  const amount = parseInt(document.getElementById('s_amount').value);
+  const fee    = parseInt(document.getElementById('s_fee').value);
+
+  if (!from || from.length !== 40) return toast('From address must be 40 hex chars', true);
+  if (!to || to.length !== 40)   return toast('To address must be 40 hex chars', true);
+  if (!amount || amount <= 0)    return toast('Amount must be > 0', true);
+
+  // "send" is in RegisteredMessages — use msg field (not msgBytes)
+  const tx = {
+    type: 'send',
+    msg: {
+      fromAddress: hexToB64(from),
+      toAddress:   hexToB64(to),
+      amount:      amount,
+    },
+    signature: null,
+    time:          Date.now() * 1000,
+    createdHeight: currentHeight,
+    fee:           fee,
+    memo:          '',
+    networkID:     1,
+    chainID:       1,
+  };
+
+  const el = document.getElementById('s_payload');
+  el.value = JSON.stringify(tx, null, 2);
+  document.getElementById('s_output').style.display = 'block';
+  toast('Send payload built — sign before submitting');
+}
+
+// ── Submit signed transaction ─────────────────────────────────────
+async function submitTx(payloadId) {
+  const raw = document.getElementById(payloadId).value;
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return toast('Invalid JSON payload', true); }
+
+  if (!parsed.signature || parsed.signature === null) {
+    return toast('Transaction is unsigned. Attach BLS12-381 signature before submitting.', true);
+  }
+
+  try {
+    const result = await rpcPost('/v1/tx', parsed);
+    toast('✓ Submitted: ' + (result || JSON.stringify(result)));
+    checkRPC();
+  } catch(e) {
+    toast('Submit failed: ' + e.message, true);
+  }
+}
+
+function copyPayload(payloadId) {
+  const val = document.getElementById(payloadId).value;
+  navigator.clipboard.writeText(val).then(() => toast('Payload copied to clipboard'));
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────
+async function loadLeaderboard() {
+  try {
+    // ForecasterRecord prefix = 0x13
+    const data = await rpcGet('/v1/query/state?prefix=13&limit=100&reverse=false');
+    const entries = data.entries || [];
+    if (entries.length === 0) {
+      renderDemoLeaderboard();
+      return;
+    }
+    renderLeaderboardRaw(entries);
+  } catch {
+    renderDemoLeaderboard();
+  }
+}
+
+function renderLeaderboardRaw(entries) {
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = `<tr><td colspan="5" style="padding:14px;color:var(--muted);font-size:11px;">
+    ${entries.length} forecaster record(s) on-chain (protobuf encoded). Decode locally to display stats.
+  </td></tr>`;
+}
+
+function renderDemoLeaderboard() {
+  const data = [
+    { address:'dfd3c8dff19da7682f7fe5fde062c813b55c9eee', correct:24, total:29, earned:4800000 },
+    { address:'eed6c9dff19da7682f7fe5fde062c813b42c7abc', correct:17, total:22, earned:2900000 },
+    { address:'aab1c2dff19da7682f7fe5fde062c813b11c1111', correct:11, total:18, earned:1600000 },
+  ];
+  const tbody = document.getElementById('leaderboardBody');
+  const rankClass = i => i===0?'gold':i===1?'silver':i===2?'bronze':'';
+  tbody.innerHTML = data.map((r,i) => {
+    const acc = r.total > 0 ? Math.round((r.correct/r.total)*100) : 0;
+    return `<tr>
+      <td><span class="rank-badge ${rankClass(i)}">#${i+1}</span></td>
+      <td style="font-size:10.5px;color:var(--green);font-family:var(--font-m)">${r.address.substring(0,16)}...</td>
+      <td>${r.correct} / ${r.total}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="acc-bar-wrap"><div class="acc-bar-fill" style="width:${acc}%"></div></div>
+          <span style="color:var(--green)">${acc}%</span>
+        </div>
+      </td>
+      <td style="color:var(--yes)">${fmtPRX(r.earned)} $PRX</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Utilities ─────────────────────────────────────────────────────
+function fmtPRX(micro) {
+  if (!micro) return '0';
+  if (micro >= 1_000_000) return (micro/1_000_000).toFixed(2);
+  if (micro >= 1_000)     return (micro/1_000).toFixed(1) + 'k';
+  return micro.toString();
+}
+
+function toast(msg, isErr=false) {
+  const wrap = document.getElementById('toastWrap');
+  const el   = document.createElement('div');
+  el.className = 'toast' + (isErr ? ' err' : '');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3500);
+}
+
+function refreshAll() { checkRPC(); loadMarkets(); }
+
+// ── Init ──────────────────────────────────────────────────────────
+selectOutcome(1);
+selectResolveOutcome(1);
+checkRPC();
+setInterval(checkRPC, 24000); // one block time
+loadMarkets();
+</script>
+</body>
+</html>

@@ -3,54 +3,109 @@ package types;
 option go_package = "github.com/canopy-network/go-plugin/contract";
 
 import "google/protobuf/any.proto";
-// Transaction represents a request or action submitted to the network like transfer assets or perform other operations
-// within the blockchain system - THIS MUST MATCH lib.Transaction EXACTLY for signing
+
+// Transaction represents a request or action submitted to the network
+// THIS MUST MATCH lib.Transaction EXACTLY for signing
 message Transaction {
-  // message_type: The type of the transaction like 'send' or 'stake'
   string message_type = 1; // @gotags: json:"messageType"
-  // msg: The actual transaction message payload, which is encapsulated in a generic message format
   google.protobuf.Any msg = 2;
-  // signature: The cryptographic signature used to verify the authenticity of the transaction
   Signature signature = 3;
-  // created_height: The height when the transaction was created - allows 'safe pruning'
   uint64 created_height = 4; // @gotags: json:"createdHeight"
-  // time: The timestamp when the transaction was created - used as temporal entropy to prevent hash collisions in txs
   uint64 time = 5;
-  // fee: The fee associated with processing the transaction
   uint64 fee = 6;
-  // memo: An optional message or note attached to the transaction
   string memo = 7;
-  // network_id: The identity of the network the transaction is intended for
   uint64 network_id = 8; // @gotags: json:"networkID"
-  // chain_id: The identity of the committee the transaction is intended for
-  uint64 chain_id = 9; // @gotags: json:"chainID"
-  // NOTE: CAN EXTEND FUNCTIONALITY BY ADDING ADDITIONAL FIELDS
+  uint64 chain_id = 9;   // @gotags: json:"chainID"
   // NO CONFLICT STARTING AT FIELD = 10
 }
 
-// MessageSend is a standard transfer transaction, taking tokens from the sender and transferring
-// them to the recipient
+// ── Built-in: Standard token transfer ───────────────────────────
 message MessageSend {
-  // from_address: is the sender of the funds
   bytes from_address = 1; // @gotags: json:"fromAddress"
-  // to_address: is the recipient of the funds
-  bytes to_address = 2; // @gotags: json:"toAddress"
-  // amount: is the amount of tokens in micro-denomination (uCNPY)
+  bytes to_address = 2;   // @gotags: json:"toAddress"
   uint64 amount = 3;
 }
 
-// FeeParams is the parameter space that defines various amounts for transaction fees
-message FeeParams {
-  // send_fee: is the fee amount (in uCNPY) for Message Send
-  uint64 send_fee = 1; // @gotags: json:"sendFee"
-  // NO CONFLICT STARTING AT FIELD = 14
+// ── Praxis: Create a new prediction market ───────────────────────
+message MessageCreateMarket {
+  bytes  creator_address    = 1; // @gotags: json:"creatorAddress"
+  string question           = 2; // e.g. "Will BTC hit $100k by EOY?"
+  string description        = 3; // optional longer description
+  bytes  resolver_address   = 4; // @gotags: json:"resolverAddress"
+  uint64 resolution_height  = 5; // @gotags: json:"resolutionHeight"
+  uint64 stake_amount       = 6; // @gotags: json:"stakeAmount"
 }
 
-// A Signature is a digital signature is a cryptographic "fingerprint" created with a private key,
-// allowing others to verify the authenticity and integrity of a message using the corresponding public key
+// ── Praxis: Submit a prediction (bet YES=1 or NO=0) ─────────────
+message MessageSubmitPrediction {
+  bytes  forecaster_address = 1; // @gotags: json:"forecasterAddress"
+  uint64 market_id          = 2; // @gotags: json:"marketId"
+  uint32 outcome            = 3; // 1 = YES, 0 = NO
+  uint64 amount             = 4;
+}
+
+// ── Praxis: Resolver declares winning outcome ────────────────────
+message MessageResolveMarket {
+  bytes  resolver_address = 1; // @gotags: json:"resolverAddress"
+  uint64 market_id        = 2; // @gotags: json:"marketId"
+  uint32 winning_outcome  = 3; // @gotags: json:"winningOutcome"
+}
+
+// ── Praxis: Forecaster claims winnings ───────────────────────────
+message MessageClaimWinnings {
+  bytes  claimer_address = 1; // @gotags: json:"claimerAddress"
+  uint64 market_id       = 2; // @gotags: json:"marketId"
+}
+
+// ── State objects ─────────────────────────────────────────────────
+
+// Market holds all data for a prediction market
+message Market {
+  uint64   id                = 1;
+  bytes    creator_address   = 2;  // @gotags: json:"creatorAddress"
+  string   question          = 3;
+  string   description       = 4;
+  bytes    resolver_address  = 5;  // @gotags: json:"resolverAddress"
+  uint64   resolution_height = 6;  // @gotags: json:"resolutionHeight"
+  uint32   status            = 7;  // 0=open, 1=resolving, 2=resolved
+  uint32   winning_outcome   = 8;  // @gotags: json:"winningOutcome"
+  uint64   total_yes_pool    = 9;  // @gotags: json:"totalYesPool"
+  uint64   total_no_pool     = 10; // @gotags: json:"totalNoPool"
+  uint64   created_height    = 11; // @gotags: json:"createdHeight"
+}
+
+// Prediction holds a single forecaster's bet on a market
+message Prediction {
+  bytes  forecaster_address = 1;  // @gotags: json:"forecasterAddress"
+  uint64 market_id          = 2;  // @gotags: json:"marketId"
+  uint32 outcome            = 3;
+  uint64 amount             = 4;
+  bool   claimed            = 5;
+}
+
+// MarketCounter tracks the next market ID (auto-increment)
+message MarketCounter {
+  uint64 count = 1;
+}
+
+// ForecasterRecord tracks a forecaster's overall stats for the leaderboard
+message ForecasterRecord {
+  bytes  address        = 1;
+  uint64 total_bets     = 2; // @gotags: json:"totalBets"
+  uint64 correct_bets   = 3; // @gotags: json:"correctBets"
+  uint64 total_staked   = 4; // @gotags: json:"totalStaked"
+  uint64 total_earned   = 5; // @gotags: json:"totalEarned"
+}
+
+// ── Governance parameters ──────────────────────────────────────────
+message FeeParams {
+  uint64 send_fee         = 1;  // @gotags: json:"sendFee"
+  uint64 create_market_fee = 14; // @gotags: json:"createMarketFee"
+  // NO CONFLICT STARTING AT FIELD = 15
+}
+
+// Signature holds the BLS12-381 signature
 message Signature {
-  // public_key: is a cryptographic code shared openly, used to verify digital signatures
   bytes public_key = 1; // @gotags: json:"publicKey"
-  // signature: the bytes of the signature output from a private key which may be verified with the message and public
-  bytes signature = 2;
+  bytes signature  = 2;
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log"
 	"math/rand"
+	"sync"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -12,30 +13,81 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-/* This file contains the base contract implementation that overrides the basic 'transfer' functionality */
+/*
+  Praxis — Prediction Market Plugin for Canopy
+  ─────────────────────────────────────────────
+  Transaction types:
+    send              - standard token transfer (built-in)
+    create_market     - open a new YES/NO prediction market
+    submit_prediction - place a bet on a market outcome
+    resolve_market    - resolver declares the winning outcome
+    claim_winnings    - winner claims their payout
 
-// PluginConfig: the configuration of the contract
+  State key prefixes:
+    0x01  Account
+    0x02  Pool (fee pool)
+    0x07  FeeParams
+    0x10  Market
+    0x11  Prediction  (keyed by marketId + forecasterAddress)
+    0x12  MarketCounter
+    0x13  ForecasterRecord
+
+  NOTE on currentHeight:
+    plugin.go creates a brand new Contract instance for EVERY FSM message,
+    so state on the Contract struct does NOT persist between BeginBlock and DeliverTx.
+    We use package-level vars (heightMu + globalHeight) to safely share
+    the block height across calls within the same block.
+*/
+
+// ── Package-level height (survives across Contract instances) ─────
+
+var (
+	heightMu     sync.RWMutex
+	globalHeight uint64
+)
+
+func setGlobalHeight(h uint64) {
+	heightMu.Lock()
+	defer heightMu.Unlock()
+	globalHeight = h
+}
+
+func getGlobalHeight() uint64 {
+	heightMu.RLock()
+	defer heightMu.RUnlock()
+	return globalHeight
+}
+
+// ── Plugin config ─────────────────────────────────────────────────
+
 var ContractConfig = &PluginConfig{
-	Name:                  "go_plugin_contract",
-	Id:                    1,
-	Version:               1,
-	SupportedTransactions: []string{"send"},
+	Name:    "praxis_prediction_market",
+	Id:      1,
+	Version: 1,
+	SupportedTransactions: []string{
+		"send",
+		"create_market",
+		"submit_prediction",
+		"resolve_market",
+		"claim_winnings",
+	},
 	TransactionTypeUrls: []string{
 		"type.googleapis.com/types.MessageSend",
+		"type.googleapis.com/types.MessageCreateMarket",
+		"type.googleapis.com/types.MessageSubmitPrediction",
+		"type.googleapis.com/types.MessageResolveMarket",
+		"type.googleapis.com/types.MessageClaimWinnings",
 	},
 	EventTypeUrls: nil,
 }
 
-// init sets FileDescriptorProtos after ensuring .pb.go files are initialized
 func init() {
-	// Explicitly initialize the proto files first to ensure File_*_proto are set
 	file_account_proto_init()
 	file_event_proto_init()
 	file_plugin_proto_init()
 	file_tx_proto_init()
 
 	var fds [][]byte
-	// Include google/protobuf/any.proto first as it's a dependency of event.proto and tx.proto
 	for _, file := range []protoreflect.FileDescriptor{
 		anypb.File_google_protobuf_any_proto,
 		File_account_proto, File_event_proto, File_plugin_proto, File_tx_proto,
@@ -46,152 +98,207 @@ func init() {
 	ContractConfig.FileDescriptorProtos = fds
 }
 
-// Contract() defines the smart contract that implements the extended logic of the nested chain
+// ── Contract struct ───────────────────────────────────────────────
+// NOTE: plugin.go creates a new Contract per FSM message, so do NOT
+// store block-scoped state on this struct. Use package-level vars instead.
+
 type Contract struct {
 	Config    Config
-	FSMConfig *PluginFSMConfig // fsm configuration
-	plugin    *Plugin          // plugin connection
-	fsmId     uint64           // the id of the requesting fsm
+	FSMConfig *PluginFSMConfig
+	plugin    *Plugin
+	fsmId     uint64
 }
 
-// Genesis() implements logic to import a json file to create the state at height 0 and export the state at any height
+// ── Lifecycle ─────────────────────────────────────────────────────
+
 func (c *Contract) Genesis(_ *PluginGenesisRequest) *PluginGenesisResponse {
-	return &PluginGenesisResponse{} // TODO map out original token holders
+	return &PluginGenesisResponse{}
 }
 
-// BeginBlock() is code that is executed at the start of `applying` the block
-func (c *Contract) BeginBlock(_ *PluginBeginRequest) *PluginBeginResponse {
+func (c *Contract) BeginBlock(req *PluginBeginRequest) *PluginBeginResponse {
+	setGlobalHeight(req.Height)
 	return &PluginBeginResponse{}
 }
 
-// CheckTx() is code that is executed to statelessly validate a transaction
 func (c *Contract) CheckTx(request *PluginCheckRequest) *PluginCheckResponse {
-	// validate fee
+	feeQId := rand.Uint64()
 	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
-			{QueryId: rand.Uint64(), Key: KeyForFeeParams()},
-		}})
-	if err == nil {
-		err = resp.Error
-	}
-	// handle error
+			{QueryId: feeQId, Key: KeyForFeeParams()},
+		},
+	})
 	if err != nil {
 		return &PluginCheckResponse{Error: err}
 	}
-	// convert bytes into fee parameters
+	if resp.Error != nil {
+		return &PluginCheckResponse{Error: resp.Error}
+	}
+	// Safely extract fee params bytes (Unmarshal handles nil gracefully — defaults to 0)
 	minFees := new(FeeParams)
-	if err = Unmarshal(resp.Results[0].Entries[0].Value, minFees); err != nil {
+	var feeBytes []byte
+	for _, r := range resp.Results {
+		if r.QueryId == feeQId && len(r.Entries) > 0 {
+			feeBytes = r.Entries[0].Value
+		}
+	}
+	if err = Unmarshal(feeBytes, minFees); err != nil {
 		return &PluginCheckResponse{Error: err}
 	}
-	// check for the minimum fee
 	if request.Tx.Fee < minFees.SendFee {
 		return &PluginCheckResponse{Error: ErrTxFeeBelowStateLimit()}
 	}
-	// get the message
+
 	msg, err := FromAny(request.Tx.Msg)
 	if err != nil {
 		return &PluginCheckResponse{Error: err}
 	}
-	// handle the message
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.CheckMessageSend(x)
+	case *MessageCreateMarket:
+		return c.CheckCreateMarket(x)
+	case *MessageSubmitPrediction:
+		return c.CheckSubmitPrediction(x)
+	case *MessageResolveMarket:
+		return c.CheckResolveMarket(x)
+	case *MessageClaimWinnings:
+		return c.CheckClaimWinnings(x)
 	default:
 		return &PluginCheckResponse{Error: ErrInvalidMessageCast()}
 	}
 }
 
-// DeliverTx() is code that is executed to apply a transaction
 func (c *Contract) DeliverTx(request *PluginDeliverRequest) *PluginDeliverResponse {
-	// get the message
 	msg, err := FromAny(request.Tx.Msg)
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	// handle the message
 	switch x := msg.(type) {
 	case *MessageSend:
 		return c.DeliverMessageSend(x, request.Tx.Fee)
+	case *MessageCreateMarket:
+		return c.DeliverCreateMarket(x, request.Tx.Fee)
+	case *MessageSubmitPrediction:
+		return c.DeliverSubmitPrediction(x, request.Tx.Fee)
+	case *MessageResolveMarket:
+		return c.DeliverResolveMarket(x, request.Tx.Fee)
+	case *MessageClaimWinnings:
+		return c.DeliverClaimWinnings(x, request.Tx.Fee)
 	default:
 		return &PluginDeliverResponse{Error: ErrInvalidMessageCast()}
 	}
 }
 
-// EndBlock() is code that is executed at the end of 'applying' a block
 func (c *Contract) EndBlock(_ *PluginEndRequest) *PluginEndResponse {
 	return &PluginEndResponse{}
 }
 
-// CheckMessageSend() statelessly validates a 'send' message
+// ── CheckTx handlers ──────────────────────────────────────────────
+
 func (c *Contract) CheckMessageSend(msg *MessageSend) *PluginCheckResponse {
-	// check sender address
 	if len(msg.FromAddress) != 20 {
 		return &PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
-	// check recipient address
 	if len(msg.ToAddress) != 20 {
 		return &PluginCheckResponse{Error: ErrInvalidAddress()}
 	}
-	// check amount
 	if msg.Amount == 0 {
 		return &PluginCheckResponse{Error: ErrInvalidAmount()}
 	}
-	// return the authorized signers
 	return &PluginCheckResponse{Recipient: msg.ToAddress, AuthorizedSigners: [][]byte{msg.FromAddress}}
 }
 
-// DeliverMessageSend() handles a 'send' message
+func (c *Contract) CheckCreateMarket(msg *MessageCreateMarket) *PluginCheckResponse {
+	if len(msg.CreatorAddress) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if len(msg.ResolverAddress) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if len(msg.Question) == 0 || len(msg.Question) > 280 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if msg.StakeAmount == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.CreatorAddress}}
+}
+
+func (c *Contract) CheckSubmitPrediction(msg *MessageSubmitPrediction) *PluginCheckResponse {
+	if len(msg.ForecasterAddress) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.MarketId == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if msg.Outcome != 0 && msg.Outcome != 1 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if msg.Amount == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.ForecasterAddress}}
+}
+
+func (c *Contract) CheckResolveMarket(msg *MessageResolveMarket) *PluginCheckResponse {
+	if len(msg.ResolverAddress) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.MarketId == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	if msg.WinningOutcome != 0 && msg.WinningOutcome != 1 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.ResolverAddress}}
+}
+
+func (c *Contract) CheckClaimWinnings(msg *MessageClaimWinnings) *PluginCheckResponse {
+	if len(msg.ClaimerAddress) != 20 {
+		return &PluginCheckResponse{Error: ErrInvalidAddress()}
+	}
+	if msg.MarketId == 0 {
+		return &PluginCheckResponse{Error: ErrInvalidAmount()}
+	}
+	return &PluginCheckResponse{AuthorizedSigners: [][]byte{msg.ClaimerAddress}}
+}
+
+// ── DeliverTx: send ───────────────────────────────────────────────
+
 func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliverResponse {
-	log.Printf("DeliverMessageSend called: from=%x to=%x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
+	log.Printf("DeliverMessageSend: from=%x to=%x amount=%d fee=%d", msg.FromAddress, msg.ToAddress, msg.Amount, fee)
 	var (
-		fromKey, toKey, feePoolKey         []byte
-		fromBytes, toBytes, feePoolBytes   []byte
-		fromQueryId, toQueryId, feeQueryId = rand.Uint64(), rand.Uint64(), rand.Uint64()
-		from, to, feePool                  = new(Account), new(Account), new(Pool)
+		fromKey, toKey, feePoolKey       = KeyForAccount(msg.FromAddress), KeyForAccount(msg.ToAddress), KeyForFeePool(c.Config.ChainId)
+		fromQId, toQId, feeQId           = rand.Uint64(), rand.Uint64(), rand.Uint64()
+		from, to, feePool                = new(Account), new(Account), new(Pool)
+		fromBytes, toBytes, feePoolBytes []byte
 	)
-	// calculate the from key and to key
-	fromKey, toKey, feePoolKey = KeyForAccount(msg.FromAddress), KeyForAccount(msg.ToAddress), KeyForFeePool(c.Config.ChainId)
-	log.Printf("Keys: fromKey=%x toKey=%x feePoolKey=%x", fromKey, toKey, feePoolKey)
-	// get the from and to account
 	response, err := c.plugin.StateRead(c, &PluginStateReadRequest{
 		Keys: []*PluginKeyRead{
-			{QueryId: feeQueryId, Key: feePoolKey},
-			{QueryId: fromQueryId, Key: fromKey},
-			{QueryId: toQueryId, Key: toKey},
-		}})
-	// check for internal error
+			{QueryId: feeQId, Key: feePoolKey},
+			{QueryId: fromQId, Key: fromKey},
+			{QueryId: toQId, Key: toKey},
+		},
+	})
 	if err != nil {
-		log.Printf("StateRead error: %v", err)
 		return &PluginDeliverResponse{Error: err}
 	}
-	// ensure no error fsm error
 	if response.Error != nil {
-		log.Printf("StateRead FSM error: %v", response.Error)
 		return &PluginDeliverResponse{Error: response.Error}
 	}
-	log.Printf("StateRead returned %d results", len(response.Results))
-	// get the from bytes and to bytes
-	for _, resp := range response.Results {
-		log.Printf("Result QueryId=%d Entries=%d", resp.QueryId, len(resp.Entries))
-		if len(resp.Entries) == 0 {
-			log.Printf("WARNING: No entries for QueryId=%d", resp.QueryId)
+	for _, r := range response.Results {
+		if len(r.Entries) == 0 {
 			continue
 		}
-		switch resp.QueryId {
-		case fromQueryId:
-			fromBytes = resp.Entries[0].Value
-			log.Printf("fromBytes len=%d", len(fromBytes))
-		case toQueryId:
-			toBytes = resp.Entries[0].Value
-			log.Printf("toBytes len=%d", len(toBytes))
-		case feeQueryId:
-			feePoolBytes = resp.Entries[0].Value
-			log.Printf("feePoolBytes len=%d", len(feePoolBytes))
+		switch r.QueryId {
+		case fromQId:
+			fromBytes = r.Entries[0].Value
+		case toQId:
+			toBytes = r.Entries[0].Value
+		case feeQId:
+			feePoolBytes = r.Entries[0].Value
 		}
 	}
-	// add fee to 'amount to deduct'
-	amountToDeduct := msg.Amount + fee
-	// convert the bytes to account structures
 	if err = Unmarshal(fromBytes, from); err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
@@ -201,24 +308,16 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 	if err = Unmarshal(feePoolBytes, feePool); err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	log.Printf("from.Amount=%d to.Amount=%d feePool.Amount=%d", from.Amount, to.Amount, feePool.Amount)
-	// if the account amount is less than the amount to subtract; return insufficient funds
+	amountToDeduct := msg.Amount + fee
 	if from.Amount < amountToDeduct {
-		log.Printf("ERROR: Insufficient funds: from.Amount=%d amountToDeduct=%d", from.Amount, amountToDeduct)
 		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
 	}
-	// for self-transfer, use same account data
 	if bytes.Equal(fromKey, toKey) {
 		to = from
 	}
-	// subtract from sender
 	from.Amount -= amountToDeduct
-	// add the fee to the 'fee pool'
 	feePool.Amount += fee
-	// add to recipient
 	to.Amount += msg.Amount
-	log.Printf("AFTER: from.Amount=%d to.Amount=%d feePool.Amount=%d", from.Amount, to.Amount, feePool.Amount)
-	// convert the accounts to bytes
 	fromBytes, err = Marshal(from)
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
@@ -231,19 +330,14 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 	if err != nil {
 		return &PluginDeliverResponse{Error: err}
 	}
-	// execute writes to the database
-	var resp *PluginStateWriteResponse
-	// if the from account is drained - delete the from account
+	var writeResp *PluginStateWriteResponse
 	if from.Amount == 0 {
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
-			Sets: []*PluginSetOp{
-				{Key: feePoolKey, Value: feePoolBytes},
-				{Key: toKey, Value: toBytes},
-			},
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Sets:    []*PluginSetOp{{Key: feePoolKey, Value: feePoolBytes}, {Key: toKey, Value: toBytes}},
 			Deletes: []*PluginDeleteOp{{Key: fromKey}},
 		})
 	} else {
-		resp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
 			Sets: []*PluginSetOp{
 				{Key: feePoolKey, Value: feePoolBytes},
 				{Key: toKey, Value: toBytes},
@@ -252,36 +346,588 @@ func (c *Contract) DeliverMessageSend(msg *MessageSend, fee uint64) *PluginDeliv
 		})
 	}
 	if err != nil {
-		log.Printf("StateWrite internal error: %v", err)
 		return &PluginDeliverResponse{Error: err}
 	}
-	if resp.Error != nil {
-		log.Printf("StateWrite FSM error: %v", resp.Error)
-		return &PluginDeliverResponse{Error: resp.Error}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
 	}
-	log.Printf("StateWrite SUCCESS!")
 	return &PluginDeliverResponse{}
 }
 
+// ── DeliverTx: create_market ──────────────────────────────────────
+
+func (c *Contract) DeliverCreateMarket(msg *MessageCreateMarket, fee uint64) *PluginDeliverResponse {
+	log.Printf("DeliverCreateMarket: creator=%x question=%q stakeAmount=%d", msg.CreatorAddress, msg.Question, msg.StakeAmount)
+
+	creatorKey := KeyForAccount(msg.CreatorAddress)
+	feePoolKey := KeyForFeePool(c.Config.ChainId)
+	counterKey := KeyForMarketCounter()
+
+	creatorQId, feeQId, counterQId := rand.Uint64(), rand.Uint64(), rand.Uint64()
+
+	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: creatorQId, Key: creatorKey},
+			{QueryId: feeQId, Key: feePoolKey},
+			{QueryId: counterQId, Key: counterKey},
+		},
+	})
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &PluginDeliverResponse{Error: resp.Error}
+	}
+
+	creator, feePool, counter := new(Account), new(Pool), new(MarketCounter)
+	var creatorBytes, feePoolBytes, counterBytes []byte
+
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case creatorQId:
+			creatorBytes = r.Entries[0].Value
+		case feeQId:
+			feePoolBytes = r.Entries[0].Value
+		case counterQId:
+			counterBytes = r.Entries[0].Value
+		}
+	}
+
+	if err = Unmarshal(creatorBytes, creator); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(feePoolBytes, feePool); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(counterBytes, counter); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	totalCost := msg.StakeAmount + fee
+	if creator.Amount < totalCost {
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+
+	counter.Count++
+	newMarket := &Market{
+		Id:               counter.Count,
+		CreatorAddress:   msg.CreatorAddress,
+		Question:         msg.Question,
+		Description:      msg.Description,
+		ResolverAddress:  msg.ResolverAddress,
+		ResolutionHeight: msg.ResolutionHeight,
+		Status:           0,
+		TotalYesPool:     0,
+		TotalNoPool:      0,
+		CreatedHeight:    getGlobalHeight(),
+	}
+
+	creator.Amount -= totalCost
+	feePool.Amount += fee
+
+	marketBytes, err := Marshal(newMarket)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	counterBytes, err = Marshal(counter)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	feePoolBytes, err = Marshal(feePool)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	sets := []*PluginSetOp{
+		{Key: KeyForMarket(newMarket.Id), Value: marketBytes},
+		{Key: counterKey, Value: counterBytes},
+		{Key: feePoolKey, Value: feePoolBytes},
+	}
+
+	var writeResp *PluginStateWriteResponse
+	if creator.Amount == 0 {
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Sets:    sets,
+			Deletes: []*PluginDeleteOp{{Key: creatorKey}},
+		})
+	} else {
+		creatorBytes, err = Marshal(creator)
+		if err != nil {
+			return &PluginDeliverResponse{Error: err}
+		}
+		sets = append(sets, &PluginSetOp{Key: creatorKey, Value: creatorBytes})
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
+	}
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
+	log.Printf("Market #%d created: %q at height=%d", newMarket.Id, newMarket.Question, newMarket.CreatedHeight)
+	return &PluginDeliverResponse{}
+}
+
+// ── DeliverTx: submit_prediction ─────────────────────────────────
+
+func (c *Contract) DeliverSubmitPrediction(msg *MessageSubmitPrediction, fee uint64) *PluginDeliverResponse {
+	log.Printf("DeliverSubmitPrediction: forecaster=%x marketId=%d outcome=%d amount=%d", msg.ForecasterAddress, msg.MarketId, msg.Outcome, msg.Amount)
+
+	forecasterKey       := KeyForAccount(msg.ForecasterAddress)
+	feePoolKey          := KeyForFeePool(c.Config.ChainId)
+	marketKey           := KeyForMarket(msg.MarketId)
+	predictionKey       := KeyForPrediction(msg.MarketId, msg.ForecasterAddress)
+	forecasterRecordKey := KeyForForecasterRecord(msg.ForecasterAddress)
+
+	forecasterQId, feeQId, marketQId, predQId, recordQId :=
+		rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+
+	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: forecasterQId, Key: forecasterKey},
+			{QueryId: feeQId, Key: feePoolKey},
+			{QueryId: marketQId, Key: marketKey},
+			{QueryId: predQId, Key: predictionKey},
+			{QueryId: recordQId, Key: forecasterRecordKey},
+		},
+	})
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &PluginDeliverResponse{Error: resp.Error}
+	}
+
+	forecaster, feePool, market, record :=
+		new(Account), new(Pool), new(Market), new(ForecasterRecord)
+	existingPrediction := new(Prediction)
+	var forecasterBytes, feePoolBytes, marketBytes, predBytes, recordBytes []byte
+
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case forecasterQId:
+			forecasterBytes = r.Entries[0].Value
+		case feeQId:
+			feePoolBytes = r.Entries[0].Value
+		case marketQId:
+			marketBytes = r.Entries[0].Value
+		case predQId:
+			predBytes = r.Entries[0].Value
+		case recordQId:
+			recordBytes = r.Entries[0].Value
+		}
+	}
+
+	if err = Unmarshal(forecasterBytes, forecaster); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(feePoolBytes, feePool); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(marketBytes, market); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(recordBytes, record); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	// Market must exist
+	if market.Id == 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	// Market must be open
+	if market.Status != 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	// Cannot bet after resolution height
+	if getGlobalHeight() >= market.ResolutionHeight {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+
+	// Build/extend prediction
+	if len(predBytes) > 0 {
+		if err = Unmarshal(predBytes, existingPrediction); err != nil {
+			return &PluginDeliverResponse{Error: err}
+		}
+		// Cannot switch bet direction on the same market
+		if existingPrediction.Outcome != msg.Outcome {
+			return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+		}
+		existingPrediction.Amount += msg.Amount
+	} else {
+		existingPrediction = &Prediction{
+			ForecasterAddress: msg.ForecasterAddress,
+			MarketId:          msg.MarketId,
+			Outcome:           msg.Outcome,
+			Amount:            msg.Amount,
+			Claimed:           false,
+		}
+	}
+
+	totalCost := msg.Amount + fee
+	if forecaster.Amount < totalCost {
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+
+	if msg.Outcome == 1 {
+		market.TotalYesPool += msg.Amount
+	} else {
+		market.TotalNoPool += msg.Amount
+	}
+	forecaster.Amount -= totalCost
+	feePool.Amount += fee
+	record.Address = msg.ForecasterAddress
+	record.TotalBets++
+	record.TotalStaked += msg.Amount
+
+	predBytes, err = Marshal(existingPrediction)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	marketBytes, err = Marshal(market)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	feePoolBytes, err = Marshal(feePool)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	recordBytes, err = Marshal(record)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	sets := []*PluginSetOp{
+		{Key: predictionKey, Value: predBytes},
+		{Key: marketKey, Value: marketBytes},
+		{Key: feePoolKey, Value: feePoolBytes},
+		{Key: forecasterRecordKey, Value: recordBytes},
+	}
+
+	var writeResp *PluginStateWriteResponse
+	if forecaster.Amount == 0 {
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Sets:    sets,
+			Deletes: []*PluginDeleteOp{{Key: forecasterKey}},
+		})
+	} else {
+		forecasterBytes, err = Marshal(forecaster)
+		if err != nil {
+			return &PluginDeliverResponse{Error: err}
+		}
+		sets = append(sets, &PluginSetOp{Key: forecasterKey, Value: forecasterBytes})
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
+	}
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
+	log.Printf("Prediction stored: market=%d forecaster=%x outcome=%d amount=%d", msg.MarketId, msg.ForecasterAddress, msg.Outcome, msg.Amount)
+	return &PluginDeliverResponse{}
+}
+
+// ── DeliverTx: resolve_market ─────────────────────────────────────
+
+func (c *Contract) DeliverResolveMarket(msg *MessageResolveMarket, fee uint64) *PluginDeliverResponse {
+	log.Printf("DeliverResolveMarket: marketId=%d resolver=%x winningOutcome=%d", msg.MarketId, msg.ResolverAddress, msg.WinningOutcome)
+
+	marketKey   := KeyForMarket(msg.MarketId)
+	resolverKey := KeyForAccount(msg.ResolverAddress)
+	feePoolKey  := KeyForFeePool(c.Config.ChainId)
+
+	marketQId, resolverQId, feeQId := rand.Uint64(), rand.Uint64(), rand.Uint64()
+
+	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: marketQId, Key: marketKey},
+			{QueryId: resolverQId, Key: resolverKey},
+			{QueryId: feeQId, Key: feePoolKey},
+		},
+	})
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &PluginDeliverResponse{Error: resp.Error}
+	}
+
+	market, resolver, feePool := new(Market), new(Account), new(Pool)
+	var marketBytes, resolverBytes, feePoolBytes []byte
+
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case marketQId:
+			marketBytes = r.Entries[0].Value
+		case resolverQId:
+			resolverBytes = r.Entries[0].Value
+		case feeQId:
+			feePoolBytes = r.Entries[0].Value
+		}
+	}
+
+	if err = Unmarshal(marketBytes, market); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(resolverBytes, resolver); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(feePoolBytes, feePool); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	if market.Id == 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	if !bytes.Equal(market.ResolverAddress, msg.ResolverAddress) {
+		return &PluginDeliverResponse{Error: ErrInvalidAddress()}
+	}
+	if market.Status != 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	if resolver.Amount < fee {
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+
+	market.Status = 2
+	market.WinningOutcome = msg.WinningOutcome
+	resolver.Amount -= fee
+	feePool.Amount += fee
+
+	marketBytes, err = Marshal(market)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	feePoolBytes, err = Marshal(feePool)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	sets := []*PluginSetOp{
+		{Key: marketKey, Value: marketBytes},
+		{Key: feePoolKey, Value: feePoolBytes},
+	}
+
+	var writeResp *PluginStateWriteResponse
+	if resolver.Amount == 0 {
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{
+			Sets:    sets,
+			Deletes: []*PluginDeleteOp{{Key: resolverKey}},
+		})
+	} else {
+		resolverBytes, err = Marshal(resolver)
+		if err != nil {
+			return &PluginDeliverResponse{Error: err}
+		}
+		sets = append(sets, &PluginSetOp{Key: resolverKey, Value: resolverBytes})
+		writeResp, err = c.plugin.StateWrite(c, &PluginStateWriteRequest{Sets: sets})
+	}
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
+	log.Printf("Market #%d resolved: winningOutcome=%d", msg.MarketId, msg.WinningOutcome)
+	return &PluginDeliverResponse{}
+}
+
+// ── DeliverTx: claim_winnings ─────────────────────────────────────
+
+func (c *Contract) DeliverClaimWinnings(msg *MessageClaimWinnings, fee uint64) *PluginDeliverResponse {
+	log.Printf("DeliverClaimWinnings: claimer=%x marketId=%d", msg.ClaimerAddress, msg.MarketId)
+
+	marketKey     := KeyForMarket(msg.MarketId)
+	predictionKey := KeyForPrediction(msg.MarketId, msg.ClaimerAddress)
+	claimerKey    := KeyForAccount(msg.ClaimerAddress)
+	feePoolKey    := KeyForFeePool(c.Config.ChainId)
+	recordKey     := KeyForForecasterRecord(msg.ClaimerAddress)
+
+	marketQId, predQId, claimerQId, feeQId, recordQId :=
+		rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()
+
+	resp, err := c.plugin.StateRead(c, &PluginStateReadRequest{
+		Keys: []*PluginKeyRead{
+			{QueryId: marketQId, Key: marketKey},
+			{QueryId: predQId, Key: predictionKey},
+			{QueryId: claimerQId, Key: claimerKey},
+			{QueryId: feeQId, Key: feePoolKey},
+			{QueryId: recordQId, Key: recordKey},
+		},
+	})
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if resp.Error != nil {
+		return &PluginDeliverResponse{Error: resp.Error}
+	}
+
+	market, prediction, claimer, feePool, record :=
+		new(Market), new(Prediction), new(Account), new(Pool), new(ForecasterRecord)
+	var marketBytes, predBytes, claimerBytes, feePoolBytes, recordBytes []byte
+
+	for _, r := range resp.Results {
+		if len(r.Entries) == 0 {
+			continue
+		}
+		switch r.QueryId {
+		case marketQId:
+			marketBytes = r.Entries[0].Value
+		case predQId:
+			predBytes = r.Entries[0].Value
+		case claimerQId:
+			claimerBytes = r.Entries[0].Value
+		case feeQId:
+			feePoolBytes = r.Entries[0].Value
+		case recordQId:
+			recordBytes = r.Entries[0].Value
+		}
+	}
+
+	if err = Unmarshal(marketBytes, market); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(predBytes, prediction); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(claimerBytes, claimer); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(feePoolBytes, feePool); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if err = Unmarshal(recordBytes, record); err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	if market.Id == 0 || market.Status != 2 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	if prediction.MarketId == 0 {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	if prediction.Claimed {
+		return &PluginDeliverResponse{Error: ErrInvalidAmount()}
+	}
+	if prediction.Outcome != market.WinningOutcome {
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+
+	// Payout = stake + proportional share of losing pool
+	var winnerPool, loserPool uint64
+	if market.WinningOutcome == 1 {
+		winnerPool = market.TotalYesPool
+		loserPool  = market.TotalNoPool
+	} else {
+		winnerPool = market.TotalNoPool
+		loserPool  = market.TotalYesPool
+	}
+	var payout uint64
+	if winnerPool > 0 {
+		payout = prediction.Amount + (prediction.Amount*loserPool)/winnerPool
+	} else {
+		payout = prediction.Amount
+	}
+	totalPool := winnerPool + loserPool
+	if payout > totalPool {
+		payout = totalPool
+	}
+	if claimer.Amount+payout < fee {
+		return &PluginDeliverResponse{Error: ErrInsufficientFunds()}
+	}
+
+	claimer.Amount += payout
+	claimer.Amount -= fee
+	feePool.Amount += fee
+	prediction.Claimed = true
+	record.CorrectBets++
+	record.TotalEarned += payout
+
+	claimerBytes, err = Marshal(claimer)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	predBytes, err = Marshal(prediction)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	feePoolBytes, err = Marshal(feePool)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	recordBytes, err = Marshal(record)
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+
+	writeResp, err := c.plugin.StateWrite(c, &PluginStateWriteRequest{
+		Sets: []*PluginSetOp{
+			{Key: claimerKey, Value: claimerBytes},
+			{Key: predictionKey, Value: predBytes},
+			{Key: feePoolKey, Value: feePoolBytes},
+			{Key: recordKey, Value: recordBytes},
+		},
+	})
+	if err != nil {
+		return &PluginDeliverResponse{Error: err}
+	}
+	if writeResp.Error != nil {
+		return &PluginDeliverResponse{Error: writeResp.Error}
+	}
+	log.Printf("Winnings claimed: claimer=%x market=%d payout=%d", msg.ClaimerAddress, msg.MarketId, payout)
+	return &PluginDeliverResponse{}
+}
+
+// ── State key prefixes ────────────────────────────────────────────
+
 var (
-	accountPrefix = []byte{1} // store key prefix for accounts
-	poolPrefix    = []byte{2} // store key prefix for pools
-	paramsPrefix  = []byte{7} // store key prefix for governance parameters
+	accountPrefix       = []byte{0x01}
+	poolPrefix          = []byte{0x02}
+	paramsPrefix        = []byte{0x07}
+	marketPrefix        = []byte{0x10}
+	predictionPrefix    = []byte{0x11}
+	marketCounterPrefix = []byte{0x12}
+	forecasterRecPrefix = []byte{0x13}
 )
 
-// KeyForAccount() returns the state database key for an account
 func KeyForAccount(addr []byte) []byte {
 	return JoinLenPrefix(accountPrefix, addr)
 }
 
-// KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'
 func KeyForFeeParams() []byte {
 	return JoinLenPrefix(paramsPrefix, []byte("/f/"))
 }
 
-// KeyForFeeParams() returns the state database key for governance controlled 'fee parameters'
 func KeyForFeePool(chainId uint64) []byte {
 	return JoinLenPrefix(poolPrefix, formatUint64(chainId))
+}
+
+func KeyForMarket(id uint64) []byte {
+	return JoinLenPrefix(marketPrefix, formatUint64(id))
+}
+
+func KeyForPrediction(marketId uint64, forecaster []byte) []byte {
+	idBytes := formatUint64(marketId)
+	combined := append(idBytes, forecaster...)
+	return JoinLenPrefix(predictionPrefix, combined)
+}
+
+func KeyForMarketCounter() []byte {
+	return JoinLenPrefix(marketCounterPrefix, []byte("/mc/"))
+}
+
+func KeyForForecasterRecord(addr []byte) []byte {
+	return JoinLenPrefix(forecasterRecPrefix, addr)
 }
 
 func formatUint64(u uint64) []byte {
