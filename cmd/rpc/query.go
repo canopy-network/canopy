@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"path/filepath"
 	"slices"
@@ -973,26 +972,6 @@ func (s *Server) withStore(fn func(st *store.Store) (any, error)) (any, error) {
 	}
 	defer st.Discard()
 	return fn(st)
-}
-
-// debugHandler is the http handler for debugging endpoints
-func debugHandler(routeName string) httprouter.Handle {
-	var f http.HandlerFunc
-	switch routeName {
-	case DebugHeapRouteName, DebugGoroutineRouteName, DebugBlockedRouteName:
-		f = func(w http.ResponseWriter, r *http.Request) {
-			pprof.Handler(routeName).ServeHTTP(w, r)
-		}
-	case DebugCPURouteName:
-		f = pprof.Profile
-	default:
-		f = func(w http.ResponseWriter, r *http.Request) {
-			http.NotFound(w, r)
-		}
-	}
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		f(w, r)
-	}
 }
 
 // parseUint64FromString parses a string into a uint64

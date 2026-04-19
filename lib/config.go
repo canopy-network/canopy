@@ -123,6 +123,7 @@ type RPCConfig struct {
 	ExplorerPort               string `json:"explorerPort"`               // the port where the block explorer is hosted
 	RPCPort                    string `json:"rpcPort"`                    // the port where the rpc server is hosted
 	AdminPort                  string `json:"adminPort"`                  // the port where the admin rpc server is hosted
+	ProfilingPort              string `json:"profilingPort"`              // the port where the pprof profiling server is hosted
 	RPCUrl                     string `json:"rpcURL"`                     // the url where the rpc server is hosted
 	AdminRPCUrl                string `json:"adminRPCUrl"`                // the url where the admin rpc server is hosted
 	TimeoutS                   int    `json:"timeoutS"`                   // the rpc request timeout in seconds
@@ -148,6 +149,7 @@ func DefaultRPCConfig() RPCConfig {
 		ExplorerPort:               "50001",                    // find the explorer on localhost:50001
 		RPCPort:                    "50002",                    // the rpc is served on localhost:50002
 		AdminPort:                  "50003",                    // the admin rpc is served on localhost:50003
+		ProfilingPort:              "6060",                     // the pprof profiling server is served on localhost:6060
 		RPCUrl:                     "http://localhost:50002",   // use a local rpc by default
 		AdminRPCUrl:                "http://localhost:50003",   // use a local admin rpc by default
 		TimeoutS:                   3,                          // the rpc timeout is 3 seconds

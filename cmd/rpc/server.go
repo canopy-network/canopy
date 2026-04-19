@@ -81,6 +81,7 @@ func (s *Server) Start() {
 	// Start the Query and Admin RPC servers concurrently
 	go s.startRPC(createRouter(s), s.config.RPCPort)
 	go s.startRPC(createAdminRouter(s), s.config.AdminPort)
+	go s.startRPC(createDebugRouter(), s.config.ProfilingPort)
 
 	// Start tasks to update poll results and poll root chain information
 	go s.updatePollResults()
