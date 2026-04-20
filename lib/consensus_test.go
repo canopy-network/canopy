@@ -6,7 +6,7 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/drand/kyber"
 	"github.com/stretchr/testify/require"
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -1175,9 +1175,7 @@ func TestAddHeight(t *testing.T) {
 		doubleSigner.AddHeight(uint64(i))
 	}
 	// sort the heights for comparison
-	sort.Slice(doubleSigner.Heights, func(i, j int) bool {
-		return doubleSigner.Heights[i] < doubleSigner.Heights[j]
-	})
+	slices.Sort(doubleSigner.Heights)
 	// check got vs expected
 	require.Equal(t, expected, doubleSigner.Heights)
 }
