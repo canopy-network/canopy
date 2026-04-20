@@ -76,7 +76,7 @@ func New(p crypto.PrivateKeyI, maxMembersPerCommittee uint64, m *lib.Metrics, c 
 	for _, ip := range c.BannedIPs {
 		i, err := net.ResolveIPAddr("", ip)
 		if err != nil {
-			l.Fatalf(err.Error())
+			l.Fatal(err.Error())
 		}
 		bannedIPs = append(bannedIPs, *i)
 	}
@@ -200,7 +200,7 @@ func (p *P2P) DialForOutboundPeers() {
 		peerAddress, err := getPeerFromString(peerString)
 		if err != nil {
 			// log the invalid format
-			p.log.Errorf(err.Error())
+			p.log.Error(err.Error())
 			// continue with the next
 			continue
 		}
@@ -232,7 +232,7 @@ func (p *P2P) DialForOutboundPeers() {
 				// otherwise, fallback to config's dial peers
 				dialPeer, err := getPeerFromString(p.config.DialPeers[rand.Intn(len(p.config.DialPeers))])
 				if err != nil {
-					p.log.Errorf(err.Error())
+					p.log.Error(err.Error())
 					return
 				}
 				peer = dialPeer
@@ -295,13 +295,18 @@ func (p *P2P) DialFailedPeers(interval time.Duration) {
 				}
 			}
 
+			// prevent a stampede of dials by staggering with a delay
+			const reconnectStagger = 100 * time.Millisecond
 			// Attempt a single dial per tick; keep it in the failed set if it doesn't succeed.
-			go func(mapKey any, a *lib.PeerAddress) {
+			go func(mapKey any, a *lib.PeerAddress, idx int) {
+				if idx > 0 {
+					time.Sleep(time.Duration(idx) * reconnectStagger)
+				}
 				if err := p.Dial(a, false, true); err != nil {
 					return
 				}
 				p.failedPeers.Delete(mapKey)
-			}(key, reconnect)
+			}(key, reconnect, count)
 
 			count++
 			return true
@@ -347,7 +352,7 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 // the peer set and the peer book
 func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPublicKey bool) (err lib.ErrorI) {
 	// create the e2e encrypted connection while establishing a full peer info object
-	connection, err := p.NewConnection(conn)
+	connection, err := p.NewConnection(conn, info)
 	if err != nil {
 		return err
 	}

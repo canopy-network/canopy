@@ -29,7 +29,7 @@ const (
 	maxStreamSendQueueSize = 1000                                // maximum number of items in a stream send queue before blocking
 	keepAlivePeriod        = 10 * time.Second                    // TCP keep-alive probe interval
 	heartbeatInterval      = time.Second                         // how often to send heartbeat pings
-	heartbeatTimeout       = 2 * time.Second                     // how long to wait for liveness before dropping the peer
+	heartbeatTimeout       = 3 * time.Second                     // how long to wait for liveness before dropping the peer
 	heartbeatTopic         = lib.Topic_HEARTBEAT                 // dedicated heartbeat stream
 	heartbeatPing          = "ping"
 	heartbeatPong          = "pong"
@@ -77,10 +77,11 @@ type MultiConn struct {
 	lastPingSent  atomic.Int64                        // last time we queued a ping (unix nano)
 	lastPingRecv  atomic.Int64                        // last time we received a ping (unix nano)
 	lastPongSent  atomic.Int64                        // last time we queued a pong (unix nano)
+	peerInfo      *lib.PeerInfo                       // peer info cache
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
-func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
+func (p *P2P) NewConnection(conn net.Conn, info *lib.PeerInfo) (*MultiConn, lib.ErrorI) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		if err := tcpConn.SetWriteBuffer(32 * 1024 * 1024); err != nil {
 			p.log.Warnf("Failed to set write buffer: %v", err)
@@ -114,6 +115,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		p2p:           p,
 		close:         sync.Once{},
 		log:           p.log,
+		peerInfo:      info,
 	}
 	now := time.Now().UnixNano()
 	c.lastPong.Store(now)
@@ -194,10 +196,15 @@ func (c *MultiConn) startSendService() {
 	var pwt *PacketWithTiming
 	defer func() { m.Done() }()
 	for {
-		// select statement ensures the sequential coordination of the concurrent processes
+		// prioritize heartbeat messages to avoid disconnecting from peers
 		select {
 		case pwt = <-c.streams[heartbeatTopic].sendQueue:
 			c.sendPacketWithTiming(pwt, m)
+			continue
+		default:
+		}
+		// select statement ensures the sequential coordination of the concurrent processes
+		select {
 		case pwt = <-c.streams[lib.Topic_CONSENSUS].sendQueue:
 			c.sendPacketWithTiming(pwt, m)
 		case pwt = <-c.streams[lib.Topic_BLOCK].sendQueue:
@@ -250,15 +257,9 @@ func (c *MultiConn) startReceiveService() {
 					c.Error(ErrBadStream(), BadStreamSlash)
 					return
 				}
-				// get the peer info from the peer set
-				info, e := c.p2p.GetPeerInfo(c.Address.PublicKey)
-				if e != nil {
-					c.Error(e)
-					return
-				}
 				// handle the packet within the stream
-				if slash, er := stream.handlePacket(info, x, c.p2p.metrics); er != nil {
-					c.log.Warnf(er.Error())
+				if slash, er := stream.handlePacket(c.peerInfo, x, c.p2p.metrics); er != nil {
+					c.log.Warn(er.Error())
 					c.Error(er, slash)
 					return
 				}
@@ -387,8 +388,8 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 		unlock := lockWithTrace("p2p", &c.p2p.mux, c.p2p.log)
 		c.hasError.Store(true)
 		// run the callback after releasing the lock to prevent blocking other readers
-		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
 		unlock()
+		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
 		// stop the multi-conn
 		c.Stop()
 	})
@@ -516,9 +517,12 @@ func (s *Stream) queueSends(packets []*Packet, sendStart time.Time, metrics *lib
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet, sendStart time.Time, metrics *lib.Metrics) bool {
+	s.mu.Lock()
 	if s.closed {
+		s.mu.Unlock()
 		return false
 	}
+	s.mu.Unlock()
 	queueStart := time.Now()
 	pwt := &PacketWithTiming{
 		packet:     p,
