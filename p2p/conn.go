@@ -517,12 +517,9 @@ func (s *Stream) queueSends(packets []*Packet, sendStart time.Time, metrics *lib
 
 // queueSend() schedules the packet to be sent
 func (s *Stream) queueSend(p *Packet, sendStart time.Time, metrics *lib.Metrics) bool {
-	s.mu.Lock()
 	if s.closed {
-		s.mu.Unlock()
 		return false
 	}
-	s.mu.Unlock()
 	queueStart := time.Now()
 	pwt := &PacketWithTiming{
 		packet:     p,
