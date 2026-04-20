@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import SwapFilters from './SwapFilters';
 import type { SwapFilterValues } from './SwapFilters';
 import RecentSwapsTable from './RecentSwapsTable';
-import { useOrders } from '../../hooks/useApi';
+import { useOrders } from '../../hooks/useApi'
+import { toCNPY } from '../../lib/utils';
 
 interface Order {
     id: string;
@@ -37,12 +38,11 @@ const DEFAULT_FILTERS: SwapFilterValues = { minAmount: '', status: 'All', commit
 
 const TokenSwapsPage: React.FC = () => {
     const navigate = useNavigate();
-    const [selectedChainId] = useState<number>(1);
     const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-    const { data: ordersData, isLoading } = useOrders(selectedChainId);
+    const { data: ordersData, isLoading } = useOrders();
 
     const swaps = useMemo(() => {
         const ordersList = Array.isArray((ordersData as Record<string, unknown>)?.orders)
@@ -68,7 +68,7 @@ const TokenSwapsPage: React.FC = () => {
                 : 'N/A';
 
             const status: 'Active' | 'Locked' = order.buyerSendAddress ? 'Locked' : 'Active';
-            const amountRaw = order.amountForSale / 1000000;
+            const amountRaw = toCNPY(order.amountForSale);
             const amount = `${amountRaw.toFixed(6)} CNPY`;
 
             return {

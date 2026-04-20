@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import AnimatedNumber from '../AnimatedNumber'
 import accountDetailTexts from '../../data/accountDetail.json'
+import { toCNPY } from '../../lib/utils'
 
 interface Account {
     address: string
@@ -58,7 +59,7 @@ const AccountDetailHeader: React.FC<AccountDetailHeaderProps> = ({ account }) =>
                     </div>
                     <div className="text-2xl sm:text-3xl font-bold text-primary">
                         <AnimatedNumber
-                            value={account.amount / 1000000}
+                            value={toCNPY(account.amount)}
                             format={{
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2

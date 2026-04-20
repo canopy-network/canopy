@@ -45,15 +45,14 @@ const ValidatorsPage: React.FC = () => {
 
     // Hook to get validators data with pagination
     // Use useAllDelegators when on delegators page to filter at API level
-    const { data: allValidatorsData, isLoading: isLoadingValidators, refetch: refetchValidators } = useAllValidators()
-    const { data: delegatorsData, isLoading: isLoadingDelegators, refetch: refetchDelegators } = useAllDelegators()
+    const { data: allValidatorsData, isLoading: isLoadingValidators } = useAllValidators()
+    const { data: delegatorsData, isLoading: isLoadingDelegators } = useAllDelegators()
     
     const validatorsData = isDelegatorsPage ? delegatorsData : allValidatorsData
     const isLoading = isDelegatorsPage ? isLoadingDelegators : isLoadingValidators
-    const refetch = isDelegatorsPage ? refetchDelegators : refetchValidators
 
     // Hook to get blocks data to calculate blocks produced
-    const { data: blocksData, refetch: refetchBlocks } = useAllBlocksCache()
+    const { data: blocksData } = useAllBlocksCache()
 
     // Function to get validator name from API
     const getValidatorName = (validator: any): string => {
@@ -199,13 +198,6 @@ const ValidatorsPage: React.FC = () => {
         setFilteredValidators(filtered)
     }
 
-    // Handle refresh
-    const handleRefresh = () => {
-        setLoading(true)
-        refetch()
-        refetchBlocks()
-    }
-
     const totalValidators = allValidators.length
 
     const handlePageChange = (page: number) => {
@@ -224,7 +216,6 @@ const ValidatorsPage: React.FC = () => {
                 totalValidators={totalValidators}
                 validators={allValidators}
                 onFilteredValidators={handleFilteredValidators}
-                onRefresh={handleRefresh}
                 initialFilter={initialFilter}
                 pageTitle={pageTitle}
             />

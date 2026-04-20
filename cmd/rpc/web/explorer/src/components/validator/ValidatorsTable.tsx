@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import validatorsTexts from '../../data/validators.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TableCard from '../Home/TableCard'
+import { toCNPY } from '../../lib/utils'
 
 interface Validator {
     rank: number
@@ -188,7 +189,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         // Total Stake (CNPY - converted from micro denomination)
         <span className="text-gray-300 text-sm">
             <AnimatedNumber
-                value={validator.stakedAmount / 1000000}
+                value={toCNPY(validator.stakedAmount)}
                 format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 suffix=" CNPY"
                 className="text-gray-300"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useCardData, useSupply, useAllValidators, useAllBlocksCache, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
+import { toCNPY, cnpyConversionRate } from '../../lib/utils'
 import AnalyticsFilters from './AnalyticsFilters'
 import KeyMetrics from './KeyMetrics'
 import NetworkActivity from './NetworkActivity'
@@ -157,29 +158,31 @@ const NetworkAnalyticsPage: React.FC = () => {
             const pendingCount = pendingData.totalCount || 0
             const blockSize = paramsData.consensus?.blockSize || 1000000
 
-            // Calculate block time based on real data
+            let blockTime = 0
             const blocksList = blocksData || []
-            let blockTime = 6.2 // Default
             if (blocksList.length >= 2) {
                 const latestBlock = blocksList[0]
                 const previousBlock = blocksList[1]
-                const timeDiff = (latestBlock.blockHeader.time - previousBlock.blockHeader.time) / 1000000 // Convert to seconds
-                blockTime = Math.round(timeDiff * 10) / 10
+                const latestTime = latestBlock.blockHeader?.time || 0
+                const previousTime = previousBlock.blockHeader?.time || 0
+                if (latestTime > 0 && previousTime > 0) {
+                    const timeDiff = (latestTime - previousTime) / 1000000
+                    blockTime = Math.round(timeDiff * 10) / 10
+                }
             }
 
-            // Use real data from the API
             const networkVersion = paramsData.consensus?.protocolVersion || '1/0'
-            const sendFee = paramsData.fee?.sendFee || 10000
+            const sendFee = paramsData.fee?.sendFee || 0
 
             setMetrics(prev => ({
                 ...prev,
                 validatorCount: activeValidators.length,
-                totalValueLocked: totalStake / 1000000000000,
+                totalValueLocked: totalStake / (cnpyConversionRate * cnpyConversionRate),
                 pendingTransactions: pendingCount,
                 blockTime: blockTime,
-                blockSize: blockSize / 1000000,
-                networkVersion: networkVersion, // protocolVersion from the API
-                avgTransactionFee: sendFee / 1000000, // Convert from wei to CNPY
+                blockSize: blockSize / cnpyConversionRate,
+                networkVersion: networkVersion,
+                avgTransactionFee: toCNPY(sendFee),
                 // The following remain simulated because they're not in the API:
                 // networkUptime: 99.98 (SIMULATED)
             }))

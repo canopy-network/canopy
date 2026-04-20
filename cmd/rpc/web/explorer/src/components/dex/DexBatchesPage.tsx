@@ -5,6 +5,9 @@ import type { DexBatchRow } from './DexBatchesTable'
 import { useDexBatch, useNextDexBatch } from '../../hooks/useApi'
 import dexTexts from '../../data/dex.json'
 
+// Backend treats chainId 0 as a wildcard that returns batches for all committees
+const ALL_COMMITTEES = 0
+
 const normalizeBatch = (data: any, batchType: 'Locked' | 'Next'): DexBatchRow => {
     const receiptHash = data?.receiptHash
     return {
@@ -28,8 +31,8 @@ const toRows = (data: any, batchType: 'Locked' | 'Next'): DexBatchRow[] => {
 }
 
 const DexBatchesPage: React.FC = () => {
-    const { data: lockedData, isLoading: lockedLoading } = useDexBatch(0)
-    const { data: nextData, isLoading: nextLoading } = useNextDexBatch(0)
+    const { data: lockedData, isLoading: lockedLoading } = useDexBatch(ALL_COMMITTEES)
+    const { data: nextData, isLoading: nextLoading } = useNextDexBatch(ALL_COMMITTEES)
 
     const isLoading = lockedLoading || nextLoading
 

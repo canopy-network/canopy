@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
 import { useTransactionsByHeight, useLatestBlock, usePending } from '../../hooks/useApi'
 import { getTotalTransactionCount } from '../../lib/api'
+import { toCNPY, extractAmountMicro } from '../../lib/utils'
 import transactionsTexts from '../../data/transactions.json'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
@@ -67,29 +68,6 @@ const TransactionsPage: React.FC = () => {
         viewMode === 'pending' ? pendingPage : 0
     )
 
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    useEffect(() => {
-        if (viewMode !== 'confirmed') return
-
-        if (debounceRef.current) clearTimeout(debounceRef.current)
-
-        debounceRef.current = setTimeout(() => {
-            const h = Number(heightInput)
-            if (heightInput === '') {
-                setQueryHeight(0)
-                setCurrentPage(1)
-            } else if (h > 0) {
-                setQueryHeight(h)
-                setCurrentPage(1)
-            }
-        }, 500)
-
-        return () => {
-            if (debounceRef.current) clearTimeout(debounceRef.current)
-        }
-    }, [heightInput, viewMode])
-
     const normalizePageTransactions = (data: unknown): Transaction[] => {
         if (!data) return []
         const payload = data as Record<string, unknown>
@@ -139,7 +117,7 @@ const TransactionsPage: React.FC = () => {
             }
         }
 
-        const amount = Number(tx.amount ?? tx.value ?? 0)
+        const amount = extractAmountMicro(tx)
         const fee = Number(
             (tx.transaction && typeof tx.transaction === 'object'
                 ? (tx.transaction as Record<string, unknown>).fee
@@ -220,7 +198,7 @@ const TransactionsPage: React.FC = () => {
 
     const formatFeeDisplay = (micro: number): string => {
         if (micro === 0) return '0 CNPY'
-        const cnpy = micro / 1000000
+        const cnpy = toCNPY(micro)
         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
     }
 
@@ -275,7 +253,6 @@ const TransactionsPage: React.FC = () => {
 
     const handleQuery = () => {
         if (viewMode !== 'confirmed') return
-        if (debounceRef.current) clearTimeout(debounceRef.current)
         const h = Number(heightInput)
         if (heightInput === '') {
             setQueryHeight(0)

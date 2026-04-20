@@ -81,7 +81,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
     const formatAmount = (amount: number) => {
         if (!amount || amount === 0) return 'N/A'
-        return `${amount.toLocaleString()} ${transactionsTexts.table.units.cnpy}`
+        const cnpy = toCNPY(amount)
+        return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${transactionsTexts.table.units.cnpy}`
     }
 
     // Helper function to convert micro denomination to CNPY
@@ -285,8 +286,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             {typeof transaction.amount === 'number' ? (
                 <>
                     <AnimatedNumber
-                        value={transaction.amount}
-                        format={{ maximumFractionDigits: 4 }}
+                        value={toCNPY(transaction.amount)}
+                        format={{ minimumFractionDigits: 2, maximumFractionDigits: 6 }}
                         className="text-white"
                     />&nbsp; {transactionsTexts.table.units.cnpy}
                 </>

@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import { toCNPY } from '../../lib/utils'
 
 interface NetworkMetrics {
     networkUptime: number
@@ -33,7 +34,7 @@ const ChainStatus: React.FC<ChainStatusProps> = ({ metrics, loading, paramsData 
             .filter((v: any) => typeof v === 'number' && v > 0)
         if (fees.length === 0) return 0
         const avg = fees.reduce((sum: number, f: number) => sum + f, 0) / fees.length
-        return avg / 1000000 // convert to CNPY
+        return toCNPY(avg)
     }
 
     const avgFee = getAvgFee()

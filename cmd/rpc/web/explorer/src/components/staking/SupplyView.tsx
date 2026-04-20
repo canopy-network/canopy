@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useCardData } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
 import stakingTexts from '../../data/staking.json'
+import { toCNPY } from '../../lib/utils'
 
 const SupplyView: React.FC = () => {
     const { data: cardData } = useCardData()
@@ -11,25 +12,25 @@ const SupplyView: React.FC = () => {
     const totalSupplyCNPY = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
         const total = s.total ?? s.totalSupply ?? s.total_cnpy ?? s.totalCNPY ?? 0
-        return Number(total) / 1000000 // Convert from uCNPY to CNPY
+        return toCNPY(Number(total))
     }, [cardData])
 
     const stakedSupplyCNPY = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
         const st = s.staked ?? 0
-        if (st) return Number(st) / 1000000
+        if (st) return toCNPY(Number(st))
         const p = (cardData as any)?.pool || {}
         const bonded = p.bondedTokens ?? p.bonded ?? p.totalStake ?? 0
-        return Number(bonded) / 1000000
+        return toCNPY(Number(bonded))
     }, [cardData])
 
     const liquidSupplyCNPY = React.useMemo(() => {
         const s = (cardData as any)?.supply || {}
         const total = Number(s.total ?? 0)
         const staked = Number(s.staked ?? 0)
-        if (total > 0) return Math.max(0, (total - staked) / 1000000)
+        if (total > 0) return Math.max(0, toCNPY(total - staked))
         const liquid = s.circulating ?? s.liquidSupply ?? s.liquid ?? 0
-        return Number(liquid) / 1000000
+        return toCNPY(Number(liquid))
     }, [cardData])
 
     const stakingRatio = React.useMemo(() => {
@@ -154,14 +155,14 @@ const SupplyView: React.FC = () => {
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-sm text-gray-400">Liquid Supply</span>
                             <span className="text-sm text-blue-400 font-medium">
-                                {(100 - stakingRatio).toFixed(2)}%
+                                {totalSupplyCNPY > 0 ? ((liquidSupplyCNPY / totalSupplyCNPY) * 100).toFixed(2) : (100 - stakingRatio).toFixed(2)}%
                             </span>
                         </div>
                         <div className="w-full bg-white/10 rounded-full h-3">
                             <motion.div
                                 className="bg-blue-500 h-3 rounded-full"
                                 initial={{ width: 0 }}
-                                animate={{ width: `${100 - stakingRatio}%` }}
+                                animate={{ width: `${totalSupplyCNPY > 0 ? (liquidSupplyCNPY / totalSupplyCNPY) * 100 : 100 - stakingRatio}%` }}
                                 transition={{ duration: 1, delay: 0.7 }}
                             ></motion.div>
                         </div>

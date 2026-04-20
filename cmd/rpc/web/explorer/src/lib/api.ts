@@ -14,6 +14,9 @@ const buildURL = (baseURL: string, endpointPath: string): string => {
     return `${normalizedBase}/${normalizedPath}`;
 };
 
+// Merkle root used by the blockchain when a block contains no transactions (32 bytes of 0x46 / ASCII 'F')
+const EMPTY_TRANSACTION_ROOT = "4646464646464646464646464646464646464646464646464646464646464646";
+
 // Default values
 let rpcURL = getEnvVar('VITE_RPC_URL', "http://localhost:50002");
 let adminRPCURL = getEnvVar('VITE_ADMIN_RPC_URL', "http://localhost:50003");
@@ -105,6 +108,10 @@ const orderPath = "/v1/query/order";
 const dexBatchPath = "/v1/query/dex-batch";
 const nextDexBatchPath = "/v1/query/next-dex-batch";
 const configPath = "/v1/admin/config";
+
+// Pool IDs
+// 2 * MaxUint16 + 1, placed above the max chainId + EscrowPoolAddend range to avoid collisions
+const DAO_POOL_ID = 131071;
 
 // HTTP Methods
 export async function POST(url: string, request: string, path: string) {
@@ -324,7 +331,7 @@ export async function getTotalAccountCount(cachedBlocks?: any[]): Promise<{ tota
 
         return {
             total: totalAccounts,
-            last24h: Math.max(1, Math.floor(totalAccounts * 0.05))
+            last24h: 0
         };
     } catch (error) {
         console.error('Error getting total account count:', error);
@@ -443,6 +450,8 @@ function extractTransactionsFromBlocks(blocks: any[]): any[] {
     return txs;
 }
 
+import { extractAmountMicro } from './utils';
+
 // Apply non-block-range filters to a list of transactions
 function applyTxFilters(txs: any[], filters: {
     type?: string;
@@ -478,7 +487,7 @@ function applyTxFilters(txs: any[], filters: {
             }
         }
         if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
-            const amount = tx.amount || tx.value || 0;
+            const amount = extractAmountMicro(tx as Record<string, unknown>);
             if (filters.minAmount !== undefined && amount < filters.minAmount) return false;
             if (filters.maxAmount !== undefined && amount > filters.maxAmount) return false;
         }
@@ -655,7 +664,7 @@ export function Committee(page: number, chain_id: number) {
 }
 
 export function DAO(height: number, _: number) {
-    return POST(rpcURL, heightAndIDRequest(height, 131071), poolPath);
+    return POST(rpcURL, heightAndIDRequest(height, DAO_POOL_ID), poolPath);
 }
 
 export function Account(height: number, address: string) {
@@ -710,8 +719,8 @@ export function EcoParams(chain_id: number) {
     return POST(rpcURL, chainRequest(chain_id), ecoParamsPath);
 }
 
-export function Orders(chain_id: number) {
-    return POST(rpcURL, heightAndIDRequest(0, chain_id), ordersPath);
+export function Orders() {
+    return POST(rpcURL, JSON.stringify({ height: 0 }), ordersPath);
 }
 
 export function Order(committee: number, order_id: string, height: number = 0) {
@@ -775,10 +784,9 @@ export async function getCardData() {
         cardData.params = await Params(0, 0);
         cardData.ecoParams = await EcoParams(0);
 
-        // Check if this network has real transactions
         const hasRealTransactions = cardData.blocks?.results?.some((block: any) => {
             const txRoot = block.blockHeader?.transactionRoot;
-            return txRoot && txRoot !== "4646464646464646464646464646464646464646464646464646464646464646";
+            return txRoot && txRoot !== EMPTY_TRANSACTION_ROOT;
         });
 
         cardData.hasRealTransactions = hasRealTransactions;
@@ -812,7 +820,7 @@ export async function getTableData(page: number, category: number, committee?: n
         case 5:
             return await Params(page, 0);
         case 6:
-            return await Orders(committee || 1);
+            return await Orders();
         case 7:
             return await Supply(0, 0);
         default:

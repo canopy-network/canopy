@@ -28,7 +28,6 @@ interface ValidatorsFiltersProps {
     totalValidators: number
     validators: Validator[]
     onFilteredValidators: (filteredValidators: Validator[]) => void
-    onRefresh: () => void
     initialFilter?: string
     pageTitle?: string
     overviewCards?: React.ReactNode
@@ -38,14 +37,12 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
     totalValidators,
     validators,
     onFilteredValidators,
-    onRefresh,
     initialFilter = 'all',
     pageTitle,
     overviewCards
 }) => {
     const [statusFilter, setStatusFilter] = useState<string>(initialFilter)
     const [sortBy, setSortBy] = useState<string>('stake')
-    const [minStakePercent, setMinStakePercent] = useState<number>(0)
 
     // Apply initial filter when component mounts or initialFilter changes
     React.useEffect(() => {
@@ -76,12 +73,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
             })
         }
 
-        // Apply minimum stake filter
-        if (minStakePercent > 0) {
-            const minStake = (minStakePercent / 100) * Math.max(...validators.map(v => v.stakedAmount))
-            filtered = filtered.filter(validator => validator.stakedAmount >= minStake)
-        }
-
         // Apply sorting
         filtered.sort((a, b) => {
             switch (sortBy) {
@@ -108,7 +99,7 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
     // Apply filters when any filter changes
     React.useEffect(() => {
         applyFilters()
-    }, [statusFilter, sortBy, minStakePercent, validators])
+    }, [statusFilter, sortBy, validators])
 
     // Export to Excel function
     const exportToExcel = () => {
@@ -126,12 +117,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     default:
                         return true
                 }
-            }
-            return true
-        }).filter(validator => {
-            if (minStakePercent > 0) {
-                const minStake = (minStakePercent / 100) * Math.max(...validators.map(v => v.stakedAmount))
-                return validator.stakedAmount >= minStake
             }
             return true
         })
@@ -180,31 +165,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
-    }
-
-    const handleMinStakeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setMinStakePercent(Number(event.target.value))
-    }
-
-    const handleMinStakeInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = event.target.value.replace(/,/g, '')
-        const parsedValue = Number(rawValue)
-        const maxStake = getMaxStake()
-
-        if (Number.isNaN(parsedValue)) return
-
-        const clampedValue = Math.min(Math.max(parsedValue, 0), maxStake)
-        const nextPercent = maxStake > 0 ? (clampedValue / maxStake) * 100 : 0
-        setMinStakePercent(nextPercent)
-    }
-
-    const getMaxStake = () => {
-        return validators.length > 0 ? Math.max(...validators.map(v => v.stakedAmount)) : 0
-    }
-
-    const getMinStakeValue = () => {
-        const maxStake = getMaxStake()
-        return maxStake > 0 ? Math.round((minStakePercent / 100) * maxStake) : 0
     }
 
     return (
@@ -273,33 +233,9 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                             <option value="name">Sort by Name</option>
                         </select>
                     </div>
-                    {/* Middle - Min Stake Slider */}
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="range"
-                            className="bg-primary h-2 rounded-full w-24"
-                            min="0"
-                            max="100"
-                            value={minStakePercent}
-                            onChange={handleMinStakeChange}
-                        />
-                        <span className="text-gray-400 text-sm whitespace-nowrap">
-                            Min Stake:
-                        </span>
-                        <input
-                            type="number"
-                            min="0"
-                            max={getMaxStake()}
-                            value={getMinStakeValue()}
-                            onChange={handleMinStakeInputChange}
-                            className="w-36 bg-gray-700/50 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                            placeholder="Enter amount"
-                            aria-label="Minimum stake amount"
-                        />
-                    </div>
                 </div>
 
-                {/* Right Side - Export and Refresh */}
+                {/* Right Side - Export */}
                 <div className="flex items-center gap-3">
                     <button
                         type="button"
@@ -308,14 +244,6 @@ const ValidatorsFilters: React.FC<ValidatorsFiltersProps> = ({
                     >
                         <i className="fa-solid fa-download text-xs"></i>
                         {validatorsTexts.filters.export}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onRefresh}
-                        className="flex items-center gap-2 bg-primary rounded-md px-3 py-2 text-sm text-black hover:bg-primary/80 transition-colors"
-                    >
-                        <i className="fa-solid fa-refresh text-xs"></i>
-                        {validatorsTexts.filters.refresh}
                     </button>
                 </div>
             </div>

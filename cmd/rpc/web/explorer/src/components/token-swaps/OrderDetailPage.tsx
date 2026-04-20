@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { useOrder } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 
-const toCNPY = (micro: number): number => micro / 1000000
+import { toCNPY } from '../../lib/utils'
 
 const formatAmount = (micro: number): string => {
     if (micro === 0) return '0 CNPY'
@@ -16,7 +16,10 @@ const OrderDetailPage: React.FC = () => {
     const { committee: committeeParam, orderId } = useParams<{ committee: string; orderId: string }>()
     const navigate = useNavigate()
 
-    const numericCommittee = Number(committeeParam) || 1
+    if (!committeeParam) {
+        throw new Error('Missing required route parameter: committee')
+    }
+    const numericCommittee = Number(committeeParam)
     const { data: orderData, isLoading, error } = useOrder(numericCommittee, orderId || '')
 
     const copyToClipboard = (text: string) => {

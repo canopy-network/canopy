@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import ValidatorsFilters from '../validator/ValidatorsFilters'
 import ValidatorsTable from '../validator/ValidatorsTable'
-import { useAllValidators, useAllDelegators, useAllBlocksCache } from '../../hooks/useApi'
+import { useAllValidators, useAllDelegators, useAllBlocksCache, useParams as useChainParams } from '../../hooks/useApi'
 
 interface OverviewCardProps {
     title: string
@@ -47,6 +47,12 @@ const StakingPage: React.FC = () => {
     const { data: allValidatorsData, isLoading: isLoadingValidators, refetch: refetchValidators } = useAllValidators()
     const { data: delegatorsData, isLoading: isLoadingDelegators, refetch: refetchDelegators } = useAllDelegators()
     const { data: blocksData, refetch: refetchBlocks } = useAllBlocksCache()
+    const { data: paramsData } = useChainParams(0)
+
+    const delegateRewardPercentage = React.useMemo(() => {
+        const validator = (paramsData as Record<string, unknown>)?.validator as Record<string, unknown> | undefined
+        return Number(validator?.delegateRewardPercentage ?? 0)
+    }, [paramsData])
 
     const isLoading = isLoadingValidators || isLoadingDelegators
 
@@ -123,7 +129,9 @@ const StakingPage: React.FC = () => {
                 activityScore = 'Active'
             }
 
-            const baseRewardRate = stakeWeight * 0.1
+            const baseRewardRate = delegateRewardPercentage > 0
+                ? stakeWeight * delegateRewardPercentage / 100
+                : stakeWeight
             const estimatedRewardRate = Math.max(0, baseRewardRate)
 
             const statusMultiplier = isActive ? 1.0 : 0.5
@@ -260,7 +268,6 @@ const StakingPage: React.FC = () => {
                 totalValidators={totalStakers}
                 validators={allStakers}
                 onFilteredValidators={handleFilteredStakers}
-                onRefresh={handleRefresh}
                 initialFilter="all"
                 pageTitle="Staking"
                 overviewCards={

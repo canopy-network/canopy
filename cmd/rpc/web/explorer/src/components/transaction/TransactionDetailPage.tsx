@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useTxByHash, useBlockByHeight, useParams as useParamsHook } from '../../hooks/useApi'
+import { useTxByHash, useBlockByHeight } from '../../hooks/useApi'
 import toast from 'react-hot-toast'
 import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'
 
-// Helper function to convert micro denomination to CNPY
-const toCNPY = (micro: number): number => {
-    return micro / 1000000
-}
+import { toCNPY, extractAmountMicro } from '../../lib/utils'
 
 // Helper function to format fee - shows in CNPY (converted from micro denomination)
 const formatFee = (micro: number): string => {
@@ -38,40 +35,10 @@ const TransactionDetailPage: React.FC = () => {
     const txBlockHeight = transactionData?.result?.height || transactionData?.height || 0
     const { data: blockData } = useBlockByHeight(txBlockHeight)
 
-    // Get params to access fee information
-    const { data: paramsData } = useParamsHook(0)
-
     // Extract transaction data safely (must be before any conditional returns)
     const transaction = transactionData?.result || transactionData
     const transactionFeeMicro = transaction?.transaction?.fee || transaction?.fee || 0
     const txType = transaction?.transaction?.type || transaction?.messageType || transaction?.type || 'send'
-
-    // Get fee params directly from endpoint
-    const feeParams = paramsData?.fee || {}
-
-    // Map transaction type to fee param key (directly from endpoint)
-    const getFeeParamKey = (type: string): string => {
-        const typeMap: Record<string, string> = {
-            'send': 'sendFee',
-            'stake': 'stakeFee',
-            'edit-stake': 'editStakeFee',
-            'editStake': 'editStakeFee',
-            'unstake': 'unstakeFee',
-            'pause': 'pauseFee',
-            'unpause': 'unpauseFee',
-            'changeParameter': 'changeParameterFee',
-            'daoTransfer': 'daoTransferFee',
-            'certificateResults': 'certificateResultsFee',
-            'subsidy': 'subsidyFee',
-            'createOrder': 'createOrderFee',
-            'editOrder': 'editOrderFee',
-            'deleteOrder': 'deleteOrderFee',
-        }
-        return typeMap[type.toLowerCase()] || 'sendFee'
-    }
-
-    // Get minimum fee for this transaction type (directly from endpoint)
-    const minimumFeeForTxType = feeParams[getFeeParamKey(txType)] || feeParams.sendFee || 0
 
     // Helper function to normalize hash for comparison
     const normalizeHash = (hash: string): string => {
@@ -252,30 +219,7 @@ const TransactionDetailPage: React.FC = () => {
     const memo = transaction?.transaction?.memo ?? null
     const txHash = transaction.txHash || transactionHash || ''
 
-    // Extract amount from transaction according to message type (from README)
-    let amountMicro = 0
-    if (transaction.transaction?.msg) {
-        const msg = transaction.transaction.msg
-        // Check for different message types according to README
-        if (msg.messageSend?.amount !== undefined) {
-            amountMicro = msg.messageSend.amount
-        } else if (msg.messageStake?.amount !== undefined) {
-            amountMicro = msg.messageStake.amount
-        } else if (msg.messageEditStake?.amount !== undefined) {
-            amountMicro = msg.messageEditStake.amount
-        } else if (msg.messageDAOTransfer?.amount !== undefined) {
-            amountMicro = msg.messageDAOTransfer.amount
-        } else if (msg.messageSubsidy?.amount !== undefined) {
-            amountMicro = msg.messageSubsidy.amount
-        } else if (msg.messageCreateOrder?.amountForSale !== undefined) {
-            amountMicro = msg.messageCreateOrder.amountForSale
-        } else if (msg.messageEditOrder?.amountForSale !== undefined) {
-            amountMicro = msg.messageEditOrder.amountForSale
-        } else if (msg.amount !== undefined) {
-            // Fallback for direct amount field
-            amountMicro = msg.amount
-        }
-    }
+    const amountMicro = extractAmountMicro(transaction as Record<string, unknown>)
     const value = amountMicro > 0 ? formatAmount(amountMicro) : '0 CNPY'
 
     return (
@@ -418,13 +362,6 @@ const TransactionDetailPage: React.FC = () => {
                                         <span className="text-orange-400 font-mono">{fee}</span>
                                     </div>
 
-                                    {minimumFeeForTxType > 0 && (
-                                        <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
-                                            <span className="text-gray-400 text-sm">Minimum Fee ({getFeeParamKey(txType)})</span>
-                                            <span className="text-primary font-mono">{formatFee(minimumFeeForTxType)}</span>
-                                        </div>
-                                    )}
-
                                     <div className="flex flex-col border-b border-gray-400/30 pb-4 gap-2">
                                         <span className="text-gray-400 text-sm">From</span>
                                         <div className="flex items-center gap-2">
@@ -541,18 +478,6 @@ const TransactionDetailPage: React.FC = () => {
                                             <span className="text-gray-400 text-sm">Fee (uCNPY)</span>
                                             <span className="text-gray-300 font-mono text-sm">{transactionFeeMicro.toLocaleString()}</span>
                                         </div>
-                                        {minimumFeeForTxType > 0 && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-400 text-sm">Minimum Fee ({getFeeParamKey(txType)})</span>
-                                                <span className="text-primary font-mono text-sm">{formatFee(minimumFeeForTxType)}</span>
-                                            </div>
-                                        )}
-                                        {transactionFeeMicro > minimumFeeForTxType && minimumFeeForTxType > 0 && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-400 text-sm">Priority Fee</span>
-                                                <span className="text-yellow-400 font-mono text-sm">{formatFee(transactionFeeMicro - minimumFeeForTxType)}</span>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </motion.div>

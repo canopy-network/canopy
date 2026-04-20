@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
+import { toCNPY } from '../../lib/utils'
 
 interface StakingTrendsProps {
     fromBlock: string
@@ -79,7 +80,7 @@ const StakingTrends: React.FC<StakingTrendsProps> = ({ fromBlock, toBlock, loadi
 
             // normalize to per-block average so groups with ±1 block difference are comparable
             const avgReward = groupBlocks.length > 0 ? groupReward / groupBlocks.length : 0
-            rewards.push(avgReward / 1000000)
+            rewards.push(toCNPY(avgReward))
 
             // build time label from first and last block in group
             const firstBlock = groupBlocks[0]

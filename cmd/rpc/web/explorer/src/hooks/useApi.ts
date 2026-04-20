@@ -636,11 +636,10 @@ export const useTransactionsInRange = (fromBlock: number, toBlock: number, maxBl
 };
 
 // Hook for fetching orders (swaps)
-export const useOrders = (chainId: number = 1) => {
+export const useOrders = () => {
     return useQuery({
-        queryKey: ['orders', chainId],
-        // Orders() already returns parsed JSON via POST(), not a Response object.
-        queryFn: () => Orders(chainId),
+        queryKey: ['orders'],
+        queryFn: () => Orders(),
         staleTime: 30000, // Cache for 30 seconds
         refetchInterval: REFRESH_INTERVAL_MS,
     });

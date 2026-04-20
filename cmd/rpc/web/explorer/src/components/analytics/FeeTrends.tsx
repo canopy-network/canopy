@@ -1,5 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
+import { toCNPY } from '../../lib/utils'
 
 interface FeeTrendsProps {
     fromBlock: string
@@ -160,11 +161,10 @@ const FeeTrends: React.FC<FeeTrendsProps> = ({ fromBlock, toBlock, loading, para
         const maxFee = Math.max(...fees)
         const avgFee = totalFees / fees.length
 
-        // Convert from micro denomination to CNPY
-        const minFeeCNPY = minFee / 1000000
-        const maxFeeCNPY = maxFee / 1000000
-        const totalFeesCNPY = totalFees / 1000000
-        const avgFeeCNPY = avgFee / 1000000
+        const minFeeCNPY = toCNPY(minFee)
+        const maxFeeCNPY = toCNPY(maxFee)
+        const totalFeesCNPY = toCNPY(totalFees)
+        const avgFeeCNPY = toCNPY(avgFee)
 
         return {
             feeRange: `${formatNumber(minFeeCNPY)} - ${formatNumber(maxFeeCNPY)} CNPY`,

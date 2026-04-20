@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import TableCard from '../Home/TableCard'
 import { useParams } from '../../hooks/useApi'
 import stakingConfig from '../../data/staking.json'
+import { toCNPY } from '../../lib/utils'
 
 interface GovernanceParam {
     paramName: string
@@ -139,7 +140,7 @@ const GovernanceView: React.FC = () => {
         if (typeof value === 'number') {
             // Convert fees from micro denomination to CNPY
             if (paramName.includes('Fee') || paramName === 'minimumOrderSize') {
-                const cnpyValue = value / 1000000
+                const cnpyValue = toCNPY(value)
                 return cnpyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
             }
             // Format percentages

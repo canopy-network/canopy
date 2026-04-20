@@ -5,6 +5,7 @@ import { useAllBlocksCache, useOrders, useTransactionsWithRealPagination } from 
 import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
+import { toCNPY, extractAmountMicro } from '../../lib/utils'
 
 const truncate = (s: string, n: number = 4) => s.length <= n ? s : `${s.slice(0, n)}...${s.slice(-4)}`
 
@@ -12,8 +13,7 @@ const OverviewCards: React.FC = () => {
     // Data hooks
     const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
     const { data: blocksPage } = useAllBlocksCache()
-    const chainId = typeof window !== 'undefined' && (window as any).__CONFIG__ ? Number((window as any).__CONFIG__.chainId) : 1
-    const { data: ordersPage } = useOrders(chainId)
+    const { data: ordersPage } = useOrders()
 
     // List normalization: accepts {transactions|blocks|results|list|data} or flat arrays
     const normalizeList = (payload: any) => {
@@ -53,7 +53,7 @@ const OverviewCards: React.FC = () => {
                                 to = t.recipient || t.to || t.destination || ''
                             }
 
-                            const amount = t.amount ?? t.value ?? t.fee ?? 0
+                            const amount = extractAmountMicro(t as Record<string, unknown>)
                             const hash = t.hash || t.txHash || t.transactionHash || ''
 
                             // Format time using date-fns
@@ -102,8 +102,7 @@ const OverviewCards: React.FC = () => {
                                 </div>,
                                 <span className="text-primary">
                                     {typeof amount === 'number' ? (() => {
-                                        // Amount comes in micro denomination, convert to CNPY
-                                        const cnpy = amount / 1000000
+                                        const cnpy = toCNPY(amount)
                                         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
                                     })() : amount}
                                 </span>,
@@ -199,7 +198,7 @@ const OverviewCards: React.FC = () => {
                         <span>
                             {rate ? (
                                 <>
-                                    1 ETH = <AnimatedNumber
+                                    1 : <AnimatedNumber
                                         value={rate}
                                         format={{ maximumSignificantDigits: 6 }}
                                         className="text-white"

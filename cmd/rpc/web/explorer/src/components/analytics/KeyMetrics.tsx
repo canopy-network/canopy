@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import AnimatedNumber from '../AnimatedNumber'
+import { toCNPY, cnpyConversionRate } from '../../lib/utils'
 
 interface NetworkMetrics {
     networkUptime: number
@@ -30,7 +31,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
         // 1. Total Value Locked (TVL) - Real data from supply
         if (supplyData?.staked || supplyData?.stakedSupply) {
             const stakedAmount = supplyData.staked || supplyData.stakedSupply || 0
-            realMetrics.totalValueLocked = stakedAmount / 1000000000000 // Convert to M CNPY
+            realMetrics.totalValueLocked = stakedAmount / (cnpyConversionRate * cnpyConversionRate)
         }
 
         // 2. Validator Count - Real ACTIVE validators based on API fields
@@ -58,7 +59,7 @@ const KeyMetrics: React.FC<KeyMetricsProps> = ({ metrics, loading, supplyData, v
 
         // 6. Block Size - Real data from params
         if (paramsData?.consensus?.blockSize) {
-            realMetrics.blockSize = paramsData.consensus.blockSize / 1000000 // Convert to MB
+            realMetrics.blockSize = paramsData.consensus.blockSize / cnpyConversionRate
         }
 
         // 7. Network Uptime - Calculate based on validator status
