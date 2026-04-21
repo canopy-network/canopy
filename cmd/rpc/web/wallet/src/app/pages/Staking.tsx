@@ -23,9 +23,7 @@ type ValidatorRow = {
   stakedAmount: number;
   status: "Staked" | "Paused" | "Unstaking" | "Delegate";
   rewards24h: number;
-  chains?: string[];
   isSynced: boolean;
-  // Additional validator information
   committees?: number[];
   compound?: boolean;
   delegate?: boolean;
@@ -35,8 +33,6 @@ type ValidatorRow = {
   publicKey?: string;
   unstakingHeight?: number;
 };
-
-const chainLabels = ["DEX", "CAN"] as const;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -54,7 +50,6 @@ export default function Staking(): JSX.Element {
 
   const csvRef = useRef<HTMLAnchorElement>(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [chainCount, setChainCount] = useState<number>(0);
 
   const validatorAddresses = useMemo(
@@ -96,60 +91,60 @@ export default function Staking(): JSX.Element {
 
   // 🧮 Construir filas memoizadas
   const rows: ValidatorRow[] = useMemo(() => {
-    return validators.map((v: any) => ({
-      address: v.address,
-      nickname: v.nickname,
-      stakedAmount: v.stakedAmount || 0,
-      status: v.unstaking ? "Unstaking" : v.paused ? "Paused" : v.delegate ? "Delegate" : "Staked",
-      rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
-      chains:
-        v.committees?.map(
-          (id: number) => chainLabels[id % chainLabels.length],
-        ) || [],
-      isSynced: !v.paused,
-      // Additional info
-      committees: v.committees,
-      compound: v.compound,
-      delegate: v.delegate,
-      maxPausedHeight: v.maxPausedHeight,
-      netAddress: v.netAddress,
-      output: v.output,
-      publicKey: v.publicKey,
-      unstakingHeight: v.unstakingHeight,
-    }));
+    return validators.map((v) => {
+      const extra = v as unknown as Record<string, unknown>;
+      return {
+        address: v.address,
+        nickname: v.nickname,
+        stakedAmount: v.stakedAmount || 0,
+        status: (v.unstaking ? "Unstaking" : v.paused ? "Paused" : v.delegate ? "Delegate" : "Staked") as ValidatorRow["status"],
+        rewards24h: rewardsHistory[v.address]?.rewards24h || 0,
+        isSynced: !v.paused,
+        committees: extra.committees as number[] | undefined,
+        compound: extra.compound as boolean | undefined,
+        delegate: v.delegate,
+        maxPausedHeight: extra.maxPausedHeight as number | undefined,
+        netAddress: extra.netAddress as string | undefined,
+        output: extra.output as string | undefined,
+        publicKey: v.publicKey,
+        unstakingHeight: v.unstakingHeight,
+      };
+    });
   }, [validators, rewardsHistory]);
-
-  const filtered: ValidatorRow[] = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        (r.nickname || "").toLowerCase().includes(q) ||
-        r.address.toLowerCase().includes(q),
-    );
-  }, [rows, searchTerm]);
 
   const prepareCSVData = useCallback(() => {
     const header = [
       "address",
       "nickname",
+      "publicKey",
       "stakedAmount",
       "rewards24h",
       "status",
+      "netAddress",
+      "output",
+      "compound",
+      "committees",
+      "unstakingHeight",
     ];
     const lines = [header.join(",")].concat(
-      filtered.map((r) =>
+      rows.map((r) =>
         [
           r.address,
           r.nickname || "",
+          r.publicKey || "",
           r.stakedAmount,
           r.rewards24h,
           r.status,
+          r.netAddress || "",
+          r.output || "",
+          String(r.compound ?? ""),
+          r.committees?.join(";") ?? "",
+          r.unstakingHeight ?? "",
         ].join(","),
       ),
     );
     return lines.join("\n");
-  }, [filtered]);
+  }, [rows]);
 
   const exportCSV = useCallback(() => {
     const csvContent = prepareCSVData();
@@ -177,37 +172,42 @@ export default function Staking(): JSX.Element {
 
   return (
     <motion.div
-      className="min-h-screen bg-background"
+      className="space-y-6"
       initial="hidden"
       animate="visible"
       variants={containerVariants}
     >
       {/* Hidden link for CSV export */}
-      <a ref={csvRef} style={{ display: "none" }} />
+      <a ref={csvRef} hidden aria-hidden="true" />
 
-      <div className="px-6 py-8">
-        {/* Top stats */}
-        <StatsCards
-          totalStaked={totalStaked}
-          totalRewards={staking.totalRewards24h || 0}
-          validatorsCount={validators.length}
-          chainCount={chainCount}
+      <div>
+        <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
+          Staking
+        </h1>
+        <p className="mt-1 text-sm md:text-base text-muted-foreground">
+          Track staked positions, rewards, and validator activity.
+        </p>
+      </div>
+
+      {/* Top stats */}
+      <StatsCards
+        totalStaked={totalStaked}
+        totalRewards={staking.totalRewards24h || 0}
+        validatorsCount={validators.length}
+        chainCount={chainCount}
+        activeValidatorsCount={activeValidatorsCount}
+      />
+
+      <div className="flex flex-col bg-card rounded-xl border border-border p-5">
+        {/* Toolbar */}
+        <Toolbar
+          onAddStake={handleAddStake}
+          onExportCSV={exportCSV}
           activeValidatorsCount={activeValidatorsCount}
         />
 
-        <div className="flex flex-col bg-card rounded-xl p-6 border border-border">
-          {/* Toolbar */}
-          <Toolbar
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            onAddStake={handleAddStake}
-            onExportCSV={exportCSV}
-            activeValidatorsCount={activeValidatorsCount}
-          />
-
-          {/* Validator List */}
-          <ValidatorList validators={filtered} />
-        </div>
+        {/* Validator List */}
+        <ValidatorList validators={rows} />
       </div>
     </motion.div>
   );

@@ -1,29 +1,25 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Play, Pause, Workflow } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Play, Pause } from 'lucide-react';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
 import { useMultipleValidatorSets } from '@/hooks/useValidatorSet';
 import { useManifest } from '@/hooks/useManifest';
 import { ActionsModal } from '@/actions/ActionsModal';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionTooltip } from '@/components/ui/ActionTooltip';
 import { useDS } from '@/core/useDs';
+import { getCanopySymbol } from '@/lib/utils/canopySymbols';
+import { useDenom } from '@/hooks/useDenom';
 
 const shortAddr = (address: string) => `${address.substring(0, 8)}…${address.substring(address.length - 4)}`;
-
-const NODE_ACCENT_COLORS = [
-    'from-primary/60 to-primary/30',
-    'from-orange-500/60 to-orange-500/30',
-    'from-blue-500/60 to-blue-500/30',
-    'from-rose-500/60 to-rose-500/30',
-];
 
 interface ProcessedNode {
     address: string;
     stakeAmount: string;
+    stakeAmountValue: number;
     status: string;
     rewardsDelta24h: string;
     rewardsDelta24hValue: number;
@@ -31,10 +27,49 @@ interface ProcessedNode {
 }
 
 const rewardDeltaClass = (value: number) => {
-    if (value > 0) return 'text-primary';
-    if (value < 0) return 'text-red-400';
-    return 'text-muted-foreground';
+    if (value > 0) return 'text-[#35cd48]';
+    if (value < 0) return 'text-[#ff1845]';
+    return 'text-white/60';
 };
+
+const desktopRowCellClass = 'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]';
+
+const getNodeStatusBadgeClass = (status: string) => {
+    switch (status.toLowerCase()) {
+        case 'staked':
+            return 'border-[#35cd48]/35 bg-[#35cd48]/12 text-[#35cd48]';
+        case 'paused':
+            return 'border-[#ff1845]/35 bg-[#ff1845]/12 text-[#ff1845]';
+        case 'unstaking':
+            return 'border-[#ddb228]/35 bg-[#ddb228]/12 text-[#ddb228]';
+        case 'delegate':
+            return 'border-[#216cd0]/35 bg-[#216cd0]/12 text-[#216cd0]';
+        case 'liquid':
+        default:
+            return 'border-[#272729] bg-[#0f0f0f] text-white/60';
+    }
+};
+
+const NodeStatusBadge = React.memo<{ label: string }>(({ label }) => (
+    <span
+        className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-tight transition-colors ${getNodeStatusBadgeClass(label)}`}
+    >
+        {label.charAt(0).toUpperCase() + label.slice(1)}
+    </span>
+));
+
+NodeStatusBadge.displayName = 'NodeStatusBadge';
+
+const LatestUpdated = React.memo<{ className?: string }>(({ className }) => (
+    <div className={`flex items-center gap-2 lg:gap-4 ${className ?? ''}`}>
+        <div className="relative inline-flex items-center gap-1.5 rounded-full bg-[#35cd48]/5 px-4 py-1">
+            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#35cd48] shadow-[0_0_4px_rgba(53,205,72,0.8)]" />
+            <span className="text-sm font-medium text-[#35cd48]">Live</span>
+        </div>
+    </div>
+));
+
+LatestUpdated.displayName = 'LatestUpdated';
 
 const ValidatorRow = React.memo<{
     node: ProcessedNode;
@@ -46,25 +81,28 @@ const ValidatorRow = React.memo<{
 
     return (
         <motion.tr
-            className="group border-b border-border/40 last:border-0"
+            className="group"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
-            <td className="py-3 pr-4">
+            <td
+                className={desktopRowCellClass}
+                style={{ borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px' }}
+            >
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
-                        <div className="text-base font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-sm font-mono text-muted-foreground/60">
+                            <span className="text-sm text-muted-foreground/60">
                                 {shortAddr(node.originalValidator.address)}
                             </span>
                             <button
                                 onClick={() => copyToClipboard(node.originalValidator.address, "Address")}
-                                className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                className="p-0.5 rounded text-white/40 transition-colors hover:bg-[#272729] hover:text-white"
                                 aria-label="Copy address"
                             >
                                 <Copy style={{ width: 12, height: 12 }} />
@@ -73,27 +111,35 @@ const ValidatorRow = React.memo<{
                     </div>
                 </div>
             </td>
-            <td className="py-3 pr-4">
-                <span className="text-base font-mono text-foreground tabular-nums">{node.stakeAmount}</span>
+            <td className={desktopRowCellClass}>
+                <span className="text-base text-foreground tabular-nums">{node.stakeAmount}</span>
             </td>
-            <td className="py-3 pr-4">
-                <StatusBadge label={node.status} size="sm" />
+            <td className={desktopRowCellClass}>
+                <NodeStatusBadge label={node.status} />
             </td>
-            <td className="py-3 pr-4">
-                <span className={`text-sm font-mono font-medium ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
+            <td className={desktopRowCellClass}>
+                <span className={`text-base tabular-nums ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</span>
             </td>
-            <td className="py-3">
+            <td
+                className={desktopRowCellClass}
+                style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
+            >
                 {hasActions && (
-                    <button
-                        onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                        className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground hover:text-foreground"
-                        aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                    <ActionTooltip
+                        label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                        description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
                     >
-                        {node.status === 'Staked'
-                            ? <Pause style={{ width: 14, height: 14 }} />
-                            : <Play style={{ width: 14, height: 14 }} />
-                        }
-                    </button>
+                        <button
+                            onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                            className="p-1.5 rounded-md text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
+                            aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                        >
+                            {node.status === 'Staked'
+                                ? <Pause style={{ width: 14, height: 14 }} />
+                                : <Play style={{ width: 14, height: 14 }} />
+                            }
+                        </button>
+                    </ActionTooltip>
                 )}
             </td>
         </motion.tr>
@@ -112,23 +158,23 @@ const ValidatorMobileCard = React.memo<{
 
     return (
         <motion.div
-            className="rounded-lg p-3.5 space-y-3 border border-border/50 bg-background/30"
+            className="rounded-lg border border-[#272729] bg-[#171717] p-3.5 space-y-3"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18, delay: index * 0.04 }}
         >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${NODE_ACCENT_COLORS[index % NODE_ACCENT_COLORS.length]} flex-shrink-0`} />
+                    <img src={getCanopySymbol(index)} alt="" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
                     <div>
-                        <div className="text-base font-body font-medium text-foreground leading-tight">
+                        <div className="text-base font-medium text-foreground leading-tight">
                             {node.originalValidator.nickname || `Node ${index + 1}`}
                         </div>
                         <div className="flex items-center gap-1">
-                            <span className="text-sm font-mono text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</span>
+                            <span className="text-sm text-muted-foreground/60">{shortAddr(node.originalValidator.address)}</span>
                             <button
                                 onClick={() => copyToClipboard(node.originalValidator.address, "Address")}
-                                className="p-0.5 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                className="p-0.5 rounded text-white/40 transition-colors hover:bg-[#272729] hover:text-white"
                                 aria-label="Copy address"
                             >
                                 <Copy style={{ width: 11, height: 11 }} />
@@ -137,26 +183,32 @@ const ValidatorMobileCard = React.memo<{
                     </div>
                 </div>
                 {hasActions && (
-                    <button
-                        onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                        className="p-1.5 rounded-md transition-colors hover:bg-accent/60 text-muted-foreground"
+                    <ActionTooltip
+                        label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                        description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
                     >
-                        {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
-                    </button>
+                        <button
+                            onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                            className="p-1.5 rounded-md text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
+                            aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                        >
+                            {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
+                        </button>
+                    </ActionTooltip>
                 )}
             </div>
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/40">
+            <div className="grid grid-cols-3 gap-2 border-t border-[#272729] pt-2">
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Stake</div>
-                    <div className="text-sm font-mono text-foreground">{node.stakeAmount}</div>
+                    <div className="mb-1 text-xs font-medium text-white/60">Stake</div>
+                    <div className="text-sm text-white">{node.stakeAmount}</div>
                 </div>
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Status</div>
-                    <StatusBadge label={node.status} size="sm" />
+                    <div className="mb-1 text-xs font-medium text-white/60">Status</div>
+                    <NodeStatusBadge label={node.status} />
                 </div>
                 <div>
-                    <div className="text-xs font-display uppercase tracking-widest text-muted-foreground mb-1">Rewards</div>
-                    <div className={`text-sm font-mono ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
+                    <div className="mb-1 text-xs font-medium text-white/60">Rewards</div>
+                    <div className={`text-sm ${rewardDeltaClass(node.rewardsDelta24hValue)}`}>{node.rewardsDelta24h}</div>
                 </div>
             </div>
         </motion.div>
@@ -185,16 +237,23 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
 
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [selectedActions, setSelectedActions] = useState<any[]>([]);
+    const [sortColumn, setSortColumn] = useState<string | null>(null);
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const isLoading = keystoreLoading || validatorsLoading;
+    const { symbol, factor } = useDenom();
 
     const formatStakeAmount = useCallback((amount: number) =>
-        (amount / 1000000).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), []);
+        (amount / factor).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), [factor]);
 
     const formatRewardsDelta = useCallback((rewards: number) => {
-        const value = rewards / 1000000;
+        const value = rewards / factor;
         const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-        return `${sign}${Math.abs(value).toFixed(2)} CNPY`;
-    }, []);
+        const formattedValue = Math.abs(value).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+        return `${sign}${formattedValue} ${symbol}`;
+    }, [factor, symbol]);
 
     const getStatus = useCallback((validator: any) => {
         if (!validator) return 'Liquid';
@@ -226,8 +285,9 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                 return {
                     address: shortAddr(address),
                     stakeAmount: validator ? formatStakeAmount(validator.stakedAmount) : '0.00',
+                    stakeAmountValue: validator ? Number(validator.stakedAmount || 0) : 0,
                     status: getStatus(validator),
-                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : '0.00 CNPY',
+                    rewardsDelta24h: validator ? formatRewardsDelta(rewardsData[address]?.change24h || 0) : `0.00 ${symbol}`,
                     rewardsDelta24hValue: validator ? Number(rewardsData[address]?.change24h || 0) : 0,
                     originalValidator: validator || { address, nickname: keyData.keyNickname || 'Unnamed Key', stakedAmount: 0 },
                 };
@@ -238,6 +298,56 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                 return 0;
             });
     }, [keystore, validators, formatStakeAmount, getStatus, formatRewardsDelta, rewardsData]);
+
+    const handleSort = useCallback((column: string) => {
+        setSortColumn((currentColumn) => {
+            if (currentColumn === column) {
+                setSortDirection((currentDirection) => currentDirection === 'desc' ? 'asc' : 'desc');
+                return currentColumn;
+            }
+            setSortDirection('desc');
+            return column;
+        });
+    }, []);
+
+    const sortedKeystores = useMemo(() => {
+        if (!sortColumn) return processedKeystores;
+
+        const sorted = [...processedKeystores];
+        sorted.sort((a, b) => {
+            let comparison = 0;
+
+            switch (sortColumn) {
+                case 'Key':
+                    comparison = (a.originalValidator.nickname || `Node ${a.address}`)
+                        .localeCompare(b.originalValidator.nickname || `Node ${b.address}`, undefined, { numeric: true, sensitivity: 'base' });
+                    break;
+                case 'Staked':
+                    comparison = a.stakeAmountValue - b.stakeAmountValue;
+                    break;
+                case 'Status':
+                    comparison = a.status.localeCompare(b.status, undefined, { numeric: true, sensitivity: 'base' });
+                    break;
+                case 'Rewards Δ24h':
+                    comparison = a.rewardsDelta24hValue - b.rewardsDelta24hValue;
+                    break;
+                default:
+                    comparison = 0;
+            }
+
+            return sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        return sorted;
+    }, [processedKeystores, sortColumn, sortDirection]);
+
+    const columns = useMemo(() => ([
+        { label: 'Key', sortable: true },
+        { label: 'Staked', sortable: true },
+        { label: 'Status', sortable: true },
+        { label: 'Rewards Δ24h', sortable: true },
+        { label: 'Action', sortable: false },
+    ]), []);
 
     const cardBase = 'canopy-card p-5';
     const cardMotion = { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, delay: 0.28 } };
@@ -257,35 +367,56 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
         <>
             <motion.div className={cardBase} {...cardMotion}>
                 {/* Header */}
-                <div className="flex items-center gap-2 mb-5">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
-                        <Workflow className="text-primary" style={{ width: 13, height: 13 }} />
-                    </div>
-                    <span className="font-display text-sm font-semibold text-muted-foreground uppercase tracking-widest">
-                        Node Management
-                    </span>
-                    {processedKeystores.length > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/15 text-xs font-mono font-semibold text-primary">
-                            {processedKeystores.length}
+                <div className="mb-5 flex flex-col items-start justify-between gap-3 leading-none sm:flex-row sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="wallet-card-title">
+                            Node Management
                         </span>
-                    )}
+                    </div>
+                    <LatestUpdated className="self-end sm:self-auto" />
                 </div>
 
                 {/* Desktop table */}
                 <div className="hidden md:block overflow-x-auto">
                     {processedKeystores.length > 0 ? (
-                        <table className="w-full">
+                        <table
+                            className="w-full"
+                            style={{ tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: '0 4px' }}
+                        >
                             <thead>
-                                <tr className="border-b border-border/50">
-                                    {['Key', 'Staked', 'Status', 'Rewards Δ24h', 'Action'].map(h => (
-                                        <th key={h} className="text-left pb-2.5 pr-4 last:pr-0 text-xs font-display font-semibold text-muted-foreground uppercase tracking-widest">
-                                            {h}
+                                <tr>
+                                    {columns.map(({ label, sortable }) => {
+                                        const isActive = sortColumn === label;
+
+                                        return (
+                                        <th
+                                            key={label}
+                                            className={`px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4 ${sortable ? 'cursor-pointer select-none hover:text-white/80' : ''}`}
+                                            onClick={() => sortable ? handleSort(label) : undefined}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                {label}
+                                                {sortable && (
+                                                    <span className="inline-flex">
+                                                        {isActive ? (
+                                                            sortDirection === 'asc' ? (
+                                                                <ChevronUp className="h-3 w-3" />
+                                                            ) : (
+                                                                <ChevronDown className="h-3 w-3" />
+                                                            )
+                                                        ) : (
+                                                            <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </th>
-                                    ))}
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody>
-                                {processedKeystores.map((node, index) => (
+                                {sortedKeystores.map((node, index) => (
                                     <ValidatorRow key={node.originalValidator.address} node={node} index={index} onPauseUnpause={handlePauseUnpause} />
                                 ))}
                             </tbody>

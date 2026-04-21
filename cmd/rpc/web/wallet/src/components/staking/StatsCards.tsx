@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Gift, Link2, Lock, ShieldCheck } from 'lucide-react';
 import { useStakedBalanceHistory } from '@/hooks/useStakedBalanceHistory';
+import { useDenom } from '@/hooks/useDenom';
 
 interface StatsCardsProps {
     totalStaked: number;
@@ -10,15 +12,17 @@ interface StatsCardsProps {
     activeValidatorsCount: number;
 }
 
-const formatStakedAmount = (amount: number) => {
+const formatStakedAmount = (amount: number, factor: number) => {
     if (!amount && amount !== 0) return '0.00';
-    return (amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const formatRewards = (amount: number) => {
+const formatRewards = (amount: number, factor: number) => {
     if (!amount && amount !== 0) return '+0.00';
-    return `+${(amount / 1000000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `+${(amount / factor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
+
+const pluralize = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 const itemVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -33,15 +37,17 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                                                           activeValidatorsCount
                                                       }) => {
     const { data: stakedHistory, isLoading: stakedHistoryLoading } = useStakedBalanceHistory();
+    const { symbol, factor } = useDenom();
     const stakedChangePercentage = stakedHistory?.changePercentage || 0;
+    const displayedChainCount = chainCount || 0;
 
     const statsData = [
         {
             id: 'totalStaked',
             title: 'Total Staked',
-            value: `${formatStakedAmount(totalStaked)} CNPY`,
+            value: `${formatStakedAmount(totalStaked, factor)} ${symbol}`,
             subtitle: stakedHistoryLoading ? (
-                'Loading 24h change...'
+                'Loading change...'
             ) : stakedHistory ? (
                 <span className={`flex items-center gap-1 ${stakedChangePercentage >= 0 ? 'text-primary' : 'text-status-error'}`}>
                     <svg
@@ -51,44 +57,54 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                     >
                         <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
                     </svg>
-                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(1)}% 24h change
+                    {stakedChangePercentage >= 0 ? '+' : ''}{stakedChangePercentage.toFixed(1)}% {stakedHistory.periodLabel} change
                 </span>
             ) : (
-                `Across ${validatorsCount} validators`
+                `Across ${pluralize(validatorsCount, 'validator')}`
             ),
-            icon: 'fa-solid fa-coins',
-            iconColor: 'text-primary',
+            icon: Lock,
+            iconColor: 'text-white/60',
             valueColor: 'text-foreground'
         },
         {
             id: 'rewardsEarned',
             title: 'Rewards Earned',
-            value: `${formatRewards(totalRewards)} CNPY`,
-            subtitle: `Last 24 hours - ${validatorsCount} validators`,
-            icon: 'fa-solid fa-ellipsis',
-            iconColor: 'text-muted-foreground',
+            value: `${formatRewards(totalRewards, factor)} ${symbol}`,
+            subtitle: `Last 24 hours across ${pluralize(validatorsCount, 'validator')}`,
+            icon: Gift,
+            iconColor: 'text-white/60',
             valueColor: 'text-primary'
         },
         {
             id: 'activeValidators',
             title: 'Active Validators',
-            value: validatorsCount.toString(),
+            value: activeValidatorsCount.toString(),
             subtitle: (
                 <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 bg-primary rounded-full"></span>
-                    {'All online'}
+                    <span className={`inline-block w-2 h-2 rounded-full ${activeValidatorsCount > 0 ? 'bg-[#35cd48]' : 'bg-muted-foreground/40'}`}></span>
+                    {activeValidatorsCount === validatorsCount
+                        ? `All ${pluralize(validatorsCount, 'validator')} active`
+                        : `${pluralize(validatorsCount, 'validator')} total`}
                 </span>
             ),
-            icon: 'fa-solid fa-shield-halved',
-            iconColor: 'text-muted-foreground',
+            icon: ShieldCheck,
+            iconColor: 'text-white/60',
             valueColor: 'text-foreground'
         },
         {
             id: 'chainsStaked',
             title:  'Chains Staked',
-            value: (chainCount || 0).toString(),
-            icon: 'fa-solid fa-link',
-            iconColor: 'text-muted-foreground',
+            value: displayedChainCount.toString(),
+            subtitle: (
+                <div className="flex items-center justify-between gap-3">
+                    <span>Covered by {pluralize(validatorsCount, 'validator')}</span>
+                    <span className="inline-flex items-center rounded-md bg-[#35cd48]/12 px-2 py-0.5 text-[11px] font-medium text-[#35cd48] ring-1 ring-[#35cd48]/25">
+                        {activeValidatorsCount} active
+                    </span>
+                </div>
+            ),
+            icon: Link2,
+            iconColor: 'text-white/60',
             valueColor: 'text-foreground'
         }
     ];
@@ -99,19 +115,21 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
                 <motion.div
                     key={stat.id}
                     variants={itemVariants}
-                    className="bg-card flex flex-col justify-center rounded-xl p-6 border border-border relative overflow-hidden gap-4"
+                    className="bg-card rounded-xl p-6 border border-border relative overflow-hidden h-full"
                 >
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-muted-foreground text-sm font-medium">
-                            {stat.title}
-                        </h3>
-                        <i className={`${stat.icon} ${stat.iconColor} text-2xl`}></i>
-                    </div>
-                    <p className={`${stat.valueColor} text-2xl font-bold`}>
-                        {stat.value}
-                    </p>
-                    <div className="text-muted-foreground text-xs">
-                        {stat.subtitle}
+                    <div className="flex h-full flex-col">
+                        <div className="flex items-center gap-2">
+                            <stat.icon className={`${stat.iconColor} h-4 w-4 flex-shrink-0`} />
+                            <h3 className="wallet-card-title">
+                                {stat.title}
+                            </h3>
+                        </div>
+                        <p className={`${stat.valueColor} mt-4 text-2xl font-bold`}>
+                            {stat.value}
+                        </p>
+                        <div className="mt-auto min-h-[20px] pt-4 text-muted-foreground text-xs">
+                            {stat.subtitle}
+                        </div>
                     </div>
                 </motion.div>
             ))}

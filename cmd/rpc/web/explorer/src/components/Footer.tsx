@@ -3,7 +3,7 @@ import Logo from './Logo'
 
 const Footer: React.FC = () => {
     return (
-        <footer className="bg-navbar border-t border-gray-800/60">
+        <footer className="bg-navbar border-t border-white/10">
             <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 {/* Desktop Layout */}
                 <div className="hidden md:flex items-center justify-between">

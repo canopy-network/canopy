@@ -1,85 +1,87 @@
 import React from 'react';
-import AnimatedNumber from '../AnimatedNumber';
 import TableCard from '../Home/TableCard';
-
-interface Swap {
-    hash: string;
-    assetPair: string;
-    action: 'Buy CNPY' | 'Sell CNPY';
-    block: number;
-    age: string;
-    fromAddress: string;
-    toAddress: string;
-    exchangeRate: string;
-    amount: string;
-    orderId: string;
-    committee: number;
-    status: 'Active' | 'Locked' | 'Completed';
-}
+import type { SwapData, SortKey, SortDir } from './TokenSwapsPage';
 
 interface RecentSwapsTableProps {
-    swaps: Swap[];
+    swaps: SwapData[];
     loading: boolean;
+    onRowClick?: (swap: SwapData) => void;
+    sortKey: SortKey | null;
+    sortDir: SortDir;
+    onSort: (key: SortKey) => void;
 }
 
-const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading }) => {
-    // Define table columns
+const SortableHeader: React.FC<{
+    label: string;
+    sortKey: SortKey;
+    activeSortKey: SortKey | null;
+    sortDir: SortDir;
+    onSort: (key: SortKey) => void;
+}> = ({ label, sortKey, activeSortKey, sortDir, onSort }) => {
+    const isActive = activeSortKey === sortKey;
+    return (
+        <button
+            onClick={() => onSort(sortKey)}
+            className="inline-flex items-center gap-1 hover:text-white transition-colors cursor-pointer"
+        >
+            {label}
+            <span className="text-[10px]">
+                {isActive ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u25B4\u25BE'}
+            </span>
+        </button>
+    );
+};
+
+const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading, onRowClick, sortKey, sortDir, onSort }) => {
     const columns = [
-        { label: 'Hash', key: 'hash' },
-        { label: 'Asset Pair', key: 'assetPair' },
-        { label: 'Action', key: 'action' },
-        { label: 'Block', key: 'block' },
-        { label: 'Age', key: 'age' },
-        { label: 'From Address', key: 'fromAddress' },
-        { label: 'To Address', key: 'toAddress' },
-        { label: 'Exchange Rate', key: 'exchangeRate' },
-        { label: 'Amount', key: 'amount' },
-        { label: 'Status', key: 'status' }
+        { label: 'Order ID' },
+        {
+            label: (
+                <SortableHeader label="Committee" sortKey="committee" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            )
+        },
+        { label: 'From Address' },
+        { label: 'To Address' },
+        {
+            label: (
+                <SortableHeader label="Exchange Rate" sortKey="exchangeRate" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            )
+        },
+        {
+            label: (
+                <SortableHeader label="Amount" sortKey="amount" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            )
+        },
+        {
+            label: (
+                <SortableHeader label="Status" sortKey="status" activeSortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+            )
+        }
     ];
 
-    // Transform swaps data to table rows
     const rows = swaps.map((swap) => [
-        // Hash
-        <span className="text-primary font-mono text-sm">{swap.hash}</span>,
-        
-        // Asset Pair
-        <span className="text-gray-300 text-sm">{swap.assetPair}</span>,
-        
-        // Action
-        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-            swap.action === 'Buy CNPY' ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-400'
-        }`}>
-            {swap.action}
+        <span
+            className="text-primary font-mono text-sm cursor-pointer hover:underline"
+            onClick={() => onRowClick?.(swap)}
+        >
+            {swap.orderId.length > 16
+                ? swap.orderId.slice(0, 8) + '...' + swap.orderId.slice(-4)
+                : swap.orderId}
         </span>,
-        
-        // Block
-        <AnimatedNumber 
-            value={swap.block} 
-            className="text-primary text-sm"
-        />,
-        
-        // Age
-        <span className="text-gray-300 text-sm">{swap.age}</span>,
-        
-        // From Address
+
+        <span className="text-white text-sm">{swap.committee}</span>,
+
         <span className="text-gray-300 font-mono text-sm">{swap.fromAddress}</span>,
-        
-        // To Address
+
         <span className="text-gray-300 font-mono text-sm">{swap.toAddress}</span>,
-        
-        // Exchange Rate
+
         <span className="text-gray-300 text-sm">{swap.exchangeRate}</span>,
-        
-        // Amount
-        <span className={`text-sm ${swap.amount.startsWith('+') ? 'text-primary' : 'text-red-400'}`}>
-            {swap.amount}
-        </span>,
-        
-        // Status
+
+        <span className="text-red-400 text-sm">{swap.amount}</span>,
+
         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-            swap.status === 'Active' ? 'bg-green-500/20 text-green-400' :
-            swap.status === 'Locked' ? 'bg-yellow-500/20 text-yellow-400' :
-            'bg-gray-500/20 text-gray-400'
+            swap.status === 'Active' ? 'bg-primary/20 text-primary' :
+            'bg-yellow-500/20 text-yellow-400'
         }`}>
             {swap.status}
         </span>
@@ -91,7 +93,8 @@ const RecentSwapsTable: React.FC<RecentSwapsTableProps> = ({ swaps, loading }) =
             columns={columns}
             rows={rows}
             loading={loading}
-            paginate={false}
+            paginate={true}
+            pageSize={15}
         />
     );
 };

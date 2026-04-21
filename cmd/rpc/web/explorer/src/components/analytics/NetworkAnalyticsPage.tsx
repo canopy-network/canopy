@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useCardData, useSupply, useAllValidators, useAllBlocksCache, useBlocksForAnalytics, usePending, useParams, useBlocksInRange, useTransactionsInRange } from '../../hooks/useApi'
+import { toCNPY, cnpyConversionRate } from '../../lib/utils'
 import AnalyticsFilters from './AnalyticsFilters'
 import KeyMetrics from './KeyMetrics'
 import NetworkActivity from './NetworkActivity'
@@ -62,6 +63,17 @@ const NetworkAnalyticsPage: React.FC = () => {
             setErrorMessage('');
         }
     }, [blockRange]);
+
+    // auto-sync searchParams when fromBlock/toBlock change so data re-fetches without manual search
+    useEffect(() => {
+        if (fromBlock && toBlock) {
+            const from = parseInt(fromBlock)
+            const to = parseInt(toBlock)
+            if (!isNaN(from) && !isNaN(to) && to >= from && to - from + 1 <= 100) {
+                setSearchParams({ from: fromBlock, to: toBlock })
+            }
+        }
+    }, [fromBlock, toBlock]);
 
     const blocksToFetch = blockRange > 0 ? Math.min(blockRange, 100) : 10; // Default 10 blocks, maximum 100
 
@@ -146,29 +158,31 @@ const NetworkAnalyticsPage: React.FC = () => {
             const pendingCount = pendingData.totalCount || 0
             const blockSize = paramsData.consensus?.blockSize || 1000000
 
-            // Calculate block time based on real data
+            let blockTime = 0
             const blocksList = blocksData || []
-            let blockTime = 6.2 // Default
             if (blocksList.length >= 2) {
                 const latestBlock = blocksList[0]
                 const previousBlock = blocksList[1]
-                const timeDiff = (latestBlock.blockHeader.time - previousBlock.blockHeader.time) / 1000000 // Convert to seconds
-                blockTime = Math.round(timeDiff * 10) / 10
+                const latestTime = latestBlock.blockHeader?.time || 0
+                const previousTime = previousBlock.blockHeader?.time || 0
+                if (latestTime > 0 && previousTime > 0) {
+                    const timeDiff = (latestTime - previousTime) / 1000000
+                    blockTime = Math.round(timeDiff * 10) / 10
+                }
             }
 
-            // Use real data from the API
             const networkVersion = paramsData.consensus?.protocolVersion || '1/0'
-            const sendFee = paramsData.fee?.sendFee || 10000
+            const sendFee = paramsData.fee?.sendFee || 0
 
             setMetrics(prev => ({
                 ...prev,
                 validatorCount: activeValidators.length,
-                totalValueLocked: totalStake / 1000000000000,
+                totalValueLocked: totalStake / (cnpyConversionRate * cnpyConversionRate),
                 pendingTransactions: pendingCount,
                 blockTime: blockTime,
-                blockSize: blockSize / 1000000,
-                networkVersion: networkVersion, // protocolVersion from the API
-                avgTransactionFee: sendFee / 1000000, // Convert from wei to CNPY
+                blockSize: blockSize / cnpyConversionRate,
+                networkVersion: networkVersion,
+                avgTransactionFee: toCNPY(sendFee),
                 // The following remain simulated because they're not in the API:
                 // networkUptime: 99.98 (SIMULATED)
             }))
@@ -408,7 +422,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                             disabled={isExporting}
                             className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${isExporting
                                 ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                : 'bg-card border-gray-800/40 text-gray-300 hover:bg-card/80'
+                                : 'bg-card border-white/10 text-gray-300 hover:bg-card/80'
                                 }`}
                         >
                             {isExporting ? (
@@ -444,6 +458,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                 isLoading={filteredBlocksLoading}
                 errorMessage={errorMessage}
                 blocksData={filteredBlocksData || analyticsBlocksData || blocksData}
+                blockTime={metrics.blockTime || undefined}
             />
 
             {/* Analytics Grid - 3 columns layout */}
@@ -454,7 +469,7 @@ const NetworkAnalyticsPage: React.FC = () => {
                     <KeyMetrics metrics={metrics} loading={isLoading} supplyData={supplyData} validatorsData={validatorsData} paramsData={paramsData} pendingData={pendingData} />
 
                     {/* Chain Status */}
-                    <ChainStatus metrics={metrics} loading={isLoading} />
+                    <ChainStatus metrics={metrics} loading={isLoading} paramsData={paramsData} />
                 </div>
 
                 {/* Second Column - 3 cards */}

@@ -37,15 +37,15 @@ export function useBlockProducerData({
           (addr: string) => addr === validatorAddress,
         ).length;
 
-        // Get parameters for accurate reward calculation
         const params = await dsFetch("params");
-        const mintPerBlock = params.MintPerBlock || 80000000; // 80 CNPY per block
-        const proposerCut = params.ProposerCut || 70; // 70% goes to proposer
+        const mintPerBlock = params.MintPerBlock;
+        const proposerCut = params.ProposerCut;
 
-        // Calculate rewards per block for this validator
-        // Proposer gets a percentage of the mint per block
-        const rewardsPerBlock = (mintPerBlock * proposerCut) / 100 / 1000000; // Convert to CNPY
-        const rewards24h = blocksProduced * rewardsPerBlock;
+        let rewards24h = 0;
+        if (mintPerBlock != null && proposerCut != null) {
+          const rewardsPerBlock = (mintPerBlock * proposerCut) / 100;
+          rewards24h = blocksProduced * rewardsPerBlock;
+        }
 
         // Find the last height this validator proposed
         const lastProposedHeight =
@@ -89,17 +89,20 @@ export function useMultipleBlockProducerData(validatorAddresses: string[]) {
 
         const results: Record<string, BlockProducerData> = {};
 
-        // Get parameters for accurate reward calculation
         const params = await dsFetch("params");
-        const mintPerBlock = params.MintPerBlock || 80000000; // 80 CNPY per block
-        const proposerCut = params.ProposerCut || 70; // 70% goes to proposer
+        const mintPerBlock = params.MintPerBlock;
+        const proposerCut = params.ProposerCut;
+        const hasRewardParams = mintPerBlock != null && proposerCut != null;
 
         for (const address of validatorAddresses) {
           const blocksProduced = proposers.filter(
             (addr: string) => addr === address,
           ).length;
-          const rewardsPerBlock = (mintPerBlock * proposerCut) / 100 / 1000000; // Convert to CNPY
-          const rewards24h = blocksProduced * rewardsPerBlock;
+          let rewards24h = 0;
+          if (hasRewardParams) {
+            const rewardsPerBlock = (mintPerBlock * proposerCut) / 100;
+            rewards24h = blocksProduced * rewardsPerBlock;
+          }
 
           const lastProposedHeight =
             proposers.lastIndexOf(address) >= 0

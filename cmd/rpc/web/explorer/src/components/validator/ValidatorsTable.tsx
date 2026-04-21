@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import validatorsTexts from '../../data/validators.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TableCard from '../Home/TableCard'
+import { toCNPY } from '../../lib/utils'
 
 interface Validator {
     rank: number
@@ -45,7 +46,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
 
     const formatActivityScore = (score: string) => {
         const colors = {
-            'Active': 'bg-green-500/20 text-green-400',
+            'Active': 'bg-primary/20 text-primary',
             'Standby': 'bg-yellow-500/20 text-yellow-400',
             'Paused': 'bg-orange-500/20 text-orange-400',
             'Unstaking': 'bg-red-500/20 text-red-400',
@@ -72,7 +73,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         const clampedPercentage = Math.max(0, Math.min(100, relativePercentage))
 
         return (
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
+            <div className="w-full bg-white/10 rounded-full h-2.5">
                 <div
                     className="bg-primary h-2.5 rounded-full transition-all duration-300"
                     style={{ width: `${clampedPercentage}%` }}
@@ -153,12 +154,12 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         </div>,
 
         // Estimated Reward Rate
-        <span className="text-green-400 text-sm font-medium">
+        <span className="text-primary text-sm font-medium">
             <AnimatedNumber
                 value={validator.estimatedRewardRate}
                 format={{ maximumFractionDigits: 2 }}
                 suffix="%"
-                className="text-green-400"
+                className="text-primary"
             />
         </span>,
 
@@ -188,7 +189,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({ validators, loading =
         // Total Stake (CNPY - converted from micro denomination)
         <span className="text-gray-300 text-sm">
             <AnimatedNumber
-                value={validator.stakedAmount / 1000000}
+                value={toCNPY(validator.stakedAmount)}
                 format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                 suffix=" CNPY"
                 className="text-gray-300"

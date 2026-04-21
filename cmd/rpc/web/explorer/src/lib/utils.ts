@@ -11,9 +11,11 @@ export function toUCNPY(cnpy: number): number {
     return cnpy * cnpyConversionRate;
 }
 
-// convertNumberWCommas() formats a number with commas
+// convertNumberWCommas() formats a number with commas (integer part only)
 export function convertNumberWCommas(x: number): string {
-    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const parts = x.toString().split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join('.');
 }
 
 // convertNumber() formats a number with commas or in compact notation
@@ -170,3 +172,26 @@ export const formatLocaleNumber = (num: number, minFractionDigits: number = 0, m
         minimumFractionDigits: minFractionDigits,
     });
 };
+
+// extractAmountMicro extracts the uCNPY amount from a transaction object,
+// checking both top-level fields and the nested transaction.msg structure.
+export function extractAmountMicro(tx: Record<string, unknown>): number {
+    if (typeof tx.amount === 'number' && tx.amount > 0) return tx.amount
+    if (typeof tx.value === 'number' && tx.value > 0) return tx.value
+
+    const txObj = tx.transaction as Record<string, unknown> | undefined
+    const msg = txObj?.msg as Record<string, unknown> | undefined
+    if (msg) {
+        for (const key of ['messageSend', 'messageStake', 'messageEditStake', 'messageDAOTransfer', 'messageSubsidy']) {
+            const inner = msg[key] as Record<string, unknown> | undefined
+            if (inner?.amount !== undefined) return Number(inner.amount)
+        }
+        for (const key of ['messageCreateOrder', 'messageEditOrder']) {
+            const inner = msg[key] as Record<string, unknown> | undefined
+            if (inner?.amountForSale !== undefined) return Number(inner.amountForSale)
+        }
+        if (msg.amount !== undefined) return Number(msg.amount)
+    }
+
+    return 0
+}

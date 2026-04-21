@@ -26,7 +26,7 @@ import { useDS } from "@/core/useDs";
 import { downloadJson } from "@/helpers/download";
 import { useQueryClient } from "@tanstack/react-query";
 
-export const CurrentWallet = (): JSX.Element => {
+export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX.Element => {
   const { accounts, selectedAccount, switchAccount } = useAccounts();
 
   const [privateKey, setPrivateKey] = useState("");
@@ -51,6 +51,12 @@ export const CurrentWallet = (): JSX.Element => {
       y: 0,
       transition: { duration: 0.4 },
     },
+  };
+
+  const truncateMiddle = (value: string, start = 12, end = 10) => {
+    if (!value) return "";
+    if (value.length <= start + end + 3) return value;
+    return `${value.slice(0, start)}...${value.slice(-end)}`;
   };
 
   const selectedKeyEntry = useMemo(() => {
@@ -191,14 +197,6 @@ export const CurrentWallet = (): JSX.Element => {
       return;
     }
 
-    if (accounts.length === 1) {
-      toast.error({
-        title: "Cannot Delete",
-        description: "You must have at least one account",
-      });
-      return;
-    }
-
     setDeleteConfirmation("");
     setShowDeleteModal(true);
   };
@@ -239,6 +237,8 @@ export const CurrentWallet = (): JSX.Element => {
         setTimeout(() => {
           switchAccount(otherAccounts[0].id);
         }, 500);
+      } else {
+        switchAccount(null);
       }
     } catch (error) {
       toast.error({
@@ -250,24 +250,8 @@ export const CurrentWallet = (): JSX.Element => {
     }
   };
 
-  return (
-    <motion.div
-      variants={panelVariants}
-      className="bg-card rounded-2xl p-6 border border-border/80 shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
-    >
-      <div className="flex items-center justify-between gap-2 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Current Wallet</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Inspect keys, export backups, and manage account lifecycle.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary uppercase tracking-wider">
-          <Wallet className="w-3 h-3" />
-          Active
-        </span>
-      </div>
-
+  const content = (
+    <>
       <div className="space-y-5">
         <div>
           <label className="block text-sm font-medium text-foreground/80 mb-2">
@@ -294,50 +278,56 @@ export const CurrentWallet = (): JSX.Element => {
           </Select>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-2">
-            Wallet Address
-          </label>
-          <div className="relative flex items-center justify-between gap-2">
-            <input
-              type="text"
-              value={selectedAccount?.address || ""}
-              readOnly
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10"
-            />
-            <button
-              onClick={() =>
-                copyToClipboard(
-                  selectedAccount?.address || "",
-                  "Wallet address",
-                )
-              }
-              className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-foreground/80 mb-2">
+              Wallet Address
+            </label>
+            <div className="relative">
+              <div
+                className="min-w-0 rounded-lg border border-border bg-muted px-3 py-2.5 pr-11 text-sm text-foreground"
+                title={selectedAccount?.address || ""}
+              >
+                <span className="block truncate font-mono">
+                  {truncateMiddle(selectedAccount?.address || "", 12, 10)}
+                </span>
+              </div>
+              <button
+                onClick={() =>
+                  copyToClipboard(
+                    selectedAccount?.address || "",
+                    "Wallet address",
+                  )
+                }
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-white/70 transition-colors hover:text-white"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-2">
-            Public Key
-          </label>
-          <div className="relative flex items-center justify-between gap-2">
-            <input
-              type="text"
-              value={selectedAccount?.publicKey || ""}
-              readOnly
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-foreground pr-10"
-            />
-            <button
-              onClick={() =>
-                copyToClipboard(selectedAccount?.publicKey || "", "Public key")
-              }
-              className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-foreground/80 mb-2">
+              Public Key
+            </label>
+            <div className="relative">
+              <div
+                className="min-w-0 rounded-lg border border-border bg-muted px-3 py-2.5 pr-11 text-sm text-foreground"
+                title={selectedAccount?.publicKey || ""}
+              >
+                <span className="block truncate font-mono">
+                  {truncateMiddle(selectedAccount?.publicKey || "", 12, 10)}
+                </span>
+              </div>
+              <button
+                onClick={() =>
+                  copyToClipboard(selectedAccount?.publicKey || "", "Public key")
+                }
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-white/70 transition-colors hover:text-white"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -356,14 +346,14 @@ export const CurrentWallet = (): JSX.Element => {
             {privateKeyVisible && (
               <button
                 onClick={() => copyToClipboard(privateKey, "Private key")}
-                className="text-primary-foreground hover:text-foreground bg-primary rounded-lg px-3 py-2.5"
+                className="rounded-lg border border-[#272729] bg-[#0f0f0f] px-3 py-2.5 text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
               >
                 <Copy className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={handleRevealPrivateKeys}
-              className="hover:text-primary bg-muted rounded-lg px-3 py-2 text-foreground"
+              className="rounded-lg border border-[#272729] bg-[#0f0f0f] px-3 py-2 text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
             >
               {privateKeyVisible ? (
                 <EyeOff className="text-foreground w-4 h-4" />
@@ -374,41 +364,42 @@ export const CurrentWallet = (): JSX.Element => {
           </div>
         </div>
 
-        <div className="flex gap-2 flex-col">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Button
             onClick={handleDownloadKeyfile}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 py-3 font-semibold"
+            variant="default"
+            className="h-11 w-full"
           >
-            <Download className="w-4 h-4 mr-2" />
+            <Download className="h-4 w-4" />
             Download Keyfile
           </Button>
           <Button
             onClick={handleRevealPrivateKeys}
-            variant="destructive"
-            className="flex-1 py-3"
+            variant="secondary"
+            className="h-11 w-full"
           >
-            <Key className="w-4 h-4 mr-2" />
+            <Key className="h-4 w-4" />
             {privateKeyVisible ? "Hide Private Key" : "Reveal Private Key"}
           </Button>
           <Button
             onClick={handleDeleteAccount}
             variant="destructive"
-            className="flex-1 py-3 bg-red-600 hover:bg-red-700 font-semibold"
-            disabled={accounts.length === 1}
+            className="h-11 w-full"
+            disabled={!selectedAccount}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="h-4 w-4" />
             Delete Account
           </Button>
         </div>
 
-        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+        <div className="rounded-lg border border-[#272729] bg-[#0f0f0f] p-4">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="text-red-500 w-5 h-5 mt-0.5" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 text-white/60" />
             <div>
-              <h4 className="text-red-400 font-medium mb-1">
+              <h4 className="mb-1 font-medium text-foreground">
                 Security Warning
               </h4>
-              <p className="text-red-300 text-sm">
+              <p className="text-sm text-muted-foreground">
                 Never share your private keys. Anyone with access to them can
                 control your funds.
               </p>
@@ -418,8 +409,8 @@ export const CurrentWallet = (): JSX.Element => {
       </div>
 
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
-          <div className="w-full max-w-sm max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-card border border-border rounded-2xl p-4 sm:p-5 shadow-[0_18px_40px_rgba(0,0,0,0.45)] overflow-y-auto">
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#0f0f0f]/80 backdrop-blur-md p-3 sm:p-4">
+          <div className="w-full max-w-sm max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-[#171717] border border-[#272729] rounded-2xl p-4 sm:p-5 shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-y-auto">
             <h3 className="text-lg text-foreground font-semibold mb-2">
               Unlock Private Key
             </h3>
@@ -431,22 +422,22 @@ export const CurrentWallet = (): JSX.Element => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35cd48]/25"
             />
             {passwordError && (
-              <div className="text-sm text-red-400 mt-2">{passwordError}</div>
+              <div className="text-sm text-[#ff1845] mt-2">{passwordError}</div>
             )}
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowPasswordModal(false)}
-                className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-accent"
+                className="px-4 py-2 rounded-lg border border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
                 disabled={isFetchingKey}
               >
                 Cancel
               </button>
               <button
                 onClick={handleFetchPrivateKey}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                className="px-4 py-2 rounded-lg bg-[#35cd48] text-[#0f0f0f] hover:bg-[#35cd48]/90"
                 disabled={isFetchingKey}
               >
                 {isFetchingKey ? "Unlocking..." : "Unlock"}
@@ -457,29 +448,29 @@ export const CurrentWallet = (): JSX.Element => {
       )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
-          <div className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-card border border-red-500/50 rounded-2xl p-4 sm:p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)] overflow-y-auto">
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#0f0f0f]/80 backdrop-blur-md p-3 sm:p-4">
+          <div className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-[#171717] border border-[#ff1845]/35 rounded-2xl p-4 sm:p-6 shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-red-500/20 rounded-full">
-                <AlertTriangle className="w-6 h-6 text-red-500" />
+              <div className="p-3 bg-[#ff1845]/12 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-[#ff1845]" />
               </div>
               <h3 className="text-xl text-foreground font-semibold">
                 Delete Account
               </h3>
             </div>
 
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4">
-              <p className="text-red-300 text-sm font-medium mb-2">
+            <div className="bg-[#ff1845]/10 border border-[#ff1845]/25 rounded-lg p-4 mb-4">
+              <p className="text-[#ff1845] text-sm font-medium mb-2">
                 This action is permanent and irreversible
               </p>
-              <p className="text-red-300 text-sm">
+              <p className="text-[#ff1845] text-sm">
                 Make sure you have backed up your private key before deleting this account.
                 You will lose access to all funds if you haven't saved your private key.
               </p>
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">
-              Type <span className="font-mono font-semibold text-foreground">
+              Type <span className="font-semibold text-foreground">
                 {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
               </span> to confirm deletion:
             </p>
@@ -489,7 +480,7 @@ export const CurrentWallet = (): JSX.Element => {
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
               placeholder="Type wallet name to confirm"
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2.5 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35"
+              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff1845]/25"
               autoFocus
             />
 
@@ -499,14 +490,14 @@ export const CurrentWallet = (): JSX.Element => {
                   setShowDeleteModal(false);
                   setDeleteConfirmation("");
                 }}
-                className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-accent"
+                className="px-4 py-2 rounded-lg border border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
                 disabled={isDeleting}
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-foreground hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-[#ff1845] text-white hover:bg-[#ff1845]/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isDeleting || deleteConfirmation !== (selectedKeyEntry?.keyNickname || selectedAccount?.nickname)}
               >
                 {isDeleting ? "Deleting..." : "Delete Permanently"}
@@ -515,8 +506,19 @@ export const CurrentWallet = (): JSX.Element => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="w-full">{content}</div>;
+  }
+
+  return (
+    <motion.div
+      variants={panelVariants}
+      className="bg-card rounded-2xl p-6 border border-border/80 shadow-[0_14px_34px_rgba(0,0,0,0.2)]"
+    >
+      {content}
     </motion.div>
   );
 };
-
-

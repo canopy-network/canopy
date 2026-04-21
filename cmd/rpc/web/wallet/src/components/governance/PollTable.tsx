@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ExternalLink, Eye, Search, ThumbsDown, ThumbsUp } from "lucide-react";
+import { ChevronDown, ExternalLink, Eye, Search, ThumbsDown, ThumbsUp, Filter } from "lucide-react";
 import { Poll } from "@/hooks/useGovernance";
+import { ActionTooltip } from "@/components/ui/ActionTooltip";
 
 interface PollTableProps {
   polls: Poll[];
-  title: string;
   onVote?: (pollHash: string, vote: "approve" | "reject") => void;
   onViewDetails?: (pollHash: string) => void;
 }
@@ -12,16 +12,14 @@ interface PollTableProps {
 const PAGE_SIZE = 10;
 
 const normalizePollHash = (poll: Poll): string => poll.proposalHash || poll.hash;
-
-const pollStatusBadge = (status: Poll["status"]) => {
-  if (status === "active") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/35";
-  if (status === "passed") return "bg-cyan-500/15 text-cyan-300 border-cyan-500/35";
-  return "bg-rose-500/15 text-rose-300 border-rose-500/35";
+const isIdentifierTitle = (poll: Poll): boolean => {
+  const normalizedHash = normalizePollHash(poll).toLowerCase();
+  const title = poll.title.trim().toLowerCase();
+  return title === normalizedHash || title === poll.hash.toLowerCase();
 };
 
 export const PollTable: React.FC<PollTableProps> = ({
   polls,
-  title,
   onVote,
   onViewDetails,
 }) => {
@@ -29,7 +27,7 @@ export const PollTable: React.FC<PollTableProps> = ({
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("endingSoon");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [showFilters, setShowFilters] = useState(false);
 
   const filtered = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -59,12 +57,12 @@ export const PollTable: React.FC<PollTableProps> = ({
     return sorted;
   }, [polls, searchTerm, statusFilter, sortBy]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, statusFilter, sortBy, pageSize]);
+  }, [searchTerm, statusFilter, sortBy]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -87,91 +85,90 @@ export const PollTable: React.FC<PollTableProps> = ({
     { key: "rejected", label: "Rejected", count: statusCounts.rejected },
   ];
 
-  return (
-    <div className="rounded-2xl border border-border bg-card/95 p-4 md:p-5 shadow-[0_10px_50px_-35px_rgba(0,0,0,0.8)]">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-lg md:text-xl font-semibold text-foreground">{title}</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Built for high poll volume with dense information and quick actions.
-          </p>
-          <div className="mt-2 h-1 w-28 rounded-full bg-gradient-to-r from-primary/80 via-primary/50 to-transparent" />
-        </div>
-        <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Visible</div>
-          <div className="text-sm font-semibold text-foreground">
-            {filtered.length} / {polls.length}
-          </div>
-        </div>
-      </div>
+  const actionButtonClass =
+    "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#272729] bg-[#0f0f0f] text-white/70 transition-colors hover:bg-[#272729] hover:text-white";
+  const filterButtonClass = `inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+    showFilters
+      ? "border-[#35cd48]/35 bg-[#35cd48]/12 text-[#35cd48]"
+      : "border-[#272729] bg-[#0f0f0f] text-muted-foreground hover:bg-[#272729] hover:text-foreground"
+  }`;
 
-      <div className="mb-4 flex flex-wrap gap-2">
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
         {statusPills.map((pill) => (
           <button
             key={pill.key}
             onClick={() => setStatusFilter(pill.key)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-semibold transition-colors ${
               statusFilter === pill.key
-                ? "bg-primary/20 text-primary border-primary/40"
-                : "bg-background/70 text-muted-foreground border-border/70 hover:text-foreground"
+                ? "bg-[#35cd48]/12 text-[#35cd48] border-[#35cd48]/35"
+                : "bg-[#0f0f0f] text-muted-foreground border-[#272729] hover:bg-[#272729] hover:text-foreground"
             }`}
           >
             <span>{pill.label}</span>
             <span className="text-[10px] opacity-80">({pill.count})</span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowFilters((current) => !current)}
+          className={filterButtonClass}
+          title={showFilters ? "Hide filters" : "Show filters"}
+          aria-label={showFilters ? "Hide filters" : "Show filters"}
+          aria-pressed={showFilters}
+        >
+          <Filter className="h-4 w-4" />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 mb-4">
-        <div className="relative xl:col-span-5">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by title, hash or proposal key..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors"
-          />
+      {showFilters ? (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+          <div className="relative xl:col-span-7">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by title, hash or proposal key..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-[#272729] bg-[#0f0f0f] py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-[#35cd48]/40 focus:outline-none"
+            />
+          </div>
+          <div className="relative xl:col-span-5">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full appearance-none rounded-lg border border-[#272729] bg-[#0f0f0f] py-2.5 pl-3 pr-10 text-sm text-foreground focus:border-[#35cd48]/40 focus:outline-none"
+            >
+              <option value="endingSoon">Sort: Ending Soon</option>
+              <option value="latest">Sort: Latest End Block</option>
+              <option value="highestSupport">Sort: Highest Approve %</option>
+              <option value="highestRejection">Sort: Highest Reject %</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          </div>
         </div>
-        <div className="relative xl:col-span-4">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-          >
-            <option value="endingSoon">Sort: Ending Soon</option>
-            <option value="latest">Sort: Latest End Block</option>
-            <option value="highestSupport">Sort: Highest Approve %</option>
-            <option value="highestRejection">Sort: Highest Reject %</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        </div>
-        <div className="relative xl:col-span-3">
-          <select
-            value={String(pageSize)}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-            className="w-full appearance-none pl-3 pr-10 py-2.5 bg-background border border-border/80 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/40"
-          >
-            <option value="10">10 / page</option>
-            <option value="20">20 / page</option>
-            <option value="30">30 / page</option>
-            <option value="50">50 / page</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        </div>
-      </div>
+      ) : null}
 
-      <div className="rounded-xl border border-border/70 overflow-hidden">
-        <div className="max-h-[640px] overflow-auto">
-          <table className="w-full min-w-[940px]">
-            <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-border/80">
+      <div className="overflow-hidden rounded-xl border border-[#272729]">
+        <div className="max-h-[640px] overflow-y-auto">
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col className="w-[34%]" />
+              <col className="w-[10%]" />
+              <col className="w-[16%]" />
+              <col className="w-[15%]" />
+              <col className="w-[10%]" />
+              <col className="w-[15%]" />
+            </colgroup>
+            <thead className="sticky top-0 z-10 border-b border-[#272729] bg-[#171717] backdrop-blur">
               <tr>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Poll</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Approve / Reject</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">End Block</th>
                 <th className="text-left py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">URL</th>
-                <th className="w-[320px] min-w-[320px] text-center py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                <th className="text-center py-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -183,31 +180,28 @@ export const PollTable: React.FC<PollTableProps> = ({
                 </tr>
               ) : (
                 pageRows.map((poll) => (
-                  <tr key={poll.hash} className="border-b border-border/60 hover:bg-background/50 transition-colors">
+                  <tr key={poll.hash} className="border-b border-[#272729] transition-colors hover:bg-[#0f0f0f]">
                     <td className="py-3 px-3 align-middle">
-                      <div className="text-sm font-medium text-foreground mb-1">{poll.title}</div>
+                      <div className="mb-1 truncate text-sm font-medium text-foreground">{poll.title}</div>
                       <div className="text-xs text-muted-foreground line-clamp-1 mb-1">{poll.description}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground">
-                        {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
-                      </div>
+                      {!isIdentifierTitle(poll) ? (
+                        <div className="text-[11px] text-muted-foreground">
+                          {normalizePollHash(poll).slice(0, 12)}...{normalizePollHash(poll).slice(-6)}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="py-3 px-3 align-middle">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${pollStatusBadge(poll.status)}`}>
+                      <span className="text-sm font-medium capitalize text-white/70">
                         {poll.status}
                       </span>
                     </td>
                     <td className="py-3 px-3 align-middle">
-                      <div className="text-xs text-foreground mb-1">
+                      <div className="text-sm font-medium text-foreground">
                         {poll.yesPercent.toFixed(1)}% / {poll.noPercent.toFixed(1)}%
-                      </div>
-                      <div className="w-32 h-1.5 rounded-full bg-muted/70 overflow-hidden flex">
-                        <div className="h-full bg-emerald-400" style={{ width: `${poll.yesPercent}%` }} />
-                        <div className="h-full bg-rose-400" style={{ width: `${poll.noPercent}%` }} />
                       </div>
                     </td>
                     <td className="py-3 px-3 align-middle">
                       <div className="text-xs text-foreground">#{poll.endBlock || 0}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">{poll.endTime}</div>
                     </td>
                     <td className="py-3 px-3 align-middle">
                       {poll.url ? (
@@ -215,7 +209,7 @@ export const PollTable: React.FC<PollTableProps> = ({
                           href={poll.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80"
+                          className="inline-flex items-center gap-1 text-xs text-[#216cd0] hover:text-[#216cd0]/80"
                         >
                           Open
                           <ExternalLink className="w-3 h-3" />
@@ -224,42 +218,50 @@ export const PollTable: React.FC<PollTableProps> = ({
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="w-[320px] min-w-[320px] py-2 px-3 align-middle">
+                    <td className="py-2 px-3 align-middle">
                       <div className="flex min-h-[68px] items-center justify-center">
                         <div className="flex flex-nowrap items-center justify-center gap-2 whitespace-nowrap">
                           {poll.status === "active" && onVote ? (
-                            <div className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-background/75 p-1 self-center">
-                              <button
-                                onClick={() => onVote(normalizePollHash(poll), "approve")}
-                                className="inline-flex h-8 min-w-[92px] items-center justify-center gap-1.5 px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[11px] font-semibold border border-emerald-500/40 transition-colors"
+                            <>
+                              <ActionTooltip
+                                label="Approve Poll"
+                                description="Submit an approve vote for this poll."
                               >
-                                <ThumbsUp className="h-3.5 w-3.5" />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => onVote(normalizePollHash(poll), "reject")}
-                                className="inline-flex h-8 min-w-[92px] items-center justify-center gap-1.5 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-lg text-[11px] font-semibold border border-rose-500/40 transition-colors"
+                                <button
+                                  onClick={() => onVote(normalizePollHash(poll), "approve")}
+                                  className={actionButtonClass}
+                                  aria-label="Approve Poll"
+                                >
+                                  <ThumbsUp className="h-4 w-4" />
+                                </button>
+                              </ActionTooltip>
+                              <ActionTooltip
+                                label="Reject Poll"
+                                description="Submit a reject vote for this poll."
                               >
-                                <ThumbsDown className="h-3.5 w-3.5" />
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="inline-flex h-8 items-center rounded-lg border border-border/60 bg-background/60 px-2.5 text-[11px] font-medium text-muted-foreground self-center">
-                              Closed
-                            </span>
-                          )}
-                          {poll.status === "active" && onVote && (
-                            <span className="h-7 w-px bg-border/60 self-center" />
-                          )}
+                                <button
+                                  onClick={() => onVote(normalizePollHash(poll), "reject")}
+                                  className={actionButtonClass}
+                                  aria-label="Reject Poll"
+                                >
+                                  <ThumbsDown className="h-4 w-4" />
+                                </button>
+                              </ActionTooltip>
+                            </>
+                          ) : null}
                           {onViewDetails && (
-                            <button
-                              onClick={() => onViewDetails(normalizePollHash(poll))}
-                              className="inline-flex h-8 items-center gap-1.5 px-2.5 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary text-[11px] font-semibold transition-colors self-center"
+                            <ActionTooltip
+                              label="View Details"
+                              description="Open the full poll details and current voting context."
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              Details
-                            </button>
+                              <button
+                                onClick={() => onViewDetails(normalizePollHash(poll))}
+                                className={actionButtonClass}
+                                aria-label="View Details"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </ActionTooltip>
                           )}
                         </div>
                       </div>
@@ -272,7 +274,7 @@ export const PollTable: React.FC<PollTableProps> = ({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="flex items-center justify-end gap-3">
         <div className="text-xs text-muted-foreground">
           Page {page} / {totalPages} - Showing {pageRows.length} rows
         </div>
@@ -280,14 +282,14 @@ export const PollTable: React.FC<PollTableProps> = ({
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="px-3 py-1.5 rounded-md border border-border text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background/80"
+            className="rounded-md border border-[#272729] px-3 py-1.5 text-xs text-foreground hover:bg-[#0f0f0f] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
-            className="px-3 py-1.5 rounded-md border border-border text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background/80"
+            className="rounded-md border border-[#272729] px-3 py-1.5 text-xs text-foreground hover:bg-[#0f0f0f] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>

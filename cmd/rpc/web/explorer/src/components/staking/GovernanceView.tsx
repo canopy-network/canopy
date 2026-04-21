@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import TableCard from '../Home/TableCard'
 import { useParams } from '../../hooks/useApi'
 import stakingConfig from '../../data/staking.json'
+import { toCNPY } from '../../lib/utils'
 
 interface GovernanceParam {
     paramName: string
@@ -139,7 +140,7 @@ const GovernanceView: React.FC = () => {
         if (typeof value === 'number') {
             // Convert fees from micro denomination to CNPY
             if (paramName.includes('Fee') || paramName === 'minimumOrderSize') {
-                const cnpyValue = value / 1000000
+                const cnpyValue = toCNPY(value)
                 return cnpyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
             }
             // Format percentages
@@ -353,7 +354,7 @@ const GovernanceView: React.FC = () => {
                         return (
                             <motion.div
                                 key={card.title}
-                                className="bg-card rounded-lg p-6 border border-gray-800/50 relative"
+                                className="bg-card rounded-lg p-6 border border-white/8 relative"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3, delay: 0.1 + (index * 0.1) }}

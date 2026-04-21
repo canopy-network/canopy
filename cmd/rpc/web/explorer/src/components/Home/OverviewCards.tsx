@@ -5,6 +5,7 @@ import { useAllBlocksCache, useOrders, useTransactionsWithRealPagination } from 
 import AnimatedNumber from '../AnimatedNumber'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
+import { toCNPY, extractAmountMicro } from '../../lib/utils'
 
 const truncate = (s: string, n: number = 4) => s.length <= n ? s : `${s.slice(0, n)}...${s.slice(-4)}`
 
@@ -12,8 +13,7 @@ const OverviewCards: React.FC = () => {
     // Data hooks
     const { data: txsPage } = useTransactionsWithRealPagination(1, 5) // Get 5 most recent transactions
     const { data: blocksPage } = useAllBlocksCache()
-    const chainId = typeof window !== 'undefined' && (window as any).__CONFIG__ ? Number((window as any).__CONFIG__.chainId) : 1
-    const { data: ordersPage } = useOrders(chainId)
+    const { data: ordersPage } = useOrders()
 
     // List normalization: accepts {transactions|blocks|results|list|data} or flat arrays
     const normalizeList = (payload: any) => {
@@ -53,7 +53,7 @@ const OverviewCards: React.FC = () => {
                                 to = t.recipient || t.to || t.destination || ''
                             }
 
-                            const amount = t.amount ?? t.value ?? t.fee ?? 0
+                            const amount = extractAmountMicro(t as Record<string, unknown>)
                             const hash = t.hash || t.txHash || t.transactionHash || ''
 
                             // Format time using date-fns
@@ -88,22 +88,21 @@ const OverviewCards: React.FC = () => {
 
                             return [
                                 hash ? (
-                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>
+                                    <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-primary hover:underline">{truncate(String(hash))}</Link>
                                 ) : (
                                     <span className="text-gray-400">-</span>
                                 ),
-                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayFrom), 8)}</Link>,
+                                <Link to={`/account/${displayFrom}`} className="text-white hover:text-primary hover:underline">{truncate(String(displayFrom), 8)}</Link>,
                                 <div>
                                     {to ? (
-                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(displayTo), 8)}</Link>
+                                        <Link to={`/account/${displayTo}`} className="text-white hover:text-primary hover:underline">{truncate(String(displayTo), 8)}</Link>
                                     ) : (
                                         <span className="text-gray-400 bg-gray-600/30 px-2 py-1 rounded-full text-xs">N/A</span>
                                     )}
                                 </div>,
-                                <span className="text-green-400">
+                                <span className="text-primary">
                                     {typeof amount === 'number' ? (() => {
-                                        // Amount comes in micro denomination, convert to CNPY
-                                        const cnpy = amount / 1000000
+                                        const cnpy = toCNPY(amount)
                                         return `${cnpy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY`
                                     })() : amount}
                                 </span>,
@@ -152,7 +151,7 @@ const OverviewCards: React.FC = () => {
                                 }
                             }
                             return [
-                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-green-400 hover:underline">
+                                <Link to={`/block/${height}`} className="text-gray-200 flex items-center gap-2 hover:text-primary hover:underline">
                                     <div className="bg-green-300/10 rounded-full py-0.5 px-1">
                                         <i className="fa-solid fa-cube text-primary"></i>
                                     </div>
@@ -160,14 +159,14 @@ const OverviewCards: React.FC = () => {
                                         {typeof height === 'number' ? (
                                             <AnimatedNumber
                                                 value={height}
-                                                className="text-gray-200 hover:text-green-400 hover:underline"
+                                                className="text-gray-200 hover:text-primary hover:underline"
                                             />
                                         ) : (
                                             height
                                         )}
                                     </p>
                                 </Link>,
-                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-green-400 hover:underline">
+                                <Link to={`/transaction/${hash}`} className="text-gray-400 hover:text-primary hover:underline">
                                     {truncate(String(hash))}
                                 </Link>,
                                 <span className="text-gray-200">
@@ -195,11 +194,11 @@ const OverviewCards: React.FC = () => {
                     const rate = sell > 0 && receive > 0 ? (receive / sell) : (o.rate || 0)
                     const hash = o.hash || o.orderId || o.id || '-'
                     return [
-                        <span className={/sell/i.test(String(action)) ? 'text-red-400' : 'text-green-400'}>{action || 'Swap'}</span>,
+                        <span className={/sell/i.test(String(action)) ? 'text-red-400' : 'text-primary'}>{action || 'Swap'}</span>,
                         <span>
                             {rate ? (
                                 <>
-                                    1 ETH = <AnimatedNumber
+                                    1 : <AnimatedNumber
                                         value={rate}
                                         format={{ maximumSignificantDigits: 6 }}
                                         className="text-white"
@@ -218,7 +217,7 @@ const OverviewCards: React.FC = () => {
                         key={c.type}
                         title={c.title}
                         live
-                        viewAllPath="/swaps"
+                        viewAllPath="/token-swaps"
                         columns={[{ label: 'Action' }, { label: 'Exchange Rate' }, { label: 'Hash' }]}
                         rows={rows}
                     />

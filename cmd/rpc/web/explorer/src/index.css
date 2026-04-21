@@ -1,27 +1,30 @@
 @import "tailwindcss";
 
-/* Global typography - DM Sans only */
+/* Semantic border — matches canopy-frontend dark `border` token; enables `border-border/40` on the header */
+@theme {
+  --color-border: rgba(255, 255, 255, 0.1);
+}
+
 html,
 body,
 #root {
-  font-family: "DM Sans", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
 }
 
-/* Explicit custom colors */
 .bg-background {
-  background-color: #1a1b23 !important;
+  background-color: #0f0f0f !important;
 }
 
 .bg-card {
-  background-color: #22232e !important;
+  background-color: #1a1a1a !important;
 }
 
 .text-primary {
-  color: #4ade80 !important;
+  color: #45ca46 !important;
 }
 
 .bg-primary {
-  background-color: #4ade80 !important;
+  background-color: #45ca46 !important;
 }
 
 .text-red {
@@ -33,15 +36,15 @@ body,
 }
 
 .bg-back {
-  background-color: #9ca3af !important;
+  background-color: #6b7280 !important;
 }
 
 .bg-navbar {
-  background-color: #14151c !important;
+  background-color: #141414 !important;
 }
 
 .bg-input {
-  background-color: #2b2c38 !important;
+  background-color: #242424 !important;
 }
 
 /* DatePicker styles */
@@ -51,19 +54,14 @@ body,
 }
 
 .react-datepicker {
-  border: 1px solid #374151;
-  /* Gray 700 */
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 0.75rem;
-  /* Rounded lg */
-  background-color: #22232e;
-  /* Card background */
+  background-color: #1a1a1a;
   color: #ffffff;
-  /* White text */
 }
 
 .react-datepicker__header {
-  background-color: #22232e;
-  /* Card background */
+  background-color: #1a1a1a;
   border-bottom: none;
   padding-top: 1rem;
 }
@@ -100,19 +98,14 @@ body,
 .react-datepicker__day--selected,
 .react-datepicker__day--in-selecting-range,
 .react-datepicker__day--in-range {
-  background-color: #4ade80 !important;
-  /* Primary background */
-  color: #1a1b23 !important;
-  /* Dark text for contrast */
+  background-color: #45ca46 !important;
+  color: #0f0f0f !important;
   border-radius: 0.25rem;
-  /* Rounded */
 }
 
 .react-datepicker__day:hover {
-  background-color: #374151;
-  /* Gray 700 or a suitable hover color */
+  background-color: rgba(255, 255, 255, 0.10);
   border-radius: 0.25rem;
-  /* Rounded */
 }
 
 .react-datepicker__day--outside-month {

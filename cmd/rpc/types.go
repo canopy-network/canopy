@@ -31,9 +31,7 @@ type orderRequest struct {
 }
 
 type ordersRequest struct {
-	Committee          uint64 `json:"committee"`
-	SellersSendAddress string `json:"sellersSendAddress"`
-	BuyerSendAddress   string `json:"buyerSendAddress"`
+	Committee uint64 `json:"committee"`
 	heightRequest
 	lib.PageParams
 }

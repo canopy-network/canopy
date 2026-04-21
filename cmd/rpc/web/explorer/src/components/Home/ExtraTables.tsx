@@ -1,10 +1,11 @@
 import React from 'react'
 import TableCard from './TableCard'
-import { useAllValidators, useTransactionsWithRealPagination, useAllBlocksCache } from '../../hooks/useApi'
+import { useAllValidators, useTransactionsWithRealPagination, useAllBlocksCache, useCardData } from '../../hooks/useApi'
 import AnimatedNumber from '../AnimatedNumber'
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns'
 import { Link } from 'react-router-dom'
 import Logo from '../Logo'
+import { toCNPY, extractAmountMicro } from '../../lib/utils'
 
 const truncate = (s: string, n: number = 6) => s.length <= n ? s : `${s.slice(0, n)}…${s.slice(-4)}`
 
@@ -38,6 +39,13 @@ const ExtraTables: React.FC = () => {
     const { data: allValidatorsData } = useAllValidators()
     const { data: txsPage } = useTransactionsWithRealPagination(1, 20)
     const { data: blocksPage } = useAllBlocksCache()
+    const { data: cardData } = useCardData()
+
+    const delegateRewardPercentage = React.useMemo(() => {
+        const params = (cardData as Record<string, unknown>)?.params as Record<string, unknown> | undefined
+        const validator = params?.validator as Record<string, unknown> | undefined
+        return Number(validator?.delegateRewardPercentage ?? 0)
+    }, [cardData])
 
     // Get all validators and take only top 10 by staking power
     const allValidators = allValidatorsData?.results || []
@@ -125,8 +133,9 @@ const ExtraTables: React.FC = () => {
             const isDelegate = v.delegate === true
             const isActive = !isUnstaking && !isPaused && !isDelegate
 
-            // Calculate rewards percentage (simplified - based on stake percentage)
-            const rewardsPct = powerPct > 0 ? (powerPct * 0.1).toFixed(2) : '0.00'
+            const rewardsPct = delegateRewardPercentage > 0
+                ? (powerPct * delegateRewardPercentage / 100).toFixed(2)
+                : powerPct > 0 ? powerPct.toFixed(2) : '0.00'
 
             // Calculate activity score based on README states
             let activityScore = 'Inactive'
@@ -154,7 +163,7 @@ const ExtraTables: React.FC = () => {
                     <div className="h-6 w-6 rounded-full bg-green-300/10 flex items-center justify-center text-xs text-primary font-semibold">
                         {address && address !== 'N/A' ? address.slice(0, 2).toUpperCase() : 'N/A'}
                     </div>
-                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(address), 16)}</Link>
+                    <Link to={`/validator/${address}?rank=${idx + 1}`} className="text-white hover:text-primary hover:underline">{truncate(String(address), 16)}</Link>
                 </div>,
                 <span className="text-gray-200">
                     {rewardsPct}%
@@ -169,7 +178,7 @@ const ExtraTables: React.FC = () => {
                         chainsStaked || '0'
                     )}
                 </span>,
-                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-green-500/20 text-primary' :
+                <span className={`text-xs px-2 py-1 rounded-full ${activityScore === 'Active' ? 'bg-primary/20 text-primary' :
                     activityScore === 'Standby' ? 'bg-yellow-500/20 text-yellow-400' :
                         activityScore === 'Paused' ? 'bg-orange-500/20 text-orange-400' :
                             activityScore === 'Unstaking' ? 'bg-red-500/20 text-red-400' :
@@ -181,25 +190,25 @@ const ExtraTables: React.FC = () => {
                 <span className="text-gray-200">
                     {typeof totalWeight === 'number' ? (
                         <AnimatedNumber
-                            value={totalWeight / 1000000}
+                            value={toCNPY(totalWeight)}
                             format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                             suffix=" CNPY"
                             className="text-gray-200"
                         />
                     ) : (
-                        totalWeight ? `${(Number(totalWeight) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
+                        totalWeight ? `${toCNPY(Number(totalWeight)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
                     )}
                 </span>,
                 <span className="text-gray-200">
                     {typeof stake === 'number' ? (
                         <AnimatedNumber
-                            value={stake / 1000000}
+                            value={toCNPY(stake)}
                             format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
                             suffix=" CNPY"
                             className="text-gray-200"
                         />
                     ) : (
-                        stake ? `${(Number(stake) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
+                        stake ? `${toCNPY(Number(stake)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : '0 CNPY'
                     )}
                 </span>,
                 <div className="flex items-center gap-2">
@@ -284,7 +293,7 @@ const ExtraTables: React.FC = () => {
 
                     // Handle different transaction types
                     let to = 'N/A'
-                    let amount = 'N/A'
+                    let amount: number | string = 'N/A'
 
                     if (action === 'certificateResults') {
                         // For certificateResults, show the first reward recipient
@@ -294,21 +303,20 @@ const ExtraTables: React.FC = () => {
                                 to = recipients[0].address || 'N/A'
                             }
                         }
-                        // For certificateResults, use fee or value if available, otherwise show 0
-                        const amountRaw = t.fee ?? t.value ?? t.amount ?? 0
-                        amount = (amountRaw != null && amountRaw !== '') ? amountRaw : 0
+                        const amountRaw = extractAmountMicro(t as Record<string, unknown>)
+                        amount = amountRaw > 0 ? amountRaw : (t.fee ?? 0)
                     } else {
                         // For other transaction types
                         to = t.recipient || t.to || 'N/A'
-                        const amountRaw = t.amount ?? t.value ?? t.fee
-                        amount = (amountRaw != null && amountRaw !== '') ? amountRaw : 'N/A'
+                        const amountRaw = extractAmountMicro(t as Record<string, unknown>)
+                        amount = amountRaw > 0 ? amountRaw : 'N/A'
                     }
 
                     const hash = t.txHash || t.hash || 'N/A'
                     const actionIcon = getTransactionIcon(action)
 
                     const baseRow = [
-                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-green-400 hover:underline">{truncate(String(hash))}</Link>,
+                        <Link to={`/transaction/${hash}`} className="text-gray-100 hover:text-primary hover:underline">{truncate(String(hash))}</Link>,
                         <span className="text-gray-400">
                             {timeAgo}
                         </span>,
@@ -320,16 +328,16 @@ const ExtraTables: React.FC = () => {
                             {typeof amount === 'number' ? (
                                 <>
                                     <AnimatedNumber
-                                        value={amount / 1000000}
+                                        value={toCNPY(amount)}
                                         format={{ minimumFractionDigits: 2, maximumFractionDigits: 6 }}
                                         className="text-primary"
                                     />&nbsp; CNPY </>
                             ) : (
-                                <span className="text-primary">{amount !== 'N/A' ? `${(Number(amount) / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : 'N/A'}</span>
+                                <span className="text-primary">{amount !== 'N/A' ? `${toCNPY(Number(amount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} CNPY` : 'N/A'}</span>
                             )}
                         </span>,
-                        <Link to={`/account/${from}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(from))}</Link>,
-                        <Link to={`/account/${to}`} className="text-white hover:text-green-400 hover:underline">{truncate(String(to))}</Link>,
+                        <Link to={`/account/${from}`} className="text-white hover:text-primary hover:underline">{truncate(String(from))}</Link>,
+                        <Link to={`/account/${to}`} className="text-white hover:text-primary hover:underline">{truncate(String(to))}</Link>,
                     ]
 
                     if (!allCanopy) {

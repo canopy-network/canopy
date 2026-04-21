@@ -47,7 +47,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({ filters, onFilterChange }
                 <select
                     value={filters.type}
                     onChange={(e) => handleFilterChange('type', e.target.value)}
-                    className="bg-input border border-gray-800/50 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-input border border-white/8 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >
                     {typeOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -63,7 +63,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({ filters, onFilterChange }
                 <select
                     value={filters.date}
                     onChange={(e) => handleFilterChange('date', e.target.value)}
-                    className="bg-input border border-gray-800/50 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-input border border-white/8 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >
                     {dateOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -79,7 +79,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({ filters, onFilterChange }
                 <select
                     value={filters.sort}
                     onChange={(e) => handleFilterChange('sort', e.target.value)}
-                    className="bg-input border border-gray-800/50 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-input border border-white/8 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >
                     {sortOptions.map(option => (
                         <option key={option.value} value={option.value}>
