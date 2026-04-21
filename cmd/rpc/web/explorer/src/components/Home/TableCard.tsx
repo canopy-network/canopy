@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import AnimatedNumber from '../AnimatedNumber'
 import { formatPaginationRange } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
 
 export interface TableColumn {
     label: React.ReactNode
@@ -156,22 +157,8 @@ const TableCard: React.FC<TableCardProps> = ({
                             Live
                         </span>
                     )}
-                    {(showEntriesSelector || showExportButton) && (
+                    {showExportButton && (
                         <div className="flex items-center gap-2 ml-4">
-                            {showEntriesSelector && (
-                                <>
-                                    <span className="text-gray-400 text-sm">Show:</span>
-                                    <select
-                                        className="px-3 py-1 bg-input border border-white/10 rounded-md text-white text-sm"
-                                        value={currentEntriesPerPage}
-                                        onChange={(e) => onEntriesPerPageChange && onEntriesPerPageChange(Number(e.target.value))}
-                                    >
-                                        {entriesPerPageOptions.map(option => (
-                                            <option key={option} value={option}>{option}</option>
-                                        ))}
-                                    </select>
-                                </>
-                            )}
                             {showExportButton && (
                                 <button
                                     onClick={onExportButtonClick}
@@ -289,8 +276,17 @@ const TableCard: React.FC<TableCardProps> = ({
                                         <i className="fa-solid fa-angle-right"></i>
                                     </button>
                                 </div>
-                                <div className="text-center text-xs text-gray-500">
-                                    {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                <div className="flex items-center justify-center gap-3 text-center text-xs text-gray-500">
+                                    <span>
+                                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                    </span>
+                                    {showEntriesSelector && onEntriesPerPageChange && (
+                                        <PageSizeSelect
+                                            value={currentEntriesPerPage}
+                                            options={entriesPerPageOptions}
+                                            onChange={onEntriesPerPageChange}
+                                        />
+                                    )}
                                 </div>
                             </div>
 
@@ -310,8 +306,17 @@ const TableCard: React.FC<TableCardProps> = ({
                                     })}
                                     <button onClick={next} disabled={currentPaginatedPage === totalPages} className="explorer-pagination-button px-3 py-1.5" aria-label="Next page"><i className="fa-solid fa-angle-right"></i></button>
                                 </div>
-                                <div>
-                                    {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                <div className="flex items-center gap-3">
+                                    <span>
+                                        {formatPaginationRange(totalItems === 0 ? 0 : startIdx + 1, Math.min(endIdx, totalItems))} of <AnimatedNumber value={totalItems} />
+                                    </span>
+                                    {showEntriesSelector && onEntriesPerPageChange && (
+                                        <PageSizeSelect
+                                            value={currentEntriesPerPage}
+                                            options={entriesPerPageOptions}
+                                            onChange={onEntriesPerPageChange}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>

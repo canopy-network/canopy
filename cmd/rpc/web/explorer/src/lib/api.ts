@@ -638,12 +638,12 @@ export async function AllTransactions(page: number, perPage: number = 10, filter
     }
 }
 
-export function Accounts(page: number, _: number) {
-    return POST(rpcURL, pageHeightReq(page, 0), accountsPath);
+export function Accounts(page: number, _: number, perPage: number = 10) {
+    return POST(rpcURL, pageHeightReq(page, 0, perPage), accountsPath);
 }
 
-export function Validators(page: number, _: number) {
-    return POST(rpcURL, pageHeightReq(page, 0), validatorsPath);
+export function Validators(page: number, _: number, perPage: number = 10) {
+    return POST(rpcURL, pageHeightReq(page, 0, perPage), validatorsPath);
 }
 
 export function ValidatorsWithFilters(page: number, unstaking: number = 0, paused: number = 0, delegate: number = 0, committee: number = 0, perPage: number = 1000) {

@@ -14,8 +14,9 @@ const LiveIndicator = () => (
 
 const AccountsPage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
 
-    const { data: accountsData, isLoading, error } = useAccounts(currentPage)
+    const { data: accountsData, isLoading, error } = useAccounts(currentPage, pageSize)
     const accounts = accountsData?.results || []
     const largestBalance = React.useMemo(
         () => accounts.reduce((max: number, account: { amount?: number }) => Math.max(max, Number(account.amount || 0)), 0),
@@ -44,6 +45,11 @@ const AccountsPage: React.FC = () => {
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page)
+    }
+
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
     }
 
     if (error) {
@@ -86,7 +92,9 @@ const AccountsPage: React.FC = () => {
                     loading={isLoading}
                     totalCount={accountsData?.totalCount || 0}
                     currentPage={currentPage}
+                    pageSize={pageSize}
                     onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
                 />
             </div>
         </motion.div>

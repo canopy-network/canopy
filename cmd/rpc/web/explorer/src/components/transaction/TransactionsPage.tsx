@@ -1,7 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import TransactionsTable from './TransactionsTable'
-import { useBlocks, usePending } from '../../hooks/useApi'
+import { usePending, useTransactionsWithRealPagination } from '../../hooks/useApi'
 import { extractAmountMicro } from '../../lib/utils'
 import transactionsTexts from '../../data/transactions.json'
 import ExplorerOverviewCards from '../ExplorerOverviewCards'
@@ -18,10 +18,6 @@ interface TransactionRow {
     timestamp?: string
 }
 
-const BLOCKS_PAGE_SIZE = 10
-const BLOCK_PAGES_PER_TRANSACTIONS_PAGE = 10
-const BLOCKS_PER_TRANSACTIONS_PAGE = BLOCKS_PAGE_SIZE * BLOCK_PAGES_PER_TRANSACTIONS_PAGE
-
 const LiveIndicator = () => (
     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-sm text-primary">
         <i className="fa-solid fa-circle animate-pulse text-[6px]"></i>
@@ -31,43 +27,32 @@ const LiveIndicator = () => (
 
 const TransactionsPage: React.FC = () => {
     const [currentPage, setCurrentPage] = React.useState(1)
-    const { data: blocksData, isLoading: isBlocksLoading } = useBlocks(currentPage, BLOCKS_PER_TRANSACTIONS_PAGE, 'all')
+    const [pageSize, setPageSize] = React.useState(10)
+    const { data: transactionsData, isLoading: isTransactionsLoading } = useTransactionsWithRealPagination(currentPage, pageSize)
     const { data: pendingData, isLoading: isPendingLoading } = usePending(1)
 
-    const blocks = React.useMemo(() => {
-        if (!blocksData) return []
-        const payload = blocksData as Record<string, unknown>
-        const list = payload.results ?? payload.blocks ?? payload.list ?? payload.data ?? blocksData
-        return Array.isArray(list) ? list : []
-    }, [blocksData])
-
     const normalizeConfirmedTransactions = React.useMemo<TransactionRow[]>(() => {
-        return blocks.flatMap((block) => {
-            const blockRecord = block as Record<string, unknown>
-            const blockHeader = (blockRecord.blockHeader || blockRecord) as Record<string, unknown>
-            const blockHeight = Number(blockHeader.height ?? blockRecord.height ?? 0) || undefined
-            const blockTime = blockHeader.time ?? blockHeader.timestamp ?? blockRecord.time ?? blockRecord.timestamp
-            const transactions = Array.isArray(blockRecord.transactions) ? blockRecord.transactions : []
+        const payload = transactionsData as Record<string, unknown> | undefined
+        const list = payload?.results ?? payload?.data ?? []
+        if (!Array.isArray(list)) return []
 
-            return transactions.map((tx) => {
-                const txRecord = tx as Record<string, unknown>
-                const txTime = txRecord.blockTime ?? txRecord.timestamp ?? txRecord.time ?? blockTime
-                const rawStatus = String(txRecord.status ?? 'success').toLowerCase()
+        return list.map((tx) => {
+            const txRecord = tx as Record<string, unknown>
+            const rawStatus = String(txRecord.status ?? 'success').toLowerCase()
 
-                return {
-                    hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
-                    type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
-                    from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
-                    to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),
-                    amount: extractAmountMicro(txRecord),
-                    fee: Number(txRecord.fee ?? 0),
-                    status: rawStatus === 'failed' ? 'failed' : 'confirmed',
-                    blockHeight,
-                    timestamp: normalizeTimestampString(txTime ?? blockTime),
-                } satisfies TransactionRow
-            })
+            return {
+                hash: String(txRecord.txHash ?? txRecord.hash ?? 'N/A'),
+                type: String(txRecord.messageType ?? txRecord.type ?? 'send'),
+                from: String(txRecord.sender ?? txRecord.from ?? 'N/A'),
+                to: String(txRecord.recipient ?? txRecord.to ?? 'N/A'),
+                amount: extractAmountMicro(txRecord),
+                fee: Number(txRecord.fee ?? 0),
+                status: rawStatus === 'failed' ? 'failed' : 'confirmed',
+                blockHeight: Number(txRecord.blockHeight ?? txRecord.height ?? 0) || undefined,
+                timestamp: normalizeTimestampString(txRecord.blockTime ?? txRecord.timestamp ?? txRecord.time),
+            } satisfies TransactionRow
         })
-    }, [blocks])
+    }, [transactionsData])
 
     const pendingTransactions = React.useMemo<TransactionRow[]>(() => {
         if (currentPage !== 1 || !pendingData) return []
@@ -92,17 +77,11 @@ const TransactionsPage: React.FC = () => {
         })
     }, [currentPage, pendingData])
 
-    const transactions = React.useMemo(() => {
-        const confirmedHashes = new Set(normalizeConfirmedTransactions.map((tx) => tx.hash))
-        const uniquePending = pendingTransactions.filter((tx) => !confirmedHashes.has(tx.hash))
-        return [...uniquePending, ...normalizeConfirmedTransactions]
-    }, [normalizeConfirmedTransactions, pendingTransactions])
-
-    const totalBlocks = Number((blocksData as Record<string, unknown> | undefined)?.totalCount ?? 0)
+    const totalTransactions = Number((transactionsData as Record<string, unknown> | undefined)?.totalCount ?? 0)
     const overviewCards = [
         {
             title: 'Visible Transactions',
-            value: transactions.length.toLocaleString(),
+            value: normalizeConfirmedTransactions.length.toLocaleString(),
             subValue: 'Current page',
             icon: 'fa-solid fa-arrow-right-arrow-left',
         },
@@ -119,12 +98,17 @@ const TransactionsPage: React.FC = () => {
             icon: 'fa-solid fa-circle-check',
         },
         {
-            title: 'Scanned Blocks',
-            value: blocks.length.toLocaleString(),
-            subValue: 'Source blocks',
+            title: 'Indexed Transactions',
+            value: totalTransactions.toLocaleString(),
+            subValue: 'Confirmed total',
             icon: 'fa-solid fa-cubes',
         },
     ]
+
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
+    }
 
     return (
         <motion.div
@@ -147,12 +131,13 @@ const TransactionsPage: React.FC = () => {
             <ExplorerOverviewCards cards={overviewCards} className="mb-8" />
 
             <TransactionsTable
-                transactions={transactions}
-                loading={isBlocksLoading || (currentPage === 1 && isPendingLoading)}
+                transactions={normalizeConfirmedTransactions}
+                loading={isTransactionsLoading || (currentPage === 1 && isPendingLoading)}
                 currentPage={currentPage}
-                totalBlockCount={totalBlocks}
-                blocksPerPage={BLOCKS_PER_TRANSACTIONS_PAGE}
+                totalCount={totalTransactions}
+                pageSize={pageSize}
                 onPageChange={setCurrentPage}
+                onPageSizeChange={handlePageSizeChange}
             />
         </motion.div>
     )

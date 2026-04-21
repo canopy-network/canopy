@@ -1,8 +1,9 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
-import { toCNPY } from '../../lib/utils'
+import { formatPaginationRange, toCNPY } from '../../lib/utils'
 import TransactionTypeBadge from './TransactionTypeBadge'
+import PageSizeSelect from '../shared/PageSizeSelect'
 
 interface Transaction {
     hash: string
@@ -20,9 +21,10 @@ interface TransactionsTableProps {
     transactions: Transaction[]
     loading?: boolean
     currentPage?: number
-    totalBlockCount?: number
-    blocksPerPage?: number
+    totalCount?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
+    onPageSizeChange?: (value: number) => void
 }
 
 const desktopHeaderClass =
@@ -84,13 +86,14 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     transactions,
     loading = false,
     currentPage = 1,
-    totalBlockCount = 0,
-    blocksPerPage = 10,
+    totalCount = 0,
+    pageSize = 10,
     onPageChange,
+    onPageSizeChange,
 }) => {
-    const totalPages = Math.max(1, Math.ceil(totalBlockCount / blocksPerPage))
-    const startIdx = totalBlockCount === 0 ? 0 : (currentPage - 1) * blocksPerPage + 1
-    const endIdx = Math.min(currentPage * blocksPerPage, totalBlockCount)
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
     const visiblePages = React.useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -132,7 +135,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                     </thead>
                     <tbody>
                         {loading ? (
-                            Array.from({ length: 10 }).map((_, index) => (
+                            Array.from({ length: pageSize }).map((_, index) => (
                                 <tr key={`skeleton-${index}`} className="group animate-pulse">
                                     {columns.map((_, columnIndex) => (
                                         <td
@@ -240,10 +243,13 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                 </table>
             </div>
 
-            {!loading && totalBlockCount > 0 && (
+            {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        Txs from blocks {startIdx} to {endIdx} of {totalBlockCount.toLocaleString()} blocks
+                    <div className="flex items-center gap-3">
+                        {formatPaginationRange(startIdx, endIdx)} of {totalCount.toLocaleString()} transactions
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

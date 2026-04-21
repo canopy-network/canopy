@@ -36,6 +36,7 @@ const ValidatorsPage: React.FC = () => {
     const [filteredValidators, setFilteredValidators] = useState<Validator[]>([])
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const location = useLocation()
 
     // Determine if we're on delegators page
@@ -180,28 +181,34 @@ const ValidatorsPage: React.FC = () => {
 
     // Effect to handle pagination of filtered validators
     useEffect(() => {
-        if (allValidators.length > 0) {
-            const pageSize = 10
-            const startIndex = (currentPage - 1) * pageSize
-            const endIndex = startIndex + pageSize
-            const pageValidators = allValidators.slice(startIndex, endIndex)
-            setFilteredValidators(pageValidators)
-            return
+        const maxPage = Math.max(1, Math.ceil(filteredValidators.length / pageSize))
+        if (currentPage > maxPage) {
+            setCurrentPage(maxPage)
         }
+    }, [currentPage, filteredValidators.length, pageSize])
 
-        // Avoid leaving stale rows visible when the current dataset is empty.
-        setFilteredValidators([])
-    }, [allValidators, currentPage])
+    const pagedValidators = React.useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize
+        const endIndex = startIndex + pageSize
+        return filteredValidators.slice(startIndex, endIndex)
+    }, [currentPage, filteredValidators, pageSize])
 
     // Handle filtered validators from filters component
     const handleFilteredValidators = (filtered: Validator[]) => {
         setFilteredValidators(filtered)
+        setCurrentPage(1)
     }
 
     const totalValidators = allValidators.length
+    const visibleValidatorCount = filteredValidators.length
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page)
+    }
+
+    const handlePageSizeChange = (value: number) => {
+        setPageSize(value)
+        setCurrentPage(1)
     }
 
     return (
@@ -221,11 +228,13 @@ const ValidatorsPage: React.FC = () => {
             />
 
             <ValidatorsTable
-                validators={filteredValidators}
+                validators={pagedValidators}
                 loading={loading || isLoading}
-                totalCount={totalValidators}
+                totalCount={visibleValidatorCount}
                 currentPage={currentPage}
+                pageSize={pageSize}
                 onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
                 pageTitle={pageTitle}
             />
         </motion.div>

@@ -4,6 +4,7 @@ import validatorsTexts from '../../data/validators.json'
 import AnimatedNumber from '../AnimatedNumber'
 import TableCard from '../Home/TableCard'
 import { formatPaginationRange, toCNPY } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
 
 interface Validator {
     rank: number
@@ -33,7 +34,9 @@ interface ValidatorsTableProps {
     loading?: boolean
     totalCount?: number
     currentPage?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
+    onPageSizeChange?: (value: number) => void
     pageTitle?: string
     variant?: 'default' | 'accounts'
     headerActions?: React.ReactNode
@@ -43,8 +46,6 @@ interface ValidatorsTableProps {
     showLiveIndicator?: boolean
     showTitle?: boolean
 }
-
-const PAGE_SIZE = 10
 
 const desktopHeaderClass =
     'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
@@ -85,7 +86,9 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
     loading = false,
     totalCount = 0,
     currentPage = 1,
+    pageSize = 10,
     onPageChange,
+    onPageSizeChange,
     pageTitle,
     variant = 'default',
     headerActions,
@@ -95,7 +98,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
     showLiveIndicator = true,
     showTitle = true,
 }) => {
-    const truncateMiddle = (value: string, leading = 10, trailing = 6) => {
+    const truncateMiddle = (value: string, leading = 14, trailing = 10) => {
         if (!value || value.length <= leading + trailing + 1) return value || 'N/A'
         return `${value.slice(0, leading)}…${value.slice(-trailing)}`
     }
@@ -194,7 +197,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
             <Link
                 to={`/validator/${validator.address}?rank=${validator.rank}`}
                 className="flex max-w-[18rem] items-center gap-2 overflow-hidden text-sm font-medium text-white transition-colors hover:text-primary"
-                title={validator.address}
+                title={identifier}
             >
                 {useCnpyBadge ? (
                     <CnpyBadge seed={validator.address} />
@@ -275,9 +278,9 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
         return cells
     })
 
-    const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-    const endIdx = Math.min(currentPage * PAGE_SIZE, totalCount)
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
     const visiblePages = React.useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -331,7 +334,7 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
                         </thead>
                         <tbody>
                             {loading ? (
-                                Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                                Array.from({ length: pageSize }).map((_, index) => (
                                     <tr key={`skeleton-${index}`} className="group animate-pulse">
                                         {columns.map((column, columnIndex) => (
                                             <td
@@ -381,8 +384,11 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
 
                 {!loading && totalCount > 0 && (
                     <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-                        <div>
+                        <div className="flex items-center gap-3">
                             {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                            {onPageSizeChange && (
+                                <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                            )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -443,6 +449,9 @@ const ValidatorsTable: React.FC<ValidatorsTableProps> = ({
             totalCount={totalCount}
             currentPage={currentPage}
             onPageChange={onPageChange}
+            showEntriesSelector={!!onPageSizeChange}
+            currentEntriesPerPage={pageSize}
+            onEntriesPerPageChange={onPageSizeChange}
             spacing={4}
         />
     )

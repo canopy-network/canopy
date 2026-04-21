@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import AnimatedNumber from '../AnimatedNumber'
 import { formatPaginationRange } from '../../lib/utils'
+import PageSizeSelect from '../shared/PageSizeSelect'
 
 interface Block {
     height: number
@@ -20,10 +21,10 @@ interface BlocksTableProps {
     loading?: boolean
     totalCount?: number
     currentPage?: number
+    pageSize?: number
     onPageChange?: (page: number) => void
+    onPageSizeChange?: (value: number) => void
 }
-
-const PAGE_SIZE = 10
 
 const desktopHeaderClass =
     'px-2 py-1.5 text-left text-[11px] font-medium capitalize tracking-wider text-white/60 whitespace-nowrap sm:px-3 lg:px-4'
@@ -75,11 +76,13 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
     loading = false,
     totalCount = 0,
     currentPage = 1,
+    pageSize = 10,
     onPageChange,
+    onPageSizeChange,
 }) => {
-    const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-    const endIdx = Math.min(currentPage * PAGE_SIZE, totalCount)
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+    const startIdx = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
+    const endIdx = Math.min(currentPage * pageSize, totalCount)
 
     const visiblePages = React.useMemo(() => {
         if (totalPages <= 6) return Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -122,7 +125,7 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
                     </thead>
                     <tbody>
                         {loading ? (
-                            Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                            Array.from({ length: pageSize }).map((_, index) => (
                                 <tr key={`skeleton-${index}`} className="group animate-pulse">
                                     {columns.map((column, columnIndex) => (
                                         <td
@@ -212,8 +215,11 @@ const BlocksTable: React.FC<BlocksTableProps> = ({
 
             {!loading && totalCount > 0 && (
                 <div className="mt-4 flex flex-col gap-3 text-sm text-white/60 md:flex-row md:items-center md:justify-between">
-                    <div>
+                    <div className="flex items-center gap-3">
                         {formatPaginationRange(startIdx, endIdx)} of <AnimatedNumber value={totalCount} />
+                        {onPageSizeChange && (
+                            <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

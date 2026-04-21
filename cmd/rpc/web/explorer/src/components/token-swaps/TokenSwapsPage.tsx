@@ -42,6 +42,7 @@ const TokenSwapsPage: React.FC = () => {
     const [filters, setFilters] = useState<SwapFilterValues>(DEFAULT_FILTERS);
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [pageSize, setPageSize] = useState(10);
 
     const { data: ordersData, isLoading } = useOrders();
 
@@ -256,6 +257,8 @@ const TokenSwapsPage: React.FC = () => {
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSort}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
             />
         </motion.div>
     );

@@ -41,8 +41,8 @@ export const queryKeys = {
     transactions: (page: number, height: number) => ['transactions', page, height],
     allTransactions: (page: number, perPage: number, filters?: any) => ['allTransactions', page, perPage, filters],
     realPaginationTransactions: (page: number, perPage: number, filters?: any) => ['realPaginationTransactions', page, perPage, filters],
-    accounts: (page: number) => ['accounts', page],
-    validators: (page: number) => ['validators', page],
+    accounts: (page: number, perPage?: number) => ['accounts', page, perPage],
+    validators: (page: number, perPage?: number) => ['validators', page, perPage],
     validatorsWithFilters: (page: number, unstaking: number, paused: number, delegate: number, committee: number) => ['validatorsWithFilters', page, unstaking, paused, delegate, committee],
     committee: (page: number, chainId: number) => ['committee', page, chainId],
     dao: (height: number) => ['dao', height],
@@ -156,19 +156,19 @@ export const useTransactionsWithRealPagination = (page: number, perPage: number 
 };
 
 // Hooks for Accounts
-export const useAccounts = (page: number) => {
+export const useAccounts = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.accounts(page),
-        queryFn: () => Accounts(page, 0),
+        queryKey: queryKeys.accounts(page, perPage),
+        queryFn: () => Accounts(page, 0, perPage),
         staleTime: 30000,
     });
 };
 
 // Hooks for Validators
-export const useValidators = (page: number) => {
+export const useValidators = (page: number, perPage: number = 10) => {
     return useQuery({
-        queryKey: queryKeys.validators(page),
-        queryFn: () => Validators(page, 0),
+        queryKey: queryKeys.validators(page, perPage),
+        queryFn: () => Validators(page, 0, perPage),
         staleTime: 30000,
     });
 };
@@ -715,4 +715,3 @@ export const useNetworkChangeHandler = () => {
         };
     }, [queryClient]);
 };
-
