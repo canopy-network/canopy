@@ -383,8 +383,8 @@ func (c *MultiConn) Error(err error, reputationDelta ...int32) {
 		unlock := lockWithTrace("p2p", &c.p2p.mux, c.p2p.log)
 		c.hasError.Store(true)
 		// run the callback after releasing the lock to prevent blocking other readers
-		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
 		unlock()
+		c.onError(err, c.Address.PublicKey, c.conn.RemoteAddr().String(), c.uuid)
 		// stop the multi-conn
 		c.Stop()
 	})
