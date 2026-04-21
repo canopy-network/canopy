@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Play, Pause } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Copy, Play, Pause, Scan, Send } from 'lucide-react';
+import { useAccounts } from '@/app/providers/AccountsProvider';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import { useValidators } from '@/hooks/useValidators';
 import { useMultipleValidatorRewardsHistory } from '@/hooks/useMultipleValidatorRewardsHistory';
@@ -33,6 +34,7 @@ const rewardDeltaClass = (value: number) => {
 };
 
 const desktopRowCellClass = 'px-2 sm:px-3 lg:px-4 py-2 text-xs sm:text-sm text-white whitespace-nowrap align-middle transition-colors group-hover:bg-[#272729] bg-[#171717]';
+const actionButtonClass = 'inline-flex items-center justify-center rounded-lg border border-[#272729] p-2 text-white/70 transition-all duration-150 hover:border-white/15 hover:bg-[#272729] hover:text-white';
 
 const getNodeStatusBadgeClass = (status: string) => {
     switch (status.toLowerCase()) {
@@ -75,8 +77,11 @@ const ValidatorRow = React.memo<{
     node: ProcessedNode;
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
-}>(({ node, index, onPauseUnpause }) => {
+    onSend: (address: string) => void;
+    onReceive: (address: string) => void;
+}>(({ node, index, onPauseUnpause, onSend, onReceive }) => {
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
+    const isLiquid = node.status === 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
     return (
@@ -124,23 +129,56 @@ const ValidatorRow = React.memo<{
                 className={desktopRowCellClass}
                 style={{ borderTopRightRadius: '10px', borderBottomRightRadius: '10px' }}
             >
-                {hasActions && (
-                    <ActionTooltip
-                        label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
-                        description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
-                    >
-                        <button
-                            onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                            className="p-1.5 rounded-md text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
-                            aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                <div className="flex items-center gap-2">
+                    {isLiquid ? (
+                        <>
+                            <ActionTooltip
+                                label="Receive"
+                                description="Show the address details for incoming transfers."
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onReceive(node.originalValidator.address)}
+                                    className={actionButtonClass}
+                                    aria-label="Receive"
+                                >
+                                    <Scan style={{ width: 14, height: 14 }} />
+                                </button>
+                            </ActionTooltip>
+                            <ActionTooltip
+                                label="Send"
+                                description="Transfer funds from this address."
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onSend(node.originalValidator.address)}
+                                    className={actionButtonClass}
+                                    aria-label="Send"
+                                >
+                                    <Send style={{ width: 14, height: 14 }} />
+                                </button>
+                            </ActionTooltip>
+                        </>
+                    ) : null}
+                    {hasActions && (
+                        <ActionTooltip
+                            label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                            description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
                         >
-                            {node.status === 'Staked'
-                                ? <Pause style={{ width: 14, height: 14 }} />
-                                : <Play style={{ width: 14, height: 14 }} />
-                            }
-                        </button>
-                    </ActionTooltip>
-                )}
+                            <button
+                                type="button"
+                                onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                                className={actionButtonClass}
+                                aria-label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                            >
+                                {node.status === 'Staked'
+                                    ? <Pause style={{ width: 14, height: 14 }} />
+                                    : <Play style={{ width: 14, height: 14 }} />
+                                }
+                            </button>
+                        </ActionTooltip>
+                    )}
+                </div>
             </td>
         </motion.tr>
     );
@@ -152,8 +190,11 @@ const ValidatorMobileCard = React.memo<{
     node: ProcessedNode;
     index: number;
     onPauseUnpause: (validator: any, action: 'pause' | 'unpause') => void;
-}>(({ node, index, onPauseUnpause }) => {
+    onSend: (address: string) => void;
+    onReceive: (address: string) => void;
+}>(({ node, index, onPauseUnpause, onSend, onReceive }) => {
     const hasActions = !node.originalValidator.delegate && node.status !== 'Liquid';
+    const isLiquid = node.status === 'Liquid';
     const { copyToClipboard } = useCopyToClipboard();
 
     return (
@@ -182,20 +223,53 @@ const ValidatorMobileCard = React.memo<{
                         </div>
                     </div>
                 </div>
-                {hasActions && (
-                    <ActionTooltip
-                        label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
-                        description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
-                    >
-                        <button
-                            onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
-                            className="p-1.5 rounded-md text-white/70 transition-colors hover:bg-[#272729] hover:text-white"
-                            aria-label={node.status === 'Staked' ? 'Pause' : 'Resume'}
+                <div className="flex items-center gap-2">
+                    {isLiquid ? (
+                        <>
+                            <ActionTooltip
+                                label="Receive"
+                                description="Show the address details for incoming transfers."
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onReceive(node.originalValidator.address)}
+                                    className={actionButtonClass}
+                                    aria-label="Receive"
+                                >
+                                    <Scan style={{ width: 14, height: 14 }} />
+                                </button>
+                            </ActionTooltip>
+                            <ActionTooltip
+                                label="Send"
+                                description="Transfer funds from this address."
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onSend(node.originalValidator.address)}
+                                    className={actionButtonClass}
+                                    aria-label="Send"
+                                >
+                                    <Send style={{ width: 14, height: 14 }} />
+                                </button>
+                            </ActionTooltip>
+                        </>
+                    ) : null}
+                    {hasActions && (
+                        <ActionTooltip
+                            label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                            description={node.status === 'Staked' ? 'Temporarily pause validator activity.' : 'Resume validator activity after a pause.'}
                         >
-                            {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
-                        </button>
-                    </ActionTooltip>
-                )}
+                            <button
+                                type="button"
+                                onClick={() => onPauseUnpause(node.originalValidator, node.status === 'Staked' ? 'pause' : 'unpause')}
+                                className={actionButtonClass}
+                                aria-label={node.status === 'Staked' ? 'Pause Validator' : 'Resume Validator'}
+                            >
+                                {node.status === 'Staked' ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
+                            </button>
+                        </ActionTooltip>
+                    )}
+                </div>
             </div>
             <div className="grid grid-cols-3 gap-2 border-t border-[#272729] pt-2">
                 <div>
@@ -218,6 +292,7 @@ const ValidatorMobileCard = React.memo<{
 ValidatorMobileCard.displayName = 'ValidatorMobileCard';
 
 export const NodeManagementCard = React.memo((): JSX.Element => {
+    const { accounts, selectedAccount, switchAccount } = useAccounts();
     const { data: keystore, isLoading: keystoreLoading } = useDS('keystore', {});
     const { data: validators = [], isLoading: validatorsLoading, error } = useValidators();
     const { manifest } = useManifest();
@@ -273,6 +348,25 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
             alert(`${action} action not found in manifest`);
         }
     }, [manifest]);
+
+    const handleAddressAction = useCallback((actionId: 'send' | 'receive', address: string) => {
+        const actionDef = manifest?.actions?.find((a: any) => a.id === actionId);
+        if (!actionDef) {
+            alert(`${actionId} action not found in manifest`);
+            return;
+        }
+
+        const account = accounts.find((entry) => entry.address === address);
+        if (account && selectedAccount?.address !== address) {
+            switchAccount(account.id);
+        }
+
+        setSelectedActions([{
+            ...actionDef,
+            ...(actionId === 'send' ? { prefilledData: { address } } : {}),
+        }]);
+        setIsActionModalOpen(true);
+    }, [accounts, manifest, selectedAccount?.address, switchAccount]);
 
     const processedKeystores = useMemo((): ProcessedNode[] => {
         if (!keystore?.addressMap) return [];
@@ -417,7 +511,14 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                             </thead>
                             <tbody>
                                 {sortedKeystores.map((node, index) => (
-                                    <ValidatorRow key={node.originalValidator.address} node={node} index={index} onPauseUnpause={handlePauseUnpause} />
+                                    <ValidatorRow
+                                        key={node.originalValidator.address}
+                                        node={node}
+                                        index={index}
+                                        onPauseUnpause={handlePauseUnpause}
+                                        onSend={(address) => handleAddressAction('send', address)}
+                                        onReceive={(address) => handleAddressAction('receive', address)}
+                                    />
                                 ))}
                             </tbody>
                         </table>
@@ -430,7 +531,14 @@ export const NodeManagementCard = React.memo((): JSX.Element => {
                 <div className="md:hidden space-y-2.5">
                     {processedKeystores.length > 0 ? (
                         processedKeystores.map((node, index) => (
-                            <ValidatorMobileCard key={node.originalValidator.address} node={node} index={index} onPauseUnpause={handlePauseUnpause} />
+                            <ValidatorMobileCard
+                                key={node.originalValidator.address}
+                                node={node}
+                                index={index}
+                                onPauseUnpause={handlePauseUnpause}
+                                onSend={(address) => handleAddressAction('send', address)}
+                                onReceive={(address) => handleAddressAction('receive', address)}
+                            />
                         ))
                     ) : (
                         <EmptyState icon="Key" title="No keys found" description="Your keys will appear here" size="sm" />
