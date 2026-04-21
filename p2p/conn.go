@@ -196,7 +196,15 @@ func (c *MultiConn) startSendService() {
 	var pwt *PacketWithTiming
 	defer func() { m.Done() }()
 	for {
+		// prioritize heartbeat messages to avoid disconnecting from peers
+		select {
+		case pwt = <-c.streams[heartbeatTopic].sendQueue:
+			c.sendPacketWithTiming(pwt, m)
+			continue
+		default:
+		}
 		// select statement ensures the sequential coordination of the concurrent processes
+		// heartbeat is included here too so pings are never stranded when no other traffic is present
 		select {
 		case pwt = <-c.streams[heartbeatTopic].sendQueue:
 			c.sendPacketWithTiming(pwt, m)
