@@ -24,14 +24,29 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function applyWindowConfig<T extends Record<string, unknown>>(chain: T): T {
+  if (typeof window === 'undefined' || !window.__CONFIG__) return chain
+
+  const rpc = (chain.rpc ?? {}) as Record<string, string>
+  return {
+    ...chain,
+    chainId: String(window.__CONFIG__.chainId),
+    rpc: {
+      ...rpc,
+      base: window.__CONFIG__.rpcURL,
+      admin: window.__CONFIG__.adminRPCURL,
+      root: window.__CONFIG__.rpcURL,
+    },
+  }
+}
+
 export function useEmbeddedConfig(chain = DEFAULT_CHAIN) {
   const base = useMemo(() => getPluginBase(chain), [chain])
 
   const chainQ = useQuery({
     queryKey: ['chain', base],
-    queryFn: () => fetchJson<any>(`${base}/chain.json`),
-    // Use the global refetch configuration every 20s
-    // The configuration data may change, so it's good to update it
+    queryFn: () => fetchJson<Record<string, unknown>>(`${base}/chain.json`),
+    select: applyWindowConfig,
   })
 
   const manifestQ = useQuery({
