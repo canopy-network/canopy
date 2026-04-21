@@ -77,10 +77,11 @@ type MultiConn struct {
 	lastPingSent  atomic.Int64                        // last time we queued a ping (unix nano)
 	lastPingRecv  atomic.Int64                        // last time we received a ping (unix nano)
 	lastPongSent  atomic.Int64                        // last time we queued a pong (unix nano)
+	peerInfo      *lib.PeerInfo                       // peer info cache
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
-func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
+func (p *P2P) NewConnection(conn net.Conn, info *lib.PeerInfo) (*MultiConn, lib.ErrorI) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		if err := tcpConn.SetWriteBuffer(32 * 1024 * 1024); err != nil {
 			p.log.Warnf("Failed to set write buffer: %v", err)
@@ -114,6 +115,7 @@ func (p *P2P) NewConnection(conn net.Conn) (*MultiConn, lib.ErrorI) {
 		p2p:           p,
 		close:         sync.Once{},
 		log:           p.log,
+		peerInfo:      info,
 	}
 	now := time.Now().UnixNano()
 	c.lastPong.Store(now)
@@ -250,15 +252,9 @@ func (c *MultiConn) startReceiveService() {
 					c.Error(ErrBadStream(), BadStreamSlash)
 					return
 				}
-				// get the peer info from the peer set
-				info, e := c.p2p.GetPeerInfo(c.Address.PublicKey)
-				if e != nil {
-					c.Error(e)
-					return
-				}
 				// handle the packet within the stream
-				if slash, er := stream.handlePacket(info, x, c.p2p.metrics); er != nil {
-					c.log.Warnf(er.Error())
+				if slash, er := stream.handlePacket(c.peerInfo, x, c.p2p.metrics); er != nil {
+					c.log.Warn(er.Error())
 					c.Error(er, slash)
 					return
 				}

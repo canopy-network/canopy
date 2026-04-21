@@ -347,7 +347,7 @@ func (p *P2P) Dial(address *lib.PeerAddress, disconnect, strictPublicKey bool) l
 // the peer set and the peer book
 func (p *P2P) AddPeer(conn net.Conn, info *lib.PeerInfo, disconnect, strictPublicKey bool) (err lib.ErrorI) {
 	// create the e2e encrypted connection while establishing a full peer info object
-	connection, err := p.NewConnection(conn)
+	connection, err := p.NewConnection(conn, info)
 	if err != nil {
 		return err
 	}
