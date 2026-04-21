@@ -416,13 +416,20 @@ export const useModalData = (query: string | number, page: number) => {
 
 // Hooks for Card Data
 export const useCardData = () => {
+    const queryClient = useQueryClient();
+    const queryKey = [...queryKeys.cardData(), rpcURL];
+
     return useQuery({
-        queryKey: [...queryKeys.cardData(), rpcURL],
-        queryFn: () => getCardData(),
+        queryKey,
+        queryFn: () => {
+            const previousCardData = queryClient.getQueryData(queryKey);
+            return getCardData(previousCardData);
+        },
         staleTime: 0,
         refetchInterval: BLOCKS_POLL_MS,
         refetchOnWindowFocus: true,
         refetchOnMount: 'always',
+        placeholderData: (previousData) => previousData,
     });
 };
 
@@ -708,5 +715,4 @@ export const useNetworkChangeHandler = () => {
         };
     }, [queryClient]);
 };
-
 

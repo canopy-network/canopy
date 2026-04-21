@@ -95,7 +95,6 @@ const Stages = () => {
                     setTotalAccounts(accountStats.total)
                 } catch (error) {
                     console.error('Error fetching account stats:', error)
-                    setTotalAccounts(0)
                 }
 
                 try {
@@ -111,15 +110,9 @@ const Stages = () => {
                     setTotalValidating(Math.max(0, totalValidatorsCount - totalDelegatorsCount))
                 } catch (error) {
                     console.error('Error fetching validator stats:', error)
-                    setTotalDelegating(0)
-                    setTotalValidating(0)
                 }
             } catch (error) {
                 console.error('Error fetching stats:', error)
-                setTotalTxs(0)
-                setTotalAccounts(0)
-                setTotalValidating(0)
-                setTotalDelegating(0)
             } finally {
                 setIsLoadingStats(false)
             }

@@ -773,33 +773,48 @@ export async function getModalData(query: string | number, page: number) {
     return block?.blockHeader?.hash ? { block } : noResult;
 }
 
-export async function getCardData() {
-    const cardData: any = {};
+export async function getCardData(previousCardData?: any) {
+    const fallbackCardData = {
+        blocks: previousCardData?.blocks ?? { results: [], totalCount: 0 },
+        canopyCommittee: previousCardData?.canopyCommittee ?? null,
+        supply: previousCardData?.supply ?? null,
+        pool: previousCardData?.pool ?? null,
+        params: previousCardData?.params ?? null,
+        ecoParams: previousCardData?.ecoParams ?? null,
+        hasRealTransactions: previousCardData?.hasRealTransactions ?? false,
+    };
 
-    try {
-        cardData.blocks = await Blocks(1, 0);
-        cardData.canopyCommittee = await Committee(1, chainId);
-        cardData.supply = await Supply(0, 0);
-        cardData.pool = await DAO(0, 0);
-        cardData.params = await Params(0, 0);
-        cardData.ecoParams = await EcoParams(0);
+    const requests = {
+        blocks: () => Blocks(1, 0),
+        canopyCommittee: () => Committee(1, chainId),
+        supply: () => Supply(0, 0),
+        pool: () => DAO(0, 0),
+        params: () => Params(0, 0),
+        ecoParams: () => EcoParams(0),
+    };
 
-        const hasRealTransactions = cardData.blocks?.results?.some((block: any) => {
+    const entries = await Promise.allSettled(
+        Object.entries(requests).map(async ([key, loader]) => [key, await loader()] as const)
+    );
+
+    const cardData: any = { ...fallbackCardData };
+
+    for (const result of entries) {
+        if (result.status === 'fulfilled') {
+            const [key, value] = result.value;
+            cardData[key] = value;
+            continue;
+        }
+
+        console.error('❌ Error in getCardData request:', result.reason);
+    }
+
+    const blocks = cardData.blocks?.results || cardData.blocks?.blocks || [];
+    if (Array.isArray(blocks) && blocks.length > 0) {
+        cardData.hasRealTransactions = blocks.some((block: any) => {
             const txRoot = block.blockHeader?.transactionRoot;
             return txRoot && txRoot !== EMPTY_TRANSACTION_ROOT;
         });
-
-        cardData.hasRealTransactions = hasRealTransactions;
-    } catch (error) {
-        console.error('❌ Error in getCardData:', error);
-        // Return empty data structure on error
-        cardData.blocks = { results: [], totalCount: 0 };
-        cardData.canopyCommittee = null;
-        cardData.supply = null;
-        cardData.pool = null;
-        cardData.params = null;
-        cardData.ecoParams = null;
-        cardData.hasRealTransactions = false;
     }
 
     return cardData;
